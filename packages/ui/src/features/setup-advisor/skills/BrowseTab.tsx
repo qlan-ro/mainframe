@@ -9,12 +9,16 @@
  * The source band stays underneath as a secondary path — it is the only way to
  * install from a private, unlisted or self-hosted repository, which the
  * registry cannot list.
+ *
+ * Rows the CLI has already installed are marked from the manifest, so the list
+ * says what is new to this machine rather than offering everything equally.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
 import { Input } from '@/components/ui/input';
 import { SectionHeader } from '@/components/ui/section-header';
 import { BrowseBody } from './BrowseBody';
+import { buildInstalledIndex } from './installed-index';
 import { InstallBand } from './InstallBand';
 import { ScopeChoice } from './ScopeChoice';
 import {
@@ -47,6 +51,11 @@ export function BrowseTab({ projectId, adapterId }: BrowseTabProps) {
   const installing = useSkillsCliStore((s) => s.installing);
   const uninstallingKey = useSkillsCliStore((s) => s.uninstallingKey);
   const install = useSkillsCliStore((s) => s.install);
+  const entries = useSkillsCliStore((s) => s.entries);
+
+  // The section owns the manifest fetch, and every install re-reads it, so the
+  // markers follow an install without this tab tracking anything itself.
+  const installed = useMemo(() => buildInstalledIndex(entries), [entries]);
 
   useEffect(() => {
     void loadCatalog();
@@ -82,6 +91,8 @@ export function BrowseTab({ projectId, adapterId }: BrowseTabProps) {
         rows={rows}
         installingKey={installingKey}
         disabled={busy}
+        installed={installed}
+        scope={scope}
         onInstall={(item) => void installSkill(item)}
       />
 

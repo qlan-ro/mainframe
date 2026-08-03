@@ -4,7 +4,9 @@
  * so as a prompt to search, not as an error, because searching still works and
  * there is nothing the user could do about the scrape anyway.
  */
+import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
 import { BrowseRow } from './BrowseRow';
+import { installedScopesFor, type InstalledIndex } from './installed-index';
 import { browseKey, type BrowseItem, type CatalogStatus, type SearchStatus } from './use-skills-browse-store';
 
 const SKELETON_ROWS = 5;
@@ -18,6 +20,10 @@ interface BrowseBodyProps {
   /** Key of the row whose install is in flight, or null. */
   installingKey: string | null;
   disabled: boolean;
+  /** What the CLI already has installed, keyed the same way the rows are. */
+  installed: InstalledIndex;
+  /** The scope an install from this list would land in. */
+  scope: SkillsCliScope;
   onInstall: (item: BrowseItem) => void;
 }
 
@@ -40,7 +46,8 @@ function Note({ testId, children }: { testId: string; children: string }) {
 }
 
 export function BrowseBody(props: BrowseBodyProps) {
-  const { mode, catalogStatus, searchStatus, searchError, rows, installingKey, disabled, onInstall } = props;
+  const { mode, catalogStatus, searchStatus, searchError, rows } = props;
+  const { installingKey, disabled, installed, scope, onInstall } = props;
 
   if (mode === 'search') {
     if (searchStatus === 'searching') return <Skeletons />;
@@ -68,6 +75,8 @@ export function BrowseBody(props: BrowseBodyProps) {
           item={item}
           running={installingKey === browseKey(item)}
           disabled={disabled}
+          installedScopes={installedScopesFor(installed, item)}
+          scope={scope}
           onInstall={onInstall}
         />
       ))}
