@@ -188,13 +188,16 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
           const accent = actionAccent(action.id);
           const isList = action.outputs.some((o) => o.type === 'list');
           const isAdvanced = ADVANCED_ACTION_IDS.has(action.id);
+          // Absent on an older daemon's payload, where every action is usable.
+          const isUnavailable = action.available === false;
           return (
             <button
               key={action.id}
               type="button"
               data-testid={`${testId}-action-${action.id}`}
               onClick={() => onPick(action)}
-              className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5 text-left hover:border-mf-border-hover hover:bg-accent"
+              disabled={isUnavailable}
+              className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5 text-left hover:border-mf-border-hover hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-border disabled:hover:bg-card"
             >
               <span
                 className={cn('flex size-[30px] shrink-0 items-center justify-center rounded-md', accent.tintClass)}
@@ -214,8 +217,16 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
                       ADVANCED
                     </Badge>
                   )}
+                  {isUnavailable && (
+                    <Badge variant="outline" className="px-1.5 py-0 text-caption font-semibold leading-4">
+                      UNAVAILABLE
+                    </Badge>
+                  )}
                 </span>
-                <span className="mt-0.5 block text-caption text-muted-foreground">{ACTION_BLURBS[action.id]}</span>
+                {/* The reason replaces the blurb: what it needs matters more than what it does. */}
+                <span className="mt-0.5 block text-caption text-muted-foreground">
+                  {isUnavailable ? action.unavailableReason : ACTION_BLURBS[action.id]}
+                </span>
               </span>
               <span className="mt-0.5 shrink-0 text-caption text-muted-foreground">
                 {action.credentialLabelHint ?? GROUP_LABEL[action.group]}

@@ -5,6 +5,7 @@
 
 pub mod ado;
 pub mod files;
+mod gh;
 pub mod github;
 pub mod http_action;
 pub mod manifest;
@@ -54,6 +55,18 @@ pub struct ActionError(pub String);
 /// Named outputs, keyed by `TokenRef.output`. Empty map = no outputs.
 pub type ActionOutputs = BTreeMap<String, TokenValue>;
 
+/// Whether an action can run at all right now. Everything self-contained is
+/// always available; a connector that shells out to an external tool reports
+/// the missing prerequisite so the catalog can mute it rather than offer a
+/// step that is guaranteed to fail.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActionAvailability {
+    Available,
+    /// One sentence naming the prerequisite and its remedy — shown verbatim
+    /// in the catalog, so it is UI copy, not a log line.
+    Unavailable(String),
+}
+
 pub trait Action: Send + Sync {
     fn manifest(&self) -> ActionManifest;
     fn execute<'a>(
@@ -61,6 +74,10 @@ pub trait Action: Send + Sync {
         params: &'a Value,
         ctx: &'a ActionCtx,
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>>;
+
+    fn availability<'a>(&'a self) -> BoxFuture<'a, ActionAvailability> {
+        Box::pin(async { ActionAvailability::Available })
+    }
 }
 
 pub(crate) use crate::USER_AGENT;
@@ -139,8 +156,11 @@ pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), Act
 
 /// Curated connectors (plan Phase 7).
 pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    registry.register(Box::new(github::GithubCreatePrAction::new()))?;
-    registry.register(Box::new(github::GithubListPrsAction::new()))?;
+    // One CLI handle for both GitHub actions: clones share the availability
+    // probe, so building the catalog costs a single `gh auth status`.
+    let gh = gh::GhCli::new();
+    registry.register(Box::new(github::GithubCreatePrAction::new(gh.clone())))?;
+    registry.register(Box::new(github::GithubListPrsAction::new(gh)))?;
     registry.register(Box::new(notion::NotionAddRowAction::new()))?;
     registry.register(Box::new(ado::AdoCreateItemAction::new()))?;
     Ok(())
@@ -156,6 +176,12 @@ pub fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionE
 
 #[cfg(test)]
 mod files_tests;
+
+#[cfg(test)]
+mod gh_stub;
+
+#[cfg(test)]
+mod gh_tests;
 
 #[cfg(test)]
 mod github_tests;

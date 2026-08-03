@@ -1,8 +1,10 @@
 //! Every connector must send a `User-Agent`. GitHub rejects requests without
 //! one (403 "Request forbidden by administrative rules"), and the wiremock
 //! suites elsewhere in this module never asserted the header, so a bare
-//! `reqwest::Client::new()` shipped undetected. One file covers all four
-//! connectors because the trap is per-client, not per-API.
+//! `reqwest::Client::new()` shipped undetected. One file covers every
+//! connector that still speaks HTTP, because the trap is per-client, not
+//! per-API. GitHub is absent on purpose: it runs on the `gh` CLI, which sends
+//! its own.
 
 use std::collections::BTreeMap;
 
@@ -13,7 +15,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use crate::credentials::{CredentialKind, Credentials};
 
 use super::ado::AdoCreateItemAction;
-use super::github::{GithubCreatePrAction, GithubListPrsAction};
 use super::http_action::HttpRequestAction;
 use super::notion::NotionAddRowAction;
 use super::{Action, ActionCtx, USER_AGENT};
@@ -42,40 +43,6 @@ async fn server_requiring_user_agent(status: u16, body: serde_json::Value) -> Mo
         .mount(&server)
         .await;
     server
-}
-
-#[tokio::test]
-async fn github_create_pr_sends_a_user_agent() {
-    let server = server_requiring_user_agent(
-        201,
-        json!({"html_url": "https://github.com/qlan/mainframe/pull/7", "number": 7}),
-    )
-    .await;
-
-    let result = GithubCreatePrAction::with_base_url(server.uri())
-        .execute(
-            &json!({
-                "repo": "qlan/mainframe",
-                "title": "feat: thing",
-                "head": "feat/thing",
-                "base": "main",
-            }),
-            &ctx(),
-        )
-        .await;
-
-    assert!(result.is_ok(), "create_pr without a User-Agent: {result:?}");
-}
-
-#[tokio::test]
-async fn github_list_prs_sends_a_user_agent() {
-    let server = server_requiring_user_agent(200, json!({"items": []})).await;
-
-    let result = GithubListPrsAction::with_base_url(server.uri())
-        .execute(&json!({}), &ctx())
-        .await;
-
-    assert!(result.is_ok(), "list_prs without a User-Agent: {result:?}");
 }
 
 #[tokio::test]

@@ -1,44 +1,30 @@
-//! github connector (T7.1, Node actions/github.ts). Params arrive
-//! pre-rendered plain strings — the run_action executor renders ChipText
-//! before invoking any action other than run_command. `github.list_prs` has
-//! no `repo` param: it uses the search API's `author:@me` qualifier across
-//! all repos. Base URL injectable for wiremock tests.
+//! github connector (T7.1), running on the GitHub CLI rather than an HTTP
+//! client: `gh` already holds a token in the OS keyring, so these actions
+//! need no credential of their own (`auth: none`) and the daemon never
+//! stores a GitHub secret. Params arrive pre-rendered plain strings — the
+//! run_action executor renders ChipText before invoking any action other
+//! than run_command. `github.list_prs` has no `repo` param: `gh search prs`
+//! spans every repo the user can see and resolves `@me` itself, which the
+//! REST search endpoint the old client called never did. The CLI handle is
+//! injectable so tests drive a stub binary.
 
 use std::collections::BTreeMap;
 
-use reqwest::RequestBuilder;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::engine::BoxFuture;
-use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
 
+use super::gh::{GhCli, validate_repo};
 use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
-use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
+use super::{Action, ActionAvailability, ActionCtx, ActionError, ActionOutputs, parse_input};
 
-fn with_auth(request: RequestBuilder, ctx: &ActionCtx) -> RequestBuilder {
-    let request = github_headers(request);
-    match &ctx.creds {
-        Some(creds) => request.bearer_auth(&creds.token),
-        None => request,
+async fn availability(gh: &GhCli) -> ActionAvailability {
+    match gh.status().await.unavailable_reason() {
+        Some(reason) => ActionAvailability::Unavailable(reason),
+        None => ActionAvailability::Available,
     }
-}
-
-async fn read_response(
-    response: reqwest::Response,
-    op: &str,
-    ctx: &ActionCtx,
-) -> Result<String, ActionError> {
-    let status = response.status().as_u16();
-    let body = response
-        .text()
-        .await
-        .map_err(|err| ActionError(format!("{op} failed: {err}")))?;
-    if status >= 400 {
-        return Err(http_failure(op, status, ctx, &body));
-    }
-    Ok(body)
 }
 
 fn parse_json<T: serde::de::DeserializeOwned>(body: &str, op: &str) -> Result<T, ActionError> {
@@ -66,26 +52,12 @@ struct CreatedPr {
 }
 
 pub struct GithubCreatePrAction {
-    base: String,
-    client: reqwest::Client,
+    gh: GhCli,
 }
 
 impl GithubCreatePrAction {
-    pub fn new() -> Self {
-        Self::with_base_url(GITHUB_API.to_string())
-    }
-
-    pub fn with_base_url(base: impl Into<String>) -> Self {
-        Self {
-            base: base.into(),
-            client: super::http_client(),
-        }
-    }
-}
-
-impl Default for GithubCreatePrAction {
-    fn default() -> Self {
-        Self::new()
+    pub(crate) fn new(gh: GhCli) -> Self {
+        Self { gh }
     }
 }
 
@@ -95,8 +67,8 @@ impl Action for GithubCreatePrAction {
             id: "github.create_pr",
             title: "GitHub: create pull request",
             group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("github"),
+            auth: ActionAuth::None,
+            credential_label_hint: None,
             params_schema: json!({
                 "type": "object",
                 "properties": {
@@ -117,27 +89,37 @@ impl Action for GithubCreatePrAction {
         }
     }
 
+    fn availability<'a>(&'a self) -> BoxFuture<'a, ActionAvailability> {
+        Box::pin(availability(&self.gh))
+    }
+
     fn execute<'a>(
         &'a self,
         params: &'a Value,
-        ctx: &'a ActionCtx,
+        _ctx: &'a ActionCtx,
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>> {
         Box::pin(async move {
             const OP: &str = "GitHub create PR";
             let input: CreatePrInput = parse_input("github.create_pr", params)?;
-            let url = format!("{}/repos/{}/pulls", self.base, input.repo);
-            let response = with_auth(self.client.post(&url), ctx)
-                .json(&json!({
-                    "title": input.title,
-                    "body": input.body,
-                    "head": input.head,
-                    "base": input.base,
-                }))
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let body = read_response(response, OP, ctx).await?;
-            let created: CreatedPr = parse_json(&body, OP)?;
+            validate_repo("github.create_pr", &input.repo)?;
+
+            let payload = json!({
+                "title": input.title,
+                "body": input.body,
+                "head": input.head,
+                "base": input.base,
+            })
+            .to_string();
+            let endpoint = format!("repos/{}/pulls", input.repo);
+            let stdout = self
+                .gh
+                .output(
+                    OP,
+                    &["api", &endpoint, "--method", "POST", "--input", "-"],
+                    Some(&payload),
+                )
+                .await?;
+            let created: CreatedPr = parse_json(&stdout, OP)?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("prUrl".to_string(), TokenValue::Text(created.html_url));
@@ -161,44 +143,25 @@ fn default_author() -> String {
 }
 
 #[derive(Debug, Deserialize)]
-struct SearchUser {
+struct PrAuthor {
     login: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct SearchItem {
-    html_url: String,
+struct FoundPr {
+    url: String,
     title: String,
     number: f64,
-    user: SearchUser,
-}
-
-#[derive(Debug, Deserialize)]
-struct SearchResponse {
-    items: Vec<SearchItem>,
+    author: PrAuthor,
 }
 
 pub struct GithubListPrsAction {
-    base: String,
-    client: reqwest::Client,
+    gh: GhCli,
 }
 
 impl GithubListPrsAction {
-    pub fn new() -> Self {
-        Self::with_base_url(GITHUB_API.to_string())
-    }
-
-    pub fn with_base_url(base: impl Into<String>) -> Self {
-        Self {
-            base: base.into(),
-            client: super::http_client(),
-        }
-    }
-}
-
-impl Default for GithubListPrsAction {
-    fn default() -> Self {
-        Self::new()
+    pub(crate) fn new(gh: GhCli) -> Self {
+        Self { gh }
     }
 }
 
@@ -208,8 +171,8 @@ impl Action for GithubListPrsAction {
             id: "github.list_prs",
             title: "GitHub: list my open pull requests",
             group: ActionGroup::Connector,
-            auth: ActionAuth::Token,
-            credential_label_hint: Some("github"),
+            auth: ActionAuth::None,
+            credential_label_hint: None,
             params_schema: json!({
                 "type": "object",
                 "properties": {
@@ -222,32 +185,45 @@ impl Action for GithubListPrsAction {
         }
     }
 
+    fn availability<'a>(&'a self) -> BoxFuture<'a, ActionAvailability> {
+        Box::pin(availability(&self.gh))
+    }
+
     fn execute<'a>(
         &'a self,
         params: &'a Value,
-        ctx: &'a ActionCtx,
+        _ctx: &'a ActionCtx,
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>> {
         Box::pin(async move {
             const OP: &str = "GitHub list PRs";
             let input: ListPrsInput = parse_input("github.list_prs", params)?;
-            let query = format!("is:pr state:open author:{}", input.author);
-            let url = format!("{}/search/issues", self.base);
-            let response = with_auth(self.client.get(&url).query(&[("q", query)]), ctx)
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let body = read_response(response, OP, ctx).await?;
-            let search: SearchResponse = parse_json(&body, OP)?;
+            let stdout = self
+                .gh
+                .output(
+                    OP,
+                    &[
+                        "search",
+                        "prs",
+                        "--state",
+                        "open",
+                        "--author",
+                        &input.author,
+                        "--json",
+                        "url,title,number,author",
+                    ],
+                    None,
+                )
+                .await?;
+            let found: Vec<FoundPr> = parse_json(&stdout, OP)?;
 
-            let prs = search
-                .items
+            let prs = found
                 .into_iter()
-                .map(|item| {
+                .map(|pr| {
                     TokenValue::Record(BTreeMap::from([
-                        ("url".to_string(), TokenValue::Text(item.html_url)),
-                        ("title".to_string(), TokenValue::Text(item.title)),
-                        ("number".to_string(), TokenValue::Number(item.number)),
-                        ("author".to_string(), TokenValue::Text(item.user.login)),
+                        ("url".to_string(), TokenValue::Text(pr.url)),
+                        ("title".to_string(), TokenValue::Text(pr.title)),
+                        ("number".to_string(), TokenValue::Number(pr.number)),
+                        ("author".to_string(), TokenValue::Text(pr.author.login)),
                     ]))
                 })
                 .collect();
@@ -262,6 +238,5 @@ impl Action for GithubListPrsAction {
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1), not a TS port
 // confidence: high
 // todos: 0
-// notes: mirrors Node actions/github.ts (search author:@me, vnd.github+json,
-//        500-char body snippet); Rust adds the credential-label-naming 401
-//        form (plan T7.1) via actions::http_failure.
+// notes: diverges from Node actions/github.ts on purpose — auth and transport
+//        both moved to the GitHub CLI, so no token is stored or sent by us.

@@ -101,8 +101,8 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
     id: 'github.create_pr',
     title: 'Create a pull request',
     group: 'connector',
-    auth: 'token',
-    credentialLabelHint: 'GitHub',
+    // No credential: the `gh` CLI holds the token, so these two ask for none.
+    auth: 'none',
     outputs: [
       { name: 'prUrl', type: 'text' },
       { name: 'prNumber', type: 'number' },
@@ -119,8 +119,7 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
     id: 'github.list_prs',
     title: 'List my open PRs',
     group: 'connector',
-    auth: 'token',
-    credentialLabelHint: 'GitHub',
+    auth: 'none',
     outputs: [{ name: 'prs', type: 'list' }],
     paramsSchema: schema([{ key: 'author', label: 'Author', control: 'text', placeholder: '@me' }]),
   },

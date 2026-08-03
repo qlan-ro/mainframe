@@ -14,7 +14,7 @@ const CATALOG: ActionCatalogEntry[] = [
     id: 'github.create_pr',
     title: 'Create a pull request',
     group: 'connector',
-    auth: 'token',
+    auth: 'none',
     paramsSchema: {},
     outputs: [],
   },
