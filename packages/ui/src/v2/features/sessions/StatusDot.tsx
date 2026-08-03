@@ -10,7 +10,7 @@
 import type { SessionBadge } from '@/features/sessions/view-model/session-status';
 import { Hint } from '@v2/components/ui/hint';
 import { cn } from '@v2/lib/utils';
-import { ProviderLogo } from './ProviderLogo';
+import { ProviderLogo } from '../shared/ProviderLogo';
 
 /** Claude's mark is radially symmetric; a plain spin reads wrong on the others. */
 function workingAnimation(adapterId: string): string {

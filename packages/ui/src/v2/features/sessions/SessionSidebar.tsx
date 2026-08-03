@@ -33,6 +33,8 @@ import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
+import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
+import { QuotaSection } from '../quota/QuotaSection';
 import { TasksSidebarSection } from '../tasks/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
@@ -146,11 +148,9 @@ export function SessionSidebar({ className }: { className?: string }) {
         <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
       </SidebarContent>
 
-      <SidebarFooter className="text-xs text-muted-foreground">
-        <div className="flex items-center gap-2 px-2">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
-          {allItems.length} sessions
-        </div>
+      <SidebarFooter>
+        <QuotaSection />
+        <DaemonSwitcher />
       </SidebarFooter>
 
       <SidebarRail />
