@@ -34,6 +34,7 @@ export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProp
             <button
               type="button"
               data-testid={`chat-plan-execmode-${id}`}
+              aria-pressed={selected}
               onClick={() => onChange(id)}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',

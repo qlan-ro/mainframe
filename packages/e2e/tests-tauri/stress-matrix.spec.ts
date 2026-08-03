@@ -10,8 +10,7 @@
  * alive across drops — only the socket is severed, so ws-client auto-reconnects and the
  * subscribe:ack handler re-seeds history (chat-ws-subscription.ts).
  *
- * Deliberately NOT asserted: chat-plan-running-footer (known bug, gates.spec.ts:242);
- * daemon-restart permission replies ("stream closed", Post-V1).
+ * Deliberately NOT asserted: daemon-restart permission replies ("stream closed", Post-V1).
  */
 
 import { test, expect, type Page } from '@playwright/test';

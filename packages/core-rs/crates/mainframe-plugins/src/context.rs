@@ -27,6 +27,7 @@ use crate::attachment_context::FsAttachmentContext;
 use crate::config_context::create_plugin_config;
 use crate::db_context::{PluginDatabaseContext, Row};
 use crate::event_bus::{PublicDaemonBus, create_plugin_event_bus};
+use crate::github_port::GitHubIssues;
 use crate::services::{build_chat_service, build_project_service};
 use crate::ui_context::create_plugin_ui_context;
 
@@ -209,6 +210,7 @@ pub struct PluginContext {
     pub chats: Arc<dyn ChatService>,
     pub projects: Arc<dyn ProjectService>,
     pub adapters: Option<Arc<dyn AdapterRegistrar>>,
+    pub github: Arc<dyn GitHubIssues>,
     on_unload: Mutex<Vec<UnloadFn>>,
 }
 
@@ -239,6 +241,9 @@ pub struct PluginContextDeps {
     pub emit: EmitSink,
     /// The adapter registrar, exposed only when `adapters` is declared.
     pub adapters: Option<Arc<dyn AdapterRegistrar>>,
+    /// The GitHub Issues port, exposed only when `http:outbound` is declared
+    /// (D2). `None` when the daemon's automations engine failed to start.
+    pub github: Option<Arc<dyn GitHubIssues>>,
 }
 
 /// `buildPluginContext(deps)`.
@@ -311,6 +316,15 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         None
     };
 
+    let github: Arc<dyn GitHubIssues> = if has(PluginCapability::HttpOutbound) {
+        match deps.github {
+            Some(github) => github,
+            None => Arc::new(guards::GuardGitHub::engine_unavailable()),
+        }
+    } else {
+        Arc::new(guards::GuardGitHub::capability_missing())
+    };
+
     Ok(Arc::new(PluginContext {
         manifest: deps.manifest,
         db,
@@ -321,6 +335,7 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         chats,
         projects,
         adapters,
+        github,
         on_unload: Mutex::new(Vec::new()),
     }))
 }
@@ -437,6 +452,8 @@ mod guards {
         fn remove_action(&self, _id: &str) {}
         fn notify(&self, _options: NotifyOptions) {}
     }
+
+    pub use crate::github_port_guard::GuardGitHub;
 }
 
 // PORT STATUS: src/plugins/context.ts

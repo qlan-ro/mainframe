@@ -26,6 +26,7 @@ use crate::context::{
     build_plugin_context,
 };
 use crate::event_bus::PublicDaemonBus;
+use crate::github_port::GitHubIssues;
 
 /// Tracks panel/action registrations per plugin (the `panelEvents`/`actionEvents`
 /// maps), kept outside the loaded-plugin entries so the tracking emit sink does
@@ -154,6 +155,10 @@ pub struct PluginManagerDeps {
     pub daemon_bus: Arc<PublicDaemonBus>,
     pub emit: EmitSink,
     pub adapters: Option<Arc<dyn AdapterRegistrar>>,
+    /// The GitHub Issues port (task 5), `None` when the automations engine
+    /// did not start — `build_plugin_context` answers that case with the
+    /// engine-unavailable guard rather than treating it as a fatal error.
+    pub github: Option<Arc<dyn GitHubIssues>>,
 }
 
 pub struct PluginManager {
@@ -162,6 +167,7 @@ pub struct PluginManager {
     host_db: Arc<dyn PluginHostDb>,
     daemon_bus: Arc<PublicDaemonBus>,
     adapters: Option<Arc<dyn AdapterRegistrar>>,
+    github: Option<Arc<dyn GitHubIssues>>,
 }
 
 impl PluginManager {
@@ -175,6 +181,7 @@ impl PluginManager {
             host_db: deps.host_db,
             daemon_bus: deps.daemon_bus,
             adapters: deps.adapters,
+            github: deps.github,
         }
     }
 
@@ -206,6 +213,7 @@ impl PluginManager {
             daemon_bus: Arc::clone(&self.daemon_bus),
             emit,
             adapters: self.adapters.clone(),
+            github: self.github.clone(),
         })?;
         let router = activate(Arc::clone(&ctx)).await?;
         let id = manifest.id.clone();
@@ -335,8 +343,12 @@ async fn plugin_detail(State(inner): State<Arc<ManagerInner>>, Path(id): Path<St
 mod tests {
     use super::*;
     use crate::context::NotifyOptions;
+    use crate::github_port::{
+        CreateIssue, GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot, IssueState,
+        RepoRef,
+    };
     use mainframe_types::chat::{Chat, Project};
-    use mainframe_types::plugin::UiZone;
+    use mainframe_types::plugin::{PluginCapability, UiZone};
     use std::sync::Mutex;
 
     #[derive(Default)]
@@ -370,6 +382,12 @@ mod tests {
     }
 
     fn manager() -> (PluginManager, Arc<Mutex<Vec<DaemonEvent>>>) {
+        manager_with_github(None)
+    }
+
+    fn manager_with_github(
+        github: Option<Arc<dyn GitHubIssues>>,
+    ) -> (PluginManager, Arc<Mutex<Vec<DaemonEvent>>>) {
         let events = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::clone(&events);
         let emit: EmitSink = Arc::new(move |e| sink.lock().unwrap().push(e));
@@ -378,8 +396,66 @@ mod tests {
             daemon_bus: Arc::new(PublicDaemonBus::new()),
             emit,
             adapters: None,
+            github,
         });
         (mgr, events)
+    }
+
+    /// Answers every call with a fixed snapshot — proves the manager threaded
+    /// this exact instance through to `ctx.github` rather than the capability
+    /// guard.
+    struct FakeGitHub;
+    impl GitHubIssues for FakeGitHub {
+        fn list_open_issues(
+            &self,
+            _repo: &RepoRef,
+            _credential_label: &str,
+        ) -> crate::BoxFuture<'_, Result<Vec<IssueSnapshot>, GitHubPortError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_issue(
+            &self,
+            _repo: &RepoRef,
+            number: u64,
+            _credential_label: &str,
+        ) -> crate::BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
+            Box::pin(async move {
+                Ok(IssueSnapshot {
+                    number,
+                    title: "fake".to_string(),
+                    body: String::new(),
+                    labels: Vec::new(),
+                    state: IssueState::Open,
+                    html_url: String::new(),
+                    updated_at: String::new(),
+                })
+            })
+        }
+        fn issue_field_times(
+            &self,
+            _repo: &RepoRef,
+            _number: u64,
+            _credential_label: &str,
+        ) -> crate::BoxFuture<'_, Result<IssueFieldTimes, GitHubPortError>> {
+            Box::pin(async { Ok(IssueFieldTimes::default()) })
+        }
+        fn create_issue(
+            &self,
+            _repo: &RepoRef,
+            _input: CreateIssue,
+            _credential_label: &str,
+        ) -> crate::BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
+            Box::pin(async { Err(GitHubPortError::NotFound) })
+        }
+        fn update_issue(
+            &self,
+            _repo: &RepoRef,
+            _number: u64,
+            _patch: IssuePatch,
+            _credential_label: &str,
+        ) -> crate::BoxFuture<'_, Result<IssueSnapshot, GitHubPortError>> {
+            Box::pin(async { Err(GitHubPortError::NotFound) })
+        }
     }
 
     fn manifest(id: &str, caps: Vec<mainframe_types::plugin::PluginCapability>) -> PluginManifest {
@@ -563,6 +639,32 @@ mod tests {
         );
         let (_, body) = read(list_plugins(State(Arc::clone(&mgr.inner))).await).await;
         assert_eq!(body["plugins"][0]["panels"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn github_port_is_threaded_from_manager_deps_into_the_plugin_context() {
+        let (mgr, _e) = manager_with_github(Some(Arc::new(FakeGitHub)));
+        let seen = Arc::new(Mutex::new(None));
+        let out = Arc::clone(&seen);
+        mgr.load_builtin(
+            manifest("todos", vec![PluginCapability::HttpOutbound]),
+            PathBuf::new(),
+            move |ctx| {
+                let out = Arc::clone(&out);
+                async move {
+                    let repo = RepoRef {
+                        owner: "qlan".to_string(),
+                        repo: "mainframe".to_string(),
+                    };
+                    let issue = ctx.github.get_issue(&repo, 7, "github").await.unwrap();
+                    *out.lock().unwrap() = Some(issue.title);
+                    Ok(Router::new())
+                }
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(seen.lock().unwrap().as_deref(), Some("fake"));
     }
 
     #[tokio::test]

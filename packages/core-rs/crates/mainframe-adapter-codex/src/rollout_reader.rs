@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use crate::item_types::{AgentMessageItem, ReasoningItem, ThreadItem, UserMessageItem};
+use crate::rollout_fork::forked_child_start_line;
 use crate::rollout_reconstruct::{
     PendingMcp, handle_custom_tool_call, handle_custom_tool_call_output, handle_function_call,
     handle_function_call_output,
@@ -153,6 +154,10 @@ async fn resolve_rollout_path(
 /// exec_command, MCP function_calls, and apply_patch custom_tool_calls are not
 /// guaranteed disjoint, and a bug in one pairing lifecycle must not be able to
 /// steal or corrupt another kind's pending entry.
+///
+/// A `spawn_agent(fork_turns: "all")` child rollout opens with a copy of the
+/// parent's own history (todo #247 QA defect) — `forked_child_start_line`
+/// skips that prefix so it doesn't leak into the child's nested card.
 fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut items: Vec<ThreadItem> = Vec::new();
     let mut pending_exec: HashMap<String, String> = HashMap::new();
@@ -160,7 +165,10 @@ fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut pending_patch: HashMap<String, String> = HashMap::new();
     let mut counter = 0usize;
 
-    for line in raw.split('\n') {
+    let lines: Vec<&str> = raw.split('\n').collect();
+    let start = forked_child_start_line(&lines).unwrap_or(0);
+
+    for line in lines[start..].iter().copied() {
         if line.trim().is_empty() {
             continue;
         }

@@ -54,7 +54,7 @@ const TODOS_MANIFEST: &str = r#"{
   "version": "1.0.0",
   "description": "GitHub-style kanban board for tracking tasks",
   "author": "Mainframe Team",
-  "capabilities": ["storage", "chat:create", "ui:panels", "ui:notifications"],
+  "capabilities": ["storage", "chat:create", "ui:panels", "ui:notifications", "http:outbound"],
   "ui": {
     "zone": "fullview",
     "label": "Tasks",

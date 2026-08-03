@@ -9,6 +9,7 @@
  *   - radius `xl` (13px)
  *   - 0.5px box-shadow for soft lift
  *   - right-aligned, max-width 75% of thread
+ *   - long unbreakable tokens wrap (overflow-wrap) — the card is the containment boundary
  *
  * Variants rendered by this file:
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
@@ -73,11 +74,12 @@ interface CoolCardProps {
 function CoolCard({ children, className }: CoolCardProps) {
   return (
     <div
+      data-testid="chat-user-bubble"
       style={CARD_STYLE}
       className={cn(
         'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-loose tracking-tight',
+        'text-body leading-loose tracking-tight break-words',
         className,
       )}
     >
@@ -237,7 +239,12 @@ function UserMessageImpl() {
           </QueuedUserTurn>
         )
       ) : planBody ? (
-        <PlanBubble plan={planBody} />
+        // The gate shell's max-width cap should govern the record's width, not
+        // the root's `items-end` alignment — an explicit full-width wrapper
+        // escapes the flex item's default shrink-to-fit sizing.
+        <div className="w-full">
+          <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+        </div>
       ) : (
         <>
           {body && <CoolCard>{body}</CoolCard>}
@@ -266,7 +273,7 @@ function UserMessageImpl() {
           </div>
           <p
             data-testid="chat-user-message-send-error"
-            className="max-w-[470px] text-right text-label text-muted-foreground"
+            className="max-w-[470px] break-words text-right text-label text-muted-foreground"
           >
             {sendError}
           </p>

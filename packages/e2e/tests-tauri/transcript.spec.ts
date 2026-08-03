@@ -31,6 +31,11 @@
  *   chat-selection-toolbar / chat-selection-quote / chat-selection-new-session — the floating
  *     selection actions (native SelectionToolbar root, our Quote / New session actions)
  *   chat-thread-viewport (+ [data-mf-chat-thread]) — the scrollable transcript viewport
+ *   chat-user-bubble — the sent user turn's card shell (todo #298 containment probe)
+ *
+ * The `thread` recording now carries three turns: the long-text turn, the Bash-tool
+ * turn, and (todo #298) a third short turn whose send is the long-unbreakable-token
+ * containment probe below.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -46,6 +51,18 @@ const LONG_TEXT = Array.from(
   { length: 12 },
   () => 'This is a deliberately long sentence for the read-more clamp test.',
 ).join(' ');
+
+/** One ~200-char token, a long bare URL, a long absolute path and a long inline-code
+ *  span — the four AC cases, all under ReadMoreBubble's 600-char threshold so the
+ *  bubble renders UNCLAMPED (a collapsed clamp sets overflow:hidden and would hide
+ *  the very spill this measures). */
+const UNBREAKABLE = 'A'.repeat(200);
+const OVERFLOW_TEXT = [
+  UNBREAKABLE,
+  `https://example.com/${'segment'.repeat(10)}`,
+  `/Users/dev/${'deeply-nested-directory/'.repeat(4)}file.ts`,
+  `\`${'x'.repeat(80)}\``,
+].join(' ');
 
 async function scrollViewportToTop(page: Page): Promise<void> {
   await page.getByTestId('chat-thread-viewport').evaluate((el) => {
@@ -187,6 +204,35 @@ test.describe('§transcript — thread turn', () => {
 
     await input.press('Escape');
     await expect(findBar).toBeHidden();
+  });
+
+  test('a long unbreakable token wraps inside the user bubble instead of painting outside it', async () => {
+    const { page } = app;
+    // Load-bearing: stays under ReadMoreBubble's 600-char threshold, or a collapsed
+    // clamp's overflow:hidden would neuter this measurement (see the constant above).
+    expect(OVERFLOW_TEXT.length).toBeLessThan(600);
+
+    await sendMessage(page, OVERFLOW_TEXT);
+    // `sendMessage` doesn't wait for the new turn to mount, so `.last()` alone could
+    // resolve to the PREVIOUS turn's bubble — bind to this turn's content instead.
+    const bubble = page.getByTestId('chat-user-bubble').filter({ hasText: UNBREAKABLE });
+    await expect(bubble).toBeVisible({ timeout: 10_000 });
+    await expect(bubble).toContainText(UNBREAKABLE);
+
+    const box = await bubble.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      width: el.getBoundingClientRect().width,
+      clamped: el.querySelector('[data-clamp]') !== null,
+    }));
+    expect(box.clamped).toBe(false);
+    // 470px cap + the 0.5px hairline border on each side.
+    expect(box.width).toBeLessThanOrEqual(471);
+    // scrollWidth includes content painted past the padding box — this is the
+    // containment assertion itself.
+    expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+
+    await waitForIdle(page, 60_000);
   });
 });
 

@@ -16,6 +16,7 @@ export * from './lsp.js';
 export * from './git.js';
 export * from './suggestion.js';
 export * from './setup-advisor.js';
+export * from './skills-cli.js';
 export * from './session-transcript.js';
 export * from './__fixtures__/ask-user-question.js';
 export * from './background-task.js';

@@ -216,47 +216,30 @@ describe('PlanGate', () => {
     expect(screen.queryByTestId('chat-plan-feedback-input')).not.toBeInTheDocument();
   });
 
-  // --- Behavior 8: approve shows persistent running footer with pulsing dot ---
+  // --- Behavior 8: approving renders no post-approval state of its own ---
 
-  it('after approving, hides action row and shows running footer with pulsing dot and mode text', () => {
+  it('keeps the controls visible after approving (the gate is unmounted by the queue, not itself)', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
 
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
-    // Action row (Approve button) is gone
-    expect(screen.queryByTestId('chat-plan-approve')).not.toBeInTheDocument();
-
-    // Running footer is visible
-    const footer = screen.getByTestId('chat-plan-running-footer');
-    expect(footer).toBeInTheDocument();
-
-    // Footer contains the execution mode text
-    expect(footer).toHaveTextContent(/Executing in/);
-    expect(footer).toHaveTextContent(/Interactive/);
+    expect(screen.getByTestId('chat-plan-approve')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-plan-execmode-default')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-plan-clear-context')).toBeInTheDocument();
   });
 
-  it('running footer pulsing dot is present after approve', () => {
+  // --- Selected exec-mode is announced, not class-only (E2E asserts it) ---
+
+  it('marks the selected exec-mode option with aria-pressed', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
 
-    fireEvent.click(screen.getByTestId('chat-plan-approve'));
-
-    const footer = screen.getByTestId('chat-plan-running-footer');
-    // The pulsing dot is a span with tw-pulse animation class
-    const dot = footer.querySelector('.animate-pulse');
-    expect(dot).toBeInTheDocument();
-  });
-
-  it('running footer uses destructive dot color in yolo exec-mode', () => {
-    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+    expect(screen.getByTestId('chat-plan-execmode-default')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('chat-plan-execmode-yolo')).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
-    fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
-    const footer = screen.getByTestId('chat-plan-running-footer');
-    expect(footer).toHaveTextContent(/Unattended/);
-    // Dot should have the destructive class for yolo mode
-    const dot = footer.querySelector('.bg-destructive');
-    expect(dot).toBeInTheDocument();
+    expect(screen.getByTestId('chat-plan-execmode-yolo')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('chat-plan-execmode-default')).toHaveAttribute('aria-pressed', 'false');
   });
 
   // --- Behavior 7: keep-planning Cancel returns to the approve panel ---

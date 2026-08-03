@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::test_support::test_chat;
-use mainframe_adapter_api::{ContextFiles, ImageInput, SessionSink, StopBackgroundTaskResult};
+use mainframe_adapter_api::{
+    ContextFiles, ImageInput, PlanModeActionHandler, SessionSink, StopBackgroundTaskResult,
+};
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
@@ -11,10 +13,12 @@ use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod plan_mode;
+
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct StoreDeps {
+pub(crate) struct StoreDeps {
     store: Mutex<HashMap<String, Chat>>,
     events: Mutex<Vec<DaemonEvent>>,
     updates: Mutex<Vec<(String, ChatUpdate)>>,
@@ -43,13 +47,16 @@ struct StoreDeps {
     attachments: Mutex<Option<ProcessedAttachments>>,
     /// What `extract_mentions_from_text` returns.
     mentions_found: Mutex<bool>,
+    /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
+    /// can inject a recorder (or leave `None` for the unresolved-handler path).
+    plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
 }
 
 impl StoreDeps {
-    fn arc() -> Arc<Self> {
+    pub(crate) fn arc() -> Arc<Self> {
         Arc::new(Self::default())
     }
-    fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
+    pub(crate) fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
         let d = Self::default();
         {
             let mut s = d.store.lock().unwrap();
@@ -199,6 +206,12 @@ impl ChatManagerDeps for StoreDeps {
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
+    }
+    fn create_plan_mode_handler(
+        &self,
+        _adapter_id: &str,
+    ) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.plan_handler.lock().unwrap().clone()
     }
     fn adapter_snapshot_models(
         &self,
@@ -366,6 +379,11 @@ struct RecSession {
     kills: AtomicUsize,
     /// `images.len()` from every `send_message` call, in order.
     images_calls: Mutex<Vec<usize>>,
+    /// Every `respond_to_permission` call, in order — pins the plan-mode escalation
+    /// double-send (decision 6).
+    responded_calls: Mutex<Vec<ControlResponse>>,
+    /// Every `set_permission_mode` call, in order.
+    permission_mode_calls: Mutex<Vec<ExecutionMode>>,
 }
 
 impl RecSession {
@@ -380,6 +398,8 @@ impl RecSession {
             order: Arc::new(Mutex::new(Vec::new())),
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -393,6 +413,8 @@ impl RecSession {
             order,
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
 }
@@ -450,8 +472,9 @@ impl AdapterSession for RecSession {
     }
     fn respond_to_permission(
         &self,
-        _response: ControlResponse,
+        response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.responded_calls.lock().unwrap().push(response);
         ok()
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -460,7 +483,8 @@ impl AdapterSession for RecSession {
     fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         ok()
     }
-    fn set_permission_mode(&self, _mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+    fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.permission_mode_calls.lock().unwrap().push(mode);
         ok()
     }
     fn set_plan_mode(&self, _on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -1501,6 +1525,7 @@ fn _status() -> ChatStatus {
 // directly with fixed `startedAt` (Rust can't trivially freeze the clock).
 mod background_activity {
     use super::*;
+    use crate::chat_manager::shared::enrich_chat;
     use mainframe_types::background_task::{
         BackgroundActivity, BackgroundActivityTask, BackgroundTask, BackgroundTaskStatus,
         BackgroundTaskToolName, BackgroundWorkKind,
@@ -1543,7 +1568,7 @@ mod background_activity {
     #[test]
     fn main_only_working_no_background() {
         let mut chat = working_chat("c-working", None, true);
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(chat.background_activity, None);
@@ -1556,7 +1581,7 @@ mod background_activity {
             bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
             bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
         ];
-        super::enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(false));
         let by_kind = HashMap::from([
@@ -1580,7 +1605,7 @@ mod background_activity {
     fn both_main_turn_and_background() {
         let mut chat = working_chat("c-working", None, true);
         let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
-        super::enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(
@@ -1597,7 +1622,7 @@ mod background_activity {
     fn terminal_tasks_do_not_count() {
         // Ended tasks never appear in listLive → an empty slice here.
         let mut chat = working_chat("c-idle", None, false);
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
         assert_eq!(chat.background_activity, None);
     }
@@ -1606,7 +1631,7 @@ mod background_activity {
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
-        super::enrich_chat(&mut chat, true, &tasks, None);
+        enrich_chat(&mut chat, true, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
         assert_eq!(chat.is_running, Some(false));
         // The chip still shows the live background work while the gate is up.
@@ -1620,7 +1645,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-live", None, false);
         chat.worktree_path = Some(dir.path().to_string_lossy().into_owned());
 
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1635,7 +1660,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-gone", None, false);
         chat.worktree_path = Some(path.clone());
 
-        super::enrich_chat(&mut chat, false, &[], Some("/project"));
+        enrich_chat(&mut chat, false, &[], Some("/project"));
 
         assert_eq!(chat.worktree_missing, Some(true));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1649,7 +1674,7 @@ mod background_activity {
         let path = path.to_str().unwrap().to_string();
         let mut chat = working_chat("c-project-gone", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], Some(&path));
+        enrich_chat(&mut chat, false, &[], Some(&path));
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1661,7 +1686,7 @@ mod background_activity {
         let dir = tempfile::TempDir::new().unwrap();
         let mut chat = working_chat("c-project-live", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], dir.path().to_str());
+        enrich_chat(&mut chat, false, &[], dir.path().to_str());
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1672,7 +1697,7 @@ mod background_activity {
     fn missing_project_row_is_not_a_missing_directory() {
         let mut chat = working_chat("c-project-row-gone", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
