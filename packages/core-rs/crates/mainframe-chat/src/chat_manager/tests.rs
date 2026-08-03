@@ -1525,6 +1525,7 @@ fn _status() -> ChatStatus {
 // directly with fixed `startedAt` (Rust can't trivially freeze the clock).
 mod background_activity {
     use super::*;
+    use crate::chat_manager::shared::enrich_chat;
     use mainframe_types::background_task::{
         BackgroundActivity, BackgroundActivityTask, BackgroundTask, BackgroundTaskStatus,
         BackgroundTaskToolName, BackgroundWorkKind,
@@ -1567,7 +1568,7 @@ mod background_activity {
     #[test]
     fn main_only_working_no_background() {
         let mut chat = working_chat("c-working", None, true);
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(chat.background_activity, None);
@@ -1580,7 +1581,7 @@ mod background_activity {
             bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
             bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
         ];
-        super::enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(false));
         let by_kind = HashMap::from([
@@ -1604,7 +1605,7 @@ mod background_activity {
     fn both_main_turn_and_background() {
         let mut chat = working_chat("c-working", None, true);
         let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
-        super::enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(
@@ -1621,7 +1622,7 @@ mod background_activity {
     fn terminal_tasks_do_not_count() {
         // Ended tasks never appear in listLive → an empty slice here.
         let mut chat = working_chat("c-idle", None, false);
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
         assert_eq!(chat.background_activity, None);
     }
@@ -1630,7 +1631,7 @@ mod background_activity {
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
-        super::enrich_chat(&mut chat, true, &tasks, None);
+        enrich_chat(&mut chat, true, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
         assert_eq!(chat.is_running, Some(false));
         // The chip still shows the live background work while the gate is up.
@@ -1644,7 +1645,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-live", None, false);
         chat.worktree_path = Some(dir.path().to_string_lossy().into_owned());
 
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1659,7 +1660,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-gone", None, false);
         chat.worktree_path = Some(path.clone());
 
-        super::enrich_chat(&mut chat, false, &[], Some("/project"));
+        enrich_chat(&mut chat, false, &[], Some("/project"));
 
         assert_eq!(chat.worktree_missing, Some(true));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1673,7 +1674,7 @@ mod background_activity {
         let path = path.to_str().unwrap().to_string();
         let mut chat = working_chat("c-project-gone", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], Some(&path));
+        enrich_chat(&mut chat, false, &[], Some(&path));
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1685,7 +1686,7 @@ mod background_activity {
         let dir = tempfile::TempDir::new().unwrap();
         let mut chat = working_chat("c-project-live", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], dir.path().to_str());
+        enrich_chat(&mut chat, false, &[], dir.path().to_str());
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1696,7 +1697,7 @@ mod background_activity {
     fn missing_project_row_is_not_a_missing_directory() {
         let mut chat = working_chat("c-project-row-gone", None, false);
 
-        super::enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
