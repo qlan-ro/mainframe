@@ -15,6 +15,10 @@
  * The effect cannot prevent the flash on its own — it runs after the render
  * that already saw the new projectId — so the report is gated on
  * `reportProjectId` at the prop boundary below.
+ *
+ * The header's section switcher only swaps the body; the recommendation fetch
+ * is keyed on [open, projectId] alone, so opening straight onto Skills still
+ * loads the report exactly once.
  */
 import { useEffect, useRef } from 'react';
 import { ScanSearch } from 'lucide-react';
@@ -22,14 +26,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
 import { selectCopiedCount, useSetupAdvisorStore } from './use-setup-advisor-store';
+import { SectionSwitcher } from './SectionSwitcher';
 import { SetupAdvisorSheet } from './SetupAdvisorSheet';
+import { SkillsSection } from './skills/SkillsSection';
 
 /** Module-scoped so a project with no copy history hands the sheet a stable prop. */
 const EMPTY_COPIED: ReadonlySet<string> = new Set();
 
 export function SetupAdvisorHost() {
-  const { open, closeSheet } = useSetupAdvisor();
-  const { projectId, projectName } = useActiveIdentity();
+  const { open, section, closeSheet, setSection } = useSetupAdvisor();
+  const { projectId, projectName, adapterId } = useActiveIdentity();
   const { report, reportProjectId, loading, error, copiedByProject, load, clearForProjectSwitch, markCopied } =
     useSetupAdvisorStore();
   const copiedCount = useSetupAdvisorStore(selectCopiedCount);
@@ -72,22 +78,27 @@ export function SetupAdvisorHost() {
         className="flex max-h-[85vh] w-full max-w-[640px] flex-col gap-0 p-0"
       >
         {/* pr-9 clears the dialog's built-in close button (26px at right-3). */}
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-9">
-          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+        <DialogHeader className="shrink-0 flex-row items-center gap-2 border-b border-border px-4 py-3 pr-9">
+          <DialogTitle className="flex min-w-0 items-center gap-2 text-heading font-bold">
             <ScanSearch size={14} className="shrink-0 text-primary" aria-hidden />
             Setup Advisor
-            <span className="min-w-0 truncate text-body font-normal text-muted-foreground">{projectName}</span>
+            <span className="min-w-0 truncate text-body font-medium text-muted-foreground">{projectName}</span>
           </DialogTitle>
+          <SectionSwitcher section={section} onSelect={setSection} />
         </DialogHeader>
-        <SetupAdvisorSheet
-          report={reportForProject}
-          loading={loading}
-          error={error}
-          copiedIds={copiedIds}
-          copiedCount={copiedCount}
-          onCopy={(recId) => markCopied(projectId, recId)}
-          onRetry={() => void load(projectId)}
-        />
+        {section === 'skills' ? (
+          <SkillsSection projectId={projectId} adapterId={adapterId} />
+        ) : (
+          <SetupAdvisorSheet
+            report={reportForProject}
+            loading={loading}
+            error={error}
+            copiedIds={copiedIds}
+            copiedCount={copiedCount}
+            onCopy={(recId) => markCopied(projectId, recId)}
+            onRetry={() => void load(projectId)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

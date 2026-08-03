@@ -37,6 +37,8 @@ pub mod session_transcripts;
 pub mod settings;
 pub mod setup_advisor;
 pub mod skills;
+pub mod skills_cli;
+pub mod skills_registry;
 pub mod suggestions;
 pub mod tags;
 pub mod tunnel;
