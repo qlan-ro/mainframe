@@ -33,6 +33,7 @@ import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
+import { TasksSidebarSection } from '../tasks/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
 import { TagFilterBar } from './TagFilterBar';
@@ -141,6 +142,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           draft={draft}
           hasFilters={hasFilters}
         />
+        <TasksSidebarSection />
         <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
       </SidebarContent>
 
