@@ -1,15 +1,16 @@
 /**
  * SkillsSection.uninstall.test.tsx
  *
- * Red until `../SkillsSection` exists (plan Group F5). Pins the uninstall
- * success outcome (plan E4): `uninstallSkills` is called with that row's
- * name and scope — a global row sends `'global'`, not the project id.
+ * Pins the uninstall outcome: `uninstallSkills` is called with that row's skill
+ * id and the scope it is being removed from — a global row sends `'global'`,
+ * not the project id.
  *
- * Rows live under Installed, which is not the tab that mounts first.
+ * A row installed in one scope removes on a click, since there is nothing to
+ * ask. A row installed in both has to ask which one it means, so it goes
+ * through the same scope popover installing uses.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/api/skills-cli', () => ({
   getSkillsCliManifest: vi.fn(),
@@ -22,82 +23,82 @@ vi.mock('@/lib/api/skills-cli', () => ({
 }));
 
 vi.mock('@/lib/toast', () => ({
-  mfToast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warning: vi.fn(),
-    info: vi.fn(),
-    permission: vi.fn(),
-  },
+  mfToast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(), permission: vi.fn() },
 }));
 
 import { SkillsSection } from '../SkillsSection';
-import { useSkillsBrowseStore } from '../use-skills-browse-store';
-import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
-
-function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: 'project' | 'global' }): SkillsCliEntry {
-  return {
-    source: 'shadcn/ui',
-    sourceType: 'github',
-    skillPath: `skills/${overrides.name}/SKILL.md`,
-    ...overrides,
-  };
-}
-
-/** Renders the section and opens Installed — Browse is what mounts first. */
-function renderInstalled(projectId: string) {
-  const result = render(<SkillsSection projectId={projectId} />);
-  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
-  return result;
-}
+import { makeEntry, mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
 
 beforeEach(() => {
-  act(() => {
-    useSkillsCliStore.setState({
-      status: 'idle',
-      entries: [],
-      probe: null,
-      installing: false,
-      uninstallingKey: null,
-      failure: null,
-    });
-    useSkillsBrowseStore.getState().reset();
-  });
-  vi.clearAllMocks();
-  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
+  resetSkillsStores();
+  mockCatalogUnavailable();
+  vi.mocked(skillsCliApi.uninstallSkills).mockResolvedValue(undefined);
 });
 
 describe('SkillsSection — uninstall success', () => {
-  it('sends the row scope and name; a global row sends "global"', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'my skill', scope: 'global' })],
-    });
-    vi.mocked(skillsCliApi.uninstallSkills).mockResolvedValue(undefined);
+  it('sends the row scope and skill id; a global row sends "global"', async () => {
+    mockManifest([makeEntry({ name: 'my skill', scope: 'global' })]);
 
-    renderInstalled('proj-a');
+    render(<SkillsSection projectId="proj-a" />);
 
-    const uninstallButton = await screen.findByTestId('skills-section-uninstall-global-my skill');
-    fireEvent.click(uninstallButton);
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/my skill'));
 
     await waitFor(() => expect(skillsCliApi.uninstallSkills).toHaveBeenCalledTimes(1));
     expect(skillsCliApi.uninstallSkills).toHaveBeenCalledWith('proj-a', ['my skill'], 'global', undefined);
   });
 
   it('sends "project" for a project-scoped row', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' })],
-    });
-    vi.mocked(skillsCliApi.uninstallSkills).mockResolvedValue(undefined);
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' })]);
 
-    renderInstalled('proj-a');
+    render(<SkillsSection projectId="proj-a" />);
 
-    const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
-    fireEvent.click(uninstallButton);
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
 
     await waitFor(() => expect(skillsCliApi.uninstallSkills).toHaveBeenCalledTimes(1));
     expect(skillsCliApi.uninstallSkills).toHaveBeenCalledWith('proj-a', ['shadcn'], 'project', undefined);
+  });
+
+  it('asks which scope when the skill is installed in both, and removes only that one', async () => {
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'shadcn', scope: 'global' })]);
+
+    render(<SkillsSection projectId="proj-a" />);
+
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
+
+    const menu = await screen.findByTestId('skills-row-scope-shadcn/ui/shadcn');
+    expect(menu).toHaveTextContent('This project');
+    expect(menu).toHaveTextContent('All projects');
+
+    fireEvent.click(screen.getByTestId('skills-row-scope-shadcn/ui/shadcn-global'));
+
+    await waitFor(() => expect(skillsCliApi.uninstallSkills).toHaveBeenCalledTimes(1));
+    expect(skillsCliApi.uninstallSkills).toHaveBeenCalledWith('proj-a', ['shadcn'], 'global', undefined);
+  });
+
+  it('passes the adapter id through', async () => {
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' })]);
+
+    render(<SkillsSection projectId="proj-a" adapterId="codex" />);
+
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
+
+    await waitFor(() =>
+      expect(skillsCliApi.uninstallSkills).toHaveBeenCalledWith('proj-a', ['shadcn'], 'project', 'codex'),
+    );
+  });
+
+  it('marks the row as removing while it runs', async () => {
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' })]);
+    vi.mocked(skillsCliApi.uninstallSkills).mockImplementation(() => new Promise(() => {}));
+
+    render(<SkillsSection projectId="proj-a" />);
+
+    const action = await screen.findByTestId('skills-row-action-shadcn/ui/shadcn');
+    fireEvent.click(action);
+
+    const running = await screen.findByTestId('skills-row-action-shadcn/ui/shadcn');
+    await waitFor(() => expect(running).toHaveAttribute('aria-busy', 'true'));
+    expect(running).toHaveTextContent('Removing');
   });
 });

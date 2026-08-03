@@ -1,8 +1,7 @@
 /**
  * SkillsSection.unavailable.test.tsx
  *
- * Red until `../SkillsSection` exists (plan Group F4/F5). Pins the
- * CLI-unavailable branch (plan E5): the whole body is replaced by an
+ * Pins the CLI-unavailable branch: the whole body is replaced by an
  * explanatory block naming both `skills` and `npx skills`, install/uninstall
  * affordances are absent from the DOM (not merely disabled), the section is
  * not rendered as an error and not hidden, and a remote daemon target names
@@ -16,6 +15,8 @@ vi.mock('@/lib/api/skills-cli', () => ({
   probeSkillsSource: vi.fn(),
   installSkills: vi.fn(),
   uninstallSkills: vi.fn(),
+  getSkillsCatalog: vi.fn(),
+  searchSkills: vi.fn(),
   SkillsCliError: class SkillsCliError extends Error {},
 }));
 
@@ -32,20 +33,13 @@ vi.mock('@/lib/daemon/active-daemon', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
-import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import * as activeDaemon from '@/lib/daemon/active-daemon';
+import { mockCatalogUnavailable, resetSkillsStores } from './harness';
 
 beforeEach(() => {
-  useSkillsCliStore.setState({
-    status: 'idle',
-    entries: [],
-    probe: null,
-    installing: false,
-    uninstallingKey: null,
-    failure: null,
-  });
-  vi.clearAllMocks();
+  resetSkillsStores();
+  mockCatalogUnavailable();
   vi.mocked(activeDaemon.getActiveDaemon).mockReturnValue({
     id: 'local',
     kind: 'local',
@@ -82,7 +76,7 @@ describe('SkillsSection — CLI unavailable', () => {
     await screen.findByTestId('skills-section-cli-unavailable');
 
     expect(screen.queryByTestId('skills-section-install')).not.toBeInTheDocument();
-    expect(screen.queryByTestId(/^skills-section-uninstall-/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^skills-row-action-/)).not.toBeInTheDocument();
   });
 
   it('has no copy-affordance text beyond naming the two commands', async () => {

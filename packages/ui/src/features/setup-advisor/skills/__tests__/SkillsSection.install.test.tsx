@@ -1,16 +1,13 @@
 /**
  * SkillsSection.install.test.tsx
  *
- * Red until `../SkillsSection` and `../InstallBand` exist (plan Group F3/F5).
- * Pins the install success outcome (plan E4): `installSkills` is called with
- * the typed source/selected names/chosen scope, success toasts via the
- * mocked `mfToast` (never sonner), and the manifest is refetched.
- *
- * The band lives under Browse, which is the tab that mounts first, and reads
- * Browse's one scope control rather than owning one.
+ * Pins the install success outcome for the source band: `installSkills` is
+ * called with the typed source, the selected names, and the scope picked on the
+ * Install button, success toasts via the mocked `mfToast` (never sonner), and
+ * the manifest is refetched so the new skill joins the installed rows.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/api/skills-cli', () => ({
   getSkillsCliManifest: vi.fn(),
@@ -33,26 +30,14 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
-import { useSkillsBrowseStore } from '../use-skills-browse-store';
-import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import { mfToast } from '@/lib/toast';
+import { mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
 
 beforeEach(() => {
-  act(() => {
-    useSkillsCliStore.setState({
-      status: 'idle',
-      entries: [],
-      probe: null,
-      installing: false,
-      uninstallingKey: null,
-      failure: null,
-    });
-    useSkillsBrowseStore.getState().reset();
-  });
-  vi.clearAllMocks();
-  vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
-  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
+  resetSkillsStores();
+  mockManifest([]);
+  mockCatalogUnavailable();
 });
 
 describe('SkillsSection — install success', () => {
@@ -69,13 +54,11 @@ describe('SkillsSection — install success', () => {
     fireEvent.change(source, { target: { value: 'shadcn/ui' } });
     fireEvent.blur(source);
 
-    const option = await screen.findByTestId('skills-section-skill-option-shadcn');
-    fireEvent.click(option);
-
-    fireEvent.click(screen.getByTestId('skills-browse-scope-global'));
+    fireEvent.click(await screen.findByTestId('skills-section-skill-option-shadcn'));
 
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockClear();
     fireEvent.click(screen.getByTestId('skills-section-install'));
+    fireEvent.click(await screen.findByTestId('skills-section-install-scope-global'));
 
     await waitFor(() => expect(skillsCliApi.installSkills).toHaveBeenCalledTimes(1));
     expect(skillsCliApi.installSkills).toHaveBeenCalledWith('proj-a', 'shadcn/ui', ['shadcn'], 'global', undefined);

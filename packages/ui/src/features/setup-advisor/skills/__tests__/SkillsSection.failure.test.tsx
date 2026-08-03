@@ -1,15 +1,13 @@
 /**
  * SkillsSection.failure.test.tsx
  *
- * Red until `../SkillsSection` exists (plan Group F5). Pins the failure
- * outcome (plan E4): a thrown `SkillsCliError` with a tail toasts via the
- * mocked `mfToast` AND renders `skills-section-failure-tail`, the tail
- * persists past toast dismissal, carries no ANSI escape, and the rendered
- * rows equal the re-read manifest, never an optimistic mutation.
+ * Pins the failure outcome: a thrown `SkillsCliError` with a tail toasts via
+ * the mocked `mfToast` AND renders `skills-section-failure-tail`, the tail
+ * persists past toast dismissal, carries no ANSI escape, and the rendered rows
+ * equal the re-read manifest, never an optimistic mutation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
 
 // `vi.hoisted` because `vi.mock`'s factory is hoisted above the module body and
 // runs during the first import of the mocked module — a plain class declaration
@@ -49,57 +47,24 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
-import { useSkillsBrowseStore } from '../use-skills-browse-store';
-import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import { mfToast } from '@/lib/toast';
-
-function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: 'project' | 'global' }): SkillsCliEntry {
-  return {
-    source: 'shadcn/ui',
-    sourceType: 'github',
-    skillPath: `skills/${overrides.name}/SKILL.md`,
-    ...overrides,
-  };
-}
-
-/** Renders the section and opens Installed — Browse is what mounts first. */
-function renderInstalled(projectId: string) {
-  const result = render(<SkillsSection projectId={projectId} />);
-  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
-  return result;
-}
+import { makeEntry, mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
 
 const TAIL = 'npm ERR! code E404\nnpm ERR! 404 Not Found';
 
 beforeEach(() => {
-  act(() => {
-    useSkillsCliStore.setState({
-      status: 'idle',
-      entries: [],
-      probe: null,
-      installing: false,
-      uninstallingKey: null,
-      failure: null,
-    });
-    useSkillsBrowseStore.getState().reset();
-  });
-  vi.clearAllMocks();
-  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
+  resetSkillsStores();
+  mockCatalogUnavailable();
+  mockManifest([makeEntry({ name: 'shadcn', scope: 'project' })]);
+  vi.mocked(skillsCliApi.uninstallSkills).mockRejectedValue(new SkillsCliError('Uninstall failed', TAIL, 1));
 });
 
 describe('SkillsSection — uninstall failure', () => {
   it('toasts and renders the tail, without mutating the row list optimistically', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' })],
-    });
-    vi.mocked(skillsCliApi.uninstallSkills).mockRejectedValue(new SkillsCliError('Uninstall failed', TAIL, 1));
+    render(<SkillsSection projectId="proj-a" />);
 
-    renderInstalled('proj-a');
-
-    const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
-    fireEvent.click(uninstallButton);
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
 
     await waitFor(() => expect(mfToast.error).toHaveBeenCalledTimes(1));
 
@@ -111,21 +76,15 @@ describe('SkillsSection — uninstall failure', () => {
 
     // The manifest fetch is re-read after the failed op, and the row that
     // failed to uninstall is still there because the re-read said so.
-    expect(await screen.findByTestId('skills-section-row-project-shadcn')).toBeInTheDocument();
+    expect(await screen.findByTestId('skills-row-shadcn/ui/shadcn')).toBeInTheDocument();
   });
 
   it('keeps the tail rendered well past a typical toast auto-dismiss duration', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' })],
-    });
-    vi.mocked(skillsCliApi.uninstallSkills).mockRejectedValue(new SkillsCliError('Uninstall failed', TAIL, 1));
 
-    renderInstalled('proj-a');
+    render(<SkillsSection projectId="proj-a" />);
 
-    const uninstallButton = await screen.findByTestId('skills-section-uninstall-project-shadcn');
-    fireEvent.click(uninstallButton);
+    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
 
     await screen.findByTestId('skills-section-failure-tail');
 

@@ -1,19 +1,17 @@
 /**
  * SkillsSection.test.tsx
  *
- * Red until `../SkillsSection` exists (plan Group F5). Pins the manifest
- * render states (plan E2) against a mocked `@/lib/api/skills-cli`. Install
- * band interaction is covered by InstallBand.test.tsx; success/failure
- * outcomes by the SkillsSection.{install,uninstall,failure}.test.tsx trio;
- * the CLI-unavailable branch by SkillsSection.unavailable.test.tsx; the tab
- * strip itself by SkillsSection.tabs.test.tsx.
+ * Pins the manifest half of the list against a mocked `@/lib/api/skills-cli`:
+ * what a row carries, how one skill installed in two scopes collapses into one
+ * row, and what the panel says when the manifest can't be read at all.
  *
- * Browse is the default tab, so every case here opens Installed first.
+ * Ordering and the row action live in SkillsSection.merged.test.tsx; the
+ * registry half in the catalog and search suites; install and uninstall
+ * outcomes in the {row-install,install,uninstall,failure} trio; the
+ * CLI-unavailable branch in SkillsSection.unavailable.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { act } from '@testing-library/react';
-import type { SkillsCliEntry } from '@qlan-ro/mainframe-types';
+import { render, screen, act } from '@testing-library/react';
 
 vi.mock('@/lib/api/skills-cli', () => ({
   getSkillsCliManifest: vi.fn(),
@@ -26,67 +24,37 @@ vi.mock('@/lib/api/skills-cli', () => ({
 }));
 
 import { SkillsSection } from '../SkillsSection';
-import { useSkillsBrowseStore } from '../use-skills-browse-store';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
-
-function makeEntry(overrides: Partial<SkillsCliEntry> & { name: string; scope: 'project' | 'global' }): SkillsCliEntry {
-  return {
-    source: 'shadcn/ui',
-    sourceType: 'github',
-    skillPath: `skills/${overrides.name}/SKILL.md`,
-    ...overrides,
-  };
-}
-
-/** Renders the section and opens Installed — Browse is what mounts first. */
-function renderInstalled(props: { projectId: string; adapterId?: string }) {
-  const result = render(<SkillsSection {...props} />);
-  fireEvent.click(screen.getByTestId('skills-section-tab-installed'));
-  return result;
-}
+import { makeEntry, mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
 
 beforeEach(() => {
-  act(() => {
-    useSkillsCliStore.setState({
-      status: 'idle',
-      entries: [],
-      probe: null,
-      installing: false,
-      uninstallingKey: null,
-      failure: null,
-    });
-    useSkillsBrowseStore.getState().reset();
-  });
-  vi.clearAllMocks();
-  vi.mocked(skillsCliApi.getSkillsCatalog).mockResolvedValue({ status: 'unavailable' });
+  resetSkillsStores();
+  mockCatalogUnavailable();
 });
 
 describe('SkillsSection — loading', () => {
   it('renders skeleton rows, not a spinner', () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(skillsCliApi.getSkillsCatalog).mockImplementation(() => new Promise(() => {}));
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    expect(screen.getAllByTestId('skills-section-skeleton').length).toBeGreaterThan(0);
-    expect(screen.queryByTestId('skills-section-empty')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('skills-browse-skeleton').length).toBeGreaterThan(0);
   });
 });
 
-describe('SkillsSection — populated', () => {
-  it('renders one row per entry, project and global scopes in one list, keyed by scope and name', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [
-        makeEntry({ name: 'shadcn', scope: 'project', source: 'shadcn/ui' }),
-        makeEntry({ name: 'my skill', scope: 'global', source: 'acme/skills' }),
-      ],
-    });
+describe('SkillsSection — installed rows', () => {
+  it('renders one row per skill, keyed by source and id, showing both', async () => {
+    mockManifest([
+      makeEntry({ name: 'shadcn', scope: 'project', source: 'shadcn/ui' }),
+      makeEntry({ name: 'my skill', scope: 'global', source: 'acme/skills' }),
+    ]);
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    const projectRow = await screen.findByTestId('skills-section-row-project-shadcn');
-    const globalRow = await screen.findByTestId('skills-section-row-global-my skill');
+    const projectRow = await screen.findByTestId('skills-row-shadcn/ui/shadcn');
+    const globalRow = await screen.findByTestId('skills-row-acme/skills/my skill');
 
     expect(projectRow).toHaveTextContent('shadcn');
     expect(projectRow).toHaveTextContent('shadcn/ui');
@@ -94,109 +62,86 @@ describe('SkillsSection — populated', () => {
     expect(globalRow).toHaveTextContent('acme/skills');
   });
 
-  it('renders two entries sharing a name across scopes as two distinct rows', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'shadcn', scope: 'global' })],
-    });
+  it('collapses one skill installed in both scopes into a single row', async () => {
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'shadcn', scope: 'global' })]);
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    const projectRow = await screen.findByTestId('skills-section-row-project-shadcn');
-    const globalRow = await screen.findByTestId('skills-section-row-global-shadcn');
-
-    expect(projectRow).not.toBe(globalRow);
+    await screen.findByTestId('skills-row-shadcn/ui/shadcn');
+    expect(screen.getAllByTestId('skills-row-shadcn/ui/shadcn')).toHaveLength(1);
   });
 
-  it('keeps the Uninstall slot present on every row whether or not one is running', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'my skill', scope: 'global' })],
-    });
+  it('keeps a source-less local skill under its own key, with no source and still removable', async () => {
+    mockManifest([{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }]);
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    await screen.findByTestId('skills-section-row-project-shadcn');
-
-    act(() => {
-      useSkillsCliStore.setState({ uninstallingKey: 'project:shadcn' });
-    });
-
-    const running = screen.getByTestId('skills-section-uninstall-project-shadcn');
-    const other = screen.getByTestId('skills-section-uninstall-global-my skill');
-
-    expect(running).toBeInTheDocument();
-    expect(other).toBeInTheDocument();
-    expect(running).toHaveAttribute('aria-busy', 'true');
-  });
-
-  it('renders a name-only entry (no source) with no source chip, still keyed and uninstallable', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [{ name: 'no-source', scope: 'project', source: null, sourceType: null, skillPath: null }],
-    });
-
-    renderInstalled({ projectId: 'proj-a' });
-
-    const row = await screen.findByTestId('skills-section-row-project-no-source');
+    const row = await screen.findByTestId('skills-row-local:no-source');
     expect(row).toHaveTextContent('no-source');
-    expect(screen.getByTestId('skills-section-uninstall-project-no-source')).toBeInTheDocument();
+    expect(screen.getByTestId('skills-row-action-local:no-source')).toHaveTextContent('Installed');
   });
 
-  it('disables every row Uninstall while an install is in flight', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({
-      status: 'available',
-      entries: [makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'my skill', scope: 'global' })],
-    });
+  it('disables every row action while an install is in flight', async () => {
+    mockManifest([makeEntry({ name: 'shadcn', scope: 'project' }), makeEntry({ name: 'my skill', scope: 'global' })]);
 
-    renderInstalled({ projectId: 'proj-a' });
-    await screen.findByTestId('skills-section-row-project-shadcn');
+    render(<SkillsSection projectId="proj-a" />);
+    await screen.findByTestId('skills-row-shadcn/ui/shadcn');
 
     act(() => {
       useSkillsCliStore.setState({ installing: true });
     });
 
-    expect(screen.getByTestId('skills-section-uninstall-project-shadcn')).toBeDisabled();
-    expect(screen.getByTestId('skills-section-uninstall-global-my skill')).toBeDisabled();
+    expect(screen.getByTestId('skills-row-action-shadcn/ui/shadcn')).toBeDisabled();
+    expect(screen.getByTestId('skills-row-action-shadcn/ui/my skill')).toBeDisabled();
   });
 });
 
-describe('SkillsSection — empty', () => {
-  it('renders "No skills installed by the CLI"', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
+describe('SkillsSection — manifest unreadable', () => {
+  it('says none are marked, rather than letting every row read as new', async () => {
+    vi.mocked(skillsCliApi.getSkillsCliManifest).mockRejectedValue(new Error('502 Bad Gateway'));
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    const empty = await screen.findByTestId('skills-section-empty');
-    expect(empty).toHaveTextContent('No skills installed by the CLI');
+    expect(await screen.findByTestId('skills-browse-manifest-error')).toHaveTextContent(
+      "Couldn't read your installed skills, so none are marked here.",
+    );
+  });
+
+  it('is absent once the manifest reads cleanly', async () => {
+    mockManifest([]);
+
+    render(<SkillsSection projectId="proj-a" />);
+
+    await screen.findByTestId('skills-browse-catalog-unavailable');
+    expect(screen.queryByTestId('skills-browse-manifest-error')).not.toBeInTheDocument();
   });
 });
 
 describe('SkillsSection — adapter note', () => {
   it('renders when adapterId is present and is not "claude"', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
+    mockManifest([]);
 
-    renderInstalled({ projectId: 'proj-a', adapterId: 'codex' });
+    render(<SkillsSection projectId="proj-a" adapterId="codex" />);
 
     const note = await screen.findByTestId('skills-section-adapter-note');
     expect(note).toHaveTextContent("The composer and sidebar skill lists show Claude's skills.");
   });
 
   it('is absent when adapterId is "claude"', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
+    mockManifest([]);
 
-    renderInstalled({ projectId: 'proj-a', adapterId: 'claude' });
+    render(<SkillsSection projectId="proj-a" adapterId="claude" />);
 
-    await screen.findByTestId('skills-section-empty');
+    await screen.findByTestId('skills-browse-catalog-unavailable');
     expect(screen.queryByTestId('skills-section-adapter-note')).not.toBeInTheDocument();
   });
 
   it('is absent when adapterId is undefined', async () => {
-    vi.mocked(skillsCliApi.getSkillsCliManifest).mockResolvedValue({ status: 'available', entries: [] });
+    mockManifest([]);
 
-    renderInstalled({ projectId: 'proj-a' });
+    render(<SkillsSection projectId="proj-a" />);
 
-    await screen.findByTestId('skills-section-empty');
+    await screen.findByTestId('skills-browse-catalog-unavailable');
     expect(screen.queryByTestId('skills-section-adapter-note')).not.toBeInTheDocument();
   });
 });

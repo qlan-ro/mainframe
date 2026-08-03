@@ -7,28 +7,31 @@
  * is validated against the daemon's own rules first, so a rejected source
  * never reaches a process.
  *
- * Scope is a prop, not local state — Browse owns the one scope control, and a
- * second one here could disagree with it on screen.
+ * Scope is asked on the Install button, the same way a list row asks it, so
+ * there is one place to learn the question rather than two.
  */
 import { useState } from 'react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MenuRow } from '@/components/ui/menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SkillPicker } from './SkillPicker';
+import { SCOPE_LABEL } from './scope-label';
 import { useSkillsCliStore } from './use-skills-cli-store';
 import { validateSkillsSource } from './validate-source';
 
 interface InstallBandProps {
   projectId: string;
-  scope: SkillsCliScope;
   adapterId?: string;
 }
 
-export function InstallBand({ projectId, scope, adapterId }: InstallBandProps) {
+export function InstallBand({ projectId, adapterId }: InstallBandProps) {
   const [source, setSource] = useState('');
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [manualName, setManualName] = useState('');
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   const probing = useSkillsCliStore((s) => s.probing);
   const probe = useSkillsCliStore((s) => s.probe);
@@ -63,7 +66,8 @@ export function InstallBand({ projectId, scope, adapterId }: InstallBandProps) {
     setSelected((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
-  async function submit() {
+  async function submit(scope: SkillsCliScope) {
+    setScopeOpen(false);
     const ok = await install(projectId, source.trim(), names, scope, adapterId);
     if (!ok) return;
     setSource('');
@@ -89,15 +93,23 @@ export function InstallBand({ projectId, scope, adapterId }: InstallBandProps) {
             probeSource();
           }}
         />
-        <Button
-          type="button"
-          size="sm"
-          data-testid="skills-section-install"
-          disabled={!canInstall}
-          onClick={() => void submit()}
-        >
-          Install
-        </Button>
+        <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" size="sm" data-testid="skills-section-install" disabled={!canInstall}>
+              Install
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent data-testid="skills-section-install-scope" className="w-40" align="end">
+            {(['project', 'global'] as const).map((scope) => (
+              <MenuRow
+                key={scope}
+                data-testid={`skills-section-install-scope-${scope}`}
+                label={SCOPE_LABEL[scope]}
+                onClick={() => void submit(scope)}
+              />
+            ))}
+          </PopoverContent>
+        </Popover>
       </div>
 
       {sourceError ? (
