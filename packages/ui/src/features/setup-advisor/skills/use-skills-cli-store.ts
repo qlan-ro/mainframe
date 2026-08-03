@@ -34,6 +34,12 @@ export interface SkillsCliUnavailableInfo {
 
 interface SkillsCliState {
   status: SkillsCliStatus;
+  /**
+   * Whether the manifest has ever finished a read. `status` returns to
+   * `loading` on every refetch, so it cannot tell a first read from a refresh —
+   * and the list may only blank itself for the first one.
+   */
+  loaded: boolean;
   entries: SkillsCliEntry[];
   unavailable: SkillsCliUnavailableInfo | null;
   error: string | null;
@@ -68,6 +74,7 @@ function toFailure(err: unknown): SkillsCliFailure {
 
 export const useSkillsCliStore = create<SkillsCliState>((set, get) => ({
   status: 'idle',
+  loaded: false,
   entries: [],
   unavailable: null,
   error: null,
@@ -86,13 +93,17 @@ export const useSkillsCliStore = create<SkillsCliState>((set, get) => ({
       if (seq !== _loadSeq) return;
       if (manifest.status === 'unavailable') {
         const { executable, packageRunner } = manifest;
-        set({ status: 'unavailable', unavailable: { executable, packageRunner }, entries: [] });
+        set({ status: 'unavailable', loaded: true, unavailable: { executable, packageRunner }, entries: [] });
         return;
       }
-      set({ status: 'available', unavailable: null, entries: manifest.entries });
+      set({ status: 'available', loaded: true, unavailable: null, entries: manifest.entries });
     } catch (err) {
       if (seq !== _loadSeq) return;
-      set({ status: 'error', error: err instanceof Error ? err.message : 'Could not read the skills manifest' });
+      set({
+        status: 'error',
+        loaded: true,
+        error: err instanceof Error ? err.message : 'Could not read the skills manifest',
+      });
     }
   },
 
@@ -152,6 +163,7 @@ export const useSkillsCliStore = create<SkillsCliState>((set, get) => ({
     _probeSeq++;
     set({
       status: 'idle',
+      loaded: false,
       entries: [],
       unavailable: null,
       error: null,

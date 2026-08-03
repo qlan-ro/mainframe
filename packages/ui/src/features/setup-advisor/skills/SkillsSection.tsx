@@ -19,6 +19,7 @@
  * thing rather than leaving a dead list.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
 import { Input } from '@/components/ui/input';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -51,6 +52,7 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
   const resetBrowse = useSkillsBrowseStore((s) => s.reset);
 
   const status = useSkillsCliStore((s) => s.status);
+  const loaded = useSkillsCliStore((s) => s.loaded);
   const entries = useSkillsCliStore((s) => s.entries);
   const unavailable = useSkillsCliStore((s) => s.unavailable);
   const installing = useSkillsCliStore((s) => s.installing);
@@ -75,6 +77,15 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
   useEffect(() => resetBrowse, [resetBrowse]);
 
   const busy = installing || uninstallingKey !== null;
+  // Every read the panel makes, in one place: a refresh keeps its rows, so
+  // without this the only sign of a slow manifest or search is that the list
+  // changes under you some seconds later.
+  const fetching =
+    status === 'idle' ||
+    status === 'loading' ||
+    catalogStatus === 'idle' ||
+    catalogStatus === 'loading' ||
+    searchStatus === 'searching';
 
   async function run(row: SkillRow, work: Promise<unknown>) {
     setRunningKey(row.key);
@@ -103,13 +114,26 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
     <section className="flex min-h-0 flex-1 flex-col">
       {/* Search and the source band frame the list; only the list scrolls. */}
       <div className="shrink-0 border-b border-border px-4 py-3">
-        <Input
-          data-testid="skills-browse-search"
-          value={query}
-          placeholder="Search your skills and skills.sh"
-          aria-label="Search skills"
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <div className="relative">
+          <Input
+            data-testid="skills-browse-search"
+            className="pr-8"
+            value={query}
+            placeholder="Search your skills and skills.sh"
+            aria-label="Search skills"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {fetching ? (
+            <span
+              data-testid="skills-browse-loading"
+              role="status"
+              aria-label="Loading skills"
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            </span>
+          ) : null}
+        </div>
 
         {adapterId && adapterId !== 'claude' ? (
           <p data-testid="skills-section-adapter-note" className="pt-1.5 text-label text-muted-foreground">
@@ -129,7 +153,7 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
         <SkillsList
           rows={rows}
           mode={mode}
-          manifestStatus={status}
+          manifestLoaded={loaded}
           catalogStatus={catalogStatus}
           searchStatus={searchStatus}
           searchError={searchError}

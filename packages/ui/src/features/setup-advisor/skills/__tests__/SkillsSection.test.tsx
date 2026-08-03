@@ -6,9 +6,10 @@
  * row, and what the panel says when the manifest can't be read at all.
  *
  * Ordering and the row action live in SkillsSection.merged.test.tsx; the
- * registry half in the catalog and search suites; install and uninstall
- * outcomes in the {row-install,install,uninstall,failure} trio; the
- * CLI-unavailable branch in SkillsSection.unavailable.test.tsx.
+ * registry half in the catalog and search suites; the loading and refresh
+ * states in SkillsSection.loading.test.tsx; install and uninstall outcomes in
+ * the {row-install,install,uninstall,failure} trio; the CLI-unavailable branch
+ * in SkillsSection.unavailable.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -34,7 +35,7 @@ beforeEach(() => {
 });
 
 describe('SkillsSection — loading', () => {
-  it('renders skeleton rows, not a spinner', () => {
+  it('stands the list in as skeleton rows rather than an empty panel', () => {
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockImplementation(() => new Promise(() => {}));
     vi.mocked(skillsCliApi.getSkillsCatalog).mockImplementation(() => new Promise(() => {}));
 

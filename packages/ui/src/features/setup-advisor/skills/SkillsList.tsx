@@ -9,20 +9,27 @@
  * Headers appear only once both halves exist. With nothing installed the list
  * is just the registry, and labelling that "From skills.sh" would be captioning
  * the only thing on screen.
+ *
+ * Nothing renders until the manifest's first read lands, even when the registry
+ * has already answered: every row's action depends on whether that skill is
+ * installed, so rendering early offers to install skills the user already has
+ * and then silently corrects itself. Skeletons say "not yet" instead. Only the
+ * first read blanks the list — a refresh keeps the rows and reports itself in
+ * the search field.
  */
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SkillListRow } from './SkillListRow';
 import type { SkillRow, SkillRows } from './skill-rows';
 import type { CatalogStatus, SearchStatus } from './use-skills-browse-store';
-import type { SkillsCliStatus } from './use-skills-cli-store';
 
 const SKELETON_ROWS = 5;
 
 interface SkillsListProps {
   rows: SkillRows;
   mode: 'catalog' | 'search';
-  manifestStatus: SkillsCliStatus;
+  /** False until the manifest's first read lands — a refetch does not clear it. */
+  manifestLoaded: boolean;
   catalogStatus: CatalogStatus;
   searchStatus: SearchStatus;
   searchError: string | null;
@@ -34,14 +41,13 @@ interface SkillsListProps {
 }
 
 export function SkillsList(props: SkillsListProps) {
-  const { rows, mode, manifestStatus, catalogStatus, searchStatus } = props;
+  const { rows, mode, manifestLoaded, catalogStatus, searchStatus } = props;
   const { runningKey, disabled, onInstall, onUninstall } = props;
 
-  const manifestLoading = manifestStatus === 'idle' || manifestStatus === 'loading';
   const registryLoading =
     mode === 'search' ? searchStatus === 'searching' : catalogStatus === 'idle' || catalogStatus === 'loading';
 
-  if (manifestLoading && registryLoading) return <Skeletons />;
+  if (!manifestLoaded) return <Skeletons />;
 
   const renderRow = (row: SkillRow) => (
     <SkillListRow
