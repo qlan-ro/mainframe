@@ -63,6 +63,7 @@
 
   --font-heading: var(--font-sans);
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-sidebar-ring: var(--sidebar-ring);

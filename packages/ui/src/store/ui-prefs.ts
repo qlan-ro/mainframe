@@ -16,8 +16,9 @@ const SIDEBAR_DEFAULT_WIDTH = 256;
 
 export type BottomPanelTab = 'context' | 'skills' | 'agents';
 
-/** The four root sections in the left sidebar, each independently collapsible. */
-export type SidebarSection = 'projects' | 'sessions' | 'tasks' | 'tags';
+/** The collapsible sidebar sections. Only Projects survived the v2 shell —
+ *  Sessions/Tasks scroll as one region and Tags lives in the footer now. */
+export type SidebarSection = 'projects';
 
 export const BOTTOM_PANEL_MIN_HEIGHT = 120;
 export const BOTTOM_PANEL_DEFAULT_HEIGHT = 280;

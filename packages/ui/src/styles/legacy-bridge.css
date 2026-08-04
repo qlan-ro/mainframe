@@ -13,6 +13,15 @@
    - the ocean/velvet schemes and the window styles — retired with the merge
    - --radius / the v1 radius derivations — v2's scale is byte-close anyway
    - `antialiased` font smoothing — the app is native-smoothed now
+   - the tracking/leading overrides — they redefined Tailwind's own names
+     globally, so the v2 tree inherited v1 metrics; defaults win now
+   - --font-mono — promoted to the v2 token layer (v2 markup uses font-mono)
+
+   Where a v1 token duplicated a v2 semantic, it is an ALIAS onto the v2
+   token (declared once — var() re-resolves per mode), so the islands'
+   resting ink, chips, selection and success hues track the shell instead
+   of keeping their warm values. --mf-warning stays amber on purpose: it
+   means "caution" (edit ring), not v2's wrong-but-not-broken red.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -22,16 +31,16 @@
   --mf-raised: #f3efe7;
   --mf-tab-bar: #f3f0ea;
   --mf-tab-active: #ffffff;
-  --mf-text-3: #6c6b68;
+  --mf-text-3: var(--muted-foreground);
   --mf-text-4: #bcbab5;
-  --mf-chip: rgba(0, 0, 0, 0.05);
-  --mf-selection: rgba(10, 132, 255, 0.1);
+  --mf-chip: var(--accent);
+  --mf-selection: var(--sidebar-selection);
   /* In-chat Find highlights — amber (matches the --mf-cm-match editor-search
      convention), defined once; the dark block does not override them. */
   --mf-find-tint: rgba(251, 191, 36, 0.32);
   --mf-find-active: rgba(251, 146, 60, 0.6);
   --mf-warning: #a15804;
-  --mf-success: #1d7b33;
+  --mf-success: var(--success);
 
   /* Editor syntax — Xcode-ish on warm paper */
   --mf-code-bg: #fbfaf7;
@@ -65,8 +74,7 @@
   --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.35);
   --mf-scrim: rgba(22, 19, 15, 0.4);
 
-  /* Mono + motion (the sans stack now comes from the v2 layer) */
-  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
+  /* Motion (fonts come from the v2 layer) */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
@@ -165,12 +173,8 @@
   --mf-raised: #313447;
   --mf-tab-bar: #21232e;
   --mf-tab-active: #373a4d;
-  --mf-text-3: #8b8ea4;
   --mf-text-4: #555870;
-  --mf-chip: rgba(255, 255, 255, 0.07);
-  --mf-selection: rgba(10, 132, 255, 0.3);
   --mf-warning: #f5a960;
-  --mf-success: #50d97c;
 
   /* Editor syntax — playful slate pastels */
   --mf-code-bg: #21222c;
@@ -376,17 +380,7 @@
   --text-display--line-height: 1.2;
   --text-hero--line-height: 1.15;
 
-  /* Letter spacing + line-height */
-  --tracking-tight: -0.02em;
-  --tracking-normal: 0;
-  --tracking-wide: 0.06em;
-  --leading-tight: 1.15;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
-  --leading-loose: 1.58;
-
-  /* Mono font + easings */
-  --font-mono: var(--font-mono);
+  /* Easings */
   --ease-default: var(--ease-default);
   --ease-signature: var(--ease-signature);
 }

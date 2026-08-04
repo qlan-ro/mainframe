@@ -11,11 +11,14 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@v2/components/ui/sidebar';
+import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
-// Legacy island: the pairing flow has not been ported yet, so "Add remote
-// daemon…" opens the v1 dialog (its own bridge-styled markup) until it is.
-import { AddRemoteDialog } from '@/features/daemon/AddRemoteDialog';
+// Legacy islands: the pairing flow has not been ported yet, so "Add remote
+// daemon…" / "Re-pair…" open the v1 dialog, and a downed remote raises the
+// v1 unreachable overlay, until they are.
+import { AddRemoteDialog, type DialogMode } from '@/features/daemon/AddRemoteDialog';
+import { DaemonUnreachableBody } from '@/features/daemon/DaemonUnreachableBody';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
 import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { useRestoreLastDaemon } from '@/features/daemon/use-restore-last-daemon';
@@ -24,6 +27,7 @@ import { DaemonMenuItems } from './DaemonMenuItems';
 import { DaemonSmallDialog, type SmallDialogKind } from './DaemonSmallDialog';
 
 type DialogState = { kind: SmallDialogKind; target: DaemonMeta } | null;
+type PairingState = { mode: DialogMode; target?: DaemonMeta } | null;
 
 /** The registry loads asynchronously; until it does, the target is all we have. */
 function targetToMeta(target: DaemonTarget): DaemonMeta {
@@ -71,7 +75,7 @@ export function DaemonSwitcher() {
   const { target } = useActiveDaemon();
   const { state: connState } = useConnectionStatus();
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [pairing, setPairing] = useState<PairingState>(null);
 
   const activeMeta = registry.daemons.find((d) => d.id === registry.activeId) ?? targetToMeta(target);
 
@@ -86,7 +90,12 @@ export function DaemonSwitcher() {
   );
 
   const handleSwitch = useCallback((d: DaemonMeta) => void registry.switchTo(d.id), [registry]);
+  const handleSwitchLocal = useCallback(() => void registry.switchTo('local'), [registry]);
   const closeDialog = useCallback(() => setDialog(null), []);
+
+  // Only when the ACTIVE daemon is remote and the socket is down — the local
+  // disconnect case is owned by App's generic reconnect overlay.
+  const showUnreachableOverlay = activeMeta.kind === 'remote' && connState === 'disconnected';
 
   const handleConfirm = useCallback(
     (label?: string) => {
@@ -112,8 +121,9 @@ export function DaemonSwitcher() {
               activeId={registry.activeId}
               onSwitch={handleSwitch}
               onRename={(d) => setDialog({ kind: 'rename', target: d })}
+              onRepair={(d) => setPairing({ mode: 'repair', target: d })}
               onRemove={(d) => setDialog({ kind: 'remove', target: d })}
-              onAddRemote={() => setAddOpen(true)}
+              onAddRemote={() => setPairing({ mode: 'add' })}
             />
           </DropdownMenuContent>
         </DropdownMenu>
@@ -130,7 +140,17 @@ export function DaemonSwitcher() {
         {/* onDone stays a no-op: the dialog fires it the instant pairing
             succeeds, then defers its own onClose ~800ms so the "Paired" notice
             stays visible. Closing here would collapse that grace window. */}
-        <AddRemoteDialog open={addOpen} onClose={() => setAddOpen(false)} onDone={() => undefined} />
+        <AddRemoteDialog
+          open={pairing != null}
+          mode={pairing?.mode ?? 'add'}
+          target={pairing?.target}
+          onClose={() => setPairing(null)}
+          onDone={() => undefined}
+        />
+
+        <ConnectionOverlay open={showUnreachableOverlay}>
+          <DaemonUnreachableBody target={activeMeta} onSwitchLocal={handleSwitchLocal} />
+        </ConnectionOverlay>
       </SidebarMenuItem>
     </SidebarMenu>
   );

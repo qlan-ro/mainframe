@@ -99,17 +99,10 @@ describe('useUiPrefs actions', () => {
   });
 
   it('toggleSidebarSection flips a section from expanded to collapsed and back', () => {
-    useUiPrefs.getState().toggleSidebarSection('tasks');
-    expect(useUiPrefs.getState().collapsedSidebarSections.tasks).toBe(true);
-    useUiPrefs.getState().toggleSidebarSection('tasks');
-    expect(useUiPrefs.getState().collapsedSidebarSections.tasks).toBe(false);
-  });
-
-  it('toggleSidebarSection only affects the given section', () => {
-    useUiPrefs.getState().toggleSidebarSection('tags');
-    expect(useUiPrefs.getState().collapsedSidebarSections).toEqual({ tags: true });
-    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBeUndefined();
-    expect(useUiPrefs.getState().collapsedSidebarSections.sessions).toBeUndefined();
+    useUiPrefs.getState().toggleSidebarSection('projects');
+    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBe(true);
+    useUiPrefs.getState().toggleSidebarSection('projects');
+    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBe(false);
   });
 });
 
@@ -119,8 +112,8 @@ describe('isSidebarSectionCollapsed', () => {
   });
 
   it('returns the recorded value when present', () => {
-    expect(isSidebarSectionCollapsed({ sessions: true }, 'sessions')).toBe(true);
-    expect(isSidebarSectionCollapsed({ sessions: false }, 'sessions')).toBe(false);
+    expect(isSidebarSectionCollapsed({ projects: true }, 'projects')).toBe(true);
+    expect(isSidebarSectionCollapsed({ projects: false }, 'projects')).toBe(false);
   });
 });
 

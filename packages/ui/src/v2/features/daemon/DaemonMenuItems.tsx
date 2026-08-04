@@ -4,12 +4,13 @@
  *
  * The shipped picker is a hand-built 324px card over `components/ui/menu`; this
  * is the stock team-switcher shape, so a remote's manage actions live in a
- * `DropdownMenuSub` rather than a nested popover. "Add remote daemon…" opens
- * the legacy pairing dialog until that flow is ported; Re-pair is still out.
+ * `DropdownMenuSub` rather than a nested popover. "Add remote daemon…" and
+ * "Re-pair…" open the legacy pairing dialog until that flow is ported.
  */
 import {
   CheckIcon,
   ChevronRightIcon,
+  LockIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -35,6 +36,7 @@ export interface DaemonMenuItemsProps {
   activeId: string;
   onSwitch: (d: DaemonMeta) => void;
   onRename: (d: DaemonMeta) => void;
+  onRepair: (d: DaemonMeta) => void;
   onRemove: (d: DaemonMeta) => void;
   onAddRemote: () => void;
 }
@@ -75,10 +77,11 @@ function RemoteItem({
   active,
   onSwitch,
   onRename,
+  onRepair,
   onRemove,
 }: { d: DaemonMeta; status: DaemonStatus; active: boolean } & Pick<
   DaemonMenuItemsProps,
-  'onSwitch' | 'onRename' | 'onRemove'
+  'onSwitch' | 'onRename' | 'onRepair' | 'onRemove'
 >) {
   return (
     <div className="flex items-center gap-1">
@@ -97,6 +100,13 @@ function RemoteItem({
           <DropdownMenuItem data-testid={`daemon-row-${d.id}-rename`} onSelect={() => onRename(d)}>
             <PencilIcon />
             Rename…
+          </DropdownMenuItem>
+          <DropdownMenuItem data-testid={`daemon-row-${d.id}-repair`} onSelect={() => onRepair(d)}>
+            <LockIcon />
+            Re-pair…
+            {status === 'needs-repair' && (
+              <span className="ml-auto text-xs text-muted-foreground">Token revoked or expired</span>
+            )}
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
@@ -118,6 +128,7 @@ export function DaemonMenuItems({
   activeId,
   onSwitch,
   onRename,
+  onRepair,
   onRemove,
   onAddRemote,
 }: DaemonMenuItemsProps) {
@@ -164,6 +175,7 @@ export function DaemonMenuItems({
             active={activeId === d.id}
             onSwitch={onSwitch}
             onRename={onRename}
+            onRepair={onRepair}
             onRemove={onRemove}
           />
         ))

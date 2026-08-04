@@ -40,7 +40,7 @@ import { Toaster } from '@/components/ui/sonner';
  *
  * Post-boot disconnect overlay lives here (not in App) so useActiveDaemon() is
  * in scope. It is suppressed when the active daemon is REMOTE — the remote case
- * is owned by DaemonFooterStatus's DaemonUnreachableBody overlay.
+ * is owned by the v2 DaemonSwitcher's DaemonUnreachableBody overlay.
  */
 function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const { target } = useActiveDaemon();
@@ -52,7 +52,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const activePort = urlPort > 0 ? urlPort : fallbackPort;
 
   // Only show the generic reconnect overlay for LOCAL daemon disconnects.
-  // REMOTE disconnects are handled by DaemonFooterStatus → DaemonUnreachableBody.
+  // REMOTE disconnects are handled by DaemonSwitcher → DaemonUnreachableBody.
   const showReconnectOverlay = target.kind === 'local' && state !== 'connected';
 
   // Daemon switch / first port: reset baseline + reseed.

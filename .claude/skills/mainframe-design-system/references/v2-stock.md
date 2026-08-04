@@ -52,6 +52,12 @@ Three, each because the preset had no way to say the thing:
 
 `--ring` is `var(--primary)`, so focus rings are the accent everywhere.
 
+`--font-mono` ("SF Mono", ui-monospace, …) is also first-class in the v2 sheet — v2 markup uses
+`font-mono`, so it cannot live in the bridge. Several bridge tokens are now **aliases** onto v2 tokens
+(`--mf-text-3` → `muted-foreground`, `--mf-chip` → `accent`, `--mf-selection` → `sidebar-selection`,
+`--mf-success` → `success`), so legacy islands track the shell; `--mf-warning` deliberately stays amber
+(caution ≠ v2's wrong-but-not-broken red).
+
 ## Ink
 
 `foreground` is `oklch(0.32)` light / `0.92` dark — deliberately off stock's `0.145`/`0.985`. Stock assumes

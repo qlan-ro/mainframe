@@ -86,12 +86,10 @@ describe('design token audit', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('locks the letter-spacing scale and maps mf-* tokens in @theme (no phantom-token regressions)', () => {
+  it('maps mf-* tokens in @theme (no phantom-token regressions)', () => {
     const css = readFileSync(join(SRC_ROOT, 'styles/legacy-bridge.css'), 'utf8');
-    // Letter-spacing scale per the Design Tokens Report (LS.tight -0.02em / normal 0 / wide +0.06em).
-    expect(css).toMatch(/--tracking-tight:\s*-0\.02em/);
-    expect(css).toMatch(/--tracking-normal:\s*0\s*;/);
-    expect(css).toMatch(/--tracking-wide:\s*0\.06em/);
+    // The v1 letter-spacing scale is retired — tracking-* resolves to Tailwind
+    // defaults now (2026-08 shell integration).
     // @theme inline must MAP these mf-* tokens to --color-*; an unmapped token makes the
     // utility a phantom class that Tailwind silently drops (the documented app-tauri trap).
     for (const token of ['mf-viewer-check-a', 'mf-viewer-check-b', 'mf-scrim']) {
