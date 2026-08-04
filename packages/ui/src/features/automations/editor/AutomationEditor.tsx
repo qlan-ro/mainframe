@@ -17,10 +17,11 @@
  * matches, rather than falling back to an arbitrary "first project in the
  * DB".
  */
+import { Button } from '@v2/components/ui/button';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
@@ -51,11 +52,11 @@ function EditorSection({
   return (
     <div className="mb-[22px]">
       <div className="mb-2.5 flex items-baseline gap-2.5">
-        <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-foreground text-caption font-bold text-background">
+        <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
           {index}
         </span>
-        <span className="text-heading font-bold tracking-tight text-foreground">{label}</span>
-        {hint && <span className="text-caption text-muted-foreground">{hint}</span>}
+        <span className="text-base font-semibold tracking-tight text-foreground">{label}</span>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </div>
       <div className="pl-[32px]">{children}</div>
     </div>
@@ -155,28 +156,22 @@ export function AutomationEditor() {
           </button>
         </Hint>
         <Zap size={15} className="text-primary" aria-hidden />
-        <span className="text-heading font-bold tracking-tight text-foreground">
+        <span className="text-base font-semibold tracking-tight text-foreground">
           {isNew ? 'New automation' : draft.name || 'Automation'}
         </span>
         <span className="flex-1" />
-        <button
-          type="button"
-          data-testid="automations-editor-cancel"
-          onClick={closeEditor}
-          className="h-[30px] rounded-md border border-border px-3.5 text-label font-medium text-muted-foreground hover:bg-accent"
-        >
+        <Button size="sm" variant="outline" data-testid="automations-editor-cancel" onClick={closeEditor}>
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="sm"
           data-testid="automations-editor-save"
           disabled={!ok || saving}
           onClick={() => void handleSave()}
-          className="inline-flex h-[30px] items-center gap-1.5 rounded-md bg-primary px-3.5 text-label font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <Check size={12} aria-hidden />
+          <Check aria-hidden />
           {isNew ? 'Create' : 'Save'}
-        </button>
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -187,14 +182,14 @@ export function AutomationEditor() {
               value={draft.name}
               onChange={(e) => updateDraft((d) => ({ ...d, name: e.target.value }))}
               placeholder="Name this automation"
-              className="border-none bg-transparent p-0 text-title font-bold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+              className="border-none bg-transparent p-0 text-lg font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
             />
             <input
               data-testid="automations-editor-description"
               value={draft.description}
               onChange={(e) => updateDraft((d) => ({ ...d, description: e.target.value }))}
               placeholder="What does it do? (optional)"
-              className="border-none bg-transparent p-0 text-body text-muted-foreground outline-none placeholder:text-muted-foreground"
+              className="border-none bg-transparent p-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
 
@@ -227,14 +222,14 @@ export function AutomationEditor() {
 
       <div className="flex min-h-[40px] shrink-0 items-center gap-2.5 border-t border-border bg-muted/40 px-4 py-2">
         {ok ? (
-          <span className="inline-flex items-center gap-1.5 text-label font-semibold text-foreground">
-            <span className="flex size-[16px] items-center justify-center rounded-full bg-mf-success">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <span className="flex size-[16px] items-center justify-center rounded-full bg-success">
               <Check size={12} className="text-primary-foreground" aria-hidden />
             </span>
             {`Looks good · ready to ${isNew ? 'create' : 'save'}`}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-label font-semibold text-foreground">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
             <TriangleAlert size={13} className="text-destructive" aria-hidden />
             {errors.length} to fix
           </span>
@@ -242,12 +237,12 @@ export function AutomationEditor() {
         <div className="h-4 w-px bg-border" />
         <div data-testid="automations-editor-issues" className="flex flex-1 items-center gap-3.5 overflow-x-auto">
           {issues.length === 0 ? (
-            <span className="text-caption text-muted-foreground">Every step’s inputs are available when it runs.</span>
+            <span className="text-xs text-muted-foreground">Every step’s inputs are available when it runs.</span>
           ) : (
             issues.map((issue, i) => (
-              <span key={i} className="inline-flex shrink-0 items-center gap-1.5 text-caption text-muted-foreground">
+              <span key={i} className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                 <span
-                  className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-destructive' : 'bg-mf-warning')}
+                  className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-destructive' : 'bg-warning')}
                 />
                 {issue.msg}
               </span>

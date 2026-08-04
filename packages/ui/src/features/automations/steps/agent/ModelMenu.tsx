@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@v2/components/ui/dropdown-menu';
 import { useAdapters } from '@/store/adapters';
 import type { AskAgentStep } from '../../contract';
 import { ChipButton } from './ChipButton';
@@ -76,7 +76,9 @@ export function ModelMenu({ adapterId, model, onChange, testId }: ModelMenuProps
                 key={m.id}
                 data-testid={`${testId}-model-option-${a.id}-${m.id}`}
                 onSelect={() => onChange({ adapterId: a.id, model: m.id })}
-                className={a.id === activeAdapter.id && m.id === activeModel.id ? 'bg-mf-selection font-medium' : ''}
+                className={
+                  a.id === activeAdapter.id && m.id === activeModel.id ? 'bg-sidebar-selection font-medium' : ''
+                }
               >
                 {m.label}
               </DropdownMenuItem>

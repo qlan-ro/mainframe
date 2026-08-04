@@ -22,7 +22,7 @@ export function DetailsRuns({ runs, onOpenRun }: DetailsRunsProps) {
         data-testid="automations-details-runs-empty"
         className="flex h-full flex-col items-center justify-center gap-[6px] px-[20px] py-[40px] text-center"
       >
-        <span className="text-body text-muted-foreground">No runs yet.</span>
+        <span className="text-sm text-muted-foreground">No runs yet.</span>
       </div>
     );
   }
@@ -39,8 +39,8 @@ export function DetailsRuns({ runs, onOpenRun }: DetailsRunsProps) {
         >
           <span aria-hidden className={cn('size-[7px] shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[run.status])} />
           <span className="min-w-0 flex-1">
-            <span className="block text-label font-medium text-foreground">{RUN_STATUS_LABEL[run.status]}</span>
-            <span className="block text-caption text-muted-foreground">
+            <span className="block text-xs font-medium text-foreground">{RUN_STATUS_LABEL[run.status]}</span>
+            <span className="block text-xs text-muted-foreground">
               {TRIGGER_LABEL[run.trigger.kind]} · {formatRelativeTime(run.startedAt, Date.now())}
             </span>
           </span>

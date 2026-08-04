@@ -42,7 +42,7 @@ export function RunRepeatGroup({
 
   if (groups.length === 0) {
     return (
-      <div data-testid={testId} className="pl-[12px] text-caption text-muted-foreground">
+      <div data-testid={testId} className="pl-[12px] text-xs text-muted-foreground">
         No iterations yet.
       </div>
     );

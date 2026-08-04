@@ -75,12 +75,12 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
         )}
       >
         <HeaderIcon size={14} className={accent.iconClass} aria-hidden />
-        <span className="flex-1 text-body font-semibold text-foreground">{action.title}</span>
+        <span className="flex-1 text-sm font-semibold text-foreground">{action.title}</span>
         <button
           type="button"
           data-testid={`${testId}-change`}
           onClick={() => setPicking(true)}
-          className="h-[24px] rounded-sm border-[0.5px] border-border bg-card px-2.5 text-caption font-semibold text-muted-foreground hover:bg-accent"
+          className="h-[24px] rounded-sm border-[0.5px] border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground hover:bg-accent"
         >
           Change
         </button>
@@ -112,7 +112,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
                 data-testid={`${testId}-outputas-${option.id}`}
                 onClick={() => onChange({ ...step, outputAs: option.id })}
                 className={cn(
-                  'rounded-sm px-2.5 py-1 text-label font-medium',
+                  'rounded-sm px-2.5 py-1 text-xs font-medium',
                   (step.outputAs ?? 'text') === option.id
                     ? 'bg-card text-foreground shadow-sm'
                     : 'text-muted-foreground',

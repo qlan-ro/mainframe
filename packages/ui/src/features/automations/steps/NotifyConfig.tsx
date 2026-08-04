@@ -23,7 +23,7 @@ export interface NotifyConfigProps {
 export function NotifyConfig({ step, onChange, tokens, testId }: NotifyConfigProps) {
   return (
     <div className="flex flex-col gap-[8px]">
-      <span className="text-caption font-medium text-muted-foreground">Message</span>
+      <span className="text-xs font-medium text-muted-foreground">Message</span>
       <TriggerTextField
         value={singlePart(step.message)}
         onChange={(message) => onChange({ ...step, message: textToChipText(message) })}
@@ -32,7 +32,7 @@ export function NotifyConfig({ step, onChange, tokens, testId }: NotifyConfigPro
         minHeight={48}
         testId={`${testId}-message`}
       />
-      <span className="text-caption text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         Links to the run and any chat it created are added automatically.
       </span>
       <MoreOptions testId={`${testId}-more`}>

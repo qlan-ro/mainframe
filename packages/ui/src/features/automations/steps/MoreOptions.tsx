@@ -2,9 +2,9 @@
  * MoreOptions — disclosure wrapper for the rare knobs each step config folds
  * under (ts153 wf2-stepconfig.jsx `WfMore`).
  *
- * ts153's trigger label was `text-micro font-bold uppercase tracking-wide` —
+ * ts153's trigger label was `text-[10px] font-semibold uppercase tracking-wide` —
  * exactly the "eyebrow antipattern" the 2026-07-11 typography audit (§4) bans.
- * Approved drift: `text-caption font-medium text-muted-foreground`, sentence
+ * Approved drift: `text-xs font-medium text-muted-foreground`, sentence
  * case, no uppercase/tracking.
  */
 import { useState, type ReactNode } from 'react';
@@ -26,7 +26,7 @@ export function MoreOptions({ children, testId, label = 'More options' }: MoreOp
         data-testid={testId}
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-[5px] text-caption font-medium text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-[5px] text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight size={10} className={cn('transition-transform', open && 'rotate-90')} aria-hidden />
         {label}

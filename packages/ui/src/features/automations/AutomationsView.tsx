@@ -23,7 +23,7 @@ const AutomationDetails = lazy(() =>
 );
 
 function SectionFallback(): React.ReactElement {
-  return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
+  return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>;
 }
 
 export function AutomationsView(): React.ReactElement {

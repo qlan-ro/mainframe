@@ -4,6 +4,7 @@
  * their own transiently-editable `key`, so — like `ConditionRow` —
  * `FormFieldRow`s are index-keyed via `testId`.
  */
+import { Input } from '@v2/components/ui/input';
 import { Plus } from 'lucide-react';
 import type { AskMeStep, AutomationFormField } from '../contract';
 import { FailureToggle } from './FailureToggle';
@@ -38,12 +39,12 @@ export function AskMeConfig({ step, onChange, testId }: AskMeConfigProps) {
   return (
     <div className="flex flex-col gap-2.5">
       <FieldRow label="Title">
-        <input
+        <Input
           data-testid={`${testId}-title`}
           value={step.title}
           onChange={(e) => onChange({ ...step, title: e.target.value })}
           placeholder="What am I answering?"
-          className="h-[30px] w-full rounded-md border-[0.5px] border-input bg-card px-2.5 text-body text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-8"
         />
       </FieldRow>
 
@@ -62,7 +63,7 @@ export function AskMeConfig({ step, onChange, testId }: AskMeConfigProps) {
           type="button"
           data-testid={`${testId}-add`}
           onClick={addField}
-          className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-mf-border-hover px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-input px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Plus size={10} aria-hidden />
           Add a field

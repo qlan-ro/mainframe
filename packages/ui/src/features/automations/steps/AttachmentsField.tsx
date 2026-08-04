@@ -53,7 +53,7 @@ export function AttachmentsField({ value, onChange, testId }: AttachmentsFieldPr
         return (
           <span
             key={i}
-            className="inline-flex h-[24px] items-center gap-1 rounded-full bg-muted pl-[9px] pr-1 text-caption font-medium text-foreground"
+            className="inline-flex h-[24px] items-center gap-1 rounded-full bg-muted pl-[9px] pr-1 text-xs font-medium text-foreground"
           >
             <Icon size={11} className="text-muted-foreground" aria-hidden />
             {name}
@@ -73,7 +73,7 @@ export function AttachmentsField({ value, onChange, testId }: AttachmentsFieldPr
         type="button"
         data-testid={`${testId}-add`}
         onClick={add}
-        className="inline-flex h-[24px] items-center gap-1 rounded-full border border-dashed border-mf-border-hover px-[10px] text-caption font-semibold text-primary hover:bg-accent"
+        className="inline-flex h-[24px] items-center gap-1 rounded-full border border-dashed border-input px-[10px] text-xs font-semibold text-primary hover:bg-accent"
       >
         <Paperclip size={11} aria-hidden />
         Add image or file…

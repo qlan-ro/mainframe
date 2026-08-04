@@ -52,7 +52,7 @@ export function RepeatBody({ step, onChange, tokens, catalog, issues, depth }: R
   return (
     <div className="flex flex-col gap-[11px]">
       <div className="flex flex-wrap items-center gap-[8px]">
-        <span className="text-label text-muted-foreground">For each item in</span>
+        <span className="text-xs text-muted-foreground">For each item in</span>
         <TokenChip descriptor={chosen} testId={`automations-repeat-items-${step.id}`} />
         <TokenPicker
           tokens={listTokens}

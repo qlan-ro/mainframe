@@ -14,7 +14,7 @@
  */
 import { useState, type RefObject } from 'react';
 import { formatVariableRef, type TokenDescriptor } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@v2/components/ui/command';
 import { buildVariablesTriggerAdapter } from './variables-trigger-adapter';
 
@@ -52,7 +52,7 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
           type="button"
           data-testid={pickerTestId}
           aria-label="Insert variable"
-          className="flex size-[20px] items-center justify-center rounded-md text-caption font-semibold text-primary hover:bg-accent"
+          className="flex size-[20px] items-center justify-center rounded-md text-xs font-semibold text-primary hover:bg-accent"
         >
           <span aria-hidden className="font-mono">
             ⟨⟩
@@ -69,9 +69,7 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
       >
         <Command>
           <CommandList>
-            <CommandEmpty className="px-2 py-4 text-caption text-muted-foreground">
-              No variables in scope yet.
-            </CommandEmpty>
+            <CommandEmpty className="px-2 py-4 text-xs text-muted-foreground">No variables in scope yet.</CommandEmpty>
             <CommandGroup>
               {items.map((item) => (
                 <CommandItem
@@ -79,9 +77,9 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
                   data-testid={`${pickerTestId}-option-${item.id}`}
                   onSelect={() => pick(item.id)}
                 >
-                  <span className="truncate text-body text-foreground">{item.label}</span>
+                  <span className="truncate text-sm text-foreground">{item.label}</span>
                   {item.description && (
-                    <span className="ml-auto truncate text-caption text-muted-foreground">{item.description}</span>
+                    <span className="ml-auto truncate text-xs text-muted-foreground">{item.description}</span>
                   )}
                 </CommandItem>
               ))}

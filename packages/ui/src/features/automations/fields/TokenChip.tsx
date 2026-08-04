@@ -107,7 +107,7 @@ export function TokenChip({ descriptor, field, onRemove, testId }: TokenChipProp
     return (
       <span
         data-testid={testId}
-        className="inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 align-middle text-caption font-medium text-foreground"
+        className="inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 align-middle text-xs font-medium text-foreground"
       >
         <TriangleAlert size={12} className="text-destructive" aria-hidden />
         <span className="truncate">Missing value</span>
@@ -131,7 +131,7 @@ export function TokenChip({ descriptor, field, onRemove, testId }: TokenChipProp
     <span
       data-testid={testId}
       className={cn(
-        'inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border align-middle text-caption font-medium text-foreground',
+        'inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border align-middle text-xs font-medium text-foreground',
         onRemove ? 'pl-[7px] pr-1' : 'px-2',
         style.tintClass,
         style.borderClass,

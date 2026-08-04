@@ -17,6 +17,8 @@ interface HintProps {
  * and `SidebarProvider` already mounts one at the stock zero delay.
  */
 export function Hint({ label, children, side, sideOffset }: HintProps) {
+  // Empty label → bare child, so `label={cond ? 'x' : undefined}` call sites skip the tooltip.
+  if (label === null || label === undefined || label === '') return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>

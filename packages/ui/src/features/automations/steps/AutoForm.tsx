@@ -14,7 +14,8 @@
  * virtual — never written to params (ts153's `WfActionForm` skipped writing
  * its `__columns` key the same way).
  */
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@v2/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 import type { ChipText } from '../contract';
 import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';
@@ -51,12 +52,12 @@ export function AutoForm({ schema, params, onChange, tokens, testId }: AutoFormP
         if (field.control === 'text') {
           return (
             <FieldRow key={field.key} label={field.label}>
-              <input
+              <Input
                 data-testid={fieldTestId}
                 value={singlePart(value)}
                 onChange={(e) => set(field.key, [e.target.value])}
                 placeholder={field.placeholder}
-                className="h-[30px] w-full rounded-md border-[0.5px] border-input bg-card px-2.5 text-body text-foreground outline-none placeholder:text-muted-foreground"
+                className="h-8"
               />
             </FieldRow>
           );
@@ -66,7 +67,7 @@ export function AutoForm({ schema, params, onChange, tokens, testId }: AutoFormP
           return (
             <FieldRow key={field.key} label={field.label}>
               <Select value={singlePart(value) || (options[0] ?? '')} onValueChange={(v) => set(field.key, [v])}>
-                <SelectTrigger data-testid={fieldTestId} className="h-[30px] w-[200px] text-caption">
+                <SelectTrigger data-testid={fieldTestId} className="h-[30px] w-[200px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -116,7 +117,7 @@ export function AutoForm({ schema, params, onChange, tokens, testId }: AutoFormP
             <div className="flex flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-card p-2.5">
               {columns.map((column) => (
                 <div key={column} className="flex items-center gap-2.5">
-                  <span className="w-[76px] shrink-0 text-caption font-medium text-muted-foreground">{column}</span>
+                  <span className="w-[76px] shrink-0 text-xs font-medium text-muted-foreground">{column}</span>
                   <div className="min-w-0 flex-1">
                     <TriggerTextField
                       value={singlePart(params[column] ?? [])}

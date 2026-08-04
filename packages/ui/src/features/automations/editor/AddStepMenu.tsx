@@ -15,8 +15,8 @@
 import { useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@v2/components/ui/hint';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import type { ActionCatalogEntry, AutomationStep } from '../contract';
 import { ADD_STEP_GROUPS, VERB_META } from './verb-meta';
 
@@ -51,7 +51,7 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
           <button
             type="button"
             data-testid={testId}
-            className="inline-flex h-[30px] items-center gap-1.5 self-start rounded-md border border-dashed border-mf-border-hover px-3 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="inline-flex h-[30px] items-center gap-1.5 self-start rounded-md border border-dashed border-input px-3 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Plus size={12} aria-hidden />
             Add step
@@ -61,7 +61,7 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
       <PopoverContent data-testid={`${testId}-menu`} align="start" className="max-h-96 w-72 overflow-y-auto p-1.5">
         {ADD_STEP_GROUPS.map((group) => (
           <div key={group.label} className="mb-1">
-            <div className="px-2 py-1 text-caption font-medium text-muted-foreground">{group.label}</div>
+            <div className="px-2 py-1 text-xs font-medium text-muted-foreground">{group.label}</div>
             {group.kinds.map((kind) => {
               const meta = VERB_META[kind];
               const Icon = meta.icon;
@@ -79,8 +79,8 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
                     <Icon size={14} className={meta.iconClass} aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-label font-semibold text-foreground">{meta.label}</span>
-                    <span className="mt-0.5 block text-caption text-muted-foreground">{meta.hint}</span>
+                    <span className="block text-xs font-semibold text-foreground">{meta.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{meta.hint}</span>
                   </span>
                 </button>
               );
@@ -96,7 +96,7 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search actions…"
-                className="w-full border-none bg-transparent text-caption text-foreground outline-none placeholder:text-muted-foreground"
+                className="w-full border-none bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
               />
             </div>
             {filtered.map((action) => (
@@ -107,12 +107,12 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
                 onClick={() => pickAction(action.id)}
                 className="flex w-full items-center gap-2.5 rounded-md p-2 text-left hover:bg-accent"
               >
-                <span className="min-w-0 flex-1 truncate text-label text-foreground">{action.title}</span>
-                <span className="text-caption text-muted-foreground">{action.group}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-foreground">{action.title}</span>
+                <span className="text-xs text-muted-foreground">{action.group}</span>
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="px-2 py-2 text-caption text-muted-foreground">No actions match “{query}”.</div>
+              <div className="px-2 py-2 text-xs text-muted-foreground">No actions match “{query}”.</div>
             )}
           </div>
         )}

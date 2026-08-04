@@ -34,14 +34,14 @@ function resolve(tokens: TokenDescriptor[], ref: TokenRef): TokenDescriptor | nu
 }
 
 function ChipTextPreview({ value, tokens, empty }: { value: ChipText; tokens: TokenDescriptor[]; empty: string }) {
-  if (value.length === 0) return <span className="text-caption text-muted-foreground">{empty}</span>;
+  if (value.length === 0) return <span className="text-xs text-muted-foreground">{empty}</span>;
   return (
     <span className="inline-flex flex-wrap items-center gap-1 leading-6">
       {value.map((part, i) =>
         isTokenPart(part) ? (
           <TokenChip key={i} descriptor={resolve(tokens, part.token)} field={part.token.field} />
         ) : (
-          <span key={i} className="whitespace-pre-wrap text-caption text-foreground">
+          <span key={i} className="whitespace-pre-wrap text-xs text-foreground">
             {part}
           </span>
         ),
@@ -58,7 +58,7 @@ function AskMeSummary({ step }: { step: AskMeStep }) {
     .slice(0, 4)
     .join(', ');
   return (
-    <span className="text-caption text-muted-foreground">
+    <span className="text-xs text-muted-foreground">
       {count} field{count === 1 ? '' : 's'}
       {count > 0 ? ` · ${labels}` : ''}
     </span>
@@ -67,10 +67,10 @@ function AskMeSummary({ step }: { step: AskMeStep }) {
 
 function RunActionSummary({ step, catalog }: { step: RunActionStep; catalog: ActionCatalogEntry[] }) {
   const action = catalog.find((a) => a.id === step.actionId);
-  if (action) return <span className="text-caption text-muted-foreground">{action.title}</span>;
+  if (action) return <span className="text-xs text-muted-foreground">{action.title}</span>;
   return (
-    <span className="inline-flex items-center gap-1 text-caption font-medium text-foreground">
-      <TriangleAlert size={11} className="text-mf-warning" aria-hidden />
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground">
+      <TriangleAlert size={11} className="text-warning" aria-hidden />
       Pick an action
     </span>
   );
@@ -87,8 +87,6 @@ export function StepSummary({ step, tokens, catalog }: StepSummaryProps) {
     case 'run_action':
       return <RunActionSummary step={step} catalog={catalog} />;
     case 'set_variable':
-      return (
-        <span className="text-caption text-muted-foreground">{step.name ? `Set $${step.name}` : 'Unnamed value'}</span>
-      );
+      return <span className="text-xs text-muted-foreground">{step.name ? `Set $${step.name}` : 'Unnamed value'}</span>;
   }
 }

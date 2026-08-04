@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ban, Check, ChevronLeft, Clock, Play, Square, TriangleAlert, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { openSessionById } from '@/lib/session-nav';
 import type { AutomationRunSummary, AutomationTimelineEntry } from '../contract';
@@ -40,8 +40,8 @@ const RUN_STATUS_PILL_ICON: Partial<Record<AutomationRunSummary['status'], Lucid
 /** Background tint per run status — the hue lives on this tint + the dot, never on the label text (typography audit §1). */
 const RUN_STATUS_BG_CLASS: Record<AutomationRunSummary['status'], string> = {
   running: 'bg-primary/10',
-  waiting: 'bg-mf-warning/12',
-  succeeded: 'bg-mf-success/12',
+  waiting: 'bg-warning/12',
+  succeeded: 'bg-success/12',
   failed: 'bg-destructive/10',
   cancelled: 'bg-muted',
 };
@@ -124,7 +124,7 @@ export function RunView() {
     return (
       <div
         data-testid="automations-run-not-found"
-        className="flex h-full items-center justify-center text-body text-muted-foreground"
+        className="flex h-full items-center justify-center text-sm text-muted-foreground"
       >
         This run couldn't be found.
       </div>
@@ -148,16 +148,16 @@ export function RunView() {
           </button>
         </Hint>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-heading font-bold tracking-tight text-foreground">
+          <div className="truncate text-base font-semibold tracking-tight text-foreground">
             {automation?.name ?? 'Automation'}
           </div>
-          <div className="text-caption text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             {TRIGGER_LABEL[run.trigger.kind]} · {formatRelativeTime(run.startedAt, Date.now())}
           </div>
         </div>
         <span
           className={cn(
-            'inline-flex h-[24px] items-center gap-1.5 rounded-full px-[11px] text-caption font-bold text-foreground',
+            'inline-flex h-[24px] items-center gap-1.5 rounded-full px-[11px] text-xs font-bold text-foreground',
             RUN_STATUS_BG_CLASS[run.status],
           )}
         >
@@ -182,7 +182,7 @@ export function RunView() {
             data-testid="automations-run-cancel"
             disabled={cancelling}
             onClick={() => void handleCancel()}
-            className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-destructive/40 px-[12px] text-caption font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-destructive/40 px-[12px] text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Square size={14} fill="currentColor" aria-hidden />
             Cancel
@@ -193,7 +193,7 @@ export function RunView() {
           data-testid="automations-run-again"
           disabled={starting}
           onClick={() => void handleRunAgain()}
-          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-caption font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-xs font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Play size={14} className="text-primary" fill="currentColor" aria-hidden />
           Run again
@@ -205,7 +205,7 @@ export function RunView() {
         className="min-h-0 flex-1 overflow-y-auto px-[16px] pt-[14px] pb-[22px]"
       >
         {topLevel.length === 0 ? (
-          <div className="flex items-center gap-2 text-body text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Zap size={14} aria-hidden />
             No steps have run yet.
           </div>

@@ -51,9 +51,9 @@ function CreationCard({
       <span className={cn('inline-flex size-[42px] items-center justify-center rounded-lg', tint)}>
         <Icon size={20} aria-hidden />
       </span>
-      <span className="text-heading font-bold tracking-tight text-foreground">{title}</span>
-      <span className="flex-1 text-label leading-normal text-muted-foreground">{body}</span>
-      <span className={cn('inline-flex items-center gap-1.5 text-label font-semibold', ctaColor)}>
+      <span className="text-base font-semibold tracking-tight text-foreground">{title}</span>
+      <span className="flex-1 text-xs leading-normal text-muted-foreground">{body}</span>
+      <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', ctaColor)}>
         {cta}
         <ChevronRight size={13} aria-hidden />
       </span>
@@ -77,8 +77,8 @@ export function BlankState({ onDescribe, onBuild, describeEnabled }: BlankStateP
         <div className="mx-auto mb-[12px] inline-flex size-[52px] items-center justify-center rounded-xl bg-primary/10">
           <Zap size={26} className="text-primary" aria-hidden />
         </div>
-        <div className="text-title font-bold tracking-tight text-foreground">Create a workflow</div>
-        <div className="mt-[4px] text-body text-muted-foreground">Automate the repetitive parts of your day.</div>
+        <div className="text-lg font-semibold tracking-tight text-foreground">Create a workflow</div>
+        <div className="mt-[4px] text-sm text-muted-foreground">Automate the repetitive parts of your day.</div>
       </div>
       <div className="flex w-full max-w-[620px] gap-[16px]">
         <CreationCard

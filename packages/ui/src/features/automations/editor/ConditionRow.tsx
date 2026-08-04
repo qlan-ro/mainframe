@@ -14,8 +14,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@v2/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 import type { Comparator, ConditionRow as ConditionRowModel, TokenRef } from '../contract';
 import { comparatorNeedsValue, comparatorsFor, isMultiValue } from '../domain/comparators';
 import type { TokenDescriptor } from '../domain/tokens';
@@ -64,7 +64,7 @@ function MultiValueEditor({
               data-testid={`${testId}-option-${option}`}
               onClick={() => onChange(active ? value.filter((v) => v !== option) : [...value, option])}
               className={cn(
-                'h-6 rounded-full border-[0.5px] px-2.5 text-caption font-medium',
+                'h-6 rounded-full border-[0.5px] px-2.5 text-xs font-medium',
                 active
                   ? 'border-primary/40 bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:bg-accent',
@@ -103,10 +103,7 @@ function ValueChipList({
       className="flex min-h-7 flex-wrap items-center gap-1 rounded-md border-[0.5px] border-input bg-card px-2 py-1"
     >
       {value.map((v, i) => (
-        <span
-          key={i}
-          className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-2 text-caption text-foreground"
-        >
+        <span key={i} className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-2 text-xs text-foreground">
           {v}
           <button
             type="button"
@@ -130,7 +127,7 @@ function ValueChipList({
         }}
         onBlur={commit}
         placeholder={value.length === 0 ? 'value' : undefined}
-        className="min-w-[60px] flex-1 border-none bg-transparent text-caption text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-w-[60px] flex-1 border-none bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
       />
     </div>
   );
@@ -165,7 +162,7 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
       <TokenChip descriptor={descriptor} testId={`${testId}-token`} />
       <TokenPicker tokens={tokens} onInsert={handleTokenPick} testId={`${testId}-token-picker`} />
       <Select value={condition.comparator} onValueChange={(next) => handleComparator(next as Comparator)}>
-        <SelectTrigger data-testid={`${testId}-comparator`} className="h-[28px] w-[116px] text-caption">
+        <SelectTrigger data-testid={`${testId}-comparator`} className="h-[28px] w-[116px] text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -189,7 +186,7 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
             value={typeof condition.value === 'string' ? condition.value : (descriptor.options[0] ?? '')}
             onValueChange={(value) => onChange({ ...condition, value })}
           >
-            <SelectTrigger data-testid={`${testId}-value`} className="h-[28px] w-[130px] text-caption">
+            <SelectTrigger data-testid={`${testId}-value`} className="h-[28px] w-[130px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -208,7 +205,7 @@ export function ConditionRow({ condition, tokens, onChange, testId }: ConditionR
             }
             onChange={(e) => onChange({ ...condition, value: e.target.value })}
             placeholder="value"
-            className="h-[28px] w-[130px] px-2.5 py-0 text-caption"
+            className="h-[28px] w-[130px] px-2.5 py-0 text-xs"
           />
         ))}
     </div>

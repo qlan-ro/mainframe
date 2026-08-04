@@ -10,8 +10,8 @@
 import { useState } from 'react';
 import { Calendar, Globe, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@v2/components/ui/hint';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import type { AutomationTrigger } from '../contract';
 import { TriggerRow } from './TriggerRow';
 
@@ -71,7 +71,7 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
         />
       ))}
       {triggers.length === 0 && (
-        <div className="text-label text-muted-foreground">No trigger yet — you’ll run it by hand.</div>
+        <div className="text-xs text-muted-foreground">No trigger yet — you’ll run it by hand.</div>
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <Hint label="Add a trigger">
@@ -79,7 +79,7 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
             <button
               type="button"
               data-testid="automations-when-add"
-              className="self-start text-caption font-semibold text-primary"
+              className="self-start text-xs font-semibold text-primary"
             >
               + Add a trigger
             </button>
@@ -100,8 +100,8 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
                   <Icon size={12} className="text-mf-auto-kind-call" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-label font-semibold text-foreground">{option.label}</span>
-                  <span className="mt-0.5 block text-caption text-muted-foreground">{option.hint}</span>
+                  <span className="block text-xs font-semibold text-foreground">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
                 </span>
               </button>
             );

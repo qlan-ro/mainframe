@@ -19,7 +19,7 @@
  */
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { variableNamesInScope } from '@qlan-ro/mainframe-types';
-import { Input } from '@/components/ui/input';
+import { Input } from '@v2/components/ui/input';
 import type { SetVariableStep } from '../contract';
 import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';
@@ -37,13 +37,13 @@ export interface SetValueConfigProps {
 function NameStatus({ error, name, testId }: { error: string | null; name: string; testId: string }) {
   if (error) {
     return (
-      <span data-testid={`${testId}-name-error`} className="text-caption font-medium text-destructive">
+      <span data-testid={`${testId}-name-error`} className="text-xs font-medium text-destructive">
         {error}
       </span>
     );
   }
   return (
-    <span data-testid={`${testId}-reference`} className="text-caption text-muted-foreground">
+    <span data-testid={`${testId}-reference`} className="text-xs text-muted-foreground">
       {name ? (
         <>
           Later steps use <span className="font-mono text-foreground">${name}</span>.
@@ -96,7 +96,7 @@ function NameField({ name, onCommit, tokens, testId }: NameFieldProps) {
         onBlur={commit}
         onKeyDown={onKeyDown}
         placeholder="release_notes"
-        className="h-[26px] px-2 py-0 font-mono text-caption"
+        className="h-[26px] px-2 py-0 font-mono text-xs"
       />
       <NameStatus error={error} name={name} testId={testId} />
     </>
@@ -106,9 +106,9 @@ function NameField({ name, onCommit, tokens, testId }: NameFieldProps) {
 export function SetValueConfig({ step, onChange, tokens, testId }: SetValueConfigProps) {
   return (
     <div className="flex flex-col gap-[8px]">
-      <span className="text-caption font-medium text-muted-foreground">Name</span>
+      <span className="text-xs font-medium text-muted-foreground">Name</span>
       <NameField name={step.name} onCommit={(name) => onChange({ ...step, name })} tokens={tokens} testId={testId} />
-      <span className="text-caption font-medium text-muted-foreground">Value</span>
+      <span className="text-xs font-medium text-muted-foreground">Value</span>
       <TriggerTextField
         value={singlePart(step.value)}
         onChange={(value) => onChange({ ...step, value: textToChipText(value) })}

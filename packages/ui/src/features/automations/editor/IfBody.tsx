@@ -57,7 +57,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
         {conditions.map((condition, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2">
             {i > 0 && (
-              <span className="w-7 text-caption font-semibold text-muted-foreground">
+              <span className="w-7 text-xs font-semibold text-muted-foreground">
                 {step.match === 'any' ? 'or' : 'and'}
               </span>
             )}
@@ -85,7 +85,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
             type="button"
             data-testid={`automations-if-add-condition-${step.id}`}
             onClick={addCondition}
-            className="text-caption font-semibold text-primary"
+            className="text-xs font-semibold text-primary"
           >
             + Add condition
           </button>
@@ -95,7 +95,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
                 type="button"
                 data-testid="automations-if-match-all"
                 onClick={() => onChange({ match: 'all' })}
-                className={`rounded-sm px-2 py-0.5 text-caption font-medium ${step.match === 'all' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                className={`rounded-sm px-2 py-0.5 text-xs font-medium ${step.match === 'all' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
               >
                 Match all
               </button>
@@ -103,7 +103,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
                 type="button"
                 data-testid="automations-if-match-any"
                 onClick={() => onChange({ match: 'any' })}
-                className={`rounded-sm px-2 py-0.5 text-caption font-medium ${step.match === 'any' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                className={`rounded-sm px-2 py-0.5 text-xs font-medium ${step.match === 'any' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
               >
                 Match any
               </button>
@@ -112,7 +112,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
         </div>
       </div>
       <div>
-        <div className="mb-1.5 text-caption font-semibold text-muted-foreground">Then</div>
+        <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Then</div>
         <Recipe
           steps={step.then}
           onChange={(then) => onChange({ then })}
@@ -126,7 +126,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
       {showOtherwise ? (
         <div>
           <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-caption font-semibold text-muted-foreground">Otherwise</span>
+            <span className="text-xs font-semibold text-muted-foreground">Otherwise</span>
             <button
               type="button"
               data-testid={`automations-if-remove-otherwise-${step.id}`}
@@ -155,7 +155,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
           type="button"
           data-testid={`automations-if-add-otherwise-${step.id}`}
           onClick={() => setShowOtherwise(true)}
-          className="self-start text-caption font-semibold text-primary"
+          className="self-start text-xs font-semibold text-primary"
         >
           + Add “otherwise”
         </button>

@@ -5,7 +5,7 @@
  * every verb's "More options" body — surfaced in the run view as "Kept
  * going" when it actually fires (Phase 5).
  */
-import { Switch } from '@/components/ui/switch';
+import { Switch } from '@v2/components/ui/switch';
 import { FieldRow } from './FieldRow';
 
 export interface FailureToggleProps {
@@ -19,7 +19,7 @@ export function FailureToggle({ keepGoing, onChange, testId }: FailureToggleProp
     <FieldRow label="On failure" top>
       <label className="inline-flex items-center gap-2.5">
         <Switch data-testid={testId} checked={keepGoing} onCheckedChange={onChange} />
-        <span className="text-caption text-muted-foreground">Keep going if this step fails</span>
+        <span className="text-xs text-muted-foreground">Keep going if this step fails</span>
       </label>
     </FieldRow>
   );

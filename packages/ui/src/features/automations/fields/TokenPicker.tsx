@@ -19,8 +19,8 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@v2/components/ui/hint';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import type { TokenRef } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import { sourceKindStyle, tokenIcon } from './TokenChip';
@@ -93,9 +93,9 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
             type="button"
             data-testid={testId}
             disabled={!hasTokens}
-            className="inline-flex h-[24px] shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-caption font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-[24px] shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-xs font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
           >
-            <span className="font-mono text-caption">⟨⟩</span>
+            <span className="font-mono text-xs">⟨⟩</span>
             Insert
           </button>
         </PopoverTrigger>
@@ -103,9 +103,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
       <PopoverContent data-testid={`${testId}-menu`} align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
         {groups.map((group) => (
           <div key={group.source} className="mb-[4px]">
-            <div className="px-[8px] pb-[4px] pt-[5px] text-caption font-medium text-muted-foreground">
-              {group.source}
-            </div>
+            <div className="px-[8px] pb-[4px] pt-[5px] text-xs font-medium text-muted-foreground">{group.source}</div>
             {group.tokens.map((token) => {
               const key = tokenKey(token.ref);
               const isExpandable = Boolean(token.fields && token.fields.length > 0);
@@ -130,8 +128,8 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                     >
                       <Icon size={12} className={style.iconClass} aria-hidden />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-body text-foreground">{token.label}</span>
-                    <span className="text-caption text-muted-foreground">{token.type}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{token.label}</span>
+                    <span className="text-xs text-muted-foreground">{token.type}</span>
                     {isExpandable && (
                       <ChevronRight
                         size={12}
@@ -147,7 +145,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
                         type="button"
                         data-testid={`${testId}-option-${key}-${field}`}
                         onClick={() => handleFieldClick(token, field)}
-                        className="flex w-full items-center gap-[8px] rounded-md py-[5px] pl-[37px] pr-[8px] text-left text-body text-muted-foreground hover:bg-accent"
+                        className="flex w-full items-center gap-[8px] rounded-md py-[5px] pl-[37px] pr-[8px] text-left text-sm text-muted-foreground hover:bg-accent"
                       >
                         {token.label} <span>›</span> <span className="font-medium text-foreground">{field}</span>
                       </button>

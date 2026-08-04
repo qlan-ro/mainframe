@@ -9,6 +9,7 @@
  * **Timeout, not a free-text budget cap.** ts153's "$4.00 or 20m" text field
  * is replaced by the real `timeoutMinutes: number` field.
  */
+import { Input } from '@v2/components/ui/input';
 import { SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAgentStep } from '../../contract';
@@ -34,7 +35,7 @@ export function AdvancedToggle({ open, onToggle, testId }: AdvancedToggleProps) 
       className={cn(
         'flex size-[26px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors',
         'hover:bg-accent hover:text-accent-foreground',
-        open && 'bg-mf-selection text-foreground',
+        open && 'bg-sidebar-selection text-foreground',
       )}
     >
       <SlidersHorizontal className="size-3.5" aria-hidden />
@@ -60,7 +61,7 @@ export function AdvancedSection({ step, onChange, testId }: AdvancedSectionProps
       </FieldRow>
 
       <FieldRow label="Timeout">
-        <input
+        <Input
           data-testid={`${testId}-timeout`}
           type="number"
           min={0}
@@ -70,7 +71,7 @@ export function AdvancedSection({ step, onChange, testId }: AdvancedSectionProps
             onChange({ timeoutMinutes: raw === '' ? undefined : Number(raw) });
           }}
           placeholder="minutes"
-          className="h-[28px] w-[110px] rounded-md border-[0.5px] border-input bg-card px-2.5 text-caption text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-7 w-[110px] text-xs"
         />
       </FieldRow>
 

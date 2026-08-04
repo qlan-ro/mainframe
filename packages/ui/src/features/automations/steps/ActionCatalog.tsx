@@ -13,6 +13,7 @@
  * wire signal at all, so it's a small curated set here — flag for design
  * review if a second advanced action ever ships.
  */
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { useState } from 'react';
 import {
   ClipboardList,
@@ -28,7 +29,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@v2/components/ui/badge';
 import type { ActionCatalogEntry } from '../contract';
 
 const ACTION_ICONS: Record<string, LucideIcon> = {
@@ -162,25 +163,23 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search actions, connectors, MCP tools…"
-            className="flex-1 border-none bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground"
+            className="flex-1 border-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
-        <div className="inline-flex w-fit gap-0.5 rounded-md bg-muted p-0.5">
-          {SOURCE_SEGMENTS.map((segment) => (
-            <button
-              key={segment.id}
-              type="button"
-              data-testid={`${testId}-filter-${segment.id}`}
-              onClick={() => setSource(segment.id)}
-              className={cn(
-                'rounded-sm px-2.5 py-1 text-label font-medium',
-                source === segment.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
-              )}
-            >
-              {segment.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={source} onValueChange={(v) => setSource(v as typeof source)} className="w-fit">
+          <TabsList className="h-7 p-0.5">
+            {SOURCE_SEGMENTS.map((segment) => (
+              <TabsTrigger
+                key={segment.id}
+                value={segment.id}
+                data-testid={`${testId}-filter-${segment.id}`}
+                className="px-2.5 text-xs font-medium"
+              >
+                {segment.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-[10px]">
         {shown.map((action) => {
@@ -194,7 +193,7 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
               type="button"
               data-testid={`${testId}-action-${action.id}`}
               onClick={() => onPick(action)}
-              className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5 text-left hover:border-mf-border-hover hover:bg-accent"
+              className="flex items-start gap-2.5 rounded-md border-[0.5px] border-border bg-card p-2.5 text-left hover:border-input hover:bg-accent"
             >
               <span
                 className={cn('flex size-[30px] shrink-0 items-center justify-center rounded-md', accent.tintClass)}
@@ -203,28 +202,28 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="text-body font-semibold text-foreground">{action.title}</span>
+                  <span className="text-sm font-semibold text-foreground">{action.title}</span>
                   {isList && (
-                    <Badge variant="outline" className="px-1.5 py-0 text-caption font-semibold leading-4">
+                    <Badge variant="outline" className="px-1.5 py-0 text-xs font-semibold leading-4">
                       LIST
                     </Badge>
                   )}
                   {isAdvanced && (
-                    <Badge variant="outline" className="px-1.5 py-0 text-caption font-semibold leading-4">
+                    <Badge variant="outline" className="px-1.5 py-0 text-xs font-semibold leading-4">
                       ADVANCED
                     </Badge>
                   )}
                 </span>
-                <span className="mt-0.5 block text-caption text-muted-foreground">{ACTION_BLURBS[action.id]}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{ACTION_BLURBS[action.id]}</span>
               </span>
-              <span className="mt-0.5 shrink-0 text-caption text-muted-foreground">
+              <span className="mt-0.5 shrink-0 text-xs text-muted-foreground">
                 {action.credentialLabelHint ?? GROUP_LABEL[action.group]}
               </span>
             </button>
           );
         })}
         {shown.length === 0 && (
-          <div className="p-[24px] text-center text-caption text-muted-foreground">No actions match “{query}”.</div>
+          <div className="p-[24px] text-center text-xs text-muted-foreground">No actions match “{query}”.</div>
         )}
       </div>
     </div>

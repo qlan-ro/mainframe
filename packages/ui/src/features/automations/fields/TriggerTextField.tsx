@@ -108,10 +108,10 @@ export function TriggerTextField({
         onClick={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
         onKeyUp={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
         className={cn(
-          'w-full resize-none bg-transparent px-[14px] pr-9 text-body leading-relaxed',
+          'w-full resize-none bg-transparent px-[14px] pr-9 text-sm leading-relaxed',
           bare ? 'pt-[10px] pb-[4px]' : 'py-[10px]',
           mono ? 'font-mono' : 'font-sans',
-          'text-foreground outline-none placeholder:text-mf-text-3',
+          'text-foreground outline-none placeholder:text-muted-foreground',
         )}
         {...field.ariaProps}
       />

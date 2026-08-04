@@ -16,7 +16,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@v2/components/ui/dropdown-menu';
 import type { AskAgentStep } from '../../contract';
 import { EXECUTION_MODES } from '../../contract';
 import { ChipButton } from './ChipButton';
@@ -56,11 +56,11 @@ export function PermissionMenu({ value, onChange, testId }: PermissionMenuProps)
             key={mode}
             data-testid={`${testId}-permission-option-${mode}`}
             onSelect={() => onChange({ permissionMode: mode })}
-            className={mode === active ? 'bg-mf-selection font-medium' : ''}
+            className={mode === active ? 'bg-sidebar-selection font-medium' : ''}
           >
             <div className="flex flex-col">
               <span>{MODE_COPY[mode].label}</span>
-              <span className="text-caption text-muted-foreground">{MODE_COPY[mode].hint}</span>
+              <span className="text-xs text-muted-foreground">{MODE_COPY[mode].hint}</span>
             </div>
           </DropdownMenuItem>
         ))}

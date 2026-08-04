@@ -64,21 +64,21 @@ export function DetailsOverview({ description, definition, catalog }: DetailsOve
 
   return (
     <div data-testid="automations-details-overview" className="flex flex-col gap-[20px] px-[20px] py-[18px]">
-      {description && <p className="text-body text-muted-foreground">{description}</p>}
+      {description && <p className="text-sm text-muted-foreground">{description}</p>}
 
       <div>
-        <h3 className="mb-[8px] text-caption font-semibold text-muted-foreground">When</h3>
+        <h3 className="mb-[8px] text-xs font-semibold text-muted-foreground">When</h3>
         {definition.triggers.length === 0 ? (
-          <p className="text-label text-muted-foreground">No trigger — run it by hand.</p>
+          <p className="text-xs text-muted-foreground">No trigger — run it by hand.</p>
         ) : (
           <TriggerChips triggers={definition.triggers} />
         )}
       </div>
 
       <div>
-        <h3 className="mb-[8px] text-caption font-semibold text-muted-foreground">Do</h3>
+        <h3 className="mb-[8px] text-xs font-semibold text-muted-foreground">Do</h3>
         {entries.length === 0 ? (
-          <p className="text-label text-muted-foreground">No steps yet.</p>
+          <p className="text-xs text-muted-foreground">No steps yet.</p>
         ) : (
           <div className="flex flex-col gap-[8px]">
             {entries.map(({ step, before }) => {
@@ -96,12 +96,12 @@ export function DetailsOverview({ description, definition, catalog }: DetailsOve
                     <Icon size={13} className={meta.iconClass} aria-hidden />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-label font-semibold text-foreground">{meta.label}</div>
+                    <div className="text-xs font-semibold text-foreground">{meta.label}</div>
                     <div className="mt-0.5">
                       {isLeaf(step) ? (
                         <StepSummary step={step} tokens={before} catalog={catalog} />
                       ) : (
-                        <span className="text-caption text-muted-foreground">{blockCaption(step)}</span>
+                        <span className="text-xs text-muted-foreground">{blockCaption(step)}</span>
                       )}
                     </div>
                   </div>

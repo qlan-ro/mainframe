@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, Pencil, Play, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
@@ -65,7 +65,7 @@ export function AutomationDetails() {
     return (
       <div
         data-testid="automations-details-not-found"
-        className="flex h-full items-center justify-center text-body text-muted-foreground"
+        className="flex h-full items-center justify-center text-sm text-muted-foreground"
       >
         This automation couldn't be found.
       </div>
@@ -86,7 +86,7 @@ export function AutomationDetails() {
           </button>
         </Hint>
         <Zap size={15} className="text-primary" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-heading font-bold tracking-tight text-foreground">
+        <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-foreground">
           {automation.name}
         </span>
         <button
@@ -94,7 +94,7 @@ export function AutomationDetails() {
           data-testid="automations-details-run"
           disabled={starting}
           onClick={() => void handleRunNow()}
-          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-caption font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-[28px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-xs font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Play size={14} className="text-primary" fill="currentColor" aria-hidden />
           Run now
@@ -120,7 +120,7 @@ export function AutomationDetails() {
               data-testid={`automations-details-tab-${t}`}
               onClick={() => setTab(t)}
               className={cn(
-                'rounded-[5px] px-[12px] py-[4px] text-caption transition-colors',
+                'rounded-[5px] px-[12px] py-[4px] text-xs transition-colors',
                 tab === t
                   ? 'bg-popover font-medium text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',

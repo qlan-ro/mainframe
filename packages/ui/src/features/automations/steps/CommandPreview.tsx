@@ -20,10 +20,10 @@ export function CommandPreview({ script, testId }: CommandPreviewProps) {
   const { text, warnings } = buildCommandPreview(script);
   return (
     <div data-testid={testId} className="flex flex-col gap-1.5">
-      <span className="text-caption font-medium text-muted-foreground">What will run</span>
+      <span className="text-xs font-medium text-muted-foreground">What will run</span>
       <pre
         data-testid={`${testId}-text`}
-        className="whitespace-pre-wrap break-words rounded-md border-[0.5px] border-border bg-muted/40 p-2.5 font-mono text-caption text-foreground"
+        className="whitespace-pre-wrap break-words rounded-md border-[0.5px] border-border bg-muted/40 p-2.5 font-mono text-xs text-foreground"
       >
         {text}
       </pre>
@@ -31,9 +31,9 @@ export function CommandPreview({ script, testId }: CommandPreviewProps) {
         <span
           key={warning.index}
           data-testid={`${testId}-warning-${warning.index}`}
-          className="flex items-start gap-1.5 text-caption font-medium text-muted-foreground"
+          className="flex items-start gap-1.5 text-xs font-medium text-muted-foreground"
         >
-          <TriangleAlert size={11} className="mt-0.5 shrink-0 text-mf-warning" aria-hidden />
+          <TriangleAlert size={11} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           {warning.message}
         </span>
       ))}

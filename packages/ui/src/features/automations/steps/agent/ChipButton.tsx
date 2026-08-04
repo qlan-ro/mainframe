@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
 
 const CHIP_BASE = [
   'flex h-[20px] shrink-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border px-[8px]',
-  'text-label font-medium transition-colors',
+  'text-xs font-medium transition-colors',
   'hover:bg-accent hover:text-accent-foreground',
-  'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+  'data-[state=open]:border-primary data-[state=open]:bg-sidebar-selection',
   'disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none',
 ].join(' ');
 
@@ -45,7 +45,7 @@ export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(functio
     >
       <Icon size={12} className="shrink-0" aria-hidden />
       {children}
-      {chevron && <ChevronDown size={12} className="shrink-0 text-mf-text-3" aria-hidden />}
+      {chevron && <ChevronDown size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
     </button>
   );
 });

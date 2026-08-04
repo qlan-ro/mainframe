@@ -70,7 +70,7 @@ export function AutomationsHost(): React.ReactElement | null {
         <DialogTitle className="sr-only">Automations</DialogTitle>
         <Suspense
           fallback={
-            <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>
+            <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>
           }
         >
           <AutomationsView />

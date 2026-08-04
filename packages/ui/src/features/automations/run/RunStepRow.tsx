@@ -99,7 +99,7 @@ export function RunStepRow({
           <VerbIcon size={14} className={verbMeta.iconClass} aria-hidden />
           <span
             className={cn(
-              'flex-1 text-body font-semibold',
+              'flex-1 text-sm font-semibold',
               entry.status === 'skipped' ? 'text-muted-foreground' : 'text-foreground',
             )}
           >
@@ -109,12 +109,12 @@ export function RunStepRow({
             <span
               data-testid={`${testId}-kept-going`}
               title="This step failed but the automation kept going"
-              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-mf-warning/15 px-[8px] text-caption font-semibold text-muted-foreground"
+              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-warning/15 px-[8px] text-xs font-semibold text-muted-foreground"
             >
               Kept going
             </span>
           )}
-          {duration && <span className="font-mono text-caption text-muted-foreground">{duration}</span>}
+          {duration && <span className="font-mono text-xs text-muted-foreground">{duration}</span>}
           {hasDisclosure && (
             <button
               type="button"
@@ -138,7 +138,7 @@ export function RunStepRow({
         {open && entry.outputPreview && (
           <div
             data-testid={`${testId}-output`}
-            className="mt-[7px] whitespace-pre-wrap rounded-md border-[0.5px] border-border bg-muted/50 px-[11px] py-[8px] font-mono text-caption leading-relaxed text-muted-foreground"
+            className="mt-[7px] whitespace-pre-wrap rounded-md border-[0.5px] border-border bg-muted/50 px-[11px] py-[8px] font-mono text-xs leading-relaxed text-muted-foreground"
           >
             {entry.outputPreview}
           </div>
@@ -146,7 +146,7 @@ export function RunStepRow({
         {open && entry.error && (
           <div
             data-testid={`${testId}-error`}
-            className="mt-[7px] rounded-md border-[0.5px] border-destructive/30 bg-destructive/[0.07] px-[11px] py-[9px] text-caption leading-relaxed text-destructive"
+            className="mt-[7px] rounded-md border-[0.5px] border-destructive/30 bg-destructive/[0.07] px-[11px] py-[9px] text-xs leading-relaxed text-destructive"
           >
             {entry.error}
           </div>
@@ -156,7 +156,7 @@ export function RunStepRow({
             type="button"
             data-testid={`${testId}-chat`}
             onClick={() => onOpenChat(entry.chatId!)}
-            className="mt-[7px] inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-[11px] text-caption font-semibold text-primary hover:bg-accent"
+            className="mt-[7px] inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-[11px] text-xs font-semibold text-primary hover:bg-accent"
           >
             <MessageSquare size={14} aria-hidden />
             Open agent chat

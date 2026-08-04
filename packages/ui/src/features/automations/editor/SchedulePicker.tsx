@@ -13,9 +13,9 @@
  * one-off field without first destroying the recurring pattern in the draft.
  */
 import { useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Input } from '@v2/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Switch } from '@v2/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type { SchedulePattern, ScheduleTrigger } from '../contract';
 import { summarizeTrigger } from '../domain/trigger-summary';
@@ -135,7 +135,7 @@ function CustomSchedule({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <Select value={pattern.type} onValueChange={(next) => handleFrequency(next as RecurringPattern['type'])}>
-        <SelectTrigger data-testid={`${testId}-frequency`} className="h-[28px] w-[124px] text-caption">
+        <SelectTrigger data-testid={`${testId}-frequency`} className="h-[28px] w-[124px] text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -162,7 +162,7 @@ function CustomSchedule({
                 aria-pressed={active}
                 onClick={() => toggleDay(day)}
                 className={cn(
-                  'h-[28px] w-[34px] rounded-md border-[0.5px] text-caption font-medium',
+                  'h-[28px] w-[34px] rounded-md border-[0.5px] text-xs font-medium',
                   active
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'border-border text-muted-foreground hover:bg-accent',
@@ -181,7 +181,7 @@ function CustomSchedule({
         // An empty field is a half-typed time, not a schedule — keep the last
         // valid one rather than writing `at: ''`, which saves and never fires.
         onChange={(e) => e.target.value && onChange({ ...pattern, at: e.target.value })}
-        className="h-[28px] w-[108px] px-2.5 py-0 text-caption"
+        className="h-[28px] w-[108px] px-2.5 py-0 text-xs"
       />
     </div>
   );
@@ -240,7 +240,7 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
             if (picked) emit(picked);
           }}
         >
-          <SelectTrigger data-testid={`${testId}-preset`} className="h-[28px] w-[230px] text-caption">
+          <SelectTrigger data-testid={`${testId}-preset`} className="h-[28px] w-[230px] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -263,12 +263,12 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
           // An empty field is a half-typed datetime, not a schedule — keep the
           // last valid moment rather than writing `at: ''` into the draft.
           onChange={(e) => e.target.value && emit({ type: 'once', at: e.target.value })}
-          className="h-[28px] w-[200px] px-2.5 py-0 text-caption"
+          className="h-[28px] w-[200px] px-2.5 py-0 text-xs"
         />
       )}
 
       {summary && (
-        <span data-testid={`${testId}-summary`} className="text-label text-muted-foreground">
+        <span data-testid={`${testId}-summary`} className="text-xs text-muted-foreground">
           {summary}
         </span>
       )}
@@ -279,7 +279,7 @@ export function SchedulePicker({ trigger, onChange, testId }: SchedulePickerProp
           checked={trigger.onMissed === 'run_once'}
           onCheckedChange={(checked) => onChange({ ...trigger, onMissed: checked ? 'run_once' : 'skip' })}
         />
-        <span className="text-label text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {trigger.onMissed === 'run_once' ? 'If my Mac was off, run when it starts' : 'Skip missed runs'}
         </span>
       </label>
