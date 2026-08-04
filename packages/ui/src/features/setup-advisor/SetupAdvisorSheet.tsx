@@ -56,9 +56,9 @@ function ErrorBody({ error, onRetry }: { error: string; onRetry: () => void }) {
 
 function Footer({ done, total, rows }: { done: number; total: number; rows: AutomationRecommendation[] }) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2.5 text-caption">
+    <div className="flex shrink-0 items-center justify-between border-t px-4 py-2.5 text-xs">
       <span className="text-muted-foreground">{payloadFooterText(rows)}</span>
-      <span className={cn('tabular-nums', done > 0 ? 'text-mf-success' : 'text-muted-foreground')}>
+      <span className={cn('tabular-nums', done > 0 ? 'text-success' : 'text-muted-foreground')}>
         {done} of {total} copied
       </span>
     </div>
