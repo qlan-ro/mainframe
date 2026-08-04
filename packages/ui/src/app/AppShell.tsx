@@ -11,6 +11,7 @@
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
 import { SidebarInset, SidebarProvider } from '@v2/components/ui/sidebar';
+import { DirectoryPickerModal } from '@v2/features/files/DirectoryPickerModal';
 import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
 import { TagPopoverHost } from '@v2/features/sessions/TagPopoverHost';
 import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
@@ -23,7 +24,6 @@ import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { SpotlightPalette } from '../features/palette/SpotlightPalette';
 import { FindInPathModal } from '../components/overlays/FindInPathModal';
-import { DirectoryPickerModal } from '../components/overlays/DirectoryPickerModal';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';

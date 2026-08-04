@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browseFilesystem } from '@/lib/api/files';
 import type { PickRequest } from '@/features/files/use-directory-picker';
-import { type FlatNode, type FlatTree, EMPTY_TREE, buildTree } from './PickerTree';
+import { type FlatNode, type FlatTree, EMPTY_TREE, buildTree } from './picker-tree-model';
 
 export const HOME_PATH = '~';
 

@@ -1,5 +1,5 @@
 /**
- * PathCrumbInput — the DirectoryPickerModal's editable path crumb.
+ * The DirectoryPickerModal's editable path crumb.
  *
  * Replaces the read-only `~` crumb with a type/paste-able input: entering an
  * absolute path and pressing Enter re-seeds the tree there (via `onNavigate`),
@@ -58,8 +58,8 @@ export function PathCrumbInput({ value, onNavigate }: PathCrumbInputProps) {
   }, []);
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3.5 py-[7px]">
-      <FolderIcon className="size-[12px] shrink-0 text-mf-text-4" fill="currentColor" />
+    <div className="flex shrink-0 items-center gap-1.5 border-b px-3.5 py-2">
+      <FolderIcon className="size-3 shrink-0 text-muted-foreground/70" fill="currentColor" />
       <input
         type="text"
         data-testid="directory-picker-path-input"
@@ -78,7 +78,7 @@ export function PathCrumbInput({ value, onNavigate }: PathCrumbInputProps) {
           // to run before Radix's own capture-phase Escape-close listener,
           // which is earlier than this bubble-phase handler could ever fire.
         }}
-        className="w-full bg-transparent font-mono text-caption text-mf-text-3 placeholder:text-mf-text-4 focus:text-foreground focus:outline-none"
+        className="w-full bg-transparent font-mono text-xs text-muted-foreground placeholder:text-muted-foreground/70 focus:text-foreground focus:outline-none"
       />
     </div>
   );

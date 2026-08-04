@@ -6,7 +6,7 @@
  *    the phantom `text-mf-text-2` (Tailwind silently drops unknown tokens,
  *    so the phantom class renders with an inherited color — no visible bug
  *    in isolation, hence the pin).
- *  - Chevron icons use the real `text-mf-text-3` token (design T.text3).
+ *  - Chevron icons use the real `text-muted-foreground` token (v2 resting ink).
  *
  * Empty/Loading node-row rendering is covered behaviorally in
  * DirectoryPickerModal.test.tsx.
@@ -30,7 +30,7 @@ describe('PickerTree — row label token', () => {
 });
 
 describe('PickerTree — chevron token', () => {
-  it('renders the collapsed chevron with the real text-mf-text-3 token', () => {
+  it('renders the collapsed chevron with the real text-muted-foreground token', () => {
     const entries: FileTreeEntry[] = [{ name: 'proj', path: '/Users/me/proj', type: 'directory' }];
     const tree = buildTree(entries, 0);
 
@@ -38,6 +38,6 @@ describe('PickerTree — chevron token', () => {
 
     const row = screen.getByTestId('directory-picker-row-/Users/me/proj');
     const chevron = row.querySelector('svg');
-    expect(chevron?.getAttribute('class')).toContain('text-mf-text-3');
+    expect(chevron?.getAttribute('class')).toContain('text-muted-foreground');
   });
 });

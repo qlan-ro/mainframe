@@ -1,59 +1,26 @@
 /**
- * PickerTree — flat-tree row rendering for DirectoryPickerModal.
+ * Flat-tree row rendering for DirectoryPickerModal.
  *
  * Split out of DirectoryPickerModal.tsx (which owns fetch/state) to keep both
  * files under the 300-line limit. Renders each node plus its per-node inline
  * states: load-error, Empty (loaded, zero children), and Loading… (expanding,
  * children not yet arrived).
  */
-import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FileIcon } from 'lucide-react';
-import type { FileTreeEntry } from '@/lib/api/files';
+import { ChevronDownIcon, ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
+import type { FlatNode, FlatTree } from '@/components/overlays/directory-picker/picker-tree-model';
 
-// ---------------------------------------------------------------------------
-// Flat tree state types
-// ---------------------------------------------------------------------------
+export { buildTree, EMPTY_TREE } from '@/components/overlays/directory-picker/picker-tree-model';
+export type { FlatNode, FlatTree } from '@/components/overlays/directory-picker/picker-tree-model';
 
-export interface FlatNode {
-  entry: FileTreeEntry;
-  /** null = not yet loaded; [] = loaded, empty directory */
-  childrenPaths: string[] | null;
-  expanded: boolean;
-  /** true when the child browse failed — renders a "Failed to load" row */
-  loadError: boolean;
-  depth: number;
-}
-
-export interface FlatTree {
-  nodes: Map<string, FlatNode>;
-  rootPaths: string[];
-}
-
-export const EMPTY_TREE: FlatTree = { nodes: new Map(), rootPaths: [] };
-
-export function buildTree(entries: FileTreeEntry[], depth: number): FlatTree {
-  const nodes = new Map<string, FlatNode>();
-  const rootPaths: string[] = [];
-  for (const e of entries) {
-    rootPaths.push(e.path);
-    nodes.set(e.path, { entry: e, childrenPaths: null, expanded: false, loadError: false, depth });
-  }
-  return { nodes, rootPaths };
-}
-
-// Design indent formula (16-dirpicker.jsx:107-109): paddingLeft = depth*16+10.
+/** Indent formula carried from the v1 picker: depth level × 16px + row inset. */
 function rowIndent(depth: number): number {
   return depth * 16 + 10;
 }
 
-// Per-node inline state rows (Empty/Loading/error) sit one level deeper:
-// paddingLeft = (depth+1)*16+30 (16-dirpicker.jsx:125-127, 130-132).
+/** Per-node inline state rows (Empty/Loading/error) sit one level deeper. */
 function nodeStateIndent(depth: number): number {
   return (depth + 1) * 16 + 30;
 }
-
-// ---------------------------------------------------------------------------
-// Individual tree row
-// ---------------------------------------------------------------------------
 
 interface PickerRowProps {
   node: FlatNode;
@@ -76,18 +43,18 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         if (isDirectory) onToggle(node);
         onSelect(node);
       }}
-      className={`flex w-full items-center gap-1.5 rounded-sm px-[10px] py-[5px] text-left text-body outline-none ${
+      className={`flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left outline-none ${
         isSelected
-          ? 'bg-mf-selection font-semibold text-foreground'
+          ? 'bg-primary/10 font-semibold text-foreground'
           : 'font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground'
       }`}
       style={{ paddingLeft: `${rowIndent(depth)}px` }}
     >
       {isDirectory ? (
         expanded ? (
-          <ChevronDownIcon className="size-3 shrink-0 text-mf-text-3" />
+          <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
         ) : (
-          <ChevronRightIcon className="size-3 shrink-0 text-mf-text-3" />
+          <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground" />
         )
       ) : (
         <span className="size-3 shrink-0" />
@@ -96,22 +63,17 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         <FolderIcon
           className="size-3.5 shrink-0 text-primary"
           fill={folderState ? 'currentColor' : 'none'}
-          // Approximates the artboard's solid `folder.fill` glyph (16-dirpicker.jsx)
-          // — lucide has no filled FolderIcon variant. 0.2 is a hand-picked
-          // opacity, not a design token; revisit if a filled icon set lands.
+          // lucide has no filled FolderIcon variant; 0.2 approximates the solid
+          // glyph without swallowing the outline.
           fillOpacity={folderState ? 0.2 : undefined}
         />
       ) : (
-        <FileIcon className="size-3.5 shrink-0 text-mf-text-3" />
+        <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span className="truncate">{entry.name}</span>
     </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Flat renderer — depth-first traversal via ordered paths
-// ---------------------------------------------------------------------------
 
 interface FlatTreeViewProps {
   tree: FlatTree;
@@ -154,14 +116,14 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
   const rows = collectRows(tree);
 
   return (
-    <div className="py-[6px]">
+    <div className="py-1.5">
       {rows.map(({ node, isLoadingChildren, isEmpty }) => (
         <div key={node.entry.path}>
           <PickerRow node={node} selectedPath={selectedPath} onSelect={onSelect} onToggle={onToggle} />
           {node.expanded && node.loadError && (
             <p
               data-testid={`directory-picker-load-error-${node.entry.path}`}
-              className="px-3 py-0.5 text-micro text-destructive"
+              className="px-3 py-0.5 text-xs text-destructive"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Failed to load
@@ -170,7 +132,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {isLoadingChildren && (
             <p
               data-testid={`directory-picker-node-loading-${node.entry.path}`}
-              className="animate-pulse px-[10px] py-[4px] text-caption text-mf-text-4"
+              className="animate-pulse px-2.5 py-1 text-xs text-muted-foreground/70"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Loading…
@@ -179,7 +141,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {isEmpty && (
             <p
               data-testid={`directory-picker-node-empty-${node.entry.path}`}
-              className="px-[10px] py-[4px] text-caption text-mf-text-4"
+              className="px-2.5 py-1 text-xs text-muted-foreground/70"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Empty

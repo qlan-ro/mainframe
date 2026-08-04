@@ -454,8 +454,8 @@ describe('DirectoryPickerModal — stale-seed guard', () => {
 // 12. Header/footer horizontal padding + inline close button (3.1, 3.6, 3.10)
 // ---------------------------------------------------------------------------
 
-describe('DirectoryPickerModal — header/footer padding + inline close', () => {
-  it('renders the header with 16px horizontal padding and justify-between layout', async () => {
+describe('DirectoryPickerModal — v2 shell: stock close button', () => {
+  it('renders the stock dialog close button', async () => {
     mockBrowse.mockResolvedValue([]);
     render(<DirectoryPickerModal />);
     act(() => {
@@ -466,52 +466,10 @@ describe('DirectoryPickerModal — header/footer padding + inline close', () => 
       expect(screen.queryByText('Select Project Directory')).not.toBeNull();
     });
 
-    const header = screen.getByText('Select Project Directory').closest('[class*="justify-between"]');
-    expect(header).not.toBeNull();
-    expect(header?.className).toContain('px-[16px]');
-    expect(header?.className).toContain('justify-between');
+    expect(document.querySelector('[data-slot="dialog-close"]')).not.toBeNull();
   });
 
-  it('renders the footer with 16px horizontal padding', async () => {
-    mockBrowse.mockResolvedValue([{ name: 'proj', path: '/Users/me/proj', type: 'directory' }]);
-    render(<DirectoryPickerModal />);
-    act(() => {
-      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('directory-picker-row-/Users/me/proj')).not.toBeNull();
-    });
-
-    const footer = screen.getByTestId('directory-picker-selected-path').closest('[class*="justify-between"]');
-    expect(footer).not.toBeNull();
-    expect(footer?.className).toContain('px-[16px]');
-  });
-
-  it('renders an inline close button in the header row, not the base dialog close', async () => {
-    mockBrowse.mockResolvedValue([]);
-    render(<DirectoryPickerModal />);
-    act(() => {
-      void useDirectoryPicker.getState().pickDirectory({ mode: 'directory' });
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText('Select Project Directory')).not.toBeNull();
-    });
-
-    // The base absolutely-positioned dialog close must be suppressed.
-    expect(screen.queryByTestId('dialog-close')).toBeNull();
-
-    const close = screen.getByTestId('directory-picker-close');
-    expect(close.className).toContain('size-[26px]');
-    expect(close.className).toContain('rounded-[7px]');
-    expect(close.getAttribute('aria-label')).toBe('Close');
-
-    const icon = close.querySelector('svg');
-    expect(icon?.getAttribute('class')).toContain('size-[14px]');
-  });
-
-  it('clicking the inline close button resolves null and closes the picker', async () => {
+  it('clicking the stock close button resolves null and closes the picker', async () => {
     mockBrowse.mockResolvedValue([]);
     render(<DirectoryPickerModal />);
     let picked: Promise<string | null>;
@@ -520,10 +478,10 @@ describe('DirectoryPickerModal — header/footer padding + inline close', () => 
     });
 
     await waitFor(() => {
-      expect(screen.queryByTestId('directory-picker-close')).not.toBeNull();
+      expect(document.querySelector('[data-slot="dialog-close"]')).not.toBeNull();
     });
 
-    await userEvent.click(screen.getByTestId('directory-picker-close'));
+    await userEvent.click(document.querySelector('[data-slot="dialog-close"]')!);
 
     await expect(picked!).resolves.toBeNull();
     expect(useDirectoryPicker.getState().pending).toBeNull();
@@ -564,7 +522,8 @@ describe('DirectoryPickerModal — review-fix: footer placeholder + real tokens'
 
     const cancel = screen.getByTestId('directory-picker-cancel');
     expect(cancel.className).not.toContain('text-mf-text-2');
-    expect(cancel.className).toContain('text-muted-foreground');
+    // v2: the Cancel is a stock outline Button, not a hand-tinted one.
+    expect(cancel.className).toContain('border');
   });
 });
 

@@ -1,7 +1,7 @@
 /**
- * RecentDirs — the "Recent" section shown at the top of the DirectoryPicker
- * tree when landing at the home root. Rows are recently-picked directories
- * (store/recent-directories); clicking one navigates the tree there.
+ * The "Recent" section shown at the top of the DirectoryPicker tree when
+ * landing at the home root. Rows are recently-picked directories
+ * (store/recent-directories); clicking one resolves the pick in one click.
  */
 import { FolderIcon } from 'lucide-react';
 
@@ -22,8 +22,8 @@ export function RecentDirs({ paths, onPick }: RecentDirsProps) {
   if (paths.length === 0) return null;
 
   return (
-    <div data-testid="directory-picker-recent" className="border-b border-border pb-1.5 pt-1">
-      <p className="px-3.5 py-1 text-micro font-semibold uppercase tracking-wide text-mf-text-4">Recent</p>
+    <div data-testid="directory-picker-recent" className="border-b pt-1 pb-1.5">
+      <p className="px-3.5 py-1 text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">Recent</p>
       {paths.map((path) => {
         const { name, parent } = splitPath(path);
         return (
@@ -32,13 +32,13 @@ export function RecentDirs({ paths, onPick }: RecentDirsProps) {
             type="button"
             data-testid={`directory-picker-recent-${path}`}
             onClick={() => onPick(path)}
-            className="group flex w-full items-center gap-1.5 px-3.5 py-[5px] text-left text-body hover:bg-accent hover:text-accent-foreground"
+            className="group flex w-full items-center gap-1.5 px-3.5 py-1 text-left hover:bg-accent hover:text-accent-foreground"
           >
-            <FolderIcon className="size-[14px] shrink-0 text-primary" fill="currentColor" />
+            <FolderIcon className="size-3.5 shrink-0 text-primary" fill="currentColor" />
             <span className="shrink-0 truncate font-medium text-muted-foreground group-hover:text-accent-foreground">
               {name}
             </span>
-            <span className="truncate font-mono text-caption text-mf-text-4">{parent}</span>
+            <span className="truncate font-mono text-xs text-muted-foreground/70">{parent}</span>
           </button>
         );
       })}
