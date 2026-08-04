@@ -1,17 +1,17 @@
 /**
- * pairing-steps — step bodies and footer rows for AddRemoteDialog.
+ * Step bodies and footer rows for the pairing dialog.
  *
- * Exported: Step0Body, Step1Body, FooterStep0, FooterStep1 and their prop types.
+ * The code entry is the stock `InputOTP` (six slots, 3+3): it replaces the v1
+ * hand-rolled box row and brings paste, caret and slot a11y for free. The
+ * value is a plain string — no space-padding sentinel.
  */
-import { Shield } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { PairCodeInput } from './PairCodeInput';
-import { NoticeCard, UrlChip, UrlAdornment, type UrlPhase } from './pairing-shared';
-
-// ---------------------------------------------------------------------------
-// Step0Body
-// ---------------------------------------------------------------------------
+import { REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
+import { ShieldIcon } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@v2/components/ui/input-otp';
+import { Label } from '@v2/components/ui/label';
+import { NoticeCard, UrlAdornment, UrlChip, type UrlPhase } from './pairing-shared';
 
 export interface Step0BodyProps {
   url: string;
@@ -23,11 +23,12 @@ export interface Step0BodyProps {
 
 export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0BodyProps) {
   return (
-    <div className="flex flex-col gap-[10px]">
-      <div className="flex flex-col gap-[4px]">
-        <label className="text-label font-semibold text-muted-foreground">Server URL</label>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="daemon-add-url">Server URL</Label>
         <div className="relative flex items-center">
           <Input
+            id="daemon-add-url"
             data-testid="daemon-add-url"
             type="url"
             value={url}
@@ -39,11 +40,11 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
             disabled={phase === 'verifying'}
             className="pr-8"
           />
-          <div className="pointer-events-none absolute right-[10px]">
+          <div className="pointer-events-none absolute right-2.5">
             <UrlAdornment phase={phase} />
           </div>
         </div>
-        <p className="text-caption text-mf-text-3 leading-normal">
+        <p className="text-xs text-muted-foreground">
           Use the <strong className="font-semibold text-foreground">named tunnel</strong> URL from the server's Remote
           Access settings. Quick tunnels rotate their URL on restart.
         </p>
@@ -63,7 +64,7 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
               type="button"
               data-testid="daemon-add-retry"
               onClick={onVerify}
-              className="text-caption font-semibold text-primary hover:underline"
+              className="text-xs font-semibold text-primary hover:underline"
             >
               Retry
             </button>
@@ -76,10 +77,6 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
   );
 }
 
-// ---------------------------------------------------------------------------
-// Step1Body
-// ---------------------------------------------------------------------------
-
 export type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable' | 'storage';
 
 export interface Step1BodyProps {
@@ -91,6 +88,8 @@ export interface Step1BodyProps {
   onCodeChange: (v: string) => void;
   onDeviceChange: (v: string) => void;
 }
+
+const OTP_SLOT = 'h-11 w-9 font-mono text-lg font-bold';
 
 export function Step1Body({
   lockedUrl,
@@ -106,16 +105,36 @@ export function Step1Body({
   const disabled = phase === 'confirming' || isDone;
 
   return (
-    <div className="flex flex-col gap-[10px]">
+    <div className="flex flex-col gap-2.5">
       <UrlChip url={lockedUrl} />
 
-      <div className="flex flex-col gap-[4px]">
-        <label className="text-label font-semibold text-muted-foreground">Pairing code</label>
-        <PairCodeInput value={code} onChange={onCodeChange} invalid={isInvalid} disabled={disabled} autoFocus />
-        <p className="text-caption text-mf-text-3 leading-normal">
+      <div className="flex flex-col gap-1.5">
+        <Label>Pairing code</Label>
+        <InputOTP
+          data-testid="daemon-pair-code"
+          maxLength={6}
+          value={code}
+          onChange={(v) => onCodeChange(v.toUpperCase())}
+          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
+          disabled={disabled}
+          autoFocus
+        >
+          <InputOTPGroup>
+            {[0, 1, 2].map((i) => (
+              <InputOTPSlot key={i} index={i} aria-invalid={isInvalid} className={OTP_SLOT} />
+            ))}
+          </InputOTPGroup>
+          <InputOTPSeparator className="text-muted-foreground" />
+          <InputOTPGroup>
+            {[3, 4, 5].map((i) => (
+              <InputOTPSlot key={i} index={i} aria-invalid={isInvalid} className={OTP_SLOT} />
+            ))}
+          </InputOTPGroup>
+        </InputOTP>
+        <p className="text-xs text-muted-foreground">
           On the server, open{' '}
           <strong className="font-semibold text-foreground">Remote Access → Generate pairing code</strong> (or{' '}
-          <code className="font-mono text-caption">mainframe-daemon pair</code>). It&apos;s valid for 5 minutes.
+          <code className="font-mono">mainframe-daemon pair</code>). It&apos;s valid for 5 minutes.
         </p>
       </div>
 
@@ -134,9 +153,10 @@ export function Step1Body({
 
       {isDone && pairedLabel != null && <NoticeCard kind="success">Paired with {pairedLabel}</NoticeCard>}
 
-      <div className="flex flex-col gap-[4px]">
-        <label className="text-label font-semibold text-muted-foreground">Device name</label>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="daemon-add-device">Device name</Label>
         <Input
+          id="daemon-add-device"
           data-testid="daemon-add-device"
           type="text"
           value={device}
@@ -149,9 +169,14 @@ export function Step1Body({
   );
 }
 
-// ---------------------------------------------------------------------------
-// FooterStep0
-// ---------------------------------------------------------------------------
+function TunnelNote() {
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <ShieldIcon className="size-3 shrink-0" />
+      <span>Encrypted over your Cloudflare tunnel</span>
+    </div>
+  );
+}
 
 export interface FooterStep0Props {
   phase: UrlPhase;
@@ -163,19 +188,15 @@ export interface FooterStep0Props {
 
 export function FooterStep0({ phase, url, onCancel, onVerify, onContinue }: FooterStep0Props) {
   const isVerifying = phase === 'verifying';
-  const isReachable = phase === 'reachable';
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-[5px] text-caption text-mf-text-3">
-        <Shield size={12} className="shrink-0" />
-        <span>Encrypted over your Cloudflare tunnel</span>
-      </div>
-      <div className="flex items-center gap-[6px]">
+    <div className="flex w-full items-center justify-between">
+      <TunnelNote />
+      <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        {isReachable ? (
+        {phase === 'reachable' ? (
           <Button size="sm" data-testid="daemon-add-continue" onClick={onContinue}>
             Continue
           </Button>
@@ -188,10 +209,6 @@ export function FooterStep0({ phase, url, onCancel, onVerify, onContinue }: Foot
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// FooterStep1
-// ---------------------------------------------------------------------------
 
 export interface FooterStep1Props {
   mode: 'add' | 'repair';
@@ -209,12 +226,9 @@ export function FooterStep1({ mode, phase, codeReady, onBack, onCancel, onConfir
   const loadingLabel = mode === 'repair' ? 'Re-pairing…' : 'Pairing…';
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-[5px] text-caption text-mf-text-3">
-        <Shield size={12} className="shrink-0" />
-        <span>Encrypted over your Cloudflare tunnel</span>
-      </div>
-      <div className="flex items-center gap-[6px]">
+    <div className="flex w-full items-center justify-between">
+      <TunnelNote />
+      <div className="flex items-center gap-1.5">
         {mode === 'add' ? (
           <Button variant="ghost" size="sm" data-testid="daemon-add-back" onClick={onBack}>
             Back

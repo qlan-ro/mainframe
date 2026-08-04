@@ -217,6 +217,18 @@
   }
 }
 
+/* Indeterminate progress sweep (daemon-unreachable card; referenced via the
+   arbitrary `animate-[ws-indeterminate_…]` utility, which does not generate
+   keyframes). Lives here, not the bridge — a v2 component animates with it. */
+@keyframes ws-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
 /* Carried over verbatim — the working-session spin the provider logo animates
    with. A keyframe has no theme dimension, so it is not a token. */
 @keyframes mf-claude-logo-working {

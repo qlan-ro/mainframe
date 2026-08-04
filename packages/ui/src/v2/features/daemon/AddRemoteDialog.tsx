@@ -1,32 +1,28 @@
 /**
- * AddRemoteDialog — two-step pairing dialog (Connect → Pair).
+ * The two-step pairing dialog (Connect → Pair), stock dialog composition.
  *
- * Exports:
- *   StepRail          — pure progress indicator component (re-exported from pairing-shared).
- *   AddRemoteBody     — pure/controlled dialog body (no async logic).
- *   AddRemoteDialog   — live state machine wired to verifyDaemon/confirmPairing/registry.
- *
- * Visual spec: task-B7-brief.md / 17-daemon.jsx design intent.
- * Token mapping: text-foreground / text-muted-foreground / text-mf-text-3 /
- *   bg-mf-content2 / mf-success / destructive / primary / rounded-md /
- *   font-mono / text-micro / text-caption / text-label / text-body.
+ * `AddRemoteBody` stays pure/controlled and the state machine keeps the v1
+ * behaviour verbatim: verify → continue → confirm, storage failures surfaced
+ * as their own phase, onDone fired immediately on success with the close
+ * deferred ~800ms so the "Paired" notice is visible. The auto-switch is
+ * deferred with it — switching remounts `<AppShell key={target.id}>`, which
+ * would tear this dialog down mid-notice.
  */
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { Server, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
-import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@v2/components/ui/dialog';
 import { getHost } from '@/lib/host';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { verifyDaemon, confirmPairing, parseRemoteUrl, PairingError } from './pair-daemon';
-import { useDaemonRegistry } from './use-daemon-registry';
+import { confirmPairing, PairingError, parseRemoteUrl, verifyDaemon } from '@/features/daemon/pair-daemon';
+import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { StepRail, type UrlPhase } from './pairing-shared';
-import { Step0Body, Step1Body, FooterStep0, FooterStep1, type Step1Phase } from './pairing-steps';
-
-export { StepRail } from './pairing-shared';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { FooterStep0, FooterStep1, Step0Body, Step1Body, type Step1Phase } from './pairing-steps';
 
 export type DialogMode = 'add' | 'repair';
 
@@ -51,10 +47,6 @@ export interface AddRemoteBodyProps {
   onConfirm: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// AddRemoteBody (pure / controlled)
-// ---------------------------------------------------------------------------
-
 export function AddRemoteBody({
   mode,
   target,
@@ -76,60 +68,35 @@ export function AddRemoteBody({
   onConfirm,
 }: AddRemoteBodyProps) {
   const title = mode === 'repair' && target != null ? `Re-pair ${target.label}` : 'Add remote daemon';
-  const codeReady = code.replace(/ /g, '').length === 6;
+  const codeReady = code.length === 6;
   const lockedUrl = mode === 'repair' && target != null ? `https://${target.host}` : url;
 
   return (
-    <div className="flex w-[460px] max-w-full flex-col gap-0">
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div className="flex items-start gap-[12px] pb-[16px]">
-        <div className="flex size-[34px] shrink-0 items-center justify-center rounded-md bg-primary/10">
-          <Server size={17} className="text-primary" />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-          <h2 className="text-heading font-bold text-foreground leading-tight">{title}</h2>
-          <p className="text-caption text-muted-foreground leading-normal">
-            Agents and code run on the server; this Mac stays a control surface.
-          </p>
-        </div>
-        <button
-          type="button"
-          data-testid="daemon-add-close"
-          onClick={onClose}
-          className={cn(
-            'flex size-[28px] shrink-0 items-center justify-center rounded-md',
-            'text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-          )}
-          aria-label="Close"
-        >
-          <X size={15} />
-        </button>
-      </div>
+    <>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>Agents and code run on the server; this Mac stays a control surface.</DialogDescription>
+      </DialogHeader>
 
-      {/* ── Step rail ─────────────────────────────────────────────── */}
-      <div className="mb-[16px] flex items-center justify-center rounded-md bg-mf-content2 py-[10px]">
+      <div className="flex items-center justify-center rounded-md bg-muted py-2.5">
         <StepRail current={step} />
       </div>
 
-      {/* ── Body ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-[12px]">
-        {step === 0 ? (
-          <Step0Body url={url} phase={urlPhase} version={urlVersion} onUrlChange={onUrlChange} onVerify={onVerify} />
-        ) : (
-          <Step1Body
-            lockedUrl={lockedUrl}
-            code={code}
-            device={device}
-            phase={step1Phase}
-            pairedLabel={pairedLabel}
-            onCodeChange={onCodeChange}
-            onDeviceChange={onDeviceChange}
-          />
-        )}
-      </div>
+      {step === 0 ? (
+        <Step0Body url={url} phase={urlPhase} version={urlVersion} onUrlChange={onUrlChange} onVerify={onVerify} />
+      ) : (
+        <Step1Body
+          lockedUrl={lockedUrl}
+          code={code}
+          device={device}
+          phase={step1Phase}
+          pairedLabel={pairedLabel}
+          onCodeChange={onCodeChange}
+          onDeviceChange={onDeviceChange}
+        />
+      )}
 
-      {/* ── Footer ────────────────────────────────────────────────── */}
-      <div className="mt-[16px]">
+      <DialogFooter>
         {step === 0 ? (
           <FooterStep0 phase={urlPhase} url={url} onCancel={onClose} onVerify={onVerify} onContinue={onContinue} />
         ) : (
@@ -142,14 +109,10 @@ export function AddRemoteBody({
             onConfirm={onConfirm}
           />
         )}
-      </div>
-    </div>
+      </DialogFooter>
+    </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// AddRemoteDialog (live state machine)
-// ---------------------------------------------------------------------------
 
 export interface AddRemoteDialogProps {
   open: boolean;
@@ -171,8 +134,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
   const [urlVersion, setUrlVersion] = useState<string | undefined>(undefined);
   const [step1Phase, setStep1Phase] = useState<Step1Phase>('idle');
   const [url, setUrl] = useState(initialUrl);
-  // 6-space string is the blank sentinel for PairCodeInput (one space per character slot)
-  const [code, setCode] = useState('      ');
+  const [code, setCode] = useState('');
   const [device, setDevice] = useState('This Mac');
   const [pairedLabel, setPairedLabel] = useState<string | undefined>(undefined);
 
@@ -212,14 +174,13 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
   }, []);
 
   const handleConfirm = useCallback(async () => {
-    const trimmedCode = code.replace(/ /g, '');
-    if (trimmedCode.length !== 6) return;
+    if (code.length !== 6) return;
 
     const targetUrl = mode === 'repair' && target != null ? `https://${target.host}` : url.trim();
     setStep1Phase('confirming');
 
     try {
-      const { token } = await confirmPairing(targetUrl, trimmedCode, device.trim() || 'This Mac');
+      const { token } = await confirmPairing(targetUrl, code, device.trim() || 'This Mac');
 
       // Pairing succeeded server-side; a failure below is LOCAL token storage
       // (the host keyring). Surface it as its own phase instead of reporting
@@ -243,7 +204,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
           await getHost().daemons.setToken(target.id, token);
         }
       } catch (storageErr) {
-        console.warn('[settings/AddRemoteDialog] token storage failed', storageErr);
+        console.warn('[daemon/AddRemoteDialog] token storage failed', storageErr);
         setStep1Phase('storage');
         return;
       }
@@ -251,11 +212,6 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
       setStep1Phase('done');
       setPairedLabel(mode === 'repair' && target != null ? target.label : undefined);
 
-      // Fire onDone immediately; defer close by 800 ms so the "Paired" notice
-      // is visible before the dialog dismisses. Defer the auto-switch too:
-      // switching flips `<AppShell key={target.id}>` in App.tsx, remounting
-      // the subtree this dialog lives in — switching eagerly used to tear the
-      // still-open dialog down before it ever reached this "done" phase.
       onDone();
       closeTimerRef.current = setTimeout(() => {
         onClose();
@@ -277,7 +233,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
         if (!o) onClose();
       }}
     >
-      <DialogContent className="p-[20px] max-w-[500px]" hideClose>
+      <DialogContent className="sm:max-w-md">
         <AddRemoteBody
           mode={mode}
           target={target}

@@ -11,15 +11,14 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@v2/components/ui/sidebar';
+// Legacy island: ConnectionOverlay is the app-level window-state overlay; it
+// ports with the window-states pass.
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
-// Legacy islands: the pairing flow has not been ported yet, so "Add remote
-// daemon…" / "Re-pair…" open the v1 dialog, and a downed remote raises the
-// v1 unreachable overlay, until they are.
-import { AddRemoteDialog, type DialogMode } from '@/features/daemon/AddRemoteDialog';
-import { DaemonUnreachableBody } from '@/features/daemon/DaemonUnreachableBody';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
+import { AddRemoteDialog, type DialogMode } from './AddRemoteDialog';
+import { DaemonUnreachableBody } from './DaemonUnreachableBody';
 import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { useRestoreLastDaemon } from '@/features/daemon/use-restore-last-daemon';
 import { ConnDot, DaemonGlyph, type DaemonStatus } from './daemon-status';

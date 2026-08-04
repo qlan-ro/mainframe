@@ -514,14 +514,7 @@
   }
 }
 
-@keyframes ws-indeterminate {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(420%);
-  }
-}
+/* ws-indeterminate moved to the v2 sheet — a v2 component animates with it. */
 
 .fill-mode-forwards {
   animation-fill-mode: forwards;

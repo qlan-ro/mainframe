@@ -15,14 +15,14 @@ import userEvent from '@testing-library/user-event';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { setHostForTesting, resetHostForTesting } from '@/lib/host';
-import { PairingError } from '../pair-daemon';
+import { PairingError } from '@/features/daemon/pair-daemon';
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the modules under test.
 // ---------------------------------------------------------------------------
 
-vi.mock('../pair-daemon', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../pair-daemon')>();
+vi.mock('@/features/daemon/pair-daemon', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/features/daemon/pair-daemon')>();
   return {
     ...original,
     verifyDaemon: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('../pair-daemon', async (importOriginal) => {
   };
 });
 
-vi.mock('../use-daemon-registry', () => ({
+vi.mock('@/features/daemon/use-daemon-registry', () => ({
   useDaemonRegistry: vi.fn(),
 }));
 
@@ -62,8 +62,8 @@ vi.mock('@/lib/daemon/ws-client', () => ({
 }));
 
 import React from 'react';
-import { verifyDaemon, confirmPairing } from '../pair-daemon';
-import { useDaemonRegistry } from '../use-daemon-registry';
+import { verifyDaemon, confirmPairing } from '@/features/daemon/pair-daemon';
+import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { AddRemoteDialog } from '../AddRemoteDialog';
 
 // ---------------------------------------------------------------------------
@@ -84,6 +84,10 @@ const REMOTE_META: DaemonMeta = {
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
+
+// input-otp polls document.elementFromPoint from a timer; jsdom doesn't
+// implement it and the suite would log an uncaught TypeError per test.
+document.elementFromPoint ??= () => null;
 
 const mockAdd = vi.fn();
 const mockSwitchTo = vi.fn();
@@ -118,17 +122,14 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Helper: type a 6-char code into the PairCodeInput
+// Helper: type a 6-char code. InputOTP renders ONE real input over the slot
+// row (not six boxes), so the code types straight in.
 // ---------------------------------------------------------------------------
 
 async function typeCode(user: ReturnType<typeof userEvent.setup>, code: string) {
   const codeInput = screen.getByTestId('daemon-pair-code');
-  const boxes = codeInput.querySelectorAll('input');
-  expect(boxes).toHaveLength(6);
-  for (let i = 0; i < code.length; i++) {
-    await user.click(boxes[i]!);
-    await user.keyboard(code[i]!);
-  }
+  await user.click(codeInput);
+  await user.keyboard(code);
 }
 
 // ---------------------------------------------------------------------------
