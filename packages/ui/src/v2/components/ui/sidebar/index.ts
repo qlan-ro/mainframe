@@ -1,6 +1,7 @@
 export {
   SidebarProvider,
   useSidebar,
+  clampSidebarWidth,
   SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_ICON,
   SIDEBAR_KEYBOARD_SHORTCUT,

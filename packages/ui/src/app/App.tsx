@@ -121,7 +121,7 @@ export function App() {
 
   return (
     <MfErrorBoundary>
-      <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
+      <div className="flex h-screen flex-col bg-background text-foreground font-sans">
         <ThemeEffect />
         <ConnectionStatusProvider value={{ state, daemonStatus }}>
           {/* Gate the data shell on `ready` (first successful /health), not merely
@@ -133,7 +133,7 @@ export function App() {
               <DaemonGatedShell fallbackPort={port} />
             </ActiveDaemonProvider>
           ) : (
-            <div className="relative flex-1 bg-mf-window">
+            <div className="relative flex-1 bg-background">
               <ConnectionOverlay
                 open
                 embedded

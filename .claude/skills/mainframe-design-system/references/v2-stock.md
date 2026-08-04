@@ -1,22 +1,28 @@
 # The v2 tree — stock shadcn, not warm chrome
 
-`packages/ui/src/v2` is a **parallel clone** of the sidebar/shell rebuilt on the shadcn **radix-vega**
-preset. It shares the repo with v1 and shares almost nothing else. Everything in `SKILL.md` about `mf-*`
-tokens, compressed spacing, window styles and the 8-rung type scale describes **v1 only** and is actively
-wrong here.
+`packages/ui/src/v2` started as a **parallel clone** of the sidebar/shell rebuilt on the shadcn
+**radix-vega** preset. Since the 2026-08 shell integration it is **the main app's design system**: the
+`index.html` entry styles itself with `src/styles/app.css`, which imports the v2 token layer plus
+`legacy-bridge.css` (the `--mf-*` vars, `mf-*` mappings, v1 type rungs and keyframes the un-ported v1
+areas still speak). Everything in `SKILL.md` about `mf-*` tokens, window styles and the 8-rung type scale
+describes those **legacy islands only**; the compressed spacing scale is gone entirely.
 
-Its own tokens live in `packages/ui/src/v2/styles/globals.css`.
+The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure — app/host concerns go in
+`app.css`, legacy compat in `legacy-bridge.css`).
 
 ## Boundaries
 
 - **Never import `@/components/ui/*` into v2.** v2 has its own primitives under `src/v2/components/ui/`.
+  (A v2 file may mount a whole *legacy island component* — `AppShell` does, and `DaemonSwitcher` mounts
+  the v1 `AddRemoteDialog` — but never mix v1 primitives into v2 markup.)
 - **Non-visual modules are imported, not cloned** — `view-model/`, `store/`, `runtime/`, `lib/api/*`,
   feature hooks all come from `@/…`. Only the render layer is duplicated.
 - **Never edit a shared module to change a v2 look.** `view-model/relative-time.ts` has ten consumers
   across v1 sessions *and* automations; a v2 label style belongs in a v2-local file
   (`features/sessions/compact-time.ts` is the precedent).
-- Only four seams exist outside `src/v2`: `v2.html`, the `@v2` alias in `vite.config.ts`, the `@v2/*` path
-  in `tsconfig.json`, and the directory itself.
+- Seams outside `src/v2`: the `@v2` alias (`vite.config.ts` / `tsconfig.json` / `vitest.config.ts`),
+  `src/styles/app.css` + `legacy-bridge.css`, `src/app/AppShell.tsx` (mounts the v2 shell), and the
+  dev-only `v2.html` lab. Each area port should shrink the bridge; its death is the port's done-signal.
 
 ## Scales
 

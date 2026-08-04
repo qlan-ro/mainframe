@@ -1,0 +1,534 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Legacy bridge — the v1 warm-chrome tokens the un-ported areas still need.
+
+   The main entry renders the v2 shell on the v2 token layer; everything not
+   yet ported (toolbar, surfaces, inspector, dialogs) still speaks mf-* and
+   the v1 type rungs. This sheet keeps those areas usable — right colours,
+   legible states — while each area port deletes its slice. When the last
+   port lands, this file is empty and gets deleted.
+
+   Deliberately NOT carried from v1 globals.css:
+   - the warm shadcn token values (--background, --border, …) — v2 wins
+   - the compressed spacing scale (p-2 = 4px) — legacy areas render roomier
+   - the ocean/velvet schemes and the window styles — retired with the merge
+   - --radius / the v1 radius derivations — v2's scale is byte-close anyway
+   - `antialiased` font smoothing — the app is native-smoothed now
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --mf-window: #e9e7e2;
+  --mf-glass: rgba(240, 237, 231, 0.84);
+  --mf-content2: #f8f6f2;
+  --mf-raised: #f3efe7;
+  --mf-tab-bar: #f3f0ea;
+  --mf-tab-active: #ffffff;
+  --mf-text-3: #6c6b68;
+  --mf-text-4: #bcbab5;
+  --mf-chip: rgba(0, 0, 0, 0.05);
+  --mf-selection: rgba(10, 132, 255, 0.1);
+  /* In-chat Find highlights — amber (matches the --mf-cm-match editor-search
+     convention), defined once; the dark block does not override them. */
+  --mf-find-tint: rgba(251, 191, 36, 0.32);
+  --mf-find-active: rgba(251, 146, 60, 0.6);
+  --mf-warning: #a15804;
+  --mf-success: #1d7b33;
+
+  /* Editor syntax — Xcode-ish on warm paper */
+  --mf-code-bg: #fbfaf7;
+  --mf-code-fg: #1f1f24;
+  --mf-code-kw: #9b2393;
+  --mf-code-str: #c41a16;
+  --mf-code-fn: #326d74;
+  --mf-code-type: #5b269a;
+  --mf-code-num: #1c00cf;
+  --mf-code-cmt: #707f8c;
+
+  --mf-term-bg: #1d1d20;
+  --mf-term-fg: #e7e6e3;
+  --mf-term-cmt: #7a7a82;
+  --mf-term-green: #30d158;
+  --mf-term-cyan: #5ac8fa;
+  --mf-term-amber: #ff9f0a;
+
+  --mf-um-card: linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%);
+  --mf-um-fade: #eef1f9;
+  --mf-um-ink: #1b1e26;
+  --mf-um-edge: rgba(40, 70, 150, 0.13);
+
+  --mf-viewer-matte: #e6e2da;
+  --mf-viewer-check-a: #efece6;
+  --mf-viewer-check-b: #dcd8d0;
+
+  /* Theme file shadows + focus ring */
+  --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+  --mf-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+  --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.35);
+  --mf-scrim: rgba(22, 19, 15, 0.4);
+
+  /* Mono + motion (the sans stack now comes from the v2 layer) */
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-signature: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── App-only tokens — LIGHT ── */
+  --mf-destructive-tint: rgba(220, 53, 69, 0.08);
+  --mf-warning-tint: rgba(217, 119, 6, 0.1);
+  --mf-success-tint: rgba(40, 167, 69, 0.1);
+  --mf-border-hover: rgba(0, 0, 0, 0.14);
+  --mf-surface-files: #7a4d9e;
+  --mf-surface-run: #1f9d4d;
+  --mf-directive-skill: #7a4dd0;
+  --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
+  --mf-directive-command-tint: rgba(10, 132, 255, 0.08);
+  --mf-tool-read: #5b8def;
+  --mf-tool-read-tint: rgba(91, 141, 239, 0.11);
+  --mf-tool-search: #9b59c4;
+  --mf-tool-search-tint: rgba(155, 89, 196, 0.11);
+  --mf-tool-bash: #7a7a82;
+  --mf-tool-bash-tint: rgba(122, 122, 130, 0.11);
+  --mf-tool-web: #16a394;
+  --mf-tool-web-tint: rgba(22, 163, 148, 0.11);
+  --mf-code-inline-fg: #7a4d2a;
+  --mf-provider-claude-avatar: #d97757;
+  --mf-provider-openai-avatar: #19c37d;
+
+  /* Tasks/Todos semantic tints — design-constant (12-todos.jsx TD_TYPE/TD_PRI) */
+  --mf-task-type-bug: #c4302b;
+  --mf-task-type-enhancement: #7b3ff2;
+  --mf-task-type-question: #b9770e;
+  --mf-task-type-duplicate: #c2540a;
+  --mf-priority-critical: #c4302b;
+  --mf-priority-high: #c2540a;
+  --mf-priority-medium: #a76d0c;
+  --mf-priority-critical-dot: #c4302b;
+  --mf-priority-high-dot: #e8730f;
+  --mf-priority-medium-dot: #e0a019;
+  --mf-priority-low-dot: #c4c2bd;
+
+  /* Automations verb-kind glyph colors — design-constant (WF_KIND table) */
+  --mf-auto-violet: #7a4d9e;
+  --mf-auto-kind-question: #c2540a;
+  --mf-auto-kind-loop: #1f8a5b;
+  --mf-auto-kind-parallel: #b0560f;
+  --mf-auto-kind-call: #2a6fdb;
+
+  /* App-only elevation variants */
+  --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 18px rgba(0, 0, 0, 0.05);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.05),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+  --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
+  --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
+  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
+  --mf-shadow-keycap: 0 1px 0 rgba(0, 0, 0, 0.03);
+  /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
+  --mf-shadow-edit-ring: 0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
+    0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
+  --mf-accent-amber: #ff9500;
+  --mf-accent-violet: #5b269a;
+
+  --mf-um-dash: rgba(40, 70, 150, 0.32);
+
+  --mf-checker-light: #f9fafb;
+  --mf-checker-dark: #e5e7eb;
+
+  /* Diff tint tokens — LIGHT */
+  --mf-diff-add-bg: #e6f2e5;
+  --mf-diff-add-border: #bce1c2;
+  --mf-diff-add-text: #28a745;
+  --mf-diff-del-bg: #f8e9e7;
+  --mf-diff-del-border: #f2bfc2;
+  --mf-diff-del-text: #dc3545;
+
+  /* CM6 editor UI states — LIGHT */
+  --mf-cm-active-line: rgba(0, 0, 0, 0.04);
+  --mf-cm-selection: rgba(59, 130, 246, 0.3);
+  --mf-cm-selection-focused: rgba(59, 130, 246, 0.4);
+  --mf-cm-match: rgba(251, 191, 36, 0.2);
+  --mf-cm-match-border: rgba(251, 191, 36, 0.4);
+  --mf-cm-match-selected: rgba(251, 191, 36, 0.4);
+  --mf-cm-sel-match: rgba(59, 130, 246, 0.15);
+}
+
+.dark {
+  --mf-window: #1b1c25;
+  --mf-glass: rgba(34, 36, 47, 0.85);
+  --mf-content2: #212330;
+  --mf-raised: #313447;
+  --mf-tab-bar: #21232e;
+  --mf-tab-active: #373a4d;
+  --mf-text-3: #8b8ea4;
+  --mf-text-4: #555870;
+  --mf-chip: rgba(255, 255, 255, 0.07);
+  --mf-selection: rgba(10, 132, 255, 0.3);
+  --mf-warning: #f5a960;
+  --mf-success: #50d97c;
+
+  /* Editor syntax — playful slate pastels */
+  --mf-code-bg: #21222c;
+  --mf-code-fg: #eef0fa;
+  --mf-code-kw: #f47fc4;
+  --mf-code-str: #eef0a0;
+  --mf-code-fn: #6df295;
+  --mf-code-type: #bd9bf5;
+  --mf-code-num: #86c9f5;
+  --mf-code-cmt: #6b7494;
+
+  --mf-term-bg: #15161e;
+  --mf-term-fg: #f0f1f7;
+  --mf-term-cmt: #6e7294;
+  --mf-term-green: #5af78e;
+  --mf-term-cyan: #84e8f5;
+  --mf-term-amber: #ffb86c;
+
+  --mf-um-card: linear-gradient(180deg, #2b2f40 0%, #252938 100%);
+  --mf-um-fade: #252938;
+  --mf-um-ink: #ebeefb;
+  --mf-um-edge: rgba(160, 180, 250, 0.22);
+
+  --mf-viewer-matte: #181922;
+  --mf-viewer-check-a: #1e2029;
+  --mf-viewer-check-b: #292b38;
+
+  --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --mf-shadow-modal: 0 28px 64px rgba(0, 0, 0, 0.66), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.5);
+  --mf-scrim: rgba(0, 0, 0, 0.55);
+
+  /* ── App-only tokens — DARK ── */
+  --mf-destructive-tint: rgba(255, 107, 107, 0.1);
+  --mf-warning-tint: rgba(245, 169, 96, 0.12);
+  --mf-success-tint: rgba(80, 217, 124, 0.12);
+  --mf-border-hover: rgba(255, 255, 255, 0.16);
+  --mf-surface-files: #b48bd8;
+  --mf-surface-run: #50d97c;
+  --mf-directive-skill: #b48cff;
+  --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
+  --mf-directive-command-tint: rgba(10, 132, 255, 0.14);
+  --mf-tool-read: #8fb2ff;
+  --mf-tool-read-tint: rgba(143, 178, 255, 0.14);
+  --mf-tool-search: #c18ee8;
+  --mf-tool-search-tint: rgba(193, 142, 232, 0.14);
+  --mf-tool-bash: #9a958d;
+  --mf-tool-bash-tint: rgba(154, 149, 141, 0.14);
+  --mf-tool-web: #2bd6c2;
+  --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
+  --mf-code-inline-fg: #e0a878;
+
+  /* Dark-surface lightness overrides for the semantic glyph/tint hues */
+  --mf-task-type-bug: #e17a76;
+  --mf-task-type-enhancement: #a982f7;
+  --mf-task-type-question: #d38810;
+  --mf-task-type-duplicate: #f3721b;
+  --mf-priority-critical: #e17a76;
+  --mf-priority-high: #f3721b;
+  --mf-priority-medium: #d2890f;
+  --mf-priority-critical-dot: #e17a76;
+  --mf-priority-high-dot: #ef770f;
+  --mf-auto-violet: #ac8bc6;
+  --mf-auto-kind-question: #f3721b;
+  --mf-auto-kind-loop: #27ad72;
+  --mf-auto-kind-parallel: #ec771b;
+  --mf-auto-kind-call: #6798e5;
+
+  --mf-shadow-panel: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-soft: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18);
+  --mf-shadow-panel-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.18),
+    0 6px 18px rgba(0, 0, 0, 0.22);
+  --mf-shadow-panel-glass-ambient: 0 0 0 0.5px var(--border), 0 1px 2px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.26);
+  --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.22);
+  --mf-shadow-keycap: 0 1px 0 rgba(0, 0, 0, 0.18);
+  --mf-accent-amber: #ff9f0a;
+  --mf-accent-violet: #bd9bf5;
+
+  --mf-um-dash: rgba(160, 180, 250, 0.34);
+
+  --mf-checker-light: #26231d;
+  --mf-checker-dark: #1c1a16;
+
+  --mf-diff-add-bg: #1e2b1d;
+  --mf-diff-add-border: #244f2e;
+  --mf-diff-add-text: #50d97c;
+  --mf-diff-del-bg: #30201c;
+  --mf-diff-del-border: #60312e;
+  --mf-diff-del-text: #ff6272;
+
+  --mf-cm-active-line: rgba(255, 255, 255, 0.04);
+  --mf-cm-selection: rgba(10, 132, 255, 0.3);
+  --mf-cm-selection-focused: rgba(10, 132, 255, 0.4);
+  --mf-cm-match: rgba(251, 191, 36, 0.2);
+  --mf-cm-match-border: rgba(251, 191, 36, 0.4);
+  --mf-cm-match-selected: rgba(251, 191, 36, 0.4);
+  --mf-cm-sel-match: rgba(59, 130, 246, 0.15);
+}
+
+@theme inline {
+  /* --mf-* extensions → utilities */
+  --color-mf-window: var(--mf-window);
+  --color-mf-glass: var(--mf-glass);
+  --color-mf-content2: var(--mf-content2);
+  --color-mf-raised: var(--mf-raised);
+  --color-mf-tab-bar: var(--mf-tab-bar);
+  --color-mf-tab-active: var(--mf-tab-active);
+  --color-mf-text-3: var(--mf-text-3);
+  --color-mf-text-4: var(--mf-text-4);
+  --color-mf-chip: var(--mf-chip);
+  --color-mf-selection: var(--mf-selection);
+  --color-mf-warning: var(--mf-warning);
+  --color-mf-warning-tint: var(--mf-warning-tint);
+  --color-mf-success: var(--mf-success);
+  --color-mf-success-tint: var(--mf-success-tint);
+  --color-mf-destructive-tint: var(--mf-destructive-tint);
+  --color-mf-border-hover: var(--mf-border-hover);
+  --color-mf-surface-files: var(--mf-surface-files);
+  --color-mf-surface-run: var(--mf-surface-run);
+  --color-mf-directive-skill: var(--mf-directive-skill);
+  --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);
+  --color-mf-directive-command-tint: var(--mf-directive-command-tint);
+  --color-mf-tool-read: var(--mf-tool-read);
+  --color-mf-tool-read-tint: var(--mf-tool-read-tint);
+  --color-mf-tool-search: var(--mf-tool-search);
+  --color-mf-tool-search-tint: var(--mf-tool-search-tint);
+  --color-mf-tool-bash: var(--mf-tool-bash);
+  --color-mf-tool-bash-tint: var(--mf-tool-bash-tint);
+  --color-mf-tool-web: var(--mf-tool-web);
+  --color-mf-tool-web-tint: var(--mf-tool-web-tint);
+  --color-mf-code-inline-fg: var(--mf-code-inline-fg);
+  --color-mf-task-type-bug: var(--mf-task-type-bug);
+  --color-mf-task-type-enhancement: var(--mf-task-type-enhancement);
+  --color-mf-task-type-question: var(--mf-task-type-question);
+  --color-mf-task-type-duplicate: var(--mf-task-type-duplicate);
+  --color-mf-priority-critical: var(--mf-priority-critical);
+  --color-mf-priority-high: var(--mf-priority-high);
+  --color-mf-priority-medium: var(--mf-priority-medium);
+  --color-mf-priority-critical-dot: var(--mf-priority-critical-dot);
+  --color-mf-priority-high-dot: var(--mf-priority-high-dot);
+  --color-mf-priority-medium-dot: var(--mf-priority-medium-dot);
+  --color-mf-priority-low-dot: var(--mf-priority-low-dot);
+  --color-mf-auto-violet: var(--mf-auto-violet);
+  --color-mf-auto-kind-question: var(--mf-auto-kind-question);
+  --color-mf-auto-kind-loop: var(--mf-auto-kind-loop);
+  --color-mf-auto-kind-parallel: var(--mf-auto-kind-parallel);
+  --color-mf-auto-kind-call: var(--mf-auto-kind-call);
+  --color-mf-code-bg: var(--mf-code-bg);
+  --color-mf-code-fg: var(--mf-code-fg);
+  --color-mf-code-kw: var(--mf-code-kw);
+  --color-mf-code-str: var(--mf-code-str);
+  --color-mf-code-fn: var(--mf-code-fn);
+  --color-mf-code-type: var(--mf-code-type);
+  --color-mf-code-num: var(--mf-code-num);
+  --color-mf-code-cmt: var(--mf-code-cmt);
+  --color-mf-term-bg: var(--mf-term-bg);
+  --color-mf-term-fg: var(--mf-term-fg);
+  --color-mf-term-cmt: var(--mf-term-cmt);
+  --color-mf-term-green: var(--mf-term-green);
+  --color-mf-term-cyan: var(--mf-term-cyan);
+  --color-mf-term-amber: var(--mf-term-amber);
+  --color-mf-um-ink: var(--mf-um-ink);
+  --color-mf-um-edge: var(--mf-um-edge);
+  --color-mf-um-dash: var(--mf-um-dash);
+  --color-mf-viewer-matte: var(--mf-viewer-matte);
+  --color-mf-viewer-check-a: var(--mf-viewer-check-a);
+  --color-mf-viewer-check-b: var(--mf-viewer-check-b);
+  --color-mf-scrim: var(--mf-scrim);
+  --color-mf-accent-amber: var(--mf-accent-amber);
+  --color-mf-accent-violet: var(--mf-accent-violet);
+
+  /* Diff tint utilities */
+  --color-mf-diff-add-bg: var(--mf-diff-add-bg);
+  --color-mf-diff-add-border: var(--mf-diff-add-border);
+  --color-mf-diff-add-text: var(--mf-diff-add-text);
+  --color-mf-diff-del-bg: var(--mf-diff-del-bg);
+  --color-mf-diff-del-border: var(--mf-diff-del-border);
+  --color-mf-diff-del-text: var(--mf-diff-del-text);
+
+  /* v1 had a 4px rounded-xs; the v2 scale starts at sm, and Tailwind's default
+     xs (2px) visibly shrinks the legacy chips that use it. */
+  --radius-xs: calc(var(--radius) * 0.4);
+
+  /* v1 type scale (10–28px, 8 rungs) — the legacy tree speaks these names */
+  --text-micro: 0.625rem;
+  --text-caption: 0.6875rem;
+  --text-label: 0.75rem;
+  --text-body: 0.8125rem;
+  --text-heading: 0.9375rem;
+  --text-title: 1.0625rem;
+  --text-display: 1.375rem;
+  --text-hero: 1.75rem;
+  --text-micro--line-height: 1.3;
+  --text-caption--line-height: 1.35;
+  --text-label--line-height: 1.4;
+  --text-body--line-height: 1.5;
+  --text-heading--line-height: 1.3;
+  --text-title--line-height: 1.25;
+  --text-display--line-height: 1.2;
+  --text-hero--line-height: 1.15;
+
+  /* Letter spacing + line-height */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --leading-loose: 1.58;
+
+  /* Mono font + easings */
+  --font-mono: var(--font-mono);
+  --ease-default: var(--ease-default);
+  --ease-signature: var(--ease-signature);
+}
+
+/* Keyboard focus ring — [data-noring] opt-out. The v1 primitives all set
+   `focus-visible:outline-none` and rely on this rule for their ONLY focus
+   indicator, so it cannot be dropped. In @layer base (v1 had it unlayered) so
+   the v2 components' own ring/shadow utilities keep winning. */
+@layer base {
+  [data-noring]:focus-visible {
+    outline: none;
+  }
+
+  button:not([data-noring]):focus-visible,
+  a:not([data-noring]):focus-visible,
+  input:not([data-noring]):focus-visible,
+  textarea:not([data-noring]):focus-visible,
+  select:not([data-noring]):focus-visible,
+  [tabindex]:not([data-noring]):focus-visible {
+    outline: none;
+    box-shadow: var(--mf-focus-ring);
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* Shimmer animation for running tool states */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Shimmering TEXT for the running ("Thinking…") indicator */
+@keyframes mf-text-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.mf-text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--mf-text-3) 0%,
+    var(--mf-text-3) 35%,
+    var(--foreground) 50%,
+    var(--mf-text-3) 65%,
+    var(--mf-text-3) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mf-text-shimmer 2.4s linear infinite;
+}
+
+/* mf-claude-logo-working lives in the v2 sheet (both trees animate it). */
+@media (prefers-reduced-motion: reduce) {
+  .mf-text-shimmer {
+    animation: none;
+    color: var(--mf-text-3);
+  }
+}
+
+/* Collapsible animations for tool cards */
+@keyframes collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+.animate-collapsible-down {
+  animation: collapsible-down var(--animation-duration, 200ms) ease-out;
+}
+
+.animate-collapsible-up {
+  animation: collapsible-up var(--animation-duration, 200ms) ease-out;
+}
+
+/* Window-level state animations (Toaster · ConnectionOverlay · TutorialOverlay).
+   Referenced via Tailwind arbitrary `animate-[name_…]` utilities, which do NOT
+   auto-generate keyframes — they must be declared here. */
+@keyframes tw-spin {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes twPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes ws-toast-rail {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes ws-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.fill-mode-forwards {
+  animation-fill-mode: forwards;
+}

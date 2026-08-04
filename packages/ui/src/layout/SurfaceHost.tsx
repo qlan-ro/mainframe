@@ -2,8 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
-import { useTheme } from '@/store/theme';
-import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
@@ -39,8 +38,7 @@ function SurfaceHostImpl({ port }: Props) {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
   const setVFrac = useLayoutStore((s) => s.setVFrac);
-  const windowStyle = useTheme((s) => s.windowStyle);
-  const geo = windowStyleGeometry(windowStyle);
+  const geo = SHELL_GEOMETRY;
   const panelCls = `${PANEL_LAYOUT} ${geo.surface}`;
 
   const outerRef = useRef<HTMLDivElement>(null);

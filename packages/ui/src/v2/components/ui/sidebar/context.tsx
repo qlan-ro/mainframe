@@ -41,6 +41,9 @@ interface SidebarProviderProps extends React.ComponentProps<'div'> {
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Seed for a persisted drag width; null keeps the `SIDEBAR_WIDTH` default. */
+  defaultWidth?: number | null;
+  onWidthChange?: (width: number) => void;
 }
 
 /**
@@ -48,12 +51,15 @@ interface SidebarProviderProps extends React.ComponentProps<'div'> {
  *
  * Two deviations from upstream, both because this is a desktop app: there is no
  * mobile Sheet branch, and state is not persisted to a `sidebar_state` cookie —
- * pass `open`/`onOpenChange` to drive it from a store instead.
+ * pass `open`/`onOpenChange` (and `defaultWidth`/`onWidthChange` for the drag
+ * width) to drive it from a store instead.
  */
 export function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange,
+  defaultWidth = null,
+  onWidthChange,
   className,
   style,
   children,
@@ -61,9 +67,18 @@ export function SidebarProvider({
 }: SidebarProviderProps) {
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
   const open = openProp ?? internalOpen;
-  const [width, setWidthState] = React.useState<number | null>(null);
+  const [width, setWidthState] = React.useState<number | null>(
+    defaultWidth == null ? null : clampSidebarWidth(defaultWidth),
+  );
   const [resizing, setResizing] = React.useState(false);
-  const setWidth = React.useCallback((value: number) => setWidthState(clampSidebarWidth(value)), []);
+  const setWidth = React.useCallback(
+    (value: number) => {
+      const clamped = clampSidebarWidth(value);
+      setWidthState(clamped);
+      onWidthChange?.(clamped);
+    },
+    [onWidthChange],
+  );
 
   const setOpen = React.useCallback(
     (value: boolean) => {

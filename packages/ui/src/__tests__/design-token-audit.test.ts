@@ -12,7 +12,10 @@ function listSourceFiles(dir: string): string[] {
     const path = join(dir, entry);
     const stat = statSync(path);
     if (stat.isDirectory()) {
-      if (entry === '__tests__') return [];
+      // v2 is the stock-shadcn tree: text-xs/text-sm ARE its named tokens and
+      // its own conventions are enforced there. This audit polices the legacy
+      // warm-chrome contract only.
+      if (entry === '__tests__' || path === join(SRC_ROOT, 'v2')) return [];
       return listSourceFiles(path);
     }
     return SOURCE_EXTENSIONS.has(path.slice(path.lastIndexOf('.'))) ? [path] : [];
@@ -84,7 +87,7 @@ describe('design token audit', () => {
   });
 
   it('locks the letter-spacing scale and maps mf-* tokens in @theme (no phantom-token regressions)', () => {
-    const css = readFileSync(join(SRC_ROOT, 'styles/globals.css'), 'utf8');
+    const css = readFileSync(join(SRC_ROOT, 'styles/legacy-bridge.css'), 'utf8');
     // Letter-spacing scale per the Design Tokens Report (LS.tight -0.02em / normal 0 / wide +0.06em).
     expect(css).toMatch(/--tracking-tight:\s*-0\.02em/);
     expect(css).toMatch(/--tracking-normal:\s*0\s*;/);

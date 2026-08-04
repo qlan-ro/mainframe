@@ -26,6 +26,9 @@ import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
+// Legacy island: the auto-updater pill (renders null unless an update exists);
+// self-contained host chrome that ports with the toolbar pass.
+import { UpdatePill } from '@/layout/UpdatePill';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
 import { QuotaFooter } from '../quota/QuotaFooter';
@@ -103,6 +106,7 @@ export function SessionSidebar({ className }: { className?: string }) {
       <SidebarHeader>
         <div className="flex items-center justify-between">
           <div aria-hidden style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
+          <UpdatePill />
           <HeaderActions />
         </div>
         <ProjectSection

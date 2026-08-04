@@ -1,0 +1,85 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Main entry stylesheet.
+
+   The v2 token layer is the app's theme; the legacy bridge keeps the
+   un-ported v1 areas usable until each one is ported in place. Everything
+   else here is host-level: rules about running inside a desktop webview,
+   not about either design system.
+   ════════════════════════════════════════════════════════════════════════ */
+@import '../v2/styles/globals.css';
+@import './legacy-bridge.css';
+
+/* Source detection roots at the entry sheet's directory (which would scan only
+   styles/); the v2 sheet points at its own tree, this points at the rest. */
+@source "../";
+
+/* Native scrollbars/form controls must be painted for the active mode, or
+   WebKit draws light chrome (the white track) on dark surfaces. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+/* App-shell chrome (sidebar, headers, labels, buttons, pills) is NOT
+   selectable — like a native desktop app. Content opts back in below. */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Re-enable text selection for actual content: rendered markdown (chat
+   messages — also what select-to-quote selects), form fields, code, and the
+   editor surfaces (markdown preview, CodeMirror source + diff) that opt in via
+   `.mf-editor-selectable`. */
+.aui-md,
+.mf-editor-selectable,
+input,
+textarea,
+[contenteditable],
+pre,
+code {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Thin scrollbar, GLOBAL (hover-revealed thumb, transparent track). Standards
+   path ONLY (scrollbar-width/scrollbar-color): setting either standard property
+   makes engines ignore ::-webkit-scrollbar rules, so the two must never be
+   mixed. In @layer base so utilities keep winning — an unlayered rule would
+   outrank ALL layered ones and silently re-enable scrollbars on
+   [scrollbar-width:none] opt-outs like the tab strips. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover {
+    scrollbar-color: var(--mf-text-4) transparent;
+  }
+}
+
+/* In-chat Find (FindBar) — CSS Custom Highlight API paint. Only
+   background-color is settable on ::highlight(). */
+::highlight(mf-find-match) {
+  background-color: var(--mf-find-tint);
+}
+::highlight(mf-find-active) {
+  background-color: var(--mf-find-active);
+}
+
+/* Window drag: Electron uses CSS app-region; Tauri uses the JS mousedown
+   listener (TauriAdapter.init). Interactive children opt out so clicks still
+   register. */
+[data-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-drag-region] button,
+[data-drag-region] input,
+[data-drag-region] select,
+[data-drag-region] textarea,
+[data-drag-region] a,
+[data-drag-region] label {
+  -webkit-app-region: no-drag;
+}

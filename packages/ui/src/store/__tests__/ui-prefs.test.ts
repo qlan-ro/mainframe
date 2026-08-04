@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell';
+const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
 import {
   useUiPrefs,
   clampBottomPanelHeight,
@@ -26,7 +26,7 @@ beforeEach(() => {
   useUiPrefs.setState({
     sidebarVisible: true,
     inspectorVisible: false,
-    sidebarWidth: SIDEBAR_EXPANDED_WIDTH,
+    sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     bottomPanelTab: 'context',
     bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
     rightClickHintDismissed: false,
@@ -40,7 +40,7 @@ describe('useUiPrefs defaults', () => {
     const s = useUiPrefs.getState();
     expect(s.sidebarVisible).toBe(true);
     expect(s.inspectorVisible).toBe(false);
-    expect(s.sidebarWidth).toBe(SIDEBAR_EXPANDED_WIDTH);
+    expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
     expect(s.bottomPanelTab).toBe('context');
     expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
     expect(s.rightClickHintDismissed).toBe(false);
@@ -64,8 +64,8 @@ describe('useUiPrefs actions', () => {
 
   it('setSidebarWidth stores a clamped width', () => {
     useUiPrefs.getState().setSidebarWidth(99999);
-    // clampSidebarWidth caps at SIDEBAR_MAX_WIDTH (640).
-    expect(useUiPrefs.getState().sidebarWidth).toBe(640);
+    // clampSidebarWidth caps at the v2 sidebar's SIDEBAR_MAX_WIDTH (480).
+    expect(useUiPrefs.getState().sidebarWidth).toBe(480);
   });
 
   it('setBottomPanelTab stores the tab', () => {

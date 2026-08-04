@@ -4,10 +4,18 @@
  *
  * The shipped picker is a hand-built 324px card over `components/ui/menu`; this
  * is the stock team-switcher shape, so a remote's manage actions live in a
- * `DropdownMenuSub` rather than a nested popover. Pairing is out of scope, so
- * there is no "Add remote daemon…" row and no Re-pair action.
+ * `DropdownMenuSub` rather than a nested popover. "Add remote daemon…" opens
+ * the legacy pairing dialog until that flow is ported; Re-pair is still out.
  */
-import { CheckIcon, ChevronRightIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon, WifiOffIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  WifiOffIcon,
+} from 'lucide-react';
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { Badge } from '@v2/components/ui/badge';
 import {
@@ -28,6 +36,7 @@ export interface DaemonMenuItemsProps {
   onSwitch: (d: DaemonMeta) => void;
   onRename: (d: DaemonMeta) => void;
   onRemove: (d: DaemonMeta) => void;
+  onAddRemote: () => void;
 }
 
 function isDown(status: DaemonStatus): boolean {
@@ -103,7 +112,15 @@ function RemoteItem({
   );
 }
 
-export function DaemonMenuItems({ daemons, statusOf, activeId, onSwitch, onRename, onRemove }: DaemonMenuItemsProps) {
+export function DaemonMenuItems({
+  daemons,
+  statusOf,
+  activeId,
+  onSwitch,
+  onRename,
+  onRemove,
+  onAddRemote,
+}: DaemonMenuItemsProps) {
   const local = daemons.find((d) => d.kind === 'local');
   const remotes = daemons.filter((d) => d.kind === 'remote');
   const active = daemons.find((d) => d.id === activeId);
@@ -151,6 +168,11 @@ export function DaemonMenuItems({ daemons, statusOf, activeId, onSwitch, onRenam
           />
         ))
       )}
+
+      <DropdownMenuItem data-testid="daemon-picker-add" onSelect={onAddRemote}>
+        <PlusIcon />
+        Add remote daemon…
+      </DropdownMenuItem>
     </div>
   );
 }

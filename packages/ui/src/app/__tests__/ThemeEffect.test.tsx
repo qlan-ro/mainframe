@@ -11,8 +11,7 @@ vi.mock('@/lib/host', () => ({ getHost: () => ({ setZoom: setZoomMock }) }));
 describe('ThemeEffect', () => {
   beforeEach(() => {
     document.documentElement.className = '';
-    document.documentElement.removeAttribute('data-scheme');
-    useTheme.setState({ mode: 'light', scheme: 'classic', windowStyle: 'glass', uiScale: 'normal' });
+    useTheme.setState({ mode: 'light', uiScale: 'normal' });
     setZoomMock.mockClear();
   });
 
@@ -20,15 +19,6 @@ describe('ThemeEffect', () => {
     useTheme.setState({ mode: 'dark' });
     render(<ThemeEffect />);
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-  });
-
-  it('applies data-scheme for non-classic schemes and removes it for classic', () => {
-    useTheme.setState({ scheme: 'velvet' });
-    const { rerender } = render(<ThemeEffect />);
-    expect(document.documentElement.getAttribute('data-scheme')).toBe('velvet');
-    useTheme.setState({ scheme: 'classic' });
-    rerender(<ThemeEffect />);
-    expect(document.documentElement.hasAttribute('data-scheme')).toBe(false);
   });
 
   it('applies native zoom for the active uiScale', () => {

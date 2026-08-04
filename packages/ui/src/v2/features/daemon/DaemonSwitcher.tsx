@@ -13,6 +13,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/comp
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@v2/components/ui/sidebar';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
+// Legacy island: the pairing flow has not been ported yet, so "Add remote
+// daemon…" opens the v1 dialog (its own bridge-styled markup) until it is.
+import { AddRemoteDialog } from '@/features/daemon/AddRemoteDialog';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
 import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { useRestoreLastDaemon } from '@/features/daemon/use-restore-last-daemon';
@@ -68,6 +71,7 @@ export function DaemonSwitcher() {
   const { target } = useActiveDaemon();
   const { state: connState } = useConnectionStatus();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const activeMeta = registry.daemons.find((d) => d.id === registry.activeId) ?? targetToMeta(target);
 
@@ -109,6 +113,7 @@ export function DaemonSwitcher() {
               onSwitch={handleSwitch}
               onRename={(d) => setDialog({ kind: 'rename', target: d })}
               onRemove={(d) => setDialog({ kind: 'remove', target: d })}
+              onAddRemote={() => setAddOpen(true)}
             />
           </DropdownMenuContent>
         </DropdownMenu>
@@ -121,6 +126,11 @@ export function DaemonSwitcher() {
             onConfirm={handleConfirm}
           />
         )}
+
+        {/* onDone stays a no-op: the dialog fires it the instant pairing
+            succeeds, then defers its own onClose ~800ms so the "Paired" notice
+            stays visible. Closing here would collapse that grace window. */}
+        <AddRemoteDialog open={addOpen} onClose={() => setAddOpen(false)} onDone={() => undefined} />
       </SidebarMenuItem>
     </SidebarMenu>
   );

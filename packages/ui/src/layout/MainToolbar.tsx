@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, FolderGit2, GitBranch, Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTheme, type WindowStyle } from '@/store/theme';
+import { useTheme } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { getGitBranch } from '@/lib/api/git';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
@@ -24,7 +24,6 @@ interface MainToolbarProps {
   branchName?: string;
   /** Whether the active session runs in a git worktree (vs. the shared main repo). */
   isWorktree?: boolean;
-  windowStyle: WindowStyle;
   port: number;
   projectId?: string;
   chatId?: string;
@@ -85,7 +84,6 @@ export function MainToolbar({
   projectName,
   branchName,
   isWorktree = false,
-  windowStyle,
   port,
   projectId,
   chatId,
@@ -97,7 +95,7 @@ export function MainToolbar({
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
-  const geo = windowStyleGeometry(windowStyle);
+  const geo = SHELL_GEOMETRY;
 
   // Read the live current branch from git so the chip shows for EVERY session,
   // not just worktrees: a main-repo session has no persisted `chat.branchName`,

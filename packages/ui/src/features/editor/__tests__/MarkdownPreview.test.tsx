@@ -3,7 +3,7 @@
  *
  * The app shell sets `user-select: none` on <body> (native-desktop feel) and
  * re-enables selection only for a whitelist of content selectors in
- * `styles/globals.css`. The preview opts in via the `mf-editor-selectable`
+ * `styles/app.css`. The preview opts in via the `mf-editor-selectable`
  * class; if that class is dropped from the wrapper, prose in the preview
  * becomes unselectable (can't copy/paste). The CSS-whitelist half lives in
  * MarkdownPreview.css.test.ts — it needs node:fs, which jsdom-environment

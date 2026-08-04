@@ -122,20 +122,12 @@ vi.mock('../../features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectName: 'mainframe', branchName: undefined }),
 }));
 
-vi.mock('../../layout/SidebarShell', () => ({
-  SIDEBAR_EXPANDED_WIDTH: 300,
-  SIDEBAR_COLLAPSED_WIDTH: 0,
-  SIDEBAR_COLLAPSE_THRESHOLD: 150,
-  clampSidebarWidth: (width: number) => Math.min(300, Math.max(0, width)),
-  SidebarShell: () => (
+vi.mock('@v2/features/sessions/SessionSidebar', () => ({
+  SessionSidebar: () => (
     <div data-testid="sessions-sidebar">
       <div data-testid="sidebar-footer" />
     </div>
   ),
-}));
-
-vi.mock('../../features/sessions/sidebar/SessionSidebar', () => ({
-  SessionSidebar: () => null,
 }));
 
 vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
@@ -158,7 +150,7 @@ vi.mock('../../features/review/ReviewPanel', () => ({
   ReviewPanel: () => null,
 }));
 
-vi.mock('../../features/sessions/tags/TagPopoverHost', () => ({
+vi.mock('@v2/features/sessions/TagPopoverHost', () => ({
   TagPopoverHost: (p: { port: number }) => <div data-testid="tag-popover-host-stub" data-port={p.port} />,
 }));
 

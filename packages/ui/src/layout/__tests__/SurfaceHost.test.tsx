@@ -1,12 +1,10 @@
 /**
- * SurfaceHost — workspace-inset + gutter wiring from windowStyleGeometry
- * (finding 15.2/15.6/15.10: the floating surface cards need a per-window-style
- * side/bottom margin and divider gutter, not hardcoded values).
+ * SurfaceHost — SHELL_GEOMETRY wiring: the flat shell has no workspace inset,
+ * and the divider gutter comes from the shared constant, not a hardcoded value.
  */
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
-import { useTheme } from '@/store/theme';
 
 vi.mock('@/features/sessions/new-thread/ChatSurface', () => ({
   ChatSurface: () => <div data-testid="chat-surface-stub" />,
@@ -35,47 +33,21 @@ beforeEach(() => {
   });
 });
 
-describe('SurfaceHost — workspace inset', () => {
-  it('applies the unified workspaceInset padding classes to the outer wrapper', () => {
-    useTheme.getState().setWindowStyle('unified');
-    render(<SurfaceHost port={31415} />);
-
-    const outer = screen.getByTestId('chat-thread-area');
-    expect(outer.className).toContain('pt-[4px]');
-    expect(outer.className).toContain('px-[10px]');
-    expect(outer.className).toContain('pb-[10px]');
-  });
-
-  it('applies the glass workspaceInset padding classes to the outer wrapper', () => {
-    useTheme.getState().setWindowStyle('glass');
-    render(<SurfaceHost port={31415} />);
-
-    const outer = screen.getByTestId('chat-thread-area');
-    expect(outer.className).toContain('pt-[4px]');
-    expect(outer.className).toContain('px-[4px]');
-    expect(outer.className).toContain('pb-0');
-  });
-
-  it('applies no extra inset classes for split', () => {
-    useTheme.getState().setWindowStyle('split');
+describe('SurfaceHost — flat shell geometry', () => {
+  it('applies no inset classes to the outer wrapper', () => {
     render(<SurfaceHost port={31415} />);
 
     const outer = screen.getByTestId('chat-thread-area');
     expect(outer.className).not.toContain('pt-[4px]');
+    expect(outer.className).not.toContain('px-[10px]');
   });
-});
 
-describe('SurfaceHost — single-column spacer gutter', () => {
-  it('uses the window-style gutter width for the single-column top-row spacer', () => {
+  it('wires the shared gutter width through to the divider', () => {
     useLayoutStore.setState({
       layout: { top: ['chat', 'files'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 1 } },
     });
-    useTheme.getState().setWindowStyle('split');
     const { container } = render(<SurfaceHost port={31415} />);
 
-    // twoCol path uses SurfDivider (data-testid), which we already cover elsewhere;
-    // this test only exists to prove the wrapper wires geo.gutter through, verified
-    // via the SurfDivider width style it renders.
     const divider = container.querySelector('[data-testid="surf-divider-x"]') as HTMLElement | null;
     expect(divider?.style.width).toBe('9px');
   });

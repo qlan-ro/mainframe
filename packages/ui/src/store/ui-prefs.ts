@@ -9,7 +9,10 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { clampSidebarWidth, SIDEBAR_EXPANDED_WIDTH } from '@/layout/SidebarShell';
+import { clampSidebarWidth } from '@v2/components/ui/sidebar';
+
+/** Matches the v2 sidebar's `SIDEBAR_WIDTH` (16rem) — the un-dragged default. */
+const SIDEBAR_DEFAULT_WIDTH = 256;
 
 export type BottomPanelTab = 'context' | 'skills' | 'agents';
 
@@ -38,6 +41,7 @@ interface UiPrefsState {
    *  Absent keys read as expanded (false) — see isSidebarSectionCollapsed. */
   collapsedSidebarSections: Partial<Record<SidebarSection, boolean>>;
   toggleSidebar: () => void;
+  setSidebarVisible: (visible: boolean) => void;
   toggleInspector: () => void;
   setSidebarWidth: (width: number) => void;
   setBottomPanelTab: (tab: BottomPanelTab) => void;
@@ -60,13 +64,14 @@ export const useUiPrefs = create<UiPrefsState>()(
     (set) => ({
       sidebarVisible: true,
       inspectorVisible: false,
-      sidebarWidth: SIDEBAR_EXPANDED_WIDTH,
+      sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       bottomPanelTab: 'context',
       bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
       rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
       collapsedSidebarSections: {},
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
+      setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       setBottomPanelTab: (bottomPanelTab) => set({ bottomPanelTab }),
