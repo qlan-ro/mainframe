@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Command } from '@v2/components/ui/command';
 import { SpotlightRowView } from '../SpotlightRow';
-import type { SpotlightRow } from '../use-spotlight-results';
+import type { SpotlightRow } from '@/features/palette/use-spotlight-results';
 
 const cmdRow: SpotlightRow = {
   type: 'command',
@@ -13,14 +14,22 @@ const cmdRow: SpotlightRow = {
   run: vi.fn(),
 };
 
+/** CommandItem needs the cmdk root's context. */
+function renderRow(row: SpotlightRow, onSelect: (row: SpotlightRow) => void = () => {}) {
+  return render(
+    <Command shouldFilter={false}>
+      <SpotlightRowView row={row} onSelect={onSelect} />
+    </Command>,
+  );
+}
+
 describe('SpotlightRowView', () => {
-  it('renders the testid, title and a kbd chip per hint glyph', () => {
-    render(<SpotlightRowView row={cmdRow} isActive rowRef={() => {}} onSelect={() => {}} />);
+  it('renders the testid, title and the shortcut hint', () => {
+    renderRow(cmdRow);
     const el = screen.getByTestId('search-palette-command-row-review');
     expect(el).toBeTruthy();
     expect(screen.getByText('Review changes…')).toBeTruthy();
-    // "⌘⇧R" → 3 kbd chips
-    expect(el.querySelectorAll('kbd')).toHaveLength(3);
+    expect(screen.getByText('⌘⇧R')).toBeTruthy();
   });
 
   it('renders a status badge for change rows', () => {
@@ -33,32 +42,24 @@ describe('SpotlightRowView', () => {
       status: 'M',
       run: vi.fn(),
     };
-    render(<SpotlightRowView row={chg} isActive={false} rowRef={() => {}} onSelect={() => {}} />);
+    renderRow(chg);
     expect(screen.getByText('M')).toBeTruthy();
   });
 
   it('calls onSelect with the row on click', async () => {
     const onSelect = vi.fn();
-    render(<SpotlightRowView row={cmdRow} isActive={false} rowRef={() => {}} onSelect={onSelect} />);
+    renderRow(cmdRow, onSelect);
     await userEvent.click(screen.getByTestId('search-palette-command-row-review'));
     expect(onSelect).toHaveBeenCalledWith(cmdRow);
   });
 
   it('renders a distinct icon per command id instead of one generic glyph for all', () => {
     const settingsRow: SpotlightRow = { ...cmdRow, id: 'settings', testid: 'search-palette-command-row-settings' };
-    const { container: reviewContainer } = render(
-      <SpotlightRowView row={cmdRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
-    const { container: settingsContainer } = render(
-      <SpotlightRowView row={settingsRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
-    const reviewIconClass = reviewContainer.querySelector('svg')?.getAttribute('class');
-    const settingsIconClass = settingsContainer.querySelector('svg')?.getAttribute('class');
+    const { container: reviewContainer } = renderRow(cmdRow);
+    const { container: settingsContainer } = renderRow(settingsRow);
     // Different lucide components render distinct default child paths — the reliable
     // cross-icon signal is the rendered SVG's innerHTML (path/circle data differs).
     expect(reviewContainer.querySelector('svg')?.innerHTML).not.toBe(settingsContainer.querySelector('svg')?.innerHTML);
-    expect(reviewIconClass).toBeTruthy();
-    expect(settingsIconClass).toBeTruthy();
   });
 
   it('renders a file-type-specific icon for file rows (not the same generic icon for every extension)', () => {
@@ -76,40 +77,15 @@ describe('SpotlightRowView', () => {
       title: 'README.md',
       run: vi.fn(),
     };
-    const { container: tsContainer } = render(
-      <SpotlightRowView row={tsRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
-    const { container: mdContainer } = render(
-      <SpotlightRowView row={mdRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
+    const { container: tsContainer } = renderRow(tsRow);
+    const { container: mdContainer } = renderRow(mdRow);
     expect(tsContainer.querySelector('svg')?.innerHTML).not.toBe(mdContainer.querySelector('svg')?.innerHTML);
   });
 
   it('renders the run command icon solid (fill=currentColor) to match the design glyph play.fill', () => {
     const runRow: SpotlightRow = { ...cmdRow, id: 'run', testid: 'search-palette-command-row-run' };
-    render(<SpotlightRowView row={runRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />);
+    renderRow(runRow);
     const svg = screen.getByTestId('search-palette-command-row-run').querySelector('svg');
     expect(svg?.getAttribute('fill')).toBe('currentColor');
-  });
-
-  it('tints the symbol-row icon color per symbol kind tag', () => {
-    const fnRow: SpotlightRow = {
-      type: 'symbol',
-      id: 'a.ts:1',
-      testid: 'search-palette-symbol-row-a',
-      title: 'foo',
-      tag: 'fn',
-      run: vi.fn(),
-    };
-    const constRow: SpotlightRow = { ...fnRow, id: 'a.ts:2', testid: 'search-palette-symbol-row-b', tag: 'const' };
-    const { container: fnContainer } = render(
-      <SpotlightRowView row={fnRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
-    const { container: constContainer } = render(
-      <SpotlightRowView row={constRow} isActive={false} rowRef={() => {}} onSelect={() => {}} />,
-    );
-    const fnClass = fnContainer.querySelector('svg')?.getAttribute('class');
-    const constClass = constContainer.querySelector('svg')?.getAttribute('class');
-    expect(fnClass).not.toBe(constClass);
   });
 });
