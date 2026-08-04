@@ -9,7 +9,7 @@
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { SettingsIcon, ZapIcon } from 'lucide-react';
+import { ListTodoIcon, SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail } from '@v2/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
@@ -20,6 +20,7 @@ import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/pro
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { useProjects } from '@/features/sessions/use-projects';
+import { useAddProject } from '@/features/sessions/use-add-project';
 import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
 import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
 import { useSettingsStore } from '@/store/settings';
@@ -70,6 +71,17 @@ function HeaderActions() {
       <Button
         variant="ghost"
         size="icon-sm"
+        data-testid="sidebar-tasks"
+        title="Tasks"
+        // The todos board host (TasksModalHost, mounted at the app root)
+        // listens for this window event; there is no store seam to call.
+        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
+      >
+        <ListTodoIcon />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
         data-testid="sidebar-settings"
         title="Settings · ⌘,"
         onClick={() => openSettings()}
@@ -90,8 +102,9 @@ export function SessionSidebar({ className }: { className?: string }) {
   const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
   const registry = useTagRegistry(useDaemonPort());
-  const { projects, removeProjectFromList } = useProjects();
+  const { projects, removeProjectFromList, reloadProjects } = useProjects();
   const onRemoveProject = useRemoveProject(removeProjectFromList);
+  const onAddProject = useAddProject(reloadProjects);
 
   const filteredItems = useMemo(
     () => applySessionFilters(allItems, { filterProjectId, selectedTags, selectedSynthetic }),
@@ -141,6 +154,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           activeId={filterProjectId}
           onSelect={setFilterProjectId}
           onRemoveProject={onRemoveProject}
+          onAddProject={() => void onAddProject()}
         />
       </SidebarHeader>
 

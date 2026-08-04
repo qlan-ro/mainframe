@@ -7,11 +7,13 @@
  * plain count — no width measurement.
  */
 import { useState } from 'react';
-import { LayoutGridIcon } from 'lucide-react';
+import { LayoutGridIcon, PlusIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { Hint } from '@v2/components/ui/hint';
 import {
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
@@ -31,9 +33,17 @@ interface ProjectSectionProps {
   activeId: string | null;
   onSelect: (id: string | null) => void;
   onRemoveProject?: (project: Project) => void;
+  onAddProject?: () => void;
 }
 
-export function ProjectSection({ projects, attention, activeId, onSelect, onRemoveProject }: ProjectSectionProps) {
+export function ProjectSection({
+  projects,
+  attention,
+  activeId,
+  onSelect,
+  onRemoveProject,
+  onAddProject,
+}: ProjectSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const collapsedSections = useUiPrefs((s) => s.collapsedSidebarSections);
   const toggleSection = useUiPrefs((s) => s.toggleSidebarSection);
@@ -53,8 +63,16 @@ export function ProjectSection({ projects, attention, activeId, onSelect, onRemo
         <SidebarGroupLabel asChild className="pl-2">
           <CollapsibleTrigger data-testid="sidebar-projects-toggle">Projects</CollapsibleTrigger>
         </SidebarGroupLabel>
-        {/* "Add project" is missing on purpose: it needs the directory-picker
-            overlay, which lands with the other root-mounted dialogs. */}
+        {onAddProject != null && (
+          <Hint label="Add project">
+            {/* top/right retuned: stock's offsets assume the group's own p-2,
+                which this section drops in favour of the header's inset. */}
+            <SidebarGroupAction data-testid="sidebar-projects-add" className="top-1 right-0" onClick={onAddProject}>
+              <PlusIcon />
+              <span className="sr-only">Add project</span>
+            </SidebarGroupAction>
+          </Hint>
+        )}
 
         <CollapsibleContent>
           <SidebarGroupContent>
