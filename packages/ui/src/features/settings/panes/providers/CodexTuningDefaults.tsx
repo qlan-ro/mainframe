@@ -1,5 +1,5 @@
 import type { AdapterModel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 
 const SUMMARY_OPTIONS = ['auto', 'concise', 'detailed', 'none'] as const;
 const PERSONALITY_OPTIONS = ['none', 'friendly', 'pragmatic'] as const;
@@ -18,7 +18,7 @@ function SelectField({
 }) {
   return (
     <Select value={value ?? INHERIT} onValueChange={(v) => onChange(v === INHERIT ? '' : v)}>
-      <SelectTrigger data-testid={testId} className="h-[30px] px-[11px] border border-input">
+      <SelectTrigger size="sm" className="w-full" data-testid={testId}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -50,7 +50,7 @@ export function CodexTuningDefaults({ adapterId, model, config, onChange }: Code
     <div className="space-y-3">
       {model?.supportsPersonality && (
         <label className="block space-y-1.5">
-          <span className="text-label text-muted-foreground">Personality</span>
+          <span className="text-xs font-medium text-muted-foreground">Personality</span>
           <SelectField
             testId={`settings-${adapterId}-personality`}
             value={config.personality}
@@ -60,7 +60,7 @@ export function CodexTuningDefaults({ adapterId, model, config, onChange }: Code
         </label>
       )}
       <label className="block space-y-1.5">
-        <span className="text-label text-muted-foreground">Reasoning Summary</span>
+        <span className="text-xs font-medium text-muted-foreground">Reasoning Summary</span>
         <SelectField
           testId={`settings-${adapterId}-reasoning-summary`}
           value={config.reasoningSummary}

@@ -9,7 +9,9 @@
  */
 import { useCallback } from 'react';
 import { Unplug } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
+import { Label } from '@v2/components/ui/label';
 import { mfToast } from '@/lib/toast';
 import { stopPortTunnel } from '@/lib/api/tunnel-ports';
 import { usePortTunnelList, type PortTunnelListEntry } from '@/store/port-tunnels';
@@ -39,7 +41,7 @@ export function ActivePortTunnelsSection({ port }: ActivePortTunnelsSectionProps
   return (
     <div data-testid="settings-remote-access-port-tunnels-section" className="space-y-3">
       <div>
-        <label className="text-label font-semibold text-muted-foreground">Active Port Tunnels</label>
+        <Label className="text-xs font-medium text-muted-foreground">Active Port Tunnels</Label>
       </div>
 
       <div className="space-y-1.5">
@@ -63,21 +65,21 @@ function PortTunnelRow({
   return (
     <div className="flex items-center justify-between gap-2 p-2.5 bg-card border border-border rounded-md">
       <div className="min-w-0">
-        <span className="text-label text-foreground">Port {tunnel.port}</span>
-        <span className="text-caption text-muted-foreground ml-2 break-all">{detail}</span>
+        <span className="text-xs text-foreground">Port {tunnel.port}</span>
+        <span className="text-xs text-muted-foreground ml-2 break-all">{detail}</span>
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            data-testid={`remote-access-port-tunnel-stop-${tunnel.port}`}
-            onClick={() => onStop(tunnel.port)}
-            className="shrink-0 p-1 text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <Unplug size={14} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Stop tunnel</TooltipContent>
-      </Tooltip>
+      <Hint label="Stop tunnel">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid={`remote-access-port-tunnel-stop-${tunnel.port}`}
+          onClick={() => onStop(tunnel.port)}
+          aria-label="Stop tunnel"
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+        >
+          <Unplug />
+        </Button>
+      </Hint>
     </div>
   );
 }

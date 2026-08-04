@@ -12,8 +12,8 @@ export function RemoteAccessPane({ port }: RemoteAccessPaneProps): React.ReactEl
   if (tunnel.loading) {
     return (
       <div data-testid="settings-pane-remote-access" className="space-y-6">
-        <h3 className="text-title font-bold text-foreground">Remote Access</h3>
-        <div className="flex items-center gap-2 text-label text-muted-foreground">
+        <h3 className="text-lg font-semibold text-foreground">Remote Access</h3>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RotateCw size={14} className="animate-spin" />
           Loading...
         </div>
@@ -23,7 +23,7 @@ export function RemoteAccessPane({ port }: RemoteAccessPaneProps): React.ReactEl
 
   return (
     <div data-testid="settings-pane-remote-access" className="space-y-6">
-      <h3 className="text-title font-bold text-foreground">Remote Access</h3>
+      <h3 className="text-lg font-semibold text-foreground">Remote Access</h3>
       <TunnelControl tunnel={tunnel} port={port} />
     </div>
   );

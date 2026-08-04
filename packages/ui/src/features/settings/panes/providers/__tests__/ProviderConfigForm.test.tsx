@@ -28,11 +28,10 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('ProviderConfigForm', () => {
-  it('the executable path input matches the design fixed height/padding (30px / 11px), not the compressed py-1.5/px-3', () => {
+  it('the executable path input uses the v2 compact input height (h-8)', () => {
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     const input = screen.getByTestId('settings-claude-executable-path-input');
-    expect(input.className).toContain('h-[30px]');
-    expect(input.className).toContain('px-[11px]');
+    expect(input.className).toContain('h-8');
   });
 
   it('editing the executable path commits one PUT on blur (not per keystroke)', () => {

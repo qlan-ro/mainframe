@@ -1,5 +1,6 @@
-import { Switch } from '../../../../components/ui/switch';
-import { Label } from '../../../../components/ui/label';
+import { useId } from 'react';
+import { Switch } from '@v2/components/ui/switch';
+import { Label } from '@v2/components/ui/label';
 
 interface ToggleRowProps {
   label: string;
@@ -10,13 +11,16 @@ interface ToggleRowProps {
 }
 
 export function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowProps) {
+  const id = useId();
   return (
-    <div className="flex items-center justify-between gap-4 px-0.5 py-[11px]">
+    <div className="flex items-center justify-between gap-4 px-0.5 py-3">
       <div className="flex-1 min-w-0">
-        <Label className="text-body text-foreground cursor-pointer">{label}</Label>
-        {description !== undefined && <p className="text-label text-muted-foreground mt-0.5">{description}</p>}
+        <Label htmlFor={id} className="text-sm text-foreground">
+          {label}
+        </Label>
+        {description !== undefined && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} data-testid={testId} />
+      <Switch id={id} checked={checked} onCheckedChange={onChange} data-testid={testId} />
     </div>
   );
 }

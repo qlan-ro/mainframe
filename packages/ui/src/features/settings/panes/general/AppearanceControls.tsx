@@ -1,5 +1,5 @@
 import { useTheme, type ThemeMode, type UiScale } from '../../../../store/theme';
-import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
 
 const MODES: { id: ThemeMode; label: string }[] = [
   { id: 'light', label: 'Light' },
@@ -27,25 +27,22 @@ export function PickerRow<T extends string>({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-body text-muted-foreground">{label}</span>
-      <div className="flex gap-1">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        value={current}
+        onValueChange={(v) => {
+          if (v) onSelect(v as T);
+        }}
+      >
         {options.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            data-testid={`${prefix}-${opt.id}`}
-            onClick={() => onSelect(opt.id)}
-            className={cn(
-              'px-3 py-1 rounded text-body transition-colors',
-              current === opt.id
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-            )}
-          >
+          <ToggleGroupItem key={opt.id} value={opt.id} data-testid={`${prefix}-${opt.id}`} className="px-3">
             {opt.label}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </div>
   );
 }

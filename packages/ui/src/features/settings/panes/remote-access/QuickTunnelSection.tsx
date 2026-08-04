@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { RotateCw } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Label } from '@v2/components/ui/label';
 import { TunnelStatusRow } from './TunnelStatusRow';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
@@ -17,20 +19,17 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
     <div data-testid="settings-remote-access-quick-tunnel-section" className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <label className="text-label font-semibold text-muted-foreground">Quick Tunnel</label>
-          <p className="text-label text-muted-foreground mt-0.5">
+          <Label className="text-xs font-medium text-muted-foreground">Quick Tunnel</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Ephemeral tunnel via trycloudflare.com (new URL each start).
           </p>
         </div>
-        <button
+        <Button
+          size="sm"
+          variant={tunnel.running ? 'outline' : 'default'}
           data-testid="quick-tunnel-toggle"
           onClick={handleToggle}
           disabled={tunnel.togglingAction !== null}
-          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-label rounded-md transition-colors disabled:opacity-50 ${
-            tunnel.running
-              ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
-              : 'bg-primary text-primary-foreground hover:opacity-90'
-          }`}
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
@@ -42,11 +41,11 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
           ) : (
             'Start'
           )}
-        </button>
+        </Button>
       </div>
 
       <TunnelStatusRow state={tunnel.state} url={tunnel.url} onRetryVerify={tunnel.retryVerify} />
-      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-label text-destructive">{tunnel.errorMsg}</p>}
+      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-destructive">{tunnel.errorMsg}</p>}
     </div>
   );
 }

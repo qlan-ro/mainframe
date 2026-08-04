@@ -8,7 +8,9 @@ import { ModelDropdown } from './ModelDropdown';
 import { ProviderTuningDefaults } from './ProviderTuningDefaults';
 import { CodexTuningDefaults } from './CodexTuningDefaults';
 import { CliProxyStatus } from './CliProxyStatus';
-import { Checkbox } from '../../../../components/ui/checkbox';
+import { Checkbox } from '@v2/components/ui/checkbox';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 
@@ -98,18 +100,18 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     <div data-testid={`settings-pane-provider-${adapterId}`} className="space-y-4">
       {/* Executable path — commits on blur to avoid one PUT per keystroke */}
       <div className="space-y-1.5">
-        <label className="text-label font-semibold text-muted-foreground">Executable Path</label>
-        <input
+        <Label className="text-xs font-medium text-muted-foreground">Executable Path</Label>
+        <Input
           data-testid={`settings-${adapterId}-executable-path-input`}
           type="text"
           value={execPath}
           onChange={(e) => setExecPath(e.target.value)}
           onBlur={handleExecPathBlur}
           placeholder={label.toLowerCase()}
-          className="h-[30px] w-full px-[11px] text-body bg-card text-foreground border border-border rounded-md focus:outline-none focus:border-primary"
+          className="h-8"
         />
         {config.resolvedExecutable?.source === 'fallback' && (
-          <p className="text-label text-muted-foreground">Not found on PATH — set the path to the binary above</p>
+          <p className="text-xs text-muted-foreground">Not found on PATH — set the path to the binary above</p>
         )}
       </div>
 
@@ -165,8 +167,8 @@ function ProviderToggles({
           className="mt-0.5 shrink-0"
         />
         <div className="flex-1">
-          <span className="text-body text-foreground">Enforce AskUserQuestion for agent questions</span>
-          <p className="text-label text-muted-foreground">
+          <span className="text-sm text-foreground">Enforce AskUserQuestion for agent questions</span>
+          <p className="text-xs text-muted-foreground">
             Instructs the agent to use the interactive AskUserQuestion tool instead of asking in plain text.
           </p>
         </div>
@@ -181,8 +183,8 @@ function ProviderToggles({
             className="mt-0.5 shrink-0"
           />
           <div className="flex-1">
-            <span className="text-body text-foreground">Start in Plan Mode</span>
-            <p className="text-label text-muted-foreground">
+            <span className="text-sm text-foreground">Start in Plan Mode</span>
+            <p className="text-xs text-muted-foreground">
               New chats begin with plan mode enabled. You can toggle it off mid-session.
             </p>
           </div>

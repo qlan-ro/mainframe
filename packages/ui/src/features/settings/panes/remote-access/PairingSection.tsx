@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCw } from 'lucide-react';
 import { generatePairingCode } from '../../../../lib/api/remote-access';
 import { CopyButton } from './CopyButton';
+import { Button } from '@v2/components/ui/button';
+import { Label } from '@v2/components/ui/label';
 
 const PAIRING_EXPIRY_MS = 5 * 60 * 1000;
 
@@ -60,8 +62,8 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
   return (
     <div data-testid="settings-remote-access-pairing-section" className="space-y-3">
       <div>
-        <label className="text-label font-semibold text-muted-foreground">Mobile Pairing</label>
-        <p className="text-label text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
+        <Label className="text-xs font-medium text-muted-foreground">Mobile Pairing</Label>
+        <p className="text-xs text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
       </div>
 
       {code ? (
@@ -73,12 +75,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
           onGenerate={handleGenerate}
         />
       ) : (
-        <button
-          data-testid="pairing-generate-code"
-          onClick={handleGenerate}
-          disabled={generating}
-          className="inline-flex h-[30px] items-center justify-center px-[11px] text-label bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
+        <Button size="sm" data-testid="pairing-generate-code" onClick={handleGenerate} disabled={generating}>
           {generating ? (
             <span className="flex items-center gap-1.5">
               <RotateCw size={12} className="animate-spin" />
@@ -87,7 +84,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
           ) : (
             'Generate Pairing Code'
           )}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -109,23 +106,25 @@ function PairingCodeDisplay({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-center gap-3 p-4 bg-card border border-border rounded-md">
-        <span className="text-display font-mono font-bold text-foreground" style={{ letterSpacing: '0.3em' }}>
+        <span className="text-2xl font-mono font-bold text-foreground" style={{ letterSpacing: '0.3em' }}>
           {code}
         </span>
         <CopyButton text={code} testId="pairing-code-copy" />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-caption text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           Expires in {minutes}:{seconds.toString().padStart(2, '0')}
         </span>
-        <button
+        <Button
+          variant="link"
+          size="sm"
           data-testid="pairing-regenerate-code"
           onClick={onGenerate}
           disabled={generating}
-          className="text-caption text-primary hover:underline disabled:opacity-50"
+          className="h-auto p-0 text-xs"
         >
           Generate new
-        </button>
+        </Button>
       </div>
     </div>
   );

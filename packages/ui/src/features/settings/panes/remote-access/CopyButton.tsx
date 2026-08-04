@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 
 interface CopyButtonProps {
   text: string;
@@ -22,17 +23,17 @@ export function CopyButton({ text, testId }: CopyButtonProps): React.ReactElemen
   }, [text]);
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          data-testid={testId}
-          onClick={handleCopy}
-          className="p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>Copy</TooltipContent>
-    </Tooltip>
+    <Hint label="Copy">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        data-testid={testId}
+        onClick={handleCopy}
+        aria-label="Copy"
+        className="shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        {copied ? <Check /> : <Copy />}
+      </Button>
+    </Hint>
   );
 }

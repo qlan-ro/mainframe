@@ -52,10 +52,8 @@ describe('GeneralPane', () => {
   describe('update channel', () => {
     it('renders the current channel as selected', () => {
       render(<GeneralPane port={31415} />);
-      expect(screen.getByTestId('settings-updates-channel-stable').className).toContain('bg-accent text-foreground');
-      expect(screen.getByTestId('settings-updates-channel-prerelease').className).not.toContain(
-        'bg-accent text-foreground',
-      );
+      expect(screen.getByTestId('settings-updates-channel-stable')).toHaveAttribute('data-state', 'on');
+      expect(screen.getByTestId('settings-updates-channel-prerelease')).toHaveAttribute('data-state', 'off');
     });
 
     it('selecting Pre-release PUTs the patch and updates the displayed selection optimistically', async () => {
@@ -63,13 +61,9 @@ describe('GeneralPane', () => {
       fireEvent.click(screen.getByTestId('settings-updates-channel-prerelease'));
       expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { updateChannel: 'prerelease' });
       await waitFor(() => {
-        expect(screen.getByTestId('settings-updates-channel-prerelease').className).toContain(
-          'bg-accent text-foreground',
-        );
+        expect(screen.getByTestId('settings-updates-channel-prerelease')).toHaveAttribute('data-state', 'on');
       });
-      expect(screen.getByTestId('settings-updates-channel-stable').className).not.toContain(
-        'bg-accent text-foreground',
-      );
+      expect(screen.getByTestId('settings-updates-channel-stable')).toHaveAttribute('data-state', 'off');
     });
   });
 });

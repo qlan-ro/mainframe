@@ -64,24 +64,24 @@ describe('ProvidersPane — default provider picker', () => {
   it('lists only installed adapters plus an "Auto" option', () => {
     seedAdapters([claudeAdapter, geminiAdapter]);
     render(<ProvidersPane port={31415} />);
-    const select = screen.getByTestId('settings-default-provider-select') as HTMLSelectElement;
-    const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues).toEqual(['', 'claude']);
+    fireEvent.click(screen.getByTestId('settings-default-provider-select'));
+    expect(screen.getByTestId('settings-default-provider-option-auto')).toBeTruthy();
+    expect(screen.getByTestId('settings-default-provider-option-claude')).toBeTruthy();
+    expect(screen.queryByTestId('settings-default-provider-option-gemini')).toBeNull();
   });
 
   it('reflects the stored defaultAdapterId as the selected value', () => {
     useSettingsStore.setState({ general: { ...useSettingsStore.getState().general, defaultAdapterId: 'claude' } });
     seedAdapters([claudeAdapter]);
     render(<ProvidersPane port={31415} />);
-    const select = screen.getByTestId('settings-default-provider-select') as HTMLSelectElement;
-    expect(select.value).toBe('claude');
+    expect(screen.getByTestId('settings-default-provider-select')).toHaveTextContent(claudeAdapter.name);
   });
 
   it('selecting a provider PUTs the patch and updates the store optimistically', async () => {
     seedAdapters([claudeAdapter]);
     render(<ProvidersPane port={31415} />);
-    const select = screen.getByTestId('settings-default-provider-select') as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: 'claude' } });
+    fireEvent.click(screen.getByTestId('settings-default-provider-select'));
+    fireEvent.click(screen.getByTestId('settings-default-provider-option-claude'));
     expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { defaultAdapterId: 'claude' });
     await waitFor(() => expect(useSettingsStore.getState().general.defaultAdapterId).toBe('claude'));
   });
@@ -90,8 +90,8 @@ describe('ProvidersPane — default provider picker', () => {
     useSettingsStore.setState({ general: { ...useSettingsStore.getState().general, defaultAdapterId: 'claude' } });
     seedAdapters([claudeAdapter]);
     render(<ProvidersPane port={31415} />);
-    const select = screen.getByTestId('settings-default-provider-select') as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(screen.getByTestId('settings-default-provider-select'));
+    fireEvent.click(screen.getByTestId('settings-default-provider-option-auto'));
     expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { defaultAdapterId: null });
     await waitFor(() => expect(useSettingsStore.getState().general.defaultAdapterId).toBeNull());
   });

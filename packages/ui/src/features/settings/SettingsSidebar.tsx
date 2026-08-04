@@ -25,13 +25,13 @@ function SettingsNavItem({ id: _id, label, icon: Icon, active, onClick, testId }
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-md px-[9px] py-[7px] text-left text-label transition-colors',
+        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
         active
-          ? 'bg-mf-selection font-semibold text-foreground'
+          ? 'bg-sidebar-selection font-semibold text-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
-      <Icon size={14} className={cn('flex-shrink-0', active ? 'text-primary' : 'text-mf-text-3')} />
+      <Icon size={14} className={cn('flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
       <span>{label}</span>
     </button>
   );
@@ -53,15 +53,15 @@ function ProviderSubItems({ activeProvider }: { activeProvider: string | null })
             data-testid={`settings-nav-provider-${adapter.id}`}
             onClick={() => setSelectedProvider(adapter.id)}
             className={cn(
-              'flex items-center gap-2 border-l-2 py-[5px] pl-[26px] pr-[9px] text-left text-label transition-colors',
+              'flex items-center gap-2 border-l-2 py-1 pl-6 pr-2 text-left text-sm transition-colors',
               active
-                ? cn('bg-mf-selection font-semibold text-foreground', providerBorder(adapter.id))
+                ? cn('bg-sidebar-selection font-semibold text-foreground', providerBorder(adapter.id))
                 : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
           >
             <span
               className={cn(
-                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-caption font-bold text-white ring-1 ring-inset ring-black/10',
+                'inline-flex size-[15px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10',
                 providerDot(adapter.id),
               )}
             >
@@ -93,7 +93,7 @@ export function SettingsSidebar() {
   }
 
   return (
-    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r-[0.5px] border-border bg-mf-content2 p-4">
+    <nav className="flex w-[184px] flex-shrink-0 flex-col gap-px overflow-y-auto border-r bg-sidebar p-4">
       {SETTINGS_TABS.map((tab) => (
         <div key={tab.id}>
           <SettingsNavItem

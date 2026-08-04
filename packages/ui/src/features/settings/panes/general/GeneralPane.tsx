@@ -3,6 +3,8 @@ import type { UpdateChannel } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { AppearanceControls, PickerRow } from './AppearanceControls';
+import { Input } from '@v2/components/ui/input';
+import { Button } from '@v2/components/ui/button';
 
 const UPDATE_CHANNEL_OPTIONS: { id: UpdateChannel; label: string }[] = [
   { id: 'stable', label: 'Stable' },
@@ -45,42 +47,35 @@ export function GeneralPane({ port }: { port: number }) {
 
   return (
     <div data-testid="settings-pane-general" className="flex flex-col gap-6 p-4">
-      <h2 className="text-title font-bold text-foreground">General</h2>
+      <h2 className="text-lg font-semibold text-foreground">General</h2>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-label font-semibold text-muted-foreground">Appearance</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">Appearance</h3>
         <AppearanceControls />
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-label font-semibold text-muted-foreground">Worktree directory</h3>
-        <p className="text-label text-muted-foreground">
-          Relative path where worktrees are created inside project roots.
-        </p>
+        <h3 className="text-xs font-medium text-muted-foreground">Worktree directory</h3>
+        <p className="text-xs text-muted-foreground">Relative path where worktrees are created inside project roots.</p>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             data-testid="settings-worktree-dir-input"
             value={displayDir}
             onChange={handleDirChange}
-            className="h-[30px] flex-1 rounded border border-input bg-card px-[11px] text-body text-foreground outline-none focus:border-primary"
+            className="h-8 flex-1"
           />
           {isDirty && (
-            <button
-              type="button"
-              data-testid="settings-worktree-dir-save"
-              onClick={handleSave}
-              className="inline-flex h-[30px] items-center justify-center rounded bg-primary px-[11px] text-body text-primary-foreground hover:opacity-90"
-            >
+            <Button size="sm" data-testid="settings-worktree-dir-save" onClick={handleSave}>
               Save
-            </button>
+            </Button>
           )}
         </div>
-        {saveError !== null && <p className="text-label text-destructive">{saveError}</p>}
+        {saveError !== null && <p className="text-xs text-destructive">{saveError}</p>}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-label font-semibold text-muted-foreground">Updates</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">Updates</h3>
         <PickerRow
           label="Channel"
           options={UPDATE_CHANNEL_OPTIONS}

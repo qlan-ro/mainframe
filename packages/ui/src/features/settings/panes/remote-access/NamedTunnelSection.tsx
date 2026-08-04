@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RotateCw } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
 import { TunnelStatusRow } from './TunnelStatusRow';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 
@@ -56,10 +59,8 @@ export function NamedTunnelSection({
   return (
     <div data-testid="settings-remote-access-named-tunnel-section" className="space-y-3">
       <div>
-        <label className="text-label font-semibold text-muted-foreground">Named Tunnel</label>
-        <p className="text-label text-muted-foreground mt-0.5">
-          Use a Cloudflare connector token for a persistent URL.
-        </p>
+        <Label className="text-xs font-medium text-muted-foreground">Named Tunnel</Label>
+        <p className="text-xs text-muted-foreground mt-0.5">Use a Cloudflare connector token for a persistent URL.</p>
       </div>
 
       {hasConfig && savedUrl ? (
@@ -103,26 +104,23 @@ function NamedTunnelConfigured({
       {tunnel.state === 'idle' || tunnel.state === 'error' ? (
         <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
           <span className="w-2 h-2 rounded-full bg-muted-foreground shrink-0" />
-          <code className="text-label text-muted-foreground truncate flex-1">{savedUrl}</code>
-          <span className="text-caption text-muted-foreground shrink-0">
+          <code className="text-xs text-muted-foreground truncate flex-1">{savedUrl}</code>
+          <span className="text-xs text-muted-foreground shrink-0">
             {tunnel.state === 'error' ? 'Stopped (error)' : 'Stopped'}
           </span>
         </div>
       ) : (
         <TunnelStatusRow state={tunnel.state} url={tunnel.url ?? savedUrl} onRetryVerify={tunnel.retryVerify} />
       )}
-      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-label text-destructive">{tunnel.errorMsg}</p>}
-      {saveError && <p className="text-label text-destructive">{saveError}</p>}
+      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-destructive">{tunnel.errorMsg}</p>}
+      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
       <div className="flex items-center gap-2">
-        <button
+        <Button
+          size="sm"
+          variant={tunnel.running ? 'outline' : 'default'}
           data-testid="named-tunnel-toggle"
           onClick={onStartStop}
           disabled={tunnel.togglingAction !== null}
-          className={`inline-flex h-[30px] items-center justify-center px-[11px] text-label rounded-md transition-colors disabled:opacity-50 ${
-            tunnel.running
-              ? 'bg-accent text-foreground border border-border hover:bg-accent/80'
-              : 'bg-primary text-primary-foreground hover:opacity-90'
-          }`}
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
@@ -134,15 +132,17 @@ function NamedTunnelConfigured({
           ) : (
             'Start'
           )}
-        </button>
-        <button
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           data-testid="named-tunnel-clear-config"
           onClick={onClear}
           disabled={tunnel.togglingAction === 'stop'}
-          className="inline-flex h-[30px] items-center justify-center px-[11px] text-label text-muted-foreground bg-accent border border-border rounded-md hover:bg-accent/80 disabled:opacity-50 transition-colors"
+          className="text-muted-foreground"
         >
           Clear Configuration
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -167,28 +167,28 @@ function NamedTunnelSetup({
 }): React.ReactElement {
   return (
     <div className="space-y-2">
-      <input
+      <Input
         data-testid="named-tunnel-token-input"
         type="password"
         value={token}
         onChange={(e) => onTokenChange(e.target.value)}
         placeholder="Cloudflare connector token"
-        className="h-[30px] w-full px-[11px] text-body bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="h-8"
       />
-      <input
+      <Input
         data-testid="named-tunnel-url-input"
         type="text"
         value={url}
         onChange={(e) => onUrlChange(e.target.value)}
         placeholder="https://mainframe.example.com"
-        className="h-[30px] w-full px-[11px] text-body bg-card border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+        className="h-8"
       />
-      {saveError && <p className="text-label text-destructive">{saveError}</p>}
-      <button
+      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+      <Button
+        size="sm"
         data-testid="named-tunnel-save"
         onClick={onSave}
         disabled={togglingStart || !token.trim() || !url.trim()}
-        className="inline-flex h-[30px] items-center justify-center px-[11px] text-label bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
         {togglingStart ? (
           <span className="flex items-center gap-1.5">
@@ -198,7 +198,7 @@ function NamedTunnelSetup({
         ) : (
           'Save & Start'
         )}
-      </button>
+      </Button>
     </div>
   );
 }
