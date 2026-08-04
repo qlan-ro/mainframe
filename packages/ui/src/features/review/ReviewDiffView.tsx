@@ -21,6 +21,7 @@
  * The `onAppend` prop is wired by ReviewPanel to the runtime's append call.
  */
 import { Button } from '@v2/components/ui/button';
+import { Textarea } from '@v2/components/ui/textarea';
 import { useEffect, useState, useCallback } from 'react';
 import { CmDiffEditor, type LineSelection } from '@/features/editor/CmDiffEditor';
 import { getWorkingDiff, type WorkingDiff } from '@/lib/api/git';
@@ -93,7 +94,7 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
 
   return (
     <div className="flex flex-col h-full">
-      {error && <div className="px-4 py-3 text-caption text-destructive">{error}</div>}
+      {error && <div className="px-4 py-3 text-xs text-destructive">{error}</div>}
 
       {diff && (
         <div className="flex-1 min-h-0">
@@ -108,28 +109,28 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
         </div>
       )}
 
-      {!error && !diff && <div className="px-4 py-4 text-caption text-muted-foreground">Loading diff…</div>}
+      {!error && !diff && <div className="px-4 py-4 text-xs text-muted-foreground">Loading diff…</div>}
 
       {/* Inline comment authoring */}
-      <form onSubmit={handleSubmit} className="shrink-0 border-t border-border px-4 py-3 flex flex-col gap-2">
+      <form onSubmit={handleSubmit} className="shrink-0 border-t px-4 py-3 flex flex-col gap-2">
         {selectedLine ? (
           <div
             data-testid="review-comment-selected-line"
-            className="flex items-baseline gap-1.5 text-caption text-muted-foreground"
+            className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
           >
             <span className="font-medium text-foreground">Line {selectedLine.line}</span>
             {snippetText && <span className="font-mono truncate text-muted-foreground">— {snippetText}</span>}
           </div>
         ) : (
-          <p className="text-caption text-muted-foreground">Click a line in the diff to anchor your comment.</p>
+          <p className="text-xs text-muted-foreground">Click a line in the diff to anchor your comment.</p>
         )}
-        <textarea
+        <Textarea
           data-testid="review-comment-input"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Add a comment…"
           rows={3}
-          className="w-full rounded border border-border bg-transparent px-2 py-1 text-body resize-none outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+          className="resize-none"
         />
         <div className="flex justify-end">
           <Button size="sm" type="submit" data-testid="review-comment-submit" disabled={!canSubmit}>

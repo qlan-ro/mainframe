@@ -4,19 +4,19 @@
  * Mirrors the prototype ReviewModal file list (07-review.jsx 218-241):
  * a "Changed files" heading, then rows with a tinted square status badge,
  * filename + dir, and a 5-square +/- stat meter. The active row gets the
- * brand selection tint; viewed (non-active) rows dim and strike through.
+ * selection tint; viewed (non-active) rows dim and strike through.
  */
 import { KIND_LABEL } from '@/lib/git-status-kind';
-import { SectionHeader } from '@/components/ui/section-header';
 import type { ReviewFile } from './git-status-to-files';
 
 /**
  * Square badge tint per semantic status (text + chip background).
- * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%),
- * not the previous /15 approximation.
+ * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%).
+ * Amber mf-warning + mf-diff-del-text stay: they belong to the git/diff color
+ * family that lives with CmDiffEditor until the diff engine is ported.
  */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
-  added: 'text-foreground bg-mf-success/[12.16%]',
+  added: 'text-foreground bg-success/[12.16%]',
   modified: 'text-foreground bg-mf-warning/[12.16%]',
   deleted: 'text-foreground bg-mf-diff-del-text/[12.16%]',
   renamed: 'text-foreground bg-mf-warning/[12.16%]',
@@ -40,10 +40,10 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
         const frac = (i + 1) / 5;
         const color =
           frac <= addFrac
-            ? 'bg-mf-success'
+            ? 'bg-success'
             : frac <= delFrac + 0.0001 && addFrac < frac
               ? 'bg-mf-diff-del-text'
-              : 'bg-mf-chip';
+              : 'bg-accent';
         return <span key={i} className={`size-[9px] rounded-[2px] ${color}`} />;
       })}
     </span>
@@ -53,13 +53,13 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
 export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles }: ReviewFileTreeProps) {
   return (
     <div className="flex h-full flex-col">
-      <SectionHeader className="px-3.5 pb-1.5 pt-[12px]">Changed files</SectionHeader>
+      <div className="shrink-0 px-3.5 pb-1.5 pt-3 text-xs font-medium text-muted-foreground">Changed files</div>
       {files.length === 0 ? (
-        <div data-testid="review-file-tree-empty" className="px-3.5 py-4 text-caption text-muted-foreground">
+        <div data-testid="review-file-tree-empty" className="px-3.5 py-4 text-xs text-muted-foreground">
           No changes to review
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-[8px]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
           {files.map((f) => {
             const isSelected = selectedFile === f.path;
             const isViewed = viewedFiles?.has(f.path) ?? false;
@@ -72,22 +72,22 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                 data-testid={`review-file-row-${f.path}`}
                 onClick={() => onSelectFile(f.path)}
                 className={`mb-px flex w-full items-center gap-2.5 rounded-md border-none px-2.5 py-1.5 text-left hover:bg-accent ${
-                  isSelected ? 'bg-mf-selection' : 'bg-transparent'
+                  isSelected ? 'bg-sidebar-selection' : 'bg-transparent'
                 } ${isViewed && !isSelected ? 'opacity-55' : ''}`}
               >
                 <span
-                  className={`inline-flex size-[16px] shrink-0 items-center justify-center rounded font-mono text-caption font-extrabold ${BADGE_CLASS[f.status]}`}
+                  className={`inline-flex size-4 shrink-0 items-center justify-center rounded font-mono text-xs font-extrabold ${BADGE_CLASS[f.status]}`}
                 >
                   {KIND_LABEL[f.status]}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span
                     title={f.path}
-                    className={`truncate font-mono text-label text-foreground ${isSelected ? 'font-semibold' : 'font-medium'} ${isViewed ? 'line-through' : ''}`}
+                    className={`truncate font-mono text-xs text-foreground ${isSelected ? 'font-semibold' : 'font-medium'} ${isViewed ? 'line-through' : ''}`}
                   >
                     {fileName}
                   </span>
-                  {dirPath && <span className="truncate text-caption text-muted-foreground">{dirPath}</span>}
+                  {dirPath && <span className="truncate text-xs text-muted-foreground">{dirPath}</span>}
                 </span>
                 <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
               </button>

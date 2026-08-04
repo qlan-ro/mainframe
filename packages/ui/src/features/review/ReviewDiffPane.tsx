@@ -34,7 +34,7 @@ export function ReviewDiffPane({
 }: ReviewDiffPaneProps) {
   if (!file) {
     return (
-      <div className="flex h-full items-center justify-center text-caption text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
         Select a file to review
       </div>
     );

@@ -9,6 +9,7 @@
  */
 import { Check, TriangleAlert } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
+import { Textarea } from '@v2/components/ui/textarea';
 
 const SUGGESTIONS = ['feat: ', 'fix: ', 'refactor: ', 'chore: ', 'docs: '];
 
@@ -40,16 +41,16 @@ export function ReviewCommitRail({
   const canCommit = message.trim().length > 0 && !committing && fileCount > 0;
 
   return (
-    <div className="flex w-[280px] shrink-0 flex-col border-l border-border bg-mf-content2 p-[16px]">
-      <div className="mb-[12px] text-body font-bold tracking-tight text-foreground">Commit</div>
+    <div className="flex w-[280px] shrink-0 flex-col border-l bg-card p-4">
+      <div className="mb-3 text-sm font-semibold text-foreground">Commit</div>
 
       {committed ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-[10px] text-center">
-          <span className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-full bg-mf-success/10">
-            <Check size={22} strokeWidth={2.4} className="text-mf-success" aria-hidden />
+        <div className="flex flex-1 flex-col items-center justify-center gap-2.5 text-center">
+          <span className="inline-flex size-11 items-center justify-center rounded-full bg-success/10">
+            <Check size={22} strokeWidth={2.4} className="text-success" aria-hidden />
           </span>
-          <div className="text-body font-semibold text-foreground">Changes committed</div>
-          <div className="font-mono text-caption text-muted-foreground">
+          <div className="text-sm font-semibold text-foreground">Changes committed</div>
+          <div className="font-mono text-xs text-muted-foreground">
             {fileCount} {fileCount === 1 ? 'file' : 'files'} · {totalLines} lines
           </div>
           <Button size="sm" className="mt-1.5" data-testid="review-commit-done" onClick={onCancel}>
@@ -58,43 +59,44 @@ export function ReviewCommitRail({
         </div>
       ) : (
         <>
-          <textarea
+          <Textarea
             data-testid="review-commit-input"
             value={message}
             onChange={(e) => onMessageChange(e.target.value)}
             placeholder="Summary of changes…"
             spellCheck={false}
-            className="mb-[8px] h-[76px] resize-none rounded-md border border-border bg-background px-[11px] py-[9px] text-label leading-snug text-foreground outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
+            className="mb-2 h-[76px] resize-none text-xs leading-snug"
           />
 
-          <div className="mb-[14px] flex flex-wrap gap-1.5">
+          <div className="mb-3.5 flex flex-wrap gap-1.5">
             {SUGGESTIONS.map((s) => (
-              <button
+              <Button
                 key={s}
-                type="button"
+                variant="outline"
+                size="sm"
                 data-testid={`review-commit-suggestion-${s.trim().replace(/[^a-z]/gi, '')}`}
                 onClick={() => onMessageChange(s)}
-                className="rounded-[13px] border border-border bg-background px-[9px] py-[4px] text-caption text-muted-foreground transition-colors hover:border-primary"
+                className="h-6 rounded-full px-2.5 text-xs font-normal text-muted-foreground hover:border-primary"
               >
                 {s.trim()}
-              </button>
+              </Button>
             ))}
           </div>
 
           {unviewedCount > 0 && (
             <div
               data-testid="review-commit-unviewed-warning"
-              className="mb-[12px] flex items-start gap-[8px] rounded-md border border-mf-warning/30 bg-mf-warning/10 px-[10px] py-[9px]"
+              className="mb-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2"
             >
-              <TriangleAlert size={14} className="mt-px shrink-0 text-mf-warning" aria-hidden />
-              <span className="text-label leading-snug text-foreground">
+              <TriangleAlert size={14} className="mt-px shrink-0 text-warning" aria-hidden />
+              <span className="text-xs leading-snug text-foreground">
                 {unviewedCount} {unviewedCount === 1 ? 'file' : 'files'} not yet reviewed.
               </span>
             </div>
           )}
 
           {error && (
-            <div data-testid="review-commit-error" className="mb-[12px] text-label text-destructive">
+            <div data-testid="review-commit-error" className="mb-3 text-xs text-destructive">
               {error}
             </div>
           )}

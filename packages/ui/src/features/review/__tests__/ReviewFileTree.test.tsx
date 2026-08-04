@@ -61,8 +61,8 @@ describe('ReviewFileTree', () => {
     render(<ReviewFileTree files={FILES} selectedFile="src/a.ts" onSelectFile={vi.fn()} />);
     const selected = screen.getByTestId('review-file-row-src/a.ts');
     const unselected = screen.getByTestId('review-file-row-src/b.ts');
-    expect(selected.className).toContain('bg-mf-selection');
-    expect(unselected.className).not.toContain('bg-mf-selection');
+    expect(selected.className).toContain('bg-sidebar-selection');
+    expect(unselected.className).not.toContain('bg-sidebar-selection');
   });
 
   it('strikes through and dims a viewed (non-selected) file', () => {
