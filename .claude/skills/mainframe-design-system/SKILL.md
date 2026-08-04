@@ -1,6 +1,6 @@
 ---
 name: mainframe-design-system
-description: Mainframe's own design system — the warm-chrome token scales (type, radius, spacing, color), the dialog/popover/row recipes the app already uses, and the layout traps that make new UI look off. Use before building or restyling ANY component in packages/ui, and when reviewing UI for design conformance. Generic design skills (ui-ux-pro-max, apple-hig) answer "what looks good"; this answers "what looks like Mainframe".
+description: Mainframe's own design system — the token scales (type, radius, spacing, color), the dialog/popover/row recipes the app already uses, and the layout traps that make new UI look off. Covers BOTH render trees in packages/ui: v1's warm chrome and the stock shadcn v2 clone, which have different scales and inverted recipes. Use before building or restyling ANY component in packages/ui, and when reviewing UI for design conformance. Generic design skills (ui-ux-pro-max, apple-hig) answer "what looks good"; this answers "what looks like Mainframe".
 ---
 
 # Mainframe design system
@@ -11,6 +11,48 @@ what the shipped app already does.
 
 **Before writing any markup: find the closest existing component and read it.** This app has a house style,
 and the fastest way to violate it is to write generic shadcn from memory.
+
+## First: which tree are you in?
+
+`packages/ui` holds **two** render trees with different design systems.
+
+- **`src/…` (v1, warm chrome)** — everything below describes this one.
+- **`src/v2/…`** — a parallel clone on the stock shadcn **radix-vega** preset. Standard Tailwind spacing,
+  no `mf-*` tokens (they compile to *nothing* there), its own 11/13px type scale, and dialog/scroll recipes
+  that are the **opposite** of v1's. **Read `references/v2-stock.md` before touching it** — the Recipes
+  table below will actively mislead you.
+
+Check the path before you write a class name.
+
+## Reach for the component before you write the markup
+
+The four most repeated mistakes in this codebase are all the same mistake: building something the library
+already has.
+
+1. **Search `components/ui/` before writing markup that resembles a primitive.** A pill is `Badge`. A
+   bordered container is `Card`. A bar showing a percentage is `Progress`. Hand-rolled versions have shipped
+   for all three, each a near-copy of the primitive's own base classes minus its focus ring and aria.
+2. **If a primitive doesn't expose what you need, extend the primitive.** You own that file — that is the
+   shadcn model. Importing raw Radix at a call site to reach an inner element is the tell that a prop is
+   missing (a `viewportProps` on `ScrollArea`, say). A feature importing `radix-ui` directly is a bug.
+3. **A stack of overrides on a primitive means you picked the wrong one, or the decision belongs in the
+   theme.** Five call sites overriding `text-muted-foreground` to escape a too-loud `foreground` is a token
+   problem, not five styling problems. Stripping `p-0 gap-0` off a dialog to rebuild its bands is a
+   different component.
+4. **Never an arbitrary value where a token could exist.** `text-[10px]` and `text-[11px]` reached eight
+   usages across six files before anyone noticed; no theme change could reach them. If the scale lacks the
+   step you need, add the step.
+
+## Ink is a scale, not a colour picker
+
+- **One role, one ink.** The same *thing* — a session's name in a row, that same name as a hover-card title
+  — must resolve to one token. Two inks for one role is what makes a popover read as a different app.
+- **Check what else the token fills.** `foreground` is a tooltip's *background* (`bg-foreground`), so
+  "make the text softer" silently restyles every tooltip.
+- **A missing semantic gets a token, not the nearest hue.** Reaching for `destructive` to mean "warning",
+  or `primary` to mean "connected", encodes the wrong meaning permanently. Add `--warning` / `--success`.
+- **A comment that explains a token's behaviour goes stale when the token moves.** Fix it in the same pass;
+  a confidently wrong comment costs more than none.
 
 ## The five rules that catch most of it
 
@@ -71,6 +113,7 @@ Full tables with every token name: `references/tokens.md`. The shape of them:
 ## Recipes
 
 Copy the structure from the named file — do not re-derive it. Details in `references/recipes.md`.
+**These are v1's.** In `src/v2` the dialog and scroll recipes invert — see `references/v2-stock.md`.
 
 | Surface | Canonical implementation |
 |---|---|
@@ -113,7 +156,18 @@ it reads as a bug forever.
 
 ## Verifying
 
-Design conformance is not a typecheck. Before calling UI work done:
+Design conformance is not a typecheck. **And do not settle a visual question by looking — measure it.**
+Nearly every "is this bigger / darker / more indented?" question in this codebase has been answered wrong
+by eye and right by `getComputedStyle`. Two glyphs that looked different sizes were both 12px (it was
+stroke density); a background that read "pinkish" had chroma 0 (the tint was in a neighbouring token); a
+sticky header that looked broken was at y=1186 against a 483px viewport.
+
+The probe: drive the running app with Playwright from inside `packages/e2e/`, read
+`getComputedStyle`/`getBoundingClientRect`, print the numbers, then screenshot. Delete the script after.
+Resolve colours through a canvas — `getComputedStyle` returns `oklch(…)` strings that naive parsing
+misreads as rgb.
+
+Before calling UI work done:
 
 - Render it. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` proves it mounts, not that it looks
   right — for anything visual, run the app (`pnpm tauri:dev` from `packages/app-tauri`, isolated via
@@ -153,6 +207,9 @@ a port rather than eyeballing.
 measured basis for the type roles, ink tiers, icon grid, and count-badge treatment above. It shipped as
 PR #452 (token re-tints, `UI_SCALE_FACTORS` 0.92/1.0/1.15, the contrast test, the primitive repairs), so
 read it as *what the app decided*, not as a proposal. Its remaining open items are the P2 tail.
+
+`references/v2-stock.md` — the `src/v2` tree: its scales, its three extra tokens, and the recipes that
+invert v1's. Required reading before any work under `src/v2`.
 
 `packages/ui/CLAUDE.md` (assistant-ui golden rule, surface model, architecture), the `shadcn` and
 `radix-ui-design-system` skills for primitive-level questions, `ui-ux-pro-max` for general visual judgment

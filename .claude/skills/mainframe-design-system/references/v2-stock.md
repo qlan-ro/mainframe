@@ -1,0 +1,77 @@
+# The v2 tree — stock shadcn, not warm chrome
+
+`packages/ui/src/v2` is a **parallel clone** of the sidebar/shell rebuilt on the shadcn **radix-vega**
+preset. It shares the repo with v1 and shares almost nothing else. Everything in `SKILL.md` about `mf-*`
+tokens, compressed spacing, window styles and the 8-rung type scale describes **v1 only** and is actively
+wrong here.
+
+Its own tokens live in `packages/ui/src/v2/styles/globals.css`.
+
+## Boundaries
+
+- **Never import `@/components/ui/*` into v2.** v2 has its own primitives under `src/v2/components/ui/`.
+- **Non-visual modules are imported, not cloned** — `view-model/`, `store/`, `runtime/`, `lib/api/*`,
+  feature hooks all come from `@/…`. Only the render layer is duplicated.
+- **Never edit a shared module to change a v2 look.** `view-model/relative-time.ts` has ten consumers
+  across v1 sessions *and* automations; a v2 label style belongs in a v2-local file
+  (`features/sessions/compact-time.ts` is the precedent).
+- Only four seams exist outside `src/v2`: `v2.html`, the `@v2` alias in `vite.config.ts`, the `@v2/*` path
+  in `tsconfig.json`, and the directory itself.
+
+## Scales
+
+| | v1 (warm chrome) | v2 (stock) |
+|---|---|---|
+| Spacing | **compressed** — `p-2` is 4px | **standard** — `p-2` is 8px |
+| Type | 8 named rungs (`text-body` …) | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16px |
+| Radius | `--radius` 8px base, `mf` names | `--radius` 0.625rem, stock `rounded-*` |
+| Color | ~90 `mf-*` extensions | shadcn contract only, **plus three additions below** |
+
+`text-sm` is the UI size — a row name, a card title, a dialog's body. `text-xs` is metadata: timestamps,
+field labels, the session row's second line. **`body` carries `text-sm`**, so unsized text lands on 13px
+rather than the browser's 16px; that rule exists because the hover card shipped at 16px without it.
+
+`mf-*` class names are **phantom** here — they compile to nothing, silently.
+
+## Tokens beyond the preset
+
+Three, each because the preset had no way to say the thing:
+
+- `--sidebar-selection` — stock's `sidebar-accent` is the neutral hover, so hovered and selected rows
+  would otherwise be identical.
+- `--warning` — `color-mix(destructive 55%, muted-foreground)`. A wrong-but-not-broken state (a missing
+  worktree). Sits at the panel's own ink lightness, so it carries hue without shouting.
+- `--success` — green, for a connection indicator. The one hue here that is convention rather than
+  choice; the accent would have said "selected".
+
+`--ring` is `var(--primary)`, so focus rings are the accent everywhere.
+
+## Ink
+
+`foreground` is `oklch(0.32)` light / `0.92` dark — deliberately off stock's `0.145`/`0.985`. Stock assumes
+body copy on a white page; every v2 surface is chrome, and full-strength ink there reads as a different,
+louder application.
+
+**A tooltip inverts `foreground` into a fill** (`bg-foreground text-background`). Any change to the ink
+token changes a background — check tooltips before touching it.
+
+## Recipes that differ from v1
+
+| Surface | v1 | v2 |
+|---|---|---|
+| Large dialog | `hideClose` + `p-0 gap-0` + bordered bands | **stock composition** — close button, `DialogHeader` with a `DialogDescription`, `DialogFooter`, the primitive's own `p-6 gap-6`, whole dialog scrolls |
+| Cancel button | — | `variant="outline"` inside `DialogClose asChild` |
+| Sidebar scrolling | — | `SidebarContent` **is** the scroller, as shadcn documents. No nested `ScrollArea`; shadcn's sidebar has no visible scrollbar by design |
+| Overflowing label | `truncate` | `truncate-fade` — a `mask-image` ramp instead of an ellipsis. **Only on a label that fills its row**; on a content-sized one the ramp eats text that fits |
+
+## Known deviations, and why
+
+Recorded so nobody "fixes" them back:
+
+- `SidebarMenuButton`'s `sm` variant is `text-sm`, not stock's `text-xs` — under the v2 scale `text-xs`
+  would put every row *name* at 11px.
+- `Progress` forwards `value` to the Radix root. Stock destructures it for the indicator transform only,
+  which leaves the root `data-state="indeterminate"` with no `aria-valuenow`.
+- `SidebarRail` drag-resizes as well as toggling (3px slop separates the gestures).
+- A parked section header and its content are **siblings**, never wrapped together — a sticky element
+  cannot be lifted above its own containing block, so a wrapper would pin the header below the fold.
