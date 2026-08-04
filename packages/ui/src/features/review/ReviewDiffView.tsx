@@ -20,6 +20,7 @@
  *
  * The `onAppend` prop is wired by ReviewPanel to the runtime's append call.
  */
+import { Button } from '@v2/components/ui/button';
 import { useEffect, useState, useCallback } from 'react';
 import { CmDiffEditor, type LineSelection } from '@/features/editor/CmDiffEditor';
 import { getWorkingDiff, type WorkingDiff } from '@/lib/api/git';
@@ -131,14 +132,9 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
           className="w-full rounded border border-border bg-transparent px-2 py-1 text-body resize-none outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
         />
         <div className="flex justify-end">
-          <button
-            type="submit"
-            data-testid="review-comment-submit"
-            disabled={!canSubmit}
-            className="rounded-md px-3 py-1.5 text-body bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <Button size="sm" type="submit" data-testid="review-comment-submit" disabled={!canSubmit}>
             Comment
-          </button>
+          </Button>
         </div>
       </form>
     </div>

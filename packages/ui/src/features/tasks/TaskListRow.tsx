@@ -7,6 +7,7 @@
  * Port of packages/app-electron/src/renderer/components/todos/TodoCard.tsx (list
  * variant), rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
+import { Button } from '@v2/components/ui/button';
 import React from 'react';
 import { ChevronDown, ChevronRight, Play, Edit, Trash2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -279,29 +280,30 @@ export function TaskListRow({
           {/* Primary CTA row */}
           <div className="flex items-center gap-2 pt-1">
             {!isDone && (
-              <button
+              <Button
+                size="sm"
                 data-testid={`tasks-list-row-start-cta-${todo.number}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onStartSession(todo);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-label font-semibold hover:opacity-90 transition-opacity"
               >
-                <Play size={14} />
+                <Play />
                 {todo.status === 'in_progress' ? 'Resume session' : 'Start session'}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              size="sm"
+              variant="outline"
               data-testid={`tasks-list-row-edit-cta-${todo.number}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(todo);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-card text-muted-foreground text-label font-medium hover:text-foreground transition-colors"
             >
-              <Edit size={14} />
+              <Edit />
               Edit
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -13,6 +13,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Zap } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
 import type { TodoType, TodoPriority } from '@/lib/api/todos';
@@ -174,13 +175,10 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
         if (!o) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        data-testid="tasks-quick-dialog"
-        className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0"
-      >
-        <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-          <DialogTitle className="flex items-center gap-1.5 text-body font-bold">
+      <DialogContent data-testid="tasks-quick-dialog" className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* pr-12 clears the stock close button. */}
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex items-center gap-1.5">
             <Zap size={13} className="text-primary shrink-0" aria-hidden />
             Quick Task
           </DialogTitle>
@@ -280,19 +278,14 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
             <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">⌘↵</kbd> to create ·{' '}
             <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">Esc</kbd> to cancel
           </span>
-          <button
-            type="button"
+          <Button
+            size="sm"
             data-testid="tasks-quick-create"
             onClick={() => void handleSubmit()}
             disabled={!title.trim() || submitting}
-            className={cn(
-              'px-3 py-1.5 text-label rounded-md transition-colors',
-              'bg-primary text-primary-foreground hover:opacity-90',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
           >
             {submitting ? 'Creating…' : 'Create'}
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

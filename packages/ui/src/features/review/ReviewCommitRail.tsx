@@ -8,6 +8,7 @@
  * onMessageChange / onCommit / onCancel.
  */
 import { Check, TriangleAlert } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 
 const SUGGESTIONS = ['feat: ', 'fix: ', 'refactor: ', 'chore: ', 'docs: '];
 
@@ -51,14 +52,9 @@ export function ReviewCommitRail({
           <div className="font-mono text-caption text-muted-foreground">
             {fileCount} {fileCount === 1 ? 'file' : 'files'} · {totalLines} lines
           </div>
-          <button
-            type="button"
-            data-testid="review-commit-done"
-            onClick={onCancel}
-            className="mt-1.5 inline-flex h-[30px] items-center rounded-md bg-primary px-[14px] text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
+          <Button size="sm" className="mt-1.5" data-testid="review-commit-done" onClick={onCancel}>
             Done
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -105,28 +101,13 @@ export function ReviewCommitRail({
 
           <div className="flex-1" />
 
-          <button
-            type="button"
-            data-testid="review-commit-submit"
-            disabled={!canCommit}
-            onClick={onCommit}
-            className={`mb-[8px] inline-flex h-[36px] items-center justify-center gap-1.5 rounded-md text-body font-bold tracking-tight transition-opacity ${
-              canCommit
-                ? 'bg-primary text-primary-foreground shadow-[0_1px_3px_color-mix(in_oklab,var(--primary)_40%,transparent)] hover:opacity-90'
-                : 'cursor-not-allowed bg-mf-chip text-muted-foreground'
-            }`}
-          >
-            <Check size={14} strokeWidth={2.4} aria-hidden />
+          <Button className="mb-2" data-testid="review-commit-submit" disabled={!canCommit} onClick={onCommit}>
+            <Check strokeWidth={2.4} aria-hidden />
             {committing ? 'Committing…' : `Commit ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
-          </button>
-          <button
-            type="button"
-            data-testid="review-commit-cancel"
-            onClick={onCancel}
-            className="inline-flex h-[30px] items-center justify-center rounded-md border border-border bg-transparent text-label font-semibold text-muted-foreground transition-colors hover:bg-accent"
-          >
+          </Button>
+          <Button size="sm" variant="outline" data-testid="review-commit-cancel" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </>
       )}
     </div>

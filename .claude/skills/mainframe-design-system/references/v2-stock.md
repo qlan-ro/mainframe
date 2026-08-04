@@ -101,6 +101,19 @@ Every dialog in the app was audited; state as of the shell integration:
 **The v1 dialog primitive is deleted.** Every modal in the app renders through
 `@v2/components/ui/dialog` / `alert-dialog` / `command`.
 
+**In-dialog chrome rules** (2026-08 drift sweep — these held in v1 bodies and were fixed):
+- **Close is on the RIGHT, always** — the stock position. Workspace dialogs with their own
+  header band (tasks board, workflows, review) put a `Button variant="ghost" size="icon-sm"`
+  with the legacy testid at the band's far right; form dialogs just use the stock built-in
+  close (header gets `pr-12` to clear it). A LEFT chevron is a *Back* affordance (automations
+  editor) and stays left — only close-X's were drifted.
+- Band titles are `text-base font-semibold` (DialogTitle's scale), counts/chips are `Badge
+  variant="secondary"`, and every action that reads as a button IS a v2 `Button` (primary
+  default, cancel `outline`, icon actions `ghost icon-sm`).
+- Still bridge-styled by design: deep body content (automations editor forms, settings panes,
+  board filter bar/segmented switch, file-picker rows) — those convert with their surface
+  ports, not chrome passes.
+
 Two Radix rules every dialog outlet must follow (both bit during this pass):
 - **Never early-return `null` while open** — unmounting an open modal leaves
   `pointer-events: none` on `<body>`. Render closed (`open={x}`) and let Radix close first.

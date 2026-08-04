@@ -13,6 +13,7 @@ import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
 import { TaskAttachments, type PendingAttachment } from './TaskAttachments';
@@ -156,9 +157,10 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent showCloseButton={false} className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+      <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* pr-12 clears the stock close button. */}
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex items-center gap-2">
             {todo ? (
               <>
                 <Pencil size={14} className="text-primary shrink-0" aria-hidden />
@@ -253,35 +255,25 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               </button>
             )}
             {todo && todo.status === 'in_progress' && onStartSession && (
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="secondary"
                 data-testid="tasks-edit-start"
                 onClick={() => {
                   onStartSession(todo.id);
                   onClose();
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
               >
-                <Play size={14} aria-hidden />
+                <Play aria-hidden />
                 Start session
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              data-testid="tasks-edit-cancel"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-label text-muted-foreground hover:bg-muted transition-colors"
-            >
+            <Button size="sm" variant="outline" data-testid="tasks-edit-cancel" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              data-testid="tasks-edit-save"
-              disabled={!title.trim() || saving}
-              className="px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
-            >
+            </Button>
+            <Button size="sm" type="submit" data-testid="tasks-edit-save" disabled={!title.trim() || saving}>
               {saving ? 'Saving…' : todo ? 'Save changes' : 'Create task'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>
