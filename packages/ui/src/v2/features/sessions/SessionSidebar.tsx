@@ -20,6 +20,9 @@ import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/pro
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { useProjects } from '@/features/sessions/use-projects';
+import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
+import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
+import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts';
@@ -42,12 +45,35 @@ import { useRemoveProject } from './use-remove-project';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
+  const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
+  const openAutomations = useAutomationsNav((s) => s.openHost);
+  const openSettings = useSettingsStore((s) => s.open);
+
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Button variant="ghost" size="icon-sm" data-testid="sidebar-workflows" title="Workflows">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="relative"
+        data-testid="sidebar-workflows"
+        title="Workflows"
+        onClick={openAutomations}
+      >
         <ZapIcon />
+        {pendingAutomations > 0 && (
+          <span
+            data-testid="sidebar-workflows-pending"
+            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
+          />
+        )}
       </Button>
-      <Button variant="ghost" size="icon-sm" data-testid="sidebar-settings" title="Settings">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        data-testid="sidebar-settings"
+        title="Settings · ⌘,"
+        onClick={() => openSettings()}
+      >
         <SettingsIcon />
       </Button>
     </div>
