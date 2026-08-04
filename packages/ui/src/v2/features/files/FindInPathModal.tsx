@@ -43,6 +43,7 @@ export function FindInPathModal() {
   const [query, setQuery] = useState('');
   const [includeIgnored, setIncludeIgnored] = useState(false);
   const [results, setResults] = useState<SearchContentResult[]>([]);
+  const [selected, setSelected] = useState('');
   const [error, setError] = useState<string | null>(null);
   const debounced = useDebounce(query, 300);
 
@@ -100,6 +101,13 @@ export function FindInPathModal() {
     setFindInPath(null);
   }
 
+  // Controlled selection: results land async, after cmdk's own
+  // select-first-on-search tick (see FilePickerDialog).
+  useEffect(() => {
+    const keys = results.map((r) => `${r.file}:${r.line}:${r.column}`);
+    if (keys.length > 0 && !keys.includes(selected)) setSelected(keys[0]!);
+  }, [results, selected]);
+
   const showHint = query.trim().length === 1;
   const showIdle = query.trim().length === 0;
   const showEmpty = debounced.trim().length >= 2 && results.length === 0 && error == null && !showHint && !showIdle;
@@ -131,7 +139,7 @@ export function FindInPathModal() {
           )}
         </DialogHeader>
 
-        <Command shouldFilter={false} loop>
+        <Command shouldFilter={false} value={selected} onValueChange={setSelected}>
           <CommandInput
             autoFocus
             data-testid="find-in-path-input"

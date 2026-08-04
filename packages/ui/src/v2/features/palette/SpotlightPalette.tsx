@@ -7,7 +7,7 @@
  * `shouldFilter={false}` and only contributes the input, listbox semantics and
  * keyboard navigation the v1 version hand-rolled.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { Badge } from '@v2/components/ui/badge';
 import {
@@ -73,13 +73,20 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     switchToThread: (id) => runtime.threads.switchToThread(id),
   });
 
+  // Controlled selection: rows land async, after cmdk's own
+  // select-first-on-search tick (see FilePickerDialog).
+  const [selected, setSelected] = useState('');
+  useEffect(() => {
+    if (rows.length > 0 && !rows.some((r) => r.id === selected)) setSelected(rows[0]!.id);
+  }, [rows, selected]);
+
   const confirm = (row: SpotlightRow) => {
     row.run();
     onClose();
   };
 
   return (
-    <Command shouldFilter={false} loop data-testid="search-palette">
+    <Command shouldFilter={false} value={selected} onValueChange={setSelected} data-testid="search-palette">
       <CommandInput
         autoFocus
         data-testid="search-palette-input"
