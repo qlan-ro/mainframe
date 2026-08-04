@@ -78,6 +78,8 @@ interface RowBodyProps {
   projectName?: string;
   showPinGlyph: boolean;
   renameSlot: React.ReactNode | null;
+  /** The hover action cluster, revealed inline just before the time. */
+  actionsSlot: React.ReactNode;
 }
 
 /**
@@ -85,18 +87,13 @@ interface RowBodyProps {
  * The status glyph stays a sibling of the whole stack rather than of the title,
  * so the button's own `items-center` centres it across both lines.
  */
-function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot }: RowBodyProps) {
+function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, actionsSlot }: RowBodyProps) {
   const { custom } = item;
   return (
     <>
       <StatusDot badge={badge} adapterId={custom.adapterId} />
-      {/* gap-1: the two lines butted together, and on hover the action cluster
-          overlapping line one left the meta glyphs sitting right under it. */}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        {/* Reserves the action cluster's width so it never lands on the title.
-            Focus-within as well as hover: stock reveals the actions on both, and
-            the row would otherwise paint the time underneath them. */}
-        <span className="flex items-center gap-1.5 transition-[padding] group-focus-within/menu-item:pr-14 group-hover/menu-item:pr-14">
+        <span className="flex items-center gap-1.5">
           {renameSlot ?? (
             // No tooltip on the title: the hover card already carries it in full.
             <span
@@ -107,10 +104,12 @@ function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot }
             </span>
           )}
           {showPinGlyph && <PinIcon data-testid="sessions-row-pin-glyph" className="size-3! shrink-0 text-primary" />}
-          {/* The time yields to the hover actions — the same slot, not a second column. */}
+          {/* Actions sit in front of the time, which stays put — the truncating
+              title is the only thing that gives way on hover. */}
+          {actionsSlot}
           <span
             data-testid="sessions-row-relative-time"
-            className="shrink-0 text-xs tabular-nums text-muted-foreground transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0"
+            className="shrink-0 text-xs tabular-nums text-muted-foreground"
           >
             {formatCompactTime(custom.updatedAt, Date.now())}
           </span>
@@ -141,6 +140,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   const itemRuntime = useThreadListItemRuntime();
   const unreadIds = useUnreadStore((s) => s.unread);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const actions = useRowActions(item);
   // Captured on right-click so the menu's Tags action anchors the popover at the
   // cursor rather than at the host's default (0,0).
@@ -175,15 +175,16 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
           onContextMenu={(e) => {
             menuPoint.current = { x: e.clientX, y: e.clientY };
           }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
         >
           <HoverCard openDelay={500} closeDelay={60}>
             <HoverCardTrigger asChild>
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton
                   size="sm"
-                  // The reserve the variants add for an overlaid action would be
-                  // spent twice: the meta cluster is in flow and fades out under
-                  // the actions, so the gutter is already there.
+                  // pr-2!: the variants reserve a gutter for an overlaid
+                  // SidebarMenuAction, but the actions render inline now.
                   className={cn(ROW_INDENT, 'h-auto py-1 pr-2! group-data-active/menu-item:bg-sidebar-selection')}
                 >
                   <RowBody
@@ -192,6 +193,17 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                     colorOf={colorOf}
                     projectName={projectName}
                     showPinGlyph={custom.pinned && !inPinnedGroup}
+                    actionsSlot={
+                      hovered ? (
+                        <RowHoverActions
+                          pinned={custom.pinned}
+                          onPin={actions.onPin}
+                          onUnpin={actions.onUnpin}
+                          onTags={actions.onTags}
+                          onArchive={actions.onArchive}
+                        />
+                      ) : null
+                    }
                     renameSlot={
                       isRenaming ? (
                         <SessionRowRename
@@ -223,13 +235,6 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
               />
             </HoverCardContent>
           </HoverCard>
-          <RowHoverActions
-            pinned={custom.pinned}
-            onPin={actions.onPin}
-            onUnpin={actions.onUnpin}
-            onTags={actions.onTags}
-            onArchive={actions.onArchive}
-          />
         </SidebarMenuItem>
       </ThreadListItemPrimitive.Root>
     </SessionContextMenu>

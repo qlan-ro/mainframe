@@ -1,16 +1,25 @@
 /**
- * Pin / tag / archive, revealed on row hover.
+ * Pin / tag / archive, revealed on row hover — inline in the title line, just
+ * before the timestamp.
  *
- * Three `SidebarMenuAction`s rather than one "more" menu: these are the primary
- * entry points (the pin glyph on a pinned row is an indicator, not a button),
- * and stock's reveal — opacity driven by `group/menu-item` — is exactly the
- * hand-rolled `group-hover:flex` this replaces. The primitive parks itself at
- * `right-1`, so stacking three only takes a right offset per slot; each is
- * `w-5`, so the rungs sit flush at 4/24/44px and read as one cluster.
+ * Inline rather than the stock `SidebarMenuAction` overlay: parked over the
+ * time slot, the cluster needed a padding reserve on the title and an opacity
+ * fade on the time, and sweeping the pointer down the list animated both on
+ * every row.
+ *
+ * The row MOUNTS this from its own hover state rather than toggling it with a
+ * CSS `group-hover` display flip: a display flip leaves an open Hint tooltip
+ * anchored to a zero-rect element the instant the pointer leaves the row, and
+ * Radix parks orphaned content at the window's top-left. Unmounting the
+ * cluster takes the tooltip down with its trigger.
+ *
+ * The cluster lives INSIDE the row's `<button>`, so these are `role="button"`
+ * spans, deliberately unfocusable — a nested `<button>` is invalid HTML, and a
+ * focusable child would drag the row through focus-within states on every
+ * sweep. Keyboard access to the same actions is the row's context menu.
  */
-import type { MouseEvent } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { ArchiveIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
-import { SidebarMenuAction } from '@v2/components/ui/sidebar';
 import { Hint } from '@v2/components/ui/hint';
 
 interface RowHoverActionsProps {
@@ -28,43 +37,56 @@ const stop = (fn: () => void) => (e: MouseEvent) => {
   fn();
 };
 
+function ActionGlyph({
+  label,
+  testId,
+  onClick,
+  children,
+}: {
+  label: string;
+  testId: string;
+  onClick: (e: MouseEvent<HTMLSpanElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Hint label={label}>
+      <span
+        role="button"
+        aria-label={label}
+        data-testid={testId}
+        onClick={onClick}
+        className="flex size-4.5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-3.5 [&>svg]:shrink-0"
+      >
+        {children}
+      </span>
+    </Hint>
+  );
+}
+
 export function RowHoverActions({ pinned, onPin, onUnpin, onTags, onArchive }: RowHoverActionsProps) {
   return (
-    <>
-      <Hint label="Archive">
-        <SidebarMenuAction
-          showOnHover
-          data-testid="sessions-row-action-archive"
-          className="right-1"
-          onClick={stop(onArchive)}
-        >
-          <ArchiveIcon />
-        </SidebarMenuAction>
-      </Hint>
-      <Hint label="Tags">
-        <SidebarMenuAction
-          showOnHover
-          data-testid="sessions-row-action-tags"
-          className="right-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onTags(e.currentTarget.getBoundingClientRect());
-          }}
-        >
-          <TagIcon />
-        </SidebarMenuAction>
-      </Hint>
-      <Hint label={pinned ? 'Unpin' : 'Pin'}>
-        <SidebarMenuAction
-          showOnHover
-          data-testid="sessions-row-action-pin"
-          className="right-11"
-          onClick={stop(pinned ? onUnpin : onPin)}
-        >
-          {pinned ? <PinOffIcon /> : <PinIcon />}
-        </SidebarMenuAction>
-      </Hint>
-    </>
+    <span className="flex shrink-0 items-center gap-0.5">
+      <ActionGlyph
+        label={pinned ? 'Unpin' : 'Pin'}
+        testId="sessions-row-action-pin"
+        onClick={stop(pinned ? onUnpin : onPin)}
+      >
+        {pinned ? <PinOffIcon /> : <PinIcon />}
+      </ActionGlyph>
+      <ActionGlyph
+        label="Tags"
+        testId="sessions-row-action-tags"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onTags(e.currentTarget.getBoundingClientRect());
+        }}
+      >
+        <TagIcon />
+      </ActionGlyph>
+      <ActionGlyph label="Archive" testId="sessions-row-action-archive" onClick={stop(onArchive)}>
+        <ArchiveIcon />
+      </ActionGlyph>
+    </span>
   );
 }
