@@ -13,7 +13,7 @@
  */
 import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog } from '@v2/components/ui/dialog';
 import { LightboxSurface } from './LightboxSurface';
 
 export interface LightboxImage {
@@ -58,48 +58,50 @@ export function ImageLightbox({ images, index, onIndexChange }: ImageLightboxPro
     // `index` drives `go`; re-bind when it (or the set) changes.
   }, [open, hasNav, index, images.length]);
 
-  if (index === null) return null;
-  const current = images[index];
-  if (!current) return null;
+  // Rendered closed rather than early-returning null: unmounting a Radix
+  // modal while it is still open leaves `pointer-events: none` on <body>.
+  const current = index !== null ? images[index] : undefined;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onIndexChange(null)}>
-      <LightboxSurface
-        testId="image-lightbox-dialog"
-        imageTestId="image-lightbox-current"
-        src={current.src}
-        alt={current.alt}
-        onDismiss={() => onIndexChange(null)}
-      >
-        {hasNav && (
-          <>
-            <button
-              type="button"
-              data-testid="image-lightbox-prev"
-              aria-label="Previous image"
-              onClick={() => go(-1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronLeft size={20} aria-hidden />
-            </button>
-            <button
-              type="button"
-              data-testid="image-lightbox-next"
-              aria-label="Next image"
-              onClick={() => go(1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronRight size={20} aria-hidden />
-            </button>
-            <div
-              data-testid="image-lightbox-counter"
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-1 text-caption font-medium text-white"
-            >
-              {index + 1} / {images.length}
-            </div>
-          </>
-        )}
-      </LightboxSurface>
+    <Dialog open={open && current != null} onOpenChange={(o) => !o && onIndexChange(null)}>
+      {current && (
+        <LightboxSurface
+          testId="image-lightbox-dialog"
+          imageTestId="image-lightbox-current"
+          src={current.src}
+          alt={current.alt}
+          onDismiss={() => onIndexChange(null)}
+        >
+          {hasNav && (
+            <>
+              <button
+                type="button"
+                data-testid="image-lightbox-prev"
+                aria-label="Previous image"
+                onClick={() => go(-1)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronLeft size={20} aria-hidden />
+              </button>
+              <button
+                type="button"
+                data-testid="image-lightbox-next"
+                aria-label="Next image"
+                onClick={() => go(1)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronRight size={20} aria-hidden />
+              </button>
+              <div
+                data-testid="image-lightbox-counter"
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white"
+              >
+                {(index ?? 0) + 1} / {images.length}
+              </div>
+            </>
+          )}
+        </LightboxSurface>
+      )}
     </Dialog>
   );
 }

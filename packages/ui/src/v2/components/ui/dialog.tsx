@@ -49,7 +49,9 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm">
+            {/* Stable testid: the e2e suite and several unit tests address the
+                built-in close of whatever dialog is open. */}
+            <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" data-testid="dialog-close">
               <XIcon />
               <span className="sr-only">Close</span>
             </Button>

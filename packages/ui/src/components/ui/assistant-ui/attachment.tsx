@@ -5,7 +5,7 @@ import { AtSignIcon, XIcon, Paperclip, FileText } from 'lucide-react';
 import { AttachmentPrimitive, ComposerPrimitive, MessagePrimitive, useAuiState, useAui } from '@assistant-ui/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Dialog, DialogTitle, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogTitle, DialogContent, DialogTrigger } from '@v2/components/ui/dialog';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { TooltipIconButton } from '@/components/ui/assistant-ui/tooltip-icon-button';
 import { cn } from '@/lib/utils';
