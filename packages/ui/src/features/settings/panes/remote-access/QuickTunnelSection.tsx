@@ -16,7 +16,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
   }, [tunnel]);
 
   return (
-    <div data-testid="settings-remote-access-quick-tunnel-section" className="space-y-3">
+    <div data-testid="settings-remote-access-quick-tunnel-section" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div>
           <Label className="text-xs font-medium text-muted-foreground">Quick Tunnel</Label>
@@ -33,7 +33,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
-              <RotateCw size={12} className="animate-spin" />
+              <RotateCw className="animate-spin" />
               {tunnel.togglingAction === 'stop' ? 'Stopping...' : 'Starting...'}
             </span>
           ) : tunnel.running ? (

@@ -145,7 +145,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+        <div className="px-4 py-3 gap-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
           <ToggleGroup
             type="single"
@@ -176,7 +176,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
           />
 
           {/* Body */}
-          <div className="space-y-1">
+          <div className="flex flex-col gap-1">
             <Textarea
               data-testid="tasks-quick-body"
               value={body}

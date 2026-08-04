@@ -8,6 +8,7 @@
  * onMessageChange / onCommit / onCancel.
  */
 import { Check, TriangleAlert } from 'lucide-react';
+import { Alert, AlertDescription } from '@v2/components/ui/alert';
 import { Button } from '@v2/components/ui/button';
 import { Textarea } from '@v2/components/ui/textarea';
 
@@ -84,15 +85,15 @@ export function ReviewCommitRail({
           </div>
 
           {unviewedCount > 0 && (
-            <div
+            <Alert
               data-testid="review-commit-unviewed-warning"
-              className="mb-3 flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2"
+              className="mb-3 border-warning/30 bg-warning/10 px-2.5 py-2"
             >
-              <TriangleAlert size={14} className="mt-px shrink-0 text-warning" aria-hidden />
-              <span className="text-xs leading-snug text-foreground">
+              <TriangleAlert className="text-warning" aria-hidden />
+              <AlertDescription className="text-xs leading-snug text-foreground">
                 {unviewedCount} {unviewedCount === 1 ? 'file' : 'files'} not yet reviewed.
-              </span>
-            </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           {error && (

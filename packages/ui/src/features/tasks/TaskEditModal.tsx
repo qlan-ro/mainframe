@@ -166,7 +166,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
+          <div className="p-4 gap-3 overflow-y-auto flex-1 min-h-0">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="tasks-edit-title" className="text-muted-foreground">
                 Title *

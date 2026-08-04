@@ -57,7 +57,7 @@ export function NamedTunnelSection({
   }, [tunnel, savedUrl]);
 
   return (
-    <div data-testid="settings-remote-access-named-tunnel-section" className="space-y-3">
+    <div data-testid="settings-remote-access-named-tunnel-section" className="flex flex-col gap-3">
       <div>
         <Label className="text-xs font-medium text-muted-foreground">Named Tunnel</Label>
         <p className="text-xs text-muted-foreground mt-0.5">Use a Cloudflare connector token for a persistent URL.</p>
@@ -100,10 +100,10 @@ function NamedTunnelConfigured({
   onClear: () => void;
 }): React.ReactElement {
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       {tunnel.state === 'idle' || tunnel.state === 'error' ? (
         <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
-          <span className="w-2 h-2 rounded-full bg-muted-foreground shrink-0" />
+          <span className="size-2 rounded-full bg-muted-foreground shrink-0" />
           <code className="text-xs text-muted-foreground truncate flex-1">{savedUrl}</code>
           <span className="text-xs text-muted-foreground shrink-0">
             {tunnel.state === 'error' ? 'Stopped (error)' : 'Stopped'}
@@ -124,7 +124,7 @@ function NamedTunnelConfigured({
         >
           {tunnel.togglingAction ? (
             <span className="flex items-center gap-1.5">
-              <RotateCw size={12} className="animate-spin" />
+              <RotateCw className="animate-spin" />
               {tunnel.togglingAction === 'stop' ? 'Stopping...' : 'Starting...'}
             </span>
           ) : tunnel.running ? (
@@ -166,7 +166,7 @@ function NamedTunnelSetup({
   onSave: () => void;
 }): React.ReactElement {
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <Input
         data-testid="named-tunnel-token-input"
         type="password"
@@ -192,7 +192,7 @@ function NamedTunnelSetup({
       >
         {togglingStart ? (
           <span className="flex items-center gap-1.5">
-            <RotateCw size={12} className="animate-spin" />
+            <RotateCw className="animate-spin" />
             Saving...
           </span>
         ) : (

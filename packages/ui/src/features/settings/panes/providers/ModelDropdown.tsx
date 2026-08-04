@@ -33,7 +33,7 @@ export function ModelDropdown({ adapterId, value, options, onChange }: ModelDrop
   const selected = options.find((o) => o.id === value);
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-muted-foreground">Default Model</Label>
       <DropdownMenu>
         <RowWithTooltip option={selected ?? { id: value, label: value }}>

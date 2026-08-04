@@ -45,7 +45,7 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
   );
 
   return (
-    <div data-testid="settings-remote-access-devices-section" className="space-y-3">
+    <div data-testid="settings-remote-access-devices-section" className="flex flex-col gap-3">
       <div>
         <Label className="text-xs font-medium text-muted-foreground">Paired Devices</Label>
       </div>
@@ -58,7 +58,7 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
       ) : devices.length === 0 ? (
         <p className="text-xs text-muted-foreground">No paired devices.</p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-1.5">
           {devices.map((device) => (
             <DeviceRow key={device.deviceId} device={device} onRemove={handleRemove} />
           ))}

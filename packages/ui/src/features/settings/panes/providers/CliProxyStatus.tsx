@@ -31,7 +31,7 @@ export function CliProxyStatus({ adapterId, models, config, onChange }: CliProxy
   const detected = proxyModels.length > 0;
 
   return (
-    <div data-testid={`settings-${adapterId}-cliproxy`} className="space-y-1.5">
+    <div data-testid={`settings-${adapterId}-cliproxy`} className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{CLIPROXY_GROUP}</span>
       <div className="flex items-center gap-1.5">
         <span className={cn('size-1.5 rounded-full', detected ? 'bg-success' : 'bg-muted-foreground')} />
@@ -46,7 +46,7 @@ export function CliProxyStatus({ adapterId, models, config, onChange }: CliProxy
       </p>
 
       {detected && (
-        <label className="block space-y-1.5 pt-1.5">
+        <label className="flex flex-col gap-1.5 pt-1.5">
           <span className="text-xs font-medium text-muted-foreground">Background model</span>
           <Select
             value={config.cliproxySmallFastModel ?? AUTO}

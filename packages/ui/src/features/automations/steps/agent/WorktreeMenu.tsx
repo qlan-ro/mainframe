@@ -51,7 +51,7 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
         data-testid={`${testId}-worktree-menu`}
         align="start"
         sideOffset={6}
-        className="w-72 space-y-2.5 p-3"
+        className="w-72 flex flex-col gap-2.5 p-3"
       >
         <label className="flex items-center gap-2.5">
           <Switch
@@ -63,7 +63,7 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
         </label>
 
         {worktree && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <TriggerTextField
               value={branchName}
               onChange={(next) => onChange({ worktree: { ...worktree, branchName: textToChipText(next) } })}

@@ -97,9 +97,9 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
   const modelOptions = buildModelOptions(adapter);
 
   return (
-    <div data-testid={`settings-pane-provider-${adapterId}`} className="space-y-4">
+    <div data-testid={`settings-pane-provider-${adapterId}`} className="flex flex-col gap-4">
       {/* Executable path — commits on blur to avoid one PUT per keystroke */}
-      <div className="space-y-1.5">
+      <div className="flex flex-col gap-1.5">
         <Label className="text-xs font-medium text-muted-foreground">Executable Path</Label>
         <Input
           data-testid={`settings-${adapterId}-executable-path-input`}
@@ -158,7 +158,7 @@ function ProviderToggles({
   update: (partial: ProviderConfigUpdate) => void;
 }) {
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1">
       <label className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors">
         <Checkbox
           data-testid={`settings-${adapterId}-system-prompt-toggle`}

@@ -39,12 +39,12 @@ export function ActivePortTunnelsSection({ port }: ActivePortTunnelsSectionProps
   if (tunnels.length === 0) return null;
 
   return (
-    <div data-testid="settings-remote-access-port-tunnels-section" className="space-y-3">
+    <div data-testid="settings-remote-access-port-tunnels-section" className="flex flex-col gap-3">
       <div>
         <Label className="text-xs font-medium text-muted-foreground">Active Port Tunnels</Label>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="flex flex-col gap-1.5">
         {tunnels.map((tunnel) => (
           <PortTunnelRow key={tunnel.port} tunnel={tunnel} onStop={handleStop} />
         ))}

@@ -47,9 +47,9 @@ interface CodexTuningDefaultsProps {
 /** Codex-specific tuning: personality (model-gated) and reasoning summary (always). */
 export function CodexTuningDefaults({ adapterId, model, config, onChange }: CodexTuningDefaultsProps) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {model?.supportsPersonality && (
-        <label className="block space-y-1.5">
+        <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Personality</span>
           <SelectField
             testId={`settings-${adapterId}-personality`}
@@ -59,7 +59,7 @@ export function CodexTuningDefaults({ adapterId, model, config, onChange }: Code
           />
         </label>
       )}
-      <label className="block space-y-1.5">
+      <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">Reasoning Summary</span>
         <SelectField
           testId={`settings-${adapterId}-reasoning-summary`}

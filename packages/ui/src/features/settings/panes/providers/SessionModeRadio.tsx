@@ -12,7 +12,7 @@ interface SessionModeRadioProps {
 /** Three-option radio group for the provider's default session mode. */
 export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRadioProps) {
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-1.5">
       <Label className="text-xs font-medium text-muted-foreground">Default Session Mode</Label>
       <RadioGroup
         value={config.defaultMode ?? 'default'}

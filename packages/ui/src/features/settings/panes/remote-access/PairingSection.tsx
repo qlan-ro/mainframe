@@ -60,7 +60,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
   const seconds = Math.floor((remaining % 60000) / 1000);
 
   return (
-    <div data-testid="settings-remote-access-pairing-section" className="space-y-3">
+    <div data-testid="settings-remote-access-pairing-section" className="flex flex-col gap-3">
       <div>
         <Label className="text-xs font-medium text-muted-foreground">Mobile Pairing</Label>
         <p className="text-xs text-muted-foreground mt-0.5">Generate a code to pair a mobile device.</p>
@@ -78,7 +78,7 @@ export function PairingSection({ port }: PairingSectionProps): React.ReactElemen
         <Button size="sm" data-testid="pairing-generate-code" onClick={handleGenerate} disabled={generating}>
           {generating ? (
             <span className="flex items-center gap-1.5">
-              <RotateCw size={12} className="animate-spin" />
+              <RotateCw className="animate-spin" />
               Generating...
             </span>
           ) : (
@@ -104,7 +104,7 @@ function PairingCodeDisplay({
   onGenerate: () => void;
 }): React.ReactElement {
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <div className="flex items-center justify-center gap-3 p-4 bg-card border border-border rounded-md">
         <span className="text-2xl font-mono font-bold text-foreground" style={{ letterSpacing: '0.3em' }}>
           {code}

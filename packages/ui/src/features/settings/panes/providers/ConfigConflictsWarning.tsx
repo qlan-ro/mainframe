@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@v2/components/ui/alert';
 
 interface ConfigConflictsWarningProps {
   conflicts: string[];
@@ -10,15 +11,12 @@ export function ConfigConflictsWarning({ conflicts }: ConfigConflictsWarningProp
   if (conflicts.length === 0) return null;
 
   return (
-    <div
-      data-testid="settings-config-conflicts-warning"
-      className="flex items-start gap-2 px-3 py-2 rounded-md bg-warning/10 border border-warning/30"
-    >
-      <AlertTriangle size={14} className="text-warning shrink-0 mt-0.5" />
-      <p className="text-xs text-foreground">
+    <Alert data-testid="settings-config-conflicts-warning" className="border-warning/30 bg-warning/10">
+      <AlertTriangle className="text-warning" />
+      <AlertDescription className="text-xs text-foreground">
         Claude Code settings.json defines {conflicts.join(', ')}. Mainframe flags will take precedence when launching
         sessions.
-      </p>
-    </div>
+      </AlertDescription>
+    </Alert>
   );
 }

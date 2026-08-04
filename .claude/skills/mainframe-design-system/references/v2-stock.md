@@ -120,6 +120,38 @@ Two Radix rules every dialog outlet must follow (both bit during this pass):
 - **Bridge-resolving buttons `preventDefault()`** the built-in close, or `onOpenChange` fires
   after the click and resolves the bridge a second time.
 
+**Dialog BODIES are converted too** (2026-08-04 sweep — "not just a chrome pass"):
+tasks family, setup advisor, review columns, all five settings panes, and the automations
+workspace all run on v2 primitives (Input/Textarea/Label/Checkbox/Switch/Select/RadioGroup/
+Tabs/Toggle/ToggleGroup/Badge/Alert/Hint/Button). New stock primitives added for it: `tabs`,
+`toggle`, `toggle-group`, `switch`, `radio-group`, `alert`. Conventions that came out of it:
+
+- **Segmented one-of-N switches are `Tabs` (List+Trigger only, no TabsContent)** — TasksBoard
+  List/Board, automations `SegmentedControl`, ActionCatalog source filter, setup-advisor
+  category tabs. In tests Radix `TabsTrigger` activates on **mouse-down, not click** — use
+  `fireEvent.mouseDown`. `ToggleGroup type="single"` is for option sets in forms (appearance,
+  update channel, quick-task type/priority); guard `if (v) onChange(v)` against deselection.
+- **Radix Select can't hold `value=""`** — null-ish choices need a sentinel (`__auto__`,
+  `__inherit__`). In jsdom, drive it with `fireEvent.click(trigger)` then click the item
+  (setup.ts already shims `hasPointerCapture`/`scrollIntoView`).
+- **v2 `Hint`/`Tooltip` need the app-root `TooltipProvider`** (SidebarProvider mounts it);
+  unit tests rendering a Hint-bearing component bare must wrap in `@v2` `TooltipProvider` —
+  the v1 one is a different context and won't satisfy it. `Hint` keeps v1's empty-label guard.
+- **Warning callouts are `Alert` + `border-warning/30 bg-warning/10`** (config conflicts,
+  unviewed-files). Chromeless inline inputs stay raw by design: editor title/description,
+  chip-draft inputs (OptionsEditor/ConditionRow), menu search fields.
+- **Domain palettes stay in the bridge deliberately**: `mf-diff-*` + amber `mf-warning`
+  (git/diff family, lives with CmDiffEditor) and `mf-auto-*`/`mf-accent-violet` (automation
+  step-kind colors). Generic tokens all map: success, warning, sidebar-selection,
+  muted-foreground; `mf-border-hover` → `input`; `mf-content2` → `card`.
+- **shadcn-skill sweep applied** (`.claude/skills/shadcn/rules/`): no `space-y-*` (flex+gap),
+  `size-*` for equal dims, no size props on icons inside `Button` (the `[&_svg]` rule sizes
+  them), semantic tokens only.
+- **WKWebView + hidden window wedges Radix exit animations**: with `document.hidden`, the
+  0.1s `exit` animation never starts (`pending: true`), so a closed dialog stays mounted at
+  `data-state="closed"` until the window is visible again. Environmental, not a bug — don't
+  chase it as a close-handler regression; check `document.hidden` first.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:

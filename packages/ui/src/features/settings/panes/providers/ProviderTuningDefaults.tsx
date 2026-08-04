@@ -24,9 +24,9 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {efforts.length > 0 && (
-        <label className="block space-y-1.5">
+        <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Default Effort</span>
           <Select
             value={config.defaultEffort ?? INHERIT}
