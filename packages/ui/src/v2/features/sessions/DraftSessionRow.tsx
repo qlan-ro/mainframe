@@ -18,7 +18,7 @@ import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { ProjectAvatar } from './ProjectAvatar';
 
 /** Level 2 — the same rung as the session rows it sits above. */
-const ROW_INDENT = 'pl-8';
+const ROW_INDENT = 'pl-2';
 
 interface DraftSessionRowProps {
   projectId: string;

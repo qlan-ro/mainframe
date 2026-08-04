@@ -6,6 +6,14 @@ export const SIDEBAR_WIDTH = '16rem';
 export const SIDEBAR_WIDTH_ICON = '3rem';
 export const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
+/** Below the floor the two-line rows truncate to nothing; above the ceiling the panel stops being chrome. */
+export const SIDEBAR_MIN_WIDTH = 208;
+export const SIDEBAR_MAX_WIDTH = 480;
+
+export function clampSidebarWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
+
 export type SidebarState = 'expanded' | 'collapsed';
 
 interface SidebarContextValue {
@@ -13,6 +21,12 @@ interface SidebarContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  /** Null until dragged — the panel sits at the `SIDEBAR_WIDTH` default. */
+  width: number | null;
+  setWidth: (width: number) => void;
+  /** True mid-drag, so the panel can drop its width transition and track the pointer. */
+  resizing: boolean;
+  setResizing: (resizing: boolean) => void;
 }
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
@@ -47,6 +61,9 @@ export function SidebarProvider({
 }: SidebarProviderProps) {
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
   const open = openProp ?? internalOpen;
+  const [width, setWidthState] = React.useState<number | null>(null);
+  const [resizing, setResizing] = React.useState(false);
+  const setWidth = React.useCallback((value: number) => setWidthState(clampSidebarWidth(value)), []);
 
   const setOpen = React.useCallback(
     (value: boolean) => {
@@ -70,8 +87,17 @@ export function SidebarProvider({
   }, [toggleSidebar]);
 
   const value = React.useMemo<SidebarContextValue>(
-    () => ({ state: open ? 'expanded' : 'collapsed', open, setOpen, toggleSidebar }),
-    [open, setOpen, toggleSidebar],
+    () => ({
+      state: open ? 'expanded' : 'collapsed',
+      open,
+      setOpen,
+      toggleSidebar,
+      width,
+      setWidth,
+      resizing,
+      setResizing,
+    }),
+    [open, setOpen, toggleSidebar, width, setWidth, resizing],
   );
 
   return (
@@ -81,7 +107,7 @@ export function SidebarProvider({
           data-slot="sidebar-wrapper"
           style={
             {
-              '--sidebar-width': SIDEBAR_WIDTH,
+              '--sidebar-width': width == null ? SIDEBAR_WIDTH : `${width}px`,
               '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
               ...style,
             } as React.CSSProperties

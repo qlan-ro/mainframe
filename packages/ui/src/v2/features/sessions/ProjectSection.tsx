@@ -7,7 +7,7 @@
  * plain count — no width measurement.
  */
 import { useState } from 'react';
-import { ChevronRightIcon, LayoutGridIcon } from 'lucide-react';
+import { LayoutGridIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
 import {
@@ -45,13 +45,13 @@ export function ProjectSection({ projects, attention, activeId, onSelect, onRemo
   const totalAttention = Object.values(attention).reduce((a, b) => a + b, 0);
 
   return (
-    <Collapsible open={open} onOpenChange={() => toggleSection('projects')} className="group/projects">
-      <SidebarGroup className="py-0">
+    <Collapsible open={open} onOpenChange={() => toggleSection('projects')}>
+      {/* p-0: this section lives in SidebarHeader, which already supplies the 8px
+          inset. Keeping the group's own padding would double it and push the
+          switcher a rung deeper than every label below it. */}
+      <SidebarGroup className="p-0">
         <SidebarGroupLabel asChild className="pl-2">
-          <CollapsibleTrigger data-testid="sidebar-projects-toggle">
-            <ChevronRightIcon className="transition-transform group-data-open/projects:rotate-90" />
-            Projects
-          </CollapsibleTrigger>
+          <CollapsibleTrigger data-testid="sidebar-projects-toggle">Projects</CollapsibleTrigger>
         </SidebarGroupLabel>
         {/* "Add project" is missing on purpose: it needs the directory-picker
             overlay, which lands with the other root-mounted dialogs. */}

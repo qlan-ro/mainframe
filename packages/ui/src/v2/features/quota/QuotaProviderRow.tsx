@@ -1,7 +1,10 @@
 /**
  * One collapsed provider row inside the quota section. Renders that provider's
- * tightest window (ring + % + relative reset) and opens a side="top" popover
- * with every window on click.
+ * tightest window (ring + % + relative reset) and opens its detail on click.
+ *
+ * Placed to the right like the session row's hover card: every "more about this
+ * row" surface in the panel comes out of the same edge, so the eye learns one
+ * place to look.
  */
 import { useState } from 'react';
 import type { ProviderQuota } from '@qlan-ro/mainframe-types';
@@ -18,10 +21,11 @@ import { ProviderLogo } from '../shared/ProviderLogo';
 import { QuotaPopover } from './QuotaPopover';
 import { QuotaRing, QuotaUnknownRing } from './QuotaRing';
 
-/** Only the red band gets its own ink — the preset carries no amber. */
+/** Only the red band gets its own ink — the preset carries no amber, and the
+ *  panel has no full-strength ink left for a number to spend. */
 const PERCENT_TEXT: Record<QuotaSeverity, string> = {
-  normal: 'text-foreground',
-  amber: 'text-foreground',
+  normal: 'text-muted-foreground',
+  amber: 'text-muted-foreground',
   red: 'text-destructive',
 };
 
@@ -58,11 +62,8 @@ export function QuotaProviderRow({
           data-active={open}
           aria-label={rowAriaLabel(label, quota, now)}
         >
-          {row.state === 'ok' ? (
-            <QuotaRing usedPercent={row.usedPercent} severity={row.severity} />
-          ) : (
-            <QuotaUnknownRing />
-          )}
+          {/* The provider mark leads, not the ring: a thin donut reads as blank
+              space, which left the row looking indented against the switcher. */}
           <ProviderLogo
             adapterId={providerId}
             testId={`provider-quota-glyph-${providerId}`}
@@ -73,20 +74,22 @@ export function QuotaProviderRow({
           </span>
           {row.state === 'ok' ? (
             <>
+              <QuotaRing usedPercent={row.usedPercent} severity={row.severity} />
               <span className={cn('font-semibold tabular-nums', PERCENT_TEXT[row.severity])}>
                 {formatUsedPercent(row.usedPercent)}%
               </span>
-              <span className="w-10 text-right text-[10px] text-muted-foreground">{rel ?? '—'}</span>
+              <span className="w-10 text-right text-xs text-muted-foreground">{rel ?? '—'}</span>
             </>
           ) : (
             <>
+              <QuotaUnknownRing />
               <span className="font-semibold text-muted-foreground">?</span>
-              <span className="w-10 text-right text-[10px] text-muted-foreground">—</span>
+              <span className="w-10 text-right text-xs text-muted-foreground">—</span>
             </>
           )}
         </SidebarMenuButton>
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-auto p-0">
+      <PopoverContent side="right" align="start" className="w-auto p-0">
         <QuotaPopover providerId={providerId} label={label} quota={quota} now={now} />
       </PopoverContent>
     </Popover>

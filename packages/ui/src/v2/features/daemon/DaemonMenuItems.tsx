@@ -44,12 +44,12 @@ function DaemonItemContent({ d, status, active }: { d: DaemonMeta; status: Daemo
         <span className="flex items-center gap-1.5">
           <span className={cn('truncate', active && 'font-semibold')}>{d.label}</span>
           {d.kind === 'local' && (
-            <Badge variant="outline" className="shrink-0 px-1 py-0 text-[10px]">
+            <Badge variant="outline" className="shrink-0 px-1 py-0 text-xs">
               Local
             </Badge>
           )}
         </span>
-        {d.host && <span className="truncate font-mono text-[10px] text-muted-foreground">{d.host}</span>}
+        {d.host && <span className="truncate font-mono text-xs text-muted-foreground">{d.host}</span>}
       </span>
       <span data-testid={`daemon-row-${d.id}-dot`} className="flex shrink-0 items-center">
         <ConnDot status={status} />

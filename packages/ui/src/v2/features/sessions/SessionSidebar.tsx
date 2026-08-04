@@ -8,24 +8,17 @@
  */
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { PanelLeftIcon, SearchIcon, SettingsIcon, ZapIcon } from 'lucide-react';
+import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
+import { SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarInput,
-  SidebarRail,
-  SidebarSeparator,
-  useSidebar,
-} from '@v2/components/ui/sidebar';
+import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail } from '@v2/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { attentionCount } from '@/features/sessions/view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
+import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
@@ -33,8 +26,9 @@ import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
+import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
-import { QuotaSection } from '../quota/QuotaSection';
+import { QuotaFooter } from '../quota/QuotaFooter';
 import { TasksSidebarSection } from '../tasks/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
@@ -45,24 +39,13 @@ import { useRemoveProject } from './use-remove-project';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
-  const { toggleSidebar } = useSidebar();
-
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 text-muted-foreground">
       <Button variant="ghost" size="icon-sm" data-testid="sidebar-workflows" title="Workflows">
         <ZapIcon />
       </Button>
       <Button variant="ghost" size="icon-sm" data-testid="sidebar-settings" title="Settings">
         <SettingsIcon />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-testid="sidebar-collapse"
-        title="Collapse sidebar"
-        onClick={toggleSidebar}
-      >
-        <PanelLeftIcon />
       </Button>
     </div>
   );
@@ -108,25 +91,20 @@ export function SessionSidebar({ className }: { className?: string }) {
   const sessionCounts = useSessionCounts(allItems);
   const draft = useDraftRow(allItems, filterProjectId);
 
+  const tagNames = useMemo(() => tagsInUse(allItems, filterProjectId), [allItems, filterProjectId]);
+  const syntheticTags = useMemo(() => SYNTHETIC_TAGS.filter((kind) => hasSynthetic(allItems, kind)), [allItems]);
+  const showTags = tagNames.length > 0 || syntheticTags.length > 0;
+
   return (
     <Sidebar collapsible="offcanvas" className={className}>
-      <SidebarHeader className="gap-2">
+      {/* The projects switcher lives here, not in the scrolling body: shadcn
+          documents the header as the home for a workspace switcher, and it is
+          the one thing a long session list must not scroll away. */}
+      <SidebarHeader>
         <div className="flex items-center justify-between">
           <div aria-hidden style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
           <HeaderActions />
         </div>
-
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <SidebarInput data-testid="sidebar-search" placeholder="Search sessions" className="pl-8" />
-        </div>
-      </SidebarHeader>
-
-      <SidebarSeparator />
-
-      {/* overflow-hidden: the sessions list is windowed and owns the only
-          scroller, so the panel itself must not become a second one. */}
-      <SidebarContent className="overflow-hidden">
         <ProjectSection
           projects={sortedProjects}
           attention={attention}
@@ -134,7 +112,9 @@ export function SessionSidebar({ className }: { className?: string }) {
           onSelect={setFilterProjectId}
           onRemoveProject={onRemoveProject}
         />
-        <SidebarSeparator />
+      </SidebarHeader>
+
+      <SidebarScrollRegion>
         <SessionsSection
           groups={groups}
           projectNames={projectNames}
@@ -145,11 +125,14 @@ export function SessionSidebar({ className }: { className?: string }) {
           hasFilters={hasFilters}
         />
         <TasksSidebarSection />
-        <TagFilterBar items={allItems} filterProjectId={filterProjectId} registry={registry} />
-      </SidebarContent>
+      </SidebarScrollRegion>
 
-      <SidebarFooter>
-        <QuotaSection />
+      {/* The rule is load-bearing, not decoration: the footer butts straight up
+          against a parked section header, and without it the tag chips read as
+          that section's content. */}
+      <SidebarFooter className="border-t border-sidebar-border">
+        {showTags && <TagFilterBar inUse={tagNames} synthetic={syntheticTags} registry={registry} />}
+        <QuotaFooter />
         <DaemonSwitcher />
       </SidebarFooter>
 

@@ -9,7 +9,7 @@
  */
 import { AlertTriangle, FolderGit2, GitBranch } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
-import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
+import { Badge } from '@v2/components/ui/badge';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
@@ -47,7 +47,7 @@ function WarningRow({ worktreeMissing, transcriptMissing }: { worktreeMissing: b
   ];
   if (causes.length === 0) return null;
   return (
-    <div data-testid="sessions-meta-card-warning" className="flex items-center gap-1.5 text-xs text-destructive">
+    <div data-testid="sessions-meta-card-warning" className="flex items-center gap-1.5 text-xs text-warning">
       <AlertTriangle aria-hidden className="size-3 shrink-0" />
       <span>{causes.join(' · ')}</span>
     </div>
@@ -62,13 +62,9 @@ function TagsRow({ tags, colorOf }: { tags: string[]; colorOf?: (name: string) =
       <div className="flex flex-1 flex-wrap items-center gap-1">
         {tags.map((name) => (
           // Inline style, not a utility: the tag palette is user-assigned per tag.
-          <span
-            key={name}
-            className="inline-flex items-center rounded-full px-2 py-px font-medium"
-            style={TAG_CHIP_STYLE(colorOf(name))}
-          >
+          <Badge key={name} variant="secondary" style={TAG_CHIP_STYLE(colorOf(name))}>
             {name}
-          </span>
+          </Badge>
         ))}
       </div>
     </div>
@@ -87,7 +83,9 @@ function PrRow({ detectedPrs }: { detectedPrs: DetectedPr[] }) {
             href={pr.url}
             target="_blank"
             rel="noreferrer"
-            className="hover:underline"
+            // The one link in the card, and the only thing here that navigates —
+            // it takes the accent, like the task numbers in the sidebar.
+            className="text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
             #{pr.number}
@@ -100,8 +98,6 @@ function PrRow({ detectedPrs }: { detectedPrs: DetectedPr[] }) {
 
 interface SessionMetaCardProps {
   title: string;
-  updatedAt: number;
-  now?: number;
   projectId?: string;
   projectName?: string;
   worktreePath?: string;
@@ -113,10 +109,11 @@ interface SessionMetaCardProps {
   colorOf?: (name: string) => TagColor;
 }
 
+/**
+ * The title takes the document's UI size; every field steps down to `text-xs`.
+ */
 export function SessionMetaCard({
   title,
-  updatedAt,
-  now = Date.now(),
   projectId,
   projectName,
   worktreePath,
@@ -129,14 +126,15 @@ export function SessionMetaCard({
 }: SessionMetaCardProps) {
   return (
     <div data-testid="sessions-meta-card" className="flex flex-col gap-1.5">
-      <div className="flex items-start justify-between gap-2">
-        <span data-testid="sessions-meta-card-title" className="min-w-0 font-semibold break-words">
-          {title}
-        </span>
-        <span data-testid="sessions-meta-card-time" className="shrink-0 text-xs text-muted-foreground">
-          {formatRelativeTime(updatedAt, now)}
-        </span>
-      </div>
+      {/* Clamped: the row already truncates this, and a pathological title —
+          a pasted paragraph, an unbroken branch name — would otherwise grow the
+          card without bound. `break-words` keeps an unspaced one inside it. */}
+      <span
+        data-testid="sessions-meta-card-title"
+        className="line-clamp-3 font-semibold break-words text-muted-foreground"
+      >
+        {title}
+      </span>
       {projectName != null && projectId != null && (
         <div data-testid="sessions-meta-card-project" className="flex items-center gap-1.5 text-xs">
           <FieldLabel>Project</FieldLabel>

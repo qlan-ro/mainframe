@@ -11,13 +11,12 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@v2/components/ui/sidebar';
-import { cn } from '@v2/lib/utils';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
 import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { useRestoreLastDaemon } from '@/features/daemon/use-restore-last-daemon';
-import { ConnDot, DAEMON_STATUS, DaemonGlyph, type DaemonStatus } from './daemon-status';
+import { ConnDot, DaemonGlyph, type DaemonStatus } from './daemon-status';
 import { DaemonMenuItems } from './DaemonMenuItems';
 import { DaemonSmallDialog, type SmallDialogKind } from './DaemonSmallDialog';
 
@@ -42,22 +41,18 @@ function SwitcherTrigger({
       </span>
       <span className="grid min-w-0 flex-1 text-left leading-tight">
         <span className="flex items-center gap-1.5">
-          <span data-testid="daemon-footer-trigger-label" className="min-w-0 truncate font-semibold">
+          <span
+            data-testid="daemon-footer-trigger-label"
+            className="min-w-0 truncate font-medium text-muted-foreground"
+          >
             {meta.label}
           </span>
+          {/* Dot only: the word is spelled out per-daemon in the picker, and on
+              the trigger it just repeated what the colour already said. */}
           <ConnDot status={status} />
-          <span
-            data-testid="daemon-footer-trigger-status"
-            className={cn('shrink-0 text-xs', DAEMON_STATUS[status].wordClass)}
-          >
-            {DAEMON_STATUS[status].word}
-          </span>
         </span>
         {meta.host && (
-          <span
-            data-testid="daemon-footer-trigger-host"
-            className="truncate font-mono text-[10px] text-muted-foreground"
-          >
+          <span data-testid="daemon-footer-trigger-host" className="truncate font-mono text-xs text-muted-foreground">
             {meta.host}
           </span>
         )}

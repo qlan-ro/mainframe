@@ -5,11 +5,16 @@
  * wiring: each row reads its own blob from the quota store and derives its view
  * via `quota-format`.
  *
- * The shipped surface is a bordered chip card; here the footer already sits on
- * `--sidebar`, so it is a plain labelled group.
+ * A footer component, not a section: no label and no `SidebarGroup`, since the
+ * footer is already its own region and quota is ambient status rather than a
+ * part of the panel's outline. It reads as a `Card` instead, matching the
+ * shipped surface's bordered chip. Stock `Card` is a page-level container, so
+ * three of its base classes are dialled down here: no shadow, no row gap, and a
+ * 4px inset instead of 24px — the rows carry their own padding.
  */
 import { useEffect, useState } from 'react';
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuItem } from '@v2/components/ui/sidebar';
+import { Card } from '@v2/components/ui/card';
+import { SidebarMenu, SidebarMenuItem } from '@v2/components/ui/sidebar';
 import { QUOTA_PROVIDERS } from '@/features/quota/quota-format';
 import { useProviderQuota } from '@/store/quota';
 import { QuotaProviderRow } from './QuotaProviderRow';
@@ -32,13 +37,12 @@ function ConnectedQuotaRow({ providerId, label, now }: { providerId: string; lab
 }
 
 /** `now` is injectable so the derived staleness/expiry states are deterministic in tests. */
-export function QuotaSection({ now }: { now?: number }) {
+export function QuotaFooter({ now }: { now?: number }) {
   const ticking = useTickingNow();
   const effectiveNow = now ?? ticking;
 
   return (
-    <SidebarGroup data-testid="provider-quota-card" className="p-0">
-      <SidebarGroupLabel className="pl-2">Quota</SidebarGroupLabel>
+    <Card data-testid="provider-quota-card" className="gap-0 p-1 shadow-none">
       <SidebarMenu>
         {QUOTA_PROVIDERS.map((p) => (
           <SidebarMenuItem key={p.id}>
@@ -46,6 +50,6 @@ export function QuotaSection({ now }: { now?: number }) {
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
-    </SidebarGroup>
+    </Card>
   );
 }

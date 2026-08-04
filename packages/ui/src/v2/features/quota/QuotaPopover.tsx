@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { RefreshCwIcon } from 'lucide-react';
 import type { ProviderQuota } from '@qlan-ro/mainframe-types';
 import { Button } from '@v2/components/ui/button';
+import { Progress } from '@v2/components/ui/progress';
 import { cn } from '@v2/lib/utils';
 import { refreshQuota } from '@/lib/api/quota';
 import { applyProviderQuota } from '@/store/quota';
@@ -28,10 +29,15 @@ const PERCENT_TEXT: Record<QuotaSeverity, string> = {
   red: 'text-destructive',
 };
 
+/**
+ * Re-tints `Progress`'s indicator rather than forking the primitive: the red
+ * band is the only one that leaves the accent, and the track stays neutral so a
+ * red bar doesn't sit in a blue-tinted trough.
+ */
 const BAR_FILL: Record<QuotaSeverity, string> = {
-  normal: 'bg-primary',
-  amber: 'bg-primary',
-  red: 'bg-destructive',
+  normal: '',
+  amber: '',
+  red: '*:data-[slot=progress-indicator]:bg-destructive',
 };
 
 function RefreshButton({ providerId, label }: { providerId: string; label: string }) {
@@ -88,14 +94,9 @@ function QuotaWindowRow({
           {formatUsedPercent(window.usedPercent)}%
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <span
-          className={cn('block h-full rounded-full', BAR_FILL[window.severity])}
-          style={{ width: `${window.usedPercent}%` }}
-        />
-      </div>
+      <Progress value={window.usedPercent} className={cn('h-1.5 bg-muted', BAR_FILL[window.severity])} />
       {window.resetsAt != null && (
-        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
           <span>resets in {rel}</span>
           <span>{formatAbsoluteReset(window.resetsAt)}</span>
         </div>
@@ -130,7 +131,7 @@ export function QuotaPopover({
           />
           {label}
         </span>
-        <span data-testid={`provider-quota-freshness-${providerId}`} className="text-[10px] text-muted-foreground">
+        <span data-testid={`provider-quota-freshness-${providerId}`} className="text-xs text-muted-foreground">
           {quota == null ? '—' : `${stale ? 'stale · ' : ''}${minutesAgo(quota.observedAt, now)}m ago`}
         </span>
       </div>

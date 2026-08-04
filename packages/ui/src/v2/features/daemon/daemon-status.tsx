@@ -2,9 +2,10 @@
  * Leaf presenters for daemon entries: the status type, its presentation map,
  * the connection dot and the local/remote glyph.
  *
- * The shipped map tints green/amber/red across a 4-step ink ramp; the preset has
- * two usable inks, so healthy reads `primary`, quiet reads `muted-foreground`,
- * and anything wrong reads `destructive` — the same collapse `StatusDot` made.
+ * The connection dot is green, not the accent: green is the convention users
+ * already read as "connected", where the accent would say "selected". Quiet
+ * reads `muted-foreground` and anything wrong reads `destructive`, the same
+ * collapse `StatusDot` made.
  */
 import { LaptopIcon, LockIcon, ServerIcon } from 'lucide-react';
 import { cn } from '@v2/lib/utils';
@@ -24,7 +25,7 @@ export const DAEMON_STATUS: Record<DaemonStatus, StatusMeta> = {
   connected: {
     label: 'Connected',
     word: 'Connected',
-    dotClass: 'bg-primary',
+    dotClass: 'bg-success',
     wordClass: 'text-muted-foreground',
   },
   connecting: {

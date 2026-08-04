@@ -36,6 +36,7 @@ export function ProjectRow({ project, active, attention, onSelect, onRemove }: P
   const row = (
     <SidebarMenuItem>
       <SidebarMenuButton
+        size="sm"
         data-testid={`sidebar-project-${project.id}`}
         isActive={active}
         aria-pressed={active}
@@ -44,15 +45,9 @@ export function ProjectRow({ project, active, attention, onSelect, onRemove }: P
         className="data-active:bg-sidebar-selection data-active:text-primary"
       >
         <ProjectAvatar name={project.name} color={projectColor(project.id)} />
-        {/* Full-strength ink is the unread signal, never the resting state. */}
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate',
-            !active && (attention > 0 ? 'font-semibold text-foreground' : 'text-muted-foreground'),
-          )}
-        >
-          {project.name}
-        </span>
+        {/* One resting ink: the avatar names the project and the badge counts it,
+            so attention never needs the name to shout too. */}
+        <span className={cn('min-w-0 flex-1 truncate-fade', !active && 'text-muted-foreground')}>{project.name}</span>
       </SidebarMenuButton>
       {attention > 0 && (
         // Badge and remove share the right gutter, so the badge yields on hover
@@ -129,6 +124,7 @@ export function AllProjectsRow({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
+        size="sm"
         data-testid="sidebar-project-all"
         isActive={active}
         aria-pressed={active}
@@ -144,7 +140,7 @@ export function AllProjectsRow({
         >
           {icon}
         </span>
-        <span className={cn('min-w-0 flex-1 truncate', !active && 'text-muted-foreground')}>All projects</span>
+        <span className={cn('min-w-0 flex-1 truncate-fade', !active && 'text-muted-foreground')}>All projects</span>
       </SidebarMenuButton>
       {attention > 0 && (
         <SidebarMenuBadge data-testid="sidebar-project-badge-all" className="text-primary">

@@ -22,21 +22,21 @@ import { cn } from '@v2/lib/utils';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { deriveSessionBadge, type SessionBadge } from '@/features/sessions/view-model/session-status';
 import { isSessionUnread } from '@/features/sessions/view-model/session-unread';
-import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useArchiveSession } from '@/features/sessions/sidebar/use-archive-session';
 import { useTagPopoverTarget } from '@/features/sessions/tags/use-tag-popover-target';
 import { pinChat } from '@/lib/api/chats';
+import { formatCompactTime } from './compact-time';
 import { RowHoverActions } from './SessionRowHoverActions';
 import { SessionContextMenu } from './SessionContextMenu';
 import { SessionMetaCard } from './SessionMetaCard';
-import { SessionRowMetaIcons } from './SessionRowMetaIcons';
+import { SessionRowMetaLine } from './SessionRowMetaLine';
 import { SessionRowRename } from './SessionRowRename';
 import { StatusDot } from './StatusDot';
 
-/** Rows sit one rung below their group header, on the stock indent scale. */
-const ROW_INDENT = 'pl-8';
+/** The section owns the horizontal inset; the row only keeps the stock pad. */
+const ROW_INDENT = 'pl-2';
 
 /** Rows rendered outside the sidebar's tag registry still paint their dots. */
 const DEFAULT_COLOR_OF = (): TagColor => 'blue';
@@ -74,43 +74,56 @@ function useRowActions(item: SessionItem): RowActions {
 interface RowBodyProps {
   item: SessionItem;
   badge: SessionBadge;
-  unread: boolean;
   colorOf: (name: string) => TagColor;
+  projectName?: string;
   showPinGlyph: boolean;
   renameSlot: React.ReactNode | null;
 }
 
-/** The button's contents: status, title (or the rename input), then the meta cluster. */
-function RowBody({ item, badge, unread, colorOf, showPinGlyph, renameSlot }: RowBodyProps) {
+/**
+ * Two lines — title plus time, then the meta line — beside one status column.
+ * The status glyph stays a sibling of the whole stack rather than of the title,
+ * so the button's own `items-center` centres it across both lines.
+ */
+function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot }: RowBodyProps) {
   const { custom } = item;
   return (
     <>
-      {showPinGlyph && <PinIcon data-testid="sessions-row-pin-glyph" className="size-3! shrink-0 text-primary" />}
       <StatusDot badge={badge} adapterId={custom.adapterId} />
-      {renameSlot ?? (
-        // No tooltip on the title: the hover card already carries it in full.
-        <span
-          data-testid="sessions-row-title"
-          className={cn(
-            'min-w-0 flex-1 truncate group-data-active/menu-item:text-primary',
-            unread ? 'font-semibold text-foreground' : 'text-muted-foreground',
+      {/* gap-1: the two lines butted together, and on hover the action cluster
+          overlapping line one left the meta glyphs sitting right under it. */}
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* Reserves the action cluster's width so it never lands on the title.
+            Focus-within as well as hover: stock reveals the actions on both, and
+            the row would otherwise paint the time underneath them. */}
+        <span className="flex items-center gap-1.5 transition-[padding] group-focus-within/menu-item:pr-14 group-hover/menu-item:pr-14">
+          {renameSlot ?? (
+            // No tooltip on the title: the hover card already carries it in full.
+            <span
+              data-testid="sessions-row-title"
+              className="min-w-0 flex-1 truncate-fade text-muted-foreground group-data-active/menu-item:text-primary"
+            >
+              {item.title ?? 'Untitled session'}
+            </span>
           )}
-        >
-          {item.title ?? 'Untitled session'}
+          {showPinGlyph && <PinIcon data-testid="sessions-row-pin-glyph" className="size-3! shrink-0 text-primary" />}
+          {/* The time yields to the hover actions — the same slot, not a second column. */}
+          <span
+            data-testid="sessions-row-relative-time"
+            className="shrink-0 text-xs tabular-nums text-muted-foreground transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0"
+          >
+            {formatCompactTime(custom.updatedAt, Date.now())}
+          </span>
         </span>
-      )}
-      {/* Meta yields to the hover actions — the same slot, not a second column. */}
-      <span className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover/menu-item:opacity-0">
-        <SessionRowMetaIcons
+        <SessionRowMetaLine
+          projectName={projectName}
           worktreePath={custom.worktreePath}
+          branchName={custom.branchName}
           worktreeMissing={custom.worktreeMissing}
           detectedPrs={custom.detectedPrs}
           tags={custom.tags}
           colorOf={colorOf}
         />
-        <span data-testid="sessions-row-relative-time" className="tabular-nums">
-          {formatRelativeTime(custom.updatedAt, Date.now())}
-        </span>
       </span>
     </>
   );
@@ -171,13 +184,13 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                   // The reserve the variants add for an overlaid action would be
                   // spent twice: the meta cluster is in flow and fades out under
                   // the actions, so the gutter is already there.
-                  className={cn(ROW_INDENT, 'pr-2! group-data-active/menu-item:bg-sidebar-selection')}
+                  className={cn(ROW_INDENT, 'h-auto py-1 pr-2! group-data-active/menu-item:bg-sidebar-selection')}
                 >
                   <RowBody
                     item={item}
                     badge={deriveSessionBadge(custom, unread)}
-                    unread={unread}
                     colorOf={colorOf}
+                    projectName={projectName}
                     showPinGlyph={custom.pinned && !inPinnedGroup}
                     renameSlot={
                       isRenaming ? (
@@ -195,10 +208,9 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                 </SidebarMenuButton>
               </ThreadListItemPrimitive.Trigger>
             </HoverCardTrigger>
-            <HoverCardContent side="right" align="start" className="w-64 p-2.5">
+            <HoverCardContent side="right" align="start">
               <SessionMetaCard
                 title={title}
-                updatedAt={custom.updatedAt}
                 projectId={custom.projectId}
                 projectName={projectName}
                 worktreePath={custom.worktreePath}

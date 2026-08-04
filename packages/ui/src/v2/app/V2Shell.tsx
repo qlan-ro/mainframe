@@ -40,7 +40,7 @@ export function V2Shell() {
           <SessionSidebar />
 
           <SidebarInset data-testid="v2-main-pane" className="overflow-hidden">
-            <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2">
+            <header className="flex h-11 shrink-0 items-center gap-2 px-2">
               <SidebarTrigger />
               <span className="text-sm font-medium">mainframe</span>
               <span className="text-xs text-muted-foreground">design/ui-v2-clone</span>

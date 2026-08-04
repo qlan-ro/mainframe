@@ -1,5 +1,5 @@
 /**
- * The Sessions section's overflow menu: the archive, and the import flow.
+ * The session list's overflow menu: the archive, and the import flow.
  *
  * Both dialogs are siblings of the menu, not children of a menu item — a Radix
  * menu unmounts its content on select, which would tear the dialog down in the
@@ -16,19 +16,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@v2/components/ui/dropdown-menu';
-import { SidebarGroupAction } from '@v2/components/ui/sidebar';
+import { Button } from '@v2/components/ui/button';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useSessionFilters } from '@/store/session-filters';
 import { ArchivedSessionsDialog } from './ArchivedSessionsDialog';
 import { ImportSessionsDialog } from './ImportSessionsDialog';
 
-interface SessionsMoreMenuProps {
-  /** Placement within the section header, which owns the action row. */
-  className?: string;
-}
-
-export function SessionsMoreMenu({ className }: SessionsMoreMenuProps) {
+export function SessionsMoreMenu() {
   const port = useDaemonPort();
   const { projects } = useProjects();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
@@ -39,14 +34,16 @@ export function SessionsMoreMenu({ className }: SessionsMoreMenuProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarGroupAction
+          <Button
+            variant="ghost"
+            size="icon-sm"
             data-testid="sessions-more-button"
             aria-label="More session actions"
             title="More session actions"
-            className={className}
+            className="size-6"
           >
             <MoreHorizontalIcon />
-          </SidebarGroupAction>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent data-testid="sessions-more-menu" align="end" sideOffset={6} className="w-52">
           <DropdownMenuItem data-testid="sessions-more-archived" onSelect={() => setArchivedOpen(true)}>

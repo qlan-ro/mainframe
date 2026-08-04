@@ -5,7 +5,9 @@
  *
  * The shipped version tints across a 4-step ink ramp (`text-mf-text-3`); stock
  * has two usable inks, so this reads `primary` for anything wanting attention
- * and `muted-foreground` for everything else, per the locked decision.
+ * and `muted-foreground` for everything else, per the locked decision. An idle
+ * row drops the provider's brand hue with it — a wall of brand marks made every
+ * session look equally urgent.
  */
 import type { SessionBadge } from '@/features/sessions/view-model/session-status';
 import { Hint } from '@v2/components/ui/hint';
@@ -17,11 +19,15 @@ function workingAnimation(adapterId: string): string {
   return adapterId === 'claude' ? 'animate-[mf-claude-logo-working_1.52s_linear_infinite]' : 'animate-spin';
 }
 
+/** Working, waiting or unread — the three states that have earned the eye. */
+function wantsAttention(badge: SessionBadge): boolean {
+  return badge.unread || badge.base === 'working' || badge.base === 'waiting';
+}
+
 function statusClass(badge: SessionBadge, adapterId: string): string {
-  const active = badge.base === 'working' || badge.base === 'waiting';
   return cn(
     'inline-flex size-6 shrink-0 items-center justify-center',
-    badge.unread || active ? 'text-primary' : 'text-muted-foreground',
+    wantsAttention(badge) ? 'text-primary' : 'text-muted-foreground',
     badge.base === 'working' && workingAnimation(adapterId),
     badge.base === 'waiting' && 'animate-pulse',
   );
@@ -46,7 +52,7 @@ export function StatusDot({ badge, adapterId = 'claude' }: { badge: SessionBadge
   return (
     <Hint label={dotLabel(badge)}>
       <span data-testid="sessions-row-status-dot" aria-label={badge.base} className={statusClass(badge, adapterId)}>
-        <ProviderLogo adapterId={adapterId} className="size-5" />
+        <ProviderLogo adapterId={adapterId} muted={!wantsAttention(badge)} className="size-5" />
       </span>
     </Hint>
   );

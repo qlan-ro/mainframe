@@ -2,9 +2,17 @@
  * Create or edit a task. All state and both write paths live in `use-task-form`;
  * this file is the dialog's shape.
  */
-import { PencilIcon, PlayIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { PlayIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@v2/components/ui/dialog';
 import { Input } from '@v2/components/ui/input';
 import { Label } from '@v2/components/ui/label';
 import { Textarea } from '@v2/components/ui/textarea';
@@ -25,7 +33,7 @@ interface ModalFooterProps {
 
 function ModalFooter({ todo, saving, canSave, onDelete, onClose, onStartSession }: ModalFooterProps) {
   return (
-    <DialogFooter className="shrink-0 items-center border-t border-border px-4 py-3">
+    <DialogFooter className="items-center">
       {todo && (
         <Button
           type="button"
@@ -53,9 +61,11 @@ function ModalFooter({ todo, saving, canSave, onDelete, onClose, onStartSession 
           Start session
         </Button>
       )}
-      <Button type="button" data-testid="tasks-edit-cancel" variant="ghost" onClick={onClose}>
-        Cancel
-      </Button>
+      <DialogClose asChild>
+        <Button type="button" data-testid="tasks-edit-cancel" variant="outline">
+          Cancel
+        </Button>
+      </DialogClose>
       <Button type="submit" data-testid="tasks-edit-save" disabled={!canSave || saving}>
         {saving ? 'Saving…' : todo ? 'Save changes' : 'Create task'}
       </Button>
@@ -87,16 +97,18 @@ export function TaskEditModal({
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent showCloseButton={false} className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-lg">
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
-          <DialogTitle className="flex items-center gap-2">
-            {todo ? <PencilIcon className="size-3.5 shrink-0" /> : <PlusIcon className="size-3.5 shrink-0" />}
-            {todo ? `Edit task #${todo.number}` : 'New task'}
-          </DialogTitle>
+      {/* The dialog scrolls as one, the way stock does — a pinned header and
+          footer would mean re-plumbing padding out of DialogContent again. */}
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{todo ? `Edit task #${todo.number}` : 'New task'}</DialogTitle>
+          <DialogDescription>
+            {todo ? 'Update this task and save when you are done.' : 'Add a task to this project.'}
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={form.submit} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+        <form onSubmit={form.submit} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="tasks-edit-title">Title</Label>
               <Input

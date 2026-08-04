@@ -56,7 +56,7 @@ export function TasksSidebarList({ port, projectId, onStartSession }: TasksSideb
               className={ROW_INDENT}
             >
               <span className="shrink-0 text-primary">#{todo.number}</span>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">{todo.title}</span>
+              <span className="min-w-0 flex-1 truncate-fade text-muted-foreground">{todo.title}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))
