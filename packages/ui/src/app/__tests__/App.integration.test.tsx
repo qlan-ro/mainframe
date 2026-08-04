@@ -130,7 +130,7 @@ vi.mock('@v2/features/sessions/SessionSidebar', () => ({
   ),
 }));
 
-vi.mock('../../features/sessions/sidebar/ArchiveWorktreeDialog', () => ({
+vi.mock('@v2/features/sessions/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => <div data-testid="sessions-archive-confirm-dialog" />,
 }));
 
@@ -142,7 +142,7 @@ vi.mock('../../components/overlays/FindInPathModal', () => ({
   FindInPathModal: () => null,
 }));
 
-vi.mock('../../components/overlays/DirectoryPickerModal', () => ({
+vi.mock('@v2/features/files/DirectoryPickerModal', () => ({
   DirectoryPickerModal: () => null,
 }));
 

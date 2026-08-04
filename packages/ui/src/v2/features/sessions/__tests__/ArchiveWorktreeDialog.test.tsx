@@ -22,7 +22,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { create } from 'zustand';
-import type { ArchiveChoice, PendingArchiveRequest } from '../../runtime/archive-confirm-bridge';
+import type { ArchiveChoice, PendingArchiveRequest } from '@/features/sessions/runtime/archive-confirm-bridge';
 
 // ---------------------------------------------------------------------------
 // Controllable mock of the archive-confirm-bridge store
@@ -42,7 +42,7 @@ const mockUseArchivePrompt = create<MockArchivePromptState>(() => ({
   resolve: mockResolve,
 }));
 
-vi.mock('../../runtime/archive-confirm-bridge', () => ({
+vi.mock('@/features/sessions/runtime/archive-confirm-bridge', () => ({
   useArchivePrompt: mockUseArchivePrompt,
 }));
 

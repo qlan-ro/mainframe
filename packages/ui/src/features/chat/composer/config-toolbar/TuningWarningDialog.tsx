@@ -8,7 +8,7 @@
  * serves all three control kinds, so there is one testid family to assert on.
  */
 
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@v2/features/shared/ConfirmDialog';
 import { describeTuningChange } from './tuning-warning-copy';
 import type { TuningChange } from './tuning-warning';
 
@@ -29,13 +29,16 @@ export function TuningWarningDialog({
   onConfirm,
   onCancel,
 }: TuningWarningDialogProps) {
-  if (pending == null) return null;
-
-  const { title, body, confirmLabel } = describeTuningChange(pending, contextTokens);
+  // Rendered closed rather than early-returning null — see ConfirmDialog's
+  // note on the Radix pointer-events leak.
+  const { title, body, confirmLabel } =
+    pending != null
+      ? describeTuningChange(pending, contextTokens)
+      : { title: '', body: undefined, confirmLabel: undefined };
 
   return (
     <ConfirmDialog
-      open
+      open={pending != null}
       title={title}
       body={body}
       confirmLabel={confirmLabel}

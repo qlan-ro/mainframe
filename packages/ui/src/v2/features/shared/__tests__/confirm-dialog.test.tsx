@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
-import { ConfirmDialog } from '../confirm-dialog';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 describe('ConfirmDialog suppress row', () => {
   it('renders nothing extra when no suppress prop is given', () => {
