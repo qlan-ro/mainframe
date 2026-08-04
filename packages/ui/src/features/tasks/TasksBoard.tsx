@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
 import { Badge } from '@v2/components/ui/badge';
 import { Button } from '@v2/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';
@@ -84,39 +84,19 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
           {activeCount} active · {doneCount} done
         </Badge>
 
-        {/* List / Board segmented switch */}
-        <div className="ml-auto flex items-center gap-0.5 rounded-[6px] bg-muted p-0.5">
-          <button
-            data-testid="tasks-view-list"
-            type="button"
-            onClick={() => setView('list')}
-            aria-pressed={view === 'list'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
-              view === 'list'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutList size={12} />
-            List
-          </button>
-          <button
-            data-testid="tasks-view-board"
-            type="button"
-            onClick={() => setView('board')}
-            aria-pressed={view === 'board'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
-              view === 'board'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutGrid size={12} />
-            Board
-          </button>
-        </div>
+        {/* List / Board view switch */}
+        <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'board')} className="ml-auto">
+          <TabsList className="h-8">
+            <TabsTrigger value="list" data-testid="tasks-view-list">
+              <LayoutList />
+              List
+            </TabsTrigger>
+            <TabsTrigger value="board" data-testid="tasks-view-board">
+              <LayoutGrid />
+              Board
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* New task */}
         <Button size="sm" data-testid="tasks-board-new" onClick={handleNew}>

@@ -12,26 +12,16 @@
 import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { Button } from '@v2/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
+import { Textarea } from '@v2/components/ui/textarea';
 import { useTodosStore } from './use-todos-store';
 import { TaskAttachments, type PendingAttachment } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';
 import { TaskSelectFields } from './TaskSelectFields';
 import type { Todo, TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
-
-// Physical padding avoids Chromium scroll-clip on <input>.
-const inputCls = cn(
-  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-label text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full',
-);
-const textareaWrap = cn(
-  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
-);
-const textareaInner = cn(
-  'w-full bg-transparent border-0 p-0 resize-none text-label text-foreground outline-none focus:outline-none focus-visible:outline-none',
-);
 
 interface Props {
   port: number;
@@ -177,11 +167,13 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
-            <div className="flex flex-col gap-1">
-              <label className="text-label text-muted-foreground">Title *</label>
-              <input
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tasks-edit-title" className="text-muted-foreground">
+                Title *
+              </Label>
+              <Input
+                id="tasks-edit-title"
                 data-testid="tasks-edit-title"
-                className={inputCls}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Task title"
@@ -199,25 +191,26 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               onStatusChange={setStatus}
             />
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <label className="text-label text-muted-foreground">Description (markdown)</label>
-                <span className="text-caption text-muted-foreground">Paste image to attach</span>
+                <Label htmlFor="tasks-edit-body" className="text-muted-foreground">
+                  Description (markdown)
+                </Label>
+                <span className="text-xs text-muted-foreground">Paste image to attach</span>
               </div>
-              <div className={textareaWrap}>
-                <textarea
-                  data-testid="tasks-edit-body"
-                  className={textareaInner}
-                  rows={4}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  onPaste={handlePaste}
-                  placeholder="Describe the task…"
-                />
-              </div>
+              <Textarea
+                id="tasks-edit-body"
+                data-testid="tasks-edit-body"
+                className="resize-none"
+                rows={4}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Describe the task…"
+              />
             </div>
 
-            {attachErr && <p className="text-label text-destructive">{attachErr}</p>}
+            {attachErr && <p className="text-xs text-destructive">{attachErr}</p>}
 
             <TaskAttachments
               port={port}

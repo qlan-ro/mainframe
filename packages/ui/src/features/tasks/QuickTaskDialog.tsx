@@ -12,9 +12,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Zap } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { Button } from '@v2/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
+import { Textarea } from '@v2/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
 import { useTodosStore } from './use-todos-store';
 import type { TodoType, TodoPriority } from '@/lib/api/todos';
 
@@ -28,48 +31,6 @@ interface PendingFile {
   mimeType: string;
   data: string;
   sizeBytes: number;
-}
-
-// Physical padding avoids Chromium scroll-clip bug.
-const inputCls = cn(
-  'bg-background border border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-label text-foreground placeholder:text-muted-foreground',
-  'focus:outline-none focus:ring-1 focus:ring-ring w-full',
-);
-const textareaWrap = cn(
-  'bg-background border border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
-);
-const textareaInner = cn(
-  'w-full bg-transparent border-0 p-0 resize-none text-label text-foreground outline-none focus:outline-none focus-visible:outline-none',
-);
-const pillBase = cn('px-3 py-1 text-caption rounded-full border transition-colors cursor-pointer');
-
-function TypePill({
-  label,
-  active,
-  onClick,
-  testId,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      className={cn(
-        pillBase,
-        active
-          ? 'bg-primary text-primary-foreground border-primary'
-          : 'bg-background text-muted-foreground border-border hover:border-foreground',
-      )}
-    >
-      {label}
-    </button>
-  );
 }
 
 interface Props {
@@ -186,48 +147,47 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
 
         <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* Type toggle */}
-          <div className="flex gap-2">
-            <TypePill
-              label="Feature"
-              active={taskType === 'feature'}
-              onClick={() => setTaskType('feature')}
-              testId="tasks-quick-feature"
-            />
-            <TypePill
-              label="Bug"
-              active={taskType === 'bug'}
-              onClick={() => setTaskType('bug')}
-              testId="tasks-quick-bug"
-            />
-          </div>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={taskType}
+            onValueChange={(v) => {
+              if (v) setTaskType(v as QuickType);
+            }}
+          >
+            <ToggleGroupItem value="feature" data-testid="tasks-quick-feature">
+              Feature
+            </ToggleGroupItem>
+            <ToggleGroupItem value="bug" data-testid="tasks-quick-bug">
+              Bug
+            </ToggleGroupItem>
+          </ToggleGroup>
 
           {/* Title */}
-          <input
+          <Input
             ref={titleRef}
             data-testid="tasks-quick-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="What needs to be done?"
-            className={inputCls}
             onKeyDown={handleModEnter}
           />
 
           {/* Body */}
           <div className="space-y-1">
-            <div className={textareaWrap}>
-              <textarea
-                data-testid="tasks-quick-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                onPaste={handlePaste}
-                placeholder="Details (optional)"
-                rows={2}
-                className={textareaInner}
-                onKeyDown={handleModEnter}
-              />
-            </div>
-            <span className="text-caption text-muted-foreground">Paste image to attach</span>
+            <Textarea
+              data-testid="tasks-quick-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              onPaste={handlePaste}
+              placeholder="Details (optional)"
+              rows={2}
+              className="resize-none"
+              onKeyDown={handleModEnter}
+            />
+            <span className="text-xs text-muted-foreground">Paste image to attach</span>
           </div>
 
           {/* Pending attachments */}
@@ -256,27 +216,31 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
             </div>
           )}
 
-          {/* Priority pills */}
+          {/* Priority */}
           <div className="flex items-center gap-2">
-            <span className="text-label text-muted-foreground">Priority</span>
-            <div className="flex gap-1">
+            <Label className="text-muted-foreground">Priority</Label>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={priority}
+              onValueChange={(v) => {
+                if (v) setPriority(v as QuickPriority);
+              }}
+            >
               {(['low', 'medium', 'high'] as const).map((p) => (
-                <TypePill
-                  key={p}
-                  label={p.charAt(0).toUpperCase() + p.slice(1)}
-                  active={priority === p}
-                  onClick={() => setPriority(p)}
-                  testId={`tasks-quick-priority-${p}`}
-                />
+                <ToggleGroupItem key={p} value={p} data-testid={`tasks-quick-priority-${p}`}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </div>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3 border-t border-border shrink-0">
-          <span className="text-caption text-muted-foreground">
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">⌘↵</kbd> to create ·{' '}
-            <kbd className="px-1 py-0.5 bg-muted rounded border border-border text-caption">Esc</kbd> to cancel
+          <span className="text-xs text-muted-foreground">
+            <kbd className="rounded border bg-muted px-1 py-0.5 text-xs">⌘↵</kbd> to create ·{' '}
+            <kbd className="rounded border bg-muted px-1 py-0.5 text-xs">Esc</kbd> to cancel
           </span>
           <Button
             size="sm"

@@ -3,7 +3,8 @@
  *
  * Extracted from TaskEditModal to keep that file under 300 lines.
  */
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@v2/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 import type { TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
 
 const TYPES: TodoType[] = [
@@ -32,9 +33,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
   return (
     <div className="grid grid-cols-3 gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-label text-muted-foreground">Type</label>
+        <Label className="text-muted-foreground">Type</Label>
         <Select value={type} onValueChange={(v) => onTypeChange(v as TodoType)}>
-          <SelectTrigger data-testid="tasks-edit-type" className="text-label h-8">
+          <SelectTrigger data-testid="tasks-edit-type" size="sm" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -47,9 +48,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-label text-muted-foreground">Priority</label>
+        <Label className="text-muted-foreground">Priority</Label>
         <Select value={priority} onValueChange={(v) => onPriorityChange(v as TodoPriority)}>
-          <SelectTrigger data-testid="tasks-edit-priority" className="text-label h-8">
+          <SelectTrigger data-testid="tasks-edit-priority" size="sm" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -62,9 +63,9 @@ export function TaskSelectFields({ type, onTypeChange, priority, onPriorityChang
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-label text-muted-foreground">Status</label>
+        <Label className="text-muted-foreground">Status</Label>
         <Select value={status} onValueChange={(v) => onStatusChange(v as TodoStatus)}>
-          <SelectTrigger data-testid="tasks-edit-status" className="text-label h-8">
+          <SelectTrigger data-testid="tasks-edit-status" size="sm" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

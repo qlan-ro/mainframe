@@ -7,15 +7,16 @@
  * Used by TasksFilterBar for Type, Priority, and Label filters.
  */
 import React from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CountBadge } from '@/components/ui/count-badge';
+import { Badge } from '@v2/components/ui/badge';
+import { Button } from '@v2/components/ui/button';
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 
 export interface FilterOption {
   value: string;
@@ -45,58 +46,39 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           data-testid={`tasks-filter-${toKebab(label)}`}
-          type="button"
-          className={cn(
-            'flex items-center gap-1 rounded-md border-[0.5px] px-2 py-1 text-label font-medium transition-colors',
-            hasSelection
-              ? 'border-transparent bg-primary/10 text-primary'
-              : 'border-border bg-background text-muted-foreground hover:text-foreground',
-          )}
+          className={cn(hasSelection && 'border-transparent bg-primary/10 text-primary hover:bg-primary/15')}
         >
           {label}
           {hasSelection && (
-            <CountBadge
-              count={selected.length}
-              variant="unread"
-              className="ml-0.5"
+            <Badge
+              variant="secondary"
+              className="px-1 py-0 text-xs tabular-nums"
               data-testid={`tasks-filter-${toKebab(label)}-count`}
-            />
-          )}
-          <ChevronDown size={12} className="ml-0.5" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[160px] max-h-64 overflow-y-auto p-1">
-        {options.map((opt) => {
-          const isSelected = selected.includes(opt.value);
-          return (
-            <DropdownMenuItem
-              key={opt.value}
-              data-testid={`tasks-filter-opt-${opt.value}`}
-              onSelect={(e) => {
-                e.preventDefault();
-                onChange(toggleValue(selected, opt.value));
-              }}
-              className="flex items-center gap-2 px-2 py-1.5 rounded text-body cursor-pointer"
             >
-              {/* Checkbox indicator */}
-              <span
-                className={cn(
-                  'w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0',
-                  isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border',
-                )}
-              >
-                {isSelected && <Check size={12} strokeWidth={3} />}
-              </span>
-              <span className="flex-1 capitalize">{opt.label.replace('_', ' ')}</span>
-              {opt.count > 0 && <span className="text-caption text-muted-foreground tabular-nums">{opt.count}</span>}
-            </DropdownMenuItem>
-          );
-        })}
-        {options.length === 0 && (
-          <div className="px-2 py-2 text-caption text-muted-foreground text-center">No options</div>
-        )}
+              {selected.length}
+            </Badge>
+          )}
+          <ChevronDown />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-64 min-w-[160px] overflow-y-auto">
+        {options.map((opt) => (
+          <DropdownMenuCheckboxItem
+            key={opt.value}
+            data-testid={`tasks-filter-opt-${opt.value}`}
+            checked={selected.includes(opt.value)}
+            onSelect={(e) => e.preventDefault()}
+            onCheckedChange={() => onChange(toggleValue(selected, opt.value))}
+          >
+            <span className="flex-1 capitalize">{opt.label.replace('_', ' ')}</span>
+            {opt.count > 0 && <span className="text-xs tabular-nums text-muted-foreground">{opt.count}</span>}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {options.length === 0 && <div className="px-2 py-2 text-center text-xs text-muted-foreground">No options</div>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
