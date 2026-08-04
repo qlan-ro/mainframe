@@ -14,7 +14,7 @@
  * via `customScrollParent`, so Tasks and Tags below it scroll as part of the
  * same surface instead of stranding the wheel at a nested boundary.
  */
-import { useMemo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
+import { useEffect, useMemo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
 import { GroupedVirtuoso } from 'react-virtuoso';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
@@ -59,6 +59,26 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
   const groupCounts = useMemo(() => groups.map((g) => g.items.length), [groups]);
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const scrollParent = useScrollRegion();
+
+  // WKWebView boot race: Virtuoso measures its viewport once on mount, and on
+  // some boots that instant lands mid-layout — the rect comes back empty. Its
+  // only re-measure triggers are parent scroll/resize, but a blank list can't
+  // scroll and the sidebar never resizes, so it wedges at zero rows forever.
+  // A synthetic scroll event drives the exact re-measure path it listens to;
+  // harmless when the mount measured correctly. Twice (post-paint + 300ms)
+  // to cover a still-settling first layout.
+  useEffect(() => {
+    if (scrollParent == null) return;
+    const nudge = () => scrollParent.dispatchEvent(new Event('scroll'));
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(nudge);
+    });
+    const timer = setTimeout(nudge, 300);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [scrollParent]);
 
   // Mounting before the viewport exists would make Virtuoso fall back to its own
   // scroller for a frame, then tear it down — one skipped frame is cheaper.
