@@ -13,7 +13,7 @@ import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
 import { TaskAttachments, type PendingAttachment } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';
@@ -156,7 +156,7 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent hideClose className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent showCloseButton={false} className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-heading font-bold">
             {todo ? (

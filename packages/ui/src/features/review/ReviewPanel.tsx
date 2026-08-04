@@ -9,7 +9,10 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+// v2 shell, legacy body: the three columns are still bridge-styled and port
+// with the review pass (which is also where resizable columns would land —
+// the v1 columns are fixed-width, so none are lost here).
+import { Dialog, DialogContent } from '@v2/components/ui/dialog';
 import { useOverlaysStore } from '@/store/overlays';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { gitCommit } from '@/lib/api/git';
@@ -109,8 +112,8 @@ export function ReviewPanel() {
     <Dialog open={reviewOpen} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent
         data-testid="review-modal"
-        hideClose
-        className="flex h-[86vh] w-full max-w-[1180px] flex-col gap-0 overflow-hidden p-0 max-h-[880px]"
+        showCloseButton={false}
+        className="flex h-[86vh] max-h-[880px] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[1180px]"
       >
         <ReviewPanelHeader
           branch={branch}

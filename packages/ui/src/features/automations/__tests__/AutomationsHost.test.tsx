@@ -43,11 +43,13 @@ it('renders the view once opened, and loads automations from the gateway', async
   expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
 });
 
-it('clicking the backdrop closes the host', () => {
+it('dismissing the dialog closes the host', () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
   render(<AutomationsHost />);
-  fireEvent.click(screen.getByTestId('automations-host'));
+  // Radix owns dismissal now (backdrop click and Escape both route through
+  // onOpenChange); Escape is the deterministic path in jsdom.
+  fireEvent.keyDown(document, { key: 'Escape' });
   expect(useAutomationsNav.getState().open).toBe(false);
 });
 

@@ -1,5 +1,14 @@
+/**
+ * The window-state overlay: boot ("Starting up…"), daemon reconnect, and the
+ * host of DaemonUnreachableBody via the children slot.
+ *
+ * Not a dialog on purpose — it must render before providers exist, is never
+ * dismissable, and sits above every Radix layer. Built on v2 tokens with a
+ * stock indeterminate Progress; the spinner uses Tailwind's own spin/pulse.
+ */
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { Progress } from '@v2/components/ui/progress';
 
 const DEFAULT_TITLE = 'Reconnecting to daemon…';
 const DEFAULT_SUBTITLE = 'Your sessions are safe. Work resumes automatically the moment the connection is back.';
@@ -15,7 +24,7 @@ interface ConnectionOverlayProps {
   testId?: string;
   /**
    * Optional body override. When provided, renders this node instead of the
-   * default spinner card. The glass scrim container is still applied.
+   * default spinner card. The scrim container is still applied.
    * Use this slot to inject DaemonUnreachableBody or similar surfaces.
    */
   children?: React.ReactNode;
@@ -29,26 +38,14 @@ export function ConnectionOverlay({
   testId = 'connection-overlay',
   children,
 }: ConnectionOverlayProps): React.ReactElement | null {
+  // A plain conditional render is safe here — this is not a Radix modal, so
+  // there is no pointer-events cleanup to miss.
   if (!open) return null;
 
   const inner = children != null ? children : <Card title={title} subtitle={subtitle} testId={testId} />;
 
   const body = (
-    <div
-      className="absolute inset-0 z-[11000] flex items-center justify-center"
-      style={{
-        // Bespoke lower-opacity warm scrim (design 14-windowstates.jsx:145,
-        // rgba(233,231,226,0.62)) — distinct from --mf-glass (the
-        // titlebar/sidebar chrome-glass token, which is the same base hue at
-        // 0.84 alpha). --mf-window (#e9e7e2) is an exact RGB match for the
-        // design value, so we derive the 0.62-alpha scrim from it via
-        // color-mix rather than hardcoding a light-only rgba (keeps the
-        // scrim theme-adaptive across all 6 mf-* theme variants).
-        background: 'color-mix(in srgb, var(--mf-window) 62%, transparent)',
-        backdropFilter: 'blur(10px) saturate(120%)',
-        WebkitBackdropFilter: 'blur(10px) saturate(120%)',
-      }}
-    >
+    <div className="absolute inset-0 z-[11000] flex items-center justify-center bg-background/60 backdrop-blur-[10px] backdrop-saturate-125">
       {inner}
     </div>
   );
@@ -62,47 +59,24 @@ function Card({ title, subtitle, testId }: { title: string; subtitle: string; te
   return (
     <div
       data-testid={testId}
-      className="flex flex-col items-center gap-[16px] rounded-[13px] bg-background border-[0.5px] border-mf-border-hover min-w-[320px] pt-[30px] px-[38px] pb-[26px]"
-      style={{
-        boxShadow: 'var(--mf-shadow-modal)',
-      }}
+      className="flex min-w-80 flex-col items-center gap-4 rounded-xl border bg-popover px-9 pt-7 pb-6 shadow-lg"
     >
       <Spinner />
-      <TextBlock title={title} subtitle={subtitle} />
-      <ProgressRail />
+      <div className="text-center">
+        <p className="font-semibold text-foreground">{title}</p>
+        <p className="mt-1 max-w-64 text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      <Progress className="h-1 w-48" />
     </div>
   );
 }
 
 function Spinner(): React.ReactElement {
   return (
-    <div className="relative w-[46px] h-[46px]">
-      <div className="absolute inset-0 rounded-full" style={{ border: '2px solid var(--mf-chip)' }} />
-      <div
-        className="absolute inset-0 rounded-full border-2 border-transparent animate-[tw-spin_0.9s_linear_infinite]"
-        style={{
-          borderTopColor: 'var(--primary)',
-          borderRightColor: 'var(--primary)',
-        }}
-      />
-      <div className="absolute top-1/2 left-1/2 w-[7px] h-[7px] -mt-[3.5px] -ml-[3.5px] rounded-full bg-primary animate-[twPulse_1.4s_ease-in-out_infinite]" />
-    </div>
-  );
-}
-
-function TextBlock({ title, subtitle }: { title: string; subtitle: string }): React.ReactElement {
-  return (
-    <div className="text-center">
-      <p className="text-heading font-semibold text-foreground tracking-tight">{title}</p>
-      <p className="text-label text-muted-foreground mt-[5px] leading-normal max-w-[248px]">{subtitle}</p>
-    </div>
-  );
-}
-
-function ProgressRail(): React.ReactElement {
-  return (
-    <div className="w-[200px] h-[3px] rounded-[2px] overflow-hidden" style={{ background: 'var(--mf-chip)' }}>
-      <div className="w-[40%] h-full rounded-[2px] bg-primary animate-[ws-indeterminate_1.5s_ease-in-out_infinite]" />
+    <div className="relative size-11">
+      <div className="absolute inset-0 rounded-full border-2 border-border" />
+      <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary border-r-primary" />
+      <div className="absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-primary" />
     </div>
   );
 }
