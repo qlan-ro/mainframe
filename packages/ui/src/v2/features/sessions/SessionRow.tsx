@@ -93,7 +93,10 @@ function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, 
     <>
       <StatusDot badge={badge} adapterId={custom.adapterId} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center gap-1.5">
+        {/* h-4.5 pins the line at text-sm's own 18px line-height: WKWebView
+            rounds the bare text line to 17px, so without it the 18px action
+            glyphs grow the hovered row and nudge every row below by 1px. */}
+        <span className="flex h-4.5 items-center gap-1.5">
           {renameSlot ?? (
             // No tooltip on the title: the hover card already carries it in full.
             <span
