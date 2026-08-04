@@ -10,7 +10,9 @@
  * Mounted once in AppShell's outlet block.
  */
 import React, { useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+// v2 shell, legacy body: the board inside is still bridge-styled and ports
+// with the tasks pass.
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useTasksModal } from './use-tasks-modal';
@@ -84,10 +86,10 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
         }}
       >
         <DialogContent
-          hideClose
+          showCloseButton={false}
           className={cn(
-            'w-full min-h-[480px] max-h-[85vh] flex flex-col p-0 gap-0 transition-[width] duration-[180ms] ease-out',
-            view === 'list' ? 'max-w-[880px]' : 'max-w-[1200px] w-[90vw]',
+            'flex max-h-[85vh] min-h-[480px] w-full flex-col gap-0 p-0 transition-[width] duration-[180ms] ease-out',
+            view === 'list' ? 'sm:max-w-[880px]' : 'w-[90vw] sm:max-w-[1200px]',
           )}
         >
           <DialogHeader className="sr-only">

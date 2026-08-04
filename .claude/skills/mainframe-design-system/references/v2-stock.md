@@ -76,6 +76,27 @@ token changes a background — check tooltips before touching it.
 | Sidebar scrolling | — | `SidebarContent` **is** the scroller, as shadcn documents. No nested `ScrollArea`; shadcn's sidebar has no visible scrollbar by design |
 | Overflowing label | `truncate` | `truncate-fade` — a `mask-image` ramp instead of an ellipsis. **Only on a label that fills its row**; on a content-sized one the ramp eats text that fits |
 
+## Dialog ledger (2026-08 pass)
+
+Every dialog in the app was audited; state as of the shell integration:
+
+- **v2-native:** pairing (AddRemoteDialog + steps + InputOTP), DirectoryPickerModal,
+  ArchiveWorktreeDialog, ConfirmDialog (alert-dialog recipe → GitConfirm, TuningWarning),
+  DaemonSmallDialog, TaskEditModal (sidebar), ArchivedSessions/ImportSessions.
+- **v2 shell, legacy body** (chrome converted, panes port with their surface): SettingsDialog,
+  TasksModalHost (board), QuickTaskDialog, FilePickerDialog.
+- **Deferred whole** — these are surfaces wearing a dialog, not dialogs: SpotlightPalette (+ the v1
+  `command.tsx` it shares with automations' VariablePickerButton), FindInPathModal, ReviewPanel,
+  AutomationsHost (hand-rolled overlay), SetupAdvisorHost, the chat lightboxes + aui attachment
+  preview, ConnectionOverlay (window-state, not a dialog). The v1 dialog primitive survives only
+  for these.
+
+Two Radix rules every dialog outlet must follow (both bit during this pass):
+- **Never early-return `null` while open** — unmounting an open modal leaves
+  `pointer-events: none` on `<body>`. Render closed (`open={x}`) and let Radix close first.
+- **Bridge-resolving buttons `preventDefault()`** the built-in close, or `onOpenChange` fires
+  after the click and resolves the bridge a second time.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:

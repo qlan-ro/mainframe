@@ -12,7 +12,7 @@
  * Port and project context come from DaemonPortContext + useActiveIdentity.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -122,11 +122,15 @@ export function FilePickerDialog() {
 
   const handleClose = useCallback(() => setPickerOpen(false), [setPickerOpen]);
 
-  if (!open) return null;
-
+  // Rendered closed rather than early-returning null: unmounting a Radix
+  // modal while it is still open leaves `pointer-events: none` on <body>.
   return (
-    <Dialog open onOpenChange={handleClose}>
-      <DialogContent className="overflow-hidden p-0 gap-0 max-w-xl" aria-describedby={undefined}>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent
+        showCloseButton={false}
+        className="gap-0 overflow-hidden p-0 sm:max-w-xl"
+        aria-describedby={undefined}
+      >
         <DialogTitle className="sr-only">Open file</DialogTitle>
         {projectId != null ? (
           <PickerBody port={port} projectId={projectId} chatId={chatId} onClose={handleClose} />

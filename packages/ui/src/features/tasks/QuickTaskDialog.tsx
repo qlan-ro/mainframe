@@ -13,7 +13,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Zap } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useTodosStore } from './use-todos-store';
 import type { TodoType, TodoPriority } from '@/lib/api/todos';
 
@@ -175,7 +175,7 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
       }}
     >
       <DialogContent
-        hideClose
+        showCloseButton={false}
         data-testid="tasks-quick-dialog"
         className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0"
       >
