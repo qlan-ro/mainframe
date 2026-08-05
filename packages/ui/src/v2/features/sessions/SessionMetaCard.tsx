@@ -35,7 +35,7 @@ function WorktreeOrBranchRow({ worktreePath, branchName }: { worktreePath?: stri
     <div data-testid="sessions-meta-card-worktree" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>{isWorktree ? 'Worktree' : 'Branch'}</FieldLabel>
       <Icon aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-      <span className="truncate font-mono">{isWorktree ? worktreeBasename(worktreePath) : branchName}</span>
+      <span className="truncate">{isWorktree ? worktreeBasename(worktreePath) : branchName}</span>
     </div>
   );
 }

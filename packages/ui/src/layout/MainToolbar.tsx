@@ -32,7 +32,7 @@ interface MainToolbarProps {
 }
 
 const CHIP =
-  'inline-flex h-6 min-w-0 max-w-[230px] items-center gap-1 rounded-md border px-1.5 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+  'inline-flex h-6 min-w-0 max-w-[230px] items-center gap-1 rounded-md border px-1.5 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /**
  * Worktree vs main-repo chip styling — mirrors the Workspace Surfaces artboard

@@ -174,6 +174,10 @@ slices remain). Conventions from the pass:
   two cards. Search = `InputGroup` + `InputGroupInput` (h-8) with an outline `icon-sm` Fetch beside.
 - `BranchSelect` is a real v2 `Select` now (same `testId`/`-list`/`-option-*` contract; jsdom tests
   drive it click-trigger → click-option, unchanged).
+- **Branch/worktree names are UI sans, never mono** (user decision 2026-08-05, GitHub model):
+  popover rows, submenu header, toolbar chip, SessionMetaCard, composer worktree panels, and the
+  branch-form inputs. Weight + status dot carry the identifier signal. Mono is reserved for
+  hashes, hosts, ports, numeric counts, and keycap hints.
 - Segmented surface toggles = `ToggleGroup type="multiple"` on a `bg-muted` pad, active item
   `bg-background shadow-sm`; toggled id = symmetric diff in `onValueChange`.
 - Git-family amber (`mf-warning` divergence arrows, worktree glyphs) stays bridge-owned by design;

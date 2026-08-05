@@ -47,12 +47,12 @@ function ActiveInfo({ chat }: { chat: Chat }) {
       <MenuDivider />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
         <span className="text-caption text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
+        <span className="truncate text-caption text-foreground">{chat.branchName ?? '—'}</span>
         <span className="text-caption text-muted-foreground">Path</span>
         <TruncatedWithTooltip
           text={chat.worktreePath ?? ''}
-          className="font-mono text-caption text-foreground"
-          contentClassName="font-mono break-all"
+          className="text-caption text-foreground"
+          contentClassName="break-all"
         />
       </div>
     </div>

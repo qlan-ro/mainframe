@@ -105,7 +105,7 @@ export function WorktreeNewForm({
           autoComplete="off"
           className={[
             'w-full rounded-[6px] border-[0.5px] bg-muted px-[8px] py-[4px]',
-            'font-mono text-label text-foreground placeholder:text-mf-text-3',
+            'text-label text-foreground placeholder:text-mf-text-3',
             'outline-none transition-colors focus:border-primary',
             validationError ? 'border-destructive' : 'border-border',
           ].join(' ')}

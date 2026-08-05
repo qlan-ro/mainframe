@@ -31,7 +31,8 @@ import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@v2/components/ui/tooltip';
 
 // v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
-const render: typeof rtlRender = (ui, options) => rtlRender(ui, { wrapper: TooltipProvider, ...options });
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 // ── mock launch API ──────────────────────────────────────────────────────────
 const startLaunchConfig = vi.fn();

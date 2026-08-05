@@ -102,7 +102,7 @@ export function NewBranchDialog({
             placeholder="feature/my-branch"
             disabled={creating}
             aria-invalid={error ? true : undefined}
-            className="h-8 font-mono text-sm"
+            className="h-8 text-sm"
           />
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
@@ -110,14 +110,14 @@ export function NewBranchDialog({
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Start from</Label>
           <Select value={startPoint} onValueChange={setStartPoint} disabled={creating}>
-            <SelectTrigger data-testid="git-new-branch-start" size="sm" className="w-full font-mono">
+            <SelectTrigger data-testid="git-new-branch-start" size="sm" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper">
               <SelectGroup>
                 <SelectLabel>Local</SelectLabel>
                 {localBranches.map((b) => (
-                  <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`} className="font-mono">
+                  <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`}>
                     {b}
                   </SelectItem>
                 ))}
@@ -126,12 +126,7 @@ export function NewBranchDialog({
                 <SelectGroup>
                   <SelectLabel>Remote</SelectLabel>
                   {remoteBranches.map((b) => (
-                    <SelectItem
-                      key={b}
-                      value={b}
-                      data-testid={`git-new-branch-start-option-${b}`}
-                      className="font-mono"
-                    >
+                    <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`}>
                       {b}
                     </SelectItem>
                   ))}

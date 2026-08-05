@@ -48,7 +48,7 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           if (e.key === 'Enter' && !busy && value.trim()) onSubmit();
         }}
         disabled={busy}
-        className="h-8 font-mono text-sm"
+        className="h-8 text-sm"
       />
 
       <div className="flex justify-end gap-2">

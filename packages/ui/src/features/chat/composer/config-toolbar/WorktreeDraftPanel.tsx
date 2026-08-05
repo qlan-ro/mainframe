@@ -32,19 +32,19 @@ export function WorktreeDraftPanel({ draft, onCancel }: WorktreeDraftPanelProps)
       <MenuDivider />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
         <span className="text-caption text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-caption text-foreground">{branch}</span>
+        <span className="truncate text-caption text-foreground">{branch}</span>
         {pending ? (
           <>
             <span className="text-caption text-muted-foreground">From</span>
-            <span className="truncate font-mono text-caption text-foreground">{pending.baseBranch}</span>
+            <span className="truncate text-caption text-foreground">{pending.baseBranch}</span>
           </>
         ) : (
           <>
             <span className="text-caption text-muted-foreground">Path</span>
             <TruncatedWithTooltip
               text={draft.worktreePath ?? ''}
-              className="font-mono text-caption text-foreground"
-              contentClassName="font-mono break-all"
+              className="text-caption text-foreground"
+              contentClassName="break-all"
             />
           </>
         )}

@@ -70,13 +70,10 @@ export function BranchRow({
       </span>
       {/* Status dot — 6px */}
       <span className={cn('size-1.5 shrink-0 rounded-full', isCurrent ? 'bg-success' : 'bg-muted-foreground/40')} />
-      {/* Branch name in monospace — text-sm like every interactive row here;
-          11px mono made the primary content read smaller than the action rows. */}
+      {/* Branch name in the UI sans (GitHub-model identifier treatment — mono is
+          reserved for hashes/hosts/counts); weight + dot mark the current branch. */}
       <span
-        className={cn(
-          'min-w-0 flex-1 truncate font-mono text-sm text-foreground',
-          isCurrent ? 'font-semibold' : 'font-medium',
-        )}
+        className={cn('min-w-0 flex-1 truncate text-sm text-foreground', isCurrent ? 'font-semibold' : 'font-medium')}
       >
         {displayName}
       </span>

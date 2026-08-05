@@ -84,7 +84,7 @@ export function WorktreeExistingTab({ worktrees, disabled, onAttach, error }: Ex
             'disabled:pointer-events-none disabled:opacity-40',
           ].join(' ')}
         >
-          <span className="truncate font-mono text-caption text-foreground">
+          <span className="truncate text-caption text-foreground">
             {wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached'}
           </span>
           <span className="truncate text-label text-muted-foreground">{wt.path}</span>
