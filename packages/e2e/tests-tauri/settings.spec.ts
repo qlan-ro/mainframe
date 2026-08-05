@@ -12,7 +12,9 @@
  * QuickTunnelSection,NamedTunnelSection,DevicesSection,PairingSection}.
  *
  * Testid reference (verified against source):
- *   sidebar-settings-button              — layout/SidebarHeader.tsx opens the dialog
+ *   sidebar-settings                     — v2/features/sessions/SessionSidebar.tsx HeaderActions
+ *                                           opens the dialog (the v1 SidebarHeader and its
+ *                                           `-button` suffixed id are both gone)
  *   settings-dialog / settings-dialog-close
  *   settings-nav-<tab>                   — tab ids: general/providers/notifications/remote-access/about
  *                                           (no `settings-nav-keybindings` — S4 dropped the pane)
@@ -20,8 +22,10 @@
  *   settings-pane-<tab>                  — SettingsContent per-pane root
  *   settings-pane-provider-<adapterId>   — ProviderConfigForm root
  *   settings-provider-header-<adapterId> — ProvidersPane ProviderHeader
- *   settings-appearance-<axis>-<id>      — AppearanceControls PickerRow buttons
- *                                           (axes: ui-scale/mode/scheme/window-style)
+ *   settings-appearance-<axis>-<id>      — AppearanceControls PickerRow, now a
+ *                                           `ToggleGroup type="single"`; only TWO axes
+ *                                           survive: ui-scale/mode (see below)
+ *   settings-updates-channel-<id>        — GeneralPane's own PickerRow (stable/prerelease)
  *   settings-worktree-dir-input / settings-worktree-dir-save
  *   settings-notify-<key>-toggle         — NotificationsPane ToggleRow switches
  *   settings-<adapterId>-executable-path-input
@@ -36,6 +40,22 @@
  *   composer-model-select / composer-model-select-option-<id> /
  *   composer-model-<id>-effort-<level>   — packages/ui/src/features/chat/composer/config-toolbar
  *
+ * Deliberately deleted by the v2 pass (do not re-assert):
+ *   - the `scheme` and `window-style` appearance axes. `store/theme.ts` keeps only
+ *     `mode` + `uiScale`, and `applyStoredTheme()` now REMOVES `data-scheme` from
+ *     <html> unconditionally ("the ocean/velvet schemes are gone, and a value
+ *     persisted by an older build must not linger on the root").
+ *
+ * Assertion contracts the v2 primitives changed:
+ *   - Appearance options are Radix `ToggleGroupItem`s in a single-select group, so
+ *     each is `role="radio"` + `aria-checked` and carries `data-state="on|off"`.
+ *     The old `toHaveClass(/bg-accent/)` check is worse than useless here: the
+ *     active fill ships as the Tailwind variant class `data-[state=on]:bg-accent`,
+ *     which is present in `class` on EVERY option regardless of state, so the
+ *     regex passed unconditionally.
+ *   - Switch/radio rows (notifications, provider toggles, session mode) are v2
+ *     `Switch`/`RadioGroupItem` — `aria-checked` still carries the state, unchanged.
+ *
  * NOT found in source (noted, not asserted): AboutPane renders no copy buttons for
  * version/author/homedir (the plan text mentions "copy buttons" but only remote-access rows
  * use the shared CopyButton — see report).
@@ -44,6 +64,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 type SettingsTab = 'general' | 'providers' | 'notifications' | 'remote-access' | 'about';
@@ -55,9 +76,19 @@ async function providerSetting(adapterId: string, key: string): Promise<unknown>
   return body.data?.[adapterId]?.[key];
 }
 
-/** Open the dialog via the deterministic sidebar-button path (⌘, covered separately). */
+/**
+ * Open the dialog via the deterministic sidebar-button path (⌘, covered separately).
+ *
+ * The scrim wait is not belt-and-braces: this file closes and reopens the dialog
+ * several times per test, and a dialog's overlay outlives its content's unmount, so
+ * `settings-dialog` reaching count 0 does not mean the `bg-black/10` scrim is gone.
+ * Reopen inside that window and Playwright reports
+ * `data-slot="dialog-overlay" intercepts pointer events` on controls inside the
+ * fresh dialog — measured on `settings-mock-cli-default-effort`.
+ */
 async function openSettings(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-settings-button').click();
+  await waitForDialogScrimsGone(page);
+  await page.getByTestId('sidebar-settings').click();
   await page.getByTestId('settings-dialog').waitFor({ timeout: 10_000 });
 }
 
@@ -100,7 +131,7 @@ test.describe('§settings', () => {
 
   // ─── Chrome: open/close, tab nav ──────────────────────────────────────────────
 
-  test('sidebar-settings-button opens the dialog; close button closes it', async () => {
+  test('sidebar-settings opens the dialog; close button closes it', async () => {
     const { page } = app;
     await openSettings(page);
     await expect(page.getByTestId('settings-dialog')).toBeVisible();
@@ -127,7 +158,7 @@ test.describe('§settings', () => {
     // Open the dialog ONCE, then navigate tabs in place. The previous version
     // called `openTab()` (which itself calls `openSettings()`) on every loop
     // iteration — after the first tab, the dialog is already open and its
-    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `sidebar-settings-button`,
+    // scrim backdrop (`fixed inset-0 z-50 ...`) covers `sidebar-settings`,
     // so the re-click never lands and the test hangs to the 120s timeout. Real
     // usage never re-opens an already-open dialog; every other test in this file
     // calls `openTab`/`openSettings` exactly once per test, which is why this was
@@ -144,34 +175,37 @@ test.describe('§settings', () => {
 
   // ─── General: appearance (client-persisted) ───────────────────────────────────
 
+  // Two axes, not four: the `scheme` and `window-style` pickers were deleted with
+  // the ocean/velvet schemes (store/theme.ts holds only `mode` + `uiScale`, and
+  // `applyStoredTheme` strips `data-scheme` from <html> on every boot), so there is
+  // no `data-scheme` reactive effect left to observe.
   test('appearance controls apply a token change and persist across reload', async () => {
     const { page } = app;
     await openTab(page, 'general');
 
     await page.getByTestId('settings-appearance-mode-dark').click();
-    await page.getByTestId('settings-appearance-scheme-ocean').click();
     await page.getByTestId('settings-appearance-ui-scale-large').click();
-    await page.getByTestId('settings-appearance-window-style-split').click();
 
-    // Immediate reactive effect: mode → <html>.dark, scheme → <html data-scheme>.
+    // Immediate reactive effect: mode → <html>.dark (ThemeEffect).
     await expect(page.locator('html')).toHaveClass(/dark/);
-    await expect(page.locator('html')).toHaveAttribute('data-scheme', 'ocean');
-    await expect(page.getByTestId('settings-appearance-ui-scale-large')).toHaveClass(/bg-accent/);
-    await expect(page.getByTestId('settings-appearance-window-style-split')).toHaveClass(/bg-accent/);
+    await expect(page.locator('html')).not.toHaveAttribute('data-scheme');
+    // ToggleGroup type="single" → role=radio + aria-checked. NOT toHaveClass: the
+    // active fill is the variant class `data-[state=on]:bg-accent`, which every
+    // option carries whether or not it is selected.
+    await expect(page.getByTestId('settings-appearance-mode-dark')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('settings-appearance-ui-scale-large')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('settings-appearance-ui-scale-normal')).toHaveAttribute('aria-checked', 'false');
 
     await closeSettings(page);
     // Full reload proves localStorage persistence, not just in-memory zustand state.
     await page.reload();
-    await page.getByTestId('sidebar-settings-button').waitFor({ timeout: 20_000 });
+    await page.getByTestId('sidebar-settings').waitFor({ timeout: 20_000 });
 
     await expect(page.locator('html')).toHaveClass(/dark/);
-    await expect(page.locator('html')).toHaveAttribute('data-scheme', 'ocean');
 
     await openTab(page, 'general');
-    await expect(page.getByTestId('settings-appearance-mode-dark')).toHaveClass(/bg-accent/);
-    await expect(page.getByTestId('settings-appearance-scheme-ocean')).toHaveClass(/bg-accent/);
-    await expect(page.getByTestId('settings-appearance-ui-scale-large')).toHaveClass(/bg-accent/);
-    await expect(page.getByTestId('settings-appearance-window-style-split')).toHaveClass(/bg-accent/);
+    await expect(page.getByTestId('settings-appearance-mode-dark')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('settings-appearance-ui-scale-large')).toHaveAttribute('aria-checked', 'true');
     await closeSettings(page);
   });
 
@@ -418,6 +452,16 @@ test.describe('§settings tuning inheritance', () => {
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
+    // A registered project with ZERO sessions is the app's boot dead-end:
+    // ChatSurface's useZeroSessionBootPicker force-opens the "New session in…"
+    // DropdownMenu 1.5s after the app settles, and that modal layer swallows the
+    // clicks inside the Settings dialog this test opens on top of it (the
+    // `settings-mock-cli-default-effort` Select trigger reported "visible, enabled
+    // and stable" while the dialog overlay intercepted every click). Any session
+    // removes the state, so this one takes the DEFAULT adapter rather than
+    // mock-cli: the test still skips gracefully when mock-cli is unregistered, and
+    // a hard-coded adapter here would make that a beforeAll failure instead.
+    await createTauriChat(app.page, project.projectId);
   });
 
   test.afterAll(async () => {
@@ -457,15 +501,20 @@ test.describe('§settings tuning inheritance', () => {
 
     await closeSettings(page);
 
-    // Create a brand-new chat on the same adapter (only session-creation call in this
-    // describe — no prior sendMessage/reload, so the useSessionListRouter navigation race
-    // documented in chat.spec.ts's mid-test createTauriChat note does not apply here).
+    // Create a brand-new chat on the mock-cli adapter. Nothing here sends a message
+    // or reloads first, so the useSessionListRouter navigation race documented in
+    // chat.spec.ts's mid-test createTauriChat note does not apply.
     await createTauriChat(page, project.projectId, 'default', 'mock-cli');
 
     // The opus-tier model's tuning flyout must show the EFFECTIVE effort checked
     // (chat override → provider default → model default). A fresh chat has no
     // override, so it inherits the provider default set above.
     const opusId = 'claude-opus-4-5-20251001';
+    // Every open of this menu goes through closeMenus: a modal Radix menu owns the
+    // page's pointer events while it lives, and a trigger click that lands inside a
+    // CLOSING menu's exit animation is swallowed outright (see composer.spec.ts's
+    // TODO(bug) on the same wart) — the menu simply never reopens.
+    await closeMenus(page);
     await page.getByTestId('composer-model-select').click();
     await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
     await expect(page.getByTestId(`composer-model-${opusId}-tuning`)).toBeVisible({ timeout: 5_000 });
@@ -474,11 +523,12 @@ test.describe('§settings tuning inheritance', () => {
     // Explicitly override the per-chat effort to 'low'. Clicking the row itself
     // would choose the model and close the menu, so select it first, then tune.
     await page.getByTestId(`composer-model-select-option-${opusId}`).click();
+    await closeMenus(page);
     await page.getByTestId('composer-model-select').click();
     await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
     await page.getByTestId(`composer-model-${opusId}-effort-low`).click();
     await expect(page.getByTestId(`composer-model-${opusId}-effort-low`)).toHaveAttribute('aria-checked', 'true');
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
 
     // The provider default in Settings must be unaffected by the chat-level override.
     await openTab(page, 'providers');

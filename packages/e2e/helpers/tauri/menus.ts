@@ -26,3 +26,17 @@ export async function closeMenus(page: Page, maxLayers = 4): Promise<void> {
   }
   await expect(menus).toHaveCount(0, { timeout: 5_000 });
 }
+
+/**
+ * Wait until no dialog SCRIM is left on the page.
+ *
+ * A dialog's content and its overlay are separate elements with separate exit
+ * animations, so the content can unmount while the `bg-black/10` scrim is still
+ * fading. Assert the dialog's own testid reaches 0 and you can still open the next
+ * dialog UNDERNEATH that dying scrim: Playwright then reports
+ * `data-slot="dialog-overlay" intercepts pointer events` on a button it can see
+ * perfectly well. Between two dialogs in one describe, wait for this too.
+ */
+export async function waitForDialogScrimsGone(page: Page): Promise<void> {
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0, { timeout: 5_000 });
+}

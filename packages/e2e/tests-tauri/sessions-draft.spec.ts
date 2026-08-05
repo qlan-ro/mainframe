@@ -17,14 +17,25 @@
  * + `sidebar/SessionsNewButton.tsx`.
  *
  * Testid reference (verified against source):
- *   sessions-new-button              — sidebar "+" (SessionsNewButton.tsx)
- *   sessions-new-picker              — NewSessionPickerPopover root (All view only)
+ *   sessions-new-button              — the list header's "+" (v2 SessionsNewButton.tsx). In "All"
+ *                                      view it is a DropdownMenu trigger; with a project filter
+ *                                      active it opens the draft directly.
+ *   sessions-new-picker              — the picker menu content (All view only)
  *   sessions-new-picker-project-<id> — project row inside the picker
- *   sessions-draft-row               — synthetic draft row (DraftSessionRow.tsx)
+ *   sessions-draft-row               — the synthetic draft row's BUTTON (v2 DraftSessionRow.tsx)
  *   sessions-draft-row-title         — draft row's "New Session" title span
- *   sessions-draft-row-discard       — draft row's hover-revealed ✕
- *   sessions-filter-pill-<id>        — project filter pill (ProjectFilterPillBar.tsx)
- *   sessions-filter-pill-all         — "All" filter pill
+ *   sessions-draft-row-discard       — the ✕. It is a `SidebarMenuAction`, i.e. a SIBLING of
+ *                                      `sessions-draft-row` inside the list item — not a
+ *                                      descendant, so it can only be reached from the page.
+ *   sidebar-project-<id>             — one project row in the switcher list (was
+ *                                      `sessions-filter-pill-<id>`)
+ *   sidebar-project-all              — "All projects" row (was `sessions-filter-pill-all`)
+ *   project-avatar                   — the coloured initial the draft row shows in "All" view.
+ *                                      The draft row no longer prints the project NAME (v2
+ *                                      DraftSessionRow renders a `ProjectAvatar`), so the
+ *                                      project a draft belongs to is asserted on the chat
+ *                                      header's chip instead.
+ *   chat-header-project              — ChatCardHeaderDraft's project chip (names the project)
  *   sessions-welcome                 — WelcomeState root (ChatEmptyState variant='welcome')
  *   sessions-welcome-suggestion-<i>  — one repo-derived suggestion row (SuggestionRow.tsx)
  *   sessions-firstrun                — FirstRunState root (zero projects)
@@ -33,36 +44,44 @@
  *   chat-composer-input / -send      — composer (usable pre-send on the draft)
  *   composer-model-select / composer-permission-mode-select — config selectors
  *
+ * The project switcher is a count-collapsed vertical list now (ProjectSection.tsx,
+ * VISIBLE_LIMIT = 3), not a width-measured pill row, so the old `expandProjectPills`
+ * helper is gone — with ≤3 projects every row is rendered.
+ *
  * Not covered here (per the plan's "does NOT cover" list / out of scope for this
  * flow): DraftSessionRow's own unit-level styling states, provider-tuning
  * inheritance defaults (chat-header.spec.ts / composer.spec.ts territory).
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { TOAST } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
+/** One row of the project switcher list (page-objects' `projectFilterPill` is stale). */
+function projectRow(page: Page, projectId: string): Locator {
+  return page.getByTestId(`sidebar-project-${projectId}`);
+}
+
 /**
- * Expand the project-pill bar's "+N more" overflow toggle if it's collapsed.
- * The sidebar is a fixed 280px wide and ProjectFilterPillBar's useRowOverflow
- * measures real available width — 2 `mf-e2e-<hex>`-named project pills
- * genuinely don't fit next to "All" + "Add project" at that width, so every
- * per-project-pill interaction in this describe needs the overflow open
- * first, or the pill locator times out waiting on a hidden element (the root
- * cause of the "pill-active New" test's apparent hang/crash below — not a
- * product bug). Mirrors sessions-filters.spec.ts's own helper. Idempotent —
- * a no-op once already expanded.
+ * Pick a project out of the "New session in…" menu and wait for that menu to be
+ * GONE, not merely closing.
+ *
+ * Radix keeps a closing menu's content mounted through its exit animation, and
+ * while it lives the modal layer still owns `<html>`'s pointer events — so the
+ * very next click (the composer's Send, in every send-from-draft test here) is
+ * swallowed and retried until the test's own 60s budget runs out. `toHaveCount(0)`
+ * on the menu's testid is the state that says the layer retired; asserting it here
+ * (rather than pressing Escape) also keeps a menu that fails to self-close on
+ * select a visible failure instead of a silently dismissed one.
  */
-async function expandProjectPills(page: Page): Promise<void> {
-  const more = page.getByTestId('sessions-projects-more');
-  if (!(await more.isVisible().catch(() => false))) return;
-  if ((await more.getAttribute('aria-expanded')) === 'true') return;
-  await more.click();
-  await expect(more).toHaveAttribute('aria-expanded', 'true');
+async function pickProjectFromPicker(page: Page, projectId: string): Promise<void> {
+  await page.getByTestId(`sessions-new-picker-project-${projectId}`).click({ timeout: 10_000 });
+  await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0, { timeout: 10_000 });
 }
 
 interface SuggestionDto {
@@ -78,11 +97,39 @@ async function fetchSuggestions(projectId: string): Promise<SuggestionDto[]> {
   return body.data ?? [];
 }
 
-async function fetchChatProjectId(chatId: string): Promise<string | undefined> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+/** `GET /api/chats?project=<id>` — the same route `lib/api/chats.ts` `listChats`
+ *  uses, rather than the uncovered `/api/projects/:id/chats` parity alias. */
+async function fetchProjectChatIds(projectId: string): Promise<string[]> {
+  const res = await fetch(`${DAEMON_BASE}/api/chats?project=${encodeURIComponent(projectId)}`);
   expect(res.ok).toBe(true);
-  const body = (await res.json()) as { data?: { projectId?: string } };
-  return body.data?.projectId;
+  const body = (await res.json()) as { data?: { id: string }[] };
+  return (body.data ?? []).map((chat) => chat.id);
+}
+
+/**
+ * Poll the daemon until EXACTLY ONE chat exists in `projectId` that did not exist
+ * before, and return its id.
+ *
+ * The daemon is the authority on "a chat was created": a set-difference over the
+ * sidebar's `data-chat-id`s is not. The first send triggers a thread-list reload,
+ * the list is windowed, and an `evaluateAll()` taken right after a `toHaveCount`
+ * assertion can land mid-remount and come back without the new row — which surfaces
+ * only as `expect(undefined).toBeTruthy()`, naming neither the cause nor the
+ * contract.
+ */
+async function waitForCreatedChat(projectId: string, before: string[]): Promise<string> {
+  const known = new Set(before);
+  let created: string[] = [];
+  await expect
+    .poll(
+      async () => {
+        created = (await fetchProjectChatIds(projectId)).filter((id) => !known.has(id));
+        return created.length;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(1);
+  return created[0] as string;
 }
 
 /** `createTauriProject` names the project after the temp dir's basename. */
@@ -92,6 +139,24 @@ function baseName(p: string): string {
 }
 
 // ─── §sessions-draft — "All" view picker + draft row lifecycle ───────────────
+
+/**
+ * Dismiss every PERSISTENT toast.
+ *
+ * `mfToast` gives error and permission toasts `duration: Infinity` plus a close
+ * button, and the Toaster sits bottom-right (App.tsx) — exactly where the composer's
+ * Send button is. So one failed agent run earlier in a describe leaves a toast parked
+ * over Send for the rest of the file: measured as `chat-composer-send` reported
+ * "visible, enabled and stable" while the click retried for the full test budget.
+ * Auto-dismissing toasts need no help, so the closeable ones are the whole problem.
+ */
+async function dismissPersistentToasts(page: Page): Promise<void> {
+  const closers = page.locator(`${TOAST.root} ${TOAST.close}`);
+  for (let remaining = await closers.count(); remaining > 0; remaining--) {
+    await closers.first().click();
+  }
+  await expect(closers).toHaveCount(0, { timeout: 5_000 });
+}
 
 test.describe('§sessions-draft — All view picker + draft row', () => {
   let app: TauriAppFixture;
@@ -130,15 +195,17 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
 
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
+    await pickProjectFromPicker(page, project.projectId);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     await expect(draftRow).toHaveAttribute('data-active', 'true');
     // The draft is a distinct synthetic row — no new sessions-row was created.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
-    await expect(draftRow.getByText(baseName(project.projectPath))).toBeVisible();
+    // In "All" view the row marks its project with a coloured initial, not the
+    // name (v2 DraftSessionRow → ProjectAvatar); the name is on the chat header.
+    await expect(draftRow.getByTestId('project-avatar')).toBeVisible();
+    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
   });
 
   // Depends on the previous test's draft-row surviving — see the fix note
@@ -174,7 +241,9 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
 
     await draftRow.hover();
-    await draftRow.getByTestId('sessions-draft-row-discard').click();
+    // The ✕ is a SidebarMenuAction — a sibling of the row button, so it is
+    // addressed from the page rather than scoped to `draftRow`.
+    await page.getByTestId('sessions-draft-row-discard').click();
 
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
     const previousRow = sessionsSidebar(page).row(existingChatId);
@@ -187,27 +256,20 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    const idsBefore = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
+    const chatsBefore = await fetchProjectChatIds(project.projectId);
 
     await sidebar.newButton().click();
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+    await pickProjectFromPicker(page, project.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     // Still no new sessions-row while the draft is unsent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
+    // ...and nothing on the daemon either: the chat is created on first send (D3).
+    expect(await fetchProjectChatIds(project.projectId)).toHaveLength(chatsBefore.length);
 
     await composer(page).submit('e2e draft first-send test');
 
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
-    const idsAfter = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
-    const newChatId = idsAfter.find((id) => id != null && !idsBefore.includes(id));
-    expect(newChatId).toBeTruthy();
-
-    const projectId = await fetchChatProjectId(newChatId as string);
-    expect(projectId).toBe(project.projectId);
+    await waitForCreatedChat(project.projectId, chatsBefore);
   });
 
   // Regression (#275, "first message is not visible"): the first send hands the
@@ -224,37 +286,57 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
-    await page.route('**/api/chats/*/messages', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { messages: [], transcriptMissing: false } }),
-      });
-    });
+    // GET only. The send itself travels over the WebSocket, so nothing else on this
+    // path is faulted today — but pinning the method keeps a future write on
+    // `/messages` out of the injection, and `route.continue()` is the honest
+    // fallthrough for it.
+    await page.route(
+      (url) => /^\/api\/chats\/[^/]+\/messages$/.test(url.pathname),
+      async (route) => {
+        if (route.request().method() !== 'GET') {
+          await route.continue();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, data: { messages: [], transcriptMissing: false } }),
+        });
+      },
+    );
 
-    try {
-      await sidebar.newButton().click();
-      await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
-      await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+    // No try/finally around the body: `page.unroute` on a page the test timeout
+    // already tore down throws, and that throw REPLACED the only report of which
+    // step actually hung. This is the last test in the describe and `afterAll`
+    // closes the app, so the route cannot leak into anything.
+    await sidebar.newButton().click({ timeout: 10_000 });
+    await pickProjectFromPicker(page, project.projectId);
+    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
 
-      await composer(page).submit('e2e first-message visibility regression');
+    // A failed agent run earlier in this describe parks a persistent error toast
+    // over the Send button; clear it before submitting.
+    await dismissPersistentToasts(page);
+    await composer(page).submit('e2e first-message visibility regression');
 
-      const userMessage = page.getByTestId('chat-user-message');
-      await expect(userMessage).toHaveCount(1, { timeout: 20_000 });
-      await expect(userMessage).toContainText('e2e first-message visibility regression');
-      // Hold past the handoff: the blank controller used to replace the
-      // transcript on its own seed, a beat after the row switched.
-      await page.waitForTimeout(2_000);
-      await expect(userMessage).toHaveCount(1);
-    } finally {
-      await page.unroute('**/api/chats/*/messages');
-    }
+    const userMessage = page.getByTestId('chat-user-message');
+    await expect(userMessage).toHaveCount(1, { timeout: 20_000 });
+    await expect(userMessage).toContainText('e2e first-message visibility regression');
+    // The draft row retiring IS the handoff: the local draft has been replaced by
+    // the canonical remote row, which is when the second controller seeds itself
+    // from the (forced-empty) history read above.
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 20_000 });
+    // Hold past it: the blank controller used to replace the transcript a beat
+    // AFTER the row switched, so the negative assertion needs a window.
+    await page.waitForTimeout(2_000);
+    await expect(userMessage).toHaveCount(1);
+
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 });
 
-// ─── §sessions-draft — pill-active skip + no cross-project leak ──────────────
+// ─── §sessions-draft — selected-project skip + no cross-project leak ─────────
 
-test.describe('§sessions-draft — pill-active skip + no leak across New cycles', () => {
+test.describe('§sessions-draft — selected-project skip + no leak across New cycles', () => {
   let app: TauriAppFixture;
   let projectA: TauriProject;
   let projectB: TauriProject;
@@ -271,49 +353,39 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
     await closeTauriApp(app);
   });
 
-  // Previously reported as a page/browser crash on this project pill click —
-  // re-triaged as an e2e-only issue, not a product bug: at the sidebar's fixed
-  // 280px width, both `mf-e2e-<hex>`-named project pills collapse behind the
-  // "+N more" overflow toggle (`useRowOverflow`), so the un-expanded pill
-  // locator was never actionable and the click hung out the full test
-  // timeout. `expandProjectPills` (above) opens the overflow first.
-  //
   // FIXED (commit 3368d065): discard (✕) never cleared the draft row when a
-  // project filter pill was active. `use-draft-row.ts`'s `onDiscard` now marks
+  // project filter was active. `use-draft-row.ts`'s `onDiscard` now marks
   // the draft in a discarded-drafts suppression set before resetting, so the
   // row clears reliably under an active project filter.
-  test('with a project pill active, New skips the picker and the draft inherits that project', async () => {
+  test('with a project selected, New skips the picker and the draft inherits that project', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
-    await expandProjectPills(page);
 
-    await sidebar.projectFilterPill(projectA.projectId).click();
-    await expect(sidebar.projectFilterPill(projectA.projectId)).toHaveAttribute('aria-pressed', 'true', {
+    await projectRow(page, projectA.projectId).click();
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
 
     await sidebar.newButton().click();
-    // No picker — the draft resolves straight from the active pill.
+    // No picker — the draft resolves straight from the selected project.
     await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
-    // DraftSessionRow's own project chip only renders in "All" view
-    // (`showProject`, per its own doc comment) — with a project pill active,
-    // the sidebar row deliberately omits it (same "only in All view" rule the
-    // SessionMetaCard hover card's project row follows). Assert the project on
-    // the chat header's own chip instead, which always renders for a draft
-    // regardless of pill state (ChatCardHeaderDraft's `chat-header-project`).
+    // The draft row's project marker only renders in "All" view (`showProject`,
+    // DraftSessionRow.tsx) — with a project selected the row omits it. The chat
+    // header's chip always names the draft's project (ChatCardHeaderDraft's
+    // `chat-header-project`), so assert there.
+    await expect(draftRow.getByTestId('project-avatar')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(projectA.projectPath));
 
-    // Clean up: discard, then clear the pill for the next test. The 2026-07
-    // project switcher list is single-select (not a toggle) — only the "All
-    // projects" row clears the filter, a second click on the active row
-    // no longer does.
+    // Clean up: discard, then clear the filter for the next test. The project
+    // switcher list is single-select (not a toggle) — only the "All projects"
+    // row clears the filter, a second click on the active row no longer does.
     await draftRow.hover();
-    await draftRow.getByTestId('sessions-draft-row-discard').click();
+    await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await page.getByTestId('sessions-filter-pill-all').click();
+    await page.getByTestId('sidebar-project-all').click();
   });
 
   test('abandoning a draft in project A does not leak into a second New picking project B', async () => {
@@ -323,16 +395,18 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
     await expect(page.getByTestId('sessions-new-button')).toBeVisible();
 
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    const idsBefore = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
+    const chatsBeforeA = await fetchProjectChatIds(projectA.projectId);
+    const chatsBeforeB = await fetchProjectChatIds(projectB.projectId);
 
-    // First New: pick project A.
+    // First New: pick project A. The draft row itself only carries a coloured
+    // initial (both e2e projects are `mf-e2e-<hex>`, so the initial cannot tell
+    // them apart) — the chat header's chip is what names the draft's project.
+    const headerProject = page.getByTestId('chat-header-project');
     await sidebar.newButton().click();
-    await page.getByTestId(`sessions-new-picker-project-${projectA.projectId}`).click();
+    await pickProjectFromPicker(page, projectA.projectId);
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
-    await expect(draftRow.getByText(baseName(projectA.projectPath))).toBeVisible();
+    await expect(headerProject).toContainText(baseName(projectA.projectPath));
 
     // WITHOUT sending, click New again — the reused draft slot must not stack.
     await sidebar.newButton().click();
@@ -340,23 +414,17 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(1);
 
     // This time pick project B — the stale A config must be fully replaced, not merged.
-    await page.getByTestId(`sessions-new-picker-project-${projectB.projectId}`).click();
+    await pickProjectFromPicker(page, projectB.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(1);
-    await expect(draftRow.getByText(baseName(projectB.projectPath))).toBeVisible({ timeout: 10_000 });
-    await expect(draftRow.getByText(baseName(projectA.projectPath))).toHaveCount(0);
+    await expect(headerProject).toContainText(baseName(projectB.projectPath), { timeout: 10_000 });
+    await expect(headerProject).not.toContainText(baseName(projectA.projectPath));
 
     // Commit it and verify on the daemon side: the created chat belongs to B, not A.
     await composer(page).submit('e2e no-leak regression test');
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
-    const idsAfter = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
-    const newChatId = idsAfter.find((id) => id != null && !idsBefore.includes(id));
-    expect(newChatId).toBeTruthy();
-
-    const projectId = await fetchChatProjectId(newChatId as string);
-    expect(projectId).toBe(projectB.projectId);
-    expect(projectId).not.toBe(projectA.projectId);
+    await waitForCreatedChat(projectB.projectId, chatsBeforeB);
+    // The abandoned A draft left nothing behind on the daemon.
+    expect(await fetchProjectChatIds(projectA.projectId)).toHaveLength(chatsBeforeA.length);
   });
 });
 
@@ -368,8 +436,8 @@ test.describe('§sessions-draft — pill-active skip + no leak across New cycles
 // (no project chip, no file tree; first send failed and rolled back via the
 // coordinator's "no draft config" guard). Fixed via useNewChatHotkeyHandler +
 // the shared useNewSessionPickerTarget store — ⌘N now opens the SAME anchored
-// popover the "+" button does when no project pill is active, and is
-// unchanged (switch straight to a new thread) when a pill IS active.
+// popover the "+" button does when no project is selected, and is
+// unchanged (switch straight to a new thread) when one IS selected.
 
 test.describe('§sessions-draft — ⌘N in "All" view opens the project picker (no projectless session)', () => {
   let app: TauriAppFixture;
@@ -389,8 +457,8 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
   test('⌘N opens the same anchored picker as the "+" button; no projectless draft is created', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    // Guarantee "All" view (no project pill active).
-    await expect(page.getByTestId('sessions-new-button')).toBeVisible();
+    // Guarantee "All" view (no project selected).
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
 
     await page.keyboard.press('ControlOrMeta+n');
 
@@ -400,8 +468,7 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
 
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
+    await pickProjectFromPicker(page, project.projectId);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
@@ -411,48 +478,42 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
   test('sending from the ⌘N-picked draft creates exactly one chat tied to the picked project', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    const idsBefore = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
+    const chatsBefore = await fetchProjectChatIds(project.projectId);
 
     // Continues from the previous test's ⌘N-picked draft.
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     await composer(page).submit('e2e cmd-n picker test');
 
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 20_000 });
-    const idsAfter = await page
-      .getByTestId('sessions-row')
-      .evaluateAll((els) => els.map((e) => e.getAttribute('data-chat-id')));
-    const newChatId = idsAfter.find((id) => id != null && !idsBefore.includes(id));
-    expect(newChatId).toBeTruthy();
-
-    const projectId = await fetchChatProjectId(newChatId as string);
-    expect(projectId).toBe(project.projectId);
+    // "exactly one chat tied to the picked project" is a claim about the daemon, so
+    // read it there — see `waitForCreatedChat` for why the sidebar's ids are the
+    // wrong source (this test failed with a bare `expect(undefined).toBeTruthy()`
+    // from exactly that DOM snapshot).
+    await waitForCreatedChat(project.projectId, chatsBefore);
   });
 
-  test('with a project pill active, ⌘N still skips the picker and seeds that project directly', async () => {
+  test('with a project selected, ⌘N still skips the picker and seeds that project directly', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
-    await sidebar.projectFilterPill(project.projectId).click();
-    await expect(sidebar.projectFilterPill(project.projectId)).toHaveAttribute('aria-pressed', 'true', {
+    await projectRow(page, project.projectId).click();
+    await expect(projectRow(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
       timeout: 5_000,
     });
 
     await page.keyboard.press('ControlOrMeta+n');
-    // No picker this time — the draft resolves straight from the active pill.
+    // No picker this time — the draft resolves straight from the selected project.
     await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
 
-    // Clean up: discard, then clear the pill. The 2026-07 project switcher
-    // list is single-select (not a toggle) — only "All projects" clears it.
+    // Clean up: discard, then clear the filter. The project switcher list is
+    // single-select (not a toggle) — only "All projects" clears it.
     await draftRow.hover();
-    await draftRow.getByTestId('sessions-draft-row-discard').click();
+    await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
-    await page.getByTestId('sessions-filter-pill-all').click();
+    await page.getByTestId('sidebar-project-all').click();
   });
 });
 
@@ -485,7 +546,7 @@ test.describe('§sessions-draft — WelcomeState suggestions', () => {
     expect(suggestions.length).toBeGreaterThan(0);
 
     await sessionsSidebar(page).newButton().click();
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+    await pickProjectFromPicker(page, project.projectId);
 
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
     const rows = page.locator('[data-testid^="sessions-welcome-suggestion-"]:not([data-testid*="insert"])');
@@ -569,7 +630,7 @@ test.describe('§sessions-draft — zero-session boot (projects>0, no sessions) 
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
     await expect(page.getByTestId('sessions-firstrun')).toHaveCount(0);
 
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click();
+    await pickProjectFromPicker(page, project.projectId);
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
   });
 });
