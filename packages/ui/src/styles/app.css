@@ -13,6 +13,15 @@
    styles/); the v2 sheet points at its own tree, this points at the rest. */
 @source "../";
 
+/* App theme overrides on top of the stock v2 preset. The preset's light
+   sidebar is a zero-chroma gray, which reads yellowish beside blue-leaning
+   content; a violet-leaning cool gray (#F5F5F8, hover #ECECEF — the
+   Linear/macOS chrome family) keeps it cool. Dark mode needs no correction. */
+:root {
+  --sidebar: oklch(0.97 0.004 286);
+  --sidebar-accent: oklch(0.945 0.004 286);
+}
+
 /* Native scrollbars/form controls must be painted for the active mode, or
    WebKit draws light chrome (the white track) on dark surfaces. */
 :root {
