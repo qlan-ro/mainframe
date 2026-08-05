@@ -33,8 +33,8 @@
  *   settings-remote-access-{named-tunnel,quick-tunnel,devices,pairing}-section
  *   named-tunnel-token-input / named-tunnel-url-input / named-tunnel-save
  *   quick-tunnel-toggle
- *   composer-model-select / composer-model-select-option-<id> / composer-effort-select /
- *   composer-effort-select-option-<id>   — packages/ui/src/features/chat/composer/config-toolbar
+ *   composer-model-select / composer-model-select-option-<id> /
+ *   composer-model-<id>-effort-<level>   — packages/ui/src/features/chat/composer/config-toolbar
  *
  * NOT found in source (noted, not asserted): AboutPane renders no copy buttons for
  * version/author/homedir (the plan text mentions "copy buttons" but only remote-access rows
@@ -462,19 +462,23 @@ test.describe('§settings tuning inheritance', () => {
     // documented in chat.spec.ts's mid-test createTauriChat note does not apply here).
     await createTauriChat(page, project.projectId, 'default', 'mock-cli');
 
-    // Switch the composer to the opus-tier model — the effort chip must reflect the
-    // EFFECTIVE value (chat override → provider default → model default). A fresh chat has
-    // no override, so it inherits the provider default set above.
+    // The opus-tier model's tuning flyout must show the EFFECTIVE effort checked
+    // (chat override → provider default → model default). A fresh chat has no
+    // override, so it inherits the provider default set above.
+    const opusId = 'claude-opus-4-5-20251001';
     await page.getByTestId('composer-model-select').click();
-    await page.getByTestId('composer-model-select-option-claude-opus-4-5-20251001').click();
-    const composerEffort = page.getByTestId('composer-effort-select');
-    await expect(composerEffort).toBeVisible({ timeout: 5_000 });
-    await expect(composerEffort).toContainText(/high/i);
+    await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
+    await expect(page.getByTestId(`composer-model-${opusId}-tuning`)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId(`composer-model-${opusId}-effort-high`)).toHaveAttribute('aria-checked', 'true');
 
-    // Explicitly override the per-chat effort to 'low'.
-    await composerEffort.click();
-    await page.getByTestId('composer-effort-select-option-low').click();
-    await expect(composerEffort).toContainText(/low/i);
+    // Explicitly override the per-chat effort to 'low'. Clicking the row itself
+    // would choose the model and close the menu, so select it first, then tune.
+    await page.getByTestId(`composer-model-select-option-${opusId}`).click();
+    await page.getByTestId('composer-model-select').click();
+    await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
+    await page.getByTestId(`composer-model-${opusId}-effort-low`).click();
+    await expect(page.getByTestId(`composer-model-${opusId}-effort-low`)).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
 
     // The provider default in Settings must be unaffected by the chat-level override.
     await openTab(page, 'providers');

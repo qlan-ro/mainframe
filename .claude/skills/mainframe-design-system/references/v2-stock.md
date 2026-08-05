@@ -166,12 +166,25 @@ popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (Surfac
 slices remain). Conventions from the pass:
 
 - **Menu-shaped = native `DropdownMenu`, no exceptions** (user decision 2026-08-05). A floating
-  list of actions/choices is a DropdownMenu (launch picker, branch menu); a searchable pick-list
-  is Popover+Command (the combobox pattern — palette, VariablePickerButton); only forms, switch
-  panels, and info cards are plain Popovers. Nested per-row buttons inside a DropdownMenuItem
-  work: stop propagation on pointerdown/pointerup/click (Radix's item pointerup path otherwise
-  treats the button press as a row select) and re-enable pointer events on the button. The
-  short-lived `menu-row` primitive is deleted — don't reintroduce hand-styled menu rows.
+  list of actions/choices is a DropdownMenu; a searchable pick-list is Popover+Command (the
+  combobox pattern — palette, VariablePickerButton); only forms, switch panels, and info cards
+  are plain Popovers. Nested per-row buttons inside a DropdownMenuItem work: stop propagation on
+  pointerdown/pointerup/click (Radix's item pointerup path otherwise treats the button press as a
+  row select) and re-enable pointer events on the button. The short-lived `menu-row` primitive is
+  deleted — don't reintroduce hand-styled menu rows.
+  **Converted so far:** launch picker (ToolbarLaunchControls), branch menu (BranchPopover), the
+  Run tab strip's `+` add menu, the automations add-trigger menu (WhenCard), the skills
+  install-scope menu (SkillAction), the automations TokenPicker (Group + Label per source), and
+  the composer's ProviderModelSelect.
+  **Not converted, by inspection:** `layout/SurfacePicker.tsx` is not a float — it is the Files/Run
+  surface's always-visible empty-state card (`RunSurface`/`FilesSurface` render it inline when no
+  tab is open). It has no trigger, so a DropdownMenu would mean inventing one and hiding the
+  content behind a click. It stays an inline card; it converts with its surface port.
+- **`components/ui/menu.tsx` survives** the title-bar and menu sweeps. Remaining consumers:
+  SurfacePicker (`MenuDivider`/`MenuLabel`), the composer worktree family — WorktreePopover,
+  WorktreeDraftPanel, WorktreeExistingTab — and setup-advisor's InstallBand (`MenuRow`). It dies
+  with those ports. `menu-variants.ts` outlives it either way: v1 `popover.tsx`,
+  `dropdown-menu.tsx` and `context-menu.tsx` all compose it.
 - **The branch popover is a native `DropdownMenu`** (user decision 2026-08-05, replacing the v1
   artboard's side-by-side cards): quick actions are items, sections are Groups whose headers are
   `Collapsible` triggers (non-items — toggling never closes the menu; Remote starts collapsed; an
@@ -183,6 +196,14 @@ slices remain). Conventions from the pass:
 - Menu-item tests: Radix items are divs — assert `aria-disabled`, not `toBeDisabled()`; a bare
   SubContent harness needs `userEvent.setup({ pointerEventsCheck: 0 })` (modal menus set body
   pointer-events:none); SubTriggers open on plain click in jsdom.
+- **Radix gates opening on the TRIGGER's own `disabled`.** `DropdownMenuTrigger asChild` around a
+  disabled `<button>` still opens on pointerdown — the child's `disabled` isn't consulted. Pass
+  `disabled` to the trigger too, or an inert control opens its menu (caught in ProviderModelSelect).
+- **In jsdom a submenu closes the moment the pointer leaves its SubTrigger.** Radix's grace-area
+  polygon is computed from `getBoundingClientRect`, which is all zeros there, so `userEvent.click`
+  on a SubContent item moves the pointer, closes the flyout, and the click lands on nothing. Open
+  the flyout with `user.hover(subTrigger)`, then drive the items with `fireEvent.click` — it
+  dispatches no pointer movement. Real browsers (Playwright) are unaffected.
 - `BranchSelect` is a real v2 `Select` now (same `testId`/`-list`/`-option-*` contract; jsdom tests
   drive it click-trigger → click-option, unchanged).
 - **Branch/worktree names are UI sans, never mono** (user decision 2026-08-05, GitHub model):
@@ -200,8 +221,16 @@ slices remain). Conventions from the pass:
   styling silently never matches. Drive pressed chrome from the state variable
   (`pressed && 'bg-background shadow-sm'`), never from the Radix attribute, on any
   Hint-wrapped toggle. `aria-pressed` survives — assert that in tests.
-- v1 `components/ui/menu.tsx` still serves: SurfacePicker, RunTabStrip, composer config-toolbar,
-  setup-advisor skills rows. It dies with those ports.
+- **The composer's effort chip and features gear are retired** (user decision 2026-08-05, the
+  Cursor pattern). Effort and per-model options live in each model row's `DropdownMenuSub` flyout
+  inside the model menu: click the row to choose the model, hover for its tuning. `EffortPicker`
+  and `FeaturesPopover` are deleted; `composer-effort-select*` / `composer-features-trigger` /
+  `composer-feature-*` are gone, replaced by `composer-model-<id>-effort-<level>` and
+  `composer-model-<id>-feature-<key>`. A NON-active model's flyout is display-only — it previews
+  that model's defaults with the controls inert, because `useTuningWarning` parks exactly one
+  pending change and a model PATCH plus a tuning PATCH would silently drop the first mid-session.
+  **Known cost:** the effective effort and the ultracode lock are no longer visible without
+  opening the menu.
 
 ## Known deviations, and why
 

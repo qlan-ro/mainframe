@@ -6,7 +6,9 @@
  * Calls useAdapters + useComposerTuning ONCE and fans out resolved props to
  * all config controls so no child runs its own hooks.
  *
- * Left→right order (matches artboard): Agent · Model · Permission · Plan · Effort · Features.
+ * Left→right order: Agent+Model · Permission · Plan · Worktree. Effort and
+ * features are no longer their own chips — they live in each model row's
+ * flyout inside the model menu (the Cursor pattern).
  * Renders nothing when every control is hidden (e.g. before chat/model loads).
  *
  * Wired into Composer.tsx via the `data-testid="chat-composer-toolbar"` slot.
@@ -16,8 +18,6 @@ import { useAdapters, useComposerTuning } from './use-composer-tuning';
 import { ProviderModelSelect } from './ProviderModelSelect';
 import { PermissionSelect } from './PermissionSelect';
 import { PlanModeToggle } from './PlanModeToggle';
-import { EffortPicker } from './EffortPicker';
-import { FeaturesPopover } from './FeaturesPopover';
 import { WorktreePopover } from './WorktreePopover';
 import { TuningWarningDialog } from './TuningWarningDialog';
 
@@ -54,29 +54,14 @@ export function ComposerToolbar() {
         model={model}
         locked={hasMessages}
         disabled={disabled}
+        providerDefaults={providerDefaults}
         setAdapter={setAdapter}
         setModel={setModel}
+        setEffort={setEffort}
+        setFeature={setFeature}
       />
       <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} providerDefaults={providerDefaults} />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
-      {model && (
-        <EffortPicker
-          chat={chat}
-          model={model}
-          setEffort={setEffort}
-          disabled={disabled}
-          providerDefaults={providerDefaults}
-        />
-      )}
-      {model && (
-        <FeaturesPopover
-          chat={chat}
-          model={model}
-          setFeature={setFeature}
-          disabled={disabled}
-          providerDefaults={providerDefaults}
-        />
-      )}
       <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
       <TuningWarningDialog
         pending={tuningWarning.pending}

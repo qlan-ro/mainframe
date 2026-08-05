@@ -24,7 +24,7 @@
  *      change on the new chat PATCHes only that chat.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
@@ -142,9 +142,22 @@ async function openModelPicker(): Promise<void> {
   await screen.findByTestId('composer-provider-model-popover');
 }
 
+/**
+ * Effort now lives in the model row's hover flyout, not a chip of its own.
+ * Hover opens it; clicking the row would choose the model and close the menu.
+ */
 async function openEffortPicker(): Promise<void> {
-  await userEvent.click(screen.getByTestId('composer-effort-select'));
-  await screen.findByTestId('composer-effort-select-option-high');
+  await userEvent.click(screen.getByTestId('composer-model-select'));
+  await userEvent.hover(screen.getByTestId('composer-model-select-option-sonnet'));
+  await screen.findByTestId('composer-model-sonnet-effort-high');
+}
+
+/**
+ * fireEvent, not userEvent: moving the pointer off the SubTrigger closes the
+ * flyout in jsdom, where Radix's grace-area rects are all zero.
+ */
+function pickEffort(level: 'high' | 'max'): void {
+  fireEvent.click(screen.getByTestId(`composer-model-sonnet-effort-${level}`));
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +222,7 @@ describe('ComposerToolbar — effort change mid-session', () => {
     renderToolbar();
 
     await openEffortPicker();
-    await userEvent.click(screen.getByTestId('composer-effort-select-option-max'));
+    pickEffort('max');
     await screen.findByTestId('composer-tuning-warning');
 
     await userEvent.click(screen.getByTestId('composer-tuning-warning-confirm'));
@@ -223,7 +236,7 @@ describe('ComposerToolbar — effort change mid-session', () => {
     renderToolbar();
 
     await openEffortPicker();
-    await userEvent.click(screen.getByTestId('composer-effort-select-option-max'));
+    pickEffort('max');
     await screen.findByTestId('composer-tuning-warning');
 
     await userEvent.click(screen.getByTestId('composer-tuning-warning-cancel'));
@@ -254,7 +267,7 @@ describe('ComposerToolbar — no warning before the first message', () => {
       label: 'effort change',
       pick: async () => {
         await openEffortPicker();
-        await userEvent.click(screen.getByTestId('composer-effort-select-option-max'));
+        pickEffort('max');
       },
       assertApplied: () =>
         expect(vi.mocked(setChatTuning)).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', {
@@ -283,7 +296,7 @@ describe('ComposerToolbar — no-op re-pick', () => {
     renderToolbar();
 
     await openEffortPicker();
-    await userEvent.click(screen.getByTestId('composer-effort-select-option-high'));
+    pickEffort('high');
 
     expect(screen.queryByTestId('composer-tuning-warning')).toBeNull();
   });

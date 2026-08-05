@@ -1,17 +1,20 @@
 'use client';
 
 /**
- * ProviderModelSelect — one trigger → a popover that unifies the provider (agent)
- * choice and the model choice (replaces the separate AdapterSelect + ModelSelect).
+ * ProviderModelSelect — one trigger → the composer's provider + model menu.
  *
- * Top section: a PROVIDER segmented row of every registered adapter. Uninstalled
- * adapters (`installed === false`) render locked + muted; once the chat has
- * messages the WHOLE row locks (switching agents mid-thread would orphan the CLI
- * session — mirrors the desktop invariant). Bottom section: the active provider's
- * models, each with its description and a `· default` marker; the older-but-still-active
- * models the CLI's own picker hides (`isOlder`) follow under their own label, then any
- * models the adapter reaches through a separate endpoint (`group`, e.g. CLIProxyAPI)
- * under theirs.
+ * A floating list of choices is a native DropdownMenu (ledger rule, 2026-08-05).
+ * The PROVIDER segmented row rides at the top as non-item chrome, the way the
+ * branch menu carries its search field: it holds focusable buttons, so it stops
+ * keydown propagation or Radix's typeahead would eat the keystrokes.
+ *
+ * Each model row is a `ModelMenuRow` — click to choose, hover for that model's
+ * effort/options flyout (the Cursor pattern). That flyout replaces the toolbar's
+ * former standalone EffortPicker chip and FeaturesPopover gear.
+ *
+ * Uninstalled adapters (`installed === false`) render locked + muted; once the
+ * chat has messages the WHOLE provider row locks (switching agents mid-thread
+ * would orphan the CLI session — mirrors the desktop invariant).
  *
  * `locked` and `disabled` are different rules: `locked` freezes the provider row
  * for the session, `disabled` makes the whole picker inert while a turn runs, so
@@ -21,18 +24,30 @@
  * under our external-store runtime. Selection writes through our setAdapter/setModel
  * → PATCH /config; config is server-authoritative (the daemon's chat.updated
  * broadcast updates the toolbar — no optimistic edits here).
- *
- * Built on shadcn Popover (not raw Radix). Real mf-* tokens; never the /opacity modifier.
  */
 
 import { Fragment, useState } from 'react';
-import { Check, ChevronDown, Lock } from 'lucide-react';
-import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ChevronDown, Lock } from 'lucide-react';
+import type {
+  AdapterInfo,
+  AdapterModel,
+  Chat,
+  EffortLevel,
+  FeatureKey,
+  ProviderConfig,
+} from '@qlan-ro/mainframe-types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { MenuLabel } from '@/components/ui/menu';
 import { cn } from '@/lib/utils';
 import { RunningHint } from './RunningHint';
+import { ModelMenuRow } from './ModelMenuRow';
+import { groupSlug, modelRows, partitionModels } from './model-menu-rows';
 
 export interface ProviderModelSelectProps {
   chat: Chat;
@@ -42,10 +57,13 @@ export interface ProviderModelSelectProps {
   model: AdapterModel | null;
   /** True once the chat has messages — locks the provider (agent) for the session. */
   locked: boolean;
-  /** True while a turn is running — the whole picker goes inert, as the effort and feature controls already do. */
+  /** True while a turn is running — the whole picker goes inert, as the other controls do. */
   disabled: boolean;
+  providerDefaults?: ProviderConfig;
   setAdapter: (adapterId: string) => void;
   setModel: (model: string) => void;
+  setEffort: (effort: EffortLevel) => void;
+  setFeature: (key: FeatureKey, on: boolean) => void;
 }
 
 /** A small dot color per known provider; neutral fallback for anything else.
@@ -58,31 +76,6 @@ const PROVIDER_DOT: Record<string, string> = {
 };
 export function providerDot(id: string): string {
   return PROVIDER_DOT[id] ?? 'bg-muted-foreground';
-}
-
-/** Model rows, injecting a synthetic entry when the stored id isn't in the catalog. */
-function modelRows(adapter: AdapterInfo | null, storedId: string | null | undefined): AdapterModel[] {
-  const catalog = adapter?.models ?? [];
-  if (storedId && storedId !== '' && !catalog.some((m) => m.id === storedId)) {
-    return [{ id: storedId, label: storedId }, ...catalog];
-  }
-  return catalog;
-}
-
-/** Labelled sections below the adapter's own models, in first-seen order. */
-function modelGroups(rows: AdapterModel[]): [string, AdapterModel[]][] {
-  const groups = new Map<string, AdapterModel[]>();
-  for (const m of rows) {
-    if (!m.group) continue;
-    const bucket = groups.get(m.group);
-    if (bucket) bucket.push(m);
-    else groups.set(m.group, [m]);
-  }
-  return [...groups];
-}
-
-function groupSlug(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
 interface ProviderPillProps {
@@ -102,10 +95,10 @@ function ProviderPill({ option, active, locked, onSelect }: ProviderPillProps) {
       disabled={disabled}
       onClick={() => onSelect(option.id)}
       className={cn(
-        'flex items-center gap-1.5 rounded-md border px-2 py-1 text-label transition-colors',
+        'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors',
         'focus-visible:outline-none',
         active
-          ? 'border-primary bg-mf-selection text-foreground font-medium'
+          ? 'border-primary bg-mf-selection font-medium text-foreground'
           : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
       )}
@@ -117,37 +110,6 @@ function ProviderPill({ option, active, locked, onSelect }: ProviderPillProps) {
   );
 }
 
-interface ModelRowProps {
-  option: AdapterModel;
-  active: boolean;
-  onSelect: (id: string) => void;
-}
-function ModelRow({ option, active, onSelect }: ModelRowProps) {
-  const desc = option.isDefault
-    ? option.description
-      ? `${option.description} · default`
-      : 'default'
-    : option.description;
-  return (
-    <button
-      type="button"
-      data-testid={`composer-model-select-option-${option.id}`}
-      onClick={() => onSelect(option.id)}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
-        'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none',
-        active && 'bg-mf-selection text-foreground',
-      )}
-    >
-      <Check size={14} className={cn('mt-0.5 flex-shrink-0 text-primary', !active && 'invisible')} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-label font-medium text-foreground">{option.label}</span>
-        {desc && <span className="block text-caption leading-snug text-muted-foreground">{desc}</span>}
-      </span>
-    </button>
-  );
-}
-
 export function ProviderModelSelect({
   chat,
   adapters,
@@ -155,8 +117,11 @@ export function ProviderModelSelect({
   model,
   locked,
   disabled,
+  providerDefaults,
   setAdapter,
   setModel,
+  setEffort,
+  setFeature,
 }: ProviderModelSelectProps) {
   const [open, setOpen] = useState(false);
   if (adapters.length === 0) return null;
@@ -164,10 +129,7 @@ export function ProviderModelSelect({
   const active = adapter ?? adapters.find((a) => a.installed) ?? adapters[0] ?? null;
   const currentModelId = model?.id ?? chat.model ?? '';
   const rows = modelRows(active, chat.model);
-  const native = rows.filter((m) => !m.group);
-  const current = native.filter((m) => !m.isOlder);
-  const older = native.filter((m) => m.isOlder);
-  const groups = modelGroups(rows);
+  const { current, older, groups } = partitionModels(rows);
   const triggerLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
   const activeId = chat.adapterId ?? active?.id ?? '';
 
@@ -179,12 +141,27 @@ export function ProviderModelSelect({
     setOpen(false);
   };
 
+  const renderRow = (m: AdapterModel) => (
+    <ModelMenuRow
+      key={m.id}
+      option={m}
+      active={m.id === currentModelId}
+      chat={chat}
+      providerDefaults={providerDefaults}
+      onSelect={onPickModel}
+      setEffort={setEffort}
+      setFeature={setFeature}
+    />
+  );
+
   return (
     <RunningHint active={disabled}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+            {/* Radix gates opening on the TRIGGER's own `disabled`; a disabled
+                child button alone still lets pointerdown open the menu. */}
+            <DropdownMenuTrigger asChild disabled={disabled}>
               <button
                 type="button"
                 data-testid="composer-model-select"
@@ -192,9 +169,11 @@ export function ProviderModelSelect({
                 disabled={disabled}
                 aria-label={`Provider and model: ${triggerLabel}`}
                 className={cn(
-                  'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-label text-muted-foreground',
+                  'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-xs text-muted-foreground',
                   'hover:bg-accent hover:text-accent-foreground',
-                  'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
+                  // Driven by state, not data-[state=open]: TooltipTrigger asChild
+                  // overwrites the child's data-state with the tooltip's own.
+                  open && 'border-primary bg-mf-selection',
                   'transition-colors focus-visible:outline-none',
                   'disabled:pointer-events-none disabled:opacity-40',
                 )}
@@ -203,35 +182,37 @@ export function ProviderModelSelect({
                 <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
                   {triggerLabel}
                 </span>
-                <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
+                <ChevronDown size={12} className="flex-shrink-0 text-muted-foreground" />
               </button>
-            </PopoverTrigger>
+            </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top">Provider &amp; model</TooltipContent>
         </Tooltip>
 
-        <PopoverContent
+        <DropdownMenuContent
           data-testid="composer-provider-model-popover"
           align="start"
           side="top"
           sideOffset={6}
           className="w-72"
         >
-          <div data-testid="composer-provider-header">
-            <MenuLabel
-              trailing={
-                locked ? (
-                  <span className="flex items-center gap-1 text-caption text-muted-foreground">
-                    <Lock size={12} /> Locked
-                  </span>
-                ) : undefined
-              }
-            >
-              Provider
-            </MenuLabel>
-          </div>
+          <DropdownMenuLabel data-testid="composer-provider-header" className="flex items-center justify-between">
+            <span>Provider</span>
+            {locked && (
+              <span className="flex items-center gap-1 font-normal">
+                <Lock size={12} /> Locked
+              </span>
+            )}
+          </DropdownMenuLabel>
 
-          <div className="flex flex-wrap gap-1 px-[8px]">
+          {/* Non-item chrome holding real buttons — keystrokes stay here rather
+              than driving the menu's typeahead. Escape still closes. */}
+          <div
+            className="flex flex-wrap gap-1 px-2 pb-1"
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') e.stopPropagation();
+            }}
+          >
             {adapters.map((a) => (
               <ProviderPill
                 key={a.id}
@@ -243,40 +224,30 @@ export function ProviderModelSelect({
             ))}
           </div>
 
-          <div className="my-2 border-t border-border" />
+          <DropdownMenuSeparator />
 
-          <MenuLabel>{active?.name ?? 'Models'} models</MenuLabel>
-          <div className="flex max-h-[264px] flex-col gap-px overflow-y-auto">
-            {current.map((m) => (
-              <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-            ))}
-            {older.length > 0 && (
-              <>
-                <div data-testid="composer-model-older-header">
-                  <MenuLabel>Older models</MenuLabel>
-                </div>
-                {older.map((m) => (
-                  <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-                ))}
-              </>
-            )}
-            {groups.map(([label, models]) => (
-              <Fragment key={label}>
-                <div data-testid={`composer-model-group-header-${groupSlug(label)}`}>
-                  <MenuLabel>{label}</MenuLabel>
-                </div>
-                {models.map((m) => (
-                  <ModelRow key={m.id} option={m} active={m.id === currentModelId} onSelect={onPickModel} />
-                ))}
-              </Fragment>
-            ))}
-          </div>
+          <DropdownMenuLabel>{active?.name ?? 'Models'} models</DropdownMenuLabel>
+          {current.map(renderRow)}
+          {older.length > 0 && (
+            <>
+              <DropdownMenuLabel data-testid="composer-model-older-header">Older models</DropdownMenuLabel>
+              {older.map(renderRow)}
+            </>
+          )}
+          {groups.map(([label, models]) => (
+            <Fragment key={label}>
+              <DropdownMenuLabel data-testid={`composer-model-group-header-${groupSlug(label)}`}>
+                {label}
+              </DropdownMenuLabel>
+              {models.map(renderRow)}
+            </Fragment>
+          ))}
 
-          <p data-testid="composer-provider-footer" className="px-[8px] pt-2 text-caption text-muted-foreground">
+          <p data-testid="composer-provider-footer" className="px-2 pt-2 text-xs text-muted-foreground">
             {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
           </p>
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </RunningHint>
   );
 }
