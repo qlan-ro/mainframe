@@ -47,6 +47,31 @@ function assertBundleTargetsTestPort(): void {
   }
 }
 
+/**
+ * Free PREVIEW_PORT before we bind it. A run that dies mid-suite (globalTimeout, SIGINT) never
+ * reaches the teardown, so its `vite preview` survives and keeps serving the OLD bundle: the next
+ * run then either loses `--strictPort` or — worse — silently tests stale assets. Killed strictly by
+ * who holds the port, never by matching a process name.
+ */
+function freePreviewPort(): void {
+  let pids: string[];
+  try {
+    pids = execFileSync('lsof', ['-ti', `tcp:${PREVIEW_PORT}`], { encoding: 'utf8' })
+      .split('\n')
+      .map((p) => p.trim())
+      .filter(Boolean);
+  } catch {
+    return; // lsof found nothing bound to the port (or isn't on PATH) — nothing to free
+  }
+  for (const pid of pids) {
+    try {
+      process.kill(Number(pid), 'SIGKILL');
+    } catch {
+      /* expected: exited between lsof and kill — the port is free either way */
+    }
+  }
+}
+
 async function isPreviewServing(): Promise<boolean> {
   const ctx = await request.newContext();
   try {
@@ -91,15 +116,15 @@ async function startPreview(): Promise<ChildProcess> {
  * static server, torn up and down 100+ times a run. Start it once here and share it across every
  * spec and describe; per-describe isolation comes from a fresh BrowserContext + a fresh daemon, not
  * a fresh file server. Returns a teardown that kills the preview when the whole run ends.
+ *
+ * Each invocation serves the bundle IT just verified: a survivor from a crashed run is killed
+ * rather than adopted, so no run can inherit another run's assets. Concurrent invocations on one
+ * PREVIEW_PORT are therefore unsupported — give the second `MF_E2E_PREVIEW_PORT`.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   buildUi();
   assertBundleTargetsTestPort();
-
-  // A preview left alive by a prior invocation (e.g. the per-file sweep reuses the port across
-  // back-to-back runs) is adopted as-is rather than fought over --strictPort. We didn't spawn it,
-  // so we don't kill it.
-  if (await isPreviewServing()) return async () => {};
+  freePreviewPort();
 
   const preview = await startPreview();
   return async () => {
