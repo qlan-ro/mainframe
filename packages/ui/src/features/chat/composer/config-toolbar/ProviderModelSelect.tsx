@@ -131,19 +131,38 @@ function ProviderTabs({
       }}
     >
       <TabsList className="w-full">
-        {adapters.map((a) => (
-          <TabsTrigger
-            key={a.id}
-            value={a.id}
-            data-testid={`composer-adapter-select-option-${a.id}`}
-            aria-label={`Provider: ${a.name}`}
-            disabled={!a.installed || (locked && a.id !== activeId)}
-          >
-            <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} />
-            <span className="truncate">{a.name}</span>
-            {!a.installed && <Lock className="size-3 shrink-0" />}
-          </TabsTrigger>
-        ))}
+        {adapters.map((a) => {
+          const lockedOut = a.installed && locked && a.id !== activeId;
+          const trigger = (
+            <TabsTrigger
+              key={a.id}
+              value={a.id}
+              data-testid={`composer-adapter-select-option-${a.id}`}
+              aria-label={`Provider: ${a.name}`}
+              disabled={!a.installed || lockedOut}
+              className={cn(lockedOut && 'w-full')}
+            >
+              <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} />
+              <span className="truncate">{a.name}</span>
+              {!a.installed && <Lock className="size-3 shrink-0" />}
+            </TabsTrigger>
+          );
+          if (!lockedOut) return trigger;
+          // A disabled button swallows pointer events, so the mid-session
+          // explanation rides on a wrapper span.
+          return (
+            <Tooltip key={a.id}>
+              <TooltipTrigger asChild>
+                <span data-testid={`composer-adapter-locked-${a.id}`} className="h-full flex-1">
+                  {trigger}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Locked for this session — start a new session to switch providers.
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
       </TabsList>
     </Tabs>
   );

@@ -288,6 +288,37 @@ describe('ProviderModelSelect — locked prop controls footer and pill state', (
     expect(screen.getByTestId('composer-adapter-select-option-gemini')).toBeDisabled();
   });
 
+  it('locked=true explains itself: the locked segment carries a tooltip, the active one does not', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      locked: true,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    // A disabled button swallows pointer events, so the tooltip rides on a
+    // wrapper span around the locked segment only.
+    expect(screen.getByTestId('composer-adapter-locked-gemini')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-adapter-locked-claude')).toBeNull();
+  });
+
+  it('locked=false renders no tooltip wrapper on any segment', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      locked: false,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-adapter-locked-gemini')).toBeNull();
+  });
+
   it('locked=true does NOT disable the active provider pill', async () => {
     renderSelect({
       adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
