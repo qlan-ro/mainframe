@@ -269,27 +269,32 @@ export function ProviderModelSelect({
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuLabel>{active?.name ?? 'Models'} models</DropdownMenuLabel>
-          {current.map(renderRow)}
-          {older.length > 0 && (
-            <CollapsibleModelSection
-              label="Older models"
-              testId="composer-model-older-header"
-              containsCurrent={older.some((m) => m.id === currentModelId)}
-            >
-              {older.map(renderRow)}
-            </CollapsibleModelSection>
-          )}
-          {groups.map(([label, models]) => (
-            <CollapsibleModelSection
-              key={label}
-              label={label}
-              testId={`composer-model-group-header-${groupSlug(label)}`}
-              containsCurrent={models.some((m) => m.id === currentModelId)}
-            >
-              {models.map(renderRow)}
-            </CollapsibleModelSection>
-          ))}
+          {/* Fixed-height scroll region: every provider's catalog renders in
+              the same panel size, so switching tabs or expanding a section
+              scrolls instead of resizing the (bottom-anchored) menu. */}
+          <div className="h-72 overflow-y-auto">
+            <DropdownMenuLabel>{active?.name ?? 'Models'} models</DropdownMenuLabel>
+            {current.map(renderRow)}
+            {older.length > 0 && (
+              <CollapsibleModelSection
+                label="Older models"
+                testId="composer-model-older-header"
+                containsCurrent={older.some((m) => m.id === currentModelId)}
+              >
+                {older.map(renderRow)}
+              </CollapsibleModelSection>
+            )}
+            {groups.map(([label, models]) => (
+              <CollapsibleModelSection
+                key={label}
+                label={label}
+                testId={`composer-model-group-header-${groupSlug(label)}`}
+                containsCurrent={models.some((m) => m.id === currentModelId)}
+              >
+                {models.map(renderRow)}
+              </CollapsibleModelSection>
+            ))}
+          </div>
 
           <p data-testid="composer-provider-footer" className="px-2 pt-2 text-xs text-muted-foreground">
             {locked ? 'Provider stays fixed for this session.' : 'Pick a provider before your first message.'}
