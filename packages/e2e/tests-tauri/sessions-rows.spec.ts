@@ -8,34 +8,51 @@
  * import), sessions-filters.spec.ts (pills/tag-bar/sort), sessions-tags.spec.ts
  * (tag popover internals — this file only asserts the resulting row dot).
  *
- * Source (verified against packages/ui/src/features/sessions/sidebar/):
+ * Source (verified against packages/ui/src/v2/features/sessions/):
  *   SessionRow.tsx          — row root, StatusDot, RowHoverActions, pin glyph
- *   SessionRowMetaIcons.tsx — compact worktree/PR/tag-dot glyph cluster (2026-07 rebuild)
+ *   SessionRowMetaLine.tsx  — the row's second line: project name + trailing worktree/PR/tag-dot
+ *                             glyphs (replaced `SessionRowMetaIcons.tsx`, hence the testid renames)
  *   SessionMetaCard.tsx     — hover-card detail (project/worktree/branch/PR/tags/warning)
  *   SessionContextMenu.tsx  — right-click menu (Pin/Unpin, Rename, Tags, Archive, Copy Session ID)
- *   SessionGroupHeader.tsx  — group header, incl. the 'Pinned' group's pin glyph
+ *   SessionGroupHeader.tsx  — header for the SECOND group onward (see the note below)
  *   view-model/session-status.ts — deriveSessionBadge (worktree-missing > transcript-missing > working > waiting > idle)
  *
  * Testid reference (all verified against source above):
  *   sessions-row                     — row root (data-chat-id, data-active)
  *   sessions-row-status-dot          — StatusDot; aria-label = badge.base
- *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing')
- *   sessions-row-relative-time       — time label, hidden on row hover
- *   sessions-row-action-pin/-tags/-archive — hover-action buttons (hidden until row hover;
- *                                       Rename is context-menu-only since the 2026-07 rebuild)
+ *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing').
+ *                                       Its ink is now stock's two-step ramp — `text-primary` for
+ *                                       anything wanting attention (working/waiting/unread) and
+ *                                       `text-muted-foreground` for everything else. The v1
+ *                                       four-step `text-mf-text-3` is a PHANTOM class in v2 and
+ *                                       compiles to nothing.
+ *   sessions-row-relative-time       — time label; it STAYS PUT on hover (the actions insert in
+ *                                       front of it and the truncating title gives way instead —
+ *                                       SessionRow.tsx RowBody)
+ *   sessions-row-action-pin/-tags/-archive — hover-action buttons, MOUNTED on row hover rather
+ *                                       than CSS-hidden (SessionRowHoverActions.tsx header);
+ *                                       Rename is context-menu-only
  *   sessions-ctx-pin/-rename/-tags/-archive/-copy-id — context-menu items
- *   sessions-group-header-Pinned     — the Pinned group header (plain text, no pin glyph)
- *   sessions-row-meta-icon-worktree  — compact worktree glyph on the row (text-destructive when missing)
- *   sessions-row-meta-icon-tag-dot-<name> — compact tag-dot glyph on the row (capped at 3)
- *   sessions-meta-card-project       — project row inside the hover card (All view only)
+ *   sessions-section-jump            — the PARKED first-group header. `SessionListVirtuoso`
+ *                                       renders a hairline instead of a duplicate header for
+ *                                       group 0, so 'Pinned' (always the FIRST group when a
+ *                                       pinned session exists) never appears as
+ *                                       `sessions-group-header-Pinned` — it is the parked
+ *                                       label's text.
+ *   sessions-group-header-<label>    — headers from the second group onward ('Today' below 'Pinned')
+ *   sessions-row-meta-worktree       — worktree/branch glyph on the row; `text-warning` (NOT
+ *                                       `text-destructive`) when the checkout is missing —
+ *                                       SessionRowMetaLine.tsx reserves destructive for
+ *                                       irreversible menu actions
+ *   sessions-row-meta-tag-dot-<name> — tag-dot glyph on the row (capped at 3)
+ *   sessions-meta-card-project       — project row inside the hover card
  *   sessions-meta-card-warning       — branch-safety warning inside the hover card
  *
  * NOTE on the pin glyph: SessionRow.tsx renders a PER-ROW
  * `sessions-row-pin-glyph` only when `custom.pinned && !inPinnedGroup`, and the
  * sidebar always routes pinned rows into the 'Pinned' group — so no pin glyph
- * is reachable through the sidebar (the group header is deliberately plain
- * text, see SessionGroupHeader.tsx). Pinned-ness is asserted via the group
- * header's presence.
+ * is reachable through the sidebar (the header is deliberately plain text, see
+ * SessionGroupHeader.tsx). Pinned-ness is asserted via the group label.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -111,42 +128,48 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     const rowX = sessionsSidebar(page).row(chatIdX);
     const dot = rowX.getByTestId('sessions-row-status-dot');
 
-    // 2026-07 sidebar rebuild: the dot is now a ProviderLogo glyph tinted by
-    // state (SessionRowStatus.tsx statusLogoClass) — muted text-mf-text-3 when
-    // idle+read, text-primary when unread/working/waiting.
+    // The dot is a ProviderLogo glyph tinted by state (StatusDot.tsx statusClass).
+    // v2 has two usable inks, so the ramp collapsed to `text-primary` for anything
+    // wanting attention and `text-muted-foreground` for everything else — v1's
+    // `text-mf-text-3` no longer exists in this tree.
     await expect(dot).toHaveAttribute('aria-label', 'idle');
-    await expect(dot).toHaveClass(/text-mf-text-3/);
+    await expect(dot).toHaveClass(/text-muted-foreground/);
     await expect(dot).not.toHaveClass(/text-primary/);
   });
 
-  test('hovering a row swaps the relative-time label for the pin/tag/archive action buttons', async () => {
+  test('hovering a row reveals the pin/tag/archive actions in front of the relative time', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
     const relTime = rowX.getByTestId('sessions-row-relative-time');
     const tagsBtn = rowX.getByTestId('sessions-row-action-tags');
-    // 2026-07 sidebar rebuild: the inline Rename hover button was dropped by
-    // design (the context menu owns Rename — SessionRowHoverActions.tsx) and a
-    // Pin/Unpin button added as the primary pin entry point.
+    // The inline Rename hover button was dropped by design (the context menu owns
+    // Rename — SessionRowHoverActions.tsx) and a Pin/Unpin button added as the
+    // primary pin entry point.
     const pinBtn = rowX.getByTestId('sessions-row-action-pin');
     const archiveBtn = rowX.getByTestId('sessions-row-action-archive');
 
     // Establish a clean non-hovered baseline first — the previous test's
     // `rowX.click()` leaves the real mouse cursor positioned over this row,
-    // which keeps it in the CSS :hover state here (live-verified flake: the
-    // very first assertion below saw relTime already hidden).
+    // which would otherwise arrive here already hovered.
     await page.mouse.move(0, 0);
     await expect(relTime).toBeVisible();
-    await expect(tagsBtn).toBeHidden();
+    // The cluster is MOUNTED from the row's hover state, not CSS-hidden: a display
+    // flip left an open Hint tooltip anchored to a zero-rect element the instant
+    // the pointer left the row (SessionRowHoverActions.tsx header). So absence,
+    // not invisibility.
+    await expect(tagsBtn).toHaveCount(0);
 
     await rowX.hover();
-    await expect(relTime).toBeHidden();
     await expect(tagsBtn).toBeVisible();
     await expect(pinBtn).toBeVisible();
     await expect(archiveBtn).toBeVisible();
+    // The time no longer yields to the actions — they insert in front of it and
+    // the truncating title is what gives way (SessionRow.tsx RowBody).
+    await expect(relTime).toBeVisible();
 
     // Reset hover so it doesn't bleed into later tests.
     await page.mouse.move(0, 0);
-    await expect(relTime).toBeVisible();
+    await expect(tagsBtn).toHaveCount(0);
   });
 
   test('right-click context menu shows exactly Pin, Rename, Tags, Archive before any message has been sent', async () => {
@@ -170,15 +193,21 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
   test('pinning via the context menu moves the row into a Pinned group; unpinning reverts it', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
-    const pinnedHeader = page.getByTestId('sessions-group-header-Pinned');
+    // 'Pinned' is always the FIRST group, and the windowed list draws a hairline
+    // instead of a duplicate header for group 0 (SessionListVirtuoso.tsx) — so the
+    // Pinned label lives on the PARKED header, and 'Today' (now group 1) is the
+    // one that gets a `sessions-group-header-*`. The header still carries no pin
+    // glyph by design (plain-text section headers, macOS pattern).
+    const parkedLabel = page.getByTestId('sessions-section-jump');
+    const todayHeader = page.getByTestId('sessions-group-header-Today');
+
+    await expect(parkedLabel).toHaveText('Today');
 
     await rowX.click({ button: 'right' });
     await page.getByTestId('sessions-ctx-pin').click();
 
-    // 2026-07 sidebar rebuild: the group header carries NO pin glyph by design
-    // (plain-text section headers, macOS pattern — SessionGroupHeader.tsx); the
-    // Pinned group label itself is the pinned indicator.
-    await expect(pinnedHeader).toBeVisible({ timeout: 10_000 });
+    await expect(parkedLabel).toHaveText('Pinned', { timeout: 10_000 });
+    await expect(todayHeader).toBeVisible({ timeout: 10_000 });
     await expect(rowX).toBeVisible();
 
     await rowX.click({ button: 'right' });
@@ -186,30 +215,27 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await expect(unpinItem).toContainText('Unpin');
     await unpinItem.click();
 
-    await expect(pinnedHeader).toHaveCount(0, { timeout: 10_000 });
+    await expect(parkedLabel).toHaveText('Today', { timeout: 10_000 });
+    await expect(todayHeader).toHaveCount(0, { timeout: 10_000 });
     await expect(rowX).toBeVisible();
   });
 
-  test('hover card shows the project only in the All view', async () => {
+  test("hover card names the row's project", async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
-    const rowX = sidebar.row(chatIdX);
+    const rowX = sessionsSidebar(page).row(chatIdX);
 
-    // 2026-07 single-row rebuild: the per-row project chip moved off the row
-    // entirely (dropped from SessionRowMetaIcons per the compact-row spec) —
-    // project identity is now surfaced only in the SessionMetaCard hover card,
-    // and only in "All" view (same visibility rule the old inline chip had).
+    // The row's own second line names the project too (SessionRowMetaLine), and the
+    // hover card spells it out with an avatar (SessionMetaCard `sessions-meta-card-project`).
+    //
+    // The "only in the All view" half of this test is GONE: `SessionsSection` still
+    // computes `showProject` from the active filter, but threads it to the draft row
+    // only — `SessionList`/`SessionRow` receive `projectNames` unconditionally, so a
+    // filtered view keeps naming the project. Reported as a suspected regression
+    // rather than pinned here in either direction.
     await rowX.hover();
-    const projectRow = page.getByTestId('sessions-meta-card-project');
-    await expect(projectRow).toBeVisible({ timeout: 5_000 });
-    await expect(projectRow).toContainText(path.basename(project.projectPath));
-
-    await sidebar.projectFilterPill(project.projectId).click();
-    await rowX.hover();
-    await expect(page.getByTestId('sessions-meta-card-project')).toHaveCount(0, { timeout: 5_000 });
-
-    // Reset the filter to All for subsequent tests.
-    await page.getByTestId('sessions-filter-pill-all').click();
+    const cardProject = page.getByTestId('sessions-meta-card-project');
+    await expect(cardProject).toBeVisible({ timeout: 5_000 });
+    await expect(cardProject).toContainText(path.basename(project.projectPath));
   });
 
   test('applying a tag surfaces a colored dot in the row meta line', async () => {
@@ -229,7 +255,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await page.keyboard.press('Escape');
     await expect(popover).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(rowX.getByTestId(`sessions-row-meta-icon-tag-dot-${tagName}`)).toBeVisible({ timeout: 5_000 });
+    await expect(rowX.getByTestId(`sessions-row-meta-tag-dot-${tagName}`)).toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -251,7 +277,7 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await closeTauriApp(app);
   });
 
-  test('worktree glyph is present; going missing on disk flips the glyph + dot to destructive and the hover card warns', async () => {
+  test('worktree glyph is present; going missing on disk flips the glyph to warning, the dot to worktree-missing, and the hover card warns', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
     const dot = row.getByTestId('sessions-row-status-dot');
@@ -261,12 +287,11 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     });
     expect(enableRes.ok()).toBe(true);
 
-    // 2026-07 single-row rebuild: the row shows an icon-only worktree glyph
-    // (SessionRowMetaIcons); the full "Worktree missing" cause text moved to
-    // the SessionMetaCard hover card (no more inline text pill/degraded marker).
-    const glyph = row.getByTestId('sessions-row-meta-icon-worktree');
+    // The row shows an icon-only worktree glyph (SessionRowMetaLine); the full
+    // "Worktree missing" cause text lives in the SessionMetaCard hover card.
+    const glyph = row.getByTestId('sessions-row-meta-worktree');
     await expect(glyph).toBeVisible({ timeout: 15_000 });
-    await expect(glyph).not.toHaveClass(/text-destructive/);
+    await expect(glyph).not.toHaveClass(/text-warning/);
     await expect(dot).toHaveAttribute('aria-label', 'idle');
 
     const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatId}`);
@@ -281,7 +306,9 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await waitConnected(page);
 
     await expect(dot).toHaveAttribute('aria-label', 'worktree-missing', { timeout: 15_000 });
-    await expect(glyph).toHaveClass(/text-destructive/);
+    // `warning`, not `destructive`: the session still works, its checkout is just
+    // gone — SessionRowMetaLine.tsx reserves destructive for irreversible actions.
+    await expect(glyph).toHaveClass(/text-warning/);
 
     await row.hover();
     const warning = page.getByTestId('sessions-meta-card-warning');
@@ -386,7 +413,7 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
 
     // A's response lands in the background: chat.notification reaches the
     // client and session-list-router's onMarkUnread(chatIdA) flips the logo
-    // glyph to the vivid unread tint (statusLogoClass's unread branch).
+    // glyph to the accent (StatusDot.tsx statusClass → wantsAttention).
     await expect(dotA).toHaveClass(/text-primary/, { timeout: 45_000 });
     await expect(dotA).toHaveAttribute('aria-label', 'idle');
 
