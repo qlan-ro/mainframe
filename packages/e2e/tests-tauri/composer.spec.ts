@@ -39,12 +39,16 @@ test.describe('§composer config selects', () => {
   test('M7: permission-mode select switches to Unattended (yolo)', async () => {
     const { page } = app;
     const trigger = page.locator('[data-testid="composer-permission-mode-select"]');
+    await closeMenus();
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-yolo"]').click();
     await expect(trigger).toContainText(/unattended/i, { timeout: 5_000 });
-    // Reset to Interactive for cleanliness
+    // Reset to Interactive for cleanliness — after the menu has actually unmounted
+    // (see closeMenus: a trigger click during the exit animation is swallowed).
+    await closeMenus();
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-default"]').click();
+    await expect(trigger).toContainText(/interactive/i, { timeout: 5_000 });
   });
 
   test('M4: provider row is present and unlocked before the first message', async () => {
@@ -60,11 +64,32 @@ test.describe('§composer config selects', () => {
     await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
       'Pick a provider before your first message.',
     );
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 
   // Tuning writes (effort/features) now broadcast `chat.updated` (core `applyChatTuning` →
   // `ChatManager.emitChatUpdated`), so the server-authoritative composer chip reflects them.
+  /**
+   * Reach a state where a picker trigger is actually clickable. Two hazards, both
+   * measured in a live browser (2026-08-06):
+   *
+   *  1. While a modal Radix menu is open, its overlay owns `<html>`'s pointer
+   *     events, so a test that left a menu (or a model row's tuning flyout) open
+   *     makes the next trigger click unhittable. Escape unwinds one layer per press.
+   *  2. Radix keeps a CLOSING menu's content mounted through its exit animation, and
+   *     a trigger click inside that window is SWALLOWED — the menu never reopens
+   *     (`aria-expanded` stays false; the click after it works). So picking an item
+   *     is not enough: wait until no `[role=menu]` is left in the DOM.
+   */
+  async function closeMenus(): Promise<void> {
+    const { page } = app;
+    const menus = page.locator('[role="menu"]');
+    for (let layer = 0; layer < 4 && (await menus.count()) > 0; layer++) {
+      await page.keyboard.press('Escape');
+    }
+    await expect(menus).toHaveCount(0, { timeout: 5_000 });
+  }
+
   /**
    * Effort and options live in each model row's hover flyout now, not in their
    * own composer chips. Opens the model menu and reveals the first candidate
@@ -72,6 +97,7 @@ test.describe('§composer config selects', () => {
    */
   async function openModelTuning(candidates: string[]): Promise<string | null> {
     const { page } = app;
+    await closeMenus();
     await page.locator('[data-testid="composer-model-select"]').click();
     for (const id of candidates) {
       const row = page.locator(`[data-testid="composer-model-select-option-${id}"]`);
@@ -116,11 +142,12 @@ test.describe('§composer config selects', () => {
 
     await expect(page.locator(`[data-testid="composer-model-${id}-effort-xhigh"]`)).toBeVisible({ timeout: 5_000 });
     await expect(page.locator(`[data-testid="composer-model-${id}-effort-max"]`)).toBeVisible();
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 
   test('M6c: haiku exposes no tuning flyout at all', async () => {
     const { page } = app;
+    await closeMenus();
     await page.locator('[data-testid="composer-model-select"]').click();
     let found: string | null = null;
     for (const id of HAIKU) {
@@ -136,7 +163,7 @@ test.describe('§composer config selects', () => {
     }
     // No effort levels, no options — so the row is a plain item with no flyout.
     await expect(page.locator(`[data-testid="composer-model-${found}-tuning"]`)).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 
   test('M6d: an opus-level model exposes all three options', async () => {
@@ -150,7 +177,7 @@ test.describe('§composer config selects', () => {
     await expect(page.locator(`[data-testid="composer-model-${id}-feature-fast"]`)).toBeVisible({ timeout: 5_000 });
     await expect(page.locator(`[data-testid="composer-model-${id}-feature-ultracode"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="composer-model-${id}-feature-adaptiveThinking"]`)).toBeVisible();
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 
   test('M6e: enabling ultracode pins the effort to xhigh and freezes the levels', async () => {
@@ -173,7 +200,7 @@ test.describe('§composer config selects', () => {
       'aria-disabled',
       'true',
     );
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 
   test('M5b: a sonnet-level model offers max but not xhigh', async () => {
@@ -187,7 +214,7 @@ test.describe('§composer config selects', () => {
     await expect(page.locator(`[data-testid="composer-model-${id}-effort-max"]`)).toBeVisible({ timeout: 5_000 });
     // xhigh needs supportsUltracode, which sonnet does not advertise.
     await expect(page.locator(`[data-testid="composer-model-${id}-effort-xhigh"]`)).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    await closeMenus();
   });
 });
 
@@ -321,17 +348,19 @@ test.describe('§composer provider locked after first message', () => {
     await expect(page.locator('[data-testid="composer-provider-model-popover"]')).toBeVisible({ timeout: 5_000 });
 
     // ProviderModelSelect.tsx: `locked` = `thread.messages.length > 0` (ComposerToolbar's
-    // hasMessages). The header swaps in the Lock glyph + "Locked" label, and the footer copy
-    // switches from the pre-message hint asserted in M4 above to the fixed-for-session copy.
-    await expect(page.locator('[data-testid="composer-provider-header"]')).toContainText('Locked');
+    // hasMessages). The Lock-glyph header is gone — the provider row is a `Tabs` strip now, so
+    // the lock reads as a disabled tab plus the footer copy, which switches from the
+    // pre-message hint asserted in M4 above to the fixed-for-session copy.
     await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
       'Provider stays fixed for this session.',
     );
 
-    // ProviderPill's `disabled = !installed || (locked && !active)` — the active provider (here
-    // mock-cli, createTauriChat's default adapterId under E2E_MODE=mock) stays clickable as a
-    // no-op re-pick; every OTHER provider pill is disabled by the lock. `claude` is a builtin,
-    // always present in the adapter list.
+    // TabsTrigger `disabled = !installed || lockedOut`, where `lockedOut = installed && locked &&
+    // id !== active` — the active provider (here mock-cli, createTauriChat's default adapterId
+    // under E2E_MODE=mock) stays selectable as a no-op re-pick; every OTHER provider is inert.
+    // `claude` is a builtin, always present in the adapter list. A locked-out INSTALLED provider
+    // also gets a tooltip wrapper (`composer-adapter-locked-<id>`) explaining why; an uninstalled
+    // one is disabled without it, so the wrapper is not asserted here.
     const otherProvider = page.locator('[data-testid="composer-adapter-select-option-claude"]');
     await expect(otherProvider).toBeVisible();
     await expect(otherProvider).toBeDisabled();
