@@ -142,7 +142,7 @@ function ProviderTabs({
               disabled={!a.installed || lockedOut}
               className={cn(lockedOut && 'w-full')}
             >
-              <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} />
+              <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} className="size-4 shrink-0" />
               <span className="truncate">{a.name}</span>
               {!a.installed && <Lock className="size-3 shrink-0" />}
             </TabsTrigger>
