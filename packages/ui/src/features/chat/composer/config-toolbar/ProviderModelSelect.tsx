@@ -130,7 +130,7 @@ function ProviderTabs({
         if (v) onSelect(v);
       }}
     >
-      <TabsList className="w-full">
+      <TabsList variant="line" className="w-full">
         {adapters.map((a) => {
           const lockedOut = a.installed && locked && a.id !== activeId;
           const trigger = (

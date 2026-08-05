@@ -34,7 +34,14 @@ export function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   return (
-    <Tabs value={value} onValueChange={(next) => onChange(next as T)} className={cn('w-fit', className)}>
+    // manual activation: automatic mode also activates on FOCUS, so a plain
+    // click would fire onChange twice before the parent re-renders.
+    <Tabs
+      value={value}
+      activationMode="manual"
+      onValueChange={(next) => onChange(next as T)}
+      className={cn('w-fit', className)}
+    >
       <TabsList aria-label={label} className="h-6 p-[2px]">
         {options.map((option) => (
           <TabsTrigger

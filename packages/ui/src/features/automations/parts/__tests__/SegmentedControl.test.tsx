@@ -1,9 +1,9 @@
 /**
  * SegmentedControl — the one-of-N mode switch the schedule surface uses
- * (todo #234 T18). No shared tabs/segmented primitive exists in
- * `components/ui/`, so this is a local part; the suite pins its contract
- * (one button per option, a single pressed option, a value-typed callback)
- * rather than its looks. TDD: test written first, implemented after.
+ * (todo #234 T18), now on the v2 Tabs primitives. The suite pins its
+ * contract in Radix tab semantics: one trigger per option, a single
+ * data-state="active" option, a value-typed callback that fires exactly
+ * once per pick, and a labelled tablist.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -26,11 +26,11 @@ describe('SegmentedControl', () => {
     expect(screen.getByTestId('sched-mode-once')).toHaveTextContent('One-off');
   });
 
-  it('marks exactly one option as pressed', () => {
+  it('marks exactly one option as active', () => {
     render(<SegmentedControl options={OPTIONS} value="custom" onChange={vi.fn()} testIdPrefix="sched-mode" />);
-    expect(screen.getByTestId('sched-mode-custom')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('sched-mode-preset')).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByTestId('sched-mode-once')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('sched-mode-custom')).toHaveAttribute('data-state', 'active');
+    expect(screen.getByTestId('sched-mode-preset')).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByTestId('sched-mode-once')).toHaveAttribute('data-state', 'inactive');
   });
 
   it('emits the picked option value', async () => {
@@ -49,7 +49,7 @@ describe('SegmentedControl', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('groups the buttons under one labelled group for screen readers', () => {
+  it('groups the triggers under one labelled tablist for screen readers', () => {
     render(
       <SegmentedControl
         options={OPTIONS}
@@ -59,7 +59,7 @@ describe('SegmentedControl', () => {
         label="Schedule mode"
       />,
     );
-    expect(screen.getByRole('group', { name: 'Schedule mode' })).toContainElement(
+    expect(screen.getByRole('tablist', { name: 'Schedule mode' })).toContainElement(
       screen.getByTestId('sched-mode-once'),
     );
   });
