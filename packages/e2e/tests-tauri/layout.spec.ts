@@ -73,6 +73,18 @@ async function moveDragTo(page: Page, to: { x: number; y: number }, steps = 6): 
   await page.mouse.move(to.x, to.y, { steps });
 }
 
+/** `beginDrag` for a SURFACE/TAB drag rather than a divider.
+ *
+ *  SurfaceDragLayer subscribes to `pointermove` inside an effect that runs only
+ *  after React commits the mount, so moves dispatched between pointerdown and that
+ *  commit are dropped on the floor and no drop zone ever resolves. Waiting for the
+ *  layer to appear is the commit signal. The divider drags don't need this — they
+ *  are handled by SurfaceHost's own pointer handlers, with no layer. */
+async function beginLayerDrag(page: Page, from: { x: number; y: number }): Promise<void> {
+  await beginDrag(page, from);
+  await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
+}
+
 /** Open a file through the workspace's file picker (the empty-state card row, or a
  *  pane's `+` menu once it has tabs) and wait for its tab to land in the strip.
  *  `query` must match a substring of the seeded project file's name. */
@@ -86,7 +98,25 @@ async function openFileTab(page: Page, query: string): Promise<void> {
   await page.locator(WORKSPACE.tab).first().waitFor({ timeout: 5_000 });
 }
 
-// ─── §20a Surface rail, dynamic floor, ⌘1/2/3 shortcuts ────────────────────────
+/**
+ * Open a file and make its tab PERMANENT.
+ *
+ * `run-pane-file-tabs.ts` gives each pane ONE preview slot per launch scope, so a
+ * second picker-opened file REPLACES the first instead of appending — a stack of
+ * files needs each one promoted (double-click, same as the app's own gesture)
+ * before the next is opened.
+ */
+async function openPermanentFileTab(page: Page, query: string): Promise<void> {
+  await openFileTab(page, query);
+  const tab = workspace(page).tab(query);
+  await tab.dblclick();
+  await expect(tab).toHaveCount(1);
+}
+
+// ─── §20a Surface rail, dynamic floor, ⌘1/⌘2 shortcuts ─────────────────────────
+//
+// SHORTCUT_MAP (SurfaceHost.tsx) has exactly two entries since the merge —
+// 1: chat, 2: workspace. There is no ⌘3.
 
 test.describe('§20 layout — surface rail, floor, shortcuts', () => {
   let app: TauriAppFixture;
@@ -255,6 +285,14 @@ test.describe('§20 layout — splits + divider resize', () => {
 
   test('closing the non-floor workspace leaves Chat alone, and re-showing it brings its tabs back', async () => {
     const { page } = app;
+    // The previous test left the workspace docked in the bottom strip, where the
+    // empty-state card's rows overflow the short strip and can't be clicked. Re-light
+    // it so `placeInLayout` puts it back in the top row at full height.
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-empty-state')).toBeVisible({ timeout: 5_000 });
+
     // Give the workspace a tab first: hiding is not closing, so the tab must survive.
     await openFileTab(page, 'index.ts');
     await expect(workspace(page).tabs()).toHaveCount(1);
@@ -288,7 +326,9 @@ test.describe('§20 layout — drag: workspace tab to a pane edge, and escape-ca
     const { page } = app;
     await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
-    await openFileTab(page, 'index.ts');
+    // The first tab must be promoted or the second file just replaces it in the
+    // pane's single preview slot.
+    await openPermanentFileTab(page, 'index.ts');
     await openFileTab(page, 'CLAUDE.md');
     await expect(workspace(page).tabs()).toHaveCount(2);
   });
@@ -305,7 +345,7 @@ test.describe('§20 layout — drag: workspace tab to a pane edge, and escape-ca
     if (!tabBox) throw new Error('workspace tab has no bounding box');
     const tabCenter = { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 };
 
-    await beginDrag(page, tabCenter);
+    await beginLayerDrag(page, tabCenter);
     await moveDragTo(page, { x: tabCenter.x, y: tabCenter.y + 60 });
     await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
 
@@ -332,7 +372,7 @@ test.describe('§20 layout — drag: workspace tab to a pane edge, and escape-ca
     // vertically centered, so it resolves unambiguously to the right edge.
     const edgeTarget = { x: wsBox.x + wsBox.width * 0.95, y: wsBox.y + wsBox.height / 2 };
 
-    await beginDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
+    await beginLayerDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
     await moveDragTo(page, edgeTarget);
     await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
     await page.mouse.up();
@@ -352,7 +392,7 @@ test.describe('§20 layout — drag: workspace tab to a pane edge, and escape-ca
     if (!wsBox) throw new Error('workspace pane has no bounding box');
     const center = { x: wsBox.x + wsBox.width / 2, y: wsBox.y + wsBox.height / 2 };
 
-    await beginDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
+    await beginLayerDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
     await moveDragTo(page, center);
     await expect(page.getByTestId('drop-zone-center')).toBeVisible({ timeout: 3_000 });
     await page.mouse.up();

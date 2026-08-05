@@ -21,14 +21,21 @@
  *   file-tree-find-in-file          — context-menu item on a file row
  *   file-tree-find-in-folder        — context-menu item on a folder row
  *   find-in-path                    — FindInPathModal DialogContent root
- *   find-in-path-input              — search input
- *   find-in-path-include-ignored    — checkbox, directory scope only
+ *   find-in-path-input              — search input (cmdk `CommandInput`; the testid rides
+ *                                     the real <input>, so `fill`/`press` work directly)
+ *   find-in-path-include-ignored    — v2 `Checkbox` (a `role="checkbox"` button, not an
+ *                                     <input>), directory scope only
  *   find-in-path-hint               — "Type at least 2 characters to search" (query.length===1)
  *   find-in-path-idle-hint          — "Type to search" (query empty)
  *   find-in-path-empty              — "No matches" (debounced query >=2 chars, 0 results)
- *   find-in-path-result-${file}:${line}:${column} — a result row
- *   workspace-tab-strip                 — a workspace pane's tab strip (role="tab" pills)
+ *   find-in-path-result-${file}:${line}:${column} — a result row (`CommandItem`)
+ *   WORKSPACE.strip                 — a workspace pane's tab-strip row (pane-id-keyed;
+ *                                     see helpers/tauri/testids.ts)
  *   viewer-shell-status             — footer status string ("Ln x, Col y" for code files)
+ *
+ * One `CommandGroup` per matched file supplies the per-file grouping: cmdk renders the
+ * heading as an aria-hidden div and its items wrapper as `role="group"` labelled by that
+ * heading, which is what the `getByRole('group', { name: file })` assertions below read.
  *
  * Cursor-position assertions expect the true 1-based match position rendered in
  * the footer: FindInPathModal converts the daemon's 1-based search hits to the
@@ -152,7 +159,8 @@ test.describe('§find-in-path', () => {
     await expect(page.getByTestId('find-in-path-result-src/alpha.ts:3:7')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('find-in-path-result-src/beta.ts:2:17')).toBeVisible();
 
-    // Grouped by file: one sticky header per matched file.
+    // Grouped by file: one cmdk CommandGroup per matched file, its role="group"
+    // items wrapper labelled by the group heading.
     await expect(page.getByRole('group', { name: 'src/alpha.ts' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'src/beta.ts' })).toBeVisible();
 

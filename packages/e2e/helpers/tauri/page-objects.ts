@@ -17,8 +17,12 @@ export function sessionsSidebar(page: Page) {
       await page.getByTestId('sessions-more-archived').click();
     },
     importProjectOption: (projectId: string) => page.getByTestId(`sessions-import-project-${projectId}`),
-    // Verified: ProjectFilterPillBar renders pills with testid `sessions-filter-pill-<projectId>`.
-    projectFilterPill: (projectId: string) => page.getByTestId(`sessions-filter-pill-${projectId}`),
+    /** One row of the sidebar's project switcher. The v1 pill cloud
+     *  (`sessions-filter-pill-<id>`) died with ProjectFilterPillBar; v2's
+     *  ProjectSection renders a vertical list of `sidebar-project-<id>` rows,
+     *  plus `sidebar-project-all` for the clear-filter row. */
+    projectRow: (projectId: string) => page.getByTestId(`sidebar-project-${projectId}`),
+    allProjectsRow: () => page.getByTestId('sidebar-project-all'),
   };
 }
 

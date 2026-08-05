@@ -8,7 +8,7 @@
  * messages/{UserMessage,ReadMoreBubble,MessageActionBar,SystemMessage,
  * MessageTimestamp,MessageTiming,AssistantMessage},
  * parts/{markdown-text,CodeHeader}, find/{FindBar,use-find-hotkey,
- * search-messages,find-in-chat-store}, components/ui/assistant-ui/quote}.tsx.
+ * search-messages,find-in-chat-store}}.tsx plus components/ui/read-more.tsx.
  *
  * Recordings: `thread` (a deliberately-long user turn + a Bash-tool turn —
  * read from fixtures/recordings/thread.0.ndjson) and `chat-status` (reused
@@ -22,16 +22,22 @@
  * reusing it here would just re-spin a daemon for no new coverage.
  *
  * Testid reference (verified against source):
- *   chat-user-readmore-toggle — ReadMoreBubble's Read more/Show less button (aria-expanded)
- *   chat-message-copy / chat-message-more / chat-message-export — MessageActionBar
+ *   chat-user-readmore-toggle — the Read more/Show less button. ReadMoreBubble is now a thin
+ *     wrapper that passes this id as `testId` into the shared components/ui/read-more.tsx
+ *     primitive, which owns the button, its label swap and `aria-expanded`.
+ *   chat-message-copy / chat-message-more / chat-message-export — MessageActionBar.
+ *     `data-copied` is set by the native ActionBarPrimitive.Copy (asChild → our Button),
+ *     not by us — see @assistant-ui/react's ActionBarCopy.
  *   chat-message-timestamp / chat-message-timing — assistant footer row
  *   chat-code-copy — CodeHeader's Copy/Copied button (fenced code blocks only)
  *   chat-scroll-to-bottom — ThreadPrimitive.ScrollToBottom (native `disabled` at-bottom state)
  *   find-bar / thread-find-input / thread-find-prev / thread-find-next / thread-find-close
- *   chat-selection-toolbar / chat-selection-quote / chat-selection-new-session — the floating
- *     selection actions (native SelectionToolbar root, our Quote / New session actions)
  *   chat-thread-viewport (+ [data-mf-chat-thread]) — the scrollable transcript viewport
  *   chat-user-bubble — the sent user turn's card shell (todo #298 containment probe)
+ *
+ * The floating selection toolbar (chat-selection-toolbar / -quote / -new-session) is NOT
+ * covered here despite once being listed: composer-advanced.spec.ts owns it, because its
+ * two actions land in the composer. Kept out rather than duplicated.
  *
  * The `thread` recording now carries three turns: the long-text turn, the Bash-tool
  * turn, and (todo #298) a third short turn whose send is the long-unbreakable-token
@@ -219,6 +225,9 @@ test.describe('§transcript — thread turn', () => {
     await expect(bubble).toBeVisible({ timeout: 10_000 });
     await expect(bubble).toContainText(UNBREAKABLE);
 
+    // `data-clamp` is emitted by components/ui/read-more.tsx whenever the measured text
+    // exceeds the threshold — present means a clamp is in play (expanded or not), so its
+    // absence is what makes the scrollWidth probe below meaningful.
     const box = await bubble.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
       clientWidth: el.clientWidth,

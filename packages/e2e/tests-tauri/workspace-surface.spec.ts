@@ -41,7 +41,13 @@
  *   surface-rail-workspace                    — MainToolbar rail toggle (⌘2)
  *   workspace-surface / workspace-empty-state — surface root / empty-state card
  *   workspace-picker-new-terminal / workspace-picker-launch-<name> — its rows
- *   WORKSPACE.pane / .tab / .strip / .add     — pane-id-keyed roots (helpers/tauri/testids.ts)
+ *   WORKSPACE.pane / .tab / .strip / .add     — pane-id-keyed roots (helpers/tauri/testids.ts);
+ *                                               `workspace(page).tab(title)` for one pill
+ *   [role="menu"]                             — any open Radix menu layer; the strip's "+" and
+ *                                               the toolbar launch picker are both native
+ *                                               DropdownMenus now, so a second trigger may only
+ *                                               be clicked once the first layer has unmounted
+ *                                               (see waitForMenusClosed)
  *   workspace-tab-close-<id> / workspace-tab-stop-<id> — per-tab controls
  *   workspace-add-menu-<paneId>               — the "+" menu content
  *   workspace-pane-new-terminal-<paneId> / workspace-pane-launch-<config>-<paneId> — its rows
@@ -89,6 +95,18 @@ function seedLaunchConfigs(projectPath: string): void {
 async function turnWorkspaceOn(page: Page): Promise<void> {
   await page.keyboard.press('ControlOrMeta+2');
   await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Wait until no Radix menu layer is mounted. Every menu here is a native
+ * DropdownMenu since the v2 port, and Radix keeps a CLOSING menu's content
+ * mounted through its exit animation — a trigger click inside that window is
+ * swallowed (the menu never opens, and only the next click works). So a test
+ * that opens a second menu after dismissing the first must wait for the layer
+ * to unmount, on state rather than a timeout.
+ */
+async function waitForMenusClosed(page: Page): Promise<void> {
+  await expect(page.locator('[role="menu"]')).toHaveCount(0, { timeout: 5_000 });
 }
 
 /** Poll the daemon's launch-status REST endpoint for a config's status. */
@@ -174,7 +192,7 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
     // up immediately, independent of the daemon confirming the process started.
     const pane = page.locator(WORKSPACE.pane).first();
     await expect(pane).toBeVisible({ timeout: 5_000 });
-    const tab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
+    const tab = workspace(page).tab('sleep-long');
     await expect(tab).toBeVisible();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
 
@@ -189,6 +207,9 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
 
   test('the per-pane "+" popover lists New terminal and the launch configs; New terminal is a no-op', async () => {
     const { page } = app;
+    // The previous test dismissed the toolbar launch menu; its layer must be gone
+    // before another trigger is clicked (see waitForMenusClosed).
+    await waitForMenusClosed(page);
     const paneId = await workspace(page).firstPaneId();
     const tabCountBefore = await page.locator(`[data-testid="workspace-pane-${paneId}"] [role="tab"]`).count();
 
@@ -225,19 +246,21 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   // reported to the orchestrator, not re-fixed here per this pass's scope.
   test('launching echo-once from the add-menu opens a second tab whose console shows its output', async () => {
     const { page } = app;
+    await waitForMenusClosed(page);
     const paneId = await workspace(page).firstPaneId();
 
     await page.getByTestId(`workspace-tab-strip-add-${paneId}`).click();
     await page.getByTestId(`workspace-pane-launch-echo-once-${paneId}`).click();
 
-    const echoTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
+    const echoTab = workspace(page).tab('echo-once');
     await expect(echoTab).toBeVisible({ timeout: 5_000 });
     // Launching activates the new tab.
     await expect(echoTab).toHaveAttribute('aria-selected', 'true');
 
-    // Both sleep-long and echo-once are `console`-kind tabs, so RunTabBody mounts
-    // a `run-console-pane` for EACH (toggling only its wrapper's CSS visibility,
-    // never unmounting) — `getByTestId` alone would resolve to 2 elements. Scope
+    // Both sleep-long and echo-once are `console`-kind tabs, so WorkspaceTabBody
+    // (surfaces/WorkspaceSurface.tsx) mounts a `run-console-pane` for EACH (toggling
+    // only its wrapper's CSS visibility, never unmounting) — `getByTestId` alone
+    // would resolve to 2 elements. Scope
     // to the one that's actually visible (the just-activated echo-once tab).
     const visibleConsole = page.locator('[data-testid="run-console-pane"]:visible');
     await expect(visibleConsole).toBeVisible();
@@ -259,8 +282,8 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   // recreates it); re-enabled together with the echo-once fix.
   test('tab activate: clicking a pill switches which console is selected', async () => {
     const { page } = app;
-    const sleepTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
-    const echoTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
+    const sleepTab = workspace(page).tab('sleep-long');
+    const echoTab = workspace(page).tab('echo-once');
 
     await sleepTab.click();
     await expect(sleepTab).toHaveAttribute('aria-selected', 'true');
@@ -275,17 +298,12 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   // echo-once…" above.
   test('tab close: closing echo-once removes it, leaving only sleep-long', async () => {
     const { page } = app;
-    const echoTabId = await page
-      .locator('[data-testid^="workspace-tab-"][role="tab"]')
-      .filter({ hasText: 'echo-once' })
-      .getAttribute('data-testid');
+    const echoTabId = await workspace(page).tab('echo-once').getAttribute('data-testid');
     const id = echoTabId!.replace('workspace-tab-', '');
 
     await page.getByTestId(`workspace-tab-close-${id}`).click();
     await expect(page.getByTestId(`workspace-tab-${id}`)).toHaveCount(0);
-    await expect(
-      page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' }),
-    ).toBeVisible();
+    await expect(workspace(page).tab('sleep-long')).toBeVisible();
   });
 
   // Previously: this reproducibly hung on "Stop" forever — a stale-response
@@ -306,15 +324,18 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   // authoritative status instead of relying solely on WS push delivery.
   test('Stop reverts the toolbar to Start for sleep-long', async () => {
     const { page } = app;
+    await waitForMenusClosed(page);
     await page.getByTestId('main-toolbar-launch').click();
+    // The per-row start/stop button stops pointer + click propagation
+    // (ToolbarLaunchControls.tsx), so pressing Stop does NOT dismiss the menu —
+    // the row flips to Start in place.
     await page.getByTestId('main-toolbar-launch-stop-sleep-long').click();
     await expect(page.getByTestId('main-toolbar-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
     await page.keyboard.press('Escape');
+    await waitForMenusClosed(page);
 
     // The tab itself is not removed on stop, only its status changes.
-    await expect(
-      page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' }),
-    ).toBeVisible();
+    await expect(workspace(page).tab('sleep-long')).toBeVisible();
   });
 });
 
@@ -349,7 +370,7 @@ test.describe('§21 workspace-surface — failed launch config', () => {
     const { page } = app;
     await page.getByTestId('workspace-picker-launch-exit-immediately').click();
 
-    const tab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'exit-immediately' });
+    const tab = workspace(page).tab('exit-immediately');
     await expect(tab).toBeVisible({ timeout: 5_000 });
 
     // No dedicated "Failed" UI text exists on the console tab (verified: neither
@@ -412,6 +433,10 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
 
     const fileTab = workspace(page).tab('index.ts');
     await fileTab.waitFor({ timeout: 5_000 });
+    // `page.mouse.*` performs no actionability check, so a press dispatched while the
+    // picker dialog is still unmounting lands on a `pointer-events: none` <body> and is
+    // silently swallowed — the drag never starts. Wait the dialog out first.
+    await expect(page.getByTestId('file-picker-dialog')).toHaveCount(0, { timeout: 5_000 });
     const tabBox = await fileTab.boundingBox();
     if (!tabBox) throw new Error('workspace tab has no bounding box');
     const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
@@ -421,6 +446,10 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
     await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(tabBox.x + tabBox.width / 2 + 8, tabBox.y + tabBox.height / 2 + 8, { steps: 2 });
+    // SurfaceDragLayer subscribes to `pointermove` in an effect, so every move
+    // dispatched before React commits its mount is dropped and no drop zone ever
+    // resolves. The layer appearing is that commit signal.
+    await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
     await page.mouse.move(edgeTarget.x, edgeTarget.y, { steps: 6 });
     await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
     await page.mouse.up();

@@ -21,14 +21,24 @@
  *   workspace-tab-close-${id}  — a tab's close button
  *   editor-tab                — EditorTab root
  *   editor-code                — CmEditor host (CM6 mounts here)
- *   editor-save-status         — "● unsaved" / "● saved" chip
- *   editor-tab-save-error      — save-failed banner
+ *   editor-save-status         — "unsaved" / "saved" chip. v2 `Badge variant="secondary"`
+ *                                since the tab-body chrome pass (SaveStatusChip.tsx): the
+ *                                hue rides an empty dot `<span>`, so the chip's TEXT is the
+ *                                bare word — the old "● saved" glyph is gone. Only mounted
+ *                                for a non-markdown, writable buffer.
+ *   editor-tab-save-error      — save-failed banner ("Save failed: {message}")
  *   editor-tab-disk-conflict   — disk-conflict banner
  *   editor-tab-reload          — disk-conflict "Reload" button
  *   editor-tab-keep-mine       — disk-conflict "Keep mine" button
  *   editor-tab-readonly        — read-only banner (NOT reachable today — see skipped test)
  *   viewer-shell-status         — footer status string ("Ln x, Col y" for code files)
- *   markdown-mode-preview / markdown-mode-edit — MarkdownEditorTab Segmented toggle
+ *   markdown-mode-preview / markdown-mode-edit — MarkdownEditorTab Segmented toggle.
+ *                                `Segmented` is the Radix Tabs List+Trigger recipe now
+ *                                (features/viewers/Segmented.tsx), so a segment is a
+ *                                `role="tab"` carrying `aria-selected` + `data-state`
+ *                                ("active"/"inactive") — NOT the `aria-pressed` button pair
+ *                                it was before. Its per-option tooltip was dropped
+ *                                deliberately (every segment has a visible label).
  *   markdown-preview            — rendered markdown body
  *
  * CM6 find panel has no testids by design (per plan) — target `.cm-search` /
@@ -138,14 +148,14 @@ test.describe('§editor', () => {
     const { page } = app;
     // utils.ts is the active (permanent) tab left over from the previous test.
     await expect(tabByTitle(page, 'utils.ts')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● saved');
+    await expect(page.getByTestId('editor-save-status')).toHaveText('saved');
 
     await page.getByTestId('editor-code').click();
     await page.keyboard.type('// dirty-edit\n');
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● unsaved', { timeout: 5_000 });
+    await expect(page.getByTestId('editor-save-status')).toHaveText('unsaved', { timeout: 5_000 });
 
     await page.keyboard.press('ControlOrMeta+s');
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● saved', { timeout: 10_000 });
+    await expect(page.getByTestId('editor-save-status')).toHaveText('saved', { timeout: 10_000 });
 
     const saved = readFileSync(path.join(project.projectPath, 'utils.ts'), 'utf8');
     expect(saved).toContain('dirty-edit');
@@ -188,7 +198,7 @@ test.describe('§editor', () => {
 
     await page.getByTestId('editor-code').click();
     await page.keyboard.type('// local edit\n');
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● unsaved', { timeout: 5_000 });
+    await expect(page.getByTestId('editor-save-status')).toHaveText('unsaved', { timeout: 5_000 });
 
     // Mutate the file on disk directly (bypassing the app) while the buffer is dirty.
     const filePath = path.join(project.projectPath, 'conflict-reload.ts');
@@ -207,7 +217,7 @@ test.describe('§editor', () => {
     await expect(banner).toBeVisible();
     await page.getByTestId('editor-tab-reload').click();
     await expect(banner).toBeHidden();
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● saved');
+    await expect(page.getByTestId('editor-save-status')).toHaveText('saved');
     await expect(page.getByTestId('editor-code')).toContainText('changed on disk');
   });
 
@@ -218,7 +228,7 @@ test.describe('§editor', () => {
 
     await page.getByTestId('editor-code').click();
     await page.keyboard.type('// keep my edit\n');
-    await expect(page.getByTestId('editor-save-status')).toHaveText('● unsaved', { timeout: 5_000 });
+    await expect(page.getByTestId('editor-save-status')).toHaveText('unsaved', { timeout: 5_000 });
 
     const filePath = path.join(project.projectPath, 'conflict-keep.ts');
     writeFileSync(filePath, 'export const original = 2; // changed on disk\n');
@@ -287,12 +297,16 @@ test.describe('§editor', () => {
     await page.getByTestId('file-tree-row-notes.md').click();
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('markdown-mode-preview')).toHaveAttribute('aria-pressed', 'true');
+    // `Segmented` is the Radix Tabs recipe now (features/viewers/Segmented.tsx), so the
+    // selected segment is marked by `data-state="active"` instead of `aria-pressed`.
+    await expect(page.getByTestId('markdown-mode-preview')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('markdown-preview')).toContainText('Notes');
     await expect(page.getByTestId('editor-code')).toHaveCount(0);
 
     await page.getByTestId('markdown-mode-edit').click();
-    await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('markdown-mode-preview')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('editor-code')).toBeVisible();
   });
 
@@ -303,7 +317,7 @@ test.describe('§editor', () => {
   test('edits typed in Source mode reflect back in Preview mode', async () => {
     const { page } = app;
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('markdown-mode-edit')).toHaveAttribute('data-state', 'active');
 
     await page.getByTestId('editor-code').click();
     await page.keyboard.press('ControlOrMeta+End'); // cursorDocEnd — deterministic anchor

@@ -15,9 +15,9 @@
  *    sides (no daemon fetch — see `DiffTab.tsx`'s `hasPreResolved` branch).
  *
  * CORRECTION (the dispatch's "known gap" does not hold — verified by direct
- * source read, not just a rerun): `DiffTab.tsx:120` DOES pass `filePath={path}`
+ * source read, not just a rerun): `DiffTab.tsx` DOES pass `filePath={path}`
  * to `<DiffHeader>`, and `path` is a required, always-truthy prop — so
- * `diff-reveal` (DiffHeader.tsx:88's `{filePath && (...)}` guard) mounts
+ * `diff-reveal` (DiffHeader's `{filePath && (...)}` guard) mounts
  * whenever the diff tab reaches its 'ready' fetch state. The original
  * "pinned absent" test was a race, not a product gap: it ran immediately after
  * the file's first test, and could observe either the brief 'loading' state
@@ -156,8 +156,8 @@ test.describe('§editor-diff — Changes panel', () => {
 
   test('the reveal button mounts once the diff tab is ready — DiffTab always passes filePath to DiffHeader', async () => {
     const { page } = app;
-    // DiffHeader (packages/ui/src/features/editor/DiffHeader.tsx:88) only mounts
-    // `diff-reveal` when given a `filePath` prop, but DiffTab.tsx:120 DOES supply
+    // DiffHeader (packages/ui/src/features/editor/DiffHeader.tsx) only mounts
+    // `diff-reveal` when given a `filePath` prop, but DiffTab.tsx DOES supply
     // one (`filePath={path}`, a required, always-truthy prop) — so the button is
     // reachable and present once the diff tab settles into its 'ready' state.
     // Wait for the diff tab's content (the prev/next toolbar) to be interactive

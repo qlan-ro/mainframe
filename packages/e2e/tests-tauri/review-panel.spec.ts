@@ -52,7 +52,14 @@
  *   review-commit-error          — commit failure message
  *   chat-user-review-comment     — the parsed review-comment message card
  *   chat-user-review-comment-L<n> — a single comment section within that card
- *   workspace-tab-strip [role="tab"] — a workspace pane's tab strip (open-in-workspace target)
+ *   WORKSPACE.strip + [role="tab"] — the workspace pane's tab strip and its pills
+ *                                  (open-in-workspace target; see helpers/tauri/testids.ts —
+ *                                  a strip is keyed by pane id since the Files+Run merge)
+ *
+ * Selected/viewed file rows carry no ARIA state (ReviewFileTree renders plain
+ * `<button>`s), so the selection tint is asserted by class — `bg-sidebar-selection`
+ * since the v2 port (it was `bg-mf-selection` in the warm-chrome tree; the legacy
+ * name now only survives as a bridge alias in styles/legacy-bridge.css).
  */
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'child_process';
@@ -137,7 +144,7 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
     // Auto-select: whichever file rendered first in the list carries the
     // selection tint, and its diff loads into the center pane.
     const firstRow = page.locator('[data-testid^="review-file-row-"]').first();
-    await expect(firstRow).toHaveClass(/bg-mf-selection/);
+    await expect(firstRow).toHaveClass(/bg-sidebar-selection/);
     await expect(page.getByTestId('review-viewed-toggle')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('review-viewed-counter')).toHaveText(/0\/3 viewed/);
 
@@ -150,8 +157,8 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
   test('clicking a file row selects it and swaps the diff to that file', async () => {
     const { page } = app;
     await page.getByTestId('review-file-row-index.ts').click();
-    await expect(page.getByTestId('review-file-row-index.ts')).toHaveClass(/bg-mf-selection/);
-    await expect(page.getByTestId('review-file-row-CLAUDE.md')).not.toHaveClass(/bg-mf-selection/);
+    await expect(page.getByTestId('review-file-row-index.ts')).toHaveClass(/bg-sidebar-selection/);
+    await expect(page.getByTestId('review-file-row-CLAUDE.md')).not.toHaveClass(/bg-sidebar-selection/);
 
     const diffRoot = page.getByTestId('editor-diff');
     const modifiedPane = diffRoot.locator('.cm-content').nth(1);

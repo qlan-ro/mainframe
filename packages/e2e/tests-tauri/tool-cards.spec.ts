@@ -24,30 +24,44 @@
  *   web-fetch.0                      → WebFetch
  *   mcp-tool.0                       → mcp__linear__get_issue (done + error)
  *   unregistered-tool.0              → CustomAnalyticsReport (ToolFallback)
+ *   schedule-pills.0                 → ScheduleWakeup/CronCreate/CronList/CronDelete/Monitor
+ *   worktree-pills.0                 → EnterWorktree ×2 / ExitWorktree (keep + remove)
+ *   tool-result-truncated.0          → Bash w/ a 51191-byte result (ToolResultExpand)
+ *   tool-group.0                     → consecutive Read + Grep (daemon-grouped → ToolGroup)
+ *   bash-exit-code.0                 → Bash `exit 0` then Bash `exit 127` (isError)
  *   app-restart.0, composer-attachments.0, context-picker.0, image-lightbox.0,
  *   multi-chat.0/.1                  → no tool calls
  *
- * No recording exercises: WebSearch, Schedule/Cron/Monitor, EnterWorktree/
- * ExitWorktree, a truncated (>threshold) tool result, two consecutive
- * explore-family tool calls (ToolGroup), or a Bash call with a trailing
- * `exit N` line. Those families are `test.skip`ped below with a precise
- * recording wishlist in the report.
+ * The five families this spec once listed as unrecorded — Schedule/Cron/Monitor,
+ * EnterWorktree/ExitWorktree, a truncated (>threshold) tool result, ToolGroup, and
+ * a Bash call with a trailing `exit N` line — all have committed recordings now
+ * (above) and are asserted live below; nothing in this file is skipped for a
+ * missing fixture.
+ *
+ * Still uncovered in TOOL_REGISTRY (register-cards.ts), all needing a recording
+ * before a test can exist — no e2e spec touches any of them today:
+ *   WebSearch                  → shares WebFetchCard, so only the registry key is untested
+ *   PushNotification           → PushNotificationCard (landed with the attention-request work)
+ *   Workflow / RunWorkflow     → WorkflowLauncherRow (landed with the workflow-run panel)
  *
  * Testid reference (verified against source; all asserted below):
- *   chat-bash-card / -trigger / -command / -description / -bash-output
+ *   chat-bash-card / -trigger / -command / -description / chat-bash-output
  *   chat-write-card / -trigger ; tool-card-file-path
  *   read-card-root / -trigger ; read-card-code-preview
  *   chat-edit-card / -open-diff ; diff-tab (workspace surface) ; editor-diff (CmDiffEditor mount)
  *   chat-ask-card / -header / -body / -question-text
  *   chat-plan-bubble (approved) ; chat-plan-card / -label / -body (not approved)
  *   chat-slash-command-row (Skill tool call)
- *   chat-skill-loaded-pill ; chat-system-message (onSkillLoaded system message)
+ *   chat-skill-loaded-pill ; chat-system-message ; marker-body (onSkillLoaded system message)
  *   chat-task-card / -toggle / -agent / -description (Task subagent card)
  *   chat-task-progress-card / -toggle / -item-{status} (TaskProgress card)
  *   web-fetch-card-root / -trigger / -url / -summary
  *   chat-mcp-pill ; marker-body (MCP tool pill)
  *   chat-tool-fallback-card / -trigger / -args / -result (ToolFallback)
- * Not testid-covered: StatusDot (no data-testid on the tri-state dot in any card — see report).
+ *   tool-card-status-dot — the shared tri-state dot, now testid'd with a
+ *     data-status="pending|error|success" (packages/ui/src/features/chat/tools/shared/chrome.tsx).
+ *     Every CollapsibleCardShell card carries one; no test here reads it, since each
+ *     card's own describe already pins its done/error rendering by border and body.
  */
 
 import { test, expect } from '@playwright/test';
@@ -466,16 +480,25 @@ test.describe('§tool-cards — Skill + SkillLoaded (chat-status)', () => {
 
     const pill = page.getByTestId('chat-skill-loaded-pill').first();
     await pill.waitFor({ timeout: 15_000 });
+    // Expandable only because the recorded onSkillLoaded carries `content`; MarkerPill
+    // disables itself when there is no body (marker-pill.tsx `clickable`).
     await expect(pill).toBeEnabled();
 
-    // MarkerBody (the expand disclosure) carries no data-testid — assert the effect structurally via
-    // the already-testid'd system-message container growing once the body mounts.
-    const systemMessage = page.getByTestId('chat-system-message').filter({ has: pill });
-    const collapsedBox = await systemMessage.boundingBox();
+    // The disclosure IS testid'd: MarkerBody defaults to `marker-body`
+    // (packages/ui/src/features/chat/tools/cards/marker-pill.tsx) and SkillLoadedCard
+    // takes that default, same as the MCP and schedule pills asserted below. Assert the
+    // mounted body and its content instead of the container's height, which only ever
+    // proved "something grew".
+    await expect(page.getByTestId('marker-body')).toHaveCount(0);
     await pill.click();
-    await expect
-      .poll(async () => (await systemMessage.boundingBox())?.height ?? 0, { timeout: 5_000 })
-      .toBeGreaterThan(collapsedBox?.height ?? 0);
+    const body = page.getByTestId('marker-body');
+    await expect(body).toBeVisible({ timeout: 5_000 });
+    // The recorded skill content is the SKILL.md of writing-clearly-and-concisely.
+    await expect(body).toContainText('Writing Clearly and Concisely');
+
+    // Collapses back — the pill is a toggle, not a one-way reveal.
+    await pill.click();
+    await expect(page.getByTestId('marker-body')).toHaveCount(0);
   });
 });
 

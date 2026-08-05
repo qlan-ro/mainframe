@@ -4,7 +4,7 @@
  * docs/plans/2026-07-03-tauri-e2e-test-plan.md, Cluster C).
  *
  * Source read: features/editor/inline-comments/{use-inline-comments,
- * comment-gutter,comment-gutter-state,comment-gutter-markers,
+ * comment-gutter,use-comment-gutter,comment-gutter-state,comment-gutter-markers,
  * CmEditorWithComments,InlineCommentWidget,use-review-actions,use-send-review,
  * resolve-comment-range}.ts(x), features/editor/context-menu/EditorContextMenu.tsx,
  * features/editor/lsp/references-panel.tsx, features/editor/use-lsp-document.ts,
@@ -35,7 +35,7 @@
  * onClose → closePortal only; no delete path is wired to Cancel/Escape/the
  * widget's `onDelete` prop) — so the ● marker persists even for an abandoned
  * add. This is real, verified behavior (see `onSave`/`onClose` wiring in
- * `CmEditorWithComments.tsx` and the widget's Cancel button using `onClose`,
+ * `use-comment-gutter.tsx` and the widget's Cancel button using `onClose`,
  * not `onDelete`), not a workaround — tests assert it as-is and flag it in
  * the report as a UX quirk worth a design decision, not "fixed" here.
  * CORRECTION: it goes one step further than the marker alone — `text` is a
@@ -213,7 +213,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
   // (use-inline-comments.ts:57-59), which commits straight into the comment's
   // stored `text` immediately. There is no separate "draft" buffer and no
   // reset-to-empty anywhere in `onClose`'s wiring (Cancel and the header X both
-  // just call `onClose`, per InlineCommentWidget.tsx:110/147) — so Cancel does
+  // just call `onClose`, per InlineCommentWidget.tsx's close/cancel Buttons) — so Cancel does
   // NOT discard typed text, only closes the widget. Reopening the SAME anchor
   // shows the typed text still there. Renamed + fixed to assert the real,
   // verified behavior instead of the incorrect original assumption.
@@ -265,7 +265,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     const { page } = app;
     // 3 comments total, all with text (the two "cancelled" drafts above kept
     // their typed text — see the correction note on the Cancel/Escape tests).
-    // "Submit review (N)" always shows the TOTAL count (CmEditorWithComments.tsx
+    // "Submit review (N)" always shows the TOTAL count (use-comment-gutter.tsx
     // `count={comments.length}`), not the filled count — `filledCount` only
     // gates the enabled/disabled state.
     const bar = page.getByTestId('editor-submit-review');
