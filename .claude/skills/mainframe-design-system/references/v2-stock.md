@@ -165,9 +165,13 @@ MainToolbar + SurfaceRail + UpdatePill + ToolbarLaunchControls + the whole `feat
 popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (SurfaceHost/InspectorPane
 slices remain). Conventions from the pass:
 
-- **`@v2/components/ui/menu-row`** — the dropdown-item recipe as a plain button (`MenuRow` +
-  `menuRowClass()`), for menu-shaped panels that are NOT Radix menus (the launch picker with
-  nested per-row buttons). Don't rebuild rows ad hoc.
+- **Menu-shaped = native `DropdownMenu`, no exceptions** (user decision 2026-08-05). A floating
+  list of actions/choices is a DropdownMenu (launch picker, branch menu); a searchable pick-list
+  is Popover+Command (the combobox pattern — palette, VariablePickerButton); only forms, switch
+  panels, and info cards are plain Popovers. Nested per-row buttons inside a DropdownMenuItem
+  work: stop propagation on pointerdown/pointerup/click (Radix's item pointerup path otherwise
+  treats the button press as a row select) and re-enable pointer events on the button. The
+  short-lived `menu-row` primitive is deleted — don't reintroduce hand-styled menu rows.
 - **The branch popover is a native `DropdownMenu`** (user decision 2026-08-05, replacing the v1
   artboard's side-by-side cards): quick actions are items, sections are Groups whose headers are
   `Collapsible` triggers (non-items — toggling never closes the menu; Remote starts collapsed; an

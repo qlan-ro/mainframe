@@ -172,10 +172,10 @@ export function MainToolbar({
                   triggerLabel={isWorktree ? 'Switch branch · worktree' : 'Switch branch · main repo'}
                 >
                   {/* Bare trigger — BranchPopover wraps this in Hint itself (via
-                      triggerLabel), around PopoverTrigger. Wrapping Hint here would
-                      interpose a non-forwarding component inside PopoverTrigger's
-                      asChild clone, dropping the ref Popper needs to position the
-                      content (see BranchPopover.tsx's file header). */}
+                      triggerLabel), around DropdownMenuTrigger. Wrapping Hint here
+                      would interpose a non-forwarding component inside the asChild
+                      clone, dropping the ref Radix needs to anchor the menu (see
+                      BranchPopover.tsx's file header). */}
                   <button
                     data-testid="main-toolbar-branch"
                     data-worktree={isWorktree ? 'true' : 'false'}

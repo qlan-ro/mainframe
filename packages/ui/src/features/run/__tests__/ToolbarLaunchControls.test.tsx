@@ -115,7 +115,8 @@ describe('ToolbarLaunchControls', () => {
   async function renderAndOpen() {
     const { ToolbarLaunchControls } = await import('../ToolbarLaunchControls');
     render(<ToolbarLaunchControls port={31415} projectId="proj-1" chatId="chat-9" />);
-    fireEvent.click(screen.getByTestId('main-toolbar-launch'));
+    // Radix DropdownMenuTrigger opens on pointerdown, not click.
+    fireEvent.pointerDown(screen.getByTestId('main-toolbar-launch'), { button: 0 });
     await waitFor(() => screen.getByTestId('main-toolbar-launch-config-dev server'));
   }
 
@@ -162,7 +163,8 @@ describe('ToolbarLaunchControls', () => {
     await renderAndOpen();
     expect(screen.getByTestId('main-toolbar-launch-config-dev server')).toBeInTheDocument();
     expect(screen.getByTestId('main-toolbar-launch-config-preview-app')).toBeInTheDocument();
-    expect(screen.getByTestId('main-toolbar-launch-generate')).toBeDisabled();
+    // Radix menu items are divs — disabled surfaces as aria-disabled.
+    expect(screen.getByTestId('main-toolbar-launch-generate')).toHaveAttribute('aria-disabled', 'true');
   });
 
   // ── Row selection ─────────────────────────────────────────────────────────
