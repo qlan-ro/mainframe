@@ -206,7 +206,7 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
         ) : (
           <GitBranch size={12} className="shrink-0 text-muted-foreground" />
         )}
-        <span className="flex-1 truncate font-mono text-xs font-semibold text-foreground">{branch}</span>
+        <span className="flex-1 truncate font-mono text-sm font-semibold text-foreground">{branch}</span>
         {busy && <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground" />}
       </div>
       <div className="py-1">
