@@ -17,7 +17,7 @@
  *   search-palette-session-row-<remoteId>   — default-mode session result
  *   search-palette-command-row-<id>         — `>` command result (ids: review/settings/sidebar/inspector/files/run)
  *   search-palette-change-row-<path>        — `#` changed-file result
- *   files-tab-strip / diff-tab              — Files-surface targets a row selection opens
+ *   workspace-tab-strip / diff-tab              — workspace-surface targets a row selection opens
  *   sessions-row / sessions-new-button      — sidebar chrome used to observe command effects
  *
  * NOT found in source (pre-work punch-list item #6, not added here — out of scope
@@ -33,6 +33,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
@@ -139,7 +140,7 @@ test.describe('§spotlight', () => {
     await closePaletteIfOpen(page);
   });
 
-  test('clicking a file row opens it in the Files surface', async () => {
+  test('clicking a file row opens it in the workspace', async () => {
     const { page } = app;
     await openPalette(page);
     await page.getByTestId('search-palette-input').fill('greeter');
@@ -148,7 +149,7 @@ test.describe('§spotlight', () => {
     await row.click();
 
     await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
-    const activeTab = page.getByTestId('files-tab-strip').locator('[role="tab"][aria-selected="true"]');
+    const activeTab = page.locator(WORKSPACE.strip).locator('[role="tab"][aria-selected="true"]');
     await expect(activeTab).toContainText(UNIQUE_FILE, { timeout: 10_000 });
   });
 
@@ -240,7 +241,7 @@ test.describe('§spotlight', () => {
 
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
-    const activeTab = page.getByTestId('files-tab-strip').locator('[role="tab"][aria-selected="true"]');
+    const activeTab = page.locator(WORKSPACE.strip).locator('[role="tab"][aria-selected="true"]');
     await expect(activeTab).toContainText(expectedFile, { timeout: 10_000 });
   });
 

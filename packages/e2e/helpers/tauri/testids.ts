@@ -20,3 +20,26 @@ export const T = {
   sessionsNewButton: 'sessions-new-button',
   sessionsMoreButton: 'sessions-more-button',
 } as const;
+
+/**
+ * Workspace-surface selectors (the merged Files+Run surface, 2026-08-05).
+ *
+ * The strip root and the pane root are keyed by pane id — `workspace-tab-strip-<paneId>`
+ * and `workspace-pane-<paneId>` — and a pane id is always `pane-<hex>` (`genId('pane')`
+ * in `store/run-pane.ts`). The tighter `-pane-` prefix is therefore what separates a
+ * root from the buttons and menu rows that share the shorter prefix
+ * (`workspace-tab-strip-add-<paneId>`, `workspace-pane-close-<paneId>`,
+ * `workspace-pane-launch-<config>-<paneId>`, …). Verified live before the merge with
+ * the identical `run-pane-pane-` trick: a 2-pane split matched 3 elements on the loose
+ * prefix.
+ */
+export const WORKSPACE = {
+  /** One pane's tab-strip row. */
+  strip: '[data-testid^="workspace-tab-strip-pane-"]',
+  /** One pane's root (strip + bodies). */
+  pane: '[data-testid^="workspace-pane-pane-"]',
+  /** Every tab pill in the surface. `[role=tab]` excludes the per-tab close/stop buttons. */
+  tab: '[data-testid^="workspace-tab-"][role="tab"]',
+  /** A pane's `+` trigger. */
+  add: '[data-testid^="workspace-tab-strip-add-"]',
+} as const;

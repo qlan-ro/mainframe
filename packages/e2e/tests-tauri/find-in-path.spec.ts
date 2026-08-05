@@ -27,7 +27,7 @@
  *   find-in-path-idle-hint          — "Type to search" (query empty)
  *   find-in-path-empty              — "No matches" (debounced query >=2 chars, 0 results)
  *   find-in-path-result-${file}:${line}:${column} — a result row
- *   files-tab-strip                 — Files surface tab strip (role="tab" pills)
+ *   workspace-tab-strip                 — a workspace pane's tab strip (role="tab" pills)
  *   viewer-shell-status             — footer status string ("Ln x, Col y" for code files)
  *
  * Cursor-position assertions expect the true 1-based match position rendered in
@@ -41,6 +41,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // ── Fixture content ────────────────────────────────────────────────────────────
 // Every file is written WITHOUT a trailing newline so its CM6 document has exactly
@@ -204,9 +205,9 @@ test.describe('§find-in-path', () => {
     await expect(result).toBeVisible({ timeout: 5_000 });
     await result.click();
 
-    // Dialog closes and the Files surface opens the matched file.
+    // Dialog closes and the workspace opens the matched file.
     await expect(page.getByTestId('find-in-path')).toHaveCount(0);
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('alpha.ts', { timeout: 10_000 });
 
     await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 3, Col 7', { timeout: 5_000 });
@@ -226,7 +227,7 @@ test.describe('§find-in-path', () => {
     await input.press('Enter');
 
     await expect(page.getByTestId('find-in-path')).toHaveCount(0);
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('gamma.ts', { timeout: 10_000 });
 
     await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 2, Col 7', { timeout: 5_000 });

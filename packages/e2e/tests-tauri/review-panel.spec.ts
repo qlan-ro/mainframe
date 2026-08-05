@@ -52,7 +52,7 @@
  *   review-commit-error          — commit failure message
  *   chat-user-review-comment     — the parsed review-comment message card
  *   chat-user-review-comment-L<n> — a single comment section within that card
- *   files-tab-strip [role="tab"] — Files surface tab strip (open-in-workspace target)
+ *   workspace-tab-strip [role="tab"] — a workspace pane's tab strip (open-in-workspace target)
  */
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'child_process';
@@ -60,6 +60,7 @@ import { appendFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
 
@@ -178,13 +179,13 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
     await expect(indexRow).toHaveClass(/opacity-55/);
   });
 
-  test('Open in workspace closes the modal and opens the file in the Files surface', async () => {
+  test('Open in workspace closes the modal and opens the file in the workspace', async () => {
     const { page } = app;
     // new-file.ts is selected from the previous test.
     await page.getByTestId('review-open-in-workspace').click();
     await expect(page.getByTestId('review-modal')).toHaveCount(0);
 
-    const tab = page.locator('[data-testid="files-tab-strip"] [role="tab"]').filter({ hasText: 'new-file.ts' });
+    const tab = page.locator(`${WORKSPACE.strip} [role="tab"]`).filter({ hasText: 'new-file.ts' });
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await expect(tab).toHaveAttribute('aria-selected', 'true');
   });

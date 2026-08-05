@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { T } from './testids.js';
+import { T, WORKSPACE } from './testids.js';
 
 export function sessionsSidebar(page: Page) {
   return {
@@ -46,5 +46,46 @@ export function chatThread(page: Page) {
     root: () => page.getByTestId(T.thread),
     userMessages: () => page.getByTestId(T.userMessage),
     assistantMessages: () => page.getByTestId(T.assistantMessage),
+  };
+}
+
+/**
+ * The workspace surface (merged Files+Run, 2026-08-05).
+ *
+ * `openFilePicker` exists because the "open a file" affordance moved with the
+ * merge: an empty workspace offers it as a row on the empty-state card, and a
+ * workspace with tabs offers it inside the pane's `+` menu. Every spec that used
+ * the old always-present `files-tab-strip-add` needs both branches.
+ */
+export function workspace(page: Page) {
+  return {
+    root: () => page.getByTestId('workspace-surface'),
+    emptyState: () => page.getByTestId('workspace-empty-state'),
+    strip: () => page.locator(WORKSPACE.strip),
+    panes: () => page.locator(WORKSPACE.pane),
+    tabs: () => page.locator(WORKSPACE.tab),
+    tab: (title: string) => page.locator(WORKSPACE.tab).filter({ hasText: title }),
+    activeTab: () => page.locator(`${WORKSPACE.tab}[aria-selected="true"]`),
+    /** Resolve the first pane's opaque id, for the per-pane testids. */
+    async firstPaneId(): Promise<string> {
+      const testid = await page.locator(WORKSPACE.pane).first().getAttribute('data-testid');
+      if (!testid) throw new Error('no workspace pane is mounted');
+      return testid.replace('workspace-pane-', '');
+    },
+    async openAddMenu(): Promise<string> {
+      const paneId = await this.firstPaneId();
+      await page.getByTestId(`workspace-tab-strip-add-${paneId}`).click();
+      await page.getByTestId(`workspace-add-menu-${paneId}`).waitFor({ timeout: 5_000 });
+      return paneId;
+    },
+    /** Open the file picker from whichever affordance the current state offers. */
+    async openFilePicker(): Promise<void> {
+      if ((await page.locator(WORKSPACE.add).count()) > 0) {
+        const paneId = await this.openAddMenu();
+        await page.getByTestId(`workspace-pane-open-file-${paneId}`).click();
+        return;
+      }
+      await page.getByTestId('workspace-picker-open-file').click();
+    },
   };
 }

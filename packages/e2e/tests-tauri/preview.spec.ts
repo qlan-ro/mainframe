@@ -38,9 +38,9 @@
  * binary so the daemon's `child.once('error')` (ENOENT) path fires quickly.
  *
  * Testid reference (verified against source):
- *   surface-rail-run              — toggles the Run surface on
- *   run-surface / run-surface-picker (empty state)
- *   run-picker-launch-<config>    — a launch-config row in the empty-state picker
+ *   surface-rail-workspace              — toggles the workspace surface on
+ *   workspace-surface / workspace-empty-state (empty state)
+ *   workspace-picker-launch-<config>    — a launch-config row on the empty-state card
  *   preview-toolbar               — toolbar root
  *   preview-run-start / preview-run-stop / preview-run-restart
  *   preview-url-input / preview-url-reload / preview-url-open-browser / preview-url-clear-cache
@@ -121,12 +121,12 @@ test.describe('§preview — running lifecycle', () => {
     cleanupTauriProject(project);
   });
 
-  test('Run surface picker lists the preview config', async () => {
+  test('the workspace empty-state card lists the preview config', async () => {
     const { page } = app;
-    await page.getByTestId('surface-rail-run').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('run-surface-picker')).toBeVisible();
-    const row = page.getByTestId(`run-picker-launch-${CONFIG_NAME}`);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('workspace-empty-state')).toBeVisible();
+    const row = page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText(CONFIG_NAME);
     await expect(row).toContainText('preview');
@@ -134,7 +134,7 @@ test.describe('§preview — running lifecycle', () => {
 
   test('starting the config shows the starting body and keeps toolbar controls locked', async () => {
     const { page } = app;
-    await page.getByTestId(`run-picker-launch-${CONFIG_NAME}`).click();
+    await page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`).click();
 
     await expect(page.getByTestId('preview-toolbar')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('preview-body-starting')).toBeVisible({ timeout: 10_000 });
@@ -325,19 +325,19 @@ test.describe('§preview — failed config', () => {
   });
 
   // Previously: `preview-body-failed` never mounted — the same
-  // unguarded-stale-REST-overwrite bug fixed in run-surface.spec.ts's "Stop
+  // unguarded-stale-REST-overwrite bug fixed in workspace-surface.spec.ts's "Stop
   // reverts the toolbar to Start for sleep-long" (`use-launch-configs.ts`'s
   // `GET /launch/status` fetch had no guard against a newer WS
   // `launch.status` update superseding it), triggered here by
-  // `RunTabStrip` mounting its own fresh `useLaunchConfigs` instance right as
+  // `WorkspaceTabStrip` mounting its own fresh `useLaunchConfigs` instance right as
   // the daemon's async spawn-error (ENOENT) detection was racing to
   // complete. Fixed by the same `reconcileFetchedStatus` stale-response guard
   // in the product-bug-fix campaign.
   test('a config with a nonexistent executable reaches the failed state', async () => {
     const { page } = app;
-    await page.getByTestId('surface-rail-run').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId(`run-picker-launch-${CONFIG_NAME}`).click();
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`).click();
 
     await expect(page.getByTestId('preview-body-failed')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('preview-body-failed')).toContainText('Failed to start');

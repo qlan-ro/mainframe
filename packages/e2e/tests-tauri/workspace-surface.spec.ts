@@ -1,15 +1,18 @@
 /**
- * §run-surface — the Run surface (terminal + launch-config panes) specs.
+ * §workspace-surface — the workspace surface's process side: terminals, launch
+ * configs, consoles and panes.
  *
- * Cluster C, spec #21 of docs/plans/2026-07-03-tauri-e2e-test-plan.md. UI-only in
- * the sense that no AI turns are involved — no recording/E2E_MODE needed — but
- * exercises REAL daemon-spawned processes via `.mainframe/launch.json` launch
- * configs (the daemon spawns actual `sleep`/`echo`/`node` child processes; this
- * is independent of the mock-CLI machinery used for chat/agent specs).
+ * Cluster C, spec #21 of docs/plans/2026-07-03-tauri-e2e-test-plan.md, rewired for
+ * the 2026-08-05 Files+Run merge (the Files and Run surfaces are one
+ * `workspace-surface`). UI-only in the sense that no AI turns are involved — no
+ * recording/E2E_MODE needed — but it exercises REAL daemon-spawned processes via
+ * `.mainframe/launch.json` launch configs (the daemon spawns actual
+ * `sleep`/`echo`/`node` children; independent of the mock-CLI machinery).
  *
- * Source read: packages/ui/src/layout/surfaces/RunSurface.tsx,
- * packages/ui/src/layout/RunTabStrip.tsx, packages/ui/src/layout/SurfacePicker.tsx
- * (RunPickerContent), packages/ui/src/features/terminal/create-terminal.ts +
+ * Source read: packages/ui/src/layout/surfaces/WorkspaceSurface.tsx,
+ * packages/ui/src/layout/{WorkspaceTabStrip,WorkspaceAddMenu,WorkspaceTabPill,
+ * WorkspaceStripChrome,WorkspaceEmptyState}.tsx,
+ * packages/ui/src/features/terminal/create-terminal.ts +
  * packages/ui/src/store/terminal-intent-subscriber.ts, packages/ui/src/lib/host/
  * fake-adapter.ts, packages/ui/src/features/run/{use-launch-actions,
  * use-launch-configs,ToolbarLaunchControls}.tsx, packages/core/src/launch/
@@ -21,10 +24,9 @@
  * (no host)"). `createTerminalSession` disposes its cache entry and re-throws;
  * `spawnTerminal` (terminal-intent-subscriber.ts) catches that rejection and only
  * `console.warn`s — it never calls `addRunTab`. So in browser mode, clicking
- * "New terminal" produces **no tab and no pane** (not a degraded/errored tab as
- * the dispatch note speculated) — the surface stays on its picker / the pane's
- * tab count is unchanged. Assertions below reflect that reality: no crash + no
- * new tab, not "tab appears but PTY fails".
+ * "New terminal" produces **no tab and no pane** — the surface stays on its
+ * empty-state card / the pane's tab count is unchanged. Assertions below reflect
+ * that reality: no crash + no new tab, not "tab appears but PTY fails".
  *
  * Launch configs are read from `<project>/.mainframe/launch.json` on disk (GET
  * /api/projects/:id/launch/configs), not seeded via a daemon REST endpoint — this
@@ -36,21 +38,20 @@
  * (non-zero exit — for the failed-state scenario).
  *
  * Testid reference (all verified against source):
- *   surface-rail-run                          — MainToolbar rail toggle (⌘3)
- *   run-surface / run-surface-picker          — RunSurface root / empty-state picker
- *   run-picker-new-terminal / run-picker-launch-<name> — picker rows
- *   run-pane-<paneId>                         — a Run pane
- *   run-tab-<id> / run-tab-close-<id>         — a tab pill / its close button
- *   run-tab-strip-add-<paneId> / run-add-menu-<paneId> — the "+" popover trigger/content
- *   run-pane-new-terminal-<paneId> / run-pane-launch-<config>-<paneId> — its rows
- *   run-tab-strip-split-right / run-tab-strip-split-down / run-surface-close — primary-pane controls
- *   run-pane-close-<paneId>                   — secondary-pane close (un-split)
+ *   surface-rail-workspace                    — MainToolbar rail toggle (⌘2)
+ *   workspace-surface / workspace-empty-state — surface root / empty-state card
+ *   workspace-picker-new-terminal / workspace-picker-launch-<name> — its rows
+ *   WORKSPACE.pane / .tab / .strip / .add     — pane-id-keyed roots (helpers/tauri/testids.ts)
+ *   workspace-tab-close-<id> / workspace-tab-stop-<id> — per-tab controls
+ *   workspace-add-menu-<paneId>               — the "+" menu content
+ *   workspace-pane-new-terminal-<paneId> / workspace-pane-launch-<config>-<paneId> — its rows
+ *   workspace-tab-strip-split-right / -split-down / workspace-surface-close — primary-pane controls
+ *   workspace-pane-close-<paneId>             — secondary-pane close (un-split)
  *   run-console-pane                          — full-space ConsolePane (process tabs)
  *   main-toolbar-launch / main-toolbar-launch-popover — toolbar launch picker (shared status source)
  *   main-toolbar-launch-start-<name> / -stop-<name> — per-config start/stop (status-derived)
- *   files-surface / files-surface-picker / files-tab-strip-add / files-tab-strip-close
  *   file-picker-dialog / file-picker-input / file-picker-row-<path>
- *   drop-zone-right / surface-drag-layer      — Files-tab-to-Run drag (setup for secondary-pane close)
+ *   drop-zone-right / surface-drag-layer      — in-workspace tab→pane-edge drag
  *   chat-header-hide                          — hides Chat (dynamic-floor setup)
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -59,18 +60,10 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { workspace } from '../helpers/tauri/page-objects.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
-
-// `[data-testid^="run-pane-"]` alone over-matches: `run-pane-close-<paneId>`,
-// `run-pane-new-terminal-<paneId>`, and `run-pane-launch-<config>-<paneId>` (the
-// add-menu rows, per RunTabStrip.tsx's own testid reference) all share the same
-// prefix as the real pane wrapper `run-pane-<paneId>`. Verified live: after a
-// 2-pane split, the bare prefix locator resolved to 3 elements (2 panes + the
-// secondary pane's `run-pane-close-*` button) — not a product bug, a test-selector
-// bug. This locator excludes the known non-pane variants.
-const RUN_PANE_SELECTOR =
-  '[data-testid^="run-pane-"]:not([data-testid^="run-pane-close-"]):not([data-testid^="run-pane-new-terminal-"]):not([data-testid^="run-pane-launch-"])';
 
 /** Write a `.mainframe/launch.json` with the three configs this spec exercises. */
 function seedLaunchConfigs(projectPath: string): void {
@@ -92,10 +85,10 @@ function seedLaunchConfigs(projectPath: string): void {
   writeFileSync(path.join(dir, 'launch.json'), JSON.stringify(config, null, 2));
 }
 
-/** Toggle the Run surface on via the rail's ⌘3 shortcut (per the dispatch note). */
-async function turnRunSurfaceOn(page: Page): Promise<void> {
-  await page.keyboard.press('ControlOrMeta+3');
-  await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });
+/** Toggle the workspace surface on via its ⌘2 shortcut (⌘1 is chat). */
+async function turnWorkspaceOn(page: Page): Promise<void> {
+  await page.keyboard.press('ControlOrMeta+2');
+  await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
 }
 
 /** Poll the daemon's launch-status REST endpoint for a config's status. */
@@ -105,9 +98,9 @@ async function launchStatus(page: Page, projectId: string, name: string): Promis
   return body.data?.statuses?.[name];
 }
 
-// ─── §21a Empty-state picker + new-terminal (browser-mode degraded) ────────────
+// ─── §21a Empty-state card + new-terminal (browser-mode degraded) ─────────────
 
-test.describe('§21 run-surface — empty-state picker + new-terminal (degraded)', () => {
+test.describe('§21 workspace-surface — empty-state card + new-terminal (degraded)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -116,7 +109,7 @@ test.describe('§21 run-surface — empty-state picker + new-terminal (degraded)
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
-    await turnRunSurfaceOn(app.page);
+    await turnWorkspaceOn(app.page);
   });
 
   test.afterAll(async () => {
@@ -124,35 +117,39 @@ test.describe('§21 run-surface — empty-state picker + new-terminal (degraded)
     await closeTauriApp(app);
   });
 
-  test('the empty-state picker lists New terminal and every launch config', async () => {
+  test('the empty-state card lists the file rows, New terminal, and every launch config', async () => {
     const { page } = app;
-    await expect(page.getByTestId('run-surface-picker')).toBeVisible();
-    await expect(page.getByTestId('run-picker-new-terminal')).toBeVisible();
-    await expect(page.getByTestId('run-picker-launch-sleep-long')).toBeVisible();
-    await expect(page.getByTestId('run-picker-launch-echo-once')).toBeVisible();
-    await expect(page.getByTestId('run-picker-launch-exit-immediately')).toBeVisible();
+    await expect(page.getByTestId('workspace-empty-state')).toBeVisible();
+    // The merged card carries BOTH halves of the old Files and Run pickers.
+    await expect(page.getByTestId('workspace-picker-open-file')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-view-changes')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-open-url')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-new-terminal')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-launch-sleep-long')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-launch-echo-once')).toBeVisible();
+    await expect(page.getByTestId('workspace-picker-launch-exit-immediately')).toBeVisible();
   });
 
-  test('New terminal fails gracefully in browser mode: no tab, no crash, picker persists', async () => {
+  test('New terminal fails gracefully in browser mode: no tab, no crash, card persists', async () => {
     const { page } = app;
     const pageErrors: Error[] = [];
     page.on('pageerror', (err) => pageErrors.push(err));
 
-    await page.getByTestId('run-picker-new-terminal').click();
+    await page.getByTestId('workspace-picker-new-terminal').click();
 
     // FakeHostBridge.terminal.create() rejects; spawnTerminal only console.warns
-    // and never calls addRunTab — so the surface never leaves the picker state.
-    await expect(page.getByTestId('run-surface-picker')).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator(RUN_PANE_SELECTOR)).toHaveCount(0);
+    // and never calls addRunTab — so the surface never leaves its empty state.
+    await expect(page.getByTestId('workspace-empty-state')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(WORKSPACE.pane)).toHaveCount(0);
     // The app must still be responsive — the rail toggle remains a live control.
-    await expect(page.getByTestId('surface-rail-run')).toBeEnabled();
+    await expect(page.getByTestId('surface-rail-workspace')).toBeEnabled();
     expect(pageErrors).toHaveLength(0);
   });
 });
 
 // ─── §21b Tab strip, per-pane "+" menu, launch start/stop, console logs ────────
 
-test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, console logs', () => {
+test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle, console logs', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -161,7 +158,7 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
-    await turnRunSurfaceOn(app.page);
+    await turnWorkspaceOn(app.page);
   });
 
   test.afterAll(async () => {
@@ -171,17 +168,17 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
 
   test('starting a launch config from the picker opens a tab and reaches running status', async () => {
     const { page } = app;
-    await page.getByTestId('run-picker-launch-sleep-long').click();
+    await page.getByTestId('workspace-picker-launch-sleep-long').click();
 
     // addRunTab is a synchronous, optimistic local-store update — the tab shows
     // up immediately, independent of the daemon confirming the process started.
-    const pane = page.locator(RUN_PANE_SELECTOR).first();
+    const pane = page.locator(WORKSPACE.pane).first();
     await expect(pane).toBeVisible({ timeout: 5_000 });
-    const tab = page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
+    const tab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
     await expect(tab).toBeVisible();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
 
-    // Status confirmation: RunTabStrip's own pill carries no status glyph, so we
+    // Status confirmation: the tab pill carries no status glyph, so we
     // read it from the toolbar's launch picker, which shares the same
     // useLaunchActions/scopeStatuses source — the Stop button only renders once
     // status is 'running' or 'starting'.
@@ -192,21 +189,20 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
 
   test('the per-pane "+" popover lists New terminal and the launch configs; New terminal is a no-op', async () => {
     const { page } = app;
-    const pane = page.locator(RUN_PANE_SELECTOR).first();
-    const paneId = (await pane.getAttribute('data-testid'))!.replace('run-pane-', '');
-    const tabCountBefore = await page.locator(`[data-testid="run-pane-${paneId}"] [role="tab"]`).count();
+    const paneId = await workspace(page).firstPaneId();
+    const tabCountBefore = await page.locator(`[data-testid="workspace-pane-${paneId}"] [role="tab"]`).count();
 
-    await page.getByTestId(`run-tab-strip-add-${paneId}`).click();
-    await expect(page.getByTestId(`run-add-menu-${paneId}`)).toBeVisible();
-    await expect(page.getByTestId(`run-pane-new-terminal-${paneId}`)).toBeVisible();
-    await expect(page.getByTestId(`run-pane-launch-echo-once-${paneId}`)).toBeVisible();
-    await expect(page.getByTestId(`run-pane-launch-exit-immediately-${paneId}`)).toBeVisible();
+    await page.getByTestId(`workspace-tab-strip-add-${paneId}`).click();
+    await expect(page.getByTestId(`workspace-add-menu-${paneId}`)).toBeVisible();
+    await expect(page.getByTestId(`workspace-pane-new-terminal-${paneId}`)).toBeVisible();
+    await expect(page.getByTestId(`workspace-pane-launch-echo-once-${paneId}`)).toBeVisible();
+    await expect(page.getByTestId(`workspace-pane-launch-exit-immediately-${paneId}`)).toBeVisible();
 
-    await page.getByTestId(`run-pane-new-terminal-${paneId}`).click();
-    await expect(page.getByTestId(`run-add-menu-${paneId}`)).toHaveCount(0);
-    // Same PTY-unavailable no-op as the empty-state picker: tab count in this
+    await page.getByTestId(`workspace-pane-new-terminal-${paneId}`).click();
+    await expect(page.getByTestId(`workspace-add-menu-${paneId}`)).toHaveCount(0);
+    // Same PTY-unavailable no-op as the empty-state card: tab count in this
     // pane is unchanged.
-    await expect(page.locator(`[data-testid="run-pane-${paneId}"] [role="tab"]`)).toHaveCount(tabCountBefore);
+    await expect(page.locator(`[data-testid="workspace-pane-${paneId}"] [role="tab"]`)).toHaveCount(tabCountBefore);
   });
 
   // Previously: the console pane never showed `echo-once`'s stdout — a fast
@@ -229,13 +225,12 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
   // reported to the orchestrator, not re-fixed here per this pass's scope.
   test('launching echo-once from the add-menu opens a second tab whose console shows its output', async () => {
     const { page } = app;
-    const pane = page.locator(RUN_PANE_SELECTOR).first();
-    const paneId = (await pane.getAttribute('data-testid'))!.replace('run-pane-', '');
+    const paneId = await workspace(page).firstPaneId();
 
-    await page.getByTestId(`run-tab-strip-add-${paneId}`).click();
-    await page.getByTestId(`run-pane-launch-echo-once-${paneId}`).click();
+    await page.getByTestId(`workspace-tab-strip-add-${paneId}`).click();
+    await page.getByTestId(`workspace-pane-launch-echo-once-${paneId}`).click();
 
-    const echoTab = page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
+    const echoTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
     await expect(echoTab).toBeVisible({ timeout: 5_000 });
     // Launching activates the new tab.
     await expect(echoTab).toHaveAttribute('aria-selected', 'true');
@@ -264,8 +259,8 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
   // recreates it); re-enabled together with the echo-once fix.
   test('tab activate: clicking a pill switches which console is selected', async () => {
     const { page } = app;
-    const sleepTab = page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
-    const echoTab = page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
+    const sleepTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' });
+    const echoTab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'echo-once' });
 
     await sleepTab.click();
     await expect(sleepTab).toHaveAttribute('aria-selected', 'true');
@@ -281,14 +276,16 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
   test('tab close: closing echo-once removes it, leaving only sleep-long', async () => {
     const { page } = app;
     const echoTabId = await page
-      .locator('[data-testid^="run-tab-"][role="tab"]')
+      .locator('[data-testid^="workspace-tab-"][role="tab"]')
       .filter({ hasText: 'echo-once' })
       .getAttribute('data-testid');
-    const id = echoTabId!.replace('run-tab-', '');
+    const id = echoTabId!.replace('workspace-tab-', '');
 
-    await page.getByTestId(`run-tab-close-${id}`).click();
-    await expect(page.getByTestId(`run-tab-${id}`)).toHaveCount(0);
-    await expect(page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'sleep-long' })).toBeVisible();
+    await page.getByTestId(`workspace-tab-close-${id}`).click();
+    await expect(page.getByTestId(`workspace-tab-${id}`)).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' }),
+    ).toBeVisible();
   });
 
   // Previously: this reproducibly hung on "Stop" forever — a stale-response
@@ -315,13 +312,15 @@ test.describe('§21 run-surface — tab strip, add-menu, launch lifecycle, conso
     await page.keyboard.press('Escape');
 
     // The tab itself is not removed on stop, only its status changes.
-    await expect(page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'sleep-long' })).toBeVisible();
+    await expect(
+      page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'sleep-long' }),
+    ).toBeVisible();
   });
 });
 
 // ─── §21c Failed launch config ───────────────────────────────────────────────
 
-test.describe('§21 run-surface — failed launch config', () => {
+test.describe('§21 workspace-surface — failed launch config', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -330,7 +329,7 @@ test.describe('§21 run-surface — failed launch config', () => {
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
-    await turnRunSurfaceOn(app.page);
+    await turnWorkspaceOn(app.page);
   });
 
   test.afterAll(async () => {
@@ -348,13 +347,13 @@ test.describe('§21 run-surface — failed launch config', () => {
   // `this.processes` entry being deleted.
   test('a config that exits non-zero reaches failed status; its tab is not removed', async () => {
     const { page } = app;
-    await page.getByTestId('run-picker-launch-exit-immediately').click();
+    await page.getByTestId('workspace-picker-launch-exit-immediately').click();
 
-    const tab = page.locator('[data-testid^="run-tab-"][role="tab"]').filter({ hasText: 'exit-immediately' });
+    const tab = page.locator('[data-testid^="workspace-tab-"][role="tab"]').filter({ hasText: 'exit-immediately' });
     await expect(tab).toBeVisible({ timeout: 5_000 });
 
     // No dedicated "Failed" UI text exists on the console tab (verified: neither
-    // RunTabStrip's tabGlyph nor ConsolePane render a status word) — the daemon's
+    // the tab pill's glyph nor ConsolePane render a status word) — the daemon's
     // own launch-status endpoint is the observable source of truth here.
     await expect
       .poll(() => launchStatus(page, project.projectId, 'exit-immediately'), { timeout: 15_000 })
@@ -365,9 +364,9 @@ test.describe('§21 run-surface — failed launch config', () => {
   });
 });
 
-// ─── §21d Run's own split controls, secondary-pane close, close-at-floor ──────
+// ─── §21d Pane splitting, secondary-pane close, close-at-floor ────────────────
 
-test.describe('§21 run-surface — split controls, secondary-pane close, close-at-floor', () => {
+test.describe('§21 workspace-surface — pane split, secondary-pane close, close-at-floor', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -376,11 +375,11 @@ test.describe('§21 run-surface — split controls, secondary-pane close, close-
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
-    await turnRunSurfaceOn(app.page);
-    // Give the primary pane content so RunTabStrip (and its split/close controls)
-    // is mounted — SurfacePicker has no such controls.
-    await app.page.getByTestId('run-picker-launch-sleep-long').click();
-    await expect(app.page.locator(RUN_PANE_SELECTOR).first()).toBeVisible({ timeout: 5_000 });
+    await turnWorkspaceOn(app.page);
+    // Give the pane content so the tab strip (and its split/close controls) mounts
+    // — the empty-state card carries no `+`.
+    await app.page.getByTestId('workspace-picker-launch-sleep-long').click();
+    await expect(app.page.locator(WORKSPACE.pane).first()).toBeVisible({ timeout: 5_000 });
   });
 
   test.afterAll(async () => {
@@ -388,33 +387,36 @@ test.describe('§21 run-surface — split controls, secondary-pane close, close-
     await closeTauriApp(app);
   });
 
-  test("run-tab-strip-split-right (Run's own header) brings in the Files surface", async () => {
+  test('the strip offers no split controls while the workspace is the only non-chat surface', async () => {
     const { page } = app;
-    await expect(page.getByTestId('files-surface')).toHaveCount(0);
-    await page.getByTestId('run-tab-strip-split-right').click();
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 5_000 });
+    // `layoutCanSplit` is false once the workspace is placed — with two surfaces
+    // there is no third to bring in, so WorkspaceStripActions renders neither
+    // split button. Splitting PANES is the tab-drag gesture below instead.
+    await expect(page.getByTestId('workspace-tab-strip-split-right')).toHaveCount(0);
+    await expect(page.getByTestId('workspace-tab-strip-split-down')).toHaveCount(0);
+    await expect(page.getByTestId('workspace-surface-close')).toBeEnabled();
   });
 
-  test("secondary-pane close: dragging a Files tab onto Run's edge splits it, then run-pane-close un-splits it", async () => {
+  test('secondary-pane close: dragging a tab onto the pane edge splits it, then workspace-pane-close un-splits', async () => {
     const { page } = app;
 
-    // Open a Files tab so there is something to drag (mirrors layout.spec.ts's
-    // established Files-tab-to-Run drag technique — reused locally here only to
-    // reach the untested `run-pane-close-<paneId>` action itself).
-    await page.getByTestId('files-tab-strip-add').click();
+    // A second tab is needed: `moveTabToPaneEdge` no-ops on the surface's last
+    // remaining tab (there would be nothing left to split against). A file tab is
+    // the cheapest second tab that needs no daemon process.
+    await workspace(page).openFilePicker();
     await page.getByTestId('file-picker-dialog').waitFor({ timeout: 5_000 });
     await page.getByTestId('file-picker-input').fill('index.ts');
     const row = page.locator('[data-testid^="file-picker-row-"]').filter({ hasText: 'index.ts' }).first();
     await row.waitFor({ timeout: 5_000 });
     await row.click();
-    const filesTab = page.locator('[data-testid="files-tab-strip"]').getByRole('tab').first();
-    await filesTab.waitFor({ timeout: 5_000 });
 
-    const tabBox = await filesTab.boundingBox();
-    if (!tabBox) throw new Error('files tab has no bounding box');
-    const runBox = await page.locator('[data-drop-surface="run"]').boundingBox();
-    if (!runBox) throw new Error('run pane has no bounding box');
-    const edgeTarget = { x: runBox.x + runBox.width * 0.95, y: runBox.y + runBox.height / 2 };
+    const fileTab = workspace(page).tab('index.ts');
+    await fileTab.waitFor({ timeout: 5_000 });
+    const tabBox = await fileTab.boundingBox();
+    if (!tabBox) throw new Error('workspace tab has no bounding box');
+    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    if (!wsBox) throw new Error('workspace surface has no bounding box');
+    const edgeTarget = { x: wsBox.x + wsBox.width * 0.95, y: wsBox.y + wsBox.height / 2 };
 
     await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
     await page.mouse.down();
@@ -423,28 +425,22 @@ test.describe('§21 run-surface — split controls, secondary-pane close, close-
     await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
     await page.mouse.up();
 
-    await expect(page.locator(RUN_PANE_SELECTOR)).toHaveCount(2, { timeout: 5_000 });
-    const closeSecondary = page.locator('[data-testid^="run-pane-close-"]');
+    await expect(page.locator(WORKSPACE.pane)).toHaveCount(2, { timeout: 5_000 });
+    const closeSecondary = page.locator('[data-testid^="workspace-pane-close-"]');
     await expect(closeSecondary).toBeVisible({ timeout: 5_000 });
 
     await closeSecondary.click();
-    await expect(page.locator(RUN_PANE_SELECTOR)).toHaveCount(1);
-    await expect(page.locator('[data-testid^="run-pane-close-"]')).toHaveCount(0);
+    await expect(page.locator(WORKSPACE.pane)).toHaveCount(1);
+    await expect(page.locator('[data-testid^="workspace-pane-close-"]')).toHaveCount(0);
   });
 
-  test('run-surface-close is disabled once Run becomes the sole lit surface (the dynamic floor)', async () => {
+  test('workspace-surface-close is disabled once the workspace is the sole lit surface (the dynamic floor)', async () => {
     const { page } = app;
-    // litCount is 3 here (chat, files, run — Files was brought in by the prior
-    // "split-right" test and survives the drag test as an empty picker) — bring
-    // it down to 1 (Run alone).
-    await expect(page.getByTestId('files-surface')).toBeVisible();
-    await page.getByTestId('surface-rail-files').click();
-    await expect(page.getByTestId('files-surface')).toHaveCount(0);
-
+    // litCount is 2 here (chat + workspace) — hiding chat leaves the workspace alone.
     await page.getByTestId('chat-header-hide').click();
     await expect(page.getByTestId('chat-header')).toHaveCount(0);
 
-    await expect(page.getByTestId('run-surface-close')).toBeDisabled();
-    await expect(page.getByTestId('surface-rail-run')).toBeDisabled();
+    await expect(page.getByTestId('workspace-surface-close')).toBeDisabled();
+    await expect(page.getByTestId('surface-rail-workspace')).toBeDisabled();
   });
 });

@@ -26,7 +26,7 @@
  *   chat-header-split-down      — split Files/Run into the bottom strip
  *   chat-header-hide            — hide the Chat surface (disabled at the dynamic floor)
  *   review-modal                — the Review panel opened by chat-header-review
- *   surface-rail-<chat|files|run> / files-surface / run-surface — layout.spec.ts's own
+ *   surface-rail-<chat|files|run> / workspace-surface / workspace-surface — layout.spec.ts's own
  *                                  testids, referenced here only to observe split/hide effects
  *   [data-drop-surface="chat|files|run"] — layout engine's per-surface panel wrapper
  */
@@ -161,7 +161,7 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
   test('enabled once Files is lit (⌘/Ctrl+2), and hides the chat surface when clicked', async () => {
     const { page } = app;
     await page.keyboard.press('ControlOrMeta+2');
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const hideButton = page.getByTestId('chat-header-hide');
     await expect(hideButton).toBeEnabled();
@@ -170,7 +170,7 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
     await expect(page.locator('[data-drop-surface="chat"]')).toHaveCount(0);
     await expect(page.getByTestId('chat-header')).toHaveCount(0);
     // Files remains the sole lit surface.
-    await expect(page.getByTestId('files-surface')).toBeVisible();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible();
   });
 });
 
@@ -194,10 +194,10 @@ test.describe('§chat-header — split controls', () => {
   test('split-right lights a second surface beside Chat in the top row', async () => {
     const { page } = app;
     await page.getByTestId('chat-header-split-right').click();
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const filesBox = await page.locator('[data-drop-surface="files"]').boundingBox();
+    const filesBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
     expect(filesBox).not.toBeNull();
     // Same row: comparable y, Chat stays leftmost.
@@ -210,10 +210,10 @@ test.describe('§chat-header — split controls', () => {
     // Chat's own header still carries the split controls regardless of how many
     // surfaces are already lit, as long as one of files/run is still missing.
     await page.getByTestId('chat-header-split-down').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const filesBox = await page.locator('[data-drop-surface="files"]').boundingBox();
-    const runBox = await page.locator('[data-drop-surface="run"]').boundingBox();
+    const filesBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const runBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
     expect(filesBox).not.toBeNull();
     expect(runBox).not.toBeNull();
     // Run sits below the top row.

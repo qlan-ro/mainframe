@@ -1,5 +1,5 @@
 /**
- * §viewers — Files-surface non-code viewers (spec #19 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
+ * §viewers — workspace-surface non-code viewers (spec #19 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
  *
  * UI-only: no recording needed (no agent turn). One project + one chat created
  * in `beforeAll`; fixture files (one per viewer kind) are written directly to
@@ -11,7 +11,7 @@
  * Testid reference (verified against packages/ui/src/features/viewers/):
  *   main-toolbar-inspector       — reveals the Inspector (file tree)
  *   file-tree-row-${path}        — a tree row; opens the file on click
- *   files-tab-strip              — tab strip root (role=tab pills)
+ *   workspace-tab-strip              — tab strip root (role=tab pills)
  *   viewer-shell                 — ViewerShell root (wraps every non-code viewer)
  *   viewer-shell-status          — footer left status string
  *   viewer-shell-reveal          — footer/header "Reveal in file tree" button
@@ -50,6 +50,7 @@ import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // Minimal 1x1 red PNG — same known-good fixture as composer.spec.ts's attachment test.
 // Raw bytes: 70 (verified) → formatBytes(70) === '0.1 KB'.
@@ -76,7 +77,7 @@ const FIXTURE_PDF =
 
 /** Locate a tab pill by its (unique-in-these-fixtures) visible title text. */
 function tabByTitle(page: Page, title: string) {
-  return page.locator('[data-testid="files-tab-strip"] [role="tab"]').filter({ hasText: title });
+  return page.locator(`${WORKSPACE.strip} [role="tab"]`).filter({ hasText: title });
 }
 
 /** The ViewerShell footer container (parent of the status testid) — holds both the
@@ -322,7 +323,7 @@ test.describe('§viewers', () => {
     await expect(page.getByTestId('viewer-shell')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('viewer-shell-reveal').click();
-    // The reveal intent activates the Files surface but not the Inspector's own
+    // The reveal intent lights the workspace surface but not the Inspector's own
     // Files/Changes tab — switch to it to observe the highlight (same pattern
     // as files-tree.spec.ts's "revealing a file from its viewer" test).
     await page.getByTestId('inspector-tab-files').click();

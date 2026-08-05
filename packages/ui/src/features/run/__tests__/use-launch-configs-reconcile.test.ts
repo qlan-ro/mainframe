@@ -249,7 +249,7 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
 
 describe('useLaunchConfigs — stale REST fetch does not clobber a fresher WS update', () => {
   it('keeps the WS-driven status when a slow REST fetch resolves after it with a stale value', async () => {
-    // Regression: `run-surface.spec.ts`'s "Stop reverts the toolbar" — opening
+    // Regression: `workspace-surface.spec.ts`'s "Stop reverts the toolbar" — opening
     // the toolbar's launch popover triggers `refetch()` (a fresh GET
     // /launch/status). If a Stop click's WS `launch.status:'stopped'` event
     // lands while that REST request is still in flight, the request's `.then`

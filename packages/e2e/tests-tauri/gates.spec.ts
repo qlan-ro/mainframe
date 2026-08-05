@@ -75,14 +75,14 @@ test.describe('§permission gate details', () => {
     // Recording's suggestions carry [{type:setMode,...},{type:addDirectories,...}] — non-empty.
     await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeVisible();
 
-    // Narrow surface: lighting Files alongside chat shrinks the column in the same window.
-    await page.getByTestId('surface-rail-files').click();
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 10_000 });
+    // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
     await expectGateMatchesComposerWidth(page);
     const column = await page.getByTestId('chat-thread-footer').boundingBox();
     const narrowGate = await page.getByTestId('chat-gate-card').boundingBox();
     expect(narrowGate!.width).toBeLessThanOrEqual(column!.width);
-    await page.getByTestId('surface-rail-files').click();
+    await page.getByTestId('surface-rail-workspace').click();
 
     // Clean up: deny so the AI finishes.
     await page.locator('[data-testid="chat-permission-deny"]').click();

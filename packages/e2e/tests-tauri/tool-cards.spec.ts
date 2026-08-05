@@ -37,7 +37,7 @@
  *   chat-bash-card / -trigger / -command / -description / -bash-output
  *   chat-write-card / -trigger ; tool-card-file-path
  *   read-card-root / -trigger ; read-card-code-preview
- *   chat-edit-card / -open-diff ; diff-tab (Files surface) ; editor-diff (CmDiffEditor mount)
+ *   chat-edit-card / -open-diff ; diff-tab (workspace surface) ; editor-diff (CmDiffEditor mount)
  *   chat-ask-card / -header / -body / -question-text
  *   chat-plan-bubble (approved) ; chat-plan-card / -label / -body (not approved)
  *   chat-slash-command-row (Skill tool call)
@@ -195,7 +195,7 @@ test.describe('§tool-cards — Read + Edit (changes-tab)', () => {
     await expect(editCard).toContainText('+1');
   });
 
-  test('"Open in diff editor" opens the Files surface diff tab with the edit\'s sides', async () => {
+  test('"Open in diff editor" opens the workspace diff tab with the edit\'s sides', async () => {
     const { page } = app;
     const editCard = page.getByTestId('chat-edit-card').first();
     await editCard.getByTestId('chat-edit-open-diff').click();

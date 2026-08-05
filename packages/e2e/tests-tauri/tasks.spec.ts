@@ -570,7 +570,7 @@ test.describe('§tasks', () => {
   // after is a plausible race against that mount (same class of "fire an
   // action, then immediately read/write derived state before React has
   // re-rendered" gap as `use-launch-configs.ts`'s already-documented races
-  // in run-surface.spec.ts/preview.spec.ts) — though unlike those two, I could
+  // in workspace-surface.spec.ts/preview.spec.ts) — though unlike those two, I could
   // not fully confirm this exact mechanism by reading assistant-ui's
   // (minified, vendored) internals within this session's budget. Not
   // touchable from this spec (packages/ui/.../use-start-todo-session.ts).

@@ -1,5 +1,5 @@
 /**
- * §editor-diff — Files-surface diff tab specs (spec #17 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
+ * §editor-diff — workspace-surface diff tab specs (spec #17 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
  *
  * Two describe blocks:
  *  - "§editor-diff — Changes panel" is UI-only (no agent turn, no recording): a
