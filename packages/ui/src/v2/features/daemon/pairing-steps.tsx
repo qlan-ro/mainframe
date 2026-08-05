@@ -193,7 +193,7 @@ export function FooterStep0({ phase, url, onCancel, onVerify, onContinue }: Foot
     <div className="flex w-full items-center justify-between">
       <TunnelNote />
       <div className="flex items-center gap-1.5">
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button variant="ghost" size="sm" data-testid="daemon-add-cancel" onClick={onCancel}>
           Cancel
         </Button>
         {phase === 'reachable' ? (
@@ -234,7 +234,7 @@ export function FooterStep1({ mode, phase, codeReady, onBack, onCancel, onConfir
             Back
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" onClick={onCancel}>
+          <Button variant="ghost" size="sm" data-testid="daemon-add-cancel" onClick={onCancel}>
             Cancel
           </Button>
         )}
