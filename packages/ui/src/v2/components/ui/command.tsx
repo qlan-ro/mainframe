@@ -54,6 +54,10 @@ function CommandInput({ className, children, ...props }: React.ComponentProps<ty
       <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
         <CommandPrimitive.Input
           data-slot="command-input"
+          // Opts out of the legacy-bridge keyboard focus ring: stock command
+          // palettes have no input ring, and cmdk's input carries no ring
+          // utility of its own to override the bridge's base-layer box-shadow.
+          data-noring
           className={cn('w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50', className)}
           {...props}
         />

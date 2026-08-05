@@ -72,6 +72,7 @@ export function SetupAdvisorHost() {
       <DialogContent
         data-testid="automation-recommender-sheet"
         className="flex max-h-[85vh] w-full flex-col gap-0 p-0 sm:max-w-[640px]"
+        closeButtonClassName="top-1.5"
       >
         {/* pr-12 clears the dialog's built-in close button. */}
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">

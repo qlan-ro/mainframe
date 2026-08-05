@@ -136,7 +136,11 @@ export function QuickTaskDialog({ port, projectId, open, onClose }: Props) {
         if (!o) onClose();
       }}
     >
-      <DialogContent data-testid="tasks-quick-dialog" className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent
+        data-testid="tasks-quick-dialog"
+        className="max-w-md w-full max-h-[90vh] flex flex-col p-0 gap-0"
+        closeButtonClassName="top-1.5"
+      >
         {/* pr-12 clears the stock close button. */}
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-1.5">

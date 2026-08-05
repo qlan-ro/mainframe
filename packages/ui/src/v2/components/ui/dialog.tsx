@@ -31,9 +31,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  closeButtonClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  /** Repositions the built-in close — compact band headers (px-4 py-3) center it with `top-1.5`. */
+  closeButtonClassName?: string;
 }) {
   return (
     <DialogPortal>
@@ -51,7 +54,12 @@ function DialogContent({
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             {/* Stable testid: the e2e suite and several unit tests address the
                 built-in close of whatever dialog is open. */}
-            <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" data-testid="dialog-close">
+            <Button
+              variant="ghost"
+              className={cn('absolute top-4 right-4', closeButtonClassName)}
+              size="icon-sm"
+              data-testid="dialog-close"
+            >
               <XIcon />
               <span className="sr-only">Close</span>
             </Button>

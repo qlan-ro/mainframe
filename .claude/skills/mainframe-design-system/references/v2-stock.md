@@ -107,6 +107,13 @@ Every dialog in the app was audited; state as of the shell integration:
   with the legacy testid at the band's far right; form dialogs just use the stock built-in
   close (header gets `pr-12` to clear it). A LEFT chevron is a *Back* affordance (automations
   editor) and stays left — only close-X's were drifted.
+- Compact band headers (`px-4 py-3 pr-12`) pass `closeButtonClassName="top-1.5"` to
+  `DialogContent` — the stock close is positioned for the `p-6` dialog (`top-4`) and sits
+  ~10px low in a 44px band otherwise.
+- Inputs with no ring utility of their own leak the legacy-bridge keyboard focus ring
+  (`input:focus-visible { box-shadow: var(--mf-focus-ring) }`, base layer). v2 inputs with
+  `focus-visible:ring-*` override it; ring-less ones (the cmdk palette input) opt out with
+  `data-noring`.
 - Band titles are `text-base font-semibold` (DialogTitle's scale), counts/chips are `Badge
   variant="secondary"`, and every action that reads as a button IS a v2 `Button` (primary
   default, cancel `outline`, icon actions `ghost icon-sm`).
