@@ -76,7 +76,7 @@ export function BranchList({
         onSelect={onSelectBranch}
       />
 
-      {isEmpty && <div className="px-3 py-2 text-body text-muted-foreground">No matching branches</div>}
+      {isEmpty && <div className="px-3 py-2 text-sm text-muted-foreground">No matching branches</div>}
 
       {worktreeGroups.map((wt) => (
         <WorktreeSection
@@ -94,7 +94,7 @@ export function BranchList({
 
       {filteredRemote.length > 0 && (
         <>
-          <div className="border-t border-border my-1" />
+          <div className="-mx-1 my-1 border-t border-border" />
           <BranchGroupSection
             title="Remote"
             branches={remoteInfos}

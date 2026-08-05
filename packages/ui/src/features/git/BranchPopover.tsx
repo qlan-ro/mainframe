@@ -22,8 +22,8 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Hint } from '@/components/ui/hint';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import { Hint } from '@v2/components/ui/hint';
 import { useBranchActions } from './use-branch-actions';
 import { useNewSessionAction } from './use-new-session-action';
 import { BranchPopoverListPane } from './BranchPopoverListPane';
@@ -34,9 +34,10 @@ type View = 'list' | 'new-branch' | 'conflict' | 'rename';
 
 // Each panel (list, submenu, overlay) is its own card; the popover container is
 // bare so the list + submenu read as two separate cards with a gap (13-popover
-// artboard), not one merged surface.
-const PANEL_CARD_SHELL = 'rounded-[11px] border border-border bg-popover shadow-[var(--mf-shadow-pop)] overflow-hidden';
-const PANEL_CARD = cn(PANEL_CARD_SHELL, 'p-[5px]');
+// artboard), not one merged surface. Card chrome = the v2 popover/menu surface.
+const PANEL_CARD_SHELL =
+  'overflow-hidden rounded-md bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10';
+const PANEL_CARD = cn(PANEL_CARD_SHELL, 'p-1');
 
 export interface BranchPopoverProps {
   port: number;
@@ -188,7 +189,7 @@ export function BranchPopover({
       {trigger && (triggerLabel ? <Hint label={triggerLabel}>{trigger}</Hint> : trigger)}
       <PopoverContent
         data-testid="git-branch-popover"
-        className="w-auto rounded-none border-0 bg-transparent p-0 shadow-none overflow-visible"
+        className="w-auto gap-0 overflow-visible rounded-none bg-transparent p-0 text-sm shadow-none ring-0"
         align="start"
         side="bottom"
         sideOffset={4}

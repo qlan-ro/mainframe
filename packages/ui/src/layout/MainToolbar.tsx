@@ -3,16 +3,17 @@ import { ChevronDown, FolderGit2, GitBranch, Moon, ScanSearch, Search, Sun } fro
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { getGitBranch } from '@/lib/api/git';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
+import { Separator } from '@v2/components/ui/separator';
+import { Toggle } from '@v2/components/ui/toggle';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
-import { Hint } from '@/components/ui/hint';
-import { CHIP_BASE } from '@/components/ui/chip';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -30,8 +31,8 @@ interface MainToolbarProps {
   chatId?: string;
 }
 
-const ICON_BTN =
-  'inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent text-muted-foreground cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+const CHIP =
+  'inline-flex h-6 min-w-0 max-w-[230px] items-center gap-1 rounded-md border px-1.5 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
 
 /**
  * Worktree vs main-repo chip styling — mirrors the Workspace Surfaces artboard
@@ -43,7 +44,7 @@ function chipClass(open: boolean, isWorktree: boolean): string {
   if (isWorktree) {
     return cn('border-primary/25 text-foreground', open ? 'bg-primary/15' : 'bg-primary/8 hover:bg-primary/12');
   }
-  return cn('border-transparent text-muted-foreground', open ? 'bg-accent' : 'hover:bg-accent');
+  return cn('border-transparent text-muted-foreground', open ? 'bg-muted' : 'hover:bg-muted');
 }
 
 /** Shared chip innards — the interactive trigger and the disabled stub render identically. */
@@ -51,29 +52,28 @@ function BranchChipContent({ branch, isWorktree }: { branch: string; isWorktree:
   return (
     <>
       {isWorktree ? (
-        <FolderGit2 size={12} className="flex-shrink-0 text-primary" />
+        <FolderGit2 className="size-3 shrink-0 text-primary" />
       ) : (
-        <GitBranch size={12} className="flex-shrink-0 text-mf-text-3" />
+        <GitBranch className="size-3 shrink-0 text-muted-foreground" />
       )}
       <span className="truncate">{branch}</span>
       {isWorktree && (
         <span
           data-testid="main-toolbar-branch-wt"
-          className="ml-[1px] inline-flex h-[14px] flex-shrink-0 items-center rounded-[4px] bg-primary/12 px-[5px] text-caption font-semibold uppercase tracking-wide text-primary"
+          className="inline-flex h-4 shrink-0 items-center rounded-sm bg-primary/12 px-1 text-xs font-semibold tracking-wide text-primary uppercase"
         >
           wt
         </span>
       )}
-      <ChevronDown size={12} className="flex-shrink-0 text-mf-text-3" />
+      <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
     </>
   );
 }
 
 /**
  * Shell-level surface-area toolbar (above SurfaceHost): project · branch identity
- * on the left, workspace controls on the right. Wired: the in-flow show-sidebar
- * button (collapsed only) + the light/dark theme toggle. Search / launch / play /
- * inspector / branch-switch are gated stubs until their subsystems exist.
+ * on the left, workspace controls (search · advisor · launch · surfaces · theme ·
+ * inspector) on the right.
  */
 export function MainToolbar({
   leadingInset,
@@ -93,7 +93,6 @@ export function MainToolbar({
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
-  const geo = SHELL_GEOMETRY;
 
   // Read the live current branch from git so the chip shows for EVERY session,
   // not just worktrees: a main-repo session has no persisted `chat.branchName`,
@@ -137,25 +136,31 @@ export function MainToolbar({
     <div
       data-testid="main-toolbar"
       data-drag-region
-      className={`flex h-[40px] flex-shrink-0 items-center justify-between gap-2 pr-[12px] ${geo.toolbar}`}
+      className="flex h-10 shrink-0 items-center justify-between gap-2 border-b bg-background pr-3"
     >
       {/* Left: identity */}
       <div
-        className="flex min-w-0 items-center gap-[8px] pl-[8px]"
+        className="flex min-w-0 items-center gap-2 pl-2"
         style={leadingInset > 0 ? { paddingLeft: leadingInset } : undefined}
       >
         {!sidebarRendered && (
           <Hint label="Show sidebar">
-            <button data-testid="show-sidebar-button" type="button" onClick={onExpandSidebar} className={ICON_BTN}>
+            <Button
+              data-testid="show-sidebar-button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onExpandSidebar}
+              className="text-muted-foreground"
+            >
               <SidebarLeftGlyph size={14} />
-            </button>
+            </Button>
           </Hint>
         )}
-        <span className="flex min-w-0 items-center gap-[5px] text-body font-semibold tracking-tight text-foreground">
+        <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
           <span className="truncate">{projectName}</span>
           {displayBranch && (
             <>
-              <span className="font-normal text-mf-text-4">|</span>
+              <Separator orientation="vertical" className="h-3.5" />
               {displayBranch && projectId && !isDraftWorktree ? (
                 <BranchPopover
                   port={port}
@@ -176,7 +181,7 @@ export function MainToolbar({
                     data-worktree={isWorktree ? 'true' : 'false'}
                     type="button"
                     onClick={() => setBranchOpen((o) => !o)}
-                    className={cn(CHIP_BASE, 'cursor-pointer', chipClass(branchOpen, isWorktree))}
+                    className={cn(CHIP, 'cursor-pointer', chipClass(branchOpen, isWorktree))}
                   >
                     <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
                   </button>
@@ -195,7 +200,7 @@ export function MainToolbar({
                     type="button"
                     disabled
                     className={cn(
-                      CHIP_BASE,
+                      CHIP,
                       'cursor-not-allowed opacity-80',
                       isWorktree ? 'border-primary/25 bg-primary/8 text-foreground' : 'text-muted-foreground',
                     )}
@@ -211,55 +216,63 @@ export function MainToolbar({
 
       {/* Right: controls — the artboard's three groups: search │ project tools
           (Setup Advisor · launch · play) │ workspace (surfaces · theme · inspector). */}
-      <div className="flex flex-shrink-0 items-center gap-[4px]">
+      <div className="flex shrink-0 items-center gap-1">
         <Hint label="Search (⌘O)">
-          <button
+          <Button
             data-testid="main-toolbar-search"
-            type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
-            className={`${ICON_BTN} h-[24px] w-auto gap-[6px] pl-[7px] pr-[6px]`}
+            className="text-muted-foreground"
           >
-            <Search size={14} />
-            <span
+            <Search className="size-3.5" />
+            <kbd
               data-testid="main-toolbar-search-hint"
-              className="inline-flex h-[17px] items-center rounded-[4px] bg-background px-[5px] text-caption font-semibold leading-none text-muted-foreground [border:0.5px_solid_var(--border)] shadow-[var(--mf-shadow-keycap)]"
+              className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-xs font-medium text-muted-foreground"
             >
               ⌘O
-            </span>
-          </button>
+            </kbd>
+          </Button>
         </Hint>
-        <span className="mx-[4px] h-[16px] w-px bg-border" />
+        <Separator orientation="vertical" className="mx-1 h-4" />
         {projectId && (
           <Hint label="Setup Advisor">
-            <button
+            <Button
               data-testid="automation-recommender-open"
-              type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={() => openSetupAdvisor()}
-              className={ICON_BTN}
+              className="text-muted-foreground"
             >
-              <ScanSearch size={14} />
-            </button>
+              <ScanSearch className="size-3.5" />
+            </Button>
           </Hint>
         )}
         {/* Launch picker ("Preview" dropdown) + run button, wired to the launch subsystem. */}
         <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
-        <span className="mx-[4px] h-[16px] w-px bg-border" />
+        <Separator orientation="vertical" className="mx-1 h-4" />
         <SurfaceRail />
         <Hint label={isDark ? 'Switch to light' : 'Switch to dark'}>
-          <button data-testid="main-toolbar-theme" type="button" onClick={toggleTheme} className={ICON_BTN}>
-            {isDark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          <Button
+            data-testid="main-toolbar-theme"
+            variant="ghost"
+            size="icon-xs"
+            onClick={toggleTheme}
+            className="text-muted-foreground"
+          >
+            {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          </Button>
         </Hint>
         <Hint label="Toggle inspector">
-          <button
+          <Toggle
             data-testid="main-toolbar-inspector"
-            type="button"
-            aria-pressed={inspectorVisible}
-            onClick={toggleInspector}
-            className={`${ICON_BTN} ${inspectorVisible ? 'bg-mf-chip text-foreground' : ''}`}
+            size="sm"
+            pressed={inspectorVisible}
+            onPressedChange={toggleInspector}
+            className="size-6 min-w-6 p-0 text-muted-foreground data-[state=on]:text-foreground"
           >
             <SidebarRightGlyph size={14} />
-          </button>
+          </Toggle>
         </Hint>
       </div>
     </div>

@@ -4,7 +4,8 @@
  */
 import { useEffect, useRef } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
 
 export interface RenameBranchViewProps {
   target: string;
@@ -23,20 +24,22 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
   }, []);
 
   return (
-    <div data-testid="git-rename-view" className="p-3 space-y-3">
+    <div data-testid="git-rename-view" className="flex flex-col gap-3 p-2">
       <div className="flex items-center gap-1.5">
-        <button
+        <Button
           data-testid="git-rename-back"
+          variant="ghost"
+          size="icon-xs"
           onClick={onCancel}
-          className="p-0.5 hover:bg-accent rounded text-muted-foreground"
+          className="size-5 text-muted-foreground"
         >
-          <ArrowLeft size={14} />
-        </button>
-        <span className="text-body font-medium text-foreground">Rename Branch</span>
-        {target && <span className="text-label text-muted-foreground truncate ml-1">'{target}'</span>}
+          <ArrowLeft className="size-3.5" />
+        </Button>
+        <span className="text-sm font-medium text-foreground">Rename Branch</span>
+        {target && <span className="ml-1 truncate text-xs text-muted-foreground">'{target}'</span>}
       </div>
 
-      <input
+      <Input
         data-testid="git-rename-input"
         ref={inputRef}
         value={value}
@@ -45,30 +48,17 @@ export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, 
           if (e.key === 'Enter' && !busy && value.trim()) onSubmit();
         }}
         disabled={busy}
-        className="w-full px-2 h-[30px] text-body rounded-md border-[0.5px] border-border bg-mf-content2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        className="h-8 font-mono text-sm"
       />
 
       <div className="flex justify-end gap-2">
-        <button
-          data-testid="git-rename-cancel"
-          onClick={onCancel}
-          disabled={busy}
-          className="px-3 h-[28px] text-body rounded border border-border text-muted-foreground hover:bg-accent"
-        >
+        <Button data-testid="git-rename-cancel" variant="outline" size="sm" onClick={onCancel} disabled={busy}>
           Cancel
-        </button>
-        <button
-          data-testid="git-rename-submit"
-          onClick={onSubmit}
-          disabled={busy || !value.trim()}
-          className={cn(
-            'px-3 h-[28px] text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity flex items-center gap-1.5',
-            (busy || !value.trim()) && 'opacity-40 cursor-not-allowed',
-          )}
-        >
-          {busy && <Loader2 size={12} className="animate-spin" />}
+        </Button>
+        <Button data-testid="git-rename-submit" size="sm" onClick={onSubmit} disabled={busy || !value.trim()}>
+          {busy && <Loader2 className="size-3 animate-spin" />}
           Rename
-        </button>
+        </Button>
       </div>
     </div>
   );

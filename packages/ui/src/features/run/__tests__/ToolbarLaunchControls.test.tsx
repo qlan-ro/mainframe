@@ -26,8 +26,12 @@
  *  - @/lib/toast — mfToast
  */
 import { it, expect, vi, beforeEach, describe } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+
+// v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
+const render: typeof rtlRender = (ui, options) => rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 // ── mock launch API ──────────────────────────────────────────────────────────
 const startLaunchConfig = vi.fn();

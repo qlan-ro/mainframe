@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -25,6 +25,10 @@ vi.mock('@/features/git/BranchPopover', () => ({
 
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+
+// v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
+const render: typeof rtlRender = (ui, options) => rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 beforeEach(() => {
   localStorage.clear();

@@ -4,7 +4,8 @@
  * Renders as a self-contained menu panel (positioned by the parent popover).
  */
 import { ArrowDown, ArrowUp, Check, GitBranch, Globe, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { MenuDivider, MenuRow } from '@/components/ui/menu';
+import { MenuRow } from '@v2/components/ui/menu-row';
+import { Separator } from '@v2/components/ui/separator';
 
 export interface BranchSubmenuProps {
   branch: string;
@@ -199,31 +200,32 @@ export function BranchSubmenu(props: BranchSubmenuProps) {
     <div data-testid="git-submenu" className="min-w-[220px]">
       {/* No back/close control (finding 10.9) — the submenu is dismissed by
           re-clicking the already-selected branch row, wired in BranchPopover. */}
-      <div className="px-1.5 py-1.5 border-b border-border flex items-center gap-1.5">
+      <div className="-mx-1 flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
         {props.isRemote ? (
-          <Globe size={12} className="text-muted-foreground shrink-0" />
+          <Globe size={12} className="shrink-0 text-muted-foreground" />
         ) : (
-          <GitBranch size={12} className="text-muted-foreground shrink-0" />
+          <GitBranch size={12} className="shrink-0 text-muted-foreground" />
         )}
-        <span className="flex-1 truncate font-mono text-label font-semibold text-foreground">{branch}</span>
-        {busy && <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />}
+        <span className="flex-1 truncate font-mono text-xs font-semibold text-foreground">{branch}</span>
+        {busy && <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground" />}
       </div>
       <div className="py-1">
         {items.map((item, idx) => {
           if ('separator' in item && item.separator) {
-            return <MenuDivider key={`sep-${idx}`} />;
+            return <Separator key={`sep-${idx}`} className="-mx-1 my-1 w-auto" />;
           }
           const mi = item as MenuItem;
           return (
             <MenuRow
               key={mi.testid}
               data-testid={mi.testid}
-              icon={mi.icon}
-              label={mi.label}
-              danger={mi.destructive}
+              destructive={mi.destructive}
               disabled={mi.disabled}
               onClick={mi.action}
-            />
+            >
+              {mi.icon}
+              <span className="min-w-0 flex-1 truncate">{mi.label}</span>
+            </MenuRow>
           );
         })}
       </div>

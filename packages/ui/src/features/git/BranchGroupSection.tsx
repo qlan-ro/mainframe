@@ -36,7 +36,7 @@ function PrefixGroup({
       <button
         data-testid={`git-branch-group-toggle-${prefix}`}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-1 px-2 py-0.5 text-caption font-medium text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-1 px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span>{prefix}</span>
@@ -73,7 +73,7 @@ export function BranchGroupSection({
       <button
         data-testid={`git-branch-section-toggle-${title.toLowerCase().replace(/\s+/g, '-')}`}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full h-[26px] flex items-center gap-[5px] px-2 text-caption font-medium text-muted-foreground"
+        className="flex h-6.5 w-full items-center gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         {title}

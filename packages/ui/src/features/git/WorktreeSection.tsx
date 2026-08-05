@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, FolderGit2, Loader2, Plus, Trash2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import { BranchRow } from './BranchRow';
 
 export interface WorktreeSectionProps {
@@ -35,31 +35,31 @@ export function WorktreeSection({
 
   return (
     <>
-      <div data-testid={`git-worktree-row-${name}`} className="flex items-center h-[26px] pr-1.5">
+      <div data-testid={`git-worktree-row-${name}`} className="flex h-6.5 items-center pr-1">
         <button
           data-testid={`git-worktree-toggle-${name}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex-1 h-[26px] flex items-center gap-[5px] px-2 text-caption font-medium text-muted-foreground"
+          className="flex h-full flex-1 items-center gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          <FolderGit2 size={12} className="text-mf-warning shrink-0" />
+          {/* Amber, not red: a worktree marker is caution-coloured in the git family. */}
+          <FolderGit2 size={12} className="shrink-0 text-mf-warning" />
           {name}
         </button>
         {onNewSession && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 data-testid={`git-worktree-new-session-${name}`}
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => onNewSession(name, branchName)}
                 disabled={isDeleting}
-                className={cn(
-                  'p-1 mr-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors',
-                  isDeleting && 'opacity-40 cursor-not-allowed',
-                )}
                 aria-label={`New session on worktree ${name}`}
+                className="size-5 text-muted-foreground hover:text-foreground"
               >
-                <Plus size={12} />
-              </button>
+                <Plus className="size-3" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="top">New session on this worktree</TooltipContent>
           </Tooltip>
@@ -67,18 +67,17 @@ export function WorktreeSection({
         {onDeleteWorktree && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 data-testid={`git-worktree-delete-${name}`}
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => onDeleteWorktree(name, branchName)}
                 disabled={isDeleting}
-                className={cn(
-                  'p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive transition-colors',
-                  isDeleting && 'opacity-60 cursor-not-allowed',
-                )}
                 aria-label={`Delete worktree ${name}`}
+                className="size-5 text-muted-foreground hover:text-destructive"
               >
-                {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              </button>
+                {isDeleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="top">{isDeleting ? 'Deleting…' : 'Delete worktree'}</TooltipContent>
           </Tooltip>

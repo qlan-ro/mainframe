@@ -3,9 +3,11 @@
  * search field + Fetch + global quick actions (New branch, Update all, Push) + BranchList.
  */
 import { ArrowUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { MenuDivider, MenuRow } from '@/components/ui/menu';
+import { Button } from '@v2/components/ui/button';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@v2/components/ui/input-group';
+import { MenuRow } from '@v2/components/ui/menu-row';
+import { Separator } from '@v2/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { BranchList } from './BranchList';
 
@@ -51,35 +53,34 @@ export function BranchListView({
   return (
     <>
       {/* Search + Fetch */}
-      <div className="flex items-center gap-1.5 px-2 pt-2 pb-1.5">
-        <div className="flex-1 flex items-center gap-[7px] h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-mf-content2 transition-shadow focus-within:border-ring focus-within:shadow-[var(--mf-focus-ring)]">
-          <Search size={13} className="text-muted-foreground shrink-0" />
-          <input
+      <div className="flex items-center gap-1.5 p-1 pb-1.5">
+        <InputGroup className="h-8 flex-1">
+          <InputGroupAddon>
+            <Search className="size-3.5" />
+          </InputGroupAddon>
+          <InputGroupInput
             data-testid="git-branch-search"
-            data-noring=""
+            data-noring
             ref={searchRef}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search branches..."
-            className="flex-1 bg-transparent text-body text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="h-full text-sm"
           />
-        </div>
+        </InputGroup>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <Button
               data-testid="git-fetch"
+              variant="outline"
+              size="icon-sm"
               onClick={() => void actions.handleFetch()}
               disabled={busy}
               aria-label="Fetch"
-              className={cn(
-                'flex-shrink-0 w-[30px] h-[30px] rounded-md border-[0.5px] border-border bg-background',
-                'inline-flex items-center justify-center text-muted-foreground',
-                'hover:bg-accent transition-colors',
-                busy && 'opacity-40 cursor-not-allowed',
-              )}
+              className="text-muted-foreground"
             >
-              <RefreshCw size={13} className={busyAction === 'fetch' ? 'animate-spin' : ''} />
-            </button>
+              <RefreshCw className={busyAction === 'fetch' ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Fetch from all remotes</TooltipContent>
         </Tooltip>
@@ -87,29 +88,25 @@ export function BranchListView({
 
       {/* Quick actions */}
       <div>
-        <MenuRow
-          data-testid="git-new-branch"
-          icon={<Plus className="text-primary" />}
-          label={search ? `Create branch "${search}"` : 'New branch…'}
-          onClick={onNewBranch}
-        />
-        <MenuRow
-          data-testid="git-update-all"
-          icon={busyAction === 'updateAll' ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          label="Update all"
-          hint="⤓"
-          disabled={busy}
-          onClick={() => void actions.handleUpdateAll()}
-        />
-        <MenuRow
-          data-testid="git-push-current"
-          icon={<ArrowUp />}
-          label="Push"
-          disabled={busy}
-          onClick={() => void actions.handlePush(currentBranch)}
-        />
+        <MenuRow data-testid="git-new-branch" onClick={onNewBranch}>
+          <Plus className="size-3.5 text-primary" />
+          <span className="min-w-0 flex-1 truncate">{search ? `Create branch "${search}"` : 'New branch…'}</span>
+        </MenuRow>
+        <MenuRow data-testid="git-update-all" disabled={busy} onClick={() => void actions.handleUpdateAll()}>
+          {busyAction === 'updateAll' ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5" />
+          )}
+          <span className="min-w-0 flex-1 truncate">Update all</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">⤓</span>
+        </MenuRow>
+        <MenuRow data-testid="git-push-current" disabled={busy} onClick={() => void actions.handlePush(currentBranch)}>
+          <ArrowUp className="size-3.5" />
+          <span className="min-w-0 flex-1 truncate">Push</span>
+        </MenuRow>
       </div>
-      <MenuDivider section />
+      <Separator className="-mx-1 my-1 w-auto" />
 
       {/* Branch list */}
       <BranchList

@@ -159,6 +159,30 @@ Tabs/Toggle/ToggleGroup/Badge/Alert/Hint/Button). New stock primitives added for
   `data-state="closed"` until the window is visible again. Environmental, not a bug — don't
   chase it as a close-handler regression; check `document.hidden` first.
 
+## Title bar (2026-08-05 port)
+
+MainToolbar + SurfaceRail + UpdatePill + ToolbarLaunchControls + the whole `features/git` branch
+popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (SurfaceHost/InspectorPane
+slices remain). Conventions from the pass:
+
+- **`@v2/components/ui/menu-row`** — the dropdown-item recipe as a plain button (`MenuRow` +
+  `menuRowClass()`), for menu-shaped panels that are NOT Radix menus (inline side-by-side cards in
+  the branch popover, the launch picker with nested per-row buttons). Radix DropdownMenu can't
+  render inline panels; don't rebuild rows ad hoc.
+- Branch popover cards = the v2 menu surface (`rounded-md bg-popover shadow-md ring-1
+  ring-foreground/10 p-1`); the PopoverContent shell stays transparent so list + submenu read as
+  two cards. Search = `InputGroup` + `InputGroupInput` (h-8) with an outline `icon-sm` Fetch beside.
+- `BranchSelect` is a real v2 `Select` now (same `testId`/`-list`/`-option-*` contract; jsdom tests
+  drive it click-trigger → click-option, unchanged).
+- Segmented surface toggles = `ToggleGroup type="multiple"` on a `bg-muted` pad, active item
+  `bg-background shadow-sm`; toggled id = symmetric diff in `onValueChange`.
+- Git-family amber (`mf-warning` divergence arrows, worktree glyphs) stays bridge-owned by design;
+  the green side moved to v2 `success`.
+- Tests: any component rendering a v2 `Hint`/`Tooltip` bare needs the **v2** `TooltipProvider`
+  wrapper (`render(ui, { wrapper: TooltipProvider })`) — the v1 provider satisfies nothing.
+- v1 `components/ui/menu.tsx` still serves: SurfacePicker, RunTabStrip, composer config-toolbar,
+  setup-advisor skills rows. It dies with those ports.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:

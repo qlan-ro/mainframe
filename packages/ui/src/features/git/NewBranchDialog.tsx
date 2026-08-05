@@ -4,7 +4,18 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@v2/components/ui/select';
 
 export const BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
 
@@ -61,21 +72,26 @@ export function NewBranchDialog({
 
   return (
     <div data-testid="git-new-branch-dialog" className="min-w-[280px]">
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border">
-        <button
+      <div className="-mx-1 flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
+        <Button
           data-testid="git-new-branch-back"
+          variant="ghost"
+          size="icon-xs"
           onClick={onBack}
-          className="p-0.5 hover:bg-accent rounded text-muted-foreground"
+          className="size-5 text-muted-foreground"
         >
-          <ArrowLeft size={14} />
-        </button>
-        <span className="text-body font-medium text-foreground">New Branch</span>
+          <ArrowLeft className="size-3.5" />
+        </Button>
+        <span className="text-sm font-medium text-foreground">New Branch</span>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-3 space-y-3">
-        <div>
-          <label className="block text-label font-medium text-muted-foreground mb-1">Branch name</label>
-          <input
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-2 pt-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="git-new-branch-name" className="text-xs text-muted-foreground">
+            Branch name
+          </Label>
+          <Input
+            id="git-new-branch-name"
             data-testid="git-new-branch-name"
             ref={inputRef}
             value={name}
@@ -85,64 +101,60 @@ export function NewBranchDialog({
             }}
             placeholder="feature/my-branch"
             disabled={creating}
-            className={cn(
-              'w-full h-[30px] px-[9px] rounded-md border-[0.5px] bg-background font-mono text-body text-foreground',
-              'focus:outline-none focus:ring-1 focus:ring-primary',
-              error ? 'border-destructive' : 'border-border',
-            )}
+            aria-invalid={error ? true : undefined}
+            className="h-8 font-mono text-sm"
           />
-          {error && <p className="mt-1 text-label text-destructive">{error}</p>}
+          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
-        <div>
-          <label className="block text-label font-medium text-muted-foreground mb-1">Start from</label>
-          <select
-            data-testid="git-new-branch-start"
-            value={startPoint}
-            onChange={(e) => setStartPoint(e.target.value)}
-            disabled={creating}
-            className="w-full h-[30px] px-[9px] rounded-md border-[0.5px] border-border bg-background font-mono text-body text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <optgroup label="Local">
-              {localBranches.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </optgroup>
-            {remoteBranches.length > 0 && (
-              <optgroup label="Remote">
-                {remoteBranches.map((b) => (
-                  <option key={b} value={b}>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Start from</Label>
+          <Select value={startPoint} onValueChange={setStartPoint} disabled={creating}>
+            <SelectTrigger data-testid="git-new-branch-start" size="sm" className="w-full font-mono">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectGroup>
+                <SelectLabel>Local</SelectLabel>
+                {localBranches.map((b) => (
+                  <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`} className="font-mono">
                     {b}
-                  </option>
+                  </SelectItem>
                 ))}
-              </optgroup>
-            )}
-          </select>
+              </SelectGroup>
+              {remoteBranches.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>Remote</SelectLabel>
+                  {remoteBranches.map((b) => (
+                    <SelectItem
+                      key={b}
+                      value={b}
+                      data-testid={`git-new-branch-start-option-${b}`}
+                      className="font-mono"
+                    >
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button
+          <Button
             data-testid="git-new-branch-cancel"
             type="button"
+            variant="outline"
+            size="sm"
             onClick={onBack}
             disabled={creating}
-            className="px-3 h-[28px] text-body rounded border border-border text-muted-foreground hover:bg-accent"
           >
             Cancel
-          </button>
-          <button
-            data-testid="git-new-branch-create"
-            type="submit"
-            disabled={creating || !name.trim()}
-            className={cn(
-              'px-3 h-[28px] text-body rounded text-primary-foreground bg-primary hover:opacity-90 transition-opacity',
-              (creating || !name.trim()) && 'opacity-40 cursor-not-allowed',
-            )}
-          >
-            {creating ? <Loader2 size={12} className="animate-spin" /> : 'Create'}
-          </button>
+          </Button>
+          <Button data-testid="git-new-branch-create" type="submit" size="sm" disabled={creating || !name.trim()}>
+            {creating ? <Loader2 className="size-3 animate-spin" /> : 'Create'}
+          </Button>
         </div>
       </form>
     </div>
