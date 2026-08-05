@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -36,6 +37,9 @@ vi.mock('@/features/preview/PreviewInstance', () => ({
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
 import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const FRESH = {
   top: ['chat' as const],

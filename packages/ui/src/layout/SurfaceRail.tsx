@@ -14,7 +14,7 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
+  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-primary' },
 ];
 
 export function SurfaceRail() {

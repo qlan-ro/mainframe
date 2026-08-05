@@ -16,7 +16,7 @@ const DiffTab = lazy(() => import('@/features/editor/DiffTab').then((m) => ({ de
 const ViewerRouter = lazy(() => import('@/features/viewers/viewer-router').then((m) => ({ default: m.ViewerRouter })));
 
 function BodyFallback({ label }: { label: string }) {
-  return <div className="grid h-full place-items-center text-caption text-muted-foreground">{label}</div>;
+  return <div className="grid h-full place-items-center text-xs text-muted-foreground">{label}</div>;
 }
 
 export function EditorTabBody({ tab }: { tab: RunTab }) {

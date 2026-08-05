@@ -8,7 +8,8 @@
  * terminal. A live launch-config tab additionally shows a red Stop button as a
  * SEPARATE control between the label and the close (×), not in the glyph slot.
  */
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render as rtlRender } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import type { RunPane } from '@/store/run-pane';
@@ -38,6 +39,9 @@ vi.mock('@/features/run/use-launch-actions', () => ({
 }));
 
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const cfg = (name: string, over: Partial<LaunchConfiguration> = {}): LaunchConfiguration =>
   ({ name, runtimeExecutable: 'pnpm', runtimeArgs: [], port: null, url: null, ...over }) as LaunchConfiguration;

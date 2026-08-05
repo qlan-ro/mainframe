@@ -9,88 +9,33 @@
  * (`EditorTabBody`). The surface is a drop target for a tab drag
  * (`data-drop-surface="workspace"`).
  */
-import { GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, X } from 'lucide-react';
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { UrlTabInstance } from '@/features/url-tab/UrlTabInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
-import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
-import { EditorTabBody } from './EditorTabBody';
-import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { activeLaunchScope } from '@/lib/launch-scope';
 import { filterRunByScope } from '@/store/run-scope-filter';
-import type { RunPane, RunTab } from '@/store/run-pane';
 import { WorkspaceEmptyState } from '../WorkspaceEmptyState';
-import { useSurfaceDragStore } from '../use-surface-drag';
-import { Hint } from '@/components/ui/hint';
-
-const HEADER_BTN =
-  'inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
+import { STRIP_ROW, WorkspaceStripActions, WorkspaceStripLead } from '../WorkspaceStripChrome';
+import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
+import { EditorTabBody } from './EditorTabBody';
+import type { RunPane, RunTab } from '@/store/run-pane';
 
 /**
  * Header shown when the workspace has no tabs — keeps the split/close controls
  * reachable so an empty surface can still be split or dismissed (todo #195). The
- * `+`/add affordance is the empty state below, so it isn't repeated here.
+ * `+`/add affordance is the empty state below, so it isn't repeated here; there
+ * is no pane yet either, so this cannot be the strip itself.
  */
 function WorkspaceEmptyHeader() {
-  const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
-  const splitSurface = useLayoutStore((s) => s.splitSurface);
-  const toggleSurface = useLayoutStore((s) => s.toggleSurface);
-  const isFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'workspace'));
-  const beginSurfaceDrag = useSurfaceDragStore((s) => s.beginSurfaceDrag);
-
   return (
-    <div className="flex h-[36px] flex-shrink-0 items-center [border-bottom:0.5px_solid_var(--border)]">
-      <div
-        data-testid="workspace-surface-drag"
-        className="grid h-full w-[20px] flex-shrink-0 cursor-grab place-items-center pl-[4px]"
-        onPointerDown={(e) => beginSurfaceDrag('workspace', { clientX: e.clientX, clientY: e.clientY })}
-      >
-        <GripVertical size={13} className="text-mf-text-4" />
-      </div>
-      <div className="flex-shrink-0 px-[4px]">
-        <Play size={11} className="text-mf-surface-run" fill="currentColor" />
-      </div>
+    <div className={STRIP_ROW}>
+      <WorkspaceStripLead primary />
       <div className="flex-1" />
-      <div className="flex flex-shrink-0 items-center gap-px pl-[2px] pr-[6px]">
-        {splitAvailable && (
-          <>
-            <Hint label="Split right">
-              <button
-                data-testid="workspace-tab-strip-split-right"
-                type="button"
-                onClick={() => splitSurface('v')}
-                className={HEADER_BTN}
-              >
-                <LayoutPanelLeft size={13} className="text-mf-text-3" />
-              </button>
-            </Hint>
-            <Hint label="Split down">
-              <button
-                data-testid="workspace-tab-strip-split-down"
-                type="button"
-                onClick={() => splitSurface('h')}
-                className={HEADER_BTN}
-              >
-                <LayoutPanelTop size={13} className="text-mf-text-3" />
-              </button>
-            </Hint>
-          </>
-        )}
-        <Hint label="Close workspace">
-          <button
-            data-testid="workspace-surface-close"
-            type="button"
-            disabled={isFloor}
-            onClick={() => toggleSurface('workspace')}
-            className={`${HEADER_BTN} ${isFloor ? 'cursor-not-allowed opacity-40' : ''}`}
-          >
-            <X size={12} className="text-mf-text-3" />
-          </button>
-        </Hint>
-      </div>
+      <WorkspaceStripActions primary />
     </div>
   );
 }
@@ -151,7 +96,7 @@ function WorkspaceTabBody({
         {tabScope && tab.config ? (
           <ConsolePane scopeKey={tabScope} processName={tab.config} variant="full" />
         ) : (
-          <div className="grid h-full place-items-center text-caption text-muted-foreground">Starting…</div>
+          <div className="grid h-full place-items-center text-xs text-muted-foreground">Starting…</div>
         )}
       </div>
     );
@@ -211,11 +156,7 @@ export function WorkspaceSurface() {
             <div
               key={pane.id}
               className={`flex min-h-0 min-w-0 flex-1 ${
-                i > 0
-                  ? run.dir === 'h'
-                    ? '[border-top:0.5px_solid_var(--border)]'
-                    : '[border-left:0.5px_solid_var(--border)]'
-                  : ''
+                i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
               }`}
             >
               <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />

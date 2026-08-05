@@ -7,7 +7,8 @@
  * ${title}` placeholder), and it obeys the same scope filter/release as every
  * other Run tab.
  */
-import { render } from '@testing-library/react';
+import { render as rtlRender } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const TAB_SCOPE = 'proj-A:/Users/me/.worktrees/feat-x';
@@ -64,6 +65,9 @@ vi.mock('@/features/run/use-launch-actions', () => ({
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const FRESH_LAYOUT = {
   top: ['workspace' as const],

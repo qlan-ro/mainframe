@@ -13,7 +13,8 @@
  *     tabs whose `scopeKey` matches (or tabs with no scopeKey at all) reach the DOM.
  *   - A tab with a non-matching scopeKey produces NO rendered element.
  */
-import { render } from '@testing-library/react';
+import { render as rtlRender } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Active scope the mock identity will resolve to.
@@ -72,6 +73,9 @@ vi.mock('@/features/run/use-launch-actions', () => ({
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const FRESH_LAYOUT = {
   top: ['workspace' as const],

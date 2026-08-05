@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { Globe } from 'lucide-react';
+import { cn } from '@v2/lib/utils';
 import { normalizePreviewUrl } from '@/features/preview/normalize-url';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
@@ -49,9 +50,9 @@ export function WorkspaceUrlEntry({ paneId, onDone }: WorkspaceUrlEntryProps) {
   return (
     <div
       data-testid="workspace-url-entry"
-      className="flex h-[24px] min-w-0 flex-1 items-center gap-1 rounded-md border-[0.5px] border-border bg-card pl-1.5 pr-1"
+      className="flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-card pr-1 pl-1.5"
     >
-      <Globe size={12} className="flex-shrink-0 text-mf-text-3" aria-hidden />
+      <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
       <input
         data-testid="workspace-url-entry-input"
         autoFocus
@@ -67,9 +68,10 @@ export function WorkspaceUrlEntry({ paneId, onDone }: WorkspaceUrlEntryProps) {
         }}
         onKeyDown={handleKeyDown}
         onBlur={onDone}
-        className={`min-w-0 flex-1 bg-transparent px-[4px] font-mono text-body outline-none placeholder:text-mf-text-4 ${
-          invalid ? 'rounded-sm text-destructive ring-1 ring-destructive' : 'text-foreground'
-        }`}
+        className={cn(
+          'min-w-0 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:text-muted-foreground',
+          invalid ? 'rounded-sm text-destructive ring-1 ring-destructive' : 'text-foreground',
+        )}
       />
     </div>
   );

@@ -2,7 +2,8 @@
  * WorkspaceSurface — empty-state header (todo #195): when the workspace has no
  * tabs, a header (with a close button) renders above the empty-state card.
  */
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/features/terminal/TerminalInstance', () => ({
@@ -36,6 +37,9 @@ vi.mock('@/features/preview/PreviewInstance', () => ({
 
 import { useLayoutStore } from '@/store/layout';
 import { WorkspaceSurface } from '../WorkspaceSurface';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const FRESH = {
   top: ['chat' as const],

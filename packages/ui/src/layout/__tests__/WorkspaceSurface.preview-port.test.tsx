@@ -3,7 +3,8 @@
  * Asserts that scopeKey and projectId are threaded from RunSurface
  * down into PreviewInstance render.
  */
-import { render } from '@testing-library/react';
+import { render as rtlRender } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockProjectId = 'proj-123';
@@ -51,6 +52,9 @@ vi.mock('@/features/run/ConsolePane', () => ({
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 const FRESH_LAYOUT = {
   top: ['chat' as const],

@@ -1,8 +1,10 @@
 /**
- * WorkspaceEmptyState — the inline card the workspace surface shows while it has
- * no tabs. Not a menu: it has no trigger and is always visible, so it stays a
- * card of rows (open a file, view changes, a recent-changes list, a URL, a
- * terminal, and the project's launch configs).
+ * WorkspaceEmptyState — the inline card the workspace shows while it has no tabs.
+ *
+ * Not a menu: it has no trigger and is always visible, so it stays a Card of
+ * rows rather than a DropdownMenu. The rows are ghost Buttons, which is what a
+ * full-width action row is in v2 — hand-rolled row markup would just re-declare
+ * the button's own hover, focus ring and disabled handling.
  *
  * data-testid:
  *   workspace-empty-state              — the card
@@ -15,8 +17,10 @@
  */
 import { useState } from 'react';
 import { ChevronRight, Code2, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Card } from '@v2/components/ui/card';
+import { Separator } from '@v2/components/ui/separator';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { MenuDivider, MenuLabel } from '@/components/ui/menu';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
@@ -34,18 +38,24 @@ interface RowProps {
 
 function PickerRow({ testid, icon, label, hint, chevron, onClick }: RowProps) {
   return (
-    <button
+    <Button
       data-testid={testid}
-      type="button"
+      variant="ghost"
+      size="sm"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-[9px] rounded-[8px] border-none bg-transparent px-[12px] py-[8px] text-left text-label text-foreground hover:bg-accent"
+      className="w-full justify-start gap-2 font-normal"
     >
       {icon}
-      <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
-      {hint && <span className="flex-shrink-0 font-mono text-caption text-muted-foreground">{hint}</span>}
-      {chevron && <ChevronRight size={12} className="flex-shrink-0 text-mf-text-3" />}
-    </button>
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+      {hint && <span className="shrink-0 font-mono text-xs text-muted-foreground">{hint}</span>}
+      {chevron && <ChevronRight className="size-3 shrink-0 text-muted-foreground" />}
+    </Button>
   );
+}
+
+/** A group label inside the card — the same eyebrow the add-menu uses for its groups. */
+function RowLabel({ children }: { children: React.ReactNode }) {
+  return <div className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">{children}</div>;
 }
 
 /** Open-a-file rows + the recently-changed files of the active session. */
@@ -57,27 +67,26 @@ function FileRows() {
     <>
       <PickerRow
         testid="workspace-picker-open-file"
-        icon={<Code2 size={14} className="flex-shrink-0 text-mf-accent-violet" />}
+        icon={<Code2 className="size-3.5 text-muted-foreground" />}
         label="Open file…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
       />
       <PickerRow
         testid="workspace-picker-view-changes"
-        icon={<GitCompare size={14} className="flex-shrink-0 text-mf-accent-amber" />}
+        icon={<GitCompare className="size-3.5 text-muted-foreground" />}
         label="View changes…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
       />
       {recent.length > 0 && (
         <>
-          <MenuDivider />
-          <MenuLabel>Recent</MenuLabel>
+          <RowLabel>Recent</RowLabel>
           {recent.map((f) => (
             <PickerRow
               key={f.path}
               testid={`workspace-picker-recent-${f.path}`}
-              icon={<FileText size={14} className="flex-shrink-0 text-mf-text-3" />}
+              icon={<FileText className="size-3.5 text-muted-foreground" />}
               label={f.path}
               onClick={() => emitSurfaceIntent({ type: 'open-file', path: f.path })}
             />
@@ -97,28 +106,27 @@ function RunRows() {
   return (
     <>
       {urlEntryOpen ? (
-        <div className="flex px-[12px] py-[8px]">
+        <div className="flex px-2 py-1">
           <WorkspaceUrlEntry onDone={() => setUrlEntryOpen(false)} />
         </div>
       ) : (
         <PickerRow
           testid="workspace-picker-open-url"
-          icon={<Globe size={14} className="flex-shrink-0 text-mf-surface-run" />}
+          icon={<Globe className="size-3.5 text-muted-foreground" />}
           label="Open URL…"
           onClick={() => setUrlEntryOpen(true)}
         />
       )}
       <PickerRow
         testid="workspace-picker-new-terminal"
-        icon={<Terminal size={14} className="flex-shrink-0 text-mf-term-cyan" />}
+        icon={<Terminal className="size-3.5 text-muted-foreground" />}
         label="New terminal"
         hint="zsh"
         onClick={() => emitSurfaceIntent({ type: 'new-terminal' })}
       />
-      <MenuDivider />
-      <MenuLabel>Launch configuration</MenuLabel>
+      <RowLabel>Launch configuration</RowLabel>
       {configs.length === 0 ? (
-        <div className="px-[12px] py-[8px] text-caption text-muted-foreground">No launch configs found.</div>
+        <div className="px-2 py-2 text-xs text-muted-foreground">No launch configs found.</div>
       ) : (
         configs.map((cfg) => (
           <PickerRow
@@ -126,9 +134,9 @@ function RunRows() {
             testid={`workspace-picker-launch-${cfg.name}`}
             icon={
               cfg.preview ? (
-                <Eye size={14} className="flex-shrink-0 text-mf-surface-run" />
+                <Eye className="size-3.5 text-muted-foreground" />
               ) : (
-                <Terminal size={14} className="flex-shrink-0 text-mf-term-cyan" />
+                <Terminal className="size-3.5 text-muted-foreground" />
               )
             }
             label={cfg.name}
@@ -143,17 +151,17 @@ function RunRows() {
 
 export function WorkspaceEmptyState() {
   return (
-    <div data-testid="workspace-empty-state" className="flex flex-1 items-center justify-center bg-background p-[16px]">
-      <div className="w-[300px] overflow-hidden rounded-[13px] border-[0.5px] border-border bg-background shadow-[var(--mf-shadow-picker)]">
-        <div className="max-h-[300px] overflow-y-auto p-[4px]">
+    <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
+      <Card data-testid="workspace-empty-state" className="w-72 gap-0 overflow-hidden py-0">
+        <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto p-1">
           <FileRows />
-          <MenuDivider />
+          <Separator className="my-1" />
           <RunRows />
         </div>
-        <div className="[border-top:0.5px_solid_var(--border)] px-3.5 py-[7px] font-mono text-caption text-muted-foreground">
+        <div className="border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
           files, terminals, and previews share this surface
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
