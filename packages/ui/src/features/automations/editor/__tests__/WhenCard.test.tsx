@@ -6,10 +6,15 @@
  * implemented after.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { AutomationTrigger } from '../../contract';
 import { WhenCard } from '../WhenCard';
+
+// v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 describe('WhenCard — empty state', () => {
   it('shows a hint when there are no triggers yet', () => {

@@ -7,7 +7,7 @@
  * manifest *and* the registry on mount, so every suite needs both resolved or
  * it is testing an accidental error state.
  */
-import { act } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import type { SkillsCatalogEntry, SkillsCliEntry } from '@qlan-ro/mainframe-types';
 import * as skillsCliApi from '@/lib/api/skills-cli';
@@ -43,4 +43,14 @@ export function makeEntry(
     skillPath: `skills/${overrides.name}/SKILL.md`,
     ...overrides,
   };
+}
+
+/**
+ * Opens a row's scope DropdownMenu. Radix menu triggers open on POINTERDOWN,
+ * not click, so `fireEvent.click` alone leaves the menu shut.
+ */
+export async function openScopeMenu(key: string): Promise<void> {
+  const trigger = await screen.findByTestId(`skills-row-action-${key}`);
+  fireEvent.pointerDown(trigger, { button: 0 });
+  await screen.findByTestId(`skills-row-scope-${key}`);
 }

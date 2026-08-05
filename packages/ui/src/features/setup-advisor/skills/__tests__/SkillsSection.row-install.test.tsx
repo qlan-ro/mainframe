@@ -28,16 +28,16 @@ vi.mock('@/lib/toast', () => ({
 
 import { SkillsSection } from '../SkillsSection';
 import * as skillsCliApi from '@/lib/api/skills-cli';
-import { mockCatalog, mockManifest, resetSkillsStores } from './harness';
+import { mockCatalog, mockManifest, openScopeMenu, resetSkillsStores } from './harness';
 
 const ROWS = [
   { source: 'anthropic/skills', skillId: 'pdf', name: 'PDF', installs: 2_800_000, isOfficial: true },
   { source: 'acme/skills', skillId: 'pdf', name: 'Acme PDF', installs: 42, isOfficial: false },
 ];
 
-/** Opens a row's scope popover and picks one, the way a user installs. */
+/** Opens a row's scope menu and picks one, the way a user installs. */
 async function install(key: string, scope: 'project' | 'global') {
-  fireEvent.click(await screen.findByTestId(`skills-row-action-${key}`));
+  await openScopeMenu(key);
   fireEvent.click(await screen.findByTestId(`skills-row-scope-${key}-${scope}`));
 }
 
@@ -77,7 +77,7 @@ describe('SkillsSection — install from a row', () => {
   it("names the scopes in the user's terms, not the CLI's", async () => {
     render(<SkillsSection projectId="proj-a" />);
 
-    fireEvent.click(await screen.findByTestId('skills-row-action-acme/skills/pdf'));
+    await openScopeMenu('acme/skills/pdf');
 
     const menu = await screen.findByTestId('skills-row-scope-acme/skills/pdf');
     expect(menu).toHaveTextContent('This project');

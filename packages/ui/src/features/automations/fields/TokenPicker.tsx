@@ -1,7 +1,8 @@
 /**
  * TokenPicker — grouped-by-source token menu (ts153 `WfTokenPicker`, ported
- * onto `TokenDescriptor`/`TokenRef`). Built on the shared `Popover`, with
- * `Hint` wrapping the trigger per the binding conventions (never nested
+ * onto `TokenDescriptor`/`TokenRef`). A pick-one list of choices, so it is a
+ * native `DropdownMenu` with a Group per source, with `Hint` wrapping the
+ * trigger per the binding conventions (never nested
  * inside it). The caller is the scope boundary: it only ever receives
  * `scopeAt(...)`'s result, so an out-of-scope token simply never appears
  * here — this component does no scoping of its own.
@@ -20,7 +21,14 @@ import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@v2/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 import type { TokenRef } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import { sourceKindStyle, tokenIcon } from './TokenChip';
@@ -53,34 +61,72 @@ function tokenKey(ref: TokenRef): string {
   return `${ref.stepId}-${ref.output}`;
 }
 
+interface TokenRowsProps {
+  token: TokenDescriptor;
+  testId: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onInsert: (ref: TokenRef) => void;
+}
+
+/** One token's item, plus its field items while expanded. */
+function TokenRows({ token, testId, expanded, onToggle, onInsert }: TokenRowsProps) {
+  const key = tokenKey(token.ref);
+  const isExpandable = Boolean(token.fields && token.fields.length > 0);
+  const style = sourceKindStyle(token.sourceKind);
+  const Icon = tokenIcon(token);
+
+  return (
+    <>
+      <DropdownMenuItem
+        data-testid={`${testId}-option-${key}`}
+        aria-expanded={isExpandable ? expanded : undefined}
+        title={token.description}
+        onSelect={(e) => {
+          // Expanding is not a choice — keep the menu open so the fields show.
+          if (isExpandable) {
+            e.preventDefault();
+            onToggle();
+            return;
+          }
+          onInsert(token.ref);
+        }}
+      >
+        <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-md', style.tintClass)}>
+          <Icon className={cn('size-3', style.iconClass)} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{token.label}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{token.type}</span>
+        {isExpandable && (
+          <ChevronRight
+            className={cn('size-3 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')}
+            aria-hidden
+          />
+        )}
+      </DropdownMenuItem>
+      {expanded &&
+        token.fields!.map((field) => (
+          <DropdownMenuItem
+            key={field}
+            data-testid={`${testId}-option-${key}-${field}`}
+            className="pl-9 text-muted-foreground"
+            onSelect={() => onInsert({ ...token.ref, field })}
+          >
+            {token.label} <span>›</span> <span className="font-medium text-foreground">{field}</span>
+          </DropdownMenuItem>
+        ))}
+    </>
+  );
+}
+
 export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const hasTokens = tokens.length > 0;
   const groups = groupBySource(tokens);
 
-  function close() {
-    setOpen(false);
-    setExpanded(null);
-  }
-
-  function handleRowClick(token: TokenDescriptor) {
-    if (token.fields && token.fields.length > 0) {
-      const key = tokenKey(token.ref);
-      setExpanded((prev) => (prev === key ? null : key));
-      return;
-    }
-    onInsert(token.ref);
-    close();
-  }
-
-  function handleFieldClick(token: TokenDescriptor, field: string) {
-    onInsert({ ...token.ref, field });
-    close();
-  }
-
   return (
-    <Popover
+    <DropdownMenu
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -88,7 +134,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
       }}
     >
       <Hint label={hasTokens ? 'Insert a value from an earlier step' : 'No values available yet'}>
-        <PopoverTrigger asChild>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
             data-testid={testId}
@@ -98,64 +144,28 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
             <span className="font-mono text-xs">⟨⟩</span>
             Insert
           </button>
-        </PopoverTrigger>
+        </DropdownMenuTrigger>
       </Hint>
-      <PopoverContent data-testid={`${testId}-menu`} align="start" className="max-h-80 w-64 overflow-y-auto p-1.5">
+      <DropdownMenuContent data-testid={`${testId}-menu`} align="start" className="max-h-80 w-64">
         {groups.map((group) => (
-          <div key={group.source} className="mb-[4px]">
-            <div className="px-[8px] pb-[4px] pt-[5px] text-xs font-medium text-muted-foreground">{group.source}</div>
+          <DropdownMenuGroup key={group.source}>
+            <DropdownMenuLabel>{group.source}</DropdownMenuLabel>
             {group.tokens.map((token) => {
               const key = tokenKey(token.ref);
-              const isExpandable = Boolean(token.fields && token.fields.length > 0);
-              const isOpen = expanded === key;
-              const style = sourceKindStyle(token.sourceKind);
-              const Icon = tokenIcon(token);
               return (
-                <div key={key}>
-                  <button
-                    type="button"
-                    data-testid={`${testId}-option-${key}`}
-                    onClick={() => handleRowClick(token)}
-                    aria-expanded={isExpandable ? isOpen : undefined}
-                    title={token.description}
-                    className="flex w-full items-center gap-[9px] rounded-md px-[8px] py-[7px] text-left hover:bg-accent"
-                  >
-                    <span
-                      className={cn(
-                        'flex size-[20px] shrink-0 items-center justify-center rounded-md',
-                        style.tintClass,
-                      )}
-                    >
-                      <Icon size={12} className={style.iconClass} aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{token.label}</span>
-                    <span className="text-xs text-muted-foreground">{token.type}</span>
-                    {isExpandable && (
-                      <ChevronRight
-                        size={12}
-                        className={cn('shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-90')}
-                        aria-hidden
-                      />
-                    )}
-                  </button>
-                  {isOpen &&
-                    token.fields!.map((field) => (
-                      <button
-                        key={field}
-                        type="button"
-                        data-testid={`${testId}-option-${key}-${field}`}
-                        onClick={() => handleFieldClick(token, field)}
-                        className="flex w-full items-center gap-[8px] rounded-md py-[5px] pl-[37px] pr-[8px] text-left text-sm text-muted-foreground hover:bg-accent"
-                      >
-                        {token.label} <span>›</span> <span className="font-medium text-foreground">{field}</span>
-                      </button>
-                    ))}
-                </div>
+                <TokenRows
+                  key={key}
+                  token={token}
+                  testId={testId}
+                  expanded={expanded === key}
+                  onToggle={() => setExpanded((prev) => (prev === key ? null : key))}
+                  onInsert={onInsert}
+                />
               );
             })}
-          </div>
+          </DropdownMenuGroup>
         ))}
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

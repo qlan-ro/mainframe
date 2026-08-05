@@ -28,7 +28,7 @@ vi.mock('@/lib/toast', () => ({
 
 import { SkillsSection } from '../SkillsSection';
 import * as skillsCliApi from '@/lib/api/skills-cli';
-import { makeEntry, mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
+import { makeEntry, mockCatalogUnavailable, mockManifest, openScopeMenu, resetSkillsStores } from './harness';
 
 beforeEach(() => {
   resetSkillsStores();
@@ -64,7 +64,7 @@ describe('SkillsSection — uninstall success', () => {
 
     render(<SkillsSection projectId="proj-a" />);
 
-    fireEvent.click(await screen.findByTestId('skills-row-action-shadcn/ui/shadcn'));
+    await openScopeMenu('shadcn/ui/shadcn');
 
     const menu = await screen.findByTestId('skills-row-scope-shadcn/ui/shadcn');
     expect(menu).toHaveTextContent('This project');

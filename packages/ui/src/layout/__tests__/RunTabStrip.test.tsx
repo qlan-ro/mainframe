@@ -139,3 +139,51 @@ describe('RunTabStrip — running-config Stop affordance', () => {
     expect(queryByTestId('run-tab-stop-term-1')).toBeNull();
   });
 });
+
+describe('RunTabStrip — add menu (native DropdownMenu)', () => {
+  /** Radix menu triggers open on POINTERDOWN, not click. */
+  const openAddMenu = (getByTestId: (id: string) => HTMLElement) =>
+    fireEvent.pointerDown(getByTestId('run-tab-strip-add-pane-1'), { button: 0 });
+
+  it('offers New terminal and URL rows, and one row per launch config', () => {
+    launch.configs = [cfg('Web', { preview: true }), cfg('Sleeper')];
+    const { getByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+
+    openAddMenu(getByTestId);
+
+    expect(getByTestId('run-pane-new-terminal-pane-1')).toBeInTheDocument();
+    expect(getByTestId('run-pane-open-url-pane-1')).toBeInTheDocument();
+    expect(getByTestId('run-pane-launch-Web-pane-1')).toBeInTheDocument();
+    expect(getByTestId('run-pane-launch-Sleeper-pane-1')).toBeInTheDocument();
+  });
+
+  it('selecting a launch-config row launches that config', () => {
+    launch.configs = [cfg('Sleeper')];
+    const { getByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+
+    openAddMenu(getByTestId);
+    fireEvent.click(getByTestId('run-pane-launch-Sleeper-pane-1'));
+
+    expect(launch.handleLaunch).toHaveBeenCalledWith(expect.objectContaining({ name: 'Sleeper' }));
+  });
+
+  it('says so when the project has no launch configs', () => {
+    launch.configs = [];
+    const { getByTestId, queryByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+
+    openAddMenu(getByTestId);
+
+    expect(getByTestId('run-add-menu-pane-1')).toHaveTextContent('No launch configs found.');
+    expect(queryByTestId('run-pane-launch-Sleeper-pane-1')).toBeNull();
+  });
+
+  it('the URL row swaps the pill row for the inline URL entry', () => {
+    const { getByTestId, queryByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+
+    openAddMenu(getByTestId);
+    fireEvent.click(getByTestId('run-pane-open-url-pane-1'));
+
+    expect(getByTestId('run-tab-url-entry')).toBeInTheDocument();
+    expect(queryByTestId(`run-tab-${terminalTab.id}`)).toBeNull();
+  });
+});

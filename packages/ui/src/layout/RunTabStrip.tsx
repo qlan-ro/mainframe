@@ -8,7 +8,7 @@
  * console/logs process, terminal = shell, file = a Files guest) that never
  * changes with run state; a launch-config tab whose process is live adds a
  * separate red Stop between the title and its close (toolbar parity, #206). The
- * `+` opens a popover (New terminal + launch configs), not a bare terminal.
+ * `+` opens a DropdownMenu (New terminal + launch configs), not a bare terminal.
  *
  * data-testid:
  *   run-tab-<id> / run-tab-close-<id>     — each tab + its close button
@@ -23,10 +23,18 @@
  *   run-pane-close-<paneId>               — un-split (secondary pane)
  */
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Eye, Globe, GripVertical, LayoutPanelLeft, LayoutPanelTop, Play, Plus, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { MenuDivider, MenuEmpty, MenuLabel, MenuRow } from '@/components/ui/menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -48,70 +56,68 @@ interface RunAddMenuProps {
   onOpenUrl: () => void;
 }
 
+/** A row's trailing kind hint ("zsh" / "preview" / "process") — not a keyboard
+ *  shortcut, so it stays a plain mono span rather than DropdownMenuShortcut. */
+function RowHint({ children }: { children: ReactNode }) {
+  return <span className="shrink-0 font-mono text-xs text-muted-foreground">{children}</span>;
+}
+
 function RunAddMenu({ paneId, configs, onLaunch, onOpenUrl }: RunAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      {/* `open` drives the pressed chrome, not `data-[state=open]`: Hint's
+          TooltipTrigger asChild overwrites the child's data-state with the
+          tooltip's own. */}
       <Hint label="New terminal, URL, or preview">
-        <PopoverTrigger asChild>
+        <DropdownMenuTrigger asChild>
           <button
             data-testid={`run-tab-strip-add-${paneId}`}
             type="button"
-            className={`${ACTION_BTN} ml-0.5 data-[state=open]:bg-mf-chip`}
+            className={cn(ACTION_BTN, 'ml-0.5', open && 'bg-mf-chip')}
           >
             <Plus size={12} className="text-mf-text-3" />
           </button>
-        </PopoverTrigger>
+        </DropdownMenuTrigger>
       </Hint>
-      <PopoverContent data-testid={`run-add-menu-${paneId}`} className="w-[214px] rounded-[8px] p-[4px]" align="start">
-        <MenuLabel>New tab</MenuLabel>
-        <MenuRow
+      <DropdownMenuContent data-testid={`run-add-menu-${paneId}`} className="w-[214px]" align="start">
+        <DropdownMenuLabel>New tab</DropdownMenuLabel>
+        <DropdownMenuItem
           data-testid={`run-pane-new-terminal-${paneId}`}
-          icon={<Terminal className="size-[13px] text-mf-term-cyan" />}
-          label="New terminal"
-          hint="zsh"
-          onClick={() => {
-            setOpen(false);
-            emitSurfaceIntent({ type: 'new-terminal', paneId });
-          }}
-        />
-        <MenuRow
-          data-testid={`run-pane-open-url-${paneId}`}
-          icon={<Globe className="size-[13px] text-mf-surface-run" />}
-          label="URL…"
-          onClick={() => {
-            setOpen(false);
-            onOpenUrl();
-          }}
-        />
-        <MenuDivider />
-        <MenuLabel>Launch configuration</MenuLabel>
+          onSelect={() => emitSurfaceIntent({ type: 'new-terminal', paneId })}
+        >
+          <Terminal className="size-3.5 text-mf-term-cyan" />
+          <span className="min-w-0 flex-1 truncate">New terminal</span>
+          <RowHint>zsh</RowHint>
+        </DropdownMenuItem>
+        <DropdownMenuItem data-testid={`run-pane-open-url-${paneId}`} onSelect={onOpenUrl}>
+          <Globe className="size-3.5 text-mf-surface-run" />
+          <span className="min-w-0 flex-1 truncate">URL…</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Launch configuration</DropdownMenuLabel>
         {configs.length === 0 ? (
-          <MenuEmpty>No launch configs found.</MenuEmpty>
+          <div className="px-2 py-4 text-center text-xs text-muted-foreground">No launch configs found.</div>
         ) : (
           configs.map((cfg) => (
-            <MenuRow
+            <DropdownMenuItem
               key={cfg.name}
               data-testid={`run-pane-launch-${cfg.name}-${paneId}`}
-              icon={
-                cfg.preview ? (
-                  <Eye className="size-[13px] text-mf-surface-run" />
-                ) : (
-                  <Terminal className="size-[13px] text-mf-term-cyan" />
-                )
-              }
-              label={cfg.name}
-              hint={cfg.preview ? 'preview' : 'process'}
-              onClick={() => {
-                setOpen(false);
-                onLaunch(cfg);
-              }}
-            />
+              onSelect={() => onLaunch(cfg)}
+            >
+              {cfg.preview ? (
+                <Eye className="size-3.5 text-mf-surface-run" />
+              ) : (
+                <Terminal className="size-3.5 text-mf-term-cyan" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{cfg.name}</span>
+              <RowHint>{cfg.preview ? 'preview' : 'process'}</RowHint>
+            </DropdownMenuItem>
           ))
         )}
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
