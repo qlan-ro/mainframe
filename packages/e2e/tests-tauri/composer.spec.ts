@@ -36,6 +36,23 @@ test.describe('§composer config selects', () => {
     await expect(options.first()).toHaveCount(0); // dropdown closed after pick
   });
 
+  // TODO(bug): the `closeMenus()` before the reset click below is a WORKAROUND for a
+  // real product wart, filed here because this is where it bites.
+  //
+  // Measured in Chromium (2026-08-06, throwaway Playwright probe reading the live DOM):
+  // pick a mode, then click the chip again and the menu does NOT reopen — the trigger
+  // stays `aria-expanded="false"`, `[role=menu]` count goes 1 → 0, and the very next
+  // click opens it normally. The dropped click lands inside the window where Radix
+  // still has the CLOSING menu's content mounted for its exit animation; waiting for
+  // that content to unmount makes the reopen reliable every time. Not reproducible in
+  // jsdom (a unit test of the same gesture passes), which is why no unit test caught it.
+  //
+  // For a user this reads as "the permission chip ignored my click" right after they
+  // changed the mode. It is NOT a regression from the v2 port: PermissionSelect still
+  // renders the v1 `components/ui/dropdown-menu` and has not changed since #460 — the
+  // same swallow reproduces on any Tooltip-wrapped DropdownMenuTrigger in the composer
+  // toolbar. Fixing it belongs in the primitive (or its Tooltip composition), not here;
+  // when it is fixed, the `closeMenus()` on the reset click becomes redundant.
   test('M7: permission-mode select switches to Unattended (yolo)', async () => {
     const { page } = app;
     const trigger = page.locator('[data-testid="composer-permission-mode-select"]');
@@ -43,8 +60,8 @@ test.describe('§composer config selects', () => {
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-yolo"]').click();
     await expect(trigger).toContainText(/unattended/i, { timeout: 5_000 });
-    // Reset to Interactive for cleanliness — after the menu has actually unmounted
-    // (see closeMenus: a trigger click during the exit animation is swallowed).
+    // Reset to Interactive for cleanliness — only after the menu has actually
+    // unmounted, per the TODO(bug) above.
     await closeMenus();
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-default"]').click();
