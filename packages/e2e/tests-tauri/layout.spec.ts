@@ -49,6 +49,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer, workspace } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 
 // ─── drag-gesture helpers ──────────────────────────────────────────────────────
 // Pointer-driven (not HTML5 DnD) — mirrors use-surface-drag.ts's own model: a
@@ -81,6 +82,11 @@ async function moveDragTo(page: Page, to: { x: number; y: number }, steps = 6): 
  *  layer to appear is the commit signal. The divider drags don't need this — they
  *  are handled by SurfaceHost's own pointer handlers, with no layer. */
 async function beginLayerDrag(page: Page, from: { x: number; y: number }): Promise<void> {
+  // `page.mouse.*` performs NO actionability check, so a press dispatched while the
+  // file picker is still unmounting lands on a `pointer-events: none` <body> and is
+  // swallowed silently — the drag never starts and the layer never mounts. Waiting the
+  // scrim out is what makes this deterministic in a full-suite run.
+  await waitForDialogScrimsGone(page);
   await beginDrag(page, from);
   await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
 }

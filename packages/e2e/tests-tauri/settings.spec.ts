@@ -531,9 +531,14 @@ test.describe('§settings tuning inheritance', () => {
     await closeMenus(page);
 
     // The provider default in Settings must be unaffected by the chat-level override.
+    // Assert the DAEMON first so a failure attributes itself: if the stored value is
+    // still 'high' and only the pane disagrees, that is the pane rendering its
+    // "Inherit (model default)" sentinel before its own fetch resolves — not the
+    // override having clobbered the provider default, which is what this test is for.
+    await expect.poll(() => providerSetting('mock-cli', 'defaultEffort')).toBe('high');
     await openTab(page, 'providers');
     await page.getByTestId('settings-nav-provider-mock-cli').click();
-    await expect(page.getByTestId('settings-mock-cli-default-effort')).toContainText(/high/i, { timeout: 5_000 });
+    await expect(page.getByTestId('settings-mock-cli-default-effort')).toContainText(/high/i, { timeout: 10_000 });
     await closeSettings(page);
   });
 });

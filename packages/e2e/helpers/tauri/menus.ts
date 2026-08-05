@@ -23,6 +23,16 @@ export async function closeMenus(page: Page, maxLayers = 4): Promise<void> {
   const menus = page.locator('[role="menu"]');
   for (let layer = 0; layer < maxLayers && (await menus.count()) > 0; layer++) {
     await page.keyboard.press('Escape');
+    // Each press needs its own settle before the count is read again. Firing them
+    // back-to-back sends every Escape into the same animation window, where Radix has
+    // already handled the first and ignores the rest — so the loop burns its budget
+    // and the menu is still up. Measured: one Escape plus a beat closes reliably.
+    await menus
+      .first()
+      .waitFor({ state: 'detached', timeout: 1_500 })
+      .catch(() => {
+        /* expected when an inner layer closed and an outer one is still up */
+      });
   }
   await expect(menus).toHaveCount(0, { timeout: 5_000 });
 }

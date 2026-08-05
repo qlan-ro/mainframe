@@ -80,6 +80,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { TOAST } from '../helpers/tauri/testids.js';
+import { closeMenus } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -149,15 +150,13 @@ async function openBranchPopover(page: Page): Promise<void> {
  * closes the whole menu, so this no-ops in that case.
  */
 async function closeBranchPopover(page: Page): Promise<void> {
-  const submenu = page.getByTestId('git-submenu');
-  if ((await submenu.count()) > 0) {
-    await page.keyboard.press('Escape');
-    await expect(submenu).toHaveCount(0, { timeout: 5_000 });
-  }
-  const popover = page.getByTestId('git-branch-popover');
-  if ((await popover.count()) > 0) await page.keyboard.press('Escape');
-  await expect(popover).toHaveCount(0, { timeout: 5_000 });
-  await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
+  // One Escape per press, and a press that lands inside a layer's exit animation is
+  // swallowed — so this retries while any layer is left rather than pressing once and
+  // asserting. A single press was enough when this file ran alone and not in the full
+  // suite, where the animation window is longer.
+  await closeMenus(page);
+  await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId('git-submenu')).toHaveCount(0);
 }
 
 /** Open a branch row's action flyout (the row is a DropdownMenuSubTrigger). */
