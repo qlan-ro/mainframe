@@ -9,9 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
-// v2 shell, legacy body: the three columns are still bridge-styled and port
-// with the review pass (which is also where resizable columns would land —
-// the v1 columns are fixed-width, so none are lost here).
+// Fixed-width columns as in v1 — resizable panels land with the review
+// surface port.
 import { Dialog, DialogContent } from '@v2/components/ui/dialog';
 import { useOverlaysStore } from '@/store/overlays';
 import { emitSurfaceIntent } from '@/store/surface-intents';

@@ -30,8 +30,6 @@ Deliberately unmapped (use as arbitrary values, never as a color utility):
 | `text-body` | 13px | 1.5 | **baseline** — body copy, rows, menu items |
 | `text-heading` | 15px | 1.3 | dialog/section titles |
 | `text-title` | 17px | 1.25 | surface titles |
-| `text-display` | 22px | 1.2 | empty/welcome states |
-| `text-hero` | 28px | 1.15 | onboarding only |
 
 `body` itself is 13px — so an *unstyled* text node looks plausible and is still wrong.
 
@@ -68,7 +66,6 @@ imported from the design prototype — the prototype specifies a stricter ladder
 | `text-body` | semibold 28 · medium 13 | **semibold** for row titles, medium for secondary |
 | `text-heading` | bold 17 · semibold 10 | **bold** — this is the dialog-title weight |
 | `text-title` | bold 9 · semibold 3 | bold |
-| `text-display` / `text-hero` | bold only | bold (not extrabold) |
 
 Practical rules that do hold: **`font-normal` is effectively unused** (3 sites) — muted text gets a muted
 *color*, not a lighter weight; **`font-extrabold` appears once**, on the brand mark; and weight rises with

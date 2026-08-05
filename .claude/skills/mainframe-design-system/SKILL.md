@@ -78,10 +78,10 @@ already has.
 
 Full tables with every token name: `references/tokens.md`. The shape of them:
 
-- **Type — 8 rungs, 10→28px**, each with paired leading: `text-micro` 10 · `text-caption` 11 · `text-label` 12
-  · `text-body` 13 · `text-heading` 15 · `text-title` 17 · `text-display` 22 · `text-hero` 28.
-  Chrome density is deliberately tight; `text-body` is the baseline, `text-heading` is a dialog title.
-  Anything above `text-title` is a welcome/empty-state moment, not a panel.
+- **Type — 6 rungs, 10→17px**, each with paired leading: `text-micro` 10 · `text-caption` 11 · `text-label` 12
+  · `text-body` 13 · `text-heading` 15 · `text-title` 17. Chrome density is deliberately tight;
+  `text-body` is the baseline, `text-heading` is a dialog title. (`text-display`/`text-hero` retired
+  with the v2 shell — welcome/empty-state moments are v2 surfaces now.)
 - **Weight rises with the rung.** `text-heading` and above is `font-bold`; below that, medium and
   semibold are both live (semibold for row titles and active state, medium for secondary). `font-normal`
   is effectively unused — muted text gets a muted *color*, not a lighter weight — and `font-extrabold`
@@ -125,7 +125,6 @@ Copy the structure from the named file — do not re-derive it. Details in `refe
 | Confirm | `components/ui/confirm-dialog.tsx` |
 | Menu / popover | `components/ui/menu.tsx` + `features/run/ToolbarLaunchControls.tsx` |
 | Toolbar icon button | `layout/MainToolbar.tsx` `ICON_BTN` — 24×28, `rounded-[6px]`, `hover:bg-accent` |
-| Chip / pill | `components/ui/chip.ts` `CHIP_BASE` — h-22, `border-[0.5px]`, `text-label` |
 | Section header / eyebrow | `components/ui/section-header.tsx` — sentence-case `text-caption font-medium text-muted-foreground`. Never hand-roll `text-micro font-bold uppercase` |
 | Count / badge | `components/ui/count-badge.tsx` — capsule-less gray numeral by default; `alert` is the only filled variant |
 | Toast | `mfToast` from `@/lib/toast` — **not** sonner directly |

@@ -10,8 +10,6 @@
  * Mounted once in AppShell's outlet block.
  */
 import React, { useEffect, useRef } from 'react';
-// v2 shell, legacy body: the board inside is still bridge-styled and ports
-// with the tasks pass.
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';

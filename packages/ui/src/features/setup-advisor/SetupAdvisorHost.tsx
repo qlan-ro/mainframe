@@ -22,8 +22,6 @@
  */
 import { useEffect, useRef } from 'react';
 import { ScanSearch } from 'lucide-react';
-// v2 shell, legacy body: the sheet content is still bridge-styled and ports
-// with the settings/advisor pass.
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';

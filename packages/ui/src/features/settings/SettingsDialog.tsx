@@ -1,6 +1,4 @@
 import { useEffect } from 'react';
-// v2 shell, legacy body: the dialog chrome is the stock v2 Dialog; the panes
-// inside are still bridge-styled and port with the settings pass.
 import { XIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@v2/components/ui/dialog';

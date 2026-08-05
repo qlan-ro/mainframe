@@ -7,10 +7,9 @@
  * opens it directly, alongside the production SidebarHeader entry point.
  */
 import React, { Suspense, useEffect } from 'react';
-// v2 shell, legacy body: the workspace inside is still bridge-styled and
-// ports with the automations pass. Radix replaces the hand-rolled overlay —
-// focus trap, scroll lock and layering come with it, and Escape now closes
-// in production too (the old manual handler was dev-only).
+// Radix replaces the v1 hand-rolled overlay — focus trap, scroll lock and
+// layering come with it, and Escape now closes in production too (the old
+// manual handler was dev-only).
 import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
 import { useActiveIdentity } from '../sessions/use-active-identity';
 import { useAutomationsNav } from './data/use-automations-nav';

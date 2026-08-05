@@ -25,7 +25,7 @@ import { useNewSessionAction } from './use-new-session-action';
 import { BranchListView } from './BranchListView';
 import { ConflictView } from './ConflictView';
 import { NewBranchDialog } from './NewBranchDialog';
-import { RenameBranchDialog } from './RenameBranchView';
+import { RenameBranchDialog } from './RenameBranchDialog';
 import type { BranchRowActions } from './BranchSubmenu';
 
 type DialogState = { kind: 'new-branch'; startFrom?: string } | { kind: 'rename'; target: string } | null;

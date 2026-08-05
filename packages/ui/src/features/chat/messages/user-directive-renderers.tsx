@@ -18,7 +18,7 @@ import { mainframeUserFormatter, mainframeUserInlineFormatter } from './user-dir
 
 const COMPLETE = { type: 'complete' } as const;
 
-/** Mirrors MainToolbar's CHIP_BASE so a reference reads as the same object class. */
+/** The toolbar branch-chip shape on directive inks, so a reference reads as the same object class. */
 const SESSION_CHIP =
   'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid border-border bg-mf-chip px-[6px] align-middle font-mono text-label font-normal text-mf-directive-session';
 
