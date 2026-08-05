@@ -45,6 +45,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@v2/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { ProviderLogo } from '@v2/features/shared/ProviderLogo';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { RunningHint } from './RunningHint';
@@ -106,35 +108,44 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
   );
 }
 
-interface ProviderPillProps {
-  option: AdapterInfo;
-  active: boolean;
+/** One full-width segment per provider — the Folder/GitHub tab treatment. */
+function ProviderTabs({
+  adapters,
+  activeId,
+  locked,
+  onSelect,
+}: {
+  adapters: AdapterInfo[];
+  activeId: string;
   locked: boolean;
   onSelect: (id: string) => void;
-}
-function ProviderPill({ option, active, locked, onSelect }: ProviderPillProps) {
-  const disabled = !option.installed || (locked && !active);
+}) {
   return (
-    <button
-      type="button"
-      data-testid={`composer-adapter-select-option-${option.id}`}
-      aria-label={`Provider: ${option.name}`}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={() => onSelect(option.id)}
-      className={cn(
-        'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors',
-        'focus-visible:outline-none',
-        active
-          ? 'border-primary bg-mf-selection font-medium text-foreground'
-          : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-        disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
-      )}
+    // manual activation: automatic mode also fires onValueChange on FOCUS,
+    // which would double-issue the adapter PATCH on every click.
+    <Tabs
+      value={activeId}
+      activationMode="manual"
+      onValueChange={(v) => {
+        if (v) onSelect(v);
+      }}
     >
-      <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(option.id))} />
-      <span>{option.name}</span>
-      {!option.installed && <Lock size={11} className="flex-shrink-0" />}
-    </button>
+      <TabsList className="w-full">
+        {adapters.map((a) => (
+          <TabsTrigger
+            key={a.id}
+            value={a.id}
+            data-testid={`composer-adapter-select-option-${a.id}`}
+            aria-label={`Provider: ${a.name}`}
+            disabled={!a.installed || (locked && a.id !== activeId)}
+          >
+            <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} />
+            <span className="truncate">{a.name}</span>
+            {!a.installed && <Lock className="size-3 shrink-0" />}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -226,32 +237,15 @@ export function ProviderModelSelect({
           sideOffset={6}
           className="w-72"
         >
-          <DropdownMenuLabel data-testid="composer-provider-header" className="flex items-center justify-between">
-            <span>Provider</span>
-            {locked && (
-              <span className="flex items-center gap-1 font-normal">
-                <Lock size={12} /> Locked
-              </span>
-            )}
-          </DropdownMenuLabel>
-
           {/* Non-item chrome holding real buttons — keystrokes stay here rather
               than driving the menu's typeahead. Escape still closes. */}
           <div
-            className="flex flex-wrap gap-1 px-2 pb-1"
+            className="p-1 pb-1.5"
             onKeyDown={(e) => {
               if (e.key !== 'Escape') e.stopPropagation();
             }}
           >
-            {adapters.map((a) => (
-              <ProviderPill
-                key={a.id}
-                option={a}
-                active={a.id === activeId}
-                locked={locked}
-                onSelect={onPickProvider}
-              />
-            ))}
+            <ProviderTabs adapters={adapters} activeId={activeId} locked={locked} onSelect={onPickProvider} />
           </div>
 
           <DropdownMenuSeparator />
