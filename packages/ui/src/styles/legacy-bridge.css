@@ -29,7 +29,6 @@
   --mf-glass: rgba(240, 237, 231, 0.84);
   --mf-content2: #f8f6f2;
   --mf-raised: #f3efe7;
-  --mf-tab-bar: #f3f0ea;
   --mf-tab-active: #ffffff;
   --mf-text-3: var(--muted-foreground);
   --mf-text-4: #bcbab5;
@@ -127,7 +126,6 @@
   --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
-  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
   /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
   --mf-shadow-edit-ring: 0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
     0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
@@ -159,7 +157,6 @@
   --mf-glass: rgba(34, 36, 47, 0.85);
   --mf-content2: #212330;
   --mf-raised: #313447;
-  --mf-tab-bar: #21232e;
   --mf-tab-active: #373a4d;
   --mf-text-4: #555870;
   --mf-warning: #f5a960;
@@ -233,7 +230,6 @@
 
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.22);
   --mf-accent-amber: #ff9f0a;
   --mf-accent-violet: #bd9bf5;
 
@@ -261,7 +257,6 @@
   --color-mf-glass: var(--mf-glass);
   --color-mf-content2: var(--mf-content2);
   --color-mf-raised: var(--mf-raised);
-  --color-mf-tab-bar: var(--mf-tab-bar);
   --color-mf-tab-active: var(--mf-tab-active);
   --color-mf-text-3: var(--mf-text-3);
   --color-mf-text-4: var(--mf-text-4);

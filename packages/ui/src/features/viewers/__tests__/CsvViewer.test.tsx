@@ -21,8 +21,13 @@
  * 15. Sticky thead uses bg-mf-content2, not bg-background.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { CsvViewer } from '../CsvViewer';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const SIMPLE_CSV = 'name,age,city\nAlice,30,London\nBob,25,Paris\nCarol,35,Berlin';
 

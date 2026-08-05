@@ -5,6 +5,7 @@
  */
 import type { ReactNode, RefObject } from 'react';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 import type { UrlTabTarget } from './resolve-url-target';
 
 interface UrlTabBodyStateProps {
@@ -24,7 +25,7 @@ function LoadedBody({
   const inspectBadge = inspectActive ? (
     <div
       data-testid="url-tab-inspect-active-indicator"
-      className="absolute top-[8px] left-[8px] z-10 rounded-[6px] bg-primary px-[7px] py-[2px] font-mono text-caption font-semibold text-primary-foreground"
+      className="absolute top-2 left-2 z-10 rounded-sm bg-primary px-1.5 py-0.5 font-mono text-xs font-semibold text-primary-foreground"
     >
       Click an element
     </div>
@@ -33,18 +34,16 @@ function LoadedBody({
   return (
     <div data-testid="url-tab-body-loaded" className="absolute inset-0">
       {device === 'desktop' ? (
-        <div
-          className={`absolute inset-0 overflow-hidden rounded-md [border:0.5px_solid_var(--border)] ${inspectFrame}`}
-        >
+        <div className={`absolute inset-0 overflow-hidden rounded-md border border-border ${inspectFrame}`}>
           <div ref={anchorRef} className="absolute inset-0" />
           {inspectBadge}
         </div>
       ) : (
-        <div className="flex items-center justify-center h-full">
+        <div className="flex h-full items-center justify-center">
           <div
-            className={`relative w-[230px] h-[420px] overflow-hidden rounded-[22px] [border:0.5px_solid_var(--border)] [box-shadow:var(--mf-shadow-pop)] ${inspectFrame}`}
+            className={`relative h-[420px] w-[230px] overflow-hidden rounded-[22px] border border-border shadow-md ${inspectFrame}`}
           >
-            <div ref={anchorRef} className="w-full h-full" />
+            <div ref={anchorRef} className="size-full" />
             {inspectBadge}
           </div>
         </div>
@@ -64,22 +63,17 @@ function MessageBody({ testId, children }: { testId: string; children: ReactNode
 function FailureLine({ text }: { text: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-2 h-2 rounded-full bg-destructive" />
-      <span className="text-body text-muted-foreground">{text}</span>
+      <span className="size-2 rounded-full bg-destructive" />
+      <span className="text-sm text-muted-foreground">{text}</span>
     </div>
   );
 }
 
 function RetryButton({ onRetry }: { onRetry: () => void }) {
   return (
-    <button
-      type="button"
-      data-testid="url-tab-retry"
-      onClick={onRetry}
-      className="rounded-md border border-border px-3 py-1.5 text-label text-foreground transition-colors hover:bg-accent"
-    >
+    <Button data-testid="url-tab-retry" variant="outline" size="sm" onClick={onRetry}>
       Retry
-    </button>
+    </Button>
   );
 }
 
@@ -91,9 +85,9 @@ export function UrlTabBodyState({ target, device, inspectActive, anchorRef, onRe
   if (target.kind === 'pending') {
     return (
       <MessageBody testId="url-tab-body-pending">
-        <div className="flex items-center gap-[8px]">
-          <Loader2 size={12} className="animate-spin text-muted-foreground" />
-          <span className="text-label text-muted-foreground">Starting a tunnel for port {target.port}…</span>
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Starting a tunnel for port {target.port}…</span>
         </div>
       </MessageBody>
     );
@@ -129,7 +123,7 @@ export function UrlTabBodyState({ target, device, inspectActive, anchorRef, onRe
   return (
     <MessageBody testId="url-tab-body-invalid">
       <FailureLine text="This tab’s saved address can’t be opened" />
-      {target.url !== '' && <span className="line-clamp-2 font-mono text-caption text-mf-text-3">{target.url}</span>}
+      {target.url !== '' && <span className="line-clamp-2 font-mono text-xs text-muted-foreground">{target.url}</span>}
     </MessageBody>
   );
 }

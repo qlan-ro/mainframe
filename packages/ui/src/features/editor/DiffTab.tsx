@@ -29,9 +29,7 @@ interface DiffTabProps {
 }
 
 type FetchState =
-  | { status: 'loading' }
-  | { status: 'ready'; original: string; modified: string }
-  | { status: 'unavailable' };
+  { status: 'loading' } | { status: 'ready'; original: string; modified: string } | { status: 'unavailable' };
 
 export function DiffTab({ path, original: origProp, modified: modProp }: DiffTabProps) {
   const port = useDaemonPort();
@@ -94,7 +92,7 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
 
   if (fetchState.status === 'unavailable') {
     return (
-      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
+      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-sm text-muted-foreground">
         No diff available — this file has no uncommitted changes.
       </div>
     );
@@ -102,7 +100,7 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
 
   if (fetchState.status === 'loading') {
     return (
-      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
+      <div data-testid="diff-tab" className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Loading diff…
       </div>
     );

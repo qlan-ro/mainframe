@@ -8,7 +8,8 @@
  *   - remote + tunnel error → console-fallback body + exactly one toast
  *   - local daemon → byte-for-byte unchanged (localhost mount, no new states)
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
@@ -76,12 +77,16 @@ afterEach(() => {
   resetHostForTesting();
 });
 
+/** The toolbar is full of v2 `Hint`s, so the v2 TooltipProvider is part of the stack. */
 function wrapper({ children }: { children: React.ReactNode }) {
-  return React.createElement(HostProvider, { host: fakeHost, children });
+  return React.createElement(HostProvider, {
+    host: fakeHost,
+    children: React.createElement(TooltipProvider, null, children),
+  });
 }
 
 function renderInstance() {
-  return render(<PreviewInstance tabId="t1" config="web" visible scopeKey={SCOPE} port={3000} projectId="proj" />, {
+  return rtlRender(<PreviewInstance tabId="t1" config="web" visible scopeKey={SCOPE} port={3000} projectId="proj" />, {
     wrapper,
   });
 }

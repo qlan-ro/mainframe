@@ -1,7 +1,7 @@
 import { Play, Square, RefreshCw } from 'lucide-react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { Hint } from '@/components/ui/hint';
-import { PreviewIconButton } from './PreviewIconButton';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 
 interface PreviewRunControlProps {
   status: LaunchProcessStatus | null;
@@ -11,41 +11,40 @@ interface PreviewRunControlProps {
 }
 
 /**
- * Primary run/stop control — the leftmost item of the preview toolbar, mirroring
- * the prototype `PrimaryRun`. Stopped/failed → a green Run button; running or
- * starting → a Stop button paired with a Restart glyph.
+ * Primary run/stop control — the leftmost item of the preview toolbar.
+ * Stopped/failed → a Run button; running or starting → Stop paired with a
+ * Restart glyph. The hue rides the glyph, not the button fill: both states are
+ * neutral `outline` buttons so neither shouts over the address bar.
  */
 export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewRunControlProps) {
   const stopped = status === null || status === 'stopped' || status === 'failed';
 
   if (stopped) {
     return (
-      <button
-        data-testid="preview-run-start"
-        onClick={onRun}
-        className="inline-flex h-[24px] flex-shrink-0 items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[9px] pr-[11px] text-label font-semibold text-foreground"
-      >
-        <Play size={12} className="fill-current text-mf-success" />
+      <Button data-testid="preview-run-start" variant="outline" size="xs" className="shrink-0" onClick={onRun}>
+        <Play data-icon="inline-start" className="fill-current text-success" />
         Run
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex flex-shrink-0 items-center gap-px">
-      <Hint label="Stop">
-        <button
-          data-testid="preview-run-stop"
-          onClick={onStop}
-          className="inline-flex h-[24px] items-center gap-1.5 rounded-md border-[0.5px] border-border bg-card pl-[8px] pr-[10px] text-label font-semibold text-foreground"
+    <div className="flex shrink-0 items-center gap-px">
+      <Button data-testid="preview-run-stop" variant="outline" size="xs" onClick={onStop}>
+        <Square data-icon="inline-start" className="fill-current text-destructive" />
+        Stop
+      </Button>
+      <Hint label="Restart server">
+        <Button
+          data-testid="preview-run-restart"
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Restart server"
+          onClick={onRestart}
         >
-          <Square size={12} className="fill-current text-destructive" />
-          Stop
-        </button>
+          <RefreshCw />
+        </Button>
       </Hint>
-      <PreviewIconButton testId="preview-run-restart" title="Restart server" onClick={onRestart} className="w-[24px]">
-        <RefreshCw size={14} />
-      </PreviewIconButton>
     </div>
   );
 }

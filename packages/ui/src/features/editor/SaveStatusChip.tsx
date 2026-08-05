@@ -1,27 +1,16 @@
-/** Save-status chip shown in the ViewerShell header actions slot. */
+import { Badge } from '@v2/components/ui/badge';
+
+/**
+ * Save-status chip shown in the ViewerShell header actions slot.
+ *
+ * The hue rides the dot, not the label — a two-word status reads as ink at
+ * 11px, and the v2 chip recipe is a neutral `secondary` Badge.
+ */
 export function SaveStatusChip({ dirty }: { dirty: boolean }) {
-  if (dirty) {
-    return (
-      <span
-        data-testid="editor-save-status"
-        className="rounded-[4px] bg-mf-warning-tint px-[5px] py-[1px] font-mono text-caption text-foreground"
-      >
-        <span className="text-mf-warning" aria-hidden>
-          ●
-        </span>{' '}
-        unsaved
-      </span>
-    );
-  }
   return (
-    <span
-      data-testid="editor-save-status"
-      className="rounded-[4px] bg-mf-success-tint px-[5px] py-[1px] font-mono text-caption text-muted-foreground"
-    >
-      <span className="text-mf-success" aria-hidden>
-        ●
-      </span>{' '}
-      saved
-    </span>
+    <Badge data-testid="editor-save-status" variant="secondary">
+      <span className={dirty ? 'size-1.5 rounded-full bg-warning' : 'size-1.5 rounded-full bg-success'} aria-hidden />
+      {dirty ? 'unsaved' : 'saved'}
+    </Badge>
   );
 }

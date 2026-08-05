@@ -118,7 +118,8 @@ modifier on them compounds toward invisible.
 ## Color — `mf-*` extensions (all mapped to utilities)
 
 - **Surfaces:** `mf-window` (app backdrop), `mf-glass` (translucent panel, pair with `backdrop-blur-[40px]`),
-  `mf-content2`, `mf-raised`, `mf-tab-bar`, `mf-tab-active`, `mf-chip`, `mf-selection`, `mf-scrim`
+  `mf-content2`, `mf-raised`, `mf-tab-active`, `mf-chip`, `mf-selection`, `mf-scrim`
+  (`mf-tab-bar` died with the workspace tab-body port — the viewer/editor bands are `bg-muted` now)
 - **Text:** `mf-text-3` (tertiary), `mf-text-4` (quaternary/disabled)
 - **Semantic:** `mf-warning` + `mf-warning-tint`, `mf-success` + `mf-success-tint`, `mf-destructive-tint`,
   `mf-border-hover`

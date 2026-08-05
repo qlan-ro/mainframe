@@ -22,8 +22,13 @@
  */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { ImageViewer } from '../ImageViewer';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 // Mock ZoomableImage so the Dialog/Radix deps don't need to be wired in tests.
 // Forward onLoad so the ImageViewer's handleLoad can fire from the <img>.
@@ -140,7 +145,7 @@ describe('ImageViewer', () => {
   it('zoom buttons are enabled after switching to 100% mode', () => {
     render(<ImageViewer src="data:image/png;base64,abc" path="/a/b/test.png" />);
     // Switch to actual/100% mode
-    fireEvent.click(screen.getByTestId('viewer-image-actual-toggle'));
+    fireEvent.mouseDown(screen.getByTestId('viewer-image-actual-toggle'));
     expect(screen.getByTestId('viewer-image-zoom-in')).not.toBeDisabled();
     expect(screen.getByTestId('viewer-image-zoom-out')).not.toBeDisabled();
   });

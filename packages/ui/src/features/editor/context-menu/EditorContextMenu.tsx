@@ -22,11 +22,12 @@ import { Copy, Quote, Code2, Search, MessageSquare } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+} from '@v2/components/ui/context-menu';
 import type { LspProviders, LspLocation } from '@/lib/lsp';
 import { buildReferenceForCm, writeToClipboard } from '@/lib/editor/copy-reference';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -203,56 +204,58 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
           <div className="contents">{children}</div>
         </ContextMenuTrigger>
 
-        <ContextMenuContent data-testid="editor-context-menu-content" className="w-[232px]">
-          {/* Copy */}
-          <ContextMenuItem data-testid="editor-context-menu-copy" onSelect={() => void handleCopy()}>
-            <Copy size={13} className="text-muted-foreground" />
-            Copy
-            <ContextMenuShortcut>⌘C</ContextMenuShortcut>
-          </ContextMenuItem>
+        <ContextMenuContent data-testid="editor-context-menu-content" className="w-58">
+          <ContextMenuGroup>
+            <ContextMenuItem data-testid="editor-context-menu-copy" onSelect={() => void handleCopy()}>
+              <Copy className="text-muted-foreground" />
+              Copy
+              <ContextMenuShortcut>⌘C</ContextMenuShortcut>
+            </ContextMenuItem>
 
-          {/* Copy Reference */}
-          <ContextMenuItem data-testid="editor-context-menu-copy-ref" onSelect={() => void handleCopyReference()}>
-            <Quote size={13} className="text-muted-foreground" />
-            Copy Reference
-            <ContextMenuShortcut>⌘⇧C</ContextMenuShortcut>
-          </ContextMenuItem>
-
-          <ContextMenuSeparator />
-
-          {/* Go to Definition */}
-          <ContextMenuItem
-            data-testid="editor-context-menu-go-to-def"
-            onSelect={() => void handleGoToDefinition()}
-            disabled={!lspAvailable}
-          >
-            <Code2 size={13} className="text-muted-foreground" />
-            Go to Definition
-            <ContextMenuShortcut>⌘Click</ContextMenuShortcut>
-          </ContextMenuItem>
-
-          {/* Find All References */}
-          <ContextMenuItem
-            data-testid="editor-context-menu-find-refs"
-            onSelect={() => void handleFindReferences()}
-            disabled={!lspAvailable}
-          >
-            <Search size={13} className="text-muted-foreground" />
-            Find All References
-            <ContextMenuShortcut>⇧F12</ContextMenuShortcut>
-          </ContextMenuItem>
+            <ContextMenuItem data-testid="editor-context-menu-copy-ref" onSelect={() => void handleCopyReference()}>
+              <Quote className="text-muted-foreground" />
+              Copy Reference
+              <ContextMenuShortcut>⌘⇧C</ContextMenuShortcut>
+            </ContextMenuItem>
+          </ContextMenuGroup>
 
           <ContextMenuSeparator />
 
-          {/* Add Agent Context */}
-          <ContextMenuItem
-            data-testid="editor-context-menu-add-context"
-            onSelect={handleAddAgentContext}
-            className="text-primary"
-          >
-            <MessageSquare size={13} className="text-primary" />
-            Add Agent Context
-          </ContextMenuItem>
+          <ContextMenuGroup>
+            <ContextMenuItem
+              data-testid="editor-context-menu-go-to-def"
+              onSelect={() => void handleGoToDefinition()}
+              disabled={!lspAvailable}
+            >
+              <Code2 className="text-muted-foreground" />
+              Go to Definition
+              <ContextMenuShortcut>⌘Click</ContextMenuShortcut>
+            </ContextMenuItem>
+
+            <ContextMenuItem
+              data-testid="editor-context-menu-find-refs"
+              onSelect={() => void handleFindReferences()}
+              disabled={!lspAvailable}
+            >
+              <Search className="text-muted-foreground" />
+              Find All References
+              <ContextMenuShortcut>⇧F12</ContextMenuShortcut>
+            </ContextMenuItem>
+          </ContextMenuGroup>
+
+          <ContextMenuSeparator />
+
+          <ContextMenuGroup>
+            {/* The one accent-ink item: it writes into the composer, not the editor. */}
+            <ContextMenuItem
+              data-testid="editor-context-menu-add-context"
+              onSelect={handleAddAgentContext}
+              className="text-primary"
+            >
+              <MessageSquare className="text-primary" />
+              Add Agent Context
+            </ContextMenuItem>
+          </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
 

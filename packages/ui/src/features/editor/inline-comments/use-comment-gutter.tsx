@@ -18,6 +18,7 @@ import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { MessageSquare } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 import { addCommentEffect, buildCommentGutter, commentField, type CommentBlockWidget } from './comment-gutter';
 import { useInlineComments } from './use-inline-comments';
 import { InlineCommentWidget } from './InlineCommentWidget';
@@ -36,22 +37,22 @@ function SubmitReviewBar({ count, filledCount, onSubmit }: SubmitReviewBarProps)
   return (
     <div
       data-testid="editor-submit-review"
-      className="flex h-[30px] shrink-0 items-center gap-2 bg-mf-content2 px-3 [border-bottom:0.5px_solid_var(--border)]"
+      className="flex h-7.5 shrink-0 items-center gap-2 border-b border-border bg-card px-3"
     >
-      <MessageSquare size={11} className="shrink-0 text-primary" aria-hidden />
-      <span className="text-caption text-muted-foreground">
+      <MessageSquare className="size-3 shrink-0 text-primary" aria-hidden />
+      <span className="text-xs text-muted-foreground">
         {count} agent {count === 1 ? 'note' : 'notes'}
       </span>
       <div className="flex-1" />
-      <button
+      <Button
         data-testid="editor-submit-review-btn"
-        type="button"
+        variant="secondary"
+        size="xs"
         onClick={onSubmit}
         disabled={filledCount === 0}
-        className="inline-flex h-[22px] items-center gap-1.5 rounded-[6px] border-none bg-primary/10 px-[9px] text-caption font-semibold text-primary disabled:cursor-default disabled:opacity-40 transition-opacity"
       >
         Submit review ({count})
-      </button>
+      </Button>
     </div>
   );
 }

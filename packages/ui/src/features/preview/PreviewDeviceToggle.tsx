@@ -1,33 +1,44 @@
 import { Frame, Smartphone } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 
 interface PreviewDeviceToggleProps {
   device: 'desktop' | 'mobile';
   onChange: (d: 'desktop' | 'mobile') => void;
 }
 
+/**
+ * Desktop ⇄ mobile viewport switch. One-of-N exclusive, so it is the v2 Tabs
+ * List+Trigger recipe (no TabsContent — the panel it switches is the webview,
+ * which the surface owns). `activationMode="manual"`: `onChange` writes, and
+ * automatic activation would fire again on focus.
+ */
 export function PreviewDeviceToggle({ device, onChange }: PreviewDeviceToggleProps) {
   return (
-    <div data-testid="preview-device-toggle" className="flex shrink-0 gap-px p-0.5 rounded-sm bg-mf-chip">
-      <button
-        data-testid="preview-device-desktop"
-        className={`w-[24px] h-[20px] rounded-xs flex items-center justify-center ${
-          device === 'desktop' ? 'bg-background shadow-[var(--mf-shadow-rail-active)]' : 'bg-transparent'
-        }`}
-        onClick={() => onChange('desktop')}
-        aria-label="Desktop view"
-      >
-        <Frame size={12} className={device === 'desktop' ? 'text-foreground' : 'text-muted-foreground'} />
-      </button>
-      <button
-        data-testid="preview-device-mobile"
-        className={`w-[24px] h-[20px] rounded-xs flex items-center justify-center ${
-          device === 'mobile' ? 'bg-background shadow-[var(--mf-shadow-rail-active)]' : 'bg-transparent'
-        }`}
-        onClick={() => onChange('mobile')}
-        aria-label="Mobile view"
-      >
-        <Smartphone size={12} className={device === 'mobile' ? 'text-foreground' : 'text-muted-foreground'} />
-      </button>
-    </div>
+    <Tabs
+      data-testid="preview-device-toggle"
+      value={device}
+      onValueChange={(v) => onChange(v as 'desktop' | 'mobile')}
+      activationMode="manual"
+      className="shrink-0"
+    >
+      <TabsList className="gap-px rounded-md p-0.5 group-data-horizontal/tabs:h-6">
+        <TabsTrigger
+          data-testid="preview-device-desktop"
+          value="desktop"
+          aria-label="Desktop view"
+          className="px-2 [&_svg:not([class*='size-'])]:size-3"
+        >
+          <Frame />
+        </TabsTrigger>
+        <TabsTrigger
+          data-testid="preview-device-mobile"
+          value="mobile"
+          aria-label="Mobile view"
+          className="px-2 [&_svg:not([class*='size-'])]:size-3"
+        >
+          <Smartphone />
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
   );
 }

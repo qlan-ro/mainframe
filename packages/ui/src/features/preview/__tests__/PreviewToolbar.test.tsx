@@ -13,8 +13,13 @@
  * that PreviewToolbar wires it correctly.)
  */
 import { it, expect, vi, describe, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { LaunchProcessStatus, PreviewHandle } from '@qlan-ro/mainframe-types';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const onRun = vi.fn();
 const onStop = vi.fn();
@@ -67,9 +72,10 @@ describe('PreviewToolbar', () => {
     onCaptureClick.mockReset();
   });
 
-  it('clicking the mobile device-toggle button calls onDeviceChange("mobile")', async () => {
+  it('selecting the mobile device segment calls onDeviceChange("mobile")', async () => {
     await renderToolbar('running');
-    fireEvent.click(screen.getByTestId('preview-device-mobile'));
+    // The device toggle is the v2 Tabs recipe — triggers activate on mouse-down.
+    fireEvent.mouseDown(screen.getByTestId('preview-device-mobile'));
     expect(onDeviceChange).toHaveBeenCalledWith('mobile');
   });
 

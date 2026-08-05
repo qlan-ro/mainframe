@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, act } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { PreviewUrlBar } from '../PreviewUrlBar';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 function makeHandle(over: Partial<PreviewHandle> = {}): PreviewHandle {
   return {
@@ -57,12 +62,12 @@ describe('PreviewUrlBar', () => {
     expect(handle.navigate).not.toHaveBeenCalled();
   });
 
-  it('applies the invalid (ring-destructive) state on invalid Enter', () => {
+  it('marks the input aria-invalid on invalid Enter', () => {
     render(<PreviewUrlBar handle={handle} seedUrl="http://localhost:3000" enabled />);
     const input = screen.getByTestId('preview-url-input');
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(input).toHaveClass('ring-destructive');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('disables the input when not enabled', () => {
@@ -126,6 +131,6 @@ describe('PreviewUrlBar', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onCommitUrl).not.toHaveBeenCalled();
     expect(handle.navigate).not.toHaveBeenCalled();
-    expect(input).toHaveClass('ring-destructive');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
   });
 });

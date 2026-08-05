@@ -15,7 +15,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { useSandboxStore, type LogEntry } from '@/store/sandbox';
 import { selectLogs } from './select-logs';
-import { Button } from '@/components/ui/button';
+import { Button } from '@v2/components/ui/button';
+import { Badge } from '@v2/components/ui/badge';
 
 const DRAWER_DEFAULT_H = 150;
 const DRAWER_MIN_H = 60;
@@ -72,12 +73,12 @@ function DrawerResizeHandle(props: {
       data-testid="run-console-resize"
       role="separator"
       aria-orientation="horizontal"
-      className="group flex h-[6px] flex-shrink-0 cursor-row-resize touch-none items-center"
+      className="group flex h-1.5 shrink-0 cursor-row-resize touch-none items-center"
       onPointerDown={props.onPointerDown}
       onPointerMove={props.onPointerMove}
       onPointerUp={props.onPointerUp}
     >
-      <div className="h-px w-full bg-border transition-colors group-hover:bg-mf-text-3 group-active:bg-primary" />
+      <div className="h-px w-full bg-border transition-colors group-hover:bg-muted-foreground group-active:bg-primary" />
     </div>
   );
 }
@@ -96,7 +97,7 @@ function LogLines({ entries, scrollRef }: { entries: LogEntry[]; scrollRef: Reac
     <div
       ref={scrollRef}
       data-testid="run-console-log-lines"
-      className="mf-editor-selectable min-h-0 flex-1 overflow-y-auto pl-[12px] pr-[12px] pt-0 pb-[10px] font-mono text-body leading-relaxed"
+      className="mf-editor-selectable min-h-0 flex-1 overflow-y-auto px-3 pt-0 pb-2.5 font-mono text-sm leading-relaxed"
     >
       {entries.length === 0 ? (
         <span className="text-muted-foreground">No output yet.</span>
@@ -118,23 +119,16 @@ function LogLines({ entries, scrollRef }: { entries: LogEntry[]; scrollRef: Reac
 function LogCountChip({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex-shrink-0 rounded-md bg-mf-chip px-[6px] py-[1px] font-mono text-caption text-muted-foreground">
+    <Badge variant="secondary" className="shrink-0 font-mono">
       {count} logs
-    </span>
+    </Badge>
   );
 }
 
 function ClearButton({ onClear }: { onClear: () => void }) {
   return (
-    <Button
-      data-testid="run-console-clear"
-      variant="ghost"
-      size="icon"
-      className="h-5 w-5"
-      aria-label="Clear console"
-      onClick={onClear}
-    >
-      <Trash2 size={12} />
+    <Button data-testid="run-console-clear" variant="ghost" size="icon-xs" aria-label="Clear console" onClick={onClear}>
+      <Trash2 />
     </Button>
   );
 }
@@ -161,39 +155,32 @@ export function ConsolePane({ scopeKey, processName, variant = 'full' }: Console
   if (variant === 'drawer') {
     const tail = entries.length > 0 ? entries[entries.length - 1]!.data : 'No output yet.';
     return (
-      <div data-testid="run-console-drawer" className="flex flex-shrink-0 flex-col bg-card">
+      <div data-testid="run-console-drawer" className="flex shrink-0 flex-col bg-card">
         {expanded && (
           <DrawerResizeHandle onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} />
         )}
-        <div
-          className={`flex h-[28px] flex-shrink-0 items-center gap-[8px] pl-[12px] pr-[8px] ${expanded ? '' : '[border-top:0.5px_solid_var(--border)]'}`}
-        >
+        <div className={`flex h-7 shrink-0 items-center gap-2 pr-2 pl-3 ${expanded ? '' : 'border-t border-border'}`}>
           <button
             data-testid="run-console-drawer-toggle"
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="flex min-w-0 flex-1 items-center gap-[8px] text-left"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <ChevronDown
-              size={11}
-              className={`flex-shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`}
+              className={`size-3 shrink-0 text-muted-foreground transition-transform ${expanded ? '' : '-rotate-90'}`}
             />
-            <span className="flex-shrink-0 text-label font-semibold text-muted-foreground">Console</span>
+            <span className="shrink-0 text-xs font-semibold text-muted-foreground">Console</span>
             <LogCountChip count={entries.length} />
             {!expanded && (
-              <span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground">{tail}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{tail}</span>
             )}
           </button>
-          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
             <ClearButton onClear={onClear} />
           </span>
         </div>
         {expanded && (
-          <div
-            data-testid="run-console-log-area"
-            style={{ height }}
-            className="flex flex-col [border-top:0.5px_solid_var(--border)]"
-          >
+          <div data-testid="run-console-log-area" style={{ height }} className="flex flex-col border-t border-border">
             <LogLines entries={entries} scrollRef={scrollRef} />
           </div>
         )}
@@ -203,9 +190,9 @@ export function ConsolePane({ scopeKey, processName, variant = 'full' }: Console
 
   return (
     <div data-testid="run-console-pane" className="flex h-full min-h-0 flex-col bg-card">
-      <div className="flex h-[28px] flex-shrink-0 items-center justify-between [border-bottom:0.5px_solid_var(--border)] pl-[12px] pr-[6px]">
-        <div className="flex min-w-0 items-center gap-[8px]">
-          <span className="flex-shrink-0 text-label font-semibold text-muted-foreground">Console</span>
+      <div className="flex h-7 shrink-0 items-center justify-between border-b border-border pr-1.5 pl-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xs font-semibold text-muted-foreground">Console</span>
           <LogCountChip count={entries.length} />
         </div>
         <ClearButton onClear={onClear} />

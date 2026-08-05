@@ -14,7 +14,8 @@
  *   - resolveCommentRange / comment-gutter effects: lightweight stubs.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, act } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -102,6 +103,10 @@ vi.mock('../use-inline-comments', () => ({
 // ── Import component under test (after mocks are in place) ───────────────────
 
 import { CmEditorWithComments } from '../CmEditorWithComments';
+
+/** The preview/editor surfaces here render v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

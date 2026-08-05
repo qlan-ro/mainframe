@@ -37,7 +37,7 @@ export function UrlTabToolbar({
   return (
     <div
       data-testid="url-tab-toolbar"
-      className="flex h-[38px] flex-shrink-0 items-center gap-[8px] [border-bottom:0.5px_solid_var(--border)] bg-background px-[8px]"
+      className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-background px-2"
     >
       {/* Always enabled: typing a new address is the only way out of the failed,
           stopped and invalid states, and none of them has a webview mounted. */}

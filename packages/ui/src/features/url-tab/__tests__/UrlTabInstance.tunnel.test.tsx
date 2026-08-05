@@ -9,6 +9,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import type { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { HostProvider, resetHostForTesting } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { usePortTunnelsStore } from '@/store/port-tunnels';
@@ -72,7 +73,12 @@ afterEach(() => {
 describe('UrlTabInstance — rehydrated tabs stay unmounted until first activation', () => {
   it('requests no tunnel and mounts no webview while never visible, then does both on first activation', async () => {
     const { rerender } = render(<UrlTabInstance tabId="t1" url={URL} visible={false} />, {
-      wrapper: ({ children }) => <HostProvider host={fakeHost}>{children}</HostProvider>,
+      // The url-tab toolbar is full of v2 `Hint`s — the v2 TooltipProvider is part of the stack.
+      wrapper: ({ children }) => (
+        <HostProvider host={fakeHost}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </HostProvider>
+      ),
     });
 
     expect(fakeHost.preview.mount).not.toHaveBeenCalled();

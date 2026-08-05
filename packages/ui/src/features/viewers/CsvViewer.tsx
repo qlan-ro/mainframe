@@ -6,7 +6,7 @@
  * Renders a CSV file as a sortable, filterable table.
  * Features (per artboard spec):
  *   - Filter chip in the ViewerShell actions (header) slot.
- *   - Sticky header row (bg-mf-content2) with sort (asc → desc → off) per column.
+ *   - Sticky header row (bg-card) with sort (asc → desc → off) per column.
  *   - Accent-colored ▲/▼ sort arrows (text-primary span).
  *   - Row-number gutter column.
  *   - Right-aligned numeric columns (auto-detected).
@@ -95,16 +95,18 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
   });
 
   // Filter chip — lives in the ViewerShell header actions slot.
+  // A v2 InputGroup is the primitive for this, but its 36px frame does not fit
+  // the 28px viewer header — the compact chip stays, on v2 tokens.
   const filterChip = (
-    <div className="inline-flex h-[20px] items-center gap-1 rounded-sm bg-mf-chip px-[8px]">
-      <Search size={10} className="shrink-0 text-mf-text-3" aria-hidden />
+    <div className="inline-flex h-5 items-center gap-1 rounded-sm bg-muted px-2">
+      <Search className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />
       <input
         type="text"
         data-testid="viewer-csv-filter"
         placeholder="Filter rows"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        className="w-24 bg-transparent text-caption text-foreground placeholder:text-mf-text-3 focus:outline-none"
+        className="w-24 bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
       />
     </div>
   );
@@ -114,16 +116,16 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
       <div data-testid="viewer-csv" className="flex h-full flex-col">
         {/* Table */}
         {content === null ? (
-          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : !parsed || parsed.headers.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">No data</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
         ) : (
           <div className="flex-1 overflow-auto">
-            <table className="w-full border-collapse text-label">
-              <thead className="sticky top-0 bg-mf-content2">
+            <table className="w-full border-collapse text-xs">
+              <thead className="sticky top-0 bg-card">
                 <tr>
                   {/* Row-number gutter */}
-                  <th className="w-10 [border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right font-mono text-micro text-mf-text-4 select-none">
+                  <th className="w-10 border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 select-none">
                     #
                   </th>
                   {parsed.headers.map((header, i) => {
@@ -135,17 +137,19 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                         data-testid={`viewer-csv-header-${header}`}
                         onClick={() => handleHeaderClick(i)}
                         className={[
-                          'cursor-pointer [border-bottom:0.5px_solid_var(--border)] px-3.5 py-1.5 font-semibold select-none',
-                          'hover:bg-accent',
+                          'cursor-pointer border-b border-border px-3.5 py-1.5 font-semibold select-none',
+                          'hover:bg-muted',
                           isNum ? 'text-right' : 'text-left',
                           isActive ? 'text-foreground' : 'text-muted-foreground',
                         ].join(' ')}
                       >
                         <span className={['inline-flex items-center gap-1', isNum ? 'flex-row-reverse' : ''].join(' ')}>
                           {header}
-                          {isActive && sort.dir === 'asc' && <span className="text-primary text-micro">▲</span>}
-                          {isActive && sort.dir === 'desc' && <span className="text-primary text-micro">▼</span>}
-                          {isActive && <ChevronsUpDown size={9} className="shrink-0 text-mf-text-3" aria-hidden />}
+                          {isActive && sort.dir === 'asc' && <span className="text-xs text-primary">▲</span>}
+                          {isActive && sort.dir === 'desc' && <span className="text-xs text-primary">▼</span>}
+                          {isActive && (
+                            <ChevronsUpDown className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />
+                          )}
                         </span>
                       </th>
                     );
@@ -154,16 +158,16 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               </thead>
               <tbody>
                 {displayRows.map((row, rowIdx) => (
-                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-mf-code-bg'}>
-                    <td className="[border-bottom:0.5px_solid_var(--border)] [border-right:0.5px_solid_var(--border)] px-3.5 py-1.5 text-right font-mono text-micro text-mf-text-4 tabular-nums">
+                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-muted/40'}>
+                    <td className="border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 tabular-nums">
                       {rowIdx + 1}
                     </td>
                     {parsed.headers.map((_header, colIdx) => (
                       <td
                         key={colIdx}
                         className={[
-                          'px-3.5 py-1.5 [border-bottom:0.5px_solid_var(--border)]',
-                          numericCols.has(colIdx) ? 'text-right tabular-nums font-mono text-caption' : 'text-left',
+                          'border-b border-border px-3.5 py-1.5',
+                          numericCols.has(colIdx) ? 'text-right font-mono text-xs tabular-nums' : 'text-left',
                           'text-foreground',
                         ].join(' ')}
                       >
@@ -176,7 +180,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                   <tr data-testid="viewer-csv-empty">
                     <td
                       colSpan={parsed.headers.length + 1}
-                      className="px-3 py-10 text-center text-label text-mf-text-3"
+                      className="px-3 py-10 text-center text-xs text-muted-foreground"
                     >
                       {`No rows match "${filter}".`}
                     </td>

@@ -267,6 +267,56 @@ Conventions from the pass:
 three-slot algebra (top row of 1–2 + a bottom strip + flex) it had for three surfaces. Multi-session
 side-by-side chat is a future decision; leave the shape alone until it is taken.
 
+### Tab-body chrome (2026-08-05, second pass)
+
+The strip was v2; the tab BODIES were still v1. Converted: `features/editor` (EditorTab/DiffTab
+states, DiffHeader, SaveStatusChip, editor-banners, EditorContextMenu, references-panel,
+InlineCommentWidget, the submit-review bar), `features/viewers` (ViewerShell, Segmented, Image/Svg/
+Pdf/Csv/Unsupported, viewer-router), `features/preview` + `features/url-tab` (toolbars, url bar,
+device toggle, run control, capture cluster, body states, CaptureAnnotationPopover), and
+`features/run/ConsolePane`. Conventions from the pass:
+
+- **`Segmented` is the Tabs recipe now**, so all three viewer toggles (Preview/Source, Fit/100%,
+  Preview/Code) and `PreviewDeviceToggle` share it. It compacts the 36px `TabsList` to 24px by
+  re-declaring **the primitive's own group modifier** — `group-data-horizontal/tabs:h-6`, not a bare
+  `h-6`, which would stack instead of replace. tailwind-merge only dedupes classes whose modifier
+  sets match; verified against `twMerge` directly rather than by eye. Same trick sizes `InputGroup`
+  (`h-7`) and `Toggle` (`size-6 min-w-6 p-0`).
+- **No `Hint` on a labelled segment.** `Segmented` lost its per-option tooltip: every call site had
+  a visible label, so the tooltip only repeated it — and `TooltipTrigger asChild` would have
+  clobbered `TabsTrigger`'s `data-state`, silently killing the active-segment fill. The unused
+  `title` prop went with it. The same rule drove the capture cluster's Inspect/Region `Toggle`s to
+  carry `pressed && …` chrome instead of `data-[state=on]:*`.
+- **`PreviewIconButton` is deleted.** Its 7 call sites are `Hint` + `Button variant="ghost"
+  size="icon-xs"`, except the two that toggle, which are `Toggle`s. The reason it existed —
+  "`Button` hard-codes `[&_svg]:size-4`" — stopped being true when `icon-xs` gained its own
+  `size-3`.
+- **The preview address bar is `InputGroup` + `InputGroupAddon` + `InputGroupButton`**, per the
+  shadcn rule that buttons inside an input are never absolutely positioned. Its invalid state is
+  `aria-invalid` on the control (the group styles itself off it) — the old `ring-destructive` class
+  assertion became `toHaveAttribute('aria-invalid', 'true')`.
+- Bands are `bg-muted` (ViewerShell header/footer, ReadOnlyBanner) or `bg-card` (DiffHeader,
+  submit-review, ConsolePane); chips are `Badge variant="secondary"` (SaveStatusChip, the console's
+  log count) with the semantic hue on a dot, never on the label.
+- ViewerShell's header went 24px → **`h-7`**: an `icon-xs` Button and a 24px segmented control both
+  sit in it, and 24px left them flush to the band. Footer stays `h-5`. The preview/url-tab toolbars
+  went 38px → **`h-9`**, matching the strip above them.
+- **`viewer-checker.ts` was dead** while ImageViewer inlined a copy of it and SvgViewer used a
+  *conic* gradient the helper's own docstring forbids ("both viewers must read identically"). Both
+  route through `checkerStyle` now.
+- Left v1 **by design**: `MarkdownPreview` (prose + `mf-code-*`/`mf-content2`/`mf-raised` content
+  palette), `cm-setup.ts` (`mf-cm-*`/`mf-code-*` CodeMirror theme), `CmDiffEditor` + DiffHeader's
+  ±N counts (`mf-diff-*`), `terminal-cache.ts` (`mf-term-*`), `mf-viewer-check-a/b` +
+  `mf-viewer-matte`, and `ToolbarLaunchControls`' `mf-surface-run`.
+- **Bridge shrank by two tokens:** `--mf-shadow-segment` (last consumer was `Segmented`) and
+  `--mf-tab-bar` + its `@theme` mapping (last consumers were ViewerShell and ReadOnlyBanner).
+  `--mf-auto-kind-parallel` is *also* consumerless but predates this pass and belongs to the
+  deliberately bridge-owned automations step-kind palette — left alone.
+- Tests: every suite rendering a viewer, the preview toolbar, or the url-tab needs the **v2**
+  `TooltipProvider`; where a suite already passes its own `wrapper`, compose the provider INTO that
+  wrapper — a `render` shim's default `wrapper` is overwritten by an explicit one, not merged.
+  `TabsTrigger` interactions are `fireEvent.mouseDown`, not `click`.
+
 ## Toasts (2026-08-05 port)
 
 Native sonner via the v2 `Toaster` (mounted once in App). **`mfToast` from `@/lib/toast` remains
