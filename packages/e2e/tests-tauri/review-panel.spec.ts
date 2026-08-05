@@ -354,7 +354,12 @@ test.describe('§review-panel — close controls', () => {
   test('Escape closes the panel', async () => {
     const { page } = app;
     await openReview(page);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('review-modal')).toHaveCount(0);
+    // Escape can land before Radix has attached the dialog's own keydown listener —
+    // the panel is still animating in — and a swallowed press leaves it up. Retry the
+    // press until the panel is actually gone rather than pressing once and hoping.
+    await expect(async () => {
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 2_000 });
+    }).toPass({ timeout: 10_000, intervals: [300, 700, 1_500] });
   });
 });

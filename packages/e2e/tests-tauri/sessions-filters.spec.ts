@@ -94,14 +94,15 @@ function projectRow(page: Page, projectId: string): Locator {
 async function selectRow(page: Page, row: Locator): Promise<void> {
   // Retried as a whole: the card has a 500ms openDelay, so it can appear BETWEEN the
   // dismissal and the click and eat it — leaving the click "successful" (Playwright's
-  // hit test saw the row) with the row never activating. Bounded, and every wait
-  // inside is on state.
+  // hit test saw the row) with the row never activating. The budget is generous
+  // because the list is recency-sorted, so a row can also be MOVING while the other
+  // chat streams. Bounded, and every wait inside is on state.
   await expect(async () => {
     await page.mouse.move(0, 0);
     await expect(page.locator('[data-slot="hover-card-content"]')).toHaveCount(0, { timeout: 2_000 });
     await row.click({ timeout: 5_000 });
     await expect(row).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
-  }).toPass({ timeout: 25_000, intervals: [500, 1_000, 2_000] });
+  }).toPass({ timeout: 45_000, intervals: [500, 1_000, 2_000] });
 }
 
 /** The parked header of the first session group — it carries the active grouping's label. */
