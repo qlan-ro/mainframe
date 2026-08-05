@@ -166,12 +166,19 @@ popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (Surfac
 slices remain). Conventions from the pass:
 
 - **`@v2/components/ui/menu-row`** — the dropdown-item recipe as a plain button (`MenuRow` +
-  `menuRowClass()`), for menu-shaped panels that are NOT Radix menus (inline side-by-side cards in
-  the branch popover, the launch picker with nested per-row buttons). Radix DropdownMenu can't
-  render inline panels; don't rebuild rows ad hoc.
-- Branch popover cards = the v2 menu surface (`rounded-md bg-popover shadow-md ring-1
-  ring-foreground/10 p-1`); the PopoverContent shell stays transparent so list + submenu read as
-  two cards. Search = `InputGroup` + `InputGroupInput` (h-8) with an outline `icon-sm` Fetch beside.
+  `menuRowClass()`), for menu-shaped panels that are NOT Radix menus (the launch picker with
+  nested per-row buttons). Don't rebuild rows ad hoc.
+- **The branch popover is a native `DropdownMenu`** (user decision 2026-08-05, replacing the v1
+  artboard's side-by-side cards): quick actions are items, sections are Groups whose headers are
+  `Collapsible` triggers (non-items — toggling never closes the menu; Remote starts collapsed; an
+  active search forces sections open), each branch is a `DropdownMenuSub` whose SubTrigger is the
+  row and whose SubContent is the action flyout (destructive variant for deletes). The search
+  field lives in the content with `onKeyDown` stopPropagation (except Escape) so typeahead can't
+  eat keystrokes. Forms NEVER live inside Radix menus: New Branch / Rename are v2 Dialogs the menu
+  hands off to, and an active merge/rebase swaps the menu for the conflict Dialog.
+- Menu-item tests: Radix items are divs — assert `aria-disabled`, not `toBeDisabled()`; a bare
+  SubContent harness needs `userEvent.setup({ pointerEventsCheck: 0 })` (modal menus set body
+  pointer-events:none); SubTriggers open on plain click in jsdom.
 - `BranchSelect` is a real v2 `Select` now (same `testId`/`-list`/`-option-*` contract; jsdom tests
   drive it click-trigger → click-option, unchanged).
 - **Branch/worktree names are UI sans, never mono** (user decision 2026-08-05, GitHub model):

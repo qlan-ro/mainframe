@@ -3,8 +3,7 @@
  *
  * Behaviors covered:
  *  1.  Renders data-testid="git-new-branch-start" select seeded with local branches.
- *  2.  Back button (git-new-branch-back) fires onBack.
- *  3.  Cancel button (git-new-branch-cancel) fires onBack.
+ *  2.  Cancel button (git-new-branch-cancel) fires onOpenChange(false).
  *  4.  Create button is disabled when name is empty.
  *  5.  Submitting an empty name shows "Branch name is required" error.
  *  6.  Submitting an invalid name (starts with '-') shows "Invalid branch name" error.
@@ -26,10 +25,11 @@ import { NewBranchDialog, type NewBranchDialogProps } from '../NewBranchDialog';
 
 function makeProps(overrides: Partial<NewBranchDialogProps> = {}): NewBranchDialogProps {
   return {
+    open: true,
+    onOpenChange: vi.fn(),
     localBranches: ['main', 'develop'],
     remoteBranches: [],
     currentBranch: 'main',
-    onBack: vi.fn(),
     onCreate: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -54,28 +54,15 @@ describe('NewBranchDialog — start-point select', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Back button fires onBack
-// ---------------------------------------------------------------------------
-
-describe('NewBranchDialog — Back button', () => {
-  it('fires onBack when git-new-branch-back is clicked', async () => {
-    const props = makeProps();
-    render(<NewBranchDialog {...props} />);
-    await userEvent.click(screen.getByTestId('git-new-branch-back'));
-    expect(props.onBack).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Cancel button fires onBack
+// 4. Cancel button closes the dialog
 // ---------------------------------------------------------------------------
 
 describe('NewBranchDialog — Cancel button', () => {
-  it('fires onBack when git-new-branch-cancel is clicked', async () => {
+  it('fires onOpenChange(false) when git-new-branch-cancel is clicked', async () => {
     const props = makeProps();
     render(<NewBranchDialog {...props} />);
     await userEvent.click(screen.getByTestId('git-new-branch-cancel'));
-    expect(props.onBack).toHaveBeenCalledTimes(1);
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
   });
 });
 

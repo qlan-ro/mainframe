@@ -1,10 +1,19 @@
 /**
- * NewBranchDialog — name input + start-point select for creating a new branch.
- * BRANCH_NAME_RE ported verbatim from desktop NewBranchDialog.
+ * NewBranchDialog — name input + start-point select for creating a new branch,
+ * as a v2 Dialog (opened from the branch menu's "New branch…" item — forms
+ * don't live inside Radix menus). BRANCH_NAME_RE ported verbatim from desktop.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@v2/components/ui/dialog';
 import { Input } from '@v2/components/ui/input';
 import { Label } from '@v2/components/ui/label';
 import {
@@ -20,11 +29,12 @@ import {
 export const BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
 
 export interface NewBranchDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   localBranches: string[];
   remoteBranches: string[];
   currentBranch: string;
   startFrom?: string;
-  onBack: () => void;
   onCreate: (name: string, startPoint: string) => Promise<void>;
 }
 
@@ -36,11 +46,12 @@ function validate(name: string, localBranches: string[]): string | null {
 }
 
 export function NewBranchDialog({
+  open,
+  onOpenChange,
   localBranches,
   remoteBranches,
   currentBranch,
   startFrom,
-  onBack,
   onCreate,
 }: NewBranchDialogProps) {
   const [name, setName] = useState('');
@@ -49,9 +60,18 @@ export function NewBranchDialog({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Fresh form every open — the dialog stays mounted across uses.
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!open) return;
+    setName('');
+    setStartPoint(startFrom ?? currentBranch);
+    setCreating(false);
+    setError(null);
+  }, [open, startFrom, currentBranch]);
+
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -71,87 +91,76 @@ export function NewBranchDialog({
   }
 
   return (
-    <div data-testid="git-new-branch-dialog" className="min-w-[280px]">
-      <div className="-mx-1 flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
-        <Button
-          data-testid="git-new-branch-back"
-          variant="ghost"
-          size="icon-xs"
-          onClick={onBack}
-          className="size-5 text-muted-foreground"
-        >
-          <ArrowLeft className="size-3.5" />
-        </Button>
-        <span className="text-sm font-medium text-foreground">New Branch</span>
-      </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="git-new-branch-dialog" className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>New Branch</DialogTitle>
+          <DialogDescription className="sr-only">Create a new branch from an existing start point.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="git-new-branch-name">Branch name</Label>
+            <Input
+              id="git-new-branch-name"
+              data-testid="git-new-branch-name"
+              ref={inputRef}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError(null);
+              }}
+              placeholder="feature/my-branch"
+              disabled={creating}
+              aria-invalid={error ? true : undefined}
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-2 pt-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="git-new-branch-name" className="text-xs text-muted-foreground">
-            Branch name
-          </Label>
-          <Input
-            id="git-new-branch-name"
-            data-testid="git-new-branch-name"
-            ref={inputRef}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setError(null);
-            }}
-            placeholder="feature/my-branch"
-            disabled={creating}
-            aria-invalid={error ? true : undefined}
-            className="h-8 text-sm"
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Start from</Label>
-          <Select value={startPoint} onValueChange={setStartPoint} disabled={creating}>
-            <SelectTrigger data-testid="git-new-branch-start" size="sm" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectGroup>
-                <SelectLabel>Local</SelectLabel>
-                {localBranches.map((b) => (
-                  <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`}>
-                    {b}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-              {remoteBranches.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <Label>Start from</Label>
+            <Select value={startPoint} onValueChange={setStartPoint} disabled={creating}>
+              <SelectTrigger data-testid="git-new-branch-start" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
                 <SelectGroup>
-                  <SelectLabel>Remote</SelectLabel>
-                  {remoteBranches.map((b) => (
+                  <SelectLabel>Local</SelectLabel>
+                  {localBranches.map((b) => (
                     <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`}>
                       {b}
                     </SelectItem>
                   ))}
                 </SelectGroup>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+                {remoteBranches.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Remote</SelectLabel>
+                    {remoteBranches.map((b) => (
+                      <SelectItem key={b} value={b} data-testid={`git-new-branch-start-option-${b}`}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button
-            data-testid="git-new-branch-cancel"
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onBack}
-            disabled={creating}
-          >
-            Cancel
-          </Button>
-          <Button data-testid="git-new-branch-create" type="submit" size="sm" disabled={creating || !name.trim()}>
-            {creating ? <Loader2 className="size-3 animate-spin" /> : 'Create'}
-          </Button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button
+              data-testid="git-new-branch-cancel"
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button data-testid="git-new-branch-create" type="submit" disabled={creating || !name.trim()}>
+              {creating ? <Loader2 className="size-3 animate-spin" /> : 'Create'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

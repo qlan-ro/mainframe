@@ -1,122 +1,78 @@
 /**
- * BranchGroupSection — a labeled group (Local / Remote) of BranchRows.
- * Handles sub-groups (prefix/ sections) and ungrouped branches.
+ * BranchGroupSection — a labeled, collapsible group (Local / Remote) of
+ * BranchRows inside the branch menu. The header is a Collapsible trigger (a
+ * non-item, so toggling never closes the menu); an active search forces the
+ * section open so a filter can't hide its matches. Prefix groups (feature/,
+ * fix/ …) render as nested labels with indented rows.
  */
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { DropdownMenuGroup, DropdownMenuLabel } from '@v2/components/ui/dropdown-menu';
 import { BranchRow } from './BranchRow';
+import type { BranchRowActions } from './BranchSubmenu';
 import { groupBranches } from './branch-grouping';
 
 export interface BranchGroupSectionProps {
   title: string;
   branches: BranchInfo[];
   currentBranch: string;
-  selectedBranch?: string;
   isRemote?: boolean;
-  onSelect: (branch: BranchInfo) => void;
-}
-
-function PrefixGroup({
-  prefix,
-  branches,
-  currentBranch,
-  selectedBranch,
-  onSelect,
-}: {
-  prefix: string;
-  branches: BranchInfo[];
-  currentBranch: string;
-  selectedBranch?: string;
-  onSelect: (branch: BranchInfo) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  return (
-    <div>
-      <button
-        data-testid={`git-branch-group-toggle-${prefix}`}
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-1 px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        <span>{prefix}</span>
-      </button>
-      {expanded &&
-        branches.map((b) => (
-          <div key={b.name} className="pl-3">
-            <BranchRow
-              branch={b}
-              isCurrent={b.name === currentBranch}
-              selected={b.name === selectedBranch}
-              grouped
-              onSelect={onSelect}
-            />
-          </div>
-        ))}
-    </div>
-  );
+  /** Initial expansion; Remote starts collapsed. */
+  defaultOpen?: boolean;
+  /** True while a search filter is active — the section must show its matches. */
+  forceOpen?: boolean;
+  actions: BranchRowActions;
 }
 
 export function BranchGroupSection({
   title,
   branches,
   currentBranch,
-  selectedBranch,
   isRemote = false,
-  onSelect,
+  defaultOpen = true,
+  forceOpen = false,
+  actions,
 }: BranchGroupSectionProps) {
-  const [expanded, setExpanded] = useState(title !== 'Remote');
+  const [expanded, setExpanded] = useState(defaultOpen);
+  if (branches.length === 0) return null;
   const { groups, ungrouped } = groupBranches(branches);
+  const open = forceOpen || expanded;
+  const slug = title.toLowerCase().replace(/\s+/g, '-');
 
   return (
-    <div>
-      <button
-        data-testid={`git-branch-section-toggle-${title.toLowerCase().replace(/\s+/g, '-')}`}
-        onClick={() => setExpanded((v) => !v)}
-        className="flex h-6.5 w-full items-center gap-1 px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {title}
-      </button>
-
-      {expanded && (
-        <>
+    <DropdownMenuGroup>
+      <Collapsible open={open} onOpenChange={setExpanded}>
+        <CollapsibleTrigger
+          data-testid={`git-branch-section-toggle-${slug}`}
+          className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground"
+        >
+          {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {title}
+        </CollapsibleTrigger>
+        <CollapsibleContent>
           {isRemote ? (
-            branches.map((b) => (
-              <BranchRow
-                key={b.name}
-                branch={b}
-                isCurrent={false}
-                selected={b.name === selectedBranch}
-                isRemote
-                onSelect={onSelect}
-              />
-            ))
+            branches.map((b) => <BranchRow key={b.name} branch={b} isCurrent={false} isRemote actions={actions} />)
           ) : (
             <>
               {ungrouped.map((b) => (
-                <BranchRow
-                  key={b.name}
-                  branch={b}
-                  isCurrent={b.name === currentBranch}
-                  selected={b.name === selectedBranch}
-                  onSelect={onSelect}
-                />
+                <BranchRow key={b.name} branch={b} isCurrent={b.name === currentBranch} actions={actions} />
               ))}
               {groups.map((g) => (
-                <PrefixGroup
-                  key={g.prefix}
-                  prefix={g.prefix}
-                  branches={g.branches}
-                  currentBranch={currentBranch}
-                  selectedBranch={selectedBranch}
-                  onSelect={onSelect}
-                />
+                <DropdownMenuGroup key={g.prefix}>
+                  <DropdownMenuLabel data-testid={`git-branch-group-${g.prefix}`} className="py-1 pl-4">
+                    {g.prefix}
+                  </DropdownMenuLabel>
+                  {g.branches.map((b) => (
+                    <BranchRow key={b.name} branch={b} isCurrent={b.name === currentBranch} grouped actions={actions} />
+                  ))}
+                </DropdownMenuGroup>
               ))}
             </>
           )}
-        </>
-      )}
-    </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </DropdownMenuGroup>
   );
 }

@@ -1,22 +1,21 @@
 /**
- * BranchListView — the main list view of the branch popover:
- * search field + Fetch + global quick actions (New branch, Update all, Push) + BranchList.
+ * BranchListView — the branch menu's body: search field + Fetch, global quick
+ * actions (New branch, Update all, Push), and the grouped BranchList. Renders
+ * inside BranchPopover's DropdownMenuContent.
  */
 import { ArrowUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
+import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut } from '@v2/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@v2/components/ui/input-group';
-import { MenuRow } from '@v2/components/ui/menu-row';
-import { Separator } from '@v2/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
+import type { BranchRowActions } from './BranchSubmenu';
 import { BranchList } from './BranchList';
 
 export interface BranchListViewActions {
   handleFetch: () => Promise<boolean>;
   handleUpdateAll: () => Promise<boolean>;
   handlePush: (branch: string) => Promise<boolean>;
-  handleDeleteWorktree: (name: string, branchName: string | undefined) => Promise<boolean>;
-  handleNewSession?: (name: string, branchName: string | undefined) => void;
 }
 
 export interface BranchListViewProps {
@@ -24,12 +23,11 @@ export interface BranchListViewProps {
   remote: string[];
   worktrees: string[];
   currentBranch: string;
-  selectedBranch?: string;
   search: string;
   onSearch: (v: string) => void;
-  onSelectBranch: (branch: BranchInfo) => void;
   onNewBranch: () => void;
   actions: BranchListViewActions;
+  rowActions: BranchRowActions;
   busy: boolean;
   busyAction: string | null;
   searchRef?: React.RefObject<HTMLInputElement | null>;
@@ -40,20 +38,26 @@ export function BranchListView({
   remote,
   worktrees,
   currentBranch,
-  selectedBranch,
   search,
   onSearch,
-  onSelectBranch,
   onNewBranch,
   actions,
+  rowActions,
   busy,
   busyAction,
   searchRef,
 }: BranchListViewProps) {
   return (
     <>
-      {/* Search + Fetch */}
-      <div className="flex items-center gap-1.5 p-1 pb-1.5">
+      {/* Search + Fetch. Keystrokes stay in the input — without stopPropagation
+          the menu's typeahead would eat them as item navigation. Escape passes
+          through so the menu still closes. */}
+      <div
+        className="flex items-center gap-1.5 p-1 pb-1.5"
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') e.stopPropagation();
+        }}
+      >
         <InputGroup className="h-8 flex-1">
           <InputGroupAddon>
             <Search className="size-3.5" />
@@ -86,27 +90,41 @@ export function BranchListView({
         </Tooltip>
       </div>
 
-      {/* Quick actions */}
-      <div>
-        <MenuRow data-testid="git-new-branch" onClick={onNewBranch}>
-          <Plus className="size-3.5 text-primary" />
-          <span className="min-w-0 flex-1 truncate">{search ? `Create branch "${search}"` : 'New branch…'}</span>
-        </MenuRow>
-        <MenuRow data-testid="git-update-all" disabled={busy} onClick={() => void actions.handleUpdateAll()}>
-          {busyAction === 'updateAll' ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="size-3.5" />
-          )}
-          <span className="min-w-0 flex-1 truncate">Update all</span>
-          <span className="shrink-0 font-mono text-xs text-muted-foreground">⤓</span>
-        </MenuRow>
-        <MenuRow data-testid="git-push-current" disabled={busy} onClick={() => void actions.handlePush(currentBranch)}>
-          <ArrowUp className="size-3.5" />
-          <span className="min-w-0 flex-1 truncate">Push</span>
-        </MenuRow>
-      </div>
-      <Separator className="-mx-1 my-1 w-auto" />
+      {/* Quick actions. Update all / Push keep the menu open (preventDefault)
+          so their busy spinners stay visible; New branch closes it and opens
+          the dialog. */}
+      <DropdownMenuItem data-testid="git-new-branch" onSelect={onNewBranch}>
+        <Plus className="size-3.5 text-primary" />
+        <span className="min-w-0 flex-1 truncate">{search ? `Create branch "${search}"` : 'New branch…'}</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        data-testid="git-update-all"
+        disabled={busy}
+        onSelect={(e) => {
+          e.preventDefault();
+          void actions.handleUpdateAll();
+        }}
+      >
+        {busyAction === 'updateAll' ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <RefreshCw className="size-3.5" />
+        )}
+        <span className="min-w-0 flex-1 truncate">Update all</span>
+        <DropdownMenuShortcut>⤓</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        data-testid="git-push-current"
+        disabled={busy}
+        onSelect={(e) => {
+          e.preventDefault();
+          void actions.handlePush(currentBranch);
+        }}
+      >
+        <ArrowUp className="size-3.5" />
+        <span className="min-w-0 flex-1 truncate">Push</span>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
 
       {/* Branch list */}
       <BranchList
@@ -114,12 +132,8 @@ export function BranchListView({
         remote={remote}
         worktrees={worktrees}
         currentBranch={currentBranch}
-        selectedBranch={selectedBranch}
         search={search}
-        onSelectBranch={onSelectBranch}
-        onDeleteWorktree={actions.handleDeleteWorktree}
-        onNewSession={actions.handleNewSession}
-        busyAction={busyAction}
+        actions={rowActions}
       />
     </>
   );

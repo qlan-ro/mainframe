@@ -4,8 +4,10 @@
  */
 import { useMemo } from 'react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
+import { DropdownMenuSeparator } from '@v2/components/ui/dropdown-menu';
 import { filterBranches, filterRemote } from './branch-grouping';
 import { BranchGroupSection } from './BranchGroupSection';
+import type { BranchRowActions } from './BranchSubmenu';
 import { WorktreeSection } from './WorktreeSection';
 
 export interface BranchListProps {
@@ -13,26 +15,11 @@ export interface BranchListProps {
   remote: string[];
   worktrees: string[];
   currentBranch: string;
-  selectedBranch?: string;
   search: string;
-  onSelectBranch: (branch: BranchInfo) => void;
-  onDeleteWorktree?: (worktreeDirName: string, branchName: string | undefined) => void;
-  onNewSession?: (worktreeDirName: string, branchName: string | undefined) => void;
-  busyAction?: string | null;
+  actions: BranchRowActions;
 }
 
-export function BranchList({
-  local,
-  remote,
-  worktrees,
-  currentBranch,
-  selectedBranch,
-  search,
-  onSelectBranch,
-  onDeleteWorktree,
-  onNewSession,
-  busyAction,
-}: BranchListProps) {
+export function BranchList({ local, remote, worktrees, currentBranch, search, actions }: BranchListProps) {
   const mainBranches = useMemo(
     () =>
       filterBranches(
@@ -66,14 +53,16 @@ export function BranchList({
     [filteredRemote],
   );
 
+  const searching = search.trim().length > 0;
+
   return (
-    <div data-testid="git-branch-list" className="max-h-60 overflow-y-auto">
+    <div data-testid="git-branch-list">
       <BranchGroupSection
         title="Local branches"
         branches={mainBranches}
         currentBranch={currentBranch}
-        selectedBranch={selectedBranch}
-        onSelect={onSelectBranch}
+        forceOpen={searching}
+        actions={actions}
       />
 
       {isEmpty && <div className="px-3 py-2 text-sm text-muted-foreground">No matching branches</div>}
@@ -84,24 +73,22 @@ export function BranchList({
           name={wt.name}
           branches={wt.branches}
           currentBranch={currentBranch}
-          selectedBranch={selectedBranch}
-          onSelect={onSelectBranch}
-          onDeleteWorktree={onDeleteWorktree}
-          onNewSession={onNewSession}
-          busyAction={busyAction}
+          actions={actions}
         />
       ))}
 
       {filteredRemote.length > 0 && (
         <>
-          <div className="-mx-1 my-1 border-t border-border" />
+          <DropdownMenuSeparator />
+          {/* Remote starts collapsed — remote lists get long; search forces it open. */}
           <BranchGroupSection
             title="Remote"
             branches={remoteInfos}
             currentBranch={currentBranch}
-            selectedBranch={selectedBranch}
             isRemote
-            onSelect={onSelectBranch}
+            defaultOpen={false}
+            forceOpen={searching}
+            actions={actions}
           />
         </>
       )}

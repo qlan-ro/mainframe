@@ -1,65 +1,74 @@
 /**
- * RenameBranchView — input + submit/cancel for renaming a branch.
- * Extracted from the inline RenameView in desktop BranchPopover.tsx.
+ * RenameBranchDialog — rename a branch, as a v2 Dialog (opened from the branch
+ * menu's Rename… item — forms don't live inside Radix menus).
  */
-import { useEffect, useRef } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@v2/components/ui/dialog';
 import { Input } from '@v2/components/ui/input';
 
-export interface RenameBranchViewProps {
+export interface RenameBranchDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The branch being renamed; seeds the input on every open. */
   target: string;
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
+  onSubmit: (nextName: string) => void;
   busy: boolean;
 }
 
-export function RenameBranchView({ target, value, onChange, onSubmit, onCancel, busy }: RenameBranchViewProps) {
+export function RenameBranchDialog({ open, onOpenChange, target, onSubmit, busy }: RenameBranchDialogProps) {
+  const [value, setValue] = useState(target);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!open) return;
+    setValue(target);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open, target]);
+
+  const submit = () => {
+    if (!busy && value.trim()) onSubmit(value.trim());
+  };
 
   return (
-    <div data-testid="git-rename-view" className="flex flex-col gap-3 p-2">
-      <div className="flex items-center gap-1.5">
-        <Button
-          data-testid="git-rename-back"
-          variant="ghost"
-          size="icon-xs"
-          onClick={onCancel}
-          className="size-5 text-muted-foreground"
-        >
-          <ArrowLeft className="size-3.5" />
-        </Button>
-        <span className="text-sm font-medium text-foreground">Rename Branch</span>
-        {target && <span className="ml-1 truncate text-xs text-muted-foreground">'{target}'</span>}
-      </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="git-rename-view" className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="min-w-0">
+            Rename Branch <span className="font-normal text-muted-foreground">'{target}'</span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">Choose a new name for the branch.</DialogDescription>
+        </DialogHeader>
 
-      <Input
-        data-testid="git-rename-input"
-        ref={inputRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !busy && value.trim()) onSubmit();
-        }}
-        disabled={busy}
-        className="h-8 text-sm"
-      />
+        <Input
+          data-testid="git-rename-input"
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+          }}
+          disabled={busy}
+        />
 
-      <div className="flex justify-end gap-2">
-        <Button data-testid="git-rename-cancel" variant="outline" size="sm" onClick={onCancel} disabled={busy}>
-          Cancel
-        </Button>
-        <Button data-testid="git-rename-submit" size="sm" onClick={onSubmit} disabled={busy || !value.trim()}>
-          {busy && <Loader2 className="size-3 animate-spin" />}
-          Rename
-        </Button>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button data-testid="git-rename-cancel" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button data-testid="git-rename-submit" onClick={submit} disabled={busy || !value.trim()}>
+            {busy && <Loader2 className="size-3 animate-spin" />}
+            Rename
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
