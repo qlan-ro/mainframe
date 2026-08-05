@@ -180,6 +180,11 @@ slices remain). Conventions from the pass:
   the green side moved to v2 `success`.
 - Tests: any component rendering a v2 `Hint`/`Tooltip` bare needs the **v2** `TooltipProvider`
   wrapper (`render(ui, { wrapper: TooltipProvider })`) — the v1 provider satisfies nothing.
+- **Hint around a Toggle/ToggleGroupItem clobbers `data-state`**: `TooltipTrigger asChild` writes
+  the tooltip's open-state ("closed"/"delayed-open") onto the child, so `data-[state=on]:*`
+  styling silently never matches. Drive pressed chrome from the state variable
+  (`pressed && 'bg-background shadow-sm'`), never from the Radix attribute, on any
+  Hint-wrapped toggle. `aria-pressed` survives — assert that in tests.
 - v1 `components/ui/menu.tsx` still serves: SurfacePicker, RunTabStrip, composer config-toolbar,
   setup-advisor skills rows. It dies with those ports.
 

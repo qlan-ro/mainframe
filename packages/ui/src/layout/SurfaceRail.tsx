@@ -51,7 +51,10 @@ export function SurfaceRail() {
               disabled={isFloor}
               className={cn(
                 'h-6 w-7 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
-                'data-[state=on]:bg-background data-[state=on]:shadow-sm',
+                // Pressed chrome keys off store state, NOT data-[state=on]: the Hint's
+                // TooltipTrigger asChild overwrites the item's data-state with the
+                // tooltip's open-state ("closed"), so the Radix selector never matches.
+                on && 'bg-background shadow-sm hover:bg-background',
                 isFloor && 'disabled:opacity-60',
               )}
             >

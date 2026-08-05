@@ -269,7 +269,12 @@ export function MainToolbar({
             size="sm"
             pressed={inspectorVisible}
             onPressedChange={toggleInspector}
-            className="size-6 min-w-6 p-0 text-muted-foreground data-[state=on]:text-foreground"
+            // Pressed chrome keys off the store flag, not data-[state=on] — the Hint's
+            // TooltipTrigger asChild overwrites data-state with the tooltip's open-state.
+            className={cn(
+              'size-6 min-w-6 p-0',
+              inspectorVisible ? 'bg-accent text-foreground' : 'text-muted-foreground',
+            )}
           >
             <SidebarRightGlyph size={14} />
           </Toggle>
