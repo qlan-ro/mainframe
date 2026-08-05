@@ -35,6 +35,7 @@ import type {
   EffortLevel,
   FeatureKey,
   ProviderConfig,
+  SessionTuning,
 } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
 import {
@@ -63,6 +64,7 @@ export interface ProviderModelSelectProps {
   providerDefaults?: ProviderConfig;
   setAdapter: (adapterId: string) => void;
   setModel: (model: string) => void;
+  setModelTuning: (model: string, tuning: SessionTuning) => void;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
 }
@@ -146,6 +148,7 @@ export function ProviderModelSelect({
   providerDefaults,
   setAdapter,
   setModel,
+  setModelTuning,
   setEffort,
   setFeature,
 }: ProviderModelSelectProps) {
@@ -175,6 +178,7 @@ export function ProviderModelSelect({
       chat={chat}
       providerDefaults={providerDefaults}
       onSelect={onPickModel}
+      setModelTuning={setModelTuning}
       setEffort={setEffort}
       setFeature={setFeature}
     />

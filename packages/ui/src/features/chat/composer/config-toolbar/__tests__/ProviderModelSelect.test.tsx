@@ -30,7 +30,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { ProviderModelSelect } from '../ProviderModelSelect';
+import { ProviderModelSelect, type ProviderModelSelectProps } from '../ProviderModelSelect';
 import type { AdapterInfo, AdapterModel, Chat, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -108,6 +108,7 @@ interface RenderProps {
   disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
+  setModelTuning?: ProviderModelSelectProps['setModelTuning'];
   setEffort?: (effort: EffortLevel) => void;
   setFeature?: (key: FeatureKey, on: boolean) => void;
 }
@@ -115,6 +116,7 @@ interface RenderProps {
 function renderSelect(props: RenderProps = {}) {
   const setAdapter = props.setAdapter ?? vi.fn();
   const setModel = props.setModel ?? vi.fn();
+  const setModelTuning = props.setModelTuning ?? vi.fn();
   const setEffort = props.setEffort ?? vi.fn();
   const setFeature = props.setFeature ?? vi.fn();
   const chat = props.chat ?? makeChat({ adapterId: 'claude', model: 'sonnet' });
@@ -135,13 +137,14 @@ function renderSelect(props: RenderProps = {}) {
         disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
+        setModelTuning={setModelTuning}
         setEffort={setEffort}
         setFeature={setFeature}
       />
     </TooltipProvider>,
   );
 
-  return { setAdapter, setModel, setEffort, setFeature };
+  return { setAdapter, setModel, setModelTuning, setEffort, setFeature };
 }
 
 // ---------------------------------------------------------------------------
@@ -809,9 +812,10 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
     expect(setFeature).toHaveBeenCalledExactlyOnceWith('fast', false);
   });
 
-  it('a non-active model previews its defaults but its controls stay inert', async () => {
+  it('a non-active model previews its defaults; touching a control switches to it with that tuning', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const setEffort = vi.fn();
+    const setModelTuning = vi.fn();
     renderSelect({
       adapters: [ADAPTER_TUNABLE],
       adapter: ADAPTER_TUNABLE,
@@ -819,14 +823,22 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
       model: HAIKU,
       chat: { ...makeChat({ adapterId: 'claude', model: 'haiku' }), effort: 'low' },
       setEffort,
+      setModelTuning,
     });
 
     await openFlyout(user, 'tunable');
 
     // Its own default, not the chat's 'low'.
     expect(screen.getByTestId('composer-model-tunable-effort-medium')).toHaveAttribute('data-state', 'checked');
-    expect(screen.getByTestId('composer-model-tunable-effort-high')).toHaveAttribute('aria-disabled', 'true');
+
+    // One compound write: switch model AND apply the effort — never the plain
+    // active-model setter, which would tune the wrong model.
+    fireEvent.click(screen.getByTestId('composer-model-tunable-effort-high'));
+    expect(setModelTuning).toHaveBeenCalledExactlyOnceWith('tunable', { effort: 'high' });
     expect(setEffort).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('composer-model-tunable-feature-fast'));
+    expect(setModelTuning).toHaveBeenCalledWith('tunable', { fast: true });
   });
 
   it('clicking a flyout row still selects that model', async () => {

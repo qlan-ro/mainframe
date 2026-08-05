@@ -226,9 +226,11 @@ slices remain). Conventions from the pass:
   inside the model menu: click the row to choose the model, hover for its tuning. `EffortPicker`
   and `FeaturesPopover` are deleted; `composer-effort-select*` / `composer-features-trigger` /
   `composer-feature-*` are gone, replaced by `composer-model-<id>-effort-<level>` and
-  `composer-model-<id>-feature-<key>`. A NON-active model's flyout is display-only — it previews
-  that model's defaults with the controls inert, because `useTuningWarning` parks exactly one
-  pending change and a model PATCH plus a tuning PATCH would silently drop the first mid-session.
+  `composer-model-<id>-feature-<key>`. A NON-active model's flyout previews that model's
+  resolved defaults, and touching a control switches to the model WITH that tuning — one
+  compound `setModelTuning(model, tuning)` write whose single guarded closure issues the config
+  PATCH and the tuning PATCH together (`useTuningWarning` parks one closure, so a compound
+  change must travel as one `guard()` call, never two).
   **Known cost:** the effective effort and the ultracode lock are no longer visible without
   opening the menu.
 

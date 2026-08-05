@@ -161,6 +161,7 @@ describe('ProviderModelSelect — footer shows in both locked and unlocked state
           disabled={false}
           setAdapter={vi.fn()}
           setModel={vi.fn()}
+          setModelTuning={vi.fn()}
           setEffort={vi.fn()}
           setFeature={vi.fn()}
         />

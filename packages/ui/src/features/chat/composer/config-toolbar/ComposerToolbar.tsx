@@ -29,6 +29,7 @@ export function ComposerToolbar() {
     model,
     providerDefaults,
     setModel,
+    setModelTuning,
     setAdapter,
     setPermissionMode,
     setPlanMode,
@@ -57,6 +58,7 @@ export function ComposerToolbar() {
         providerDefaults={providerDefaults}
         setAdapter={setAdapter}
         setModel={setModel}
+        setModelTuning={setModelTuning}
         setEffort={setEffort}
         setFeature={setFeature}
       />

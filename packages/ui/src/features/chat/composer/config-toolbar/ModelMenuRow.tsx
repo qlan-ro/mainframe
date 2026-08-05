@@ -11,16 +11,22 @@
  * Effort and option controls `preventDefault()` on select so the menu survives
  * the write — you can set an effort and keep reading the list.
  *
- * A NON-ACTIVE model's flyout is display-only: it shows what that model would
- * resolve to (its provider/catalog defaults) with the controls inert. Writing
- * tuning for a model that isn't selected would need a model PATCH plus a tuning
- * PATCH, and `useTuningWarning` parks exactly one pending change — the second
- * would silently drop the first mid-session. Choosing the row first, then
- * tuning it, keeps every write inside the gate the toolbar already has.
+ * A NON-ACTIVE model's flyout previews that model's resolved defaults, and
+ * touching a control SWITCHES to the model with that tuning applied — one
+ * compound write through `setModelTuning`, which parks a single guarded change
+ * (model PATCH + tuning PATCH in one closure) so the mid-session gate can
+ * never drop half the gesture.
  */
 
 import { Check } from 'lucide-react';
-import type { AdapterModel, Chat, EffortLevel, FeatureKey, ProviderConfig } from '@qlan-ro/mainframe-types';
+import type {
+  AdapterModel,
+  Chat,
+  EffortLevel,
+  FeatureKey,
+  ProviderConfig,
+  SessionTuning,
+} from '@qlan-ro/mainframe-types';
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
@@ -42,6 +48,7 @@ export interface ModelMenuRowProps {
   chat: Chat;
   providerDefaults?: ProviderConfig;
   onSelect: (id: string) => void;
+  setModelTuning: (model: string, tuning: SessionTuning) => void;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
 }
@@ -71,6 +78,7 @@ export function ModelMenuRow({
   chat,
   providerDefaults,
   onSelect,
+  setModelTuning,
   setEffort,
   setFeature,
 }: ModelMenuRowProps) {
@@ -109,10 +117,11 @@ export function ModelMenuRow({
                 key={level.id}
                 data-testid={`composer-model-${option.id}-effort-${level.id}`}
                 checked={level.id === effort}
-                disabled={!active || locked}
+                disabled={locked}
                 onSelect={(e) => {
                   e.preventDefault();
-                  setEffort(level.id as EffortLevel);
+                  if (active) setEffort(level.id as EffortLevel);
+                  else setModelTuning(option.id, { effort: level.id as EffortLevel });
                 }}
               >
                 {level.label}
@@ -129,10 +138,11 @@ export function ModelMenuRow({
                 key={f.key}
                 data-testid={`composer-model-${option.id}-feature-${f.key}`}
                 checked={effectiveFeature(tuningSource, providerDefaults, f.key)}
-                disabled={!active}
                 onSelect={(e) => {
                   e.preventDefault();
-                  setFeature(f.key, !effectiveFeature(tuningSource, providerDefaults, f.key));
+                  const next = !effectiveFeature(tuningSource, providerDefaults, f.key);
+                  if (active) setFeature(f.key, next);
+                  else setModelTuning(option.id, { [f.key]: next });
                 }}
               >
                 {f.label}
