@@ -388,21 +388,26 @@
   --ease-signature: var(--ease-signature);
 }
 
-/* Keyboard focus ring — [data-noring] opt-out. The v1 primitives all set
+/* Keyboard focus ring — v1 islands ONLY. The v1 primitives all set
    `focus-visible:outline-none` and rely on this rule for their ONLY focus
-   indicator, so it cannot be dropped. In @layer base (v1 had it unlayered) so
-   the v2 components' own ring/shadow utilities keep winning. */
+   indicator, so it cannot be dropped. Every v2 element carries `data-slot`
+   and owns its focus treatment (ring utilities, or none by design — Radix
+   menu items are hover-FOCUSED divs with tabindex, and this rule was
+   painting the v1 blue ring on them whenever WebKit's focus-visible
+   heuristic leaned keyboard). [data-noring] opts out v1-island elements
+   with a focus treatment of their own. In @layer base (v1 had it unlayered)
+   so ring/shadow utilities keep winning. */
 @layer base {
   [data-noring]:focus-visible {
     outline: none;
   }
 
-  button:not([data-noring]):focus-visible,
-  a:not([data-noring]):focus-visible,
-  input:not([data-noring]):focus-visible,
-  textarea:not([data-noring]):focus-visible,
-  select:not([data-noring]):focus-visible,
-  [tabindex]:not([data-noring]):focus-visible {
+  button:not([data-noring], [data-slot]):focus-visible,
+  a:not([data-noring], [data-slot]):focus-visible,
+  input:not([data-noring], [data-slot]):focus-visible,
+  textarea:not([data-noring], [data-slot]):focus-visible,
+  select:not([data-noring], [data-slot]):focus-visible,
+  [tabindex]:not([data-noring], [data-slot]):focus-visible {
     outline: none;
     box-shadow: var(--mf-focus-ring);
     border-radius: var(--radius-sm);
