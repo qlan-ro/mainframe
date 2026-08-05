@@ -57,6 +57,9 @@ export function SessionsNewButton({
       variant="ghost"
       size="icon-sm"
       data-testid="sessions-new-button"
+      // TutorialOverlay's first step anchors here; without it the step is
+      // unanchorable and the auto-skip drops "Start a session" entirely.
+      data-tut="sessions"
       aria-label={label}
       title={label}
       className="size-6"
