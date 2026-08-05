@@ -16,6 +16,32 @@ export const PREVIEW_PORT = Number(process.env['MF_E2E_PREVIEW_PORT'] ?? 4317);
 export const PREVIEW_BASE = `http://127.0.0.1:${PREVIEW_PORT}`;
 
 /**
+ * Refuse to run without an explicit adapter mode.
+ *
+ * This suite is built for `E2E_MODE=mock`: it is what wires E2E_RECORDINGS_DIR +
+ * E2E_RECORDING_KEY into the daemon and registers the `mock-cli` adapter that
+ * `createTauriChat` defaults to. Without it every `launchTauriApp({ recordingKey })` is
+ * silently inert and chats spawn the DEVELOPER'S REAL `claude` CLI — so
+ * recording-dependent specs fail for reasons that look exactly like product
+ * regressions (a context meter reading 0, a skills list showing the developer's own
+ * ~/.claude skills), and the run bills real API calls. CI has always set the variable;
+ * a bare `pnpm test:e2e` did not, which cost a 40-minute run and a day spent chasing
+ * three families of phantom regressions. The scripts now set it — this is the backstop
+ * for a direct `playwright test`.
+ */
+function assertAdapterModeChosen(): void {
+  if (process.env['E2E_MODE']) return;
+  if (process.env['MF_E2E_ALLOW_REAL_ADAPTER'] === '1') return;
+  throw new Error(
+    'E2E_MODE is unset, so this run would drive the REAL `claude` CLI and every recording ' +
+      'would be inert.\n' +
+      '  Normal run:        pnpm test:e2e            (sets E2E_MODE=mock for you)\n' +
+      '  Direct invocation: E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e exec playwright test\n' +
+      '  Deliberate live-adapter run: MF_E2E_ALLOW_REAL_ADAPTER=1 (bills real API calls)',
+  );
+}
+
+/**
  * Skip via `MF_E2E_SKIP_BUILD=1` when running against an already-built, already-verified bundle.
  * Safe to skip because assertBundleTargetsTestPort() still runs unconditionally right after and
  * fails fast if dist/ is missing or was built for a different port.
@@ -122,6 +148,7 @@ async function startPreview(): Promise<ChildProcess> {
  * PREVIEW_PORT are therefore unsupported — give the second `MF_E2E_PREVIEW_PORT`.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
+  assertAdapterModeChosen();
   buildUi();
   assertBundleTargetsTestPort();
   freePreviewPort();
