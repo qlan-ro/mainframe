@@ -18,11 +18,14 @@
 import type {
   BackgroundActivityTask,
   Chat,
+  ClaudeWorkflowRun,
   ControlRequest,
   DisplayMessage,
   QueuedMessageRef,
   WorktreeSwitchOffer,
 } from '@qlan-ro/mainframe-types';
+import { seedWorkflowRuns, upsertWorkflowRun, type WorkflowRunsSlice } from './chat-workflow-runs';
+import { sameBackgroundTasks, sameWorktreeOffers } from './snapshot-equality';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -35,6 +38,8 @@ export interface PendingUserMessage {
   createdAt: number;
   status: 'pending' | 'failed';
   error?: unknown;
+  stage?: 'upload' | 'send';
+  attachmentsRestored?: boolean;
 }
 
 export interface ChatPermissionEntry {
@@ -90,6 +95,12 @@ export interface ChatThreadState {
    */
   readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
   /**
+   * Claude CLI workflow runs keyed by the CLI task id — fed by
+   * `claude_workflow.run.updated` and re-seeded from the history payload, which
+   * is what survives a reload of a run that finished while the webview was gone.
+   */
+  readonly workflowRuns: WorkflowRunsSlice;
+  /**
    * Worktrees the agent created during this session that the chat is not bound
    * to yet, keyed by canonical worktree path — fed by `worktree.offer.*`.
    * Drives the WorktreeSwitchBanner.
@@ -109,7 +120,12 @@ export interface ChatThreadState {
 
 export type ChatStateEvent =
   | { type: 'history.loading' }
-  | { type: 'history.loaded'; messages: DisplayMessage[]; transcriptMissing?: boolean }
+  | {
+      type: 'history.loaded';
+      messages: DisplayMessage[];
+      transcriptMissing?: boolean;
+      workflowRuns?: ClaudeWorkflowRun[];
+    }
   | { type: 'history.failed'; error: unknown }
   | { type: 'run.started' }
   | { type: 'run.cancelling' }
@@ -126,7 +142,8 @@ export type ChatStateEvent =
   | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
-  | { type: 'local.message.failed'; clientId: string; error: unknown }
+  | { type: 'local.message.failed'; clientId: string; error: unknown; stage?: 'upload' | 'send' }
+  | { type: 'local.message.attachments_restored'; clientId: string }
   | { type: 'local.message.retrying'; clientId: string }
   | { type: 'chat.config.updated'; chat: Chat }
   | { type: 'chat.id.adopted'; chatId: string }
@@ -136,6 +153,7 @@ export type ChatStateEvent =
   | { type: 'background.upsert'; task: BackgroundActivityTask }
   | { type: 'background.ended'; taskId: string }
   | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] }
+  | { type: 'workflow.run.updated'; run: ClaudeWorkflowRun }
   | { type: 'worktree.offer.added'; offer: WorktreeSwitchOffer }
   | { type: 'worktree.offer.removed'; worktreePath: string }
   | { type: 'worktree.offer.snapshot'; offers: WorktreeSwitchOffer[] }
@@ -163,6 +181,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     contextUsage: null,
     compacting: false,
     backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
+    workflowRuns: {} as WorkflowRunsSlice,
     worktreeOffers: {} as Readonly<Record<string, WorktreeSwitchOffer>>,
     switching: null,
   };
@@ -211,34 +230,12 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.ultracode === b.ultracode &&
     a.adaptiveThinking === b.adaptiveThinking &&
     a.worktreeMissing === b.worktreeMissing &&
+    a.directoryMissing === b.directoryMissing &&
+    a.missingDirectoryPath === b.missingDirectoryPath &&
     a.transcriptMissing === b.transcriptMissing &&
     a.worktreePath === b.worktreePath &&
     a.branchName === b.branchName
   );
-}
-
-/** True when the snapshot lists exactly the tasks already in state (field-equal). */
-function sameBackgroundTasks(
-  current: Readonly<Record<string, BackgroundActivityTask>>,
-  snapshot: BackgroundActivityTask[],
-): boolean {
-  if (Object.keys(current).length !== snapshot.length) return false;
-  return snapshot.every((t) => {
-    const c = current[t.id];
-    return c !== undefined && c.kind === t.kind && c.description === t.description && c.startedAt === t.startedAt;
-  });
-}
-
-/** True when the snapshot lists exactly the offers already in state (field-equal). */
-function sameWorktreeOffers(
-  current: Readonly<Record<string, WorktreeSwitchOffer>>,
-  snapshot: WorktreeSwitchOffer[],
-): boolean {
-  if (Object.keys(current).length !== snapshot.length) return false;
-  return snapshot.every((o) => {
-    const c = current[o.worktreePath];
-    return c !== undefined && c.branchName === o.branchName && c.detectedAt === o.detectedAt;
-  });
 }
 
 /**
@@ -283,6 +280,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         messagesById,
         messageOrder,
         chatConfig,
+        workflowRuns: seedWorkflowRuns(event.workflowRuns ?? []),
       };
     }
 
@@ -448,6 +446,11 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       return { ...state, backgroundTasks };
     }
 
+    case 'workflow.run.updated': {
+      const workflowRuns = upsertWorkflowRun(state.workflowRuns, event.run);
+      return workflowRuns === state.workflowRuns ? state : { ...state, workflowRuns };
+    }
+
     case 'worktree.offer.added':
       return {
         ...state,
@@ -496,16 +499,28 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         ...state,
         pendingUserMessages: {
           ...state.pendingUserMessages,
-          [event.clientId]: { ...current, status: 'failed', error: event.error },
+          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
         },
         runState: { type: 'error', error: event.error },
+      };
+    }
+
+    case 'local.message.attachments_restored': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current || current.attachmentsRestored) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, attachmentsRestored: true },
+        },
       };
     }
 
     case 'local.message.retrying': {
       const current = state.pendingUserMessages[event.clientId];
       if (!current) return state;
-      const { error: _dropped, ...rest } = current;
+      const { error: _dropped, stage: _dropped2, attachmentsRestored: _dropped3, ...rest } = current;
       return {
         ...state,
         pendingUserMessages: {

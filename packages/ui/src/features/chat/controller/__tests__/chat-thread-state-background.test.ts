@@ -69,6 +69,38 @@ describe('chat-thread-state — background activity slice', () => {
     expect(s2).toBe(s);
   });
 
+  it('background.snapshot that learns workflowName/runId on reconnect is NOT treated as equal', () => {
+    let s = createChatThreadState(CHAT_ID);
+    s = reduceChatThreadState(s, { type: 'background.snapshot', tasks: [task('w-1', { kind: 'workflow' })] });
+    const s2 = reduceChatThreadState(s, {
+      type: 'background.snapshot',
+      tasks: [task('w-1', { kind: 'workflow', workflowName: 'deploy', runId: 'run_1' })],
+    });
+    expect(s2).not.toBe(s);
+    expect(s2.backgroundTasks['w-1']).toEqual({
+      id: 'w-1',
+      kind: 'workflow',
+      description: 'desc-w-1',
+      startedAt: 1000,
+      workflowName: 'deploy',
+      runId: 'run_1',
+    });
+  });
+
+  it('a field-identical snapshot after that learned identity returns the same state object', () => {
+    let s = createChatThreadState(CHAT_ID);
+    s = reduceChatThreadState(s, { type: 'background.snapshot', tasks: [task('w-1', { kind: 'workflow' })] });
+    s = reduceChatThreadState(s, {
+      type: 'background.snapshot',
+      tasks: [task('w-1', { kind: 'workflow', workflowName: 'deploy', runId: 'run_1' })],
+    });
+    const s2 = reduceChatThreadState(s, {
+      type: 'background.snapshot',
+      tasks: [task('w-1', { kind: 'workflow', workflowName: 'deploy', runId: 'run_1' })],
+    });
+    expect(s2).toBe(s);
+  });
+
   it('background.snapshot with an empty list clears the slice', () => {
     let s = createChatThreadState(CHAT_ID);
     s = reduceChatThreadState(s, { type: 'background.upsert', task: task('a-1') });

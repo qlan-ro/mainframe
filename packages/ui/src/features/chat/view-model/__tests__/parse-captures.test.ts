@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SANDBOX_CAPTURE_SENTINEL, parseSandboxCaptureBlock } from '../parse-captures';
+import { SANDBOX_CAPTURE_SENTINEL } from '../../markers/message-markers';
+import { parseSandboxCaptureBlock } from '../parse-captures';
 
 // ---------------------------------------------------------------------------
 // Helpers — build sentinel-prefixed strings using the exported constant so the

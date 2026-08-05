@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { classifyMention, createMentionCache, buildMentionTriggerAdapter } from '../mention-adapter';
 import type { MentionCacheDeps } from '../mention-adapter';
 import type { FileResult, FileTreeEntry } from '@/lib/api/files';
+import type { TriggerItem } from '@/components/trigger-engine/types';
 import type { AgentConfig } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -319,6 +320,11 @@ const agentFixtures: AgentConfig[] = [
   },
 ];
 
+const sessionFixtures: TriggerItem[] = [
+  { id: 'chat-1', type: 'session', label: 'Foo refactor' },
+  { id: 'chat-2', type: 'session', label: 'Bar cleanup' },
+];
+
 describe('buildMentionTriggerAdapter', () => {
   it('categories() returns []', () => {
     const { deps } = makeDeps();
@@ -439,6 +445,96 @@ describe('buildMentionTriggerAdapter', () => {
         { id: 'src/components', type: 'directory', label: 'components', description: 'src/components' },
         { id: 'src/config.ts', type: 'file', label: 'config.ts', description: 'src/config.ts' },
       ]);
+    });
+  });
+
+  describe('session items', () => {
+    async function seededCache(): Promise<ReturnType<typeof createMentionCache>> {
+      const { deps } = makeDeps();
+      const { promise, resolve } = makeControlledPromise<FileResult[]>();
+      deps.searchFiles = vi.fn().mockReturnValue(promise);
+      const cache = createMentionCache(deps);
+      cache.request('foo');
+      resolve(fileFixtures);
+      await promise;
+      await Promise.resolve();
+      return cache;
+    }
+
+    it('orders agents → sessions → files for a query matching all three', async () => {
+      const cache = await seededCache();
+      const adapter = buildMentionTriggerAdapter(cache, agentFixtures, sessionFixtures);
+
+      const results = adapter.search!('foo');
+
+      expect(results.map((r) => r.type)).toEqual(['agent', 'session', 'file', 'file']);
+      expect(results[1]).toEqual({ id: 'chat-1', type: 'session', label: 'Foo refactor' });
+    });
+
+    it('matches the session label case-insensitively as a substring', () => {
+      const { deps } = makeDeps();
+      deps.searchFiles = vi.fn().mockReturnValue(new Promise(() => undefined));
+      const cache = createMentionCache(deps);
+      const adapter = buildMentionTriggerAdapter(cache, agentFixtures, sessionFixtures);
+
+      expect(adapter.search!('CLEANUP')).toEqual([{ id: 'chat-2', type: 'session', label: 'Bar cleanup' }]);
+      expect(adapter.search!('zzz').filter((r) => r.type === 'session')).toEqual([]);
+    });
+
+    it('lists every session for a bare `@`', () => {
+      const { deps } = makeDeps();
+      const cache = createMentionCache(deps);
+      const adapter = buildMentionTriggerAdapter(cache, [], sessionFixtures);
+
+      expect(adapter.search!('')).toEqual(sessionFixtures);
+      expect(adapter.categoryItems('')).toEqual(sessionFixtures);
+    });
+
+    it('keeps the caller ordering — sessions arrive pre-sorted and are not re-sorted', () => {
+      const { deps } = makeDeps();
+      const cache = createMentionCache(deps);
+      const reversed = [...sessionFixtures].reverse();
+      const adapter = buildMentionTriggerAdapter(cache, [], reversed);
+
+      expect(adapter.search!('').map((r) => r.id)).toEqual(['chat-2', 'chat-1']);
+    });
+
+    it('merges no session rows in autocomplete (tree) mode', async () => {
+      const { deps, getFileTree } = makeDeps();
+      const { promise, resolve } = makeControlledPromise<FileTreeEntry[]>();
+      getFileTree.mockReturnValue(promise);
+      const cache = createMentionCache(deps);
+      cache.request('src/');
+      resolve(treeFixtures);
+      await promise;
+      await Promise.resolve();
+
+      const adapter = buildMentionTriggerAdapter(cache, agentFixtures, sessionFixtures);
+
+      expect(adapter.search!('src/').filter((r) => r.type === 'session')).toEqual([]);
+    });
+
+    it('merges no session rows in filesystem mode', async () => {
+      const { deps, browseFilesystem } = makeDeps();
+      const { promise, resolve } = makeControlledPromise<FileTreeEntry[]>();
+      browseFilesystem.mockReturnValue(promise);
+      const cache = createMentionCache(deps);
+      cache.request('~/');
+      resolve([{ name: 'Documents', type: 'directory', path: '/Users/x/Documents' }]);
+      await promise;
+      await Promise.resolve();
+
+      const adapter = buildMentionTriggerAdapter(cache, agentFixtures, sessionFixtures);
+
+      expect(adapter.search!('~/').filter((r) => r.type === 'session')).toEqual([]);
+    });
+
+    it('omitting the sessions argument reproduces the agents-only output', async () => {
+      const cache = await seededCache();
+
+      expect(buildMentionTriggerAdapter(cache, agentFixtures).search!('foo')).toEqual(
+        buildMentionTriggerAdapter(cache, agentFixtures, []).search!('foo'),
+      );
     });
   });
 });

@@ -10,7 +10,8 @@
  * Behaviors covered:
  *  - GateButton: children text, data-testid forwarding, onClick callback,
  *    kind→class mapping (primary/danger/default).
- *  - GateCardShell: renders children, resolved/unresolved border classes.
+ *  - GateCardShell: renders children, resolved/unresolved border classes,
+ *    absence of a self-declared max-width, default testid.
  *  - GateHead: eyebrow text, title text, right slot, tileClassName on icon tile.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -109,9 +110,19 @@ describe('GateCardShell', () => {
     expect(el).not.toHaveClass('bg-background');
   });
 
-  it('caps width at the design maxWidth (680px)', () => {
+  it('declares no max-width of its own — width comes from the transcript column', () => {
     wrap(<GateCardShell data-testid="shell-width">content</GateCardShell>);
-    expect(screen.getByTestId('shell-width')).toHaveClass('max-w-[680px]');
+    const className = screen.getByTestId('shell-width').className;
+    expect(className).not.toMatch(/(^|\s)max-w-/);
+  });
+
+  it('carries a default data-testid the E2E width assertion can target', () => {
+    render(
+      <TooltipProvider>
+        <GateCardShell>content</GateCardShell>
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId('chat-gate-card')).toHaveTextContent('content');
   });
 
   it('unresolved + accent="primary": shadow is tinted with the primary accent var', () => {

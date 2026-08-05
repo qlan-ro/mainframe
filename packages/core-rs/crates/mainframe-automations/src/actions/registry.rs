@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
-use super::{Action, ActionError};
+use super::{Action, ActionAvailability, ActionError};
 
 /// Wire projection of a manifest (types `ActionCatalogEntry`, the
 /// `GET /api/automation-actions` body). Drops the engine-internal
@@ -26,10 +26,22 @@ pub struct ActionCatalogEntry {
     pub credential_label_hint: Option<String>,
     pub params_schema: Value,
     pub outputs: Vec<ActionOutput>,
+    /// False when a prerequisite is missing (e.g. the GitHub CLI): the editor
+    /// shows the action muted with `unavailable_reason` instead of letting a
+    /// step be built on it. Defaults true so an older client's payload — and
+    /// every action that has no prerequisite — reads as usable.
+    #[serde(default = "available_by_default")]
+    pub available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
+}
+
+fn available_by_default() -> bool {
+    true
 }
 
 impl ActionCatalogEntry {
-    fn from_manifest(manifest: &ActionManifest) -> Self {
+    fn from_manifest(manifest: &ActionManifest, availability: &ActionAvailability) -> Self {
         Self {
             id: manifest.id.to_string(),
             title: manifest.title.to_string(),
@@ -38,6 +50,11 @@ impl ActionCatalogEntry {
             credential_label_hint: manifest.credential_label_hint.map(str::to_string),
             params_schema: manifest.params_schema.clone(),
             outputs: manifest.outputs.clone(),
+            available: matches!(availability, ActionAvailability::Available),
+            unavailable_reason: match availability {
+                ActionAvailability::Available => None,
+                ActionAvailability::Unavailable(reason) => Some(reason.clone()),
+            },
         }
     }
 
@@ -52,6 +69,8 @@ impl ActionCatalogEntry {
             credential_label_hint: None,
             params_schema: json!({"type": "object", "additionalProperties": true}),
             outputs: vec![ActionOutput::new("result", ActionOutputType::Text)],
+            available: true,
+            unavailable_reason: None,
         }
     }
 }
@@ -97,12 +116,19 @@ impl ActionRegistry {
         self.actions.iter().map(|a| a.manifest()).collect()
     }
 
-    /// `GET /api/automation-actions` body (T7.3/T9.3).
-    pub fn wire_catalog(&self) -> Vec<ActionCatalogEntry> {
-        self.actions
-            .iter()
-            .map(|a| ActionCatalogEntry::from_manifest(&a.manifest()))
-            .collect()
+    /// `GET /api/automation-actions` body (T7.3/T9.3). Async because an
+    /// action's availability can depend on the machine — the GitHub actions
+    /// ask the CLI whether it is installed and signed in.
+    pub async fn wire_catalog(&self) -> Vec<ActionCatalogEntry> {
+        let mut entries = Vec::with_capacity(self.actions.len());
+        for action in &self.actions {
+            let availability = action.availability().await;
+            entries.push(ActionCatalogEntry::from_manifest(
+                &action.manifest(),
+                &availability,
+            ));
+        }
+        entries
     }
 }
 

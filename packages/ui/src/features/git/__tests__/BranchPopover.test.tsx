@@ -101,7 +101,7 @@ vi.mock('@/lib/api/git', () => ({
 // Mock confirm bridge
 // ---------------------------------------------------------------------------
 
-vi.mock('../use-git-confirm', () => ({
+vi.mock('../git-confirm', () => ({
   requestGitConfirm: vi.fn().mockResolvedValue(true),
   useGitConfirm: { getState: () => ({ request: vi.fn().mockResolvedValue(true) }) },
 }));

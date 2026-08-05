@@ -43,6 +43,8 @@ impl EventHandlerDeps for CancelDeps {
     fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
     fn on_queued_cleared(&self, _chat_id: &str) {}
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
         Vec::new()
     }
@@ -78,6 +80,9 @@ impl EventHandlerDeps for CancelDeps {
     }
     fn notify_session_error(&self) -> bool {
         false
+    }
+    fn notify_attention_request(&self) -> bool {
+        true
     }
 }
 

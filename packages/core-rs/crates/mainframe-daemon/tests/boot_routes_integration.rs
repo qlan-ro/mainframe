@@ -105,6 +105,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit,
         adapters: None,
+        github: None,
     }));
     plugin_manager
         .load_builtin(manifest("demo"), data_dir.path().to_path_buf(), demo_plugin)
@@ -131,6 +132,7 @@ async fn boot_serves_launch_plugins_and_lsp_happy_paths() {
         ws_clients: Arc::new(DashMap::new()),
         adapter_registry: Arc::new(AdapterRegistry::new()),
         background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
         chat_manager: None,
         launch_registry: Some(Arc::clone(&launch_registry)),
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),

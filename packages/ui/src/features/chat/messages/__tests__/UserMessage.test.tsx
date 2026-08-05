@@ -26,16 +26,25 @@
  *       present.
  *  PB — a clear-context "Implement the following plan:" message renders the
  *       shared PlanBubble instead of the plain cool-card body.
+ *  WB — the CoolCard shell (`chat-user-bubble`) and the send-failure detail
+ *       (`chat-user-message-send-error`) both carry `break-words`, so a
+ *       token longer than the card wraps instead of painting past the
+ *       border (todo #298).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-// Controllable retry spy for the chat-extras seam (hoisted for vi.mock).
-const { retryMessageSpy } = vi.hoisted(() => ({ retryMessageSpy: vi.fn() }));
+// Controllable retry spy + chat-config fixture for the chat-extras seam
+// (hoisted for vi.mock). `state.chatConfig` feeds the PlanBubble's
+// execution-mode caption, so it must be swappable per test.
+const { retryMessageSpy, extrasState } = vi.hoisted(() => ({
+  retryMessageSpy: vi.fn(),
+  extrasState: { chatConfig: null as import('@qlan-ro/mainframe-types').Chat | null },
+}));
 // Mutable queued-refs fixture for the FIFO position/total dispatch tests (7.2).
 let __queuedFixture: import('@qlan-ro/mainframe-types').QueuedMessageRef[] = [];
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
-  useChatExtras: () => ({ retryMessage: retryMessageSpy }),
+  useChatExtras: () => ({ retryMessage: retryMessageSpy, state: extrasState }),
   useChatQueuedMessages: () => __queuedFixture,
 }));
 
@@ -467,7 +476,9 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
       content: [{ type: 'text', text: 'go' }],
       mainframe: { queued: true },
     });
-    __queuedFixture = [{ messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' }];
+    __queuedFixture = [
+      { messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' },
+    ];
     renderUserMessage();
     const shell = screen.getByTestId('chat-queued-message');
     expect(shell).toHaveAttribute('data-position', '1');
@@ -492,6 +503,31 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Tests — WB: word-breaking containment (todo #298)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — WB: word-breaking containment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('the user bubble opts into word breaking', () => {
+    __messageFixture = makeFixture();
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-bubble').className).toContain('break-words');
+    expect(screen.getByTestId('chat-user-bubble').className).toContain('max-w-[470px]');
+  });
+
+  it('the send-failure detail wraps long tokens', () => {
+    __messageFixture = makeFixture({
+      mainframe: { pending: true, clientId: 'c-1', error: 'Network timeout' },
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-user-message-send-error').className).toContain('break-words');
+  });
+});
+
 describe('UserMessage — find DOM hook', () => {
   it('sets data-message-id on the message root', () => {
     __messageFixture = makeFixture({ mainframe: undefined });
@@ -508,6 +544,7 @@ describe('UserMessage — PB: clear-context plan message', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __skillsFixture = [];
+    extrasState.chatConfig = null;
   });
 
   it('renders the PlanBubble for a plan-prefixed message', () => {
@@ -519,6 +556,16 @@ describe('UserMessage — PB: clear-context plan message', () => {
     expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
     expect(screen.getByText('Implementing plan')).toBeInTheDocument();
     expect(screen.getByText('Dummy Plan')).toBeInTheDocument();
+  });
+
+  it("captions the plan record with the chat's permission mode and the cleared-context suffix", () => {
+    extrasState.chatConfig = { permissionMode: 'yolo' } as import('@qlan-ro/mainframe-types').Chat;
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-plan-exec-mode')).toHaveTextContent('Unattended · context cleared');
   });
 
   it('does not render the plain cool-card body for a plan-prefixed message', () => {
@@ -538,5 +585,90 @@ describe('UserMessage — PB: clear-context plan message', () => {
     renderUserMessage();
     expect(screen.getByText('Just a regular message')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
+  });
+
+  it('renders the plan record on a full-width wrapper, escaping the right-aligned message column', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    // MessagePrimitive.Root is `items-end`, which shrink-wraps and right-aligns
+    // flex children by default — the plan record needs an explicit full-width
+    // wrapper so it fills the message column instead.
+    expect(screen.getByTestId('chat-plan-bubble').parentElement).toHaveClass('w-full');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — SR: session references (todo #240)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — SR: session reference lines and chips', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __skillsFixture = [];
+    __queuedFixture = [];
+  });
+
+  it('strips the reference lines from the rendered body', () => {
+    __messageFixture = makeFixture({
+      content: [
+        { type: 'text', text: 'Referenced session @session[Fix foo]: /repo/a\n\nlook at @session[Fix foo] please' },
+      ],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.queryByText(/Referenced session/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/repo\/a/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('look at');
+  });
+
+  it('renders an @session token as a chip carrying the label only', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'compare with @session[Fix foo] now' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    const chip = screen.getByTestId('chat-message-session-chip-fix-foo');
+    expect(chip).toHaveTextContent('Fix foo');
+    expect(chip).not.toHaveTextContent('@session[');
+    expect(chip.tagName).toBe('SPAN');
+  });
+
+  it('strips reference lines from the command-path body too (D1)', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '/review\nReferenced session @session[Fix foo]: /repo/a\n\ndo it' }],
+      mainframe: {
+        command: {
+          name: 'review',
+          source: 'commands',
+          userText: '\nReferenced session @session[Fix foo]: /repo/a\n\ndo it',
+        },
+      },
+    });
+    renderUserMessage();
+    expect(screen.getByText('/review')).toBeInTheDocument();
+    expect(screen.queryByText(/Referenced session/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('do it');
+  });
+
+  it('chips an @session token that follows formatted markdown in the same paragraph', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '**check** this against @session[Fix foo] ok' }],
+      mainframe: undefined,
+    });
+    renderUserMessage();
+    expect(screen.getByTestId('chat-message-session-chip-fix-foo')).toBeInTheDocument();
+  });
+
+  it('does not treat a slash word in a non-leading paragraph child as a command chip', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '**note** /not-a-command here' }],
+      mainframe: undefined,
+    });
+    const { container } = renderUserMessage();
+    expect(container.querySelector('[data-directive-type="command"]')).toBeNull();
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('/not-a-command here');
   });
 });

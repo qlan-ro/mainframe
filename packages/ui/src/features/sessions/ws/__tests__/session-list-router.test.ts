@@ -6,6 +6,7 @@
  *  - chat.ended    → onReload called once; onMarkUnread not called
  *  - chat.updated  → onReload called once; waiting/completed/error also mark unread
  *  - chat.notification → onMarkUnread called with the chatId; onReload not called
+ *  - chat.notification (kind: attention_request) → also calls onOsNotify with title + body
  *  - permission.requested (notify: true)  → onMarkUnread called with chatId; onReload not called
  *  - permission.requested (notify: false) → onMarkUnread called with chatId
  *  - permission.resolved  → neither mock called
@@ -93,6 +94,7 @@ function makeFakeWs(): {
 
 let onReload: ReturnType<typeof vi.fn<() => void>>;
 let onMarkUnread: ReturnType<typeof vi.fn<(chatId: string) => void>>;
+let onOsNotify: ReturnType<typeof vi.fn<(title: string, body: string) => void>>;
 let dispatch: (event: DaemonEvent) => void;
 let unsubscribeSpy: ReturnType<typeof vi.fn>;
 let router: SessionListRouter;
@@ -100,10 +102,11 @@ let router: SessionListRouter;
 beforeEach(() => {
   onReload = vi.fn<() => void>();
   onMarkUnread = vi.fn<(chatId: string) => void>();
+  onOsNotify = vi.fn<(title: string, body: string) => void>();
   const fakeWs = makeFakeWs();
   dispatch = fakeWs.dispatch;
   unsubscribeSpy = fakeWs.unsubscribeSpy;
-  router = new SessionListRouter(fakeWs.ws as unknown as DaemonWsClient, { onReload, onMarkUnread });
+  router = new SessionListRouter(fakeWs.ws as unknown as DaemonWsClient, { onReload, onMarkUnread, onOsNotify });
 });
 
 // ---------------------------------------------------------------------------
@@ -187,6 +190,63 @@ describe('session-list-router — chat.notification triggers markUnread', () => 
     expect(onMarkUnread).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).toHaveBeenCalledWith('c3');
     expect(onReload).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.notification (kind: attention_request) → OS notification + markUnread
+// ---------------------------------------------------------------------------
+
+describe('session-list-router — attention requests also raise an OS notification', () => {
+  it('calls onOsNotify with the title and body, and still marks unread', () => {
+    dispatch({
+      type: 'chat.notification',
+      chatId: 'c3',
+      title: 'Claude needs your attention',
+      body: 'Which database should I migrate?',
+      level: 'success',
+      kind: 'attention_request',
+    });
+
+    expect(onOsNotify).toHaveBeenCalledTimes(1);
+    expect(onOsNotify).toHaveBeenCalledWith('Claude needs your attention', 'Which database should I migrate?');
+    expect(onMarkUnread).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).toHaveBeenCalledWith('c3');
+  });
+
+  it('does not call onOsNotify for a task_complete notification', () => {
+    dispatch({
+      type: 'chat.notification',
+      chatId: 'c3',
+      title: 'Task Complete',
+      body: 'Done',
+      level: 'success',
+      kind: 'task_complete',
+    });
+
+    expect(onOsNotify).not.toHaveBeenCalled();
+    expect(onMarkUnread).toHaveBeenCalledWith('c3');
+  });
+
+  it('does not call onOsNotify for a session_error notification', () => {
+    dispatch({
+      type: 'chat.notification',
+      chatId: 'c3',
+      title: 'Session Error',
+      body: 'Boom',
+      level: 'error',
+      kind: 'session_error',
+    });
+
+    expect(onOsNotify).not.toHaveBeenCalled();
+    expect(onMarkUnread).toHaveBeenCalledWith('c3');
+  });
+
+  it('does not call onOsNotify when the notification carries no kind', () => {
+    dispatch({ type: 'chat.notification', chatId: 'c3', title: 'Done', body: 'Finished', level: 'success' });
+
+    expect(onOsNotify).not.toHaveBeenCalled();
+    expect(onMarkUnread).toHaveBeenCalledWith('c3');
   });
 });
 

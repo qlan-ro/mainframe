@@ -199,6 +199,7 @@ mod tests {
                 tool_use_id: "tu1".into(),
                 command: "sleep 1".into(),
                 description: "d".into(),
+                workflow_name: None,
             },
             "/tmp/mf-out".into(),
         );
@@ -222,6 +223,8 @@ mod tests {
             summary: None,
             usage: None,
             recovered: Some(true),
+            workflow_name: None,
+            run_id: None,
         };
         let id = task.id.clone();
         ctx.background_tasks

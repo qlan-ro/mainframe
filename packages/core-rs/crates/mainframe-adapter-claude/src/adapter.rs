@@ -11,15 +11,17 @@ use mainframe_adapter_api::{
     Adapter, AdapterError, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::display::ToolCategories;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::models::{claude_models, enrich_with_context_window, merge_older_models};
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::is_claude_transcript_present;
+use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -73,6 +75,7 @@ fn merged_catalog(
 
 pub struct ClaudeAdapter {
     background_tasks: Arc<BackgroundTaskTracker>,
+    workflow_store: Arc<ClaudeWorkflowStore>,
     sessions: Arc<Mutex<HashMap<String, Arc<ClaudeSession>>>>,
     dynamic_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
     /// Models a local CLIProxyAPI serves, refreshed by each probe. Empty is the
@@ -85,19 +88,19 @@ pub struct ClaudeAdapter {
 }
 
 impl ClaudeAdapter {
-    pub fn new(background_tasks: Arc<BackgroundTaskTracker>, resolved_path: ResolvedPath) -> Self {
+    pub fn new(
+        background_tasks: Arc<BackgroundTaskTracker>,
+        workflow_store: Arc<ClaudeWorkflowStore>,
+        resolved_path: ResolvedPath,
+    ) -> Self {
         Self {
             background_tasks,
+            workflow_store,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             dynamic_models: Arc::new(Mutex::new(None)),
             proxy_models: Arc::new(Mutex::new(Vec::new())),
             resolved_path,
         }
-    }
-
-    /// `createPlanModeHandler()` — the per-adapter plan-mode strategy.
-    pub fn create_plan_mode_handler(&self) -> Box<dyn PlanModeActionHandler> {
-        Box::new(ClaudePlanModeHandler)
     }
 }
 
@@ -105,6 +108,7 @@ impl Default for ClaudeAdapter {
     fn default() -> Self {
         Self::new(
             Arc::new(BackgroundTaskTracker::new()),
+            Arc::new(ClaudeWorkflowStore::new()),
             ResolvedPath::from_value("/usr/bin:/bin"),
         )
     }
@@ -206,6 +210,7 @@ impl Adapter for ClaudeAdapter {
             options,
             None,
             self.background_tasks.clone(),
+            self.workflow_store.clone(),
             self.resolved_path.clone(),
         ));
         session.init_weak();
@@ -272,6 +277,20 @@ impl Adapter for ClaudeAdapter {
         })
     }
 
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        Box::pin(async move {
+            Ok(
+                locate_claude_transcript(&session_id, &project_path, session_file_path.as_deref())
+                    .await,
+            )
+        })
+    }
+
     fn get_tool_categories(&self) -> Option<ToolCategories> {
         Some(ToolCategories {
             explore: tool_category(&["Read", "Glob", "Grep", "LS"]),
@@ -293,6 +312,10 @@ impl Adapter for ClaudeAdapter {
             progress: tool_category(&["TaskCreate", "TaskUpdate"]),
             subagent: tool_category(&["Task", "Agent"]),
         })
+    }
+
+    fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
+        Some(Arc::new(ClaudePlanModeHandler))
     }
 }
 
@@ -316,6 +339,12 @@ mod tests {
         assert_eq!(a.name(), "Claude Code");
         assert!(a.capabilities().plan_mode);
         assert!(a.has_probe_models());
+    }
+
+    #[test]
+    fn adapter_trait_resolves_a_plan_mode_handler() {
+        let a = ClaudeAdapter::default();
+        assert!(Adapter::create_plan_mode_handler(&a).is_some());
     }
 
     #[tokio::test]

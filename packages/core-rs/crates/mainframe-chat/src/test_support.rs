@@ -218,6 +218,8 @@ pub fn test_chat(id: &str) -> Chat {
         is_running: None,
         background_activity: None,
         worktree_missing: None,
+        directory_missing: None,
+        missing_directory_path: None,
         transcript_missing: None,
         todos: None,
         pinned: None,
@@ -230,5 +232,10 @@ pub fn test_chat(id: &str) -> Chat {
         automation_run_id: None,
     }
 }
+
+/// `mainframe-chat` and `mainframe-server` both depend on `mainframe-runtime`
+/// already, so the tracing capture helper lives there and is re-exported here
+/// for the crate's existing `crate::test_support::LogCapture` call sites.
+pub use mainframe_runtime::log_capture::LogCapture;
 
 // Not a port; test scaffolding only. No PORT STATUS trailer.

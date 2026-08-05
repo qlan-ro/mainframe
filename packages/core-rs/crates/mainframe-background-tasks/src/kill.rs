@@ -547,6 +547,7 @@ mod tests {
                 tool_use_id: "u".to_string(),
                 command: "x".to_string(),
                 description: String::new(),
+                workflow_name: None,
             },
             output_path.to_string(),
         );

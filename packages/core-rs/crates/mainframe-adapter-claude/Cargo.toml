@@ -23,6 +23,7 @@ mainframe-runtime = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-display = { workspace = true }
 mainframe-background-tasks = { workspace = true }
+mainframe-claude-workflows = { workspace = true }
 mainframe-services = { workspace = true }
 
 [dev-dependencies]

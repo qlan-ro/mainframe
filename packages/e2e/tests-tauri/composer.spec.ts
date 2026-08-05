@@ -419,9 +419,10 @@ test.describe('§composer worktree-missing degraded card', () => {
     worktreePath = path.join(project.projectPath, '.worktrees', branchName);
     rmSync(worktreePath, { recursive: true, force: true });
 
-    // isWorktreePresent() (packages/core/src/workspace/worktree.ts) is a live fs check recomputed
-    // on every enrichChat() — a reload + reselect is enough to pick up worktreeMissing:true with
-    // no daemon restart needed.
+    // is_worktree_present() (packages/core-rs/crates/mainframe-services/src/workspace/worktree.rs)
+    // is a live fs check recomputed on every enrich_chat() — now joined by the generalized
+    // directory check for the no-worktree case — so a reload + reselect is enough to pick up
+    // worktreeMissing:true with no daemon restart needed.
     await page.reload();
     await waitConnected(page);
     await sessionsSidebar(page).row(chatId).click();
@@ -432,10 +433,11 @@ test.describe('§composer worktree-missing degraded card', () => {
     await closeTauriApp(app);
   });
 
-  test('shows the degraded-chat card with recovery actions and locks the input + send button', async () => {
+  test('shows the degraded-chat card with recovery actions and hides the composer', async () => {
     const { page } = app;
     // The old chat-composer-worktree-missing banner was replaced by the
-    // thread-level DegradedChatCard (unified transcript/worktree recovery).
+    // thread-level DegradedChatCard (unified transcript/worktree recovery), which now lives in
+    // the sticky footer and takes the composer's slot instead of disabling it.
     const card = page.getByTestId('chat-degraded-card');
     await expect(card).toBeVisible({ timeout: 10_000 });
     await expect(card).toContainText('Worktree deleted');
@@ -445,7 +447,7 @@ test.describe('§composer worktree-missing degraded card', () => {
     await expect(page.getByTestId('chat-degraded-delete')).toBeVisible();
     await expect(page.getByTestId('chat-composer-worktree-missing')).toHaveCount(0);
 
-    await expect(page.getByTestId('chat-composer-input')).toBeDisabled();
-    await expect(page.getByTestId('chat-composer-send')).toBeDisabled();
+    await expect(page.getByTestId('chat-thread-footer').getByTestId('chat-degraded-card')).toHaveCount(1);
+    await expect(page.getByTestId('chat-composer')).toHaveCount(0);
   });
 });

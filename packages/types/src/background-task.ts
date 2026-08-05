@@ -29,6 +29,8 @@ export interface BackgroundTask {
   } | null;
   /** True when this entry was rehydrated by reconciliation, not produced by a live CLI session. */
   recovered?: true;
+  workflowName?: string;
+  runId?: string;
 }
 
 export interface BackgroundTaskStartedEvent {
@@ -57,6 +59,8 @@ export interface BackgroundActivityTask {
   kind: BackgroundWorkKind;
   description: string;
   startedAt: number;
+  workflowName?: string;
+  runId?: string;
 }
 
 /** Live background work for a chat — derived from the tracker, never persisted. */
@@ -71,6 +75,8 @@ export const BackgroundActivityTaskSchema: z.ZodType<BackgroundActivityTask> = z
   kind: BackgroundWorkKindSchema,
   description: z.string(),
   startedAt: z.number(),
+  workflowName: z.string().optional(),
+  runId: z.string().optional(),
 });
 
 export const BackgroundActivitySchema: z.ZodType<BackgroundActivity> = z.object({
@@ -86,6 +92,8 @@ export function toActivityTask(task: BackgroundTask): BackgroundActivityTask {
     kind: task.kind,
     description: task.description || task.command,
     startedAt: task.startedAt,
+    workflowName: task.workflowName,
+    runId: task.runId,
   };
 }
 

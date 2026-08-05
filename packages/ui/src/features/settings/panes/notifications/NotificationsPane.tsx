@@ -75,6 +75,13 @@ export function NotificationsPane({ port }: { port: number }) {
           onChange={(v) => patchChat('sessionError', v)}
           testId="settings-notify-session-error-toggle"
         />
+        <ToggleRow
+          label="When Claude asks for your attention"
+          description="Notify when Claude interrupts to reach you"
+          checked={notifications.chat.attentionRequest}
+          onChange={(v) => patchChat('attentionRequest', v)}
+          testId="settings-notify-attention-request-toggle"
+        />
       </SettingGroup>
 
       <SettingGroup title="Permissions">

@@ -117,6 +117,10 @@ export function handleDaemonEvent(
       }
       return { kind: 'event', event: { type: 'background.upsert', task: toActivityTask(event.task) } };
 
+    case 'claude_workflow.run.updated':
+      if (event.chatId !== chatId) return { kind: 'noop' };
+      return { kind: 'event', event: { type: 'workflow.run.updated', run: event.run } };
+
     case 'background_task.ended':
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };

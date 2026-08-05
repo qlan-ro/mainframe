@@ -9,6 +9,7 @@
  *   - radius `xl` (13px)
  *   - 0.5px box-shadow for soft lift
  *   - right-aligned, max-width 75% of thread
+ *   - long unbreakable tokens wrap (overflow-wrap) — the card is the containment boundary
  *
  * Variants rendered by this file:
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
@@ -20,8 +21,9 @@
  *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
  *     `Implement the following plan:` turn (see plan-message.ts)
  *
- * @mention inline rendering uses the native `createDirectiveText` pattern from
- * @assistant-ui/react via our `mainframeUserFormatter` (see user-directives.ts).
+ * Inline directives (@mention, @session, /command) render through
+ * user-directive-renderers.tsx; session reference lines are stripped here so the
+ * agent-facing preamble never reaches the transcript.
  * The SlashPill leading badge is kept metadata-driven: when daemon metadata carries
  * `command.name`, we render the pill before the text body. If no metadata exists
  * but the text itself starts with `/command`, the formatter will emit a command
@@ -34,7 +36,6 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Wrench, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { useChatExtras, useChatQueuedMessages } from '../runtime/use-chat-thread-runtime';
@@ -42,8 +43,8 @@ import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
 import { queuePosition } from './queue-position';
 import { InlineImageThumbs } from './InlineImageThumbs';
-import { createDirectiveText } from '@/components/ui/assistant-ui/directive-text';
-import { mainframeUserFormatter } from './user-directives';
+import { userMarkdownComponents } from './user-directive-renderers';
+import { visibleMessageText } from '../markers/message-markers';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
@@ -55,40 +56,6 @@ import { parsePlanUserMessage } from './plan-message';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Directive-text inline renderer (replaces highlightMentions + MentionParagraph)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * TextMessagePartComponent for user text — renders @mentions as plain accent
- * text (no box/icon, design 7.1), and a leading /command as a boxed chip if
- * present in the raw text.
- */
-const UserDirectiveText = createDirectiveText(mainframeUserFormatter, {
-  iconMap: {
-    command: Wrench,
-  },
-  plainTypes: ['mention'],
-});
-
-/**
- * `<p>` override for react-markdown that feeds string children through the
- * directive formatter.  Non-string children (bold, italic, etc.) pass through
- * unchanged — identical to the prior highlightMentions guard.
- */
-function DirectiveParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  if (typeof children !== 'string') {
-    return <p {...props}>{children}</p>;
-  }
-  return (
-    <p {...props}>
-      <UserDirectiveText type="text" text={children} status={{ type: 'complete' }} />
-    </p>
-  );
-}
-
-const userMarkdownComponents = { ...markdownComponents, p: DirectiveParagraph };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cool-card shell
@@ -107,11 +74,12 @@ interface CoolCardProps {
 function CoolCard({ children, className }: CoolCardProps) {
   return (
     <div
+      data-testid="chat-user-bubble"
       style={CARD_STYLE}
       className={cn(
         'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
         'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-loose tracking-tight',
+        'text-body leading-loose tracking-tight break-words',
         className,
       )}
     >
@@ -187,7 +155,9 @@ function UserMessageImpl() {
   // message.attachments (built in convert-message).
   const attachmentCount = useAuiState((s) => s.message.attachments?.length ?? 0);
 
-  const cleanText = meta.cleanText ?? rawText;
+  // Reference lines are addressed to the agent, not the reader — the chips in
+  // the body already say which sessions were referenced.
+  const cleanText = visibleMessageText(meta.cleanText ?? rawText);
 
   // ── Command / skill resolution from metadata ──────────────────────────────
   const { skills } = useChatSkills();
@@ -198,7 +168,9 @@ function UserMessageImpl() {
     slashProps = {
       kind: isCommand ? 'command' : 'skill',
       name: isCommand ? metaCmd.name : resolveSkillName(metaCmd.name, skills),
-      userText: metaCmd.userText ?? cleanText,
+      // A slash command keeps line 1, so its references sit below it and survive
+      // the cleanText strip above. Idempotent — the fallback is already stripped.
+      userText: visibleMessageText(metaCmd.userText ?? cleanText),
     };
   }
 
@@ -267,7 +239,12 @@ function UserMessageImpl() {
           </QueuedUserTurn>
         )
       ) : planBody ? (
-        <PlanBubble plan={planBody} />
+        // The gate shell's max-width cap should govern the record's width, not
+        // the root's `items-end` alignment — an explicit full-width wrapper
+        // escapes the flex item's default shrink-to-fit sizing.
+        <div className="w-full">
+          <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+        </div>
       ) : (
         <>
           {body && <CoolCard>{body}</CoolCard>}
@@ -276,20 +253,30 @@ function UserMessageImpl() {
       )}
 
       {sendError != null && (
-        <div className="flex items-center gap-2">
-          <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
-            Failed to send
-          </span>
-          {retryClientId && chatExtras && (
-            <button
-              type="button"
-              data-testid="chat-user-message-retry"
-              onClick={() => void chatExtras.retryMessage(retryClientId)}
-              className="text-label font-medium text-primary hover:underline"
-            >
-              Retry
-            </button>
-          )}
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
+              Failed to send
+            </span>
+            {/* Retry re-sends the text only, so it would silently drop the
+                attachments the runtime just put back into the composer. */}
+            {retryClientId && chatExtras && !meta.attachmentsRestored && (
+              <button
+                type="button"
+                data-testid="chat-user-message-retry"
+                onClick={() => void chatExtras.retryMessage(retryClientId)}
+                className="text-label font-medium text-primary hover:underline"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+          <p
+            data-testid="chat-user-message-send-error"
+            className="max-w-[470px] break-words text-right text-label text-muted-foreground"
+          >
+            {sendError}
+          </p>
         </div>
       )}
     </MessagePrimitive.Root>

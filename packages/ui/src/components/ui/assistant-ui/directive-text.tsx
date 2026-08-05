@@ -29,6 +29,8 @@ export type CreateDirectiveTextOptions = {
    * chips keep the box treatment.
    */
   plainTypes?: readonly string[];
+  /** Per-type renderer, checked before `plainTypes` and the default chip. */
+  renderers?: Record<string, FC<{ type: string; label: string; id: string }>>;
 };
 
 // ── Warm-chrome chip ─────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ export function createDirectiveText(
   const iconMap = options?.iconMap;
   const fallbackIcon = options?.fallbackIcon;
   const plainTypes = options?.plainTypes;
+  const renderers = options?.renderers;
 
   const Component: TextMessagePartComponent = ({ text }) => {
     const segments = formatter.parse(text);
@@ -111,6 +114,11 @@ export function createDirectiveText(
                 {seg.text}
               </span>
             );
+          }
+
+          const Custom = renderers?.[seg.type];
+          if (Custom) {
+            return <Custom key={i} type={seg.type} label={seg.label} id={seg.id} />;
           }
 
           if (plainTypes?.includes(seg.type)) {

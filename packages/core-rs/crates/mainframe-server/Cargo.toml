@@ -32,9 +32,11 @@ mainframe-adapter-claude = { workspace = true }
 mainframe-adapter-codex = { workspace = true }
 mainframe-adapter-mock = { workspace = true }
 mainframe-background-tasks = { workspace = true }
+mainframe-claude-workflows = { workspace = true }
 mainframe-launch = { workspace = true }
 mainframe-plugins = { workspace = true }
 mainframe-lsp = { workspace = true }
+reqwest = { workspace = true }
 ignore = { workspace = true }
 grep-searcher = { workspace = true }
 grep-regex = { workspace = true }
@@ -42,7 +44,10 @@ grep-matcher = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-reqwest = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+flate2 = { workspace = true }
+brotli = { workspace = true }
+tracing-subscriber = { workspace = true }
+mainframe-runtime = { workspace = true, features = ["test-support"] }

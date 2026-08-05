@@ -19,11 +19,19 @@
  */
 import type { ReactElement } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useActiveThreadId } from '../../runtime/use-active-thread-id';
+import { useSessionReferences } from '../sessions/session-reference-store';
 import { renderHighlights } from './render-highlights';
+
+const NO_LABELS: string[] = [];
 
 /** Color-only overlay rendered behind the transparent composer textarea. */
 export function ComposerHighlight(): ReactElement {
   const text = useAuiState((s) => s.composer.text) ?? '';
+  const threadId = useActiveThreadId();
+  // The draft's own labels: a bare `@<label>` mention is only tintable against them (#240).
+  const references = useSessionReferences((s) => (threadId == null ? undefined : s.byThread[threadId]));
+  const labels = references ? Object.keys(references) : NO_LABELS;
 
   return (
     <div
@@ -31,7 +39,7 @@ export function ComposerHighlight(): ReactElement {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-foreground"
     >
-      {text ? renderHighlights(text + '​') : null}
+      {text ? renderHighlights(text + '​', labels) : null}
     </div>
   );
 }

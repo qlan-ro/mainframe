@@ -60,6 +60,7 @@ fn make_project(id: &str, path: &str) -> Project {
         created_at: "2020-01-01T00:00:00.000Z".to_string(),
         last_opened_at: "2020-01-01T00:00:00.000Z".to_string(),
         parent_project_id: None,
+        available: None,
     }
 }
 
@@ -97,6 +98,8 @@ fn make_chat(
         is_running: None,
         background_activity: None,
         worktree_missing,
+        directory_missing: None,
+        missing_directory_path: None,
         transcript_missing: None,
         todos: None,
         pinned: None,

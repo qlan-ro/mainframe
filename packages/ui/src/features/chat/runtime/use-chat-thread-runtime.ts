@@ -26,7 +26,7 @@ import { createAttachmentAdapter } from '../composer/attachment-adapter';
 /** Stateless — the per-chat daemon upload happens in the controller on send. */
 const ATTACHMENT_ADAPTER = createAttachmentAdapter();
 import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { ChatThreadController } from '../controller/chat-thread-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
@@ -89,6 +89,32 @@ function isRunningFromState(state: ChatThreadState): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Failed send → attachments back to the composer
+// ---------------------------------------------------------------------------
+
+async function restoreAttachments(
+  runtime: AssistantRuntime | null,
+  attachments: AppendMessage['attachments'],
+): Promise<boolean> {
+  const composer = runtime?.thread.composer;
+  const pending = attachments ?? [];
+  if (!composer || pending.length === 0) return false;
+
+  let restored = 0;
+  for (const attachment of pending) {
+    const file = attachment.file;
+    if (!file) continue;
+    try {
+      await composer.addAttachment(file);
+      restored += 1;
+    } catch (error) {
+      console.warn('[chat-runtime] could not restore an attachment to the composer', error);
+    }
+  }
+  return restored === pending.length;
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -139,21 +165,36 @@ export function useChatThreadRuntime(
     [controller, port, state],
   );
 
+  // The restore below needs the runtime this hook produces, which doesn't exist
+  // yet when onNew is created — the ref closes that loop.
+  const runtimeRef = useRef<AssistantRuntime | null>(null);
+
   // onNew: a new (__LOCALID_*) thread has no daemon chat yet — create it, adopt
   // its id (setRemoteId), then send. A thread that already has a remoteId
   // (pre-existing chat, or one created earlier this session) just sends.
   const onNew = useCallback(
     async (message: AppendMessage): Promise<void> => {
-      if (!controller.hasRemoteId()) {
-        const { remoteId } = await createForLocal(controller.getThreadId(), port);
-        chatControllerRegistry.adopt(controller, remoteId);
+      // createChat can 401 before a pending bubble exists, after the composer reset.
+      try {
+        if (!controller.hasRemoteId()) {
+          const { remoteId } = await createForLocal(controller.getThreadId(), port);
+          chatControllerRegistry.adopt(controller, remoteId);
+        }
+        await controller.sendMessage(message);
+      } catch (error) {
+        // Safe against the composer reset: sendMessage cannot reject before its
+        // first await (the upload fetch), so this lands after append() has
+        // dropped this promise and use-submit-composition has reset the composer.
+        if (await restoreAttachments(runtimeRef.current, message.attachments)) {
+          controller.markAttachmentsRestoredForFailure(error);
+        }
+        throw error;
       }
-      await controller.sendMessage(message);
     },
     [controller, port],
   );
 
-  return useExternalStoreRuntime<ThreadMessage>({
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
     isLoading: state.loadState.type === 'loading',
     isRunning,
     messageRepository,
@@ -164,6 +205,9 @@ export function useChatThreadRuntime(
       await controller.cancel();
     },
   });
+  runtimeRef.current = runtime;
+
+  return runtime;
 }
 
 // ---------------------------------------------------------------------------

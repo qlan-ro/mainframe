@@ -80,10 +80,10 @@ describe('request — HTTP error extraction', () => {
     await expect(request('POST', URL, { a: 1 })).rejects.toThrow('validation failed');
   });
 
-  it('throws "HTTP <status>" when the error body is not JSON', async () => {
+  it('throws a human sentence when the error body is not JSON', async () => {
     mockFetch({ ok: false, status: 503, json: () => Promise.reject(new Error('not json')) });
 
-    await expect(request('GET', URL)).rejects.toThrow('HTTP 503');
+    await expect(request('GET', URL)).rejects.toThrow('The daemon failed to handle this request (HTTP 503).');
   });
 });
 

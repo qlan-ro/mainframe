@@ -68,6 +68,17 @@ pub fn is_worktree_present(worktree_path: &str) -> bool {
     Path::new(worktree_path).exists() && Path::new(worktree_path).join(".git").exists()
 }
 
+/// A project directory need not be a git checkout, so unlike `is_worktree_present`
+/// this checks presence only. Sync variant for `enrich_chat`, which runs under a
+/// held lock; async variant for the (async, sync-I/O-banned) projects route.
+pub fn is_directory_present(path: &str) -> bool {
+    Path::new(path).is_dir()
+}
+
+pub async fn is_directory_present_async(path: &str) -> bool {
+    tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
+}
+
 pub fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
     let mut entries: Vec<WorktreeEntry> = Vec::new();
     let mut current_path: Option<String> = None;
@@ -316,6 +327,44 @@ mod tests {
     #[test]
     fn present_false_for_path_that_does_not_exist() {
         assert!(!is_worktree_present("/definitely/does/not/exist/nope"));
+    }
+
+    #[test]
+    fn is_directory_present_sync_true_for_existing_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(is_directory_present(dir.path().to_str().unwrap()));
+    }
+
+    #[test]
+    fn is_directory_present_sync_false_for_missing_path() {
+        assert!(!is_directory_present("/definitely/does/not/exist/nope"));
+    }
+
+    #[test]
+    fn is_directory_present_sync_false_for_a_file_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("f.txt");
+        std::fs::write(&file, "x").unwrap();
+        assert!(!is_directory_present(file.to_str().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn is_directory_present_async_true_for_existing_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(is_directory_present_async(dir.path().to_str().unwrap()).await);
+    }
+
+    #[tokio::test]
+    async fn is_directory_present_async_false_for_missing_path() {
+        assert!(!is_directory_present_async("/definitely/does/not/exist/nope").await);
+    }
+
+    #[tokio::test]
+    async fn is_directory_present_async_false_for_a_file_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("f.txt");
+        tokio::fs::write(&file, "x").await.unwrap();
+        assert!(!is_directory_present_async(file.to_str().unwrap()).await);
     }
 
     #[test]

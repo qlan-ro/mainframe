@@ -3,7 +3,9 @@
 
 use super::*;
 use crate::test_support::test_chat;
-use mainframe_adapter_api::{ContextFiles, ImageInput, SessionSink, StopBackgroundTaskResult};
+use mainframe_adapter_api::{
+    ContextFiles, ImageInput, PlanModeActionHandler, SessionSink, StopBackgroundTaskResult,
+};
 use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{Chat, ChatStatus, ProcessState};
@@ -11,10 +13,12 @@ use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod plan_mode;
+
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct StoreDeps {
+pub(crate) struct StoreDeps {
     store: Mutex<HashMap<String, Chat>>,
     events: Mutex<Vec<DaemonEvent>>,
     updates: Mutex<Vec<(String, ChatUpdate)>>,
@@ -30,6 +34,8 @@ struct StoreDeps {
     /// When `Some`, `write_workspace_trust` fails with this message instead of
     /// recording the call.
     fail_trust_write: Mutex<Option<String>>,
+    /// When `Some`, `projects_remove` records the id and then fails with this message.
+    fail_project_remove: Mutex<Option<String>>,
     /// What `generate_title` returns.
     generated_title: Mutex<Option<String>>,
     /// The `content` of every `generate_title` call, in order.
@@ -41,13 +47,16 @@ struct StoreDeps {
     attachments: Mutex<Option<ProcessedAttachments>>,
     /// What `extract_mentions_from_text` returns.
     mentions_found: Mutex<bool>,
+    /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
+    /// can inject a recorder (or leave `None` for the unresolved-handler path).
+    plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
 }
 
 impl StoreDeps {
-    fn arc() -> Arc<Self> {
+    pub(crate) fn arc() -> Arc<Self> {
         Arc::new(Self::default())
     }
-    fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
+    pub(crate) fn with_chats(chats: Vec<Chat>) -> Arc<Self> {
         let d = Self::default();
         {
             let mut s = d.store.lock().unwrap();
@@ -144,11 +153,15 @@ impl ChatManagerDeps for StoreDeps {
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         Some("/tmp/test".to_string())
     }
-    fn projects_remove(&self, project_id: &str) {
+    fn projects_remove(&self, project_id: &str) -> Result<(), String> {
         self.project_removed
             .lock()
             .unwrap()
             .push(project_id.to_string());
+        match self.fail_project_remove.lock().unwrap().clone() {
+            Some(msg) => Err(msg),
+            None => Ok(()),
+        }
     }
     fn write_workspace_trust<'a>(
         &'a self,
@@ -193,6 +206,18 @@ impl ChatManagerDeps for StoreDeps {
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
+    }
+    fn create_plan_mode_handler(
+        &self,
+        _adapter_id: &str,
+    ) -> Option<Arc<dyn PlanModeActionHandler>> {
+        self.plan_handler.lock().unwrap().clone()
+    }
+    fn adapter_snapshot_models(
+        &self,
+        _adapter_id: &str,
+    ) -> Vec<mainframe_types::adapter::AdapterModel> {
+        Vec::new()
     }
     fn attachment_delete_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
@@ -301,6 +326,9 @@ impl ChatManagerDeps for StoreDeps {
     fn notify_session_error(&self) -> bool {
         false
     }
+    fn notify_attention_request(&self) -> bool {
+        true
+    }
     fn extract_mentions_from_text(&self, _chat_id: &str, _text: &str) -> bool {
         *self.mentions_found.lock().unwrap()
     }
@@ -311,6 +339,8 @@ impl ChatManagerDeps for StoreDeps {
     }
     /// Empty on purpose: chat_deps.rs's tracker_end_all_running_delegates_... test covers the wiring (#273).
     fn tracker_end_all_running(&self, _chat_id: &str) {}
+    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     fn is_transcript_present<'a>(
         &'a self,
         _adapter_id: &'a str,
@@ -349,6 +379,11 @@ struct RecSession {
     kills: AtomicUsize,
     /// `images.len()` from every `send_message` call, in order.
     images_calls: Mutex<Vec<usize>>,
+    /// Every `respond_to_permission` call, in order — pins the plan-mode escalation
+    /// double-send (decision 6).
+    responded_calls: Mutex<Vec<ControlResponse>>,
+    /// Every `set_permission_mode` call, in order.
+    permission_mode_calls: Mutex<Vec<ExecutionMode>>,
 }
 
 impl RecSession {
@@ -363,6 +398,8 @@ impl RecSession {
             order: Arc::new(Mutex::new(Vec::new())),
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -376,6 +413,8 @@ impl RecSession {
             order,
             kills: AtomicUsize::new(0),
             images_calls: Mutex::new(Vec::new()),
+            responded_calls: Mutex::new(Vec::new()),
+            permission_mode_calls: Mutex::new(Vec::new()),
         })
     }
 }
@@ -433,8 +472,9 @@ impl AdapterSession for RecSession {
     }
     fn respond_to_permission(
         &self,
-        _response: ControlResponse,
+        response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.responded_calls.lock().unwrap().push(response);
         ok()
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -443,7 +483,8 @@ impl AdapterSession for RecSession {
     fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         ok()
     }
-    fn set_permission_mode(&self, _mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+    fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.permission_mode_calls.lock().unwrap().push(mode);
         ok()
     }
     fn set_plan_mode(&self, _on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -1167,6 +1208,28 @@ async fn plain_text_first_message_still_titles_in_the_same_event_order() {
 }
 
 #[tokio::test]
+async fn plain_text_first_message_with_a_session_reference_titles_from_the_visible_text() {
+    let (mgr, deps, _session) = title_cmd_manager(None);
+    let content = "Referenced session @session[Fix login bug]: /tmp/fix-login-bug.jsonl\n\nwhat did they change?";
+
+    mgr.send_message("chat-1", content, None, None)
+        .await
+        .unwrap();
+    settle().await;
+
+    assert_eq!(
+        deps.chats_get("chat-1").unwrap().title,
+        Some("what did they change?".to_string()),
+        "the fallback title must not leak the raw reference preamble"
+    );
+    assert_eq!(
+        deps.generate_title_calls.lock().unwrap().clone(),
+        vec!["what did they change?".to_string()],
+        "the LLM title call must not see the raw reference preamble either"
+    );
+}
+
+#[tokio::test]
 async fn command_first_fallback_survives_a_generation_that_returns_nothing() {
     let (mgr, deps, _session) = title_cmd_manager(None);
 
@@ -1313,12 +1376,38 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     seed_active(&mgr, "c1", c1, s1);
     seed_active(&mgr, "c2", c2, s2);
 
-    mgr.remove_project("p1").await;
+    assert!(mgr.remove_project("p1").await.is_ok());
 
     let order = order.lock().unwrap();
     let idx = |s: &str| order.iter().position(|x| x == s);
     assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert!(idx("kill:c2:no-wt").unwrap() < idx("sess.kill:c2").unwrap());
+    assert_eq!(
+        deps.project_removed.lock().unwrap().as_slice(),
+        &["p1".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn remove_project_propagates_a_row_delete_failure() {
+    let mut c1 = test_chat("c1");
+    c1.project_id = "p1".to_string();
+    c1.worktree_path = Some("/wt/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let order = deps.order.clone();
+    *deps.fail_project_remove.lock().unwrap() = Some("database is locked".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let s1 = RecSession::with_order("c1", order.clone());
+    seed_active(&mgr, "c1", c1, s1);
+
+    let result = mgr.remove_project("p1").await;
+    assert_eq!(result, Err("database is locked".to_string()));
+
+    let order = order.lock().unwrap();
+    let idx = |s: &str| order.iter().position(|x| x == s);
+    assert!(idx("kill:c1:/wt/c1").unwrap() < idx("sess.kill:c1").unwrap());
     assert_eq!(
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
@@ -1436,6 +1525,7 @@ fn _status() -> ChatStatus {
 // directly with fixed `startedAt` (Rust can't trivially freeze the clock).
 mod background_activity {
     use super::*;
+    use crate::chat_manager::shared::enrich_chat;
     use mainframe_types::background_task::{
         BackgroundActivity, BackgroundActivityTask, BackgroundTask, BackgroundTaskStatus,
         BackgroundTaskToolName, BackgroundWorkKind,
@@ -1459,6 +1549,8 @@ mod background_activity {
             summary: None,
             usage: None,
             recovered: None,
+            workflow_name: None,
+            run_id: None,
         }
     }
 
@@ -1468,13 +1560,15 @@ mod background_activity {
             kind,
             description: description.to_string(),
             started_at: 5000,
+            workflow_name: None,
+            run_id: None,
         }
     }
 
     #[test]
     fn main_only_working_no_background() {
         let mut chat = working_chat("c-working", None, true);
-        super::enrich_chat(&mut chat, false, &[]);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(chat.background_activity, None);
@@ -1487,7 +1581,7 @@ mod background_activity {
             bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
             bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
         ];
-        super::enrich_chat(&mut chat, false, &tasks);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(false));
         let by_kind = HashMap::from([
@@ -1511,7 +1605,7 @@ mod background_activity {
     fn both_main_turn_and_background() {
         let mut chat = working_chat("c-working", None, true);
         let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
-        super::enrich_chat(&mut chat, false, &tasks);
+        enrich_chat(&mut chat, false, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(
@@ -1528,7 +1622,7 @@ mod background_activity {
     fn terminal_tasks_do_not_count() {
         // Ended tasks never appear in listLive → an empty slice here.
         let mut chat = working_chat("c-idle", None, false);
-        super::enrich_chat(&mut chat, false, &[]);
+        enrich_chat(&mut chat, false, &[], None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
         assert_eq!(chat.background_activity, None);
     }
@@ -1537,11 +1631,77 @@ mod background_activity {
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
-        super::enrich_chat(&mut chat, true, &tasks);
+        enrich_chat(&mut chat, true, &tasks, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
         assert_eq!(chat.is_running, Some(false));
         // The chip still shows the live background work while the gate is up.
         assert_eq!(chat.background_activity.map(|a| a.total), Some(1));
+    }
+
+    #[test]
+    fn worktree_present_marks_directory_present() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join(".git")).unwrap();
+        let mut chat = working_chat("c-wt-live", None, false);
+        chat.worktree_path = Some(dir.path().to_string_lossy().into_owned());
+
+        enrich_chat(&mut chat, false, &[], None);
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
+    }
+
+    #[test]
+    fn worktree_gone_marks_directory_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("missing-worktree");
+        let path = path.to_str().unwrap().to_string();
+        let mut chat = working_chat("c-wt-gone", None, false);
+        chat.worktree_path = Some(path.clone());
+
+        enrich_chat(&mut chat, false, &[], Some("/project"));
+
+        assert_eq!(chat.worktree_missing, Some(true));
+        assert_eq!(chat.directory_missing, Some(true));
+        assert_eq!(chat.missing_directory_path, Some(path));
+    }
+
+    #[test]
+    fn project_path_gone_marks_directory_missing_without_worktree_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("missing-project");
+        let path = path.to_str().unwrap().to_string();
+        let mut chat = working_chat("c-project-gone", None, false);
+
+        enrich_chat(&mut chat, false, &[], Some(&path));
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(true));
+        assert_eq!(chat.missing_directory_path, Some(path));
+    }
+
+    #[test]
+    fn project_path_present_marks_directory_present() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut chat = working_chat("c-project-live", None, false);
+
+        enrich_chat(&mut chat, false, &[], dir.path().to_str());
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
+    }
+
+    #[test]
+    fn missing_project_row_is_not_a_missing_directory() {
+        let mut chat = working_chat("c-project-row-gone", None, false);
+
+        enrich_chat(&mut chat, false, &[], None);
+
+        assert_eq!(chat.worktree_missing, Some(false));
+        assert_eq!(chat.directory_missing, Some(false));
+        assert_eq!(chat.missing_directory_path, None);
     }
 }
 
@@ -1739,6 +1899,7 @@ async fn with_external_sessions_wires_scan_page_through_the_facade() {
         created_at: "now".into(),
         last_opened_at: "now".into(),
         parent_project_id: None,
+        available: None,
     });
     ext.sessions.lock().unwrap().push(external_session("s1"));
     let service = Arc::new(ExternalSessionService::new(ext));
@@ -1768,6 +1929,27 @@ async fn with_external_sessions_wires_import_session_through_the_facade() {
         ext.created.lock().unwrap().as_slice(),
         [("p1".to_string(), "claude".to_string())]
     );
+}
+
+#[tokio::test]
+async fn import_session_title_drops_the_session_reference_preamble() {
+    let ext = Arc::new(FakeExternalDeps::default());
+    let service = Arc::new(ExternalSessionService::new(ext.clone()));
+    let mgr = ChatManager::new(StoreDeps::arc()).with_external_sessions(service);
+
+    let facade = mgr.external_session_service().expect("service injected");
+    let chat = facade
+        .import_session(
+            "p1",
+            "s1",
+            "claude",
+            Some("Referenced session @session[Model Identity]: /repo/a.jsonl\n\nlook at this"),
+            None,
+            None,
+        )
+        .await;
+
+    assert_eq!(chat.title.as_deref(), Some("look at this"));
 }
 
 // ── trust_workspace ─────────────────────────────────────────────────────────

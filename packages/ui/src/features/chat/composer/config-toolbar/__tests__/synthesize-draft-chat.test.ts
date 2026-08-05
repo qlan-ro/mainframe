@@ -164,14 +164,13 @@ describe('synthesizeDraftChat — tuning fields forwarded', () => {
 // ---------------------------------------------------------------------------
 
 describe('synthesizeDraftChat — placeholder fields', () => {
-  it('sets status to "active", totalCost to 0, and worktreeMissing to false', () => {
+  it('sets status to "active" and totalCost to 0', () => {
     const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', permissionMode: 'default' };
 
     const chat = synthesizeDraftChat('__LOCALID_x', draft);
 
     expect(chat.status).toBe('active');
     expect(chat.totalCost).toBe(0);
-    expect(chat.worktreeMissing).toBe(false);
   });
 });
 

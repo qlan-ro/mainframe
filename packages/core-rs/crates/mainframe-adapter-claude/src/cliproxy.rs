@@ -212,5 +212,4 @@ pub async fn resolve_env(
 }
 
 #[cfg(test)]
-#[path = "cliproxy/tests.rs"]
 mod tests;

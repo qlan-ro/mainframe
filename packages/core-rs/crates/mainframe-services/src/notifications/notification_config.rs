@@ -8,18 +8,20 @@ use crate::settings::provider_config::SettingsReader;
 /// Salvage a chat group (`{ taskComplete?, sessionError? }`). Returns `None` when
 /// a present known key is the wrong type (Zod `.safeParse` failure); unknown keys
 /// are ignored (Zod strips them).
-fn salvage_chat(value: Option<&Value>) -> Option<(Option<bool>, Option<bool>)> {
+fn salvage_chat(value: Option<&Value>) -> Option<(Option<bool>, Option<bool>, Option<bool>)> {
     let obj = value?.as_object()?;
     let mut task_complete = None;
     let mut session_error = None;
+    let mut attention_request = None;
     for (key, val) in obj {
         match key.as_str() {
             "taskComplete" => task_complete = Some(val.as_bool()?),
             "sessionError" => session_error = Some(val.as_bool()?),
+            "attentionRequest" => attention_request = Some(val.as_bool()?),
             _ => {}
         }
     }
-    Some((task_complete, session_error))
+    Some((task_complete, session_error, attention_request))
 }
 
 fn salvage_permission(value: Option<&Value>) -> Option<(Option<bool>, Option<bool>, Option<bool>)> {
@@ -67,12 +69,16 @@ pub fn read_notification_config(db: &impl SettingsReader) -> NotificationConfig 
     let root = if parsed.is_object() { &parsed } else { &empty };
 
     let mut config = defaults;
-    if let Some((task_complete, session_error)) = salvage_chat(root.get("chat")) {
+    if let Some((task_complete, session_error, attention_request)) = salvage_chat(root.get("chat"))
+    {
         if let Some(v) = task_complete {
             config.chat.task_complete = v;
         }
         if let Some(v) = session_error {
             config.chat.session_error = v;
+        }
+        if let Some(v) = attention_request {
+            config.chat.attention_request = v;
         }
     }
     if let Some((tool_request, user_question, plan_approval)) =
@@ -160,6 +166,31 @@ mod tests {
             result.permission.tool_request,
             NotificationConfig::default().permission.tool_request
         );
+    }
+
+    #[test]
+    fn honours_a_stored_attention_request_override() {
+        let stored = r#"{"chat":{"attentionRequest":false}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert!(!result.chat.attention_request);
+    }
+
+    #[test]
+    fn attention_request_defaults_to_true_when_the_key_is_absent() {
+        let stored = r#"{"chat":{"taskComplete":false}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert!(result.chat.attention_request);
+    }
+
+    #[test]
+    fn a_non_boolean_attention_request_falls_back_to_the_whole_group_default() {
+        let stored = r#"{"chat":{"taskComplete":false,"attentionRequest":"nope"}}"#;
+        let result = read_notification_config(&fake_db(Some(stored)));
+        assert_eq!(
+            result.chat.task_complete,
+            NotificationConfig::default().chat.task_complete
+        );
+        assert!(result.chat.attention_request);
     }
 
     #[test]

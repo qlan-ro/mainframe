@@ -9,12 +9,13 @@ use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, ExternalSessionPage, SessionOptions,
 };
 use mainframe_types::display::ToolCategories;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
 use crate::title_generator::generate_codex_title;
-use crate::transcript::is_codex_transcript_present;
+use crate::transcript::{is_codex_transcript_present, locate_codex_transcript};
 use crate::types::{ModelInfo, ModelListResult};
 
 pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
@@ -241,6 +242,17 @@ impl Adapter for CodexAdapter {
         _session_file_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
         Box::pin(async move { Ok(is_codex_transcript_present(&session_id, None).await) })
+    }
+
+    /// `locateTranscript(sessionId)` — same state-DB resolution as `is_transcript_present`,
+    /// re-expressed as a location instead of a bool.
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        _project_path: String,
+        _session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        Box::pin(async move { Ok(locate_codex_transcript(&session_id, None).await) })
     }
 
     fn get_tool_categories(&self) -> Option<ToolCategories> {

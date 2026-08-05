@@ -28,7 +28,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
 }));
 
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
+  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] }),
   getChat: vi.fn().mockResolvedValue(null),
   getPendingPermission: vi.fn().mockResolvedValue(null),
   resumeChat: vi.fn().mockResolvedValue(undefined),
@@ -116,7 +116,7 @@ describe('ChatThreadController.refresh — recovers from a prior failure', () =>
     // First call rejects (the failure).
     vi.mocked(getChatMessages).mockRejectedValueOnce(new Error('transient'));
     // Second call (refresh) resolves with an empty history.
-    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();
@@ -137,7 +137,7 @@ describe('ChatThreadController.refresh — recovers from a prior failure', () =>
 
 describe('ChatThreadController.load — getChatMessages resolves', () => {
   it('sets loadState.type to "ready" when getChatMessages resolves with an empty array', async () => {
-    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();
@@ -160,7 +160,7 @@ describe('ChatThreadController.load — getChatMessages resolves', () => {
 
 describe('ChatThreadController.load — seeds once per controller', () => {
   it('does not re-fetch on a second load() after the first settled ready', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();
@@ -174,7 +174,7 @@ describe('ChatThreadController.load — seeds once per controller', () => {
   });
 
   it('refresh() still re-fetches after a ready load', async () => {
-    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();
@@ -187,7 +187,7 @@ describe('ChatThreadController.load — seeds once per controller', () => {
 
   it('retries after a failed load — an error state is not a seed', async () => {
     vi.mocked(getChatMessages).mockRejectedValueOnce(new Error('transient'));
-    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false });
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false, workflowRuns: [] });
 
     const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
     ctrl.subscribeLive();

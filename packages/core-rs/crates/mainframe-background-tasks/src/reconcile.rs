@@ -70,6 +70,8 @@ fn build_recovered_snapshot(
         },
         usage: None,
         recovered: Some(true),
+        workflow_name: None,
+        run_id: None,
     }
 }
 

@@ -10,8 +10,9 @@ use mainframe_types::adapter::{ExternalSession, ExternalSessionPage};
 use mainframe_types::chat::{Chat, ChatStatus, Project};
 use mainframe_types::events::DaemonEvent;
 use tokio::task::JoinHandle;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
+use crate::message_markers::visible_message_text;
 use crate::title_generator::{derive_title_from_message, resolve_title_binary};
 
 /// 5 minutes.
@@ -123,8 +124,15 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionService<D> {
             ..Default::default()
         };
 
-        // Strip XML-like tags from the title (e.g. <command-message>, <local-command-caveat>)
-        let clean_title = title.map(strip_xml_tags).filter(|s| !s.is_empty());
+        // Drop the composer's markers (message_markers.rs) — an imported session's
+        // first message carries them verbatim, and they address the agent or the
+        // renderer, not the reader. This runs before strip_xml_tags because that
+        // collapses newlines, which would fuse a marker block with the body into one
+        // line the line-based strip then swallows whole. Both title paths consume it.
+        let clean_title = title
+            .map(visible_message_text)
+            .map(|t| strip_xml_tags(&t))
+            .filter(|s| !s.is_empty());
         if let Some(ct) = &clean_title {
             updates.title = Some(derive_title_from_message(ct));
         }
@@ -347,6 +355,12 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         .as_deref()
         == Some("true")
     {
+        debug!(
+            chat_id = %chat.id,
+            adapter_id,
+            reason = "disabled_by_setting",
+            "title generation skipped"
+        );
         return;
     }
 
@@ -355,6 +369,12 @@ async fn generate_import_title<D: ExternalSessionDeps>(
         adapter_id,
     );
     let Some(title) = deps.generate_title(adapter_id, content, &binary).await else {
+        debug!(
+            chat_id = %chat.id,
+            adapter_id,
+            reason = "no_title",
+            "title generation produced no title"
+        );
         return;
     };
 
@@ -466,6 +486,13 @@ mod tests {
         chats: Vec<Chat>,
         has_reconcile: bool,
         reconcile_calls: StdMutex<Vec<String>>,
+        /// When `true`, `settings_get("general", "titleGeneration.disabled")`
+        /// answers `Some("true")`.
+        title_disabled: bool,
+        /// Titles `chats_update` observed being written (only when
+        /// `updates.title.is_some()`).
+        title_updates: StdMutex<Vec<String>>,
+        events: StdMutex<Vec<DaemonEvent>>,
     }
     impl ExternalSessionDeps for SweepDeps {
         fn projects_get(&self, _project_id: &str) -> Option<Project> {
@@ -480,14 +507,30 @@ mod tests {
         fn chats_create(&self, _project_id: &str, _adapter_id: &str) -> Chat {
             test_chat("new")
         }
-        fn chats_update(&self, _chat_id: &str, _updates: &ExternalChatUpdate) {}
+        fn chats_update(&self, _chat_id: &str, updates: &ExternalChatUpdate) {
+            if let Some(title) = &updates.title {
+                self.title_updates
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(title.clone());
+            }
+        }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             self.chats.clone()
         }
-        fn settings_get(&self, _ns: &str, _key: &str) -> Option<String> {
-            None
+        fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
+            if self.title_disabled && ns == "general" && key == "titleGeneration.disabled" {
+                Some("true".to_string())
+            } else {
+                None
+            }
         }
-        fn emit_event(&self, _event: DaemonEvent) {}
+        fn emit_event(&self, event: DaemonEvent) {
+            self.events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(event);
+        }
         fn generate_title<'a>(
             &'a self,
             _adapter_id: &'a str,
@@ -547,6 +590,7 @@ mod tests {
             ],
             has_reconcile: true,
             reconcile_calls: StdMutex::new(Vec::new()),
+            ..Default::default()
         });
         let service = ExternalSessionService::new(deps.clone());
 
@@ -565,6 +609,7 @@ mod tests {
             chats: vec![chat("with-session", Some("sess-a"), ChatStatus::Active)],
             has_reconcile: false,
             reconcile_calls: StdMutex::new(Vec::new()),
+            ..Default::default()
         });
         let service = ExternalSessionService::new(deps.clone());
         service.sweep_transcript_presence("p1").await;
@@ -574,6 +619,69 @@ mod tests {
                 .unwrap_or_else(|e| e.into_inner())
                 .is_empty()
         );
+    }
+
+    // ── generate_import_title observability (#287) ──────────────────────────
+    // Each case installs a `LogCapture` guard and asserts the captured
+    // `(level, reason)` event plus the title-retention invariants; only the
+    // deps setup and the expected reason token differ between cases.
+
+    type CapturedEvents = StdMutex<Vec<(tracing::Level, Option<String>)>>;
+
+    fn assert_logged_once_and_title_untouched(
+        events: &Arc<CapturedEvents>,
+        expected_reason: &str,
+        deps: &SweepDeps,
+    ) {
+        assert_eq!(
+            crate::test_support::LogCapture::events_with_reason(events),
+            vec![(tracing::Level::DEBUG, expected_reason.to_string())]
+        );
+        assert!(
+            deps.title_updates
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_empty()
+        );
+        assert!(
+            !deps
+                .events
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .any(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
+        );
+    }
+
+    #[tokio::test]
+    async fn import_with_title_generation_disabled_logs_and_keeps_the_title() {
+        let deps = Arc::new(SweepDeps {
+            title_disabled: true,
+            ..Default::default()
+        });
+        let mut chat = test_chat("c1");
+        chat.title = Some("Fallback Title".to_string());
+
+        let (subscriber, events) = crate::test_support::LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
+
+        assert_logged_once_and_title_untouched(&events, "disabled_by_setting", &deps);
+        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
+    }
+
+    #[tokio::test]
+    async fn import_with_no_title_logs_no_title_and_keeps_the_title() {
+        let deps = Arc::new(SweepDeps::default());
+        let mut chat = test_chat("c1");
+        chat.title = Some("Fallback Title".to_string());
+
+        let (subscriber, events) = crate::test_support::LogCapture::install();
+        let _guard = tracing::subscriber::set_default(subscriber);
+        generate_import_title(deps.as_ref(), &mut chat, "first message", "claude").await;
+
+        assert_logged_once_and_title_untouched(&events, "no_title", &deps);
+        assert_eq!(chat.title.as_deref(), Some("Fallback Title"));
     }
 }
 

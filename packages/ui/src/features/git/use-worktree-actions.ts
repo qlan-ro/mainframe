@@ -7,7 +7,7 @@
 import { useCallback } from 'react';
 import { mfToast } from '@/lib/toast';
 import { getProjectWorktrees, deleteWorktree } from '@/lib/api/git';
-import { requestGitConfirm } from './use-git-confirm';
+import { requestGitConfirm } from './git-confirm';
 import { resolveWorktree } from './worktree-resolve';
 import type { BranchBusy } from './use-branch-busy';
 

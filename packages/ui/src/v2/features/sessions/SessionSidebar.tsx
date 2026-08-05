@@ -40,7 +40,7 @@ import { TasksSidebarSection } from '../tasks/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
 import { TagFilterBar } from './TagFilterBar';
-import { useRemoveProject } from './use-remove-project';
+import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
 /** Reserves the native macOS traffic-lights cluster (3 × 12px + gaps + inset). */
 const TRAFFIC_LIGHTS_WIDTH = 80;

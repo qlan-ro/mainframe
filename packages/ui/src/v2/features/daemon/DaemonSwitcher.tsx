@@ -6,7 +6,7 @@
  * reflects live connection state; inactive ones read `connected`, since nothing
  * polls their health.
  */
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
@@ -15,6 +15,7 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@v2/components/
 // ports with the window-states pass.
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
+import { getAuthFailureSnapshot, hasAuthFailure, subscribeAuthFailures } from '@/lib/daemon/auth-failure-store';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
 import { AddRemoteDialog, type DialogMode } from './AddRemoteDialog';
@@ -78,14 +79,21 @@ export function DaemonSwitcher() {
 
   const activeMeta = registry.daemons.find((d) => d.id === registry.activeId) ?? targetToMeta(target);
 
+  // Re-derive every status whenever an auth-failure marker flips; the snapshot
+  // itself carries no data, statusOf reads the marker per id.
+  const authSnapshot = useSyncExternalStore(subscribeAuthFailures, getAuthFailureSnapshot);
+
   const statusOf = useCallback(
     (id: string): DaemonStatus => {
-      if (id !== registry.activeId) return 'connected';
-      if (connState === 'connected') return 'connected';
-      if (connState === 'connecting') return 'connecting';
-      return 'unreachable';
+      const isActive = id === registry.activeId;
+      // A dead socket outranks a stale token: re-pairing can't reach the daemon.
+      if (isActive && connState === 'disconnected') return 'unreachable';
+      if (hasAuthFailure(id)) return 'needs-repair';
+      if (!isActive) return 'connected';
+      return connState === 'connected' ? 'connected' : 'connecting';
     },
-    [registry.activeId, connState],
+    // authSnapshot invalidates the memo; hasAuthFailure reads live state.
+    [registry.activeId, connState, authSnapshot],
   );
 
   const handleSwitch = useCallback((d: DaemonMeta) => void registry.switchTo(d.id), [registry]);

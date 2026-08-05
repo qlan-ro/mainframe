@@ -8,11 +8,15 @@
 //! `.await` that emits events or does session I/O (CONCURRENCY.tsv rules 1-4).
 //!
 //! Task 4.1 pre-created these module files so parallel port agents never touch a
-//! shared `lib.rs`. Each module is an empty skeleton pending its per-file port.
+//! shared `lib.rs`. Modules land their per-file port independently as agents pick
+//! them up — check each module's own PORT STATUS footer, not this one, for its
+//! current state (`plan_mode_actions`/`plan_mode_handler`, for example, are fully
+//! ported, not skeletons).
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod attachment_processor;
+pub mod attention_request;
 pub mod chat_manager;
 pub mod config_manager;
 pub mod context_tracker;
@@ -23,6 +27,7 @@ pub mod external_session_service;
 pub mod idle_scanner;
 pub mod lifecycle_manager;
 pub mod message_cache;
+pub mod message_markers;
 pub mod permission_handler;
 pub mod permission_manager;
 pub mod plan_mode_actions;
@@ -38,8 +43,9 @@ pub mod worktree_offer_scan;
 #[cfg(test)]
 mod test_support;
 
-// PORT STATUS: src/chat/* — skeleton only (Task 4.1)
+// PORT STATUS: src/chat/* — module files pre-created by Task 4.1, ported
+// incrementally since; see each module's own footer for its state.
 // confidence: low
 // todos: 0
-// notes: module stubs pre-created for parallel ports; no logic yet. Consumes the
+// notes: this file only wires `pub mod` declarations. Consumes the
 // notes: mainframe-adapter-api traits (sessions are Arc<dyn AdapterSession>).

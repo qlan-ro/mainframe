@@ -69,6 +69,13 @@ export interface Chat {
   /** Live background work (agents/bash/workflows) — derived per response, never persisted. */
   backgroundActivity?: BackgroundActivity;
   worktreeMissing?: boolean;
+  /**
+   * Derived per response over the chat's effective working directory
+   * (`worktreePath ?? project.path`); generalizes `worktreeMissing`, never persisted.
+   */
+  directoryMissing?: boolean;
+  /** The absent directory. Set only when `directoryMissing` is true. */
+  missingDirectoryPath?: string;
   /** True when the CLI's transcript file for this session was deleted from disk (persisted flag). */
   transcriptMissing?: boolean;
   todos?: TodoItem[];
@@ -92,6 +99,8 @@ export interface Project {
   createdAt: string;
   lastOpenedAt: string;
   parentProjectId?: string | null;
+  /** Derived on read by stat-ing `path`; never persisted, absent on responses that do not derive it. */
+  available?: boolean;
 }
 
 export interface ChatMessage {

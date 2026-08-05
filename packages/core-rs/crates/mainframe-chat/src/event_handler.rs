@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_runtime::time::now_iso8601;
@@ -15,9 +16,12 @@ use mainframe_types::chat::{
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, ToolCategories};
-use mainframe_types::events::{ChatNotificationLevel, ChatUpdatedReason, DaemonEvent};
+use mainframe_types::events::{
+    ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
+};
 use tracing::{debug, warn};
 
+use crate::attention_request::{AttentionDedupe, normalize_attention_body};
 use crate::display_emitter::emit_display_delta;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
@@ -89,6 +93,10 @@ pub trait EventHandlerDeps: Send + Sync {
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool;
     fn notify_task_complete(&self) -> bool;
     fn notify_session_error(&self) -> bool;
+    /// Gates `notifications.chat.attentionRequest`. Not defaulted — a
+    /// defaulted trait method silently inherited the wrong behavior once
+    /// before (bug class #273), so every deps impl must state its answer.
+    fn notify_attention_request(&self) -> bool;
     fn send_push(&self, _msg: PushOut) {}
 
     /// `tracker?.endAllRunning(chatId)` — stop every live background task on session
@@ -96,6 +104,11 @@ pub trait EventHandlerDeps: Send + Sync {
     /// not defaulted: a silently-inherited no-op left orphaned tasks Running forever
     /// in production, the same defaulted-trait bug class as #273.
     fn tracker_end_all_running(&self, chat_id: &str);
+
+    /// D5 (#273) — the workflow-run store's counterpart to
+    /// `tracker_end_all_running`: the CLI owns every live workflow run, so none
+    /// can report completion after it dies.
+    fn workflow_runs_stop_all(&self, chat_id: &str);
 
     /// `onProviderQuota(adapterId, quota)` — an account-wide provider-plan quota
     /// escalation pushed from a session event (Codex `account/rateLimits/updated`,
@@ -134,6 +147,16 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// Truncate to [`PUSH_BODY_MAX_LENGTH`] chars, ending in an ellipsis; shared
+/// with `attention_request::normalize_attention_body`.
+pub(crate) fn truncate_push_body(text: &str) -> String {
+    if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
+    format!("{head}\u{2026}")
+}
+
 fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
     let Some(msgs) = msgs else {
         return String::new();
@@ -148,11 +171,7 @@ fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
                 if text.is_empty() {
                     continue;
                 }
-                if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
-                    return text.to_string();
-                }
-                let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
-                return format!("{head}\u{2026}");
+                return truncate_push_body(text);
             }
         }
     }
@@ -164,6 +183,9 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     permissions: Arc<Mutex<PermissionManager>>,
     display_cache: DisplayCache,
     deps: Arc<D>,
+    /// Survives a session resume (plan decision P3) — kept on the handler,
+    /// not the per-session sink `build_sink` recreates.
+    attention_dedupe: Arc<Mutex<AttentionDedupe>>,
 }
 
 impl<D: EventHandlerDeps + 'static> EventHandler<D> {
@@ -177,6 +199,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             permissions,
             display_cache: Arc::new(Mutex::new(HashMap::new())),
             deps,
+            attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
         }
     }
 
@@ -198,6 +221,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
+            attention_dedupe: self.attention_dedupe.clone(),
         })
     }
 
@@ -264,6 +288,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
+    attention_dedupe: Arc<Mutex<AttentionDedupe>>,
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -891,6 +916,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         title: "Session Error".to_string(),
                         body: "A session ended unexpectedly".to_string(),
                         level: ChatNotificationLevel::Error,
+                        kind: Some(ChatNotificationKind::SessionError),
                     });
                     self.deps.send_push(PushOut {
                         chat_id: self.chat_id.clone(),
@@ -916,6 +942,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 title: "Task Complete".to_string(),
                 body: body.clone(),
                 level: ChatNotificationLevel::Success,
+                kind: Some(ChatNotificationKind::TaskComplete),
             });
             self.deps.send_push(PushOut {
                 chat_id: self.chat_id.clone(),
@@ -1010,6 +1037,8 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         // orphaned entries don't pin the sidebar's working indicator; the
         // tracker emits `ended` per survivor for connected clients.
         self.deps.tracker_end_all_running(&self.chat_id);
+        // D5 (#273): the workflow-run store gets the same CLI-exit sweep.
+        self.deps.workflow_runs_stop_all(&self.chat_id);
 
         if let Some(cell) = &cell {
             let chat = {
@@ -1232,11 +1261,45 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.deps.on_provider_quota(adapter_id, quota);
     }
+
+    fn on_attention_request(&self, message: &str) {
+        let Some(attention) = normalize_attention_body(message) else {
+            return;
+        };
+        if !self.deps.notify_attention_request() {
+            return;
+        }
+        let admitted = self
+            .attention_dedupe
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .admit(&self.chat_id, &attention.dedupe_key, Instant::now());
+        if !admitted {
+            return;
+        }
+        self.deps.emit_event(DaemonEvent::ChatNotification {
+            chat_id: self.chat_id.clone(),
+            title: "Claude needs your attention".to_string(),
+            body: attention.body.clone(),
+            level: ChatNotificationLevel::Success,
+            kind: Some(ChatNotificationKind::AttentionRequest),
+        });
+        self.deps.send_push(PushOut {
+            chat_id: self.chat_id.clone(),
+            title: "Claude needs your attention".to_string(),
+            body: attention.body,
+            push_type: "attention_request".to_string(),
+            priority: "high".to_string(),
+        });
+    }
 }
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
+
+#[cfg(test)]
+mod attention_tests;
 
 #[cfg(test)]
 mod worktree_trigger_tests;
@@ -1338,6 +1401,9 @@ mod tests {
         fn notify_session_error(&self) -> bool {
             false
         }
+        fn notify_attention_request(&self) -> bool {
+            true
+        }
         fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
             // Mirror DaemonChatDeps: session-pushed quota sparse-merges (Push).
             if let Some(q) = &self.quota {
@@ -1346,6 +1412,8 @@ mod tests {
         }
         /// Empty on purpose: BgDeps below covers on_exit's tracker_end_all_running wiring.
         fn tracker_end_all_running(&self, _chat_id: &str) {}
+        /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+        fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     }
 
     fn umsg(id: &str, meta: Option<HashMap<String, serde_json::Value>>) -> ChatMessage {
@@ -1863,9 +1931,14 @@ mod tests {
         fn notify_session_error(&self) -> bool {
             false
         }
+        fn notify_attention_request(&self) -> bool {
+            true
+        }
         fn tracker_end_all_running(&self, chat_id: &str) {
             self.tracker.end_all_running(chat_id);
         }
+        /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
+        fn workflow_runs_stop_all(&self, _chat_id: &str) {}
     }
 
     fn bg_sink(deps: Arc<BgDeps>) -> Arc<dyn SessionSink> {
@@ -1885,6 +1958,7 @@ mod tests {
             tool_use_id: format!("tu-{id}"),
             command: command.to_string(),
             description: description.to_string(),
+            workflow_name: None,
         }
     }
 

@@ -20,12 +20,15 @@
  * genuinely new New for a recycled localId must arm normally, not stay
  * suppressed from a previous discard on that same slot.
  *
- * Composer segments are keyed by that same reused id, so they leak the same
- * way — a file quoted into an abandoned draft would come back as a pill on the
- * next New and ship its path to a different project. Clearing them here keeps
- * the whole draft (config + readiness + composition) on one reset point.
+ * Composer segments and session references are keyed by that same reused id, so
+ * they leak the same way — a file quoted into an abandoned draft would come back
+ * as a pill on the next New and ship its path to a different project, and a
+ * `@session[…]` binding would attach another project's transcript. Clearing them
+ * here keeps the whole draft (config + readiness + composition + references) on
+ * one reset point.
  */
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 import { clearDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { abandonCreateForLocal } from '../runtime/new-thread-coordinator';
@@ -38,4 +41,5 @@ export function resetNewThreadDraft(newThreadId: string | null | undefined): voi
   useNewThreadReady.getState().clearReady(newThreadId);
   clearDraftDiscarded(newThreadId);
   useComposerSegments.getState().clear(newThreadId);
+  useSessionReferences.getState().clear(newThreadId);
 }

@@ -1,11 +1,11 @@
 /**
  * DegradedChatCard — unified recovery card for a degraded chat, rendered in
- * the thread area. Replaces both the silent empty thread (transcript deleted
- * from disk) and the old composer worktree banner. One section per cause; a
- * chat can have both, in which case the transcript's "Continue here" merges
- * into whichever worktree action is chosen (fresh session after recovery).
+ * the thread's sticky footer. It covers deleted transcripts, deleted worktrees,
+ * and missing project directories. One section renders per cause; a chat can
+ * have multiple causes, in which case transcript recovery merges into the
+ * working-directory action.
  */
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -14,14 +14,18 @@ import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatW
 const ACTION_BUTTON =
   'rounded-md border border-border px-3 py-1.5 text-label text-foreground transition-colors hover:bg-accent disabled:opacity-50';
 
-function CauseSection({ title, body }: { title: string; body: string }) {
+function MissingPath({ path }: { path: string }) {
+  return <code className="font-mono text-label break-all">{path}</code>;
+}
+
+function CauseSection({ title, body }: { title: string; body: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 text-left">
+    <div className="flex min-w-0 flex-col gap-1 text-left">
       <p className="flex items-center gap-1.5 text-body font-medium text-foreground">
         <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />
         {title}
       </p>
-      <p className="text-label text-muted-foreground">{body}</p>
+      <p className="min-w-0 text-label text-muted-foreground">{body}</p>
     </div>
   );
 }
@@ -35,7 +39,8 @@ export function DegradedChatCard() {
   const chat = extras?.state.chatConfig ?? null;
   const worktreeMissing = chat?.worktreeMissing ?? false;
   const transcriptMissing = chat?.transcriptMissing ?? false;
-  if (!chat || (!worktreeMissing && !transcriptMissing)) return null;
+  const directoryMissing = chat?.directoryMissing ?? false;
+  if (!chat || (!worktreeMissing && !transcriptMissing && !directoryMissing)) return null;
   const chatId = chat.id;
 
   const run = (action: () => Promise<void>) => {
@@ -51,7 +56,7 @@ export function DegradedChatCard() {
   return (
     <div
       data-testid="chat-degraded-card"
-      className="mx-auto my-8 flex w-full max-w-md flex-col gap-4 rounded-lg border border-border bg-card px-5 py-5"
+      className="flex w-full min-w-0 flex-col gap-4 rounded-lg border border-border bg-card px-5 py-5"
     >
       {transcriptMissing && (
         <CauseSection
@@ -67,9 +72,28 @@ export function DegradedChatCard() {
         <CauseSection
           title="Worktree deleted"
           body={
-            chat.worktreePath
-              ? `The worktree for this session (${chat.worktreePath}) was deleted.`
-              : 'The worktree for this session was deleted.'
+            chat.worktreePath ? (
+              <>
+                The worktree for this session <MissingPath path={chat.worktreePath} /> was deleted.
+              </>
+            ) : (
+              'The worktree for this session was deleted.'
+            )
+          }
+        />
+      )}
+      {directoryMissing && chat.worktreePath == null && (
+        <CauseSection
+          title="Project directory missing"
+          body={
+            chat.missingDirectoryPath ? (
+              <>
+                The project directory <MissingPath path={chat.missingDirectoryPath} /> is missing. Mainframe kept this
+                session and its history, but sending is unavailable until the directory is restored.
+              </>
+            ) : (
+              'The project directory for this session is missing. Mainframe kept the session and its history, but sending is unavailable until the directory is restored.'
+            )
           }
         />
       )}
@@ -81,7 +105,7 @@ export function DegradedChatCard() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {transcriptMissing && !worktreeMissing && (
+        {transcriptMissing && !worktreeMissing && !directoryMissing && (
           <button
             data-testid="chat-degraded-continue"
             type="button"

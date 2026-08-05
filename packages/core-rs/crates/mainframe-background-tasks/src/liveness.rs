@@ -195,6 +195,7 @@ mod tests {
                 tool_use_id: "u".to_string(),
                 command: "x".to_string(),
                 description: String::new(),
+                workflow_name: None,
             },
             output_path.to_string(),
         );
@@ -351,6 +352,7 @@ mod tests {
                 tool_use_id: "u".to_string(),
                 command: String::new(),
                 description: "subagent".to_string(),
+                workflow_name: None,
             },
             "/p/a1.out".to_string(),
         );

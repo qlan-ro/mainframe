@@ -7,6 +7,12 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Test-only `log_capture` module, enabled from the [dev-dependencies] entries
+# of mainframe-chat and mainframe-server (resolver = "2" keeps a dev-dependency
+# feature out of release builds of the *depending* crate's own lib target).
+test-support = []
+
 [dependencies]
 mainframe-types = { workspace = true }
 tracing = { workspace = true }

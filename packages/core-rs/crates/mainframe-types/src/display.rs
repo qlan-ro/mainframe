@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::adapter::ControlRequest;
 use crate::chat::DiffHunk;
+use crate::claude_workflow::ClaudeWorkflowRun;
 use crate::content::LeafContent;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -153,6 +154,8 @@ pub struct DisplayMessage {
 pub struct ChatHistoryPayload {
     pub messages: Vec<DisplayMessage>,
     pub transcript_missing: bool,
+    #[serde(default)]
+    pub workflow_runs: Vec<ClaudeWorkflowRun>,
 }
 
 #[cfg(test)]
@@ -244,7 +247,11 @@ mod tests {
 
     #[test]
     fn chat_history_payload_round_trips() {
-        roundtrip::<ChatHistoryPayload>(json!({ "messages": [], "transcriptMissing": true }));
+        roundtrip::<ChatHistoryPayload>(json!({
+            "messages": [],
+            "transcriptMissing": true,
+            "workflowRuns": []
+        }));
         roundtrip::<ChatHistoryPayload>(json!({
             "messages": [
                 {
@@ -255,7 +262,8 @@ mod tests {
                     "timestamp": "2026-07-08T10:15:30.000Z"
                 }
             ],
-            "transcriptMissing": false
+            "transcriptMissing": false,
+            "workflowRuns": []
         }));
     }
 }

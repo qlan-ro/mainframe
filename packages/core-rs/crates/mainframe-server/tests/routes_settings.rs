@@ -468,3 +468,47 @@ async fn notifications_put_rejects_invalid_payload() {
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(body["success"], false);
 }
+
+#[tokio::test]
+async fn notifications_put_persists_attention_request_leaf() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "notifications": { "chat": { "attentionRequest": false } } }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], true);
+
+    let get_body = get_json(&server, "/api/settings/general").await;
+    assert_eq!(
+        get_body["data"]["notifications"]["chat"]["attentionRequest"],
+        false
+    );
+    let d = NotificationConfig::default();
+    assert_eq!(
+        get_body["data"]["notifications"]["chat"]["taskComplete"],
+        d.chat.task_complete
+    );
+    assert_eq!(
+        get_body["data"]["notifications"]["chat"]["sessionError"],
+        d.chat.session_error
+    );
+}
+
+#[tokio::test]
+async fn notifications_put_rejects_non_boolean_attention_request() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/general"))
+        .json(&json!({ "notifications": { "chat": { "attentionRequest": "nope" } } }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["success"], false);
+    assert_eq!(get_setting(&server, "general", "notifications").await, None);
+}

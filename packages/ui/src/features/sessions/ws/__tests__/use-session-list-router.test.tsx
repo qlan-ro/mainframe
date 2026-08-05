@@ -8,6 +8,7 @@
  *  - onChatUpdated → calls runtime.threads.reload() (corrected contract: reload,
  *    not a surgical patch)
  *  - onMarkUnread → calls unreadStore.markUnread with the chatId
+ *  - onOsNotify → calls the host bridge's notify(), even on the active thread
  *  - active thread change → calls clearUnread with the active id
  *  - cross-project activate → calls setFilterProjectId(null)
  *  - same-project activate → does NOT call setFilterProjectId
@@ -47,11 +48,14 @@ let fakeThreadItems: Array<{
   custom?: { projectId?: string; updatedAt?: number };
 }>;
 
+let notifySpy: ReturnType<typeof vi.fn<(title: string, body?: string) => Promise<void>>>;
+
 // Captured from the createSessionListRouter factory mock
 let capturedDeps: {
   onReload: () => void;
   onChatUpdated: (chat: Chat) => void;
   onMarkUnread: (id: string) => void;
+  onOsNotify: (title: string, body: string) => void;
 };
 
 // Tracks how many times the factory was called across renders
@@ -74,6 +78,10 @@ vi.mock('../session-list-router', () => ({
     factoryCallCount += 1;
     return { dispose: disposeSpy };
   }),
+}));
+
+vi.mock('../../../../lib/host', () => ({
+  getHost: () => ({ notify: (title: string, body?: string) => notifySpy(title, body) }),
 }));
 
 vi.mock('../../../../store/unread-store', () => ({
@@ -138,6 +146,7 @@ beforeEach(() => {
   switchSpy = vi.fn();
   reloadSpy = vi.fn();
   disposeSpy = vi.fn();
+  notifySpy = vi.fn().mockResolvedValue(undefined);
 
   filterProjectIdValue = null;
   mainThreadIdValue = null;
@@ -189,6 +198,45 @@ it('calls markUnreadSpy with "c3" when capturedDeps.onMarkUnread("c3") is invoke
 
   expect(markUnreadSpy).toHaveBeenCalledTimes(1);
   expect(markUnreadSpy).toHaveBeenCalledWith('c3');
+});
+
+// ---------------------------------------------------------------------------
+// onOsNotify → host.notify(), unguarded by the active-thread check
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — attention requests reach the host bridge', () => {
+  it('notifies the OS for the ACTIVE thread while markUnread stays suppressed', () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1' } }];
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onOsNotify('Claude needs your attention', 'Which database should I migrate?');
+      capturedDeps.onMarkUnread('chat-A');
+    });
+
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledWith('Claude needs your attention', 'Which database should I migrate?');
+    expect(markUnreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns instead of rejecting when the host bridge fails to notify', async () => {
+    notifySpy = vi.fn().mockRejectedValue(new Error('no permission'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onOsNotify('Claude needs your attention', 'Ping');
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------

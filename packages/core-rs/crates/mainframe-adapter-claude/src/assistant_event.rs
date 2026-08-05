@@ -51,9 +51,37 @@ fn tag_block(block: &Value, parent_tool_use_id: &str) -> Value {
     b
 }
 
+/// Claude's `PushNotification` tool call (todo #293), forwarded before any
+/// subagent-tagging or state-lock logic (plan decision P1) — a subagent may
+/// call it too, and the sink alone owns the trim/dedupe rules (P2).
+fn scan_attention_requests(content: &[Value], sink: &dyn SessionSink) {
+    for block in content {
+        if block.get("type").and_then(Value::as_str) != Some("tool_use") {
+            continue;
+        }
+        if block.get("name").and_then(Value::as_str) != Some("PushNotification") {
+            continue;
+        }
+        if let Some(message) = block
+            .get("input")
+            .and_then(|i| i.get("message"))
+            .and_then(Value::as_str)
+        {
+            sink.on_attention_request(message);
+        }
+    }
+}
+
 pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     let message = event.get("message");
     let usage = message.and_then(|m| m.get("usage"));
+
+    if let Some(content) = message
+        .and_then(|m| m.get("content"))
+        .and_then(Value::as_array)
+    {
+        scan_attention_requests(content, sink);
+    }
 
     let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
     let st: &mut ClaudeSessionState = &mut guard;

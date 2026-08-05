@@ -94,6 +94,30 @@ describe('reduceChatThreadState — chat.config.updated', () => {
     expect(afterDetach.chatConfig?.worktreePath).toBeUndefined();
   });
 
+  it('adopts a chat that differs only in directoryMissing', () => {
+    const missing = { ...chat, directoryMissing: true, missingDirectoryPath: '/gone/proj' } as unknown as Chat;
+    const recovered = { ...chat, directoryMissing: false, missingDirectoryPath: undefined } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withMissing = reduceChatThreadState(base, { type: 'chat.config.updated', chat: missing });
+    const afterRecovery = reduceChatThreadState(withMissing, { type: 'chat.config.updated', chat: recovered });
+
+    expect(afterRecovery.chatConfig).toBe(recovered);
+    expect(afterRecovery.chatConfig?.directoryMissing).toBe(false);
+  });
+
+  it('adopts a chat that differs only in missingDirectoryPath', () => {
+    const missing = { ...chat, directoryMissing: true, missingDirectoryPath: '/gone/proj' } as unknown as Chat;
+    const moved = { ...chat, directoryMissing: true, missingDirectoryPath: '/gone/elsewhere' } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withMissing = reduceChatThreadState(base, { type: 'chat.config.updated', chat: missing });
+    const afterPathChange = reduceChatThreadState(withMissing, { type: 'chat.config.updated', chat: moved });
+
+    expect(afterPathChange.chatConfig).toBe(moved);
+    expect(afterPathChange.chatConfig?.missingDirectoryPath).toBe('/gone/elsewhere');
+  });
+
   it('still ignores identity-irrelevant churn (same config object fields)', () => {
     const churn = { ...chat, totalCost: 42 } as unknown as Chat;
 

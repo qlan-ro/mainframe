@@ -231,6 +231,7 @@ async fn connection_global_event_reaches_unsubscribed_client() {
             title: "Task Complete".into(),
             body: "done".into(),
             level: mainframe_types::events::ChatNotificationLevel::Success,
+            kind: Some(mainframe_types::events::ChatNotificationKind::TaskComplete),
         });
     let event = ws.wait_for("chat.notification").await;
     assert_eq!(event["chatId"], "background-chat");

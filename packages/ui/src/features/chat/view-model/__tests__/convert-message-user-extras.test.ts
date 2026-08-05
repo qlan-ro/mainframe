@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { DisplayMessage } from '@qlan-ro/mainframe-types';
 import { convertMessage } from '../convert-message';
-import { SANDBOX_CAPTURE_SENTINEL } from '../parse-captures';
+import { SANDBOX_CAPTURE_SENTINEL } from '../../markers/message-markers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -196,8 +196,7 @@ describe('convertMessage USER — native file attachments', () => {
     const r = result(msg);
 
     const previews = r.metadata?.custom?.mainframe?.attachmentPreviews as
-      | Array<{ name: string; kind: string }>
-      | undefined;
+      Array<{ name: string; kind: string }> | undefined;
     expect(previews).toEqual([
       { name: 'photo.png', kind: 'image' },
       { name: 'element1.png', kind: 'image' },

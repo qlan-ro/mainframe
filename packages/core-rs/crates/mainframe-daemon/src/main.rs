@@ -14,8 +14,12 @@
 
 mod builtin_plugins;
 mod cli;
+mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+
+#[cfg(test)]
+mod github_issues_port_tests;
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -46,6 +50,7 @@ use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
 };
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
+use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::ClaudeWorkflowStore};
 use mainframe_launch::{
     BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
     ResolveCloudflaredDeps, TunnelManager, TunnelManagerOptions, TunnelStartOptions,
@@ -54,7 +59,7 @@ use mainframe_launch::{
 use mainframe_lsp::{LspManager, LspRegistry};
 use mainframe_plugins::event_bus::PublicDaemonBus;
 use mainframe_plugins::manager::PluginManagerDeps;
-use mainframe_plugins::{EmitSink, PluginHostDb, PluginManager};
+use mainframe_plugins::{EmitSink, GitHubIssues, PluginHostDb, PluginManager};
 use mainframe_server::ctx::{AppCtx, DefaultRunner, GitFactory, Services};
 use mainframe_server::db::Db;
 use mainframe_server::{
@@ -194,9 +199,11 @@ async fn run_daemon() {
     // ownership); both adapters register before the static snapshot seed so
     // `GET /api/adapters` serves instantly without a CLI spawn.
     let background_tasks = Arc::new(BackgroundTaskTracker::new());
+    let claude_workflows = Arc::new(ClaudeWorkflowStore::new());
     let adapters = Arc::new(AdapterRegistry::new());
     adapters.register(Arc::new(ClaudeAdapter::new(
         Arc::clone(&background_tasks),
+        Arc::clone(&claude_workflows),
         resolved_path.clone(),
     )));
     adapters.register(Arc::new(CodexAdapter::new(resolved_path.clone())));
@@ -209,6 +216,7 @@ async fn run_daemon() {
     // Forward tracker emissions through the broadcast (index.ts wires
     // background_task.started/updated/ended onto broadcastEvent).
     spawn_task_event_bridge(Arc::clone(&background_tasks), broadcast.clone());
+    spawn_workflow_run_bridge(Arc::clone(&claude_workflows), broadcast.clone());
 
     // uncaughtException cleanup (index.ts `process.on('uncaughtException')`): a
     // panic is Rust's uncaught exception. Kill adapter children and — crucially —
@@ -282,6 +290,7 @@ async fn run_daemon() {
             db.clone(),
         )),
         Arc::clone(&quota_manager),
+        Arc::clone(&claude_workflows),
         resolved_path.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
@@ -328,11 +337,27 @@ async fn run_daemon() {
         let _ = plugin_emit_bcast.send(event);
     });
     let plugin_host_db: Arc<dyn PluginHostDb> = Arc::new(DaemonPluginHostDb::new(db.clone()));
+    // GitHub Issues port (task 5c): built over the automations engine's own
+    // credential store so a token connected via the link dialog after boot
+    // resolves without a restart (task 5a/5b). `None` when the engine failed
+    // to start, or when the HTTP client cannot be built — the plugin context
+    // then answers every call with the engine-unavailable guard (task 4)
+    // instead of this composition root treating it as fatal.
+    let github: Option<Arc<dyn GitHubIssues>> = automations.as_ref().and_then(|automations| {
+        match github_issues_port::DaemonGitHubIssuesPort::new(automations.credentials()) {
+            Ok(port) => Some(Arc::new(port) as Arc<dyn GitHubIssues>),
+            Err(err) => {
+                tracing::error!(%err, "github issues port unavailable: HTTP client build failed");
+                None
+            }
+        }
+    });
     let plugin_manager = Arc::new(PluginManager::new(PluginManagerDeps {
         host_db: plugin_host_db,
         daemon_bus,
         emit: plugin_emit,
         adapters: None,
+        github,
     }));
     if let Err(err) = builtin_plugins::load_builtin_plugins(&plugin_manager, &data_dir).await {
         tracing::error!(%err, "failed to load builtin plugins");
@@ -361,6 +386,7 @@ async fn run_daemon() {
         ws_clients: Arc::clone(&ws_clients),
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
+        claude_workflows: Arc::clone(&claude_workflows),
         chat_manager: Some(Arc::clone(&chats)),
         launch_registry: Some(Arc::clone(&launch_registry)),
         tunnel_manager: Some(Arc::clone(&tunnel_manager)),

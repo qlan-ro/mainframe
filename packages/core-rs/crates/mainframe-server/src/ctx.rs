@@ -10,6 +10,7 @@ use mainframe_adapter_api::AdapterRegistry;
 use mainframe_automations::AutomationsEngine;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_launch::{LaunchRegistry, PortTunnelRegistry, TunnelManager};
 use mainframe_lsp::LspManager;
 use mainframe_plugins::PluginManager;
@@ -111,6 +112,9 @@ pub struct AppCtx {
     /// The `BackgroundTaskTracker` (contract `backgroundTasks` handle). Backs the
     /// `/api/chats/:chatId/background-tasks*` routes. Cheap to construct, so concrete.
     pub background_tasks: Arc<BackgroundTaskTracker>,
+    /// The `ClaudeWorkflowStore` (retained in-memory Claude workflow runs). Backs
+    /// the chat-history `workflowRuns` fold. Cheap to construct, so concrete.
+    pub claude_workflows: Arc<ClaudeWorkflowStore>,
     /// The `ChatManager` (contract `chats` handle). `None` until the daemon boot
     /// (the next task) wires construction — `ChatManager::new` needs a full
     /// `ChatManagerDeps` impl, so the Phase-3 test harness cannot build one. Chat
@@ -240,6 +244,7 @@ impl AppCtx {
             broadcast,
             adapter_registry: Arc::new(AdapterRegistry::new()),
             background_tasks: Arc::new(BackgroundTaskTracker::new()),
+            claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
             chat_manager: None,
             launch_registry: None,
             tunnel_manager: None,

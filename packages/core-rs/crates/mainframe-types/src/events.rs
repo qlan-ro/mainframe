@@ -18,6 +18,7 @@ use crate::automation::{
 };
 use crate::background_task::BackgroundTask;
 use crate::chat::{Chat, ChatMessage, QueuedMessageRef, TodoItem};
+use crate::claude_workflow::ClaudeWorkflowRun;
 use crate::display::DisplayMessage;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
@@ -52,6 +53,17 @@ pub enum LaunchStream {
 pub enum ChatNotificationLevel {
     Success,
     Error,
+}
+
+/// Which producer raised a `chat.notification` — lets a client single out an
+/// attention request without adding a parallel event type. Optional on the
+/// wire: absent on old daemons and never required by the mobile client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatNotificationKind {
+    TaskComplete,
+    SessionError,
+    AttentionRequest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -274,6 +286,8 @@ pub enum DaemonEvent {
         title: String,
         body: String,
         level: ChatNotificationLevel,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        kind: Option<ChatNotificationKind>,
     },
     #[serde(rename = "chat.compacting")]
     ChatCompacting { chat_id: String },
@@ -359,6 +373,13 @@ pub enum DaemonEvent {
     BackgroundTaskEnded {
         chat_id: String,
         task: BackgroundTask,
+    },
+    /// Distinct from the Automations `workflow.run.updated` below — this one carries
+    /// a Claude CLI `/workflows` run, not an Automations `WorkflowRunSummary`.
+    #[serde(rename = "claude_workflow.run.updated")]
+    ClaudeWorkflowRunUpdated {
+        chat_id: String,
+        run: ClaudeWorkflowRun,
     },
     #[serde(rename = "workflow.run.updated")]
     WorkflowRunUpdated { run: WorkflowRunSummary },
@@ -821,6 +842,43 @@ mod tests {
                 "title": "Daily standup",
                 "body": "Standup posted",
                 "links": { "runId": "run_1", "chatIds": ["chat_1"] }
+            }),
+        );
+    }
+
+    #[test]
+    fn chat_notification_kind_wire_shape() {
+        assert_daemon_wire(
+            DaemonEvent::ChatNotification {
+                chat_id: "chat_1".into(),
+                title: "Claude needs your attention".into(),
+                body: "Ready to deploy?".into(),
+                level: ChatNotificationLevel::Success,
+                kind: Some(ChatNotificationKind::AttentionRequest),
+            },
+            json!({
+                "type": "chat.notification",
+                "chatId": "chat_1",
+                "title": "Claude needs your attention",
+                "body": "Ready to deploy?",
+                "level": "success",
+                "kind": "attention_request"
+            }),
+        );
+        assert_daemon_wire(
+            DaemonEvent::ChatNotification {
+                chat_id: "chat_1".into(),
+                title: "Task Complete".into(),
+                body: "done".into(),
+                level: ChatNotificationLevel::Success,
+                kind: None,
+            },
+            json!({
+                "type": "chat.notification",
+                "chatId": "chat_1",
+                "title": "Task Complete",
+                "body": "done",
+                "level": "success"
             }),
         );
     }

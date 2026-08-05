@@ -44,30 +44,61 @@ struct UploadAttachmentItem {
     original_path: Option<String>,
 }
 
-/// `POST /api/chats/:id/attachments`.
-async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
-    let parsed: UploadAttachmentsBody = match serde_json::from_slice(&body) {
-        Ok(v) => v,
-        Err(e) => return fail(StatusCode::BAD_REQUEST, e.to_string()),
-    };
-    let attachments = parsed.attachments;
+/// Count and per-item size checks, split out of `upload` to keep it under 50
+/// lines. Returns the human rejection reason on failure — reused as both the
+/// HTTP error body and the log record's `outcome`.
+fn validate(attachments: &[UploadAttachmentItem]) -> Result<(), &'static str> {
     if attachments.is_empty() || attachments.len() > 10 {
-        return fail(
-            StatusCode::BAD_REQUEST,
-            "Between 1 and 10 attachments required",
-        );
+        return Err("Between 1 and 10 attachments required");
     }
-    for a in &attachments {
+    for a in attachments {
         if a.name.is_empty() || a.media_type.is_empty() || a.data.is_empty() {
-            return fail(StatusCode::BAD_REQUEST, "Invalid attachment");
+            return Err("Invalid attachment");
         }
         let computed = (a.data.len() * 3 / 4) as f64;
         let effective = a.size_bytes.unwrap_or(computed);
         if effective > MAX_ATTACHMENT_SIZE_BYTES || computed > MAX_ATTACHMENT_SIZE_BYTES {
-            return fail(StatusCode::BAD_REQUEST, "Attachment exceeds 5MB limit");
+            return Err("Attachment exceeds 5MB limit");
         }
     }
+    Ok(())
+}
 
+/// One structured record per upload outcome. Deliberately carries only the
+/// chat id, item count, and byte total — never a file name, the base64
+/// payload, or `original_path`.
+fn log_upload(chat_id: &str, count: usize, total_bytes: usize, outcome: &str) {
+    if outcome == "accepted" {
+        tracing::info!(chat_id, count, total_bytes, outcome, "attachment upload");
+    } else {
+        tracing::warn!(chat_id, count, total_bytes, outcome, "attachment upload");
+    }
+}
+
+fn total_bytes_of(attachments: &[UploadAttachmentItem]) -> usize {
+    attachments
+        .iter()
+        .map(|a| a.size_bytes.unwrap_or((a.data.len() * 3 / 4) as f64) as usize)
+        .sum()
+}
+
+/// `POST /api/chats/:id/attachments`.
+async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
+    let parsed: UploadAttachmentsBody = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            log_upload(&id, 0, 0, "malformed body");
+            return fail(StatusCode::BAD_REQUEST, e.to_string());
+        }
+    };
+    let attachments = parsed.attachments;
+    if let Err(reason) = validate(&attachments) {
+        log_upload(&id, attachments.len(), total_bytes_of(&attachments), reason);
+        return fail(StatusCode::BAD_REQUEST, reason);
+    }
+
+    let count = attachments.len();
+    let total_bytes = total_bytes_of(&attachments);
     let to_save: Vec<StoredAttachment> = attachments
         .into_iter()
         .map(|a| {
@@ -90,8 +121,14 @@ async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: By
         .collect();
 
     match ctx.services.attachments.save(&id, to_save).await {
-        Ok(saved) => ok(json!({ "attachments": saved })),
-        Err(e) => internal_error("Failed to save attachments", &e),
+        Ok(saved) => {
+            log_upload(&id, count, total_bytes, "accepted");
+            ok(json!({ "attachments": saved }))
+        }
+        Err(e) => {
+            log_upload(&id, count, total_bytes, "save failed");
+            internal_error("Failed to save attachments", &e)
+        }
     }
 }
 
@@ -102,7 +139,10 @@ async fn serve(
 ) -> Response {
     match ctx.services.attachments.get(&chat_id, &attachment_id).await {
         Some(attachment) => ok(attachment),
-        None => fail(StatusCode::NOT_FOUND, "Attachment not found"),
+        None => {
+            tracing::warn!(chat_id, attachment_id, "attachment not found");
+            fail(StatusCode::NOT_FOUND, "Attachment not found")
+        }
     }
 }
 
@@ -122,3 +162,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
 // failure → opaque 500 (Express 5 forwards the async rejection to the global
 // handler). GET returns the stored attachment in the success envelope; None →
 // 404. No chat-existence check — the TS route performs none either.
+// Observability (#219): one tracing record per upload outcome (chat_id, count,
+// total_bytes, outcome — never a name, the base64 payload, or original_path)
+// and one for a GET 404, so a rejected upload leaves server-side evidence.

@@ -28,7 +28,7 @@ import {
 } from '@/lib/api/git';
 import type { GitStatusFile } from '@/lib/api/git';
 import { useBranchBusy } from './use-branch-busy';
-import { requestGitConfirm } from './use-git-confirm';
+import { requestGitConfirm } from './git-confirm';
 import { useWorktreeActions } from './use-worktree-actions';
 
 const CONFLICT_STATUSES = new Set(['UU', 'AA', 'DD', 'AU', 'UA', 'UD', 'DU']);

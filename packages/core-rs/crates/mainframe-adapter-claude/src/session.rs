@@ -34,6 +34,7 @@ use mainframe_adapter_api::{
     StopBackgroundTaskResult,
 };
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
     AdapterProcess, AdapterProcessStatus, ControlBehavior, ControlResponse, MessageUsage,
@@ -344,6 +345,7 @@ impl ClaudeSession {
         options: SessionOptions,
         on_exit: Option<Box<dyn Fn() + Send + Sync>>,
         background_tasks: Arc<BackgroundTaskTracker>,
+        workflow_store: Arc<ClaudeWorkflowStore>,
         resolved_path: ResolvedPath,
     ) -> Self {
         let id = nanoid!();
@@ -376,7 +378,7 @@ impl ClaudeSession {
                 tool_use_registry: HashMap::new(),
                 skill_path_cache: HashMap::new(),
                 task_v2_events: Vec::new(),
-                task_events: ClaudeTaskEvents::new(background_tasks),
+                task_events: ClaudeTaskEvents::new(background_tasks, workflow_store),
             })),
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),
@@ -1306,6 +1308,7 @@ mod tests {
             },
             None,
             Arc::new(BackgroundTaskTracker::new()),
+            Arc::new(ClaudeWorkflowStore::new()),
             ResolvedPath::from_value("/usr/bin:/bin"),
         ));
         s.init_weak();

@@ -26,6 +26,7 @@ fn row_to_project(row: &rusqlite::Row<'_>) -> rusqlite::Result<Project> {
         // parent_project_id is nullable but always present as a column → the
         // tri-state field is Some(None) for NULL, Some(Some(_)) for a value.
         parent_project_id: Some(row.get::<_, Option<String>>("parentProjectId")?),
+        available: None,
     })
 }
 
@@ -87,6 +88,7 @@ impl ProjectsRepository {
             created_at: now.clone(),
             last_opened_at: now,
             parent_project_id: Some(None),
+            available: None,
         })
     }
 

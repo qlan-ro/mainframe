@@ -31,10 +31,13 @@ mainframe-adapter-api = { workspace = true }
 mainframe-adapter-claude = { workspace = true }
 mainframe-adapter-codex = { workspace = true }
 mainframe-adapter-mock = { workspace = true }
+mainframe-automations = { workspace = true }
 mainframe-background-tasks = { workspace = true }
+mainframe-claude-workflows = { workspace = true }
 mainframe-launch = { workspace = true }
 mainframe-plugins = { workspace = true }
 mainframe-lsp = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+wiremock = { workspace = true }

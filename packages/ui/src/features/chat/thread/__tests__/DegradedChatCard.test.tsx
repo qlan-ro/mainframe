@@ -142,3 +142,66 @@ describe('DegradedChatCard — both causes', () => {
     expect(screen.getByTestId('chat-degraded-delete')).toBeInTheDocument();
   });
 });
+
+describe('DegradedChatCard — project directory missing', () => {
+  it('shows the project-directory cause and only the delete action', () => {
+    __chatConfig = chat({ directoryMissing: true, worktreePath: undefined, missingDirectoryPath: '/gone/proj' });
+
+    render(<DegradedChatCard />);
+
+    expect(screen.getByText('Project directory missing')).toBeInTheDocument();
+    expect(screen.getByText('/gone/proj')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-degraded-delete')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-degraded-recreate-worktree')).toBeNull();
+    expect(screen.queryByTestId('chat-degraded-project-root')).toBeNull();
+    expect(screen.queryByTestId('chat-degraded-continue')).toBeNull();
+  });
+
+  it('shows the worktree-deleted cause instead of the project-directory cause for a missing worktree', () => {
+    __chatConfig = chat({
+      directoryMissing: true,
+      worktreeMissing: true,
+      worktreePath: '/repo/.worktrees/feat-x',
+      branchName: 'feat-x',
+      missingDirectoryPath: '/repo/.worktrees/feat-x',
+    });
+
+    render(<DegradedChatCard />);
+
+    expect(screen.getByText('Worktree deleted')).toBeInTheDocument();
+    expect(screen.queryByText('Project directory missing')).toBeNull();
+  });
+
+  it('uses full-width footer geometry instead of transcript centering geometry', () => {
+    __chatConfig = chat({ directoryMissing: true, missingDirectoryPath: '/gone/proj' });
+
+    render(<DegradedChatCard />);
+
+    const className = screen.getByTestId('chat-degraded-card').className;
+    expect(className).toContain('w-full');
+    expect(className).not.toContain('max-w-md');
+    expect(className).not.toContain('mx-auto');
+    expect(className).not.toContain('my-8');
+  });
+
+  it('renders both missing paths in breakable code elements', () => {
+    __chatConfig = chat({
+      directoryMissing: true,
+      transcriptMissing: true,
+      worktreeMissing: true,
+      worktreePath: '/repo/.worktrees/feat-x',
+      missingDirectoryPath: '/repo/.worktrees/feat-x',
+    });
+
+    const { rerender } = render(<DegradedChatCard />);
+    const worktreePath = screen.getByText('/repo/.worktrees/feat-x').closest('code');
+    expect(worktreePath).not.toBeNull();
+    expect(worktreePath?.className).toContain('break-all');
+
+    __chatConfig = chat({ directoryMissing: true, worktreePath: undefined, missingDirectoryPath: '/gone/proj' });
+    rerender(<DegradedChatCard />);
+    const projectPath = screen.getByText('/gone/proj').closest('code');
+    expect(projectPath).not.toBeNull();
+    expect(projectPath?.className).toContain('break-all');
+  });
+});

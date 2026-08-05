@@ -90,6 +90,7 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 import { useSubmitComposition, useCanSubmit } from '../use-submit-composition';
+import { useSessionReferences } from '../../sessions/session-reference-store';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -99,6 +100,7 @@ beforeEach(() => {
   liveRunConfig = { custom: { effort: 'high' } };
   liveCanSend = false;
   useComposerSegments.setState({ byThread: {} });
+  useSessionReferences.setState({ byThread: {} });
 });
 
 describe('useSubmitComposition — append shape', () => {
@@ -291,6 +293,48 @@ describe('useSubmitComposition — predicate never reads canSend', () => {
 
   it('does not submit on empty serialization + no attachments even though canSend is true', () => {
     liveCanSend = true;
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    expect(appendSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Session references (#240) — the body that reaches the daemon is also the body
+// the optimistic echo renders, so the reference lines are prepended ONCE, here,
+// before append. Only labels the draft actually still mentions survive.
+// ---------------------------------------------------------------------------
+
+describe('useSubmitComposition — session reference lines', () => {
+  it('prepends one reference line per referenced label and clears the store', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
+    liveText = 'compare with @session[Foo refactor] please';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    const [callArg] = appendSpy.mock.calls[0] as [{ content: { text: string }[] }];
+    expect(callArg.content[0]!.text).toBe(
+      'Referenced session @session[Foo refactor]: /tmp/a.jsonl\n\ncompare with @session[Foo refactor] please',
+    );
+    expect(useSessionReferences.getState().byThread[THREAD_ID]).toEqual({});
+  });
+
+  it('drops a recorded reference whose token the user deleted from the draft', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
+    liveText = 'never mind';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    const [callArg] = appendSpy.mock.calls[0] as [{ content: { text: string }[] }];
+    expect(callArg.content[0]!.text).toBe('never mind');
+  });
+
+  it('does not send on a draft that is nothing but a stale reference record', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());

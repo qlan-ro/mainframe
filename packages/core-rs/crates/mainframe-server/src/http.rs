@@ -2,13 +2,14 @@
 //!
 //! CORS (localhost-origin echo, `OPTIONS → 204`, `X-Content-Type-Options:
 //! nosniff`), the 30mb JSON body limit, the auth middleware over the HTTP routes,
-//! `GET /health`, the mounted Phase-3 route modules, and the WS upgrade route.
+//! negotiated gzip/brotli response compression (todo #294), `GET /health`, the
+//! mounted Phase-3 route modules, and the WS upgrade route.
 
 use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use axum::extract::Request;
+use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::header::{
     ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN, ORIGIN,
 };
@@ -21,6 +22,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
 use crate::middleware::auth::auth_middleware;
+use crate::middleware::compression::compression_layer;
 use crate::routes;
 use crate::websocket::{lsp_ws_handler, ws_handler};
 
@@ -42,6 +44,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::files::router())
         .merge(routes::search::router())
         .merge(routes::git::router())
+        .merge(routes::git_remotes::router())
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
@@ -55,11 +58,14 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         .merge(routes::worktree::router())
         .merge(routes::worktree_offer::router())
         .merge(routes::chat_recovery::router())
+        .merge(routes::session_transcripts::router())
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())
         .merge(routes::adapters::router())
         .merge(routes::agents::router())
         .merge(routes::skills::router())
+        .merge(routes::skills_cli::router())
+        .merge(routes::skills_registry::router())
         .merge(routes::suggestions::router())
         .merge(routes::setup_advisor::router())
         .merge(routes::quota::router())
@@ -88,7 +94,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // Express's `app.use(authMiddleware)` runs before the router's 404, so a
         // non-loopback caller without a token gets 401 (not 404) on any path.
         .fallback(not_found)
-        .layer(from_fn_with_state(Arc::clone(&ctx), auth_middleware));
+        .layer(from_fn_with_state(Arc::clone(&ctx), auth_middleware))
+        // Outermost layer of the HTTP router only: the WS upgrades merged below
+        // must never pass through the compressor.
+        .layer(compression_layer());
 
     Router::new()
         .merge(http)
@@ -98,6 +107,10 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // LSP WS upgrade (`/lsp/:projectId/:language`) — self-authenticates like
         // the generic WS route, then proxies to the spawned language server.
         .route("/lsp/{project_id}/{language}", any(lsp_ws_handler))
+        // axum's built-in 2 MB extractor limit shadows the layer below unless
+        // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
+        // base64-inflated) gets an empty-bodied 413 before the handler runs.
+        .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(BODY_LIMIT_BYTES))
         // CORS is the outermost layer so `OPTIONS` is answered (204) before auth.
         .layer(from_fn(cors_middleware))
@@ -168,4 +181,10 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
 // auth, the PluginManager router nested at /api/plugins (nest_service — its state is
 // pre-applied), and the self-authenticating `/lsp/:projectId/:language` WS upgrade
 // alongside the generic `/` WS route. Workflows stay deliberately unmounted
-// (SCOPE DECISION 2026-07-10).
+// (SCOPE DECISION 2026-07-10). Negotiated gzip/brotli response compression
+// (todo #294) is a Rust-side addition with no TS counterpart, layered inside
+// the HTTP router so the WS upgrade routes stay untouched.
+// #219: axum's own DefaultBodyLimit (2mb) sat inside RequestBodyLimitLayer's
+// stack and rejected anything over ~2mb with an empty body before the 30mb
+// layer ever ran — silently breaking 2-5mb attachments on every daemon, local
+// or remote. Disabled so the explicit 30mb layer is the only limit in force.

@@ -11,6 +11,7 @@ import type { Project } from '@qlan-ro/mainframe-types';
 import { PencilIcon, Trash2Icon } from 'lucide-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@v2/components/ui/context-menu';
 import { DismissibleHint } from '@v2/components/ui/hint';
+import { Badge } from '@v2/components/ui/badge';
 import { SidebarMenuAction, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@v2/components/ui/sidebar';
 import { cn } from '@v2/lib/utils';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
@@ -32,6 +33,9 @@ interface ProjectRowProps {
 export function ProjectRow({ project, active, attention, onSelect, onRemove }: ProjectRowProps) {
   const hintDismissed = useUiPrefs((s) => s.rightClickHintDismissed);
   const dismissHint = useUiPrefs((s) => s.dismissRightClickHint);
+  // Unavailable (directory missing on disk) renders muted with a badge but
+  // stays selectable, so its sessions remain reachable.
+  const unavailable = project.available === false;
 
   const row = (
     <SidebarMenuItem>
@@ -47,7 +51,18 @@ export function ProjectRow({ project, active, attention, onSelect, onRemove }: P
         <ProjectAvatar name={project.name} color={projectColor(project.id)} />
         {/* One resting ink: the avatar names the project and the badge counts it,
             so attention never needs the name to shout too. */}
-        <span className={cn('min-w-0 flex-1 truncate-fade', !active && 'text-muted-foreground')}>{project.name}</span>
+        <span className={cn('min-w-0 flex-1 truncate-fade', (!active || unavailable) && 'text-muted-foreground')}>
+          {project.name}
+        </span>
+        {unavailable && (
+          <Badge
+            variant="secondary"
+            data-testid={`sidebar-project-unavailable-${project.id}`}
+            className="h-4 shrink-0 px-1 text-[10px] font-normal text-muted-foreground"
+          >
+            Unavailable
+          </Badge>
+        )}
       </SidebarMenuButton>
       {attention > 0 && (
         // Badge and remove share the right gutter, so the badge yields on hover

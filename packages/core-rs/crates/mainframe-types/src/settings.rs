@@ -143,6 +143,7 @@ pub struct ProviderConfigUpdate {
 pub struct NotificationChatConfig {
     pub task_complete: bool,
     pub session_error: bool,
+    pub attention_request: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +192,7 @@ impl Default for NotificationConfig {
             chat: NotificationChatConfig {
                 task_complete: true,
                 session_error: true,
+                attention_request: true,
             },
             permission: NotificationPermissionConfig {
                 tool_request: true,
@@ -275,7 +277,7 @@ mod tests {
         let json = serde_json::to_string(&NotificationConfig::default()).unwrap();
         assert_eq!(
             json,
-            r#"{"chat":{"taskComplete":true,"sessionError":true},"permission":{"toolRequest":true,"userQuestion":true,"planApproval":true},"other":{"plugin":true}}"#
+            r#"{"chat":{"taskComplete":true,"sessionError":true,"attentionRequest":true},"permission":{"toolRequest":true,"userQuestion":true,"planApproval":true},"other":{"plugin":true}}"#
         );
     }
 

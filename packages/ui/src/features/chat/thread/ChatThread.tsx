@@ -4,7 +4,8 @@
  * Role-based message components (UserMessage / AssistantMessage / SystemMessage)
  * render through MessagePrimitive.GroupedParts + the tool-card registry inside a
  * centered, max-width column. The composer sits in a `ViewportFooter` so its
- * height registers as scroll inset (the last message never hides behind it).
+ * height registers as scroll inset (the last message never hides behind it);
+ * the recovery card takes that slot when the working directory is gone.
  */
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
@@ -75,6 +76,16 @@ function CompactingIndicator() {
   return <CompactingPill />;
 }
 
+function ThreadFooterInput() {
+  const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
+  return (
+    <>
+      <DegradedChatCard />
+      {!directoryMissing && <Composer />}
+    </>
+  );
+}
+
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
@@ -96,7 +107,6 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           >
             <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
               <LoadErrorBanner />
-              <DegradedChatCard />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
               {/* Inline "thinking/working" indicator — sits after the last message,
@@ -118,10 +128,10 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div className="mx-auto w-full max-w-3xl px-5 pb-4">
+              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-3xl px-5 pb-4">
                 <BackgroundActivityBar />
                 <WorktreeSwitchBanner />
-                <Composer />
+                <ThreadFooterInput />
               </div>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>

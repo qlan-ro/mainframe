@@ -220,9 +220,9 @@ export class ChatThreadController {
       .catch((err: unknown) => console.warn('[chat-controller] seed chat config failed', err));
 
     const request = getChatMessages(this.port, this.daemonId)
-      .then(({ messages, transcriptMissing }) => {
+      .then(({ messages, transcriptMissing, workflowRuns }) => {
         if (this.loadPromise !== request) return;
-        this.dispatch({ type: 'history.loaded', messages, transcriptMissing });
+        this.dispatch({ type: 'history.loaded', messages, transcriptMissing, workflowRuns });
         this.reconcilePendingAgainstHistory(messages);
       })
       .catch((error: unknown) => {
@@ -255,6 +255,8 @@ export class ChatThreadController {
   }
 
   public async sendMessage(message: AppendMessage): Promise<void> {
+    if (this.refuseIfDirectoryMissing()) return;
+
     const input = parseSendInput(message);
     if (!input) return;
     const { text, uploadItems } = input;
@@ -267,9 +269,9 @@ export class ChatThreadController {
     this.dispatch({ type: 'local.message.queued', pending });
     this.dispatch({ type: 'run.started' });
 
+    let attachmentIds: string[] | undefined;
     try {
-      // Upload attachments first → reference them by id (the daemon stores the bytes).
-      const attachmentIds =
+      attachmentIds =
         uploadItems.length > 0 ? await uploadAttachments(this.port, this.daemonId, uploadItems) : undefined;
       this.ws.send({
         type: 'message.send',
@@ -278,9 +280,17 @@ export class ChatThreadController {
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       });
     } catch (error) {
-      this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error });
+      const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
+      this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage });
       throw error;
     }
+  }
+
+  public markAttachmentsRestoredForFailure(error: unknown): void {
+    const failed = Object.values(this.state.pendingUserMessages)
+      .filter((pending) => pending.status === 'failed' && pending.error === error)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (failed) this.dispatch({ type: 'local.message.attachments_restored', clientId: failed.clientId });
   }
 
   /**
@@ -291,6 +301,7 @@ export class ChatThreadController {
   public async retryMessage(clientId: string): Promise<void> {
     const pending = this.state.pendingUserMessages[clientId];
     if (!pending) return;
+    if (this.refuseIfDirectoryMissing()) return;
 
     this.dispatch({ type: 'local.message.retrying', clientId });
     this.dispatch({ type: 'run.started' });
@@ -298,9 +309,18 @@ export class ChatThreadController {
     try {
       this.ws.send({ type: 'message.send', chatId: this.daemonId, content: pending.text });
     } catch (error) {
-      this.dispatch({ type: 'local.message.failed', clientId, error });
+      this.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send' });
       throw error;
     }
+  }
+
+  private refuseIfDirectoryMissing(): boolean {
+    const chat = this.state.chatConfig;
+    if (chat?.directoryMissing !== true) return false;
+    mfToast.error('Can’t send — the working directory is missing', {
+      description: chat.missingDirectoryPath ?? 'The directory this session runs in no longer exists.',
+    });
+    return true;
   }
 
   public async cancel(): Promise<void> {

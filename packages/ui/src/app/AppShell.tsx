@@ -22,7 +22,7 @@ import { InspectorPane } from '../features/files/InspectorPane';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
-import { GitConfirmDialog } from '../features/git/GitConfirmDialog';
+import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
@@ -137,7 +137,7 @@ function RuntimeBody({ port }: { port: number }) {
           tree stays on disk until Phase 7 deletes it. */}
       <AutomationsHost />
       <SetupAdvisorHost />
-      <GitConfirmDialog />
+      <ConfirmDialogHost />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}
     </SidebarProvider>

@@ -26,3 +26,4 @@ mainframe-background-tasks = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+mainframe-runtime = { workspace = true, features = ["test-support"] }

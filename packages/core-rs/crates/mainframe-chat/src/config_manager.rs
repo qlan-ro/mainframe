@@ -883,6 +883,7 @@ mod tests {
             created_at: String::new(),
             last_opened_at: String::new(),
             parent_project_id: None,
+            available: None,
         }
     }
 

@@ -8,6 +8,9 @@
 import { AlertTriangleIcon, CheckIcon, GlobeIcon, Loader2Icon, LockIcon } from 'lucide-react';
 import { cn } from '@v2/lib/utils';
 
+/** Lives here, not in AddRemoteDialog, so apply-pairing can read it without a cycle. */
+export type DialogMode = 'add' | 'repair';
+
 const STEPS = ['Connect', 'Pair'] as const;
 
 export function StepRail({ current }: { current: 0 | 1 }) {

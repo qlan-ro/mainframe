@@ -26,8 +26,9 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PendingAttachment } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
-import { toUploadItems, createAttachmentAdapter } from '../attachment-adapter';
+import { toUploadItems, createAttachmentAdapter, toCompleteAttachment } from '../attachment-adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers — build minimal CompleteAttachment-compatible objects
@@ -247,5 +248,37 @@ describe('createAttachmentAdapter().add — under-limit file', () => {
 
     await expect(adapter.add({ file })).resolves.toBeDefined();
     expect(vi.mocked(mfToast.error)).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toCompleteAttachment — the File survives the status flip (todo #219)
+// ---------------------------------------------------------------------------
+
+describe('toCompleteAttachment — carries the File through', () => {
+  function makePending(file?: File): PendingAttachment {
+    return {
+      id: 'att-pending',
+      type: 'image',
+      name: 'shot.png',
+      contentType: 'image/png',
+      content: [{ type: 'image', image: 'data:image/png;base64,AAAA' }],
+      status: { type: 'requires-action', reason: 'composer-send' },
+      ...(file ? { file } : {}),
+    } as PendingAttachment;
+  }
+
+  it('keeps the same File reference when flipping a pending attachment to complete', () => {
+    const file = new File(['bytes'], 'shot.png', { type: 'image/png' });
+    const complete = toCompleteAttachment(makePending(file));
+
+    expect(complete.status).toEqual({ type: 'complete' });
+    expect(complete.file).toBe(file);
+  });
+
+  it('omits `file` entirely when the pending attachment carries none', () => {
+    const complete = toCompleteAttachment(makePending());
+
+    expect(complete).not.toHaveProperty('file');
   });
 });

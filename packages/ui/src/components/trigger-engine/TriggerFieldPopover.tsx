@@ -21,6 +21,10 @@ function TriggerFieldRow({
 }) {
   const isItem = 'type' in entry;
   const highlighted = index === field.highlightedIndex;
+  const testId = isItem
+    ? (field.trigger?.itemTestId?.(entry) ?? `${testIdPrefix}-${entry.id}`)
+    : `${testIdPrefix}-category-${entry.id}`;
+  const glyph = isItem ? field.trigger?.itemGlyph?.(entry) : null;
   return (
     <button
       type="button"
@@ -28,7 +32,7 @@ function TriggerFieldRow({
       id={field.optionId(entry.id)}
       aria-selected={highlighted}
       data-highlighted={highlighted ? '' : undefined}
-      data-testid={isItem ? `${testIdPrefix}-${entry.id}` : `${testIdPrefix}-category-${entry.id}`}
+      data-testid={testId}
       className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left
                  data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
       // Keep the caret (and the field's own cursor tracking) alive through the click.
@@ -36,7 +40,10 @@ function TriggerFieldRow({
       onMouseMove={() => field.highlightIndex(index)}
       onClick={() => field.selectEntry(entry)}
     >
-      <span className="font-medium text-foreground">{entry.label}</span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        {glyph}
+        <span className="font-medium text-foreground">{entry.label}</span>
+      </span>
       {isItem && entry.description != null && (
         <span className="text-label text-muted-foreground">{entry.description}</span>
       )}

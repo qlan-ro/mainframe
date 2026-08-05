@@ -14,32 +14,42 @@
 
 pub mod adapter;
 pub mod approval_handler;
-// `pub`, not `pub(crate)`: `tests/child_tail.rs` exercises `spawn_child_tail`
-// directly as an integration test (no existing public entry point wraps it yet).
-pub mod child_tail;
+pub(crate) mod collab_card;
+pub(crate) mod collab_identity;
+pub(crate) mod collab_protocol;
+pub(crate) mod collab_resolve;
 pub(crate) mod compaction;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
 pub mod history;
+pub(crate) mod history_collab;
+pub(crate) mod history_collab_resolve;
+pub(crate) mod history_convert;
+pub(crate) mod history_load;
 pub(crate) mod image_generation_history;
 pub(crate) mod image_generation_render;
 pub mod item_types;
 pub mod jsonrpc;
+pub(crate) mod parent_id_sink;
 pub mod plan_mode_handler;
 pub mod quota_identity;
 pub mod quota_pull;
 pub mod quota_rate_limit;
+pub(crate) mod rollout_fork;
 pub mod rollout_reader;
 pub(crate) mod rollout_reconstruct;
 pub mod session;
+pub(crate) mod session_state;
 pub(crate) mod thread_item_render;
 pub(crate) mod thread_item_variants;
 pub mod thread_registry;
 pub mod title_generator;
 pub mod transcript;
 pub mod turn_config;
+pub(crate) mod turn_lifecycle;
 pub mod types;
+pub(crate) mod unified_diff;
 pub(crate) mod web_search_history;
 pub(crate) mod web_search_render;
 

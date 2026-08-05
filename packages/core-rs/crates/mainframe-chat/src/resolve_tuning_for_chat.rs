@@ -104,6 +104,8 @@ mod tests {
             is_running: None,
             background_activity: None,
             worktree_missing: None,
+            directory_missing: None,
+            missing_directory_path: None,
             transcript_missing: None,
             todos: None,
             pinned: None,

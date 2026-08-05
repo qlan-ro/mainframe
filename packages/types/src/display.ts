@@ -1,5 +1,6 @@
 import type { DiffHunk } from './chat.js';
 import type { ControlRequest } from './adapter.js';
+import type { ClaudeWorkflowRun } from './claude-workflow.js';
 import type { LeafContent } from './content.js';
 
 export interface AskUserQuestionAnswer {
@@ -76,4 +77,5 @@ export interface DisplayMessage {
 export interface ChatHistoryPayload {
   messages: DisplayMessage[];
   transcriptMissing: boolean;
+  workflowRuns: ClaudeWorkflowRun[];
 }

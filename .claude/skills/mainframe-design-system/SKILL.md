@@ -125,7 +125,7 @@ Copy the structure from the named file — do not re-derive it. Details in `refe
 | Confirm | `components/ui/confirm-dialog.tsx` |
 | Menu / popover | `components/ui/menu.tsx` + `features/run/ToolbarLaunchControls.tsx` |
 | Toolbar icon button | `layout/MainToolbar.tsx` `ICON_BTN` — 24×28, `rounded-[6px]`, `hover:bg-accent` |
-| Chip / pill | `layout/MainToolbar.tsx` `CHIP_BASE` — h-22, `border-[0.5px]`, `text-label` |
+| Chip / pill | `components/ui/chip.ts` `CHIP_BASE` — h-22, `border-[0.5px]`, `text-label` |
 | Section header / eyebrow | `components/ui/section-header.tsx` — sentence-case `text-caption font-medium text-muted-foreground`. Never hand-roll `text-micro font-bold uppercase` |
 | Count / badge | `components/ui/count-badge.tsx` — capsule-less gray numeral by default; `alert` is the only filled variant |
 | Toast | `mfToast` from `@/lib/toast` — **not** sonner directly |

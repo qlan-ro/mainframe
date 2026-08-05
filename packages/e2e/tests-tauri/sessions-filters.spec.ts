@@ -12,6 +12,8 @@
  *   sessions-filter-pill-<projectId>  — per-project pill (ProjectPillContextMenu)
  *   sessions-project-rename-<id>      — context menu "Rename Project" (always disabled)
  *   sessions-project-remove-<id>      — context menu "Remove Project"
+ *   sessions-remove-project-dialog / -confirm / -cancel — in-app confirm
+ *                                        dialog for project removal (ConfirmDialogHost)
  *   sessions-pill-hint-dismiss        — "Don't show anymore" button inside the
  *                                        hover tooltip wrapping a project pill
  *   sessions-add-project              — dashed "Add project" affordance
@@ -345,12 +347,11 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     const sidebar = sessionsSidebar(page);
     await expandProjectPills(page);
 
-    page.once('dialog', (dialog) => {
-      void dialog.accept();
-    });
-
     await sidebar.projectFilterPill(projectB.projectId).click({ button: 'right' });
     await page.getByTestId(`sessions-project-remove-${projectB.projectId}`).click();
+
+    await expect(page.getByTestId('sessions-remove-project-dialog')).toBeVisible();
+    await page.getByTestId('sessions-remove-project-dialog-confirm').click();
 
     await expect(page.getByTestId(`sessions-filter-pill-${projectB.projectId}`)).toHaveCount(0, {
       timeout: 10_000,

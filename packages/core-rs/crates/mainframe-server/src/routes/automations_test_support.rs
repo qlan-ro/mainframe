@@ -95,6 +95,7 @@ pub(crate) async fn automations_ctx() -> AutomationsHarness {
         ws_clients: base.ws_clients.clone(),
         adapter_registry: base.adapter_registry.clone(),
         background_tasks: base.background_tasks.clone(),
+        claude_workflows: base.claude_workflows.clone(),
         chat_manager: None,
         launch_registry: None,
         tunnel_manager: None,

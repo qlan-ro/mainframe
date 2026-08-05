@@ -40,6 +40,9 @@ pub struct TaskSeed {
     pub tool_use_id: String,
     pub command: String,
     pub description: String,
+    /// Set for a `local_workflow` task_type; carried onto the started
+    /// `BackgroundTask` so `run_id` (learned later) has a name to sit beside.
+    pub workflow_name: Option<String>,
 }
 
 /// The terminal-transition update passed to [`BackgroundTaskTracker::end`].
@@ -131,6 +134,8 @@ impl BackgroundTaskTracker {
             summary: None,
             usage: None,
             recovered: None,
+            workflow_name: seed.workflow_name,
+            run_id: None,
         };
         {
             let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
@@ -184,6 +189,39 @@ impl BackgroundTaskTracker {
             task: next.clone(),
         });
         Some(next)
+    }
+
+    /// Learned from the `Workflow` tool result, after `start` already seeded
+    /// the task with `run_id: None`. No-op when the task is unknown or
+    /// already carries this `run_id`. `workflow_name` fills in only when the
+    /// task doesn't already carry one — `task_started` may have preceded the
+    /// CLI naming its own workflow.
+    pub fn link_run_id(
+        &self,
+        chat_id: &str,
+        task_id: &str,
+        run_id: &str,
+        workflow_name: Option<String>,
+    ) {
+        let Some(mut chat) = self.by_chat.get_mut(chat_id) else {
+            return;
+        };
+        let Some(task) = chat.get_mut(task_id) else {
+            return;
+        };
+        if task.run_id.as_deref() == Some(run_id) {
+            return;
+        }
+        task.run_id = Some(run_id.to_string());
+        if task.workflow_name.is_none() {
+            task.workflow_name = workflow_name;
+        }
+        let updated = task.clone();
+        drop(chat);
+        let _ = self.emitter.send(TaskEvent::Updated {
+            chat_id: chat_id.to_string(),
+            task: updated,
+        });
     }
 
     /// Insert a fully-formed task from reconciliation. Replaces any existing
@@ -293,6 +331,7 @@ mod tests {
             tool_use_id: "tu-1".to_string(),
             command: "pnpm dev".to_string(),
             description: description.to_string(),
+            workflow_name: None,
         }
     }
 
@@ -526,6 +565,8 @@ mod tests {
             summary: None,
             usage: None,
             recovered: Some(true),
+            workflow_name: None,
+            run_id: None,
         }
     }
 
@@ -586,6 +627,7 @@ mod tests {
             tool_use_id: "u".to_string(),
             command: "x".to_string(),
             description: String::new(),
+            workflow_name: None,
         }
     }
 
@@ -815,6 +857,7 @@ mod tests {
                 tool_use_id: "u9".to_string(),
                 command: "pnpm dev".to_string(),
                 description: "dev server".to_string(),
+                workflow_name: None,
             },
             "/tmp/claude-501/-Users-x-proj/sess/tasks/t9.output".to_string(),
         );
@@ -822,6 +865,53 @@ mod tests {
             tracker.get("chat-a", "t9").unwrap().output_path.as_deref(),
             Some("/tmp/claude-501/-Users-x-proj/sess/tasks/t9.output")
         );
+    }
+
+    #[test]
+    fn link_run_id_sets_run_id_on_a_live_task_and_emits_updated() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start(
+            "chat-a",
+            make_seed("task-1"),
+            "/tmp/spool/task-1.output".to_string(),
+        );
+        let mut rx = tracker.subscribe();
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
+        assert_eq!(
+            tracker.get("chat-a", "task-1").unwrap().run_id.as_deref(),
+            Some("run-1")
+        );
+        let events = drain(&mut rx);
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            TaskEvent::Updated { chat_id, task } => {
+                assert_eq!(chat_id, "chat-a");
+                assert_eq!(task.run_id.as_deref(), Some("run-1"));
+            }
+            _ => panic!("expected Updated"),
+        }
+    }
+
+    #[test]
+    fn link_run_id_is_a_no_op_for_an_unknown_task() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut rx = tracker.subscribe();
+        tracker.link_run_id("chat-ghost", "task-1", "run-1", None);
+        assert!(drain(&mut rx).is_empty());
+    }
+
+    #[test]
+    fn link_run_id_is_a_no_op_when_the_task_already_carries_that_id() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start(
+            "chat-a",
+            make_seed("task-1"),
+            "/tmp/spool/task-1.output".to_string(),
+        );
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
+        let mut rx = tracker.subscribe();
+        tracker.link_run_id("chat-a", "task-1", "run-1", None);
+        assert!(drain(&mut rx).is_empty());
     }
 }
 

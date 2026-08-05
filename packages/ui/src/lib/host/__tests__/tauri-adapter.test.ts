@@ -5,6 +5,8 @@ const invoke = vi.fn();
 const listen = vi.fn();
 const openUrl = vi.fn();
 const sendNotification = vi.fn();
+const isPermissionGranted = vi.fn();
+const requestPermission = vi.fn();
 const startDragging = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -20,6 +22,8 @@ vi.mock('@tauri-apps/api/webviewWindow', () => ({
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: (...a: unknown[]) => openUrl(...a) }));
 vi.mock('@tauri-apps/plugin-notification', () => ({
   sendNotification: (...a: unknown[]) => sendNotification(...a),
+  isPermissionGranted: (...a: unknown[]) => isPermissionGranted(...a),
+  requestPermission: (...a: unknown[]) => requestPermission(...a),
 }));
 
 beforeEach(() => {
@@ -30,6 +34,8 @@ beforeEach(() => {
   listen.mockReset().mockResolvedValue(() => {});
   openUrl.mockReset();
   sendNotification.mockReset();
+  isPermissionGranted.mockReset().mockResolvedValue(true);
+  requestPermission.mockReset().mockResolvedValue('granted');
   startDragging.mockClear();
 });
 
@@ -67,6 +73,37 @@ describe('TauriAdapter — delegation', () => {
     invoke.mockResolvedValueOnce(31500);
     await expect(new TauriAdapter().daemon.port()).resolves.toBe(31500);
     expect(invoke).toHaveBeenCalledWith('get_daemon_port');
+  });
+
+  it('notify sends the notification when permission is already granted', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    await new TauriAdapter().notify('Claude needs your attention', 'Which database?');
+    expect(sendNotification).toHaveBeenCalledWith({
+      title: 'Claude needs your attention',
+      body: 'Which database?',
+    });
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('notify requests permission first when it has not been granted yet', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    isPermissionGranted.mockResolvedValueOnce(false);
+    await new TauriAdapter().notify('Title', 'Body');
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(sendNotification).toHaveBeenCalledWith({ title: 'Title', body: 'Body' });
+  });
+
+  it('notify warns and sends nothing when permission is denied', async () => {
+    const { TauriAdapter } = await import('../tauri-adapter');
+    isPermissionGranted.mockResolvedValueOnce(false);
+    requestPermission.mockResolvedValueOnce('denied');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await new TauriAdapter().notify('Title', 'Body');
+
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it('preview.mount returns a handle (delegates to the Tauri backend)', async () => {

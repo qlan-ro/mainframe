@@ -196,7 +196,7 @@ describe('createProject', () => {
     await expect(createProject(31415, 'relative/path')).rejects.toThrow('path must be absolute');
   });
 
-  it('on a non-OK with no parseable body throws HTTP <status>', async () => {
+  it('on a non-OK with no parseable body throws a human sentence', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -206,6 +206,8 @@ describe('createProject', () => {
       }),
     );
 
-    await expect(createProject(31415, '/home/user/gamma')).rejects.toThrow('HTTP 500');
+    await expect(createProject(31415, '/home/user/gamma')).rejects.toThrow(
+      'The daemon failed to handle this request (HTTP 500).',
+    );
   });
 });

@@ -22,6 +22,13 @@ import { TasksFilterBar } from './TasksFilterBar';
 import { TaskListView } from './TaskListView';
 import { TaskBoardView } from './TaskBoardView';
 import { TaskEditModal } from './TaskEditModal';
+import { GitHubSyncControl } from './github/GitHubSyncControl';
+import { SyncRunBanner } from './github/SyncRunBanner';
+import { LinkRepoDialog } from './github/LinkRepoDialog';
+import { ImportIssuesDialog } from './github/ImportIssuesDialog';
+import { PublishTaskDialog } from './github/PublishTaskDialog';
+import { SyncReportDialog } from './github/SyncReportDialog';
+import { useGitHubSyncStore } from './github/use-github-sync-store';
 import type { Todo } from '@/lib/api/todos';
 
 interface Props {
@@ -33,7 +40,15 @@ interface Props {
 
 export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
   const { todos, loading, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
+  const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
   const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
+
+  // The GitHub sync store has no other loader owner — unlike the todos store,
+  // which the sidebar section loads.
+  React.useEffect(() => {
+    initSync(port, projectId);
+    void loadSync();
+  }, [port, projectId, initSync, loadSync]);
 
   const allLabels = extractAllLabels(todos);
   const filtered = sortTodos(
@@ -98,6 +113,8 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
           </TabsList>
         </Tabs>
 
+        <GitHubSyncControl />
+
         {/* New task */}
         <Button size="sm" data-testid="tasks-board-new" onClick={handleNew}>
           <Plus />
@@ -114,6 +131,8 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
           <X />
         </Button>
       </div>
+
+      <SyncRunBanner />
 
       {/* Filter bar */}
       <TasksFilterBar
@@ -172,6 +191,14 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
           }}
         />
       )}
+
+      {/* GitHub sync dialogs — one mount each, driven by the sync store's
+          `dialog`. LinkRepoDialog is the exception: it refetches the project's
+          remotes on mount, so it is gated here rather than self-gated. */}
+      {syncDialog?.kind === 'link' && <LinkRepoDialog />}
+      <ImportIssuesDialog />
+      <PublishTaskDialog />
+      <SyncReportDialog />
     </div>
   );
 }

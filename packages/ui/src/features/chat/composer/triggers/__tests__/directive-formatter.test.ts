@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   literalDirectiveFormatter,
   mentionDirectiveFormatter,
@@ -56,6 +56,28 @@ describe('mentionDirectiveFormatter', () => {
     it('directory item → @<id>/ with NO trailing space (keeps token open for drill-down)', () => {
       expect(fmt.serialize({ id: 'src/components', type: 'directory', label: 'components' })).toBe('@src/components/');
     });
+
+    // A session token carries the reference LABEL, never the chat id: the label
+    // is what the sent message's chip displays and what the reference line keys on.
+    // The draft spells it bare — `expandSessionMentions` adds `session[…]` at submit.
+    it('session item → @<label> when no label resolver is given', () => {
+      expect(fmt.serialize({ id: 'chat-1', type: 'session', label: 'Fix the parser' })).toBe('@Fix the parser');
+    });
+  });
+
+  describe('serialize with a label resolver', () => {
+    it('session item uses the resolved label, not the item label', () => {
+      const withResolver = mentionDirectiveFormatter(() => 'Foo (2)');
+      expect(withResolver.serialize({ id: 'chat-2', type: 'session', label: 'Foo' })).toBe('@Foo (2)');
+    });
+
+    it('the resolver is never consulted for a file item', () => {
+      const resolve = vi.fn(() => 'Foo (2)');
+      const withResolver = mentionDirectiveFormatter(resolve);
+
+      expect(withResolver.serialize({ id: 'src/foo.ts', type: 'file', label: 'foo.ts' })).toBe('@src/foo.ts');
+      expect(resolve).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -78,5 +100,9 @@ describe('shouldCloseTriggerOnInsert', () => {
 
   it('returns true for a skill item', () => {
     expect(shouldCloseTriggerOnInsert({ id: 'my-skill', type: 'skill', label: 'My Skill' })).toBe(true);
+  });
+
+  it('returns true for a session item (the token is complete on insert)', () => {
+    expect(shouldCloseTriggerOnInsert({ id: 'chat-1', type: 'session', label: 'Fix the parser' })).toBe(true);
   });
 });

@@ -24,8 +24,10 @@ use mainframe_types::chat::{ChatMessage, MessageContent, ResolvedTuning, TodoIte
 use mainframe_types::context::{ContextFile, SkillFileEntry};
 use mainframe_types::display::ToolCategories;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::transcript::TranscriptLocation;
 use serde::{Deserialize, Serialize};
 
+use crate::plan_mode_actions::PlanModeActionHandler;
 use crate::{AdapterError, BoxFuture};
 
 /// One inline image attachment for `sendMessage` (`{ mediaType, data }`).
@@ -100,6 +102,10 @@ pub trait SessionSink: Send + Sync {
     /// Account-wide provider plan quota (`onProviderQuota?`) — optional in TS,
     /// default no-op; no chatId, mirrors `on_context_usage`.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
+    /// Claude's `PushNotification` tool call, forwarded raw; the sink owns
+    /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
+    /// with no such tool need not implement it.
+    fn on_attention_request(&self, _message: &str) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored
@@ -222,11 +228,19 @@ pub trait Adapter: Send + Sync {
     /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
     /// callers then keep the deterministic truncated title. Owned `String` args to
     /// match this trait's async-method convention (`send_message`/`set_model`).
+    /// The default fires a `debug` log once per attempt — expected today for Codex,
+    /// which has no title model — so it reads as "no title model" in the log
+    /// instead of being indistinguishable from an adapter that tried and failed.
     fn generate_title(
         &self,
         content: String,
         binary: String,
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        tracing::debug!(
+            adapter_id = self.id(),
+            reason = "adapter_has_no_title_model",
+            "title generation skipped"
+        );
         let _ = (content, binary);
         Box::pin(async { Ok(None) })
     }
@@ -245,21 +259,43 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
+    /// Absolute on-disk location of the CLI transcript for `session_id`.
+    /// `Ok(None)` = the adapter cannot determine the layout — callers MUST treat
+    /// it as "unknown" and hide the session, never as "missing".
+    fn locate_transcript(
+        &self,
+        session_id: String,
+        project_path: String,
+        session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        let _ = (session_id, project_path, session_file_path);
+        Box::pin(async { Ok(None) })
+    }
+
+    /// `createPlanModeHandler?()` — the adapter's plan-mode action strategy.
+    /// `None` = this adapter has no plan-mode strategy; the dispatcher warns and
+    /// no-ops rather than failing the permission response.
+    fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
+        None
+    }
+
     // TODO(port): the optional skill/agent/command/external-session CRUD methods
-    // and `createPlanModeHandler?` from adapter.ts are deferred to the phase that
-    // ports the concrete claude/codex adapters and their routes — their default
-    // wire semantics (unsupported vs empty) must be pinned against those callers,
-    // not guessed here. The registry + chat-session consumers do not need them.
+    // from adapter.ts are deferred to the phase that ports the concrete
+    // claude/codex adapters and their routes — their default wire semantics
+    // (unsupported vs empty) must be pinned against those callers, not guessed
+    // here. The registry + chat-session consumers do not need them.
 }
 
 // PORT STATUS: behavioral half of packages/types/src/adapter.ts (Adapter/
 // AdapterSession/SessionSink traits)
 // confidence: high
-// todos: 1 (skill/agent/command/external-session CRUD + createPlanModeHandler,
-//   deferred to the concrete-adapter phase — see the TODO above)
+// todos: 1 (skill/agent/command/external-session CRUD, deferred to the
+//   concrete-adapter phase — see the TODO above)
 // notes: Main catch-up (#424/#430) adds two OPTIONAL Adapter methods with default
 // `Ok(None)` bodies so existing adapters keep compiling and each concrete adapter
 // (Wave 1) overrides: generate_title(content, binary) and is_transcript_present(
 // session_id, project_path, session_file_path). Owned `String` params (not &str)
 // to stay consistent with this trait's async BoxFuture methods; `None` return =
 // "unsupported / cannot determine — don't flag".
+// notes: todo #240 adds a third optional method, locate_transcript, alongside
+// is_transcript_present — same default-Ok(None) shape, same owned-String args.

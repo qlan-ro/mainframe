@@ -16,11 +16,17 @@ pub mod config_context;
 pub mod context;
 pub mod db_context;
 pub mod event_bus;
+pub mod github_port;
+mod github_port_guard;
 pub mod manager;
 pub mod security;
 pub mod services;
 pub mod todos;
+pub mod todos_github;
 pub mod ui_context;
+
+#[cfg(test)]
+mod github_port_tests;
 
 pub use context::{
     AdapterRegistrar, AttachmentData, AttachmentUpload, ChatService, CreateChatArgs,
@@ -29,6 +35,10 @@ pub use context::{
     build_plugin_context,
 };
 pub use db_context::PluginDatabaseContext;
+pub use github_port::{
+    CreateIssue, GitHubIssues, GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot,
+    IssueState, RepoRef,
+};
 pub use mainframe_adapter_api::BoxFuture;
 pub use manager::PluginManager;
 
