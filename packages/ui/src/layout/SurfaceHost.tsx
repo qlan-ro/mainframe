@@ -99,7 +99,17 @@ function SurfaceHostImpl({ port }: Props) {
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
           <Fragment key={name}>
-            <div data-drop-surface={name} style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${panelCls}`}>
+            {/* A lone pane always takes the whole row: drag fractions are < 1,
+                and a flex row whose grow factors sum below 1 hands out only
+                that fraction of its free space — the stale weight would leave
+                the survivor at 30-something percent after a close. The weights
+                stay in the store so re-opening restores the dragged ratio
+                (same guard the vertical axis has via `bottom ? vFlex.top : 1`). */}
+            <div
+              data-drop-surface={name}
+              style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
+              className={`min-w-0 ${panelCls}`}
+            >
               <SurfaceView name={name} port={port} />
             </div>
             {i < top.length - 1 &&

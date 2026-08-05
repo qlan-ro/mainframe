@@ -21,6 +21,9 @@ vi.mock('@/store/intent-subscriber', () => ({
 vi.mock('@/store/terminal-intent-subscriber', () => ({
   subscribeToTerminalIntents: () => () => {},
 }));
+vi.mock('@/store/url-tab-intent-subscriber', () => ({
+  subscribeToUrlTabIntents: () => () => {},
+}));
 
 import { SurfaceHost } from '../SurfaceHost';
 
@@ -47,5 +50,38 @@ describe('SurfaceHost — flat shell geometry', () => {
 
     const divider = container.querySelector('[data-testid="surf-divider-x"]') as HTMLElement | null;
     expect(divider?.style.width).toBe('9px');
+  });
+});
+
+describe('SurfaceHost — lone pane reclaims the full row', () => {
+  it('ignores a stale drag fraction when only one surface remains', () => {
+    // A divider drag writes complementary fractions (< 1 each). After the
+    // right surface closes, the survivor must NOT keep its fraction: a lone
+    // flex child with grow < 1 fills only that FRACTION of the row (flexbox
+    // distributes sum-of-grow free space when the sum is below 1).
+    useLayoutStore.setState({
+      layout: { top: ['chat'], bottom: null, topFlex: { chat: 0.3, workspace: 0.7 }, vFlex: { top: 1, bottom: 1 } },
+    });
+    const { container } = render(<SurfaceHost port={31415} />);
+
+    const pane = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
+    expect(pane.style.flex).toBe('1 1 0%');
+  });
+
+  it('keeps the dragged fractions while two surfaces share the row', () => {
+    useLayoutStore.setState({
+      layout: {
+        top: ['chat', 'workspace'],
+        bottom: null,
+        topFlex: { chat: 0.3, workspace: 0.7 },
+        vFlex: { top: 1, bottom: 1 },
+      },
+    });
+    const { container } = render(<SurfaceHost port={31415} />);
+
+    const chat = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
+    const ws = container.querySelector('[data-drop-surface="workspace"]') as HTMLElement;
+    expect(chat.style.flex).toBe('0.3 1 0%');
+    expect(ws.style.flex).toBe('0.7 1 0%');
   });
 });
