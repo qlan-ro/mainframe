@@ -67,19 +67,25 @@ describe('design token audit', () => {
   // tracking-tight/normal/wide scale has no exact px equivalent at these font
   // sizes. Same "one-off design value" pattern as the pre-existing
   // workflows/daemon offenders below (left failing, not touched here).
+  // SettingsSidebar: a 10px initial inside a 15px provider dot — the same
+  // tiny-avatar idiom the v2 tree uses (ProjectRow's text-[10px] badge);
+  // text-xs (12px) overflows the dot.
   const TYPOGRAPHY_ARBITRARY_ALLOWLIST = new Set([
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
+    'features/settings/SettingsSidebar.tsx',
   ]);
 
-  it('uses named typography tokens instead of arbitrary or framework-default values', () => {
+  // Stock text-xs/sm/base/… ARE the app's typography scale since the v2 body
+  // conversions (2026-08); the v1 named rungs survive only inside un-ported
+  // legacy islands via the bridge. The audit now polices arbitrary values and
+  // off-scale tracking only.
+  it('keeps typography on the scale — no arbitrary sizes or off-scale tracking', () => {
     const offenders = productionSources()
       .filter(({ rel }) => !TYPOGRAPHY_ARBITRARY_ALLOWLIST.has(rel))
       .flatMap(({ rel, text }) => {
         const matches =
-          text.match(
-            /(?:text|tracking|leading)-\[[^\]]+\]|\btext-(?:xs|sm|base|lg|xl|[2-9]xl)\b|\btracking-(?!tight\b|normal\b|wide\b)[a-z-]+/g,
-          ) ?? [];
+          text.match(/(?:text|tracking|leading)-\[[^\]]+\]|\btracking-(?!tight\b|normal\b|wide\b)[a-z-]+/g) ?? [];
         return matches.map((match) => `${rel}: ${match}`);
       });
 
