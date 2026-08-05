@@ -26,8 +26,8 @@
  * broadcast updates the toolbar — no optimistic edits here).
  */
 
-import { Fragment, useState } from 'react';
-import { ChevronDown, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import type {
   AdapterInfo,
   AdapterModel,
@@ -36,6 +36,7 @@ import type {
   FeatureKey,
   ProviderConfig,
 } from '@qlan-ro/mainframe-types';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +77,31 @@ const PROVIDER_DOT: Record<string, string> = {
 };
 export function providerDot(id: string): string {
   return PROVIDER_DOT[id] ?? 'bg-muted-foreground';
+}
+
+interface ModelSectionProps {
+  label: string;
+  testId: string;
+  /** A section holding the checked model starts open — the selection must never load hidden. */
+  containsCurrent: boolean;
+  children: React.ReactNode;
+}
+
+/** Secondary model sections (Older models, catalog groups) fold away by default. */
+function CollapsibleModelSection({ label, testId, containsCurrent, children }: ModelSectionProps) {
+  const [expanded, setExpanded] = useState(containsCurrent);
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <CollapsibleTrigger
+        data-testid={testId}
+        className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground"
+      >
+        {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        {label}
+      </CollapsibleTrigger>
+      <CollapsibleContent>{children}</CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 interface ProviderPillProps {
@@ -229,18 +255,23 @@ export function ProviderModelSelect({
           <DropdownMenuLabel>{active?.name ?? 'Models'} models</DropdownMenuLabel>
           {current.map(renderRow)}
           {older.length > 0 && (
-            <>
-              <DropdownMenuLabel data-testid="composer-model-older-header">Older models</DropdownMenuLabel>
+            <CollapsibleModelSection
+              label="Older models"
+              testId="composer-model-older-header"
+              containsCurrent={older.some((m) => m.id === currentModelId)}
+            >
               {older.map(renderRow)}
-            </>
+            </CollapsibleModelSection>
           )}
           {groups.map(([label, models]) => (
-            <Fragment key={label}>
-              <DropdownMenuLabel data-testid={`composer-model-group-header-${groupSlug(label)}`}>
-                {label}
-              </DropdownMenuLabel>
+            <CollapsibleModelSection
+              key={label}
+              label={label}
+              testId={`composer-model-group-header-${groupSlug(label)}`}
+              containsCurrent={models.some((m) => m.id === currentModelId)}
+            >
               {models.map(renderRow)}
-            </Fragment>
+            </CollapsibleModelSection>
           ))}
 
           <p data-testid="composer-provider-footer" className="px-2 pt-2 text-xs text-muted-foreground">

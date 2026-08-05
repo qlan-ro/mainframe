@@ -497,6 +497,9 @@ describe('ProviderModelSelect — older models group', () => {
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
     expect(screen.getByTestId('composer-model-older-header').textContent).toContain('Older models');
+    // Collapsed by default — rows appear only after expanding the section.
+    expect(screen.queryByTestId('composer-model-select-option-claude-opus-4-1-20250805')).toBeNull();
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
     expect(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805')).toBeInTheDocument();
   });
 
@@ -509,6 +512,7 @@ describe('ProviderModelSelect — older models group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
 
     const header = screen.getByTestId('composer-model-older-header');
     const haiku = screen.getByTestId('composer-model-select-option-haiku');
@@ -541,6 +545,7 @@ describe('ProviderModelSelect — older models group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805'));
 
     expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
@@ -583,7 +588,10 @@ describe('ProviderModelSelect — endpoint model group', () => {
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
-    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toBe('CLIProxyAPI');
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toContain('CLIProxyAPI');
+    // Collapsed by default — rows appear only after expanding the section.
+    expect(screen.queryByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeNull();
+    await userEvent.click(screen.getByTestId('composer-model-group-header-cliproxyapi'));
     expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
     expect(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3')).toBeInTheDocument();
   });
@@ -597,6 +605,7 @@ describe('ProviderModelSelect — endpoint model group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
 
     const opus = screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805');
     const groupHeader = screen.getByTestId('composer-model-group-header-cliproxyapi');
@@ -641,6 +650,7 @@ describe('ProviderModelSelect — endpoint model group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-group-header-cliproxyapi'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3'));
 
     expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3');
