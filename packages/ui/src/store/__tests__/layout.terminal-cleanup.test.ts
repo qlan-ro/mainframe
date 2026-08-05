@@ -9,7 +9,7 @@ import { useLayoutStore } from '../layout';
 
 function seedRun() {
   useLayoutStore.setState({
-    layout: { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],
@@ -39,10 +39,12 @@ describe('layout terminal cleanup', () => {
     expect(killDisposeSpy).toHaveBeenCalledWith(['t2']);
   });
 
-  it('toggling Run off kills every terminal in the run state', () => {
-    useLayoutStore.getState().toggleSurface('run');
-    const ids = killDisposeSpy.mock.calls[0]![0] as string[];
-    expect(ids.sort()).toEqual(['t1', 't2']);
+  // Hiding the workspace is not closing it — the terminal cache detaches without
+  // disposing, so re-showing the surface reattaches live output.
+  it('toggling the workspace off kills nothing and keeps the panes', () => {
+    useLayoutStore.getState().toggleSurface('workspace');
+    expect(killDisposeSpy).not.toHaveBeenCalled();
+    expect(useLayoutStore.getState().run?.panes).toHaveLength(2);
   });
 
   it('closeRunTab on a non-terminal tab does NOT call cleanup at all', () => {

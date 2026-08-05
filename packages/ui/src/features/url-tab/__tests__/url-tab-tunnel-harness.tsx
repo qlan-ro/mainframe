@@ -19,7 +19,7 @@ import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels'
 import { useSandboxStore } from '@/store/sandbox';
 import { UrlTabInstance } from '../UrlTabInstance';
 
-const FRESH_LAYOUT = { top: ['run' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['workspace' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
 export function makeFakeHandle(): PreviewHandle {
   return {

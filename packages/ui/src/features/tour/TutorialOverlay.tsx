@@ -40,10 +40,10 @@ const STEPS: TourStep[] = [
     body: 'Claude, Codex, or Gemini — choose per session. The provider locks once the conversation starts.',
   },
   {
-    target: 'run',
+    target: 'workspace',
     side: 'below',
-    title: 'Run & preview',
-    body: 'Launch a dev server and preview your app live, right beside the chat. Capture the screen straight back into context.',
+    title: 'Open the workspace',
+    body: 'Files, diffs, terminals, and a live preview of your app share one surface beside the chat. Capture the screen straight back into context.',
   },
 ];
 

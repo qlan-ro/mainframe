@@ -646,12 +646,12 @@ describe('useSessionListRouter — active thread change wires per-session layout
   it('restores a previously customized layout when switching back to a visited session', () => {
     // Prime chat-old's persisted workspace with a non-default layout (files split in).
     useLayoutStore.getState().setActiveSession('chat-old');
-    useLayoutStore.getState().toggleSurface('files');
-    expect(useLayoutStore.getState().layout.top).toContain('files');
+    useLayoutStore.getState().toggleSurface('workspace');
+    expect(useLayoutStore.getState().layout.top).toContain('workspace');
 
     // Switch away, as if the user opened a different session.
     useLayoutStore.getState().setActiveSession('chat-other');
-    expect(useLayoutStore.getState().layout.top).not.toContain('files');
+    expect(useLayoutStore.getState().layout.top).not.toContain('workspace');
 
     // Now render the hook as if the app activated chat-old again — the hook's
     // wiring (not a direct store call) must restore chat-old's saved layout.
@@ -661,7 +661,7 @@ describe('useSessionListRouter — active thread change wires per-session layout
     renderHook(() => useSessionListRouter());
 
     expect(useLayoutStore.getState().activeSessionId).toBe('chat-old');
-    expect(useLayoutStore.getState().layout.top).toContain('files');
+    expect(useLayoutStore.getState().layout.top).toContain('workspace');
   });
 
   it('seeds a never-visited session with the default (INITIAL_LAYOUT) workspace', () => {

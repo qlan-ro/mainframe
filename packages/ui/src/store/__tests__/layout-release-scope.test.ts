@@ -8,7 +8,7 @@ import { useLayoutStore } from '../layout';
 beforeEach(() => {
   killSpy.mockReset();
   useLayoutStore.setState({
-    layout: { top: ['run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],
@@ -40,6 +40,6 @@ describe('useLayoutStore.releaseRunScope', () => {
     useLayoutStore.getState().releaseRunScope('p:/b'); // remove prev-b too
     useLayoutStore.getState().releaseRunScope('p:/a'); // now empty
     expect(useLayoutStore.getState().run).toBeNull();
-    expect(useLayoutStore.getState().layout.top).not.toContain('run');
+    expect(useLayoutStore.getState().layout.top).not.toContain('workspace');
   });
 });

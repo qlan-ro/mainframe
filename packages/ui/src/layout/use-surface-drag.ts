@@ -1,10 +1,10 @@
 /**
  * layout/use-surface-drag.ts — pointer drag state machine for the typed-surface
- * engine (Phase 8). Two gestures:
+ * engine. Two gestures:
  *   • surface drag  — drag a whole surface header to reposition it
  *     (top-left / top-right / bottom).
- *   • tab drag      — drag a Files tab onto the Run region (center = join as a
- *     tab, edge = split into a pane).
+ *   • tab drag      — drag an open workspace tab onto a workspace region
+ *     (center = join the first pane, edge = split into a second pane).
  *
  * The store holds live pointer + drop-zone state; `SurfaceDragLayer` renders the
  * ghost + highlight and commits on drop via the layout store. Drop targets are
@@ -30,7 +30,7 @@ interface DragState {
   kind: 'surface' | 'tab' | null;
   /** For a surface drag. */
   surface: SurfaceId | null;
-  /** For a tab drag (Files tab id). */
+  /** For a tab drag (workspace tab id). */
   tabId: string | null;
   pointer: { x: number; y: number };
   /** The pointer position when the drag began (used for the jitter threshold). */
@@ -128,8 +128,8 @@ export const useSurfaceDragStore = create<DragStore>((set, get) => ({
       if (!isSelfCenter) {
         layout.repositionSurface(surface, repositionTargetFor(dropZone));
       }
-    } else if (kind === 'tab' && tabId && dropZone && dropZone.surface === 'run') {
-      layout.moveFilesTabToRun(tabId, dropZone.edge as RunDropEdge);
+    } else if (kind === 'tab' && tabId && dropZone && dropZone.surface === 'workspace') {
+      layout.moveTabToPaneEdge(tabId, dropZone.edge as RunDropEdge);
     }
     set({ ...IDLE });
   },

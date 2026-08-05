@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useLayoutStore, type WorkspaceLayout } from '../layout';
 import { addRunTab, closePane, closeRunTab, emptyRun, moveTabToRun, type RunTab } from '../run-pane';
-import { useTabsStore } from '../tabs';
 
 const FRESH: WorkspaceLayout = { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
@@ -12,12 +11,11 @@ function resetStores() {
     sessions: new Map(),
     activeSessionId: null,
   });
-  useTabsStore.setState({ tabs: [], activeTabId: null });
 }
 
 const guest = (id: string): RunTab => ({ id, kind: 'code', title: id });
 
-describe('run-pane reducers', () => {
+describe('workspace-pane reducers', () => {
   it('emptyRun has one empty pane', () => {
     const run = emptyRun();
     expect(run.panes).toHaveLength(1);
@@ -36,7 +34,7 @@ describe('run-pane reducers', () => {
     expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['a', 'b']);
   });
 
-  it('moveTabToRun edge splits Run into two panes', () => {
+  it('moveTabToRun edge splits the workspace into two panes', () => {
     const run = moveTabToRun(addRunTab(null, guest('a')), guest('b'), 'right');
     expect(run.panes).toHaveLength(2);
     expect(run.dir).toBe('v');
@@ -57,14 +55,14 @@ describe('run-pane reducers', () => {
     expect(three.panes[0]!.tabs.map((t) => t.id)).toEqual(['a', 'c']);
   });
 
-  it('edge-drop onto empty Run places the guest into the single pane (no split)', () => {
-    // Run is null — no existing panes with tabs.
+  it('edge-drop onto an empty workspace places the tab into the single pane (no split)', () => {
+    // run is null — no existing panes with tabs.
     const run = moveTabToRun(null, guest('a'), 'right');
     expect(run.panes).toHaveLength(1);
     expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['a']);
   });
 
-  it('edge-drop onto a Run with one empty pane still places guest into that pane', () => {
+  it('edge-drop onto a workspace with one empty pane still places the tab into that pane', () => {
     // emptyRun() has 1 pane with 0 tabs.
     const base = emptyRun();
     const run = moveTabToRun(base, guest('a'), 'left');
@@ -77,7 +75,7 @@ describe('run-pane reducers', () => {
     expect(closePane(run, run.panes[0]!.id)).toBeNull();
   });
 
-  it('closeRunTab drops an emptied pane and returns null when Run is empty', () => {
+  it('closeRunTab drops an emptied pane and returns null when the workspace is empty', () => {
     const run = addRunTab(null, guest('a'))!;
     expect(closeRunTab(run, run.panes[0]!.id, 'a')).toBeNull();
   });
@@ -97,14 +95,14 @@ describe('layout store — per-session workspaces', () => {
   it('remembers each session layout across a switch away and back', () => {
     const s = useLayoutStore.getState();
     s.setActiveSession('s1');
-    s.toggleSurface('files'); // s1 has files
+    s.toggleSurface('workspace'); // s1 has the workspace
     s.setActiveSession('s2'); // fresh
     expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
     s.setActiveSession('s1'); // restore
-    expect(useLayoutStore.getState().layout.top).toContain('files');
+    expect(useLayoutStore.getState().layout.top).toContain('workspace');
   });
 
-  it('persists Run panes per session', () => {
+  it('persists workspace panes per session', () => {
     const s = useLayoutStore.getState();
     s.setActiveSession('s1');
     s.addRunTab(guest('a'));
@@ -116,16 +114,16 @@ describe('layout store — per-session workspaces', () => {
   });
 });
 
-describe('layout store — reposition + Files→Run drag', () => {
+describe('layout store — reposition + in-workspace tab drag', () => {
   beforeEach(resetStores);
 
-  it('repositionSurface moves files from the top row to the bottom strip', () => {
+  it('repositionSurface moves the workspace from the top row to the bottom strip', () => {
     const s = useLayoutStore.getState();
-    s.toggleSurface('files');
-    s.repositionSurface('files', 'bottom');
+    s.toggleSurface('workspace');
+    s.repositionSurface('workspace', 'bottom');
     const { layout } = useLayoutStore.getState();
-    expect(layout.bottom).toBe('files');
-    expect(layout.top).not.toContain('files');
+    expect(layout.bottom).toBe('workspace');
+    expect(layout.top).not.toContain('workspace');
   });
 
   it('repositionSurface never sends chat to the bottom strip', () => {
@@ -134,34 +132,26 @@ describe('layout store — reposition + Files→Run drag', () => {
     expect(useLayoutStore.getState().layout.bottom).toBeNull();
   });
 
-  it('moveFilesTabToRun center moves a Files tab into Run as a guest tab', () => {
-    const tabs = useTabsStore.getState();
-    tabs.openTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, { mode: 'permanent' });
-    const tabId = useTabsStore.getState().tabs[0]!.id;
-
-    useLayoutStore.getState().moveFilesTabToRun(tabId, 'center');
+  it('openFileTab opens a file into the workspace and lights the surface', () => {
+    const tabId = useLayoutStore.getState().openFileTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, 'preview');
 
     const { layout, run } = useLayoutStore.getState();
     expect(run?.panes[0]!.tabs.map((t) => t.path)).toEqual(['/a.ts']);
-    expect(layout.top.includes('run') || layout.bottom === 'run').toBe(true);
-    expect(useTabsStore.getState().tabs).toHaveLength(0); // removed from Files
+    expect(run?.panes[0]!.active).toBe(tabId);
+    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true);
   });
 
-  it('moveFilesTabToRun edge splits Run into two panes', () => {
-    const tabs = useTabsStore.getState();
-    tabs.openTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, { mode: 'permanent' });
-    tabs.openTab({ kind: 'code', path: '/b.ts', title: 'b.ts' }, { mode: 'permanent' });
-    const first = useTabsStore.getState().tabs[0]!.id;
-    const second = useTabsStore.getState().tabs[1]!.id;
-
+  it('moveTabToPaneEdge splits the workspace into two panes', () => {
     const s = useLayoutStore.getState();
-    s.moveFilesTabToRun(first, 'center');
-    s.moveFilesTabToRun(second, 'right');
+    s.openFileTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, 'permanent');
+    const second = s.openFileTab({ kind: 'code', path: '/b.ts', title: 'b.ts' }, 'permanent');
+
+    s.moveTabToPaneEdge(second, 'right');
 
     expect(useLayoutStore.getState().run?.panes).toHaveLength(2);
   });
 
-  it('closePane that empties Run removes the Run surface from the layout', () => {
+  it('closePane that empties the workspace removes the surface from the layout', () => {
     const s = useLayoutStore.getState();
     s.addRunTab(guest('a'));
     expect(useLayoutStore.getState().run).not.toBeNull();
@@ -169,23 +159,23 @@ describe('layout store — reposition + Files→Run drag', () => {
     s.closePane(paneId);
     const { layout, run } = useLayoutStore.getState();
     expect(run).toBeNull();
-    expect(layout.top.includes('run') || layout.bottom === 'run').toBe(false);
+    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(false);
   });
 });
 
 describe('layout store — existing invariants still hold', () => {
   beforeEach(resetStores);
 
-  it('chat is never removable', () => {
+  it('chat is never removable while it is the only lit surface', () => {
     useLayoutStore.getState().toggleSurface('chat');
     expect(useLayoutStore.getState().layout.top).toContain('chat');
   });
 
-  it('Cmd-1/2/3 style toggle still adds/removes files', () => {
+  it('Cmd-2 style toggle adds and removes the workspace', () => {
     const s = useLayoutStore.getState();
-    s.toggleSurface('files');
-    expect(useLayoutStore.getState().layout.top).toContain('files');
-    s.toggleSurface('files');
-    expect(useLayoutStore.getState().layout.top).not.toContain('files');
+    s.toggleSurface('workspace');
+    expect(useLayoutStore.getState().layout.top).toContain('workspace');
+    s.toggleSurface('workspace');
+    expect(useLayoutStore.getState().layout.top).not.toContain('workspace');
   });
 });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { setActiveDaemon } from '@/lib/daemon/active-daemon';
-import { sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
+import { layoutPersistOptions, sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
 import { useLayoutStore } from '../layout';
 import type { RunState } from '../run-pane';
 import type { SessionWorkspace } from '../layout';
@@ -90,6 +90,69 @@ describe('layout-persist', () => {
     const m = reviveSessions({ 'chat-1': { layout, run: null } });
     expect(m).toBeInstanceOf(Map);
     expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'run']);
+  });
+});
+
+// ── v1 → v2: the files/run surfaces folded into one `workspace` ───────────────
+
+describe('layout-persist migrate (v1 → v2)', () => {
+  const migrate = layoutPersistOptions.migrate!;
+  const v1 = (l: unknown) => ({ sessions: { 'chat-1': { layout: l, run: null } } });
+  const migrated = (l: unknown) =>
+    (migrate(v1(l), 1) as { sessions: Record<string, SessionWorkspace> }).sessions['chat-1']!.layout;
+
+  it('renames a persisted `run` surface to `workspace`', () => {
+    const out = migrated({ top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.top).toEqual(['chat', 'workspace']);
+  });
+
+  it('renames a persisted `files` surface to `workspace`', () => {
+    const out = migrated({ top: ['chat', 'files'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.top).toEqual(['chat', 'workspace']);
+  });
+
+  it('dedupes files+run in the same row into one workspace', () => {
+    const out = migrated({ top: ['files', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.top).toEqual(['workspace']);
+  });
+
+  it('drops a bottom strip that the top row now duplicates', () => {
+    const out = migrated({ top: ['chat', 'files'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.top).toEqual(['chat', 'workspace']);
+    expect(out.bottom).toBeNull();
+  });
+
+  it('keeps a bottom strip the top row does not hold', () => {
+    const out = migrated({ top: ['chat'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.bottom).toBe('workspace');
+  });
+
+  it('carries flex weights over, run winning a files/run tie', () => {
+    const out = migrated({
+      top: ['chat', 'run'],
+      bottom: null,
+      topFlex: { chat: 0.6, files: 0.3, run: 0.4 },
+      vFlex: { top: 0.8, bottom: 0.2 },
+    });
+    expect(out.topFlex).toEqual({ chat: 0.6, workspace: 0.4 });
+    expect(out.vFlex).toEqual({ top: 0.8, bottom: 0.2 });
+  });
+
+  it('leaves persisted tabs alone — they already carry the merged RunTab shape', () => {
+    const persisted = {
+      sessions: {
+        'chat-1': {
+          layout: { top: ['run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+          run: run([{ id: 'c1', kind: 'code', title: 'a.ts', path: 'a.ts' }]),
+        },
+      },
+    };
+    const out = migrate(persisted, 1) as { sessions: Record<string, SessionWorkspace> };
+    expect(out.sessions['chat-1']!.run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['c1']);
+  });
+
+  it('survives an empty / absent persisted payload', () => {
+    expect(migrate(undefined, 1)).toEqual({ sessions: {} });
   });
 });
 

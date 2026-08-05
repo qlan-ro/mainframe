@@ -1,12 +1,16 @@
 /**
  * store/layout-placement.ts — pure workspace-layout types and placement
  * helpers (mirrors 04-engine.jsx placeInLayout / removeSurface). Split out of
- * `layout.ts` (#281 Task 32): these touch no store state, unlike the Run-tab
+ * `layout.ts` (#281 Task 32): these touch no store state, unlike the tab
  * mutators, which close over `get()`/`writeWorkspace` and would need an
  * injection shape to extract for a much smaller line-count win.
+ *
+ * Two surfaces, since Files and Run merged: chat and the workspace. The shape
+ * below still carries a top row + a bottom slot + flex weights — surface
+ * PLACEMENT is deliberately unchanged by the merge (see docs/plans).
  */
 
-export type SurfaceId = 'chat' | 'files' | 'run';
+export type SurfaceId = 'chat' | 'workspace';
 
 /** Where a dragged surface lands when repositioned. */
 export type RepositionTarget = 'top-left' | 'top-right' | 'bottom';
@@ -81,9 +85,9 @@ export function repositionInLayout(layout: WorkspaceLayout, s: SurfaceId, target
   return { ...layout, top, bottom };
 }
 
-/** True when at least one of files/run is not yet in the layout. */
+/** True when the workspace surface is not yet placed, so there is something to split to. */
 export function layoutCanSplit(layout: WorkspaceLayout): boolean {
-  return (['files', 'run'] as SurfaceId[]).some((s) => !layout.top.includes(s) && layout.bottom !== s);
+  return !layout.top.includes('workspace') && layout.bottom !== 'workspace';
 }
 
 /** Number of surfaces currently shown (top row + optional bottom strip). */

@@ -1,5 +1,5 @@
 /**
- * RunSurface — scope-coupled tab visibility (the leak fix).
+ * WorkspaceSurface — scope-coupled tab visibility (the leak fix).
  *
  * Run tabs are global (layout store), but they must only be RENDERED for the
  * session whose launch scope matches the tab's own `scopeKey`. Tabs from other
@@ -71,10 +71,10 @@ vi.mock('@/features/run/use-launch-actions', () => ({
 
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
-import { RunSurface } from '../surfaces/RunSurface';
+import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
 
 const FRESH_LAYOUT = {
-  top: ['run' as const],
+  top: ['workspace' as const],
   bottom: null as null,
   topFlex: {} as Record<string, number>,
   vFlex: { top: 1, bottom: 0.4 },
@@ -110,7 +110,7 @@ function seedRunTabs(tabs: { id: string; kind: 'preview' | 'console'; config: st
   });
 }
 
-describe('RunSurface — scope-coupled tab visibility', () => {
+describe('WorkspaceSurface — scope-coupled tab visibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     previewProps.length = 0;
@@ -120,7 +120,7 @@ describe('RunSurface — scope-coupled tab visibility', () => {
   // Test 1 — matching preview tab is rendered and receives its scopeKey
   it('renders a preview tab whose scopeKey matches the active scope', () => {
     seedRunTabs([{ id: 'tab-match', kind: 'preview', config: 'dev', scopeKey: TAB_SCOPE }]);
-    render(<RunSurface />);
+    render(<WorkspaceSurface />);
     expect(previewProps[0]).toBeDefined();
     expect(previewProps[0]!['scopeKey']).toBe(TAB_SCOPE);
   });
@@ -128,7 +128,7 @@ describe('RunSurface — scope-coupled tab visibility', () => {
   // Test 2 — matching console tab is rendered and receives its scopeKey
   it('renders a console tab whose scopeKey matches the active scope', () => {
     seedRunTabs([{ id: 'tab-c', kind: 'console', config: 'dev', scopeKey: TAB_SCOPE }]);
-    render(<RunSurface />);
+    render(<WorkspaceSurface />);
     expect(consoleProps[0]).toBeDefined();
     expect(consoleProps[0]!['scopeKey']).toBe(TAB_SCOPE);
   });
@@ -138,7 +138,7 @@ describe('RunSurface — scope-coupled tab visibility', () => {
     const { queryByTestId } = render(
       (() => {
         seedRunTabs([{ id: 'leak-tab', kind: 'preview', config: 'dev', scopeKey: 'proj-B:/other/worktree' }]);
-        return <RunSurface />;
+        return <WorkspaceSurface />;
       })(),
     );
     // No preview body was mounted — prop-capture array is empty.
@@ -153,7 +153,7 @@ describe('RunSurface — scope-coupled tab visibility', () => {
       { id: 'keep-1', kind: 'preview', config: 'dev', scopeKey: TAB_SCOPE },
       { id: 'leak-1', kind: 'preview', config: 'dev', scopeKey: 'proj-B:/other' },
     ]);
-    const { queryByTestId, getByTestId } = render(<RunSurface />);
+    const { queryByTestId, getByTestId } = render(<WorkspaceSurface />);
 
     // Exactly one preview rendered, and it is the matching tab.
     expect(previewProps).toHaveLength(1);

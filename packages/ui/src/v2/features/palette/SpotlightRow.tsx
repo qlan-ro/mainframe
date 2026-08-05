@@ -10,7 +10,6 @@ import {
   ChevronRightIcon,
   FileDiffIcon,
   FileIcon,
-  FolderIcon,
   GitCompareIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -38,12 +37,11 @@ const COMMAND_ICONS: Record<string, ComponentType<{ className?: string; fill?: s
   settings: SettingsIcon,
   sidebar: PanelLeftIcon,
   inspector: PanelRightIcon,
-  files: FolderIcon,
-  run: PlayIcon,
+  workspace: PlayIcon,
 };
 
-/** Command ids whose glyph renders SOLID (design spec: play.fill for `run`). */
-const SOLID_COMMAND_ICONS = new Set(['run']);
+/** Command ids whose glyph renders SOLID (design spec: play.fill for the workspace). */
+const SOLID_COMMAND_ICONS = new Set(['workspace']);
 
 function rowIcon(row: SpotlightRow): ComponentType<{ className?: string; fill?: string }> {
   if (row.type === 'command') return COMMAND_ICONS[row.id] ?? ICONS.command;

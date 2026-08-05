@@ -3,7 +3,7 @@ import { useLayoutStore } from '../layout';
 
 beforeEach(() => {
   useLayoutStore.setState({
-    layout: { top: ['run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],

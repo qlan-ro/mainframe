@@ -3,7 +3,7 @@ import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
 import { Hint } from '@v2/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
+import { ChatGlyph, EditorGlyph } from './surface-icons';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -14,8 +14,7 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
-  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-mf-surface-run' },
+  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
 ];
 
 export function SurfaceRail() {
@@ -47,7 +46,7 @@ export function SurfaceRail() {
             <ToggleGroupItem
               value={id}
               data-testid={`surface-rail-${id}`}
-              data-tut={id === 'run' ? 'run' : undefined}
+              data-tut={id === 'workspace' ? 'workspace' : undefined}
               disabled={isFloor}
               className={cn(
                 'h-6 w-7 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',

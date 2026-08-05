@@ -82,10 +82,10 @@ describe('SpotlightRowView', () => {
     expect(tsContainer.querySelector('svg')?.innerHTML).not.toBe(mdContainer.querySelector('svg')?.innerHTML);
   });
 
-  it('renders the run command icon solid (fill=currentColor) to match the design glyph play.fill', () => {
-    const runRow: SpotlightRow = { ...cmdRow, id: 'run', testid: 'search-palette-command-row-run' };
-    renderRow(runRow);
-    const svg = screen.getByTestId('search-palette-command-row-run').querySelector('svg');
+  it('renders the workspace command icon solid (fill=currentColor) to match the design glyph play.fill', () => {
+    const row: SpotlightRow = { ...cmdRow, id: 'workspace', testid: 'search-palette-command-row-workspace' };
+    renderRow(row);
+    const svg = screen.getByTestId('search-palette-command-row-workspace').querySelector('svg');
     expect(svg?.getAttribute('fill')).toBe('currentColor');
   });
 });

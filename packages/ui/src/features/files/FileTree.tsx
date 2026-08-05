@@ -16,7 +16,8 @@ import { ChevronRight, File, Folder, RotateCw } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
-import { useTabsStore } from '@/store/tabs';
+import { useLayoutStore } from '@/store/layout';
+import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
@@ -204,11 +205,8 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   const [error, setError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // The path of the file open in the active tab — used to highlight the selected row.
-  const activeTabPath = useTabsStore((s) => {
-    const active = s.tabs.find((t) => t.id === s.activeTabId);
-    return active?.path ?? null;
-  });
+  // The path of the file open in the active workspace tab — highlights the selected row.
+  const activeTabPath = useLayoutStore((s) => activeFileTab(s.run)?.path ?? null);
 
   // Absolute workspace base (worktree wins over project) for Reveal/Copy Path.
   const base = useActiveBasesStore((s) => s.bases.worktreePath ?? s.bases.projectPath);

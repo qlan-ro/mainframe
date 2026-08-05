@@ -51,8 +51,8 @@ describe('addRunTab action (layout store)', () => {
     expect(added).toBe(false);
     const { layout, run } = useLayoutStore.getState();
     expect(run).toBeNull(); // no spurious empty Run surface committed
-    expect(layout.top).not.toContain('run'); // Run was NOT placed in the layout
-    expect(layout.bottom).not.toBe('run');
+    expect(layout.top).not.toContain('workspace'); // Run was NOT placed in the layout
+    expect(layout.bottom).not.toBe('workspace');
   });
 
   it('reports true and commits a Run state on the first-pane default path', () => {
@@ -61,7 +61,7 @@ describe('addRunTab action (layout store)', () => {
     expect(added).toBe(true);
     const { layout, run } = useLayoutStore.getState();
     expect(run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['t2']);
-    expect(layout.top.includes('run') || layout.bottom === 'run').toBe(true); // Run placed
+    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true); // Run placed
   });
 });
 

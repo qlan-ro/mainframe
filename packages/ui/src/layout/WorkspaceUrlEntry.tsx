@@ -1,5 +1,5 @@
 /**
- * RunUrlEntry — the inline "open a URL" field (#281), shared by the Run tab
+ * WorkspaceUrlEntry — the inline "open a URL" field (#281), shared by the Run tab
  * strip's `+` menu and the empty-state picker.
  *
  * Inline rather than a dialog: the strip is already the anchor, and a modal for
@@ -7,22 +7,22 @@
  * subscriber owns tab creation — so it reads no layout state.
  *
  * data-testid:
- *   run-tab-url-entry        — the field wrapper
- *   run-tab-url-entry-input  — the input
+ *   workspace-url-entry        — the field wrapper
+ *   workspace-url-entry-input  — the input
  */
 import { useState } from 'react';
 import { Globe } from 'lucide-react';
 import { normalizePreviewUrl } from '@/features/preview/normalize-url';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
-interface RunUrlEntryProps {
+interface WorkspaceUrlEntryProps {
   /** Target pane; omitted from the empty-state picker, which has no pane yet. */
   paneId?: string;
   /** Called once the entry is finished with — on commit, Escape, or blur. */
   onDone: () => void;
 }
 
-export function RunUrlEntry({ paneId, onDone }: RunUrlEntryProps) {
+export function WorkspaceUrlEntry({ paneId, onDone }: WorkspaceUrlEntryProps) {
   const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
 
@@ -48,12 +48,12 @@ export function RunUrlEntry({ paneId, onDone }: RunUrlEntryProps) {
 
   return (
     <div
-      data-testid="run-tab-url-entry"
+      data-testid="workspace-url-entry"
       className="flex h-[24px] min-w-0 flex-1 items-center gap-1 rounded-md border-[0.5px] border-border bg-card pl-1.5 pr-1"
     >
       <Globe size={12} className="flex-shrink-0 text-mf-text-3" aria-hidden />
       <input
-        data-testid="run-tab-url-entry-input"
+        data-testid="workspace-url-entry-input"
         autoFocus
         value={draft}
         spellCheck={false}

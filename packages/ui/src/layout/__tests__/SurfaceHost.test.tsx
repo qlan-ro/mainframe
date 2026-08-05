@@ -9,11 +9,8 @@ import { useLayoutStore } from '@/store/layout';
 vi.mock('@/features/sessions/new-thread/ChatSurface', () => ({
   ChatSurface: () => <div data-testid="chat-surface-stub" />,
 }));
-vi.mock('../surfaces/FilesSurface', () => ({
-  FilesSurface: () => <div data-testid="files-surface-stub" />,
-}));
-vi.mock('../surfaces/RunSurface', () => ({
-  RunSurface: () => <div data-testid="run-surface-stub" />,
+vi.mock('../surfaces/WorkspaceSurface', () => ({
+  WorkspaceSurface: () => <div data-testid="workspace-surface-stub" />,
 }));
 vi.mock('../SurfaceDragLayer', () => ({
   SurfaceDragLayer: () => null,
@@ -44,7 +41,7 @@ describe('SurfaceHost — flat shell geometry', () => {
 
   it('wires the shared gutter width through to the divider', () => {
     useLayoutStore.setState({
-      layout: { top: ['chat', 'files'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 1 } },
+      layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 1 } },
     });
     const { container } = render(<SurfaceHost port={31415} />);
 

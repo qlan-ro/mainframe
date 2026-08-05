@@ -1,5 +1,5 @@
 /**
- * RunSurface — PreviewInstance prop threading.
+ * WorkspaceSurface — PreviewInstance prop threading.
  * Asserts that scopeKey and projectId are threaded from RunSurface
  * down into PreviewInstance render.
  */
@@ -50,7 +50,7 @@ vi.mock('@/features/run/ConsolePane', () => ({
 
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
-import { RunSurface } from '../surfaces/RunSurface';
+import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
 
 const FRESH_LAYOUT = {
   top: ['chat' as const],
@@ -59,7 +59,7 @@ const FRESH_LAYOUT = {
   vFlex: { top: 1, bottom: 0.4 },
 };
 
-describe('RunSurface — PreviewInstance prop threading', () => {
+describe('WorkspaceSurface — PreviewInstance prop threading', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedProps.length = 0;
@@ -93,13 +93,13 @@ describe('RunSurface — PreviewInstance prop threading', () => {
   });
 
   it('passes scopeKey to PreviewInstance', () => {
-    render(<RunSurface />);
+    render(<WorkspaceSurface />);
     expect(capturedProps[0]).toBeDefined();
     expect(capturedProps[0]!['scopeKey']).toBe(mockScopeKey);
   });
 
   it('passes projectId to PreviewInstance', () => {
-    render(<RunSurface />);
+    render(<WorkspaceSurface />);
     expect(capturedProps[0]!['projectId']).toBe(mockProjectId);
   });
 });

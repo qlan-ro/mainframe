@@ -148,7 +148,12 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
     // Seed the store with an EXISTING 'dev' tab for scope A BEFORE rendering.
     useLayoutStore.setState({
       ...CLEAN_LAYOUT,
-      layout: { top: ['chat', 'run'] as ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: {
+        top: ['chat', 'workspace'] as ['chat', 'workspace'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
       run: {
         dir: 'v',
         flex: [1, 1],
@@ -196,7 +201,12 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
     // Seed with a 'dev' tab that is ALREADY for scope B — reconcile must be a no-op.
     useLayoutStore.setState({
       ...CLEAN_LAYOUT,
-      layout: { top: ['chat', 'run'] as ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: {
+        top: ['chat', 'workspace'] as ['chat', 'workspace'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
       run: {
         dir: 'v',
         flex: [1, 1],

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { lspClientManager, initLspPort, getLspLanguage, type LspSymbol } from '@/lib/lsp';
-import { useTabsStore } from '@/store/tabs';
+import { useLayoutStore } from '@/store/layout';
+import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useDebounce } from '@/features/files/use-file-search';
 
 /** The active editor tab's LSP language, else 'typescript' (v1 default). */
 export function pickSymbolLanguage(): string {
-  const { tabs, activeTabId } = useTabsStore.getState();
-  const active = tabs.find((t) => t.id === activeTabId);
-  return (active ? getLspLanguage(active.path) : null) ?? 'typescript';
+  const active = activeFileTab(useLayoutStore.getState().run);
+  return (active?.path ? getLspLanguage(active.path) : null) ?? 'typescript';
 }
 
 interface Args {

@@ -15,14 +15,9 @@ export function getPaletteCommands(): PaletteCommand[] {
     { id: 'sidebar', label: 'Toggle Sidebar', hint: '⌘\\', run: () => emitSurfaceIntent({ type: 'toggle-sidebar' }) },
     { id: 'inspector', label: 'Toggle Inspector', run: () => emitSurfaceIntent({ type: 'toggle-inspector' }) },
     {
-      id: 'files',
-      label: 'Reveal Files surface',
-      run: () => emitSurfaceIntent({ type: 'activate-surface', surface: 'files' }),
-    },
-    {
-      id: 'run',
-      label: 'Reveal Run surface',
-      run: () => emitSurfaceIntent({ type: 'activate-surface', surface: 'run' }),
+      id: 'workspace',
+      label: 'Reveal Workspace surface',
+      run: () => emitSurfaceIntent({ type: 'activate-surface', surface: 'workspace' }),
     },
   ];
 }

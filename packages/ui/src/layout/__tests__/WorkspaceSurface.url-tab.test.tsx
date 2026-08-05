@@ -1,5 +1,5 @@
 /**
- * RunSurface — the `url` tab kind (#281, AC3, AC13).
+ * WorkspaceSurface — the `url` tab kind (#281, AC3, AC13).
  *
  * Mirrors RunSurface.tab-scope.test.tsx's mock set and scope-filtering model,
  * adding a stub for UrlTabInstance and proving two things that file doesn't
@@ -24,6 +24,9 @@ vi.mock('@/features/preview/PreviewInstance', () => ({
   PreviewInstance: (props: Record<string, unknown>) => <div data-testid={`stub-preview-${props['tabId'] as string}`} />,
 }));
 
+vi.mock('@/features/editor/EditorTab', () => ({
+  EditorTab: ({ path }: { path: string }) => <div data-testid={`stub-editor-${path}`} />,
+}));
 vi.mock('@/features/run/ConsolePane', () => ({
   ConsolePane: () => <div data-testid="stub-console-pane" />,
 }));
@@ -60,16 +63,18 @@ vi.mock('@/features/run/use-launch-actions', () => ({
 
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
-import { RunSurface } from '../surfaces/RunSurface';
+import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
 
 const FRESH_LAYOUT = {
-  top: ['run' as const],
+  top: ['workspace' as const],
   bottom: null as null,
   topFlex: {} as Record<string, number>,
   vFlex: { top: 1, bottom: 0.4 },
 };
 
-function seedRunTabs(tabs: { id: string; kind: 'url' | 'code'; title: string; url?: string; scopeKey?: string }[]) {
+function seedRunTabs(
+  tabs: { id: string; kind: 'url' | 'code'; title: string; url?: string; path?: string; scopeKey?: string }[],
+) {
   useLayoutStore.setState({
     layout: { ...FRESH_LAYOUT },
     run: {
@@ -89,7 +94,7 @@ function seedRunTabs(tabs: { id: string; kind: 'url' | 'code'; title: string; ur
   });
 }
 
-describe('RunSurface — the url tab kind', () => {
+describe('WorkspaceSurface — the url tab kind', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     urlTabProps.length = 0;
@@ -99,7 +104,7 @@ describe('RunSurface — the url tab kind', () => {
     seedRunTabs([
       { id: 'tab-1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/', scopeKey: TAB_SCOPE },
     ]);
-    const { getByTestId, queryByText } = render(<RunSurface />);
+    const { getByTestId, queryByText } = render(<WorkspaceSurface />);
 
     expect(getByTestId('stub-url-tab-tab-1')).toBeTruthy();
     expect(queryByText('url: localhost:5173')).toBeNull();
@@ -109,7 +114,7 @@ describe('RunSurface — the url tab kind', () => {
     seedRunTabs([
       { id: 'tab-1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/', scopeKey: TAB_SCOPE },
     ]);
-    render(<RunSurface />);
+    render(<WorkspaceSurface />);
 
     expect(urlTabProps[0]).toMatchObject({
       tabId: 'tab-1',
@@ -120,11 +125,12 @@ describe('RunSurface — the url tab kind', () => {
     });
   });
 
-  it('a code tab still renders the fallback placeholder — the assertion above is not vacuous', () => {
-    seedRunTabs([{ id: 'tab-code', kind: 'code', title: 'index.ts', scopeKey: TAB_SCOPE }]);
-    const { getByText } = render(<RunSurface />);
+  it('a code tab renders the editor body instead — the assertion above is not vacuous', async () => {
+    seedRunTabs([{ id: 'tab-code', kind: 'code', title: 'index.ts', path: 'src/index.ts', scopeKey: TAB_SCOPE }]);
+    const { findByTestId } = render(<WorkspaceSurface />);
 
-    expect(getByText('code: index.ts')).toBeTruthy();
+    // EditorTabBody lazy-loads its bodies, so the stub resolves a tick later.
+    expect(await findByTestId('stub-editor-src/index.ts')).toBeTruthy();
     expect(urlTabProps).toHaveLength(0);
   });
 
@@ -138,7 +144,7 @@ describe('RunSurface — the url tab kind', () => {
         scopeKey: 'proj-B:/other',
       },
     ]);
-    const { queryByTestId } = render(<RunSurface />);
+    const { queryByTestId } = render(<WorkspaceSurface />);
 
     expect(urlTabProps).toHaveLength(0);
     expect(queryByTestId('stub-url-tab-leak-tab')).toBeNull();
@@ -149,7 +155,7 @@ describe('RunSurface — the url tab kind', () => {
       { id: 'keep-1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/', scopeKey: TAB_SCOPE },
       { id: 'leak-1', kind: 'url', title: 'localhost:6000', url: 'http://localhost:6000/', scopeKey: 'proj-B:/other' },
     ]);
-    const { getByTestId, queryByTestId } = render(<RunSurface />);
+    const { getByTestId, queryByTestId } = render(<WorkspaceSurface />);
 
     expect(urlTabProps).toHaveLength(1);
     expect(urlTabProps[0]!['scopeKey']).toBe(TAB_SCOPE);
@@ -161,11 +167,11 @@ describe('RunSurface — the url tab kind', () => {
     seedRunTabs([
       { id: 'tab-1', kind: 'url', title: 'localhost:5173', url: 'http://localhost:5173/', scopeKey: TAB_SCOPE },
     ]);
-    const { queryByTestId, rerender } = render(<RunSurface />);
+    const { queryByTestId, rerender } = render(<WorkspaceSurface />);
     expect(queryByTestId('stub-url-tab-tab-1')).toBeTruthy();
 
     useLayoutStore.getState().releaseRunScope(TAB_SCOPE);
-    rerender(<RunSurface />);
+    rerender(<WorkspaceSurface />);
 
     expect(queryByTestId('stub-url-tab-tab-1')).toBeNull();
   });

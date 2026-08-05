@@ -9,13 +9,11 @@ import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
 import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
-import { FilesSurface } from './surfaces/FilesSurface';
-import { RunSurface } from './surfaces/RunSurface';
+import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
 const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '1': 'chat',
-  '2': 'files',
-  '3': 'run',
+  '2': 'workspace',
 };
 
 // Each surface is its own rounded floating card (geo.surface), per the prototype
@@ -25,8 +23,7 @@ const PANEL_LAYOUT = 'flex flex-col overflow-hidden';
 
 function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
   if (name === 'chat') return <ChatSurface port={port} />;
-  if (name === 'files') return <FilesSurface />;
-  return <RunSurface />;
+  return <WorkspaceSurface />;
 }
 
 interface Props {
@@ -55,24 +52,24 @@ function SurfaceHostImpl({ port }: Props) {
     });
   }, []);
 
-  // Subscribe to open-file / reveal-file intents — opens tabs + activates Files surface.
+  // Subscribe to open-file / reveal-file intents — opens tabs + lights the workspace.
   // One stable subscription; no re-sub on layout change.
   useEffect(() => {
     return subscribeToFileIntents();
   }, []);
 
-  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds RunTab.
+  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds a tab.
   // One stable subscription; no re-sub on layout change.
   useEffect(() => {
     return subscribeToTerminalIntents();
   }, []);
 
-  // Subscribe to open-url-tab intents — normalizes the URL and adds the Run tab.
+  // Subscribe to open-url-tab intents — normalizes the URL and adds the tab.
   useEffect(() => {
     return subscribeToUrlTabIntents();
   }, []);
 
-  // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
+  // Cmd/Ctrl + 1/2 toggle Chat / Workspace.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;

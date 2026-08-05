@@ -1,5 +1,5 @@
 /**
- * RunTabStrip — tab-type glyph + running-config Stop affordance (todo #206,
+ * WorkspaceTabStrip — tab-type glyph + running-config Stop affordance (todo #206,
  * revised per user feedback):
  *
  * The tab's leading glyph is a STATIC type identifier — it never flips with the
@@ -37,7 +37,7 @@ vi.mock('@/features/run/use-launch-actions', () => ({
   useLaunchActions: () => launch,
 }));
 
-import { RunTabStrip } from '../RunTabStrip';
+import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
 
 const cfg = (name: string, over: Partial<LaunchConfiguration> = {}): LaunchConfiguration =>
   ({ name, runtimeExecutable: 'pnpm', runtimeArgs: [], port: null, url: null, ...over }) as LaunchConfiguration;
@@ -49,7 +49,7 @@ const paneWith = (tabs: RunPane['tabs']): RunPane => ({ id: 'pane-1', tabs, acti
 
 /** The lucide glyph name(s) inside a single tab pill (scoped, not the surface icon). */
 const pillGlyphs = (root: HTMLElement, tabId: string): string[] =>
-  Array.from(root.querySelector(`[data-testid="run-tab-${tabId}"]`)!.querySelectorAll('svg.lucide'))
+  Array.from(root.querySelector(`[data-testid="workspace-tab-${tabId}"]`)!.querySelectorAll('svg.lucide'))
     .flatMap((svg) => Array.from(svg.classList))
     .filter((c) => c.startsWith('lucide-') && c !== 'lucide-square');
 
@@ -62,18 +62,18 @@ beforeEach(() => {
 
 afterEach(() => vi.clearAllMocks());
 
-describe('RunTabStrip — static type glyph (independent of run state)', () => {
+describe('WorkspaceTabStrip — static type glyph (independent of run state)', () => {
   it('console (cli) tab keeps its square-terminal glyph whether stopped or running — never Play, never flips to Square', () => {
     launch.configs = [cfg('Sleeper')];
 
     launch.scopeStatuses = { Sleeper: 'stopped' };
-    const idle = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
+    const idle = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
     expect(pillGlyphs(idle.container, consoleTab.id)).toContain('lucide-square-terminal');
     expect(pillGlyphs(idle.container, consoleTab.id)).not.toContain('lucide-play');
     idle.unmount();
 
     launch.scopeStatuses = { Sleeper: 'running' };
-    const live = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
+    const live = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
     // The static glyph stays put while running — it no longer flips into the Stop.
     expect(pillGlyphs(live.container, consoleTab.id)).toContain('lucide-square-terminal');
   });
@@ -82,27 +82,27 @@ describe('RunTabStrip — static type glyph (independent of run state)', () => {
     launch.configs = [cfg('Web', { preview: true } as Partial<LaunchConfiguration>)];
 
     launch.scopeStatuses = { Web: 'stopped' };
-    const idle = render(<RunTabStrip pane={paneWith([previewTab])} primary />);
+    const idle = render(<WorkspaceTabStrip pane={paneWith([previewTab])} primary />);
     expect(pillGlyphs(idle.container, previewTab.id)).toContain('lucide-eye');
     idle.unmount();
 
     launch.scopeStatuses = { Web: 'running' };
-    const live = render(<RunTabStrip pane={paneWith([previewTab])} primary />);
+    const live = render(<WorkspaceTabStrip pane={paneWith([previewTab])} primary />);
     expect(pillGlyphs(live.container, previewTab.id)).toContain('lucide-eye');
   });
 
   it('terminal tab shows the static Terminal glyph', () => {
-    const { container } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const { container } = render(<WorkspaceTabStrip pane={paneWith([terminalTab])} primary />);
     expect(pillGlyphs(container, terminalTab.id)).toContain('lucide-terminal');
   });
 });
 
-describe('RunTabStrip — running-config Stop affordance', () => {
+describe('WorkspaceTabStrip — running-config Stop affordance', () => {
   it('renders a Stop button ALONGSIDE the static glyph on a running launch-config tab', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'running' };
-    const { queryByTestId, container } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
-    expect(queryByTestId(`run-tab-stop-${consoleTab.id}`)).not.toBeNull();
+    const { queryByTestId, container } = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
+    expect(queryByTestId(`workspace-tab-stop-${consoleTab.id}`)).not.toBeNull();
     // The type glyph is NOT displaced by the Stop.
     expect(pillGlyphs(container, consoleTab.id)).toContain('lucide-square-terminal');
   });
@@ -110,80 +110,80 @@ describe('RunTabStrip — running-config Stop affordance', () => {
   it('treats a "starting" config as live (Stop shown)', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'starting' };
-    const { queryByTestId } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
-    expect(queryByTestId(`run-tab-stop-${consoleTab.id}`)).not.toBeNull();
+    const { queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
+    expect(queryByTestId(`workspace-tab-stop-${consoleTab.id}`)).not.toBeNull();
   });
 
   it('shows NO Stop button when the config is stopped', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'stopped' };
-    const { queryByTestId } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
-    expect(queryByTestId(`run-tab-stop-${consoleTab.id}`)).toBeNull();
+    const { queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
+    expect(queryByTestId(`workspace-tab-stop-${consoleTab.id}`)).toBeNull();
   });
 
   it('clicking Stop calls handleStop with the config and does NOT close the tab', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'running' };
-    const { getByTestId, queryByTestId } = render(<RunTabStrip pane={paneWith([consoleTab])} primary />);
-    fireEvent.click(getByTestId(`run-tab-stop-${consoleTab.id}`));
+    const { getByTestId, queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([consoleTab])} primary />);
+    fireEvent.click(getByTestId(`workspace-tab-stop-${consoleTab.id}`));
     expect(launch.handleStop).toHaveBeenCalledWith(expect.objectContaining({ name: 'Sleeper' }));
     // The close control is untouched and still present.
-    expect(queryByTestId(`run-tab-close-${consoleTab.id}`)).not.toBeNull();
+    expect(queryByTestId(`workspace-tab-close-${consoleTab.id}`)).not.toBeNull();
   });
 
   it('a terminal tab never shows a Stop button even if a same-named config is live', () => {
     launch.configs = [cfg('Sleeper')];
     launch.scopeStatuses = { Sleeper: 'running' };
     const term = { id: 'term-1', kind: 'terminal' as const, title: 'zsh' };
-    const { queryByTestId } = render(<RunTabStrip pane={paneWith([term])} primary />);
-    expect(queryByTestId('run-tab-stop-term-1')).toBeNull();
+    const { queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([term])} primary />);
+    expect(queryByTestId('workspace-tab-stop-term-1')).toBeNull();
   });
 });
 
-describe('RunTabStrip — add menu (native DropdownMenu)', () => {
+describe('WorkspaceTabStrip — add menu (native DropdownMenu)', () => {
   /** Radix menu triggers open on POINTERDOWN, not click. */
   const openAddMenu = (getByTestId: (id: string) => HTMLElement) =>
-    fireEvent.pointerDown(getByTestId('run-tab-strip-add-pane-1'), { button: 0 });
+    fireEvent.pointerDown(getByTestId('workspace-tab-strip-add-pane-1'), { button: 0 });
 
   it('offers New terminal and URL rows, and one row per launch config', () => {
     launch.configs = [cfg('Web', { preview: true }), cfg('Sleeper')];
-    const { getByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const { getByTestId } = render(<WorkspaceTabStrip pane={paneWith([terminalTab])} primary />);
 
     openAddMenu(getByTestId);
 
-    expect(getByTestId('run-pane-new-terminal-pane-1')).toBeInTheDocument();
-    expect(getByTestId('run-pane-open-url-pane-1')).toBeInTheDocument();
-    expect(getByTestId('run-pane-launch-Web-pane-1')).toBeInTheDocument();
-    expect(getByTestId('run-pane-launch-Sleeper-pane-1')).toBeInTheDocument();
+    expect(getByTestId('workspace-pane-new-terminal-pane-1')).toBeInTheDocument();
+    expect(getByTestId('workspace-pane-open-url-pane-1')).toBeInTheDocument();
+    expect(getByTestId('workspace-pane-launch-Web-pane-1')).toBeInTheDocument();
+    expect(getByTestId('workspace-pane-launch-Sleeper-pane-1')).toBeInTheDocument();
   });
 
   it('selecting a launch-config row launches that config', () => {
     launch.configs = [cfg('Sleeper')];
-    const { getByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const { getByTestId } = render(<WorkspaceTabStrip pane={paneWith([terminalTab])} primary />);
 
     openAddMenu(getByTestId);
-    fireEvent.click(getByTestId('run-pane-launch-Sleeper-pane-1'));
+    fireEvent.click(getByTestId('workspace-pane-launch-Sleeper-pane-1'));
 
     expect(launch.handleLaunch).toHaveBeenCalledWith(expect.objectContaining({ name: 'Sleeper' }));
   });
 
   it('says so when the project has no launch configs', () => {
     launch.configs = [];
-    const { getByTestId, queryByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const { getByTestId, queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([terminalTab])} primary />);
 
     openAddMenu(getByTestId);
 
-    expect(getByTestId('run-add-menu-pane-1')).toHaveTextContent('No launch configs found.');
-    expect(queryByTestId('run-pane-launch-Sleeper-pane-1')).toBeNull();
+    expect(getByTestId('workspace-add-menu-pane-1')).toHaveTextContent('No launch configs found.');
+    expect(queryByTestId('workspace-pane-launch-Sleeper-pane-1')).toBeNull();
   });
 
   it('the URL row swaps the pill row for the inline URL entry', () => {
-    const { getByTestId, queryByTestId } = render(<RunTabStrip pane={paneWith([terminalTab])} primary />);
+    const { getByTestId, queryByTestId } = render(<WorkspaceTabStrip pane={paneWith([terminalTab])} primary />);
 
     openAddMenu(getByTestId);
-    fireEvent.click(getByTestId('run-pane-open-url-pane-1'));
+    fireEvent.click(getByTestId('workspace-pane-open-url-pane-1'));
 
-    expect(getByTestId('run-tab-url-entry')).toBeInTheDocument();
-    expect(queryByTestId(`run-tab-${terminalTab.id}`)).toBeNull();
+    expect(getByTestId('workspace-url-entry')).toBeInTheDocument();
+    expect(queryByTestId(`workspace-tab-${terminalTab.id}`)).toBeNull();
   });
 });
