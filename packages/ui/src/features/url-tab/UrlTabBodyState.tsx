@@ -1,5 +1,5 @@
 /**
- * The body of a `url` Run tab: the webview frame when there is something to
+ * The body of a `url` workspace tab: the webview frame when there is something to
  * show, and one explicit state for every other resolver outcome (#281, AC9).
  * Mirrors `PreviewBodyState`'s frames so the two tab kinds read as one surface.
  */

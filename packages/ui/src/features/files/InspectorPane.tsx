@@ -31,7 +31,7 @@ export function InspectorPane({ port }: { port: number }) {
   const changesCount = useChangesCount(port, projectId, chatId);
 
   // Subscribe to inspector-tab intents so external triggers (e.g. the
-  // SurfacePicker "View changes" button) can switch the active tab.
+  // the workspace empty state's "View changes" button) can switch the active tab.
   useEffect(() => {
     return onSurfaceIntent((intent) => {
       if (intent.type === 'inspector-tab') {

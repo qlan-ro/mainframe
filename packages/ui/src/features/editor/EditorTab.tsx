@@ -1,5 +1,5 @@
 /**
- * EditorTab — renders the active 'code' or 'viewer' tab in the Files surface.
+ * EditorTab — renders the active 'code' or 'viewer' tab in the workspace surface.
  *
  * Responsibilities:
  *  - loads file content via lib/tauri bridge

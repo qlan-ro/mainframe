@@ -1,11 +1,11 @@
 /**
  * WorkspaceSurface — the `url` tab kind (#281, AC3, AC13).
  *
- * Mirrors RunSurface.tab-scope.test.tsx's mock set and scope-filtering model,
+ * Mirrors WorkspaceSurface.tab-scope.test.tsx's mock set and scope-filtering model,
  * adding a stub for UrlTabInstance and proving two things that file doesn't
  * cover: the `url` kind renders through a real view (never the `${kind}:
  * ${title}` placeholder), and it obeys the same scope filter/release as every
- * other Run tab.
+ * other workspace tab.
  */
 import { render as rtlRender } from '@testing-library/react';
 import { TooltipProvider } from '@v2/components/ui/tooltip';

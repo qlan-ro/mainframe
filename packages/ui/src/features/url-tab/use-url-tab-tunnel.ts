@@ -1,5 +1,5 @@
 /**
- * useUrlTabTunnel — the React binding between a `url` Run tab and the per-port
+ * useUrlTabTunnel — the React binding between a `url` workspace tab and the per-port
  * tunnel machinery (#281). It composes three pieces and owns none of them:
  *
  * - `tunnel-claim.ts` (via `useTunnelClaim`) decides whether this tab may stop

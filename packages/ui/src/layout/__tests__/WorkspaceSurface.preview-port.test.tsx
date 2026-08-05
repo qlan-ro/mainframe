@@ -1,6 +1,6 @@
 /**
  * WorkspaceSurface — PreviewInstance prop threading.
- * Asserts that scopeKey and projectId are threaded from RunSurface
+ * Asserts that scopeKey and projectId are threaded from WorkspaceSurface
  * down into PreviewInstance render.
  */
 import { render as rtlRender } from '@testing-library/react';

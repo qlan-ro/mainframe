@@ -10,7 +10,7 @@
  * An empty `{}` means "no active session" (new/draft thread).
  *
  * `scopeKey` is the active session's launch scope (`buildLaunchScope`), stamped
- * onto every Run tab created outside React (terminals, Files guests) so they
+ * onto every workspace tab created outside React (terminals, files) so they
  * scope-filter alongside launch-config tabs. `null` for a draft/unresolved
  * session.
  */

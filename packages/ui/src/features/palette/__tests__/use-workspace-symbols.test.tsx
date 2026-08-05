@@ -14,8 +14,8 @@ vi.mock('@/lib/lsp', () => ({
   initLspPort: () => Promise.resolve(),
   getLspLanguage: (p: string) => (p.endsWith('.ts') ? 'typescript' : null),
 }));
-vi.mock('@/store/tabs', () => ({
-  useTabsStore: { getState: () => ({ tabs: [], activeTabId: null }) },
+vi.mock('@/store/layout', () => ({
+  useLayoutStore: { getState: () => ({ run: null }) },
 }));
 
 const { useWorkspaceSymbols } = await import('../use-workspace-symbols');

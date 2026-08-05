@@ -1,5 +1,5 @@
 /**
- * A `url` Run tab: the same native webview the preview tab drives, pointed at an
+ * A `url` workspace tab: the same native webview the preview tab drives, pointed at an
  * arbitrary address instead of a launch config (#281). Everything process-shaped
  * — run/stop, console, launch status — is absent by construction; the tunnel
  * resolver in `useUrlTabTunnel` takes the place of the launch lifecycle.

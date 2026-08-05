@@ -1,5 +1,5 @@
 /**
- * MarkdownEditorTab — a markdown file in the Files surface with a Preview/Source
+ * MarkdownEditorTab — a markdown file in the workspace surface with a Preview/Source
  * toggle. Source = the CM6 editor (markdown highlighting, editable); Preview =
  * rendered warm-chrome prose of the live buffer value.
  *

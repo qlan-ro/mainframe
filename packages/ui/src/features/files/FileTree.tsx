@@ -4,7 +4,7 @@
  * Directories fetch their children on first expand via `getFileTree(dir)`
  * (the daemon returns a single level per call). Clicking a file emits the
  * `open-file` surface intent — the same path the chat tool-cards use — so the
- * Files surface activates and the file opens as a tab. No `layout/` import.
+ * workspace surface lights and the file opens as a tab. No `layout/` import.
  *
  * Reveal support: when the files store has a `revealTarget`, the tree
  * auto-expands ancestor directories, scrolls the target row into view, and

@@ -48,7 +48,7 @@ const FRESH = {
   vFlex: { top: 1, bottom: 0.4 },
 };
 
-describe('RunSurface terminal rendering', () => {
+describe('WorkspaceSurface terminal rendering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useLayoutStore.setState({

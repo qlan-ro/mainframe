@@ -1,16 +1,16 @@
 /**
  * store/run-scope-filter.ts — scope-filter the global Run state for display.
  *
- * Run tabs are GLOBAL (a single `layout.run`) and every tab carries its own
+ * Workspace tabs are GLOBAL (a single `layout.run`) and every tab carries its own
  * `scopeKey` (`buildLaunchScope(projectId, effectivePath)`) — captured at
  * creation from the active session (launch configs, terminals, and Files
- * guests alike). The Run surface must show only the tabs belonging to the
+ * files alike). The workspace surface must show only the tabs belonging to the
  * ACTIVE session's launch scope — otherwise a tab opened under project/worktree
  * A keeps rendering after the user switches to a session under project/worktree
  * B (the tab "leak").
  *
  * Pure view-derivation: the global store is untouched; this only shapes what
- * RunSurface renders for the current scope.
+ * the workspace renders for the current scope.
  */
 import type { RunPane, RunState } from './run-pane';
 
@@ -18,7 +18,7 @@ import type { RunPane, RunState } from './run-pane';
  * Keep only the tabs whose scope matches `activeScopeKey`. A tab with no
  * `scopeKey` matches only a null active scope (an unresolved/draft session).
  * Panes left empty are dropped; a pane whose active tab was dropped re-points
- * to its first survivor. Returns `null` when nothing remains (RunSurface then
+ * to its first survivor. Returns `null` when nothing remains (the workspace then
  * shows the empty picker).
  */
 export function filterRunByScope(run: RunState | null, activeScopeKey: string | null): RunState | null {

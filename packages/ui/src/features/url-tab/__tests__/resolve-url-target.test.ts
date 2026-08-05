@@ -1,6 +1,6 @@
 /**
  * resolveUrlTabTarget / composeTunnelUrl — pure tunnel-state resolution for a
- * `url` Run tab (#281, plan Task 11's priority-ordered contract).
+ * `url` workspace tab (#281, plan Task 11's priority-ordered contract).
  */
 import { describe, it, expect } from 'vitest';
 import { resolveUrlTabTarget, composeTunnelUrl, type UrlTabTunnelInput } from '../resolve-url-target';

@@ -29,7 +29,7 @@ describe('addRunTab pane targeting', () => {
   });
 
   it('returns null (no-op) when run is null and an explicit paneId is given', () => {
-    // The whole Run surface was torn down to null during the async create gap.
+    // The whole workspace surface was torn down to null during the async create gap.
     // A fresh emptyRun() has no such pane, so this is still a no-op — and the
     // null signal (not reference equality) is what catches it.
     const next = addRunTab(null, tab('b'), 'pane-gone');

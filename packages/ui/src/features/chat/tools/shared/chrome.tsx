@@ -96,7 +96,7 @@ export function shortFilename(filePath: string): string {
 /**
  * A clickable file-path badge that opens the file in the editor surface.
  * Uses `useOpenFile()` from chat-tool-context for the surface-intent bus;
- * replaces desktop's `useTabsStore` reach-through.
+ * replaces desktop's tab-store reach-through.
  */
 export function ClickableFilePath({ filePath }: { filePath: string }) {
   const { openFile, revealFile } = useOpenFile();

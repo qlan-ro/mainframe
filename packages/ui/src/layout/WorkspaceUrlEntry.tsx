@@ -1,5 +1,5 @@
 /**
- * WorkspaceUrlEntry — the inline "open a URL" field (#281), shared by the Run tab
+ * WorkspaceUrlEntry — the inline "open a URL" field (#281), shared by the workspace tab
  * strip's `+` menu and the empty-state picker.
  *
  * Inline rather than a dialog: the strip is already the anchor, and a modal for

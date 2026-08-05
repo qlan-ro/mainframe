@@ -74,7 +74,7 @@ interface ViewerRouterProps {
   path: string;
   /**
    * Render prop called when the path resolves to a `"code"` kind.
-   * Phase 7 wires this to `<CmEditor>` via the Files surface.
+   * Phase 7 wires this to `<CmEditor>` via the workspace surface.
    * If omitted, a plain pre-formatted fallback is rendered.
    */
   renderCode?: (path: string) => ReactNode;

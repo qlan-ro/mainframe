@@ -3,7 +3,7 @@
  * useLaunchConfigs — reconcile path: scope-aware tab creation.
  *
  * The reconcile path runs on every fetch: for each already-running config it
- * ensures a Run tab exists in the layout store. The production bug is that
+ * ensures a workspace tab exists in the layout store. The production bug is that
  * `tabbed` (the "already has a tab" guard) is keyed only by config NAME, not
  * by scopeKey. So when scope A already has a 'dev' tab, fetching scope B's
  * statuses (also 'dev') finds 'dev' in `tabbed` and skips creating a tab for

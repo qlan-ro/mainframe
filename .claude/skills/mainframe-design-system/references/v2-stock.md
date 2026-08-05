@@ -177,12 +177,12 @@ slices remain). Conventions from the pass:
   Run tab strip's `+` add menu, the automations add-trigger menu (WhenCard), the skills
   install-scope menu (SkillAction), the automations TokenPicker (Group + Label per source), and
   the composer's ProviderModelSelect.
-  **Not converted, by inspection:** `layout/SurfacePicker.tsx` is not a float — it is the Files/Run
-  surface's always-visible empty-state card (`RunSurface`/`FilesSurface` render it inline when no
-  tab is open). It has no trigger, so a DropdownMenu would mean inventing one and hiding the
-  content behind a click. It stays an inline card; it converts with its surface port.
+  **Not converted, by inspection:** the workspace's empty-state card (now
+  `layout/WorkspaceEmptyState.tsx`) is not a float — it is always visible, with no trigger, so a
+  DropdownMenu would mean inventing one and hiding the content behind a click. It converted with
+  the surface port below and stays a `Card` of ghost-Button rows.
 - **`components/ui/menu.tsx` survives** the title-bar and menu sweeps. Remaining consumers:
-  SurfacePicker (`MenuDivider`/`MenuLabel`), the composer worktree family — WorktreePopover,
+  the composer worktree family — WorktreePopover,
   WorktreeDraftPanel, WorktreeExistingTab — and setup-advisor's InstallBand (`MenuRow`). It dies
   with those ports. `menu-variants.ts` outlives it either way: v1 `popover.tsx`,
   `dropdown-menu.tsx` and `context-menu.tsx` all compose it.
@@ -234,6 +234,38 @@ slices remain). Conventions from the pass:
   change must travel as one `guard()` call, never two).
   **Known cost:** the effective effort and the ultracode lock are no longer visible without
   opening the menu.
+
+## Workspace surface (2026-08-05 merge + port)
+
+The Files and Run surfaces became **one** `WorkspaceSurface`, and its chrome is v2. `SurfaceId` is
+now `'chat' | 'workspace'` — there is no `files` or `run` id, component, store or drop target.
+Conventions from the pass:
+
+- **A closeable tab strip is NOT Radix `Tabs`.** `TabsTrigger` renders a `<button>`, so a per-tab
+  close or stop inside it would nest buttons. The strip stays `div[role=tab]` pills carrying v2
+  Buttons, and borrows Tabs' *vocabulary* only (resting `text-muted-foreground`, active
+  `bg-muted text-foreground`). Radix `Tabs` remains right for segmented one-of-N switches.
+- **`Button` gained `icon-2xs`** (16px, 12px glyph) for an affordance nested INSIDE another control
+  — the tab pill's close and stop, where `icon-xs`'s 24px equals the 24px pill. Add the scale step;
+  don't override `icon-xs` per call site.
+- **A tab glyph carries TYPE by shape and STATE by ink.** Eight kinds (eye/globe/square-terminal/
+  terminal/code/git-compare/file) each with their own hue did not survive having one strip, so the
+  per-kind tints (`mf-term-cyan`, `mf-surface-run`, `mf-accent-amber`) are gone: active =
+  `text-foreground`, inactive = `text-muted-foreground`. `mf-surface-files` and `mf-shadow-picker`
+  died with this pass; **`mf-surface-run` survives via `ToolbarLaunchControls` only.**
+- **The strip's two ends live in `WorkspaceStripChrome`** (grip + surface glyph; split/close
+  cluster) with a shared `STRIP_ROW` height, because the empty-state header is the same row without
+  a pane. The near-copy the merge inherited is what made this necessary — don't re-inline it.
+- Geometry keeps v1's density on the v2 scale: strip `h-9` (36px), tab pill `h-6` (24px), tab titles
+  `text-xs` (11px — same rung as the toolbar chip directly above), icon buttons 24px/12px glyph.
+- Pick-list surfaces are `w-72` / `max-h-72`, matching `popover.tsx` and `command.tsx`.
+- Tests: every suite that renders the strip, a pill or the surface bare needs the **v2**
+  `TooltipProvider` wrapper — the pills are full of `Hint`s. Shadowing `render` with
+  `rtlRender(ui, { wrapper: TooltipProvider })` beats threading the option through 15 call sites.
+
+**Surface placement is deliberately NOT redesigned.** `layout-placement.ts` still carries the
+three-slot algebra (top row of 1–2 + a bottom strip + flex) it had for three surfaces. Multi-session
+side-by-side chat is a future decision; leave the shape alone until it is taken.
 
 ## Toasts (2026-08-05 port)
 

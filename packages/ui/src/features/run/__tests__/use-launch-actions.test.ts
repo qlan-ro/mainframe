@@ -146,7 +146,7 @@ describe('useLaunchActions — handleSelect records under the active scopeKey', 
 });
 
 describe('useLaunchActions — refetch after start/stop', () => {
-  // Bug: the Run surface's own launch path (RunTabStrip add-menu, SurfacePicker)
+  // Bug: the workspace's own launch path (add-menu, empty-state card)
   // shares this hook but never re-synced with the daemon after starting/stopping
   // a config — a fast subprocess's buffered output (seedOutputBuffer, only
   // reachable inside useLaunchConfigs's fetch effect) and a just-stopped

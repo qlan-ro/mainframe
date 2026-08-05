@@ -85,7 +85,6 @@
   --mf-warning-tint: rgba(217, 119, 6, 0.1);
   --mf-success-tint: rgba(40, 167, 69, 0.1);
   --mf-border-hover: rgba(0, 0, 0, 0.14);
-  --mf-surface-files: #7a4d9e;
   --mf-surface-run: #1f9d4d;
   --mf-directive-skill: #7a4dd0;
   --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
@@ -126,7 +125,6 @@
   /* App-only elevation variants */
   --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
   --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
-  --mf-shadow-picker: 0 12px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
   --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.06);
@@ -202,7 +200,6 @@
   --mf-warning-tint: rgba(245, 169, 96, 0.12);
   --mf-success-tint: rgba(80, 217, 124, 0.12);
   --mf-border-hover: rgba(255, 255, 255, 0.16);
-  --mf-surface-files: #b48bd8;
   --mf-surface-run: #50d97c;
   --mf-directive-skill: #b48cff;
   --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
@@ -234,7 +231,6 @@
   --mf-auto-kind-parallel: #ec771b;
   --mf-auto-kind-call: #6798e5;
 
-  --mf-shadow-picker: 0 16px 44px rgba(0, 0, 0, 0.46), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-shadow-segment: 0 0 0 0.5px var(--border), 0 1px 1.5px rgba(0, 0, 0, 0.22);
@@ -277,7 +273,6 @@
   --color-mf-success-tint: var(--mf-success-tint);
   --color-mf-destructive-tint: var(--mf-destructive-tint);
   --color-mf-border-hover: var(--mf-border-hover);
-  --color-mf-surface-files: var(--mf-surface-files);
   --color-mf-surface-run: var(--mf-surface-run);
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);

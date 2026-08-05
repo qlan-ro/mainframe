@@ -1,6 +1,6 @@
 /**
  * resolveUrlTabTarget / composeTunnelUrl — pure tunnel-state resolution for a
- * `url` Run tab (#281). Table-drives the priority-ordered contract below over
+ * `url` workspace tab (#281). Table-drives the priority-ordered contract below over
  * a snapshot of the port-tunnels store, this tab's own start attempt, and its
  * watchdog — never touches the store directly, so every case is a pure input.
  */

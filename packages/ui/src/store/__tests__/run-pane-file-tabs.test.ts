@@ -1,6 +1,6 @@
 /**
  * File-tab semantics on the workspace pane model — the preview-vs-permanent
- * rules ported from the retired Files tab store (`tabs.test.ts`), plus the
+ * rules ported from the retired file tab store (`tabs.test.ts`), plus the
  * per-pane and per-scope behaviour the merge adds.
  *
  * Behaviour-based with hardcoded expectations; pure reducers, no store.

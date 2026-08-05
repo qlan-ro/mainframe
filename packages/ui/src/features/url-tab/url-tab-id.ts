@@ -1,5 +1,5 @@
 /**
- * urlTabId / urlTabTitle — pure identity helpers for a `url` Run tab (#281).
+ * urlTabId / urlTabTitle — pure identity helpers for a `url` workspace tab (#281).
  *
  * The id doubles as the child webview's label, so it must stay inside Tauri's
  * label charset — the URL itself must never leak into it.

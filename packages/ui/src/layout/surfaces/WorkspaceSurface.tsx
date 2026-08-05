@@ -60,7 +60,7 @@ function WorkspaceTabBody({
 }) {
   // A launch tab carries its OWN scope (captured at launch); fall back to the
   // active-chat-derived scope only for tabs created before this was captured.
-  // Run tabs are global, so the active chat may not resolve to this tab's scope.
+  // workspace tabs are global, so the active chat may not resolve to this tab's scope.
   const tabScope = tab.scopeKey ?? scopeKey;
   if (tab.kind === 'terminal') {
     return <TerminalInstance terminalId={tab.id} visible={active} />;

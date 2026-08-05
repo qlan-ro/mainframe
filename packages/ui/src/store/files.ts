@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /**
- * Files surface store.
+ * workspace surface store.
  *
  * Holds the pending reveal target — the path the tree should expand to, scroll
  * into view, and transiently highlight. The subscriber sets it; the FileTree

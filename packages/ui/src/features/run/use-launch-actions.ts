@@ -4,7 +4,7 @@
  *
  * Wraps `useLaunchConfigs` (fetch) with the per-scope process statuses, the
  * selected-config state, and the start/stop handlers. Starting any config opens
- * (or focuses) its own Run tab — a `preview` webview tab for `preview:true`
+ * (or focuses) its own workspace tab — a `preview` webview tab for `preview:true`
  * configs, a full-space `console` tab for process configs. Selecting/starting a
  * config records it as the selected one so the toolbar picker reflects it.
  */
@@ -84,7 +84,7 @@ export function useLaunchActions(
         // the ONLY code path that seeds a fast/short-lived config's buffered
         // console output (`useLaunchConfigs`'s `seedOutputBuffer`, which only
         // runs inside its own fetch effect) — without it, a config launched
-        // from the Run surface's own picker/add-menu (as opposed to reopening
+        // from the workspace's own empty-state card or add-menu (as opposed to reopening
         // the toolbar's launch popover, which already called refetch()) never
         // picks up output from a process whose whole lifecycle finished before
         // any live WS delivery was observed.

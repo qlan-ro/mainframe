@@ -1,13 +1,13 @@
 /**
  * WorkspaceSurface — scope-coupled tab visibility (the leak fix).
  *
- * Run tabs are global (layout store), but they must only be RENDERED for the
+ * workspace tabs are global (layout store), but they must only be RENDERED for the
  * session whose launch scope matches the tab's own `scopeKey`. Tabs from other
  * projects/worktrees must be hidden — not just pass through a wrong scope — so
- * they cannot leak into a different session's Run surface.
+ * they cannot leak into a different session's workspace.
  *
  * NEW behavior (replaces the old "decoupled from the active chat" premise):
- *   - RunSurface computes an `activeScopeKey` from `useActiveIdentity()` via
+ *   - WorkspaceSurface computes an `activeScopeKey` from `useActiveIdentity()` via
  *     `buildLaunchScope(projectId, worktreePath ?? projectPath)`.
  *   - `filterRunByScope(run, activeScopeKey)` is applied before rendering; only
  *     tabs whose `scopeKey` matches (or tabs with no scopeKey at all) reach the DOM.

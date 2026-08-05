@@ -3,7 +3,7 @@
  *
  * `ImageViewer.test.tsx` mocks `ZoomableImage` away for its own rendering
  * contract, so it never proves the real `ZoomableImage → LightboxSurface →
- * ImageContextMenu` chain reaches the Files surface. This suite renders the
+ * ImageContextMenu` chain reaches the workspace surface. This suite renders the
  * real `ZoomableImage` (no mock) and asserts the menu opens, closing the gap
  * without pulling the Radix dialog into the mocked regression suite.
  */

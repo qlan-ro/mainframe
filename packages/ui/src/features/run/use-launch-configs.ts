@@ -2,7 +2,7 @@
  * use-launch-configs — fetch and refresh launch configs + statuses.
  *
  * Takes the active {port, projectId, chatId} explicitly so it works both inside
- * the Run surface (context-derived) and in the shell MainToolbar (prop-derived).
+ * the workspace surface (context-derived) and in the shell MainToolbar (prop-derived).
  * Fetches both configs and the current process statuses in a single effect, and
  * exposes a `refetch` callback for manual refresh (e.g. on popover open).
  */
@@ -54,7 +54,7 @@ function reconcileFetchedStatus(
   if (!supersededByWs) {
     sandbox.setProcessStatus(scope, name, status);
   }
-  // A running/starting config must always have a tab in the Run surface —
+  // A running/starting config must always have a tab in the workspace surface —
   // reconcile one if missing (e.g. after an app restart, where the run panes
   // are empty but the process is still alive).
   if ((effectiveStatus === 'running' || effectiveStatus === 'starting') && !tabbed.has(name)) {
@@ -128,7 +128,7 @@ export function useLaunchConfigs(
         // status-fetch seed to learn the URL.
         sandbox.seedTunnelUrls(scope, statuses.tunnelUrls);
 
-        // Run tabs already open FOR THIS SCOPE, keyed by config name (don't
+        // workspace tabs already open FOR THIS SCOPE, keyed by config name (don't
         // re-add/re-focus). Scope-scoped so a same-named config running in
         // another project/worktree still gets reconciled into its own tab.
         const layout = useLayoutStore.getState();

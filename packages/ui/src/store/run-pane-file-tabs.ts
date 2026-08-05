@@ -2,7 +2,7 @@
  * store/run-pane-file-tabs.ts — file-backed tab semantics for the workspace
  * pane model. Pure reducers over `RunState`; the store (`layout.ts`) wires them.
  *
- * These are the rules the retired Files tab store owned (mirroring
+ * These are the rules the retired file tab store owned (mirroring
  * `openTargetWS` in prototype/04-engine.jsx), now expressed per PANE because
  * the workspace can be split:
  *  - opening a file in 'preview' mode replaces that pane's preview tab (at most
