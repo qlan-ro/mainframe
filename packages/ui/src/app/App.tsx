@@ -27,7 +27,8 @@ import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatu
 import { ConnectionOverlay } from './ConnectionOverlay';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@v2/components/ui/sonner';
+import { ToastDetailsHost } from '@/components/overlays/ToastDetailsHost';
 
 /**
  * Inner shell — must run inside ActiveDaemonProvider so it can read the active
@@ -144,7 +145,8 @@ export function App() {
             </div>
           )}
         </ConnectionStatusProvider>
-        <Toaster />
+        <Toaster position="bottom-right" offset={18} gap={9} visibleToasts={5} expand />
+        <ToastDetailsHost />
       </div>
     </MfErrorBoundary>
   );

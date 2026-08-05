@@ -235,6 +235,17 @@ slices remain). Conventions from the pass:
   **Known cost:** the effective effort and the ultracode lock are no longer visible without
   opening the menu.
 
+## Toasts (2026-08-05 port)
+
+Native sonner via the v2 `Toaster` (mounted once in App). **`mfToast` from `@/lib/toast` remains
+the only raise API** — it owns the type→policy table (error/permission persist with a close
+button; success/info/warning auto-dismiss; permission renders as a warning toast) and the
+`chatId` → "Open session" CTA. The v1 `WsToastCard` and v1 sonner wrapper are deleted.
+**Abstract failures carry a `details` option** (stack, stderr, response body): the toast grows a
+Details button that opens `ToastDetailsHost` (v2 Dialog at the app root, monospace copyable
+payload via the `toast-details` store). Prefer `mfToast.error(title, { description, details })`
+over stuffing payloads into the toast body.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:

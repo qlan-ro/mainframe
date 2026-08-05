@@ -158,7 +158,7 @@ vi.mock('../../features/sessions/new-thread/ChatSurface', () => ({
   ChatSurface: (p: { port: number }) => <div data-testid="chat-surface-stub" data-port={p.port} />,
 }));
 
-vi.mock('@/components/ui/sonner', () => ({
+vi.mock('@v2/components/ui/sonner', () => ({
   Toaster: () => null,
 }));
 
