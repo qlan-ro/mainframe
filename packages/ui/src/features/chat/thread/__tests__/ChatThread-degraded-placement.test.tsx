@@ -40,7 +40,6 @@ vi.mock('@assistant-ui/react', () => {
 
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
-vi.mock('../../composer/BackgroundActivityBar', () => ({ BackgroundActivityBar: () => null }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({

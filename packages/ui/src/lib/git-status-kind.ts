@@ -3,11 +3,10 @@
  *
  * The daemon emits a trimmed 2-char XY git porcelain code (e.g. 'M', 'A', 'D',
  * '??', 'R', 'C', 'MM', 'AM', 'RM'). This function collapses it to one of four
- * semantic kinds used by both ChangesPanel and the review surfaces.
+ * semantic kinds used by the review surfaces and spotlight results.
  *
- * Precedence mirrors ChangesPanel.tsx:10 (existing canonical mapping) with
- * rename/copy added before the add/del/modify checks so that 'RM' → 'renamed'
- * rather than 'modified'.
+ * Rename/copy is checked before add/del/modify so that 'RM' → 'renamed' rather
+ * than 'modified'.
  */
 export type GitStatusKind = 'added' | 'modified' | 'deleted' | 'renamed';
 
@@ -21,8 +20,8 @@ export function gitStatusKind(code: string): GitStatusKind {
 
 /**
  * Canonical single-char display label per semantic kind.
- * Used by both ChangesPanel and ReviewFileTree so the badge label is derived
- * from the same source of truth as the tint class.
+ * Used by ReviewFileTree and the spotlight results so the badge label is
+ * derived from the same source of truth as the tint class.
  */
 export const KIND_LABEL: Record<GitStatusKind, string> = {
   added: 'A',

@@ -23,7 +23,6 @@ vi.mock('@/features/run/use-launch-actions', () => ({
     configs: launchConfigs(),
     scopeStatuses: {},
     selectedConfigName: null,
-    handleSelect: vi.fn(),
     handleLaunch,
     handleStop: vi.fn(),
     refetch: vi.fn(),
@@ -61,11 +60,11 @@ describe('WorkspaceEmptyState — one card for files, terminals and previews', (
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file-picker' });
   });
 
-  it('view-changes emits an inspector-tab intent with tab="changes"', async () => {
+  it('view-changes emits open-review — the same destination as the session panel Changes row', async () => {
     const user = userEvent.setup();
     render(<WorkspaceEmptyState />);
     await user.click(screen.getByTestId('workspace-picker-view-changes'));
-    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'inspector-tab', tab: 'changes' });
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-review' });
   });
 
   it('new-terminal is enabled and emits a new-terminal intent', async () => {

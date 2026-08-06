@@ -11,7 +11,6 @@ import { Hint } from '@v2/components/ui/hint';
 import { Separator } from '@v2/components/ui/separator';
 import { Toggle } from '@v2/components/ui/toggle';
 import { BranchPopover } from '../features/git/BranchPopover';
-import { ToolbarLaunchControls } from '../features/run/ToolbarLaunchControls';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
 
@@ -227,9 +226,6 @@ export function MainToolbar({
             </Button>
           </Hint>
         )}
-        {/* Launch picker ("Preview" dropdown) + run button, wired to the launch subsystem. */}
-        <ToolbarLaunchControls port={port} projectId={projectId} chatId={chatId} />
-        <Separator orientation="vertical" className="mx-1 h-4" />
         <SurfaceRail />
         <Hint label={isDark ? 'Switch to light' : 'Switch to dark'}>
           <Button

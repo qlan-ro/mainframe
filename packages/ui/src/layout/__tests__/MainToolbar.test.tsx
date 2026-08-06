@@ -305,26 +305,6 @@ describe('MainToolbar — show-sidebar button', () => {
   });
 });
 
-describe('MainToolbar — launch controls', () => {
-  it('renders an enabled launch picker; the run button is disabled until configs load', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
-
-    // No projectId → no configs fetched → run button has no target (disabled),
-    // but the picker itself is now live (was a disabled stub before wiring).
-    expect(screen.getByTestId('main-toolbar-launch')).not.toBeDisabled();
-    expect(screen.getByTestId('main-toolbar-play')).toBeDisabled();
-  });
-});
-
 describe('MainToolbar — search button', () => {
   it('clicking main-toolbar-search emits open-search-palette', () => {
     render(
@@ -423,25 +403,6 @@ describe('MainToolbar — Setup Advisor button', () => {
     );
 
     expect(screen.getByTestId('automation-recommender-open')).toBeDefined();
-  });
-
-  it('places the Setup Advisor button before the launch controls', () => {
-    mockGetGitBranch.mockResolvedValue({ branch: null });
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-
-        port={31415}
-      />,
-    );
-
-    const advisor = screen.getByTestId('automation-recommender-open');
-    const launch = screen.getByTestId('main-toolbar-launch');
-    expect(advisor.compareDocumentPosition(launch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('does not render automation-recommender-open when there is no projectId', () => {

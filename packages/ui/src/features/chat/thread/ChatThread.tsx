@@ -14,7 +14,6 @@ import { Alert, AlertDescription, AlertTitle } from '@v2/components/ui/alert';
 import { Button } from '@v2/components/ui/button';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
-import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
 import { ChatSelectionToolbar } from './ChatSelectionToolbar';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
@@ -140,7 +139,6 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
               </ThreadPrimitive.ScrollToBottom>
 
               <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-3xl px-5 pb-4">
-                <BackgroundActivityBar />
                 <WorktreeSwitchBanner />
                 <ThreadFooterInput />
               </div>

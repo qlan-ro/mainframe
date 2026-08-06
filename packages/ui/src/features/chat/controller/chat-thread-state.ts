@@ -91,7 +91,8 @@ export interface ChatThreadState {
   /**
    * Live background work (agents / bg bash / workflows) keyed by task id — fed
    * by `background_task.*` events, resynced from `chat.updated`'s
-   * `backgroundActivity` snapshot. Drives the BackgroundActivityBar chip.
+   * `backgroundActivity` snapshot. Drives the session panel's Background
+   * Activity section and its rail badge.
    */
   readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
   /**

@@ -9,6 +9,10 @@
 import type { ReactNode } from 'react';
 import { Badge } from '@v2/components/ui/badge';
 
+/** The row shape every sub-group renders: memory files, session items, skills. */
+export const SUB_GROUP_ROW =
+  'flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-background';
+
 interface PanelSubGroupProps {
   label: string;
   count: number;

@@ -49,7 +49,6 @@ vi.mock('@/features/run/use-launch-actions', () => ({
     configs: mockConfigs,
     scopeStatuses: mockStatuses,
     selectedConfigName: mockSelected,
-    handleSelect: vi.fn(),
     handleLaunch,
     handleStop,
     refetch: vi.fn(),

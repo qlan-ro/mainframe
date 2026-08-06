@@ -17,7 +17,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
-import { ChatSessionInline } from './ChatSessionInline';
+import { ChatModelChip } from './ChatModelChip';
 
 /**
  * The chat surface's header row. Same height, border and gutters as the
@@ -70,9 +70,8 @@ function ChatCardHeaderReal() {
       <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
-      <ChatSessionInline part="model" />
+      <ChatModelChip />
       <span className="flex-1" />
-      <ChatSessionInline part="status" />
       <Hint label="Review changes (⌘⇧R)">
         <Button
           data-testid="chat-header-review"

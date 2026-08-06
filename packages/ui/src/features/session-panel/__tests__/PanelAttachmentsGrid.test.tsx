@@ -8,7 +8,7 @@
  *    default, so an ungated grid would fire N base64 reads per session switch
  *  - an image tile opens the lightbox; a file tile is inert
  *
- * Replaces `context-panel/__tests__/SessionAttachmentsGrid.test.tsx`.
+ * Replaces the retired bottom panel's `SessionAttachmentsGrid.test.tsx`.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';

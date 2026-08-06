@@ -148,8 +148,5 @@ export function subscribeToFileIntents(): () => void {
       useUiPrefs.getState().toggleInspector();
       return;
     }
-
-    // 'inspector-tab' intents are consumed directly by InspectorPane via its
-    // own onSurfaceIntent subscription — no action needed here.
   });
 }

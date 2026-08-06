@@ -1,15 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import {
-  useUiPrefs,
-  clampBottomPanelHeight,
-  isSidebarSectionCollapsed,
-  isSessionPanelSectionOpen,
-  BOTTOM_PANEL_MIN_HEIGHT,
-  BOTTOM_PANEL_DEFAULT_HEIGHT,
-  BOTTOM_PANEL_MAX_FALLBACK,
-} from '../ui-prefs';
+import { useUiPrefs, isSidebarSectionCollapsed, isSessionPanelSectionOpen } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
@@ -28,8 +20,6 @@ beforeEach(() => {
     sidebarVisible: true,
     inspectorVisible: false,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-    bottomPanelTab: 'context',
-    bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
     rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
     collapsedSidebarSections: {},
@@ -43,8 +33,6 @@ describe('useUiPrefs defaults', () => {
     expect(s.sidebarVisible).toBe(true);
     expect(s.inspectorVisible).toBe(false);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
-    expect(s.bottomPanelTab).toBe('context');
-    expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
     expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.collapsedSidebarSections).toEqual({});
@@ -119,18 +107,6 @@ describe('useUiPrefs actions', () => {
     expect(useUiPrefs.getState().sidebarWidth).toBe(480);
   });
 
-  it('setBottomPanelTab stores the tab', () => {
-    useUiPrefs.getState().setBottomPanelTab('skills');
-    expect(useUiPrefs.getState().bottomPanelTab).toBe('skills');
-  });
-
-  it('setBottomPanelHeight clamps against the fallback ceiling', () => {
-    useUiPrefs.getState().setBottomPanelHeight(5);
-    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_MIN_HEIGHT);
-    useUiPrefs.getState().setBottomPanelHeight(99999);
-    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_MAX_FALLBACK);
-  });
-
   it('dismissRightClickHint permanently suppresses the hint', () => {
     expect(useUiPrefs.getState().rightClickHintDismissed).toBe(false);
     useUiPrefs.getState().dismissRightClickHint();
@@ -168,14 +144,6 @@ describe('isSidebarSectionCollapsed', () => {
   });
 });
 
-describe('clampBottomPanelHeight', () => {
-  it('clamps to [min, maxHeight]', () => {
-    expect(clampBottomPanelHeight(5, 400)).toBe(BOTTOM_PANEL_MIN_HEIGHT);
-    expect(clampBottomPanelHeight(800, 400)).toBe(400);
-    expect(clampBottomPanelHeight(250, 400)).toBe(250);
-  });
-});
-
 describe('useUiPrefs persistence', () => {
   it('writes only the whitelisted fields to localStorage', () => {
     useUiPrefs.getState().setSidebarWidth(300);
@@ -198,16 +166,6 @@ describe('useUiPrefs persistence', () => {
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
   });
-
-  it('never writes the bottom-panel keys back, even after a bottom-panel setter runs', () => {
-    useUiPrefs.getState().setBottomPanelTab('agents');
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    // The state field still exists (its consumers outlive this change)…
-    expect(useUiPrefs.getState().bottomPanelTab).toBe('agents');
-    // …but it is no longer part of the persisted blob.
-    expect(parsed.state.bottomPanelTab).toBeUndefined();
-    expect(parsed.state.bottomPanelHeight).toBeUndefined();
-  });
 });
 
 describe('useUiPrefs v1 → v2 migration', () => {
@@ -222,9 +180,15 @@ describe('useUiPrefs v1 → v2 migration', () => {
     const fresh = await reloadStore();
     // Proves hydration actually ran, so the next assertions aren't vacuous.
     expect(fresh.getState().sidebarWidth).toBe(300);
-    // Stripped: the declared defaults win over the v1 blob.
-    expect(fresh.getState().bottomPanelTab).toBe('context');
-    expect(fresh.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
+    // Stripped by migrate, so they never reach the store...
+    const state = fresh.getState() as unknown as Record<string, unknown>;
+    expect(state.bottomPanelTab).toBeUndefined();
+    expect(state.bottomPanelHeight).toBeUndefined();
+    // ...nor get written back out on the next persist.
+    fresh.getState().setSidebarWidth(320);
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.bottomPanelTab).toBeUndefined();
+    expect(parsed.state.bottomPanelHeight).toBeUndefined();
   });
 
   it('leaves a v1 payload without bottom-panel keys otherwise intact', async () => {

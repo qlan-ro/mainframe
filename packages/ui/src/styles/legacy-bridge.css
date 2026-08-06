@@ -9,11 +9,8 @@
    The shell, the title bar, the dialogs, the workspace surface and the chat
    surface have all ported. What still speaks mf-* and the v1 type rungs, as of
    the 2026-08-06 chat pass:
-   - whole areas awaiting their own port: context-panel, tasks, automations,
-     review, settings panes, the files tree, sessions' v1 leftovers, tour
-   - one cluster inside the ported chat surface: the workflow / background-
-     activity family (features/chat/workflow/* + composer/{BackgroundActivityBar,
-     WorkflowActivityPopover}), which the chat port did not reach
+   - whole areas awaiting their own port: tasks, automations, review, settings
+     panes, the files tree, sessions' v1 leftovers, tour
    - the surviving v1 primitives: components/ui/{tooltip,hint,dropdown-menu,
      popover,menu-variants,count-badge,section-header,read-more,scroll-area}
 
@@ -45,7 +42,6 @@
   --mf-glass: rgba(240, 237, 231, 0.84);
   --mf-content2: #f8f6f2;
   --mf-raised: #f3efe7;
-  --mf-tab-active: #ffffff;
   --mf-text-3: var(--muted-foreground);
   --mf-text-4: #bcbab5;
   --mf-chip: var(--accent);
@@ -95,7 +91,6 @@
   --mf-warning-tint: rgba(217, 119, 6, 0.1);
   --mf-success-tint: rgba(40, 167, 69, 0.1);
   --mf-border-hover: rgba(0, 0, 0, 0.14);
-  --mf-surface-run: #1f9d4d;
   --mf-directive-skill: #7a4dd0;
   --mf-directive-session: #a84c08;
   --mf-code-inline-fg: #7a4d2a;
@@ -125,7 +120,6 @@
   /* App-only elevation variants */
   --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
   --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
-  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
   --mf-shadow-edit-ring:
     0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
@@ -156,7 +150,6 @@
   --mf-glass: rgba(34, 36, 47, 0.85);
   --mf-content2: #212330;
   --mf-raised: #313447;
-  --mf-tab-active: #373a4d;
   --mf-text-4: #555870;
   --mf-warning: #f5a960;
 
@@ -191,7 +184,6 @@
   --mf-warning-tint: rgba(245, 169, 96, 0.12);
   --mf-success-tint: rgba(80, 217, 124, 0.12);
   --mf-border-hover: rgba(255, 255, 255, 0.16);
-  --mf-surface-run: #50d97c;
   --mf-directive-skill: #b48cff;
   --mf-directive-session: #f0b429;
   --mf-code-inline-fg: #e0a878;
@@ -212,7 +204,6 @@
   --mf-auto-kind-parallel: #ec771b;
   --mf-auto-kind-call: #6798e5;
 
-  --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-accent-amber: #ff9f0a;
   --mf-accent-violet: #bd9bf5;
 
@@ -238,7 +229,6 @@
   --color-mf-glass: var(--mf-glass);
   --color-mf-content2: var(--mf-content2);
   --color-mf-raised: var(--mf-raised);
-  --color-mf-tab-active: var(--mf-tab-active);
   --color-mf-text-3: var(--mf-text-3);
   --color-mf-text-4: var(--mf-text-4);
   --color-mf-chip: var(--mf-chip);
@@ -249,7 +239,6 @@
   --color-mf-success-tint: var(--mf-success-tint);
   --color-mf-destructive-tint: var(--mf-destructive-tint);
   --color-mf-border-hover: var(--mf-border-hover);
-  --color-mf-surface-run: var(--mf-surface-run);
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-session: var(--mf-directive-session);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);

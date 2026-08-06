@@ -10,7 +10,7 @@
  *  - the toggle reports back to the store that owns section open-state
  *
  * The tasks-list coverage this replaces lived in
- * `context-panel/__tests__/TasksSection.test.tsx`.
+ * the retired bottom panel's `TasksSection.test.tsx`.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';

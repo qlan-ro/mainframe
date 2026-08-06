@@ -4,10 +4,8 @@
  * Owns sidebar/inspector visibility, the committed sidebar width, and the
  * session panel's per-section open state. Persisted to localStorage under
  * `mf:ui-prefs` via zustand's persist middleware (mirrors store/tutorial.ts).
- * The bottom Context/Skills/Agents panel's tab + height still live here as
- * state but are no longer persisted — v2 strips them. Per-session surface
- * layout is NOT here — it stays
- * in-memory in store/layout.ts (live PTY/preview refs make it unsafe to persist).
+ * Per-session surface layout is NOT here — it stays in-memory in
+ * store/layout.ts (live PTY/preview refs make it unsafe to persist).
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -15,8 +13,6 @@ import { clampSidebarWidth } from '@v2/components/ui/sidebar';
 
 /** Matches the v2 sidebar's `SIDEBAR_WIDTH` (16rem) — the un-dragged default. */
 const SIDEBAR_DEFAULT_WIDTH = 256;
-
-export type BottomPanelTab = 'context' | 'skills' | 'agents';
 
 /** The collapsible sidebar sections. Only Projects survived the v2 shell —
  *  Sessions/Tasks scroll as one region and Tags lives in the footer now. */
@@ -45,20 +41,10 @@ export function isSessionPanelSectionOpen(sections: SessionPanelSections, id: Se
   return sections[id] ?? SESSION_PANEL_SECTION_DEFAULTS[id];
 }
 
-export const BOTTOM_PANEL_MIN_HEIGHT = 120;
-export const BOTTOM_PANEL_DEFAULT_HEIGHT = 280;
-export const BOTTOM_PANEL_MAX_FALLBACK = 600;
-
-export function clampBottomPanelHeight(height: number, maxHeight: number): number {
-  return Math.max(BOTTOM_PANEL_MIN_HEIGHT, Math.min(maxHeight, height));
-}
-
 interface UiPrefsState {
   sidebarVisible: boolean;
   inspectorVisible: boolean;
   sidebarWidth: number;
-  bottomPanelTab: BottomPanelTab;
-  bottomPanelHeight: number;
   /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
   rightClickHintDismissed: boolean;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
@@ -74,8 +60,6 @@ interface UiPrefsState {
   setSidebarVisible: (visible: boolean) => void;
   toggleInspector: () => void;
   setSidebarWidth: (width: number) => void;
-  setBottomPanelTab: (tab: BottomPanelTab) => void;
-  setBottomPanelHeight: (height: number) => void;
   dismissRightClickHint: () => void;
   dismissTuningChangeWarning: () => void;
   toggleSidebarSection: (section: SidebarSection) => void;
@@ -93,10 +77,7 @@ export function isSidebarSectionCollapsed(
   return collapsed[section] ?? false;
 }
 
-/** The persisted subset. `bottomPanelTab` / `bottomPanelHeight` are deliberately
- *  absent: the bottom panel is being retired, and writing them back here would
- *  make the v2 migration inert. Their state fields and setters live on until
- *  their last consumer goes. */
+/** The persisted subset. */
 function partializeUiPrefs(s: UiPrefsState) {
   return {
     sidebarVisible: s.sidebarVisible,
@@ -117,8 +98,6 @@ export const useUiPrefs = create<UiPrefsState>()(
       sidebarVisible: true,
       inspectorVisible: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-      bottomPanelTab: 'context',
-      bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
       rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
       collapsedSidebarSections: {},
@@ -127,9 +106,6 @@ export const useUiPrefs = create<UiPrefsState>()(
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
-      setBottomPanelTab: (bottomPanelTab) => set({ bottomPanelTab }),
-      setBottomPanelHeight: (height) =>
-        set({ bottomPanelHeight: clampBottomPanelHeight(height, BOTTOM_PANEL_MAX_FALLBACK) }),
       dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
       toggleSidebarSection: (section) =>
@@ -157,7 +133,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         if (version >= 2 || persisted === null || typeof persisted !== 'object') {
           return persisted as PersistedUiPrefs;
         }
-        // v2 retires the bottom Context/Skills/Agents panel; its two keys are
+        // v2 retired the bottom Context/Skills/Agents panel; its two keys are
         // dropped so a stale tab/height can never rehydrate into the new panel.
         const next = { ...(persisted as Record<string, unknown>) };
         delete next.bottomPanelTab;

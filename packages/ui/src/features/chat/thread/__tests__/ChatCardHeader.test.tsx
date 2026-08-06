@@ -25,18 +25,11 @@ vi.mock('../../../sessions/use-projects', () => ({
   useProjects: () => ({ projects: fakeProjects }),
 }));
 
-// ChatSessionInline pulls chat-thread + adapter-registry data that this suite
-// doesn't otherwise fixture; stub it to fixed testid markers so ChatCardHeader
+// ChatModelChip pulls chat-thread + adapter-registry data that this suite
+// doesn't otherwise fixture; stub it to a fixed testid marker so ChatCardHeader
 // structure/order assertions don't depend on that data layer.
-vi.mock('../ChatSessionInline', () => ({
-  ChatSessionInline: ({ part }: { part: 'model' | 'status' }) =>
-    part === 'model' ? (
-      <span data-testid="chat-header-model">Sonnet 4.6</span>
-    ) : (
-      <span data-testid="chat-header-context">
-        <span data-testid="chat-header-context-pct">42%</span>
-      </span>
-    ),
+vi.mock('../ChatModelChip', () => ({
+  ChatModelChip: () => <span data-testid="chat-header-model">Sonnet 4.6</span>,
 }));
 
 import { ChatCardHeader } from '../ChatCardHeader';
@@ -101,17 +94,17 @@ describe('ChatCardHeader — structure', () => {
     expect(svgs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('renders the ChatSessionInline model slot', () => {
+  it('renders the ChatModelChip slot', () => {
     renderHeader();
 
     expect(screen.getByTestId('chat-header-model')).toBeInTheDocument();
   });
 
-  it('renders the ChatSessionInline status (context meter) slot', () => {
+  it('no longer renders a context meter — the session panel owns that number', () => {
     renderHeader();
 
-    expect(screen.getByTestId('chat-header-context')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-header-context-pct')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-header-context')).toBeNull();
+    expect(screen.queryByTestId('chat-header-context-pct')).toBeNull();
   });
 });
 

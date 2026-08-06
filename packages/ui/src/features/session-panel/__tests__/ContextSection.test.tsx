@@ -10,7 +10,7 @@
  *  - agents are gone from the product surface (D15)
  *  - the attachments grid mounts only when the session has attachments
  *
- * Replaces `context-panel/__tests__/{ContextSection,SkillsList,SkillsList.manage-link}.test.tsx`.
+ * Replaces the retired bottom panel's `{ContextSection,SkillsList,SkillsList.manage-link}.test.tsx`.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
@@ -20,13 +20,13 @@ import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { TooltipProvider as LegacyTooltipProvider } from '@/components/ui/tooltip';
 
 let mockContext: SessionContext | null = null;
-vi.mock('@/features/context-panel/use-session-context', () => ({
+vi.mock('@/features/sessions/use-session-context', () => ({
   useSessionContext: () => ({ context: mockContext, chatId: 'chat-9' }),
 }));
 
 let mockSkills: Skill[] = [];
 let mockSkillsLoading = false;
-vi.mock('@/features/context-panel/use-sidebar-skills', () => ({
+vi.mock('@/features/sessions/use-sidebar-skills', () => ({
   useSidebarSkills: () => ({ skills: mockSkills, agents: [], loading: mockSkillsLoading }),
 }));
 

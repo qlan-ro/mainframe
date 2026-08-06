@@ -73,7 +73,7 @@ export interface ProviderModelSelectProps {
 }
 
 /** A small dot color per known provider; neutral fallback for anything else.
- *  Exported for ChatSessionInline so the header chip and the picker always agree. */
+ *  Exported for ChatModelChip so the header chip and the picker always agree. */
 const PROVIDER_DOT: Record<string, string> = {
   claude: 'bg-orange-500',
   codex: 'bg-emerald-500',

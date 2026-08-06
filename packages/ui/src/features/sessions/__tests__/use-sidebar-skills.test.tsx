@@ -1,3 +1,15 @@
+/**
+ * useSidebarSkills — unit tests.
+ *
+ * Moved out of the retired bottom panel with the hook. Agents are dropped from
+ * the product surface (plan D15), so the hook no longer fetches them and the
+ * agent assertions are gone: `getAgents` is asserted NOT to be called, which is
+ * the point of the decision rather than a silent omission.
+ *
+ * Mocked dependencies: @/lib/api/skills, @/lib/api/agents,
+ * @/features/sessions/runtime/daemon-port-context,
+ * @/features/sessions/use-active-identity.
+ */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 
@@ -22,33 +34,38 @@ describe('useSidebarSkills', () => {
   it('returns empty without fetching when there is no active project path', () => {
     useActiveIdentity.mockReturnValue({ projectName: 'X' });
     const { result } = renderHook(() => useSidebarSkills());
-    expect(result.current).toEqual({ skills: [], agents: [], loading: false });
+    expect(result.current).toEqual({ skills: [], loading: false });
     expect(getSkills).not.toHaveBeenCalled();
   });
 
-  it('fetches skills + agents for the active project path with the claude adapter', async () => {
+  it('fetches skills for the active project path with the claude adapter', async () => {
     useActiveIdentity.mockReturnValue({ projectName: 'X', projectPath: '/p' });
     getSkills.mockResolvedValue([{ id: 's1', name: 'one' }]);
-    getAgents.mockResolvedValue([{ id: 'a1', name: 'bot' }]);
 
     const { result } = renderHook(() => useSidebarSkills());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSkills).toHaveBeenCalledWith(31415, 'claude', '/p');
-    expect(getAgents).toHaveBeenCalledWith(31415, 'claude', '/p');
     expect(result.current.skills).toHaveLength(1);
-    expect(result.current.agents).toHaveLength(1);
   });
 
   it('fetches with the active session adapter id, not hardcoded claude', async () => {
     useActiveIdentity.mockReturnValue({ projectName: 'X', projectPath: '/p', adapterId: 'codex' });
     getSkills.mockResolvedValue([]);
-    getAgents.mockResolvedValue([]);
 
     const { result } = renderHook(() => useSidebarSkills());
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSkills).toHaveBeenCalledWith(31415, 'codex', '/p');
-    expect(getAgents).toHaveBeenCalledWith(31415, 'codex', '/p');
+  });
+
+  it('never fetches agents — they are gone from the product surface (D15)', async () => {
+    useActiveIdentity.mockReturnValue({ projectName: 'X', projectPath: '/p' });
+    getSkills.mockResolvedValue([]);
+
+    const { result } = renderHook(() => useSidebarSkills());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getAgents).not.toHaveBeenCalled();
   });
 });

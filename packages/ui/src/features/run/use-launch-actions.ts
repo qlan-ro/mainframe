@@ -1,12 +1,13 @@
 /**
- * use-launch-actions — the shared launch behavior consumed by BOTH the Run
- * surface's `LaunchPopover` and the shell `ToolbarLaunchControls`.
+ * use-launch-actions — the shared launch behavior consumed by the session
+ * panel's Launch section and rail, the workspace tab strip, and its empty state.
  *
  * Wraps `useLaunchConfigs` (fetch) with the per-scope process statuses, the
  * selected-config state, and the start/stop handlers. Starting any config opens
  * (or focuses) its own workspace tab — a `preview` webview tab for `preview:true`
- * configs, a full-space `console` tab for process configs. Selecting/starting a
- * config records it as the selected one so the toolbar picker reflects it.
+ * configs, a full-space `console` tab for process configs. There is no pure
+ * select: starting a config is what records it as the selected one, so the
+ * rail's quick action targets whatever you last ran.
  */
 import { useCallback } from 'react';
 import { mfToast } from '@/lib/toast';
@@ -23,8 +24,6 @@ export interface UseLaunchActionsResult {
   /** Status by config name for the active project/worktree scope. */
   scopeStatuses: Record<string, LaunchProcessStatus>;
   selectedConfigName: string | null;
-  /** Select a config — updates the selected config only; no tab, no start. */
-  handleSelect: (config: LaunchConfiguration) => void;
   handleLaunch: (config: LaunchConfiguration) => void;
   handleStop: (config: LaunchConfiguration) => void;
   refetch: () => void;
@@ -53,16 +52,6 @@ export function useLaunchActions(
   const storedName = scopeKey ? selectedConfigByScope[scopeKey] : undefined;
   const selectedConfig = configs.find((c) => c.name === storedName) ?? configs[0];
   const selectedConfigName = selectedConfig?.name ?? null;
-
-  // Pure selection — only updates the selected config. Does NOT open a preview
-  // tab or start anything; that happens on start (handleLaunch).
-  const handleSelect = useCallback(
-    (config: LaunchConfiguration) => {
-      if (!scopeKey) return;
-      setSelectedConfig(scopeKey, config.name);
-    },
-    [scopeKey, setSelectedConfig],
-  );
 
   const handleLaunch = useCallback(
     async (config: LaunchConfiguration) => {
@@ -115,5 +104,5 @@ export function useLaunchActions(
     [port, projectId, chatId, refetch],
   );
 
-  return { configs, scopeStatuses, selectedConfigName, handleSelect, handleLaunch, handleStop, refetch };
+  return { configs, scopeStatuses, selectedConfigName, handleLaunch, handleStop, refetch };
 }

@@ -42,7 +42,8 @@ function SendOrCancelButton() {
   if (isRunning) {
     // The composer's Stop gets a soft destructive fill — it swaps in for the
     // primary Send, so it must read as THE action, unlike the ghost stops on
-    // WorkspaceTabPill / ToolbarLaunchControls which are incidental chrome.
+    // WorkspaceTabPill / the session panel's Launch rows, which are incidental
+    // chrome.
     return (
       <ComposerPrimitive.Cancel asChild>
         <Button

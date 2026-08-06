@@ -15,20 +15,18 @@ import { Badge } from '@v2/components/ui/badge';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import type { Skill } from '@qlan-ro/mainframe-types';
-import { ContextFileItem } from '@/features/context-panel/ContextFileItem';
-import { deriveSessionItems } from '@/features/context-panel/derive-session-items';
-import { useSessionContext } from '@/features/context-panel/use-session-context';
-import { useSidebarSkills } from '@/features/context-panel/use-sidebar-skills';
+import { useSessionContext } from '@/features/sessions/use-session-context';
+import { useSidebarSkills } from '@/features/sessions/use-sidebar-skills';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { ContextFileItem } from './ContextFileItem';
 import { deriveContextFiles, type ContextFileRow } from './context-groups';
+import { deriveSessionItems } from './derive-session-items';
 import { formatTokens } from './context-tokens';
 import { PanelAttachmentsGrid } from './PanelAttachmentsGrid';
 import { PanelSection } from './PanelSection';
-import { PanelSubGroup } from './PanelSubGroup';
+import { PanelSubGroup, SUB_GROUP_ROW } from './PanelSubGroup';
 
-const SUB_ROW =
-  'flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-background';
 const SUB_NOTE = 'px-1 py-1 text-xs text-muted-foreground';
 
 function MemoryFileRow({ row }: { row: ContextFileRow }) {
@@ -38,7 +36,7 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
         type="button"
         data-testid={`session-panel-context-file-${row.path}`}
         onClick={() => emitSurfaceIntent({ type: 'open-file', path: row.path })}
-        className={SUB_ROW}
+        className={SUB_GROUP_ROW}
       >
         <span className="min-w-0 flex-1 truncate text-sm">{row.label}</span>
         <Badge variant="outline">{row.scope}</Badge>
@@ -58,7 +56,7 @@ function SkillRow({ skill }: { skill: Skill }) {
         type="button"
         data-testid={`session-panel-skill-${skill.id}`}
         onClick={() => emitSurfaceIntent({ type: 'open-file', path: skill.filePath })}
-        className={SUB_ROW}
+        className={SUB_GROUP_ROW}
       >
         <span className="min-w-0 flex-1 truncate text-sm">/{skill.displayName || skill.name}</span>
         {/* `scope` comes off the wire as project / global / plugin and reads verbatim. */}

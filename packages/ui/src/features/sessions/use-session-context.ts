@@ -22,7 +22,7 @@ export function useSessionContext(): { context: SessionContext | null; chatId: s
     if (!chatId) return;
     getSessionContext(port, chatId)
       .then(setContext)
-      .catch((err) => console.warn('[context-panel] fetch failed', err));
+      .catch((err) => console.warn('[session-context] fetch failed', err));
   }, [port, chatId]);
 
   useEffect(() => {
