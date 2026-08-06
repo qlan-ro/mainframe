@@ -31,7 +31,7 @@ describe('ChipButton', () => {
     );
     const chip = screen.getByTestId('agent-a-model');
     expect(chip.className).toContain('data-[state=open]:border-primary');
-    expect(chip.className).toContain('data-[state=open]:bg-mf-selection');
+    expect(chip.className).toContain('data-[state=open]:bg-sidebar-selection');
   });
 
   it('renders destructive when flagged, muted otherwise', () => {

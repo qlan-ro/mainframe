@@ -8,7 +8,15 @@ function TooltipProvider({ delayDuration = 0, ...props }: React.ComponentProps<t
 }
 
 function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+  // Self-providing, like shadcn mainline: a bare Root throws outside a
+  // provider, and every consumer render (tests included) would have to carry
+  // one. Nesting under the app provider is fine — delayDuration is 0 both
+  // places, so the shadowed skip-delay grouping changes nothing.
+  return (
+    <TooltipProvider>
+      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+    </TooltipProvider>
+  );
 }
 
 function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
