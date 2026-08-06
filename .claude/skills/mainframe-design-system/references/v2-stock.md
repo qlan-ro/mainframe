@@ -181,11 +181,10 @@ slices remain). Conventions from the pass:
   `layout/WorkspaceEmptyState.tsx`) is not a float — it is always visible, with no trigger, so a
   DropdownMenu would mean inventing one and hiding the content behind a click. It converted with
   the surface port below and stays a `Card` of ghost-Button rows.
-- **`components/ui/menu.tsx` survives** the title-bar and menu sweeps. Remaining consumers:
-  the composer worktree family — WorktreePopover,
-  WorktreeDraftPanel, WorktreeExistingTab — and setup-advisor's InstallBand (`MenuRow`). It dies
-  with those ports. `menu-variants.ts` outlives it either way: v1 `popover.tsx`,
-  `dropdown-menu.tsx` and `context-menu.tsx` all compose it.
+- **`components/ui/menu.tsx` survived** the title-bar and menu sweeps, then **died in the
+  2026-08-06 chat sweep** with its last consumer (setup-advisor's InstallBand). The census table
+  is in the Phase-5 section below. `menu-variants.ts` outlives it, as predicted — v1 `popover.tsx`
+  and `dropdown-menu.tsx` still compose it.
 - **The branch popover is a native `DropdownMenu`** (user decision 2026-08-05, replacing the v1
   artboard's side-by-side cards): quick actions are items, sections are Groups whose headers are
   `Collapsible` triggers (non-items — toggling never closes the menu; Remote starts collapsed; an
@@ -520,8 +519,117 @@ Phase-1 spike spent its budget proving correct (`turnAnchor`, full-history re-se
 jump-to-bottom). 2.2 ms saved on a 400-message re-seed — under one frame — does not buy that.
 
 **Pre-existing breakage found, NOT caused by this port:** `src/styles/__tests__/contrast.test.ts`
-reads `src/styles/globals.css`, which no longer exists — the guardrail has been inert since the v1
-sheet was deleted, so no color token added since then has been checked by it.
+reads `src/styles/globals.css`, which no longer exists, so no colour token added since the v1 sheet
+was deleted has been checked by it. **Fixed in Phase 5 below** — and the diagnosis needed one
+correction: the suite was not inert, it failed to load, reporting `0 tests`.
+
+### The no-leftovers sweep (Phase 5)
+
+**Four config-toolbar chips were never converted** — the Phase-4 note that the toolbar was
+"already v2-native" was wrong. `PermissionSelect` (v1 DropdownMenu + Tooltip), `PlanModeToggle`
+and `RunningHint` (v1 Tooltip/Hint) and `ProviderModelSelect`'s two tooltips are v2 now.
+`PermissionSelect`'s open chrome had also been dead the whole time: `data-[state=open]:` inside a
+`TooltipTrigger asChild`, whose `data-state` the tooltip overwrites — the trap this file already
+documents twice. It reads React state now.
+
+- **Plan mode's engaged chrome is `primary`, not amber** (verdict, 2026-08-06). The chip was
+  `border-mf-warning bg-mf-warning-tint text-mf-warning`. Bridge amber means *caution* and v2
+  `warning` means *wrong-but-not-broken*; plan mode is a mode the user chose, and the **safer**
+  one — it plans instead of acting — so both readings are backwards. It takes the chip family's
+  own engaged treatment, `border-primary bg-sidebar-selection text-primary`, which is the same
+  call the running indicator and the queued-turn dot took in Phase 2. `composer.spec.ts` pinned
+  `border-mf-warning`, so the assertion moved in the same commit. The composer's amber **edit
+  ring stays** — editing a sent message genuinely is a caution state.
+- **It stays a hand-rolled button, not a v2 `Toggle`.** It is `Hint`-wrapped, so
+  `data-[state=on]:*` would be clobbered and re-specified at the call site anyway — the same
+  reason `PlanExecModeControl` is hand-rolled. Chrome comes off the `active` variable;
+  `aria-pressed` carries the state.
+- **InstallBand's scope picker is a `DropdownMenu`.** It asked the identical "which scope?"
+  question as `SkillAction`'s row menu, on the same panel, but answered it with a Popover of
+  hand-styled `MenuRow`s. Both wrap their items in a `DropdownMenuGroup` now (the shadcn rule).
+  Its tests move to the harness's `openMenu` pointerdown helper — Radix menus do not open on click.
+
+#### v1 primitive obituary
+
+`components/ui/` went from 26 files to 11. Deleted: **`menu.tsx`** (last consumer InstallBand) and
+**`context-menu.tsx`** (last consumer `FileTreeRowMenu`, which carried no classes of its own — the
+whole conversion was the import); nine with no consumer at all — `avatar` `badge` `button` `card`
+`collapsible` `input` `select` `separator` `textarea`; and four reachable only from their own
+`choice-controls` test — `checkbox` `label` `radio-group` `switch`. Test files went with them.
+Every one of them still emitted v1 type rungs or `mf-*`, so this shrank the bridge's reach, not
+just the file count.
+
+**Survivors, with the consumers keeping them alive** — none of them chat-surface except where noted:
+
+| primitive | consumers |
+|---|---|
+| `tooltip` | `hint`, `truncated-with-tooltip`, context-panel (2), tasks (2), chat's `link-with-preview` |
+| `truncated-with-tooltip` | chat's `UserAttachments`, context-panel, files (2), settings/About |
+| `count-badge` | context-panel (2), files `InspectorPane`, tasks (2) |
+| `hint` | files (2), tasks `TaskCard` |
+| `popover` | **chat only** — `BackgroundActivityBar`, `WorkflowActivityPopover`, `WorkflowLauncherRow` |
+| `dropdown-menu` | chat's `UrlChip`, tasks' `GitHubSyncControl` |
+| `section-header` | setup-advisor (2) |
+| `project-chip` | chat's `ChatCardHeader`, sessions' `WelcomeState` |
+| `read-more` | chat's `ReadMoreBubble` |
+| `scroll-area` | settings `SettingsDialog` |
+| `menu-variants` | `popover`, `dropdown-menu` |
+
+`menu-variants.ts` outlives `menu.tsx` exactly as predicted. `project-chip` and
+`truncated-with-tooltip` emit **no** bridge tokens, so they are duplication (v2 has its own
+`truncated-with-tooltip`) rather than bridge debt — cheap to leave, cheap to kill with their
+surfaces. MarkdownPreview and InspectorPane remain the sanctioned v1 islands.
+
+**v1 `popover.tsx` was NOT converted, deliberately.** All three consumers are the
+workflow / background-activity cluster, which the chat port never reached: nine files still on
+`text-label`/`text-caption`/`mf-text-3`/`mf-success`/`mf-warning`/`mf-border-hover`. Swapping only
+the popover primitive would have moved that cluster's radius, padding and clip
+(v1 `rounded-lg` + `overflow-hidden` + `p-[5px]` → v2 `rounded-md` + `p-4` + `flex-col gap-4`)
+with no way to verify it, since the sweep runs no app. The cluster needs a port pass of its own;
+its chrome converts then, per the "bodies convert with their surface" rule.
+
+#### The contrast guardrail was broken, not inert
+
+`src/styles/__tests__/contrast.test.ts` read `src/styles/globals.css`, deleted with the v1 shell.
+It did not pass vacuously — it **failed to load**, reporting `0 tests` as a suite error, which is
+exactly the shape a full run skims past. Repointed at `src/v2/styles/globals.css` +
+`legacy-bridge.css`, two themes instead of six (ocean/velvet retired with the merge), 25 cases.
+
+- The resolver had to grow `oklch()`, `color-mix(in oklch, …)`, `var()` and the relative
+  `oklch(from …)` form, in `__tests__/css-color.ts`. **Verified against Chromium** —
+  `getComputedStyle` plus canvas readback, via a throwaway Playwright probe — 33 of 34 tokens
+  exact, the remainder premultiplied-alpha readback noise at α=0.1. It independently reproduces
+  Phase 2's measured `--bubble-tinted` figures (10.03:1 light, 10.72:1 dark).
+- The probe caught a real bug: **an achromatic side of a `color-mix` keeps its stated hue.** Only
+  the `none` keyword makes a hue powerless, and `oklch(0.556 0 0)` states `0`, so `--warning`
+  lands on hue 15.03 (27.325 × 0.55), not `destructive`'s 27.325. Do not "fix" that back.
+- **`--mf-glass` left the muted-ink backdrop set.** The v1 audit solved `mf-text-3` to exactly
+  4.5:1 on light glass because the warm glass sidebar carried metadata; that panel is gone and
+  glass's one remaining consumer (`layout/SurfaceDragLayer`) carries `text-foreground`. Muted ink
+  there would measure **4.02:1** — recorded in the test header so nobody lowers a threshold to it.
+- Both failure modes are now named and proven: a missing sheet, and — the one that actually bit —
+  a sheet that still exists while the tokens migrate out of it.
+- New: the bridge's alias claim is tested. `mf-text-3`→`muted-foreground`,
+  `mf-selection`→`sidebar-selection`, `mf-success`→`success`, `mf-chip`→`accent` must resolve
+  equal per mode, and `mf-warning` must **not** equal `warning`.
+
+#### Bridge deletions
+
+Eight tokens, all grep-verified consumerless: the whole `mf-um-*` user-message family
+(`card` `fade` `ink` `edge` `dash`), `mf-directive-command-tint`, `mf-directive-skill-tint`, and
+`mf-shadow-user-card`. Two traps in auditing this:
+
+- **A Tailwind-class grep must allow a leading hyphen.** `mf-term-green` hides from
+  `[^a-z0-9-]mf-term-green` because the char before it in `text-mf-term-green` *is* a hyphen. The
+  first pass called half the live palette dead.
+- **A negative assertion is not a consumer.** `mf-shadow-user-card`'s only reference in the tree
+  was `expect(style).not.toContain(…)` in `PlanBubble.test.tsx` — a token that cannot appear
+  cannot fail the test. Asserting the positive instead is what exposed it.
+
+Members of a deliberately-pinned palette stay even when individually consumerless
+(`mf-term-cmt`, `mf-term-cyan`, `mf-auto-kind-parallel`) — the precedent set for
+`mf-auto-kind-parallel` in the workspace pass. The bridge header now carries a current island
+list and says so, so the next sweep does not re-litigate it.
 
 ## Known deviations, and why
 
