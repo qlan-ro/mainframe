@@ -1,12 +1,13 @@
 /**
- * use-review-data — loads the changed-file set (status + per-file stat) and the
- * current branch when the Review panel opens. Merges stat counts into each
- * ReviewFile via gitStatusToFiles. Returns the files, repo-wide totals, branch,
- * and a load-error flag.
+ * use-review-data — the Review panel's view of `useWorkingChanges`: the
+ * uncommitted scope, fetched only while the panel is open.
+ *
+ * The fetching, merging and invalidation all live in the shared hook now; this
+ * only adapts its shape to what the review surfaces render.
  */
-import { useEffect, useState } from 'react';
-import { getGitStatus, getGitBranch, getWorkingStat } from '@/lib/api/git';
-import { gitStatusToFiles, type ReviewFile } from './git-status-to-files';
+import { useMemo } from 'react';
+import type { ReviewFile } from './git-status-to-files';
+import { useWorkingChanges } from './use-working-changes';
 
 interface ReviewData {
   files: ReviewFile[];
@@ -16,39 +17,31 @@ interface ReviewData {
   loadError: boolean;
 }
 
-const EMPTY: ReviewData = { files: [], totalAdditions: 0, totalDeletions: 0, branch: null, loadError: false };
-
 export function useReviewData(open: boolean, port: number, projectId: string | null, chatId?: string): ReviewData {
-  const [data, setData] = useState<ReviewData>(EMPTY);
+  const { files, totalAdditions, totalDeletions, branch, error } = useWorkingChanges({
+    port,
+    projectId,
+    chatId,
+    scope: 'uncommitted',
+    enabled: open,
+  });
 
-  useEffect(() => {
-    if (!open || !projectId) return;
-    let cancelled = false;
-    setData(EMPTY);
-    Promise.all([
-      getGitStatus(port, projectId, chatId),
-      getWorkingStat(port, projectId, chatId).catch(() => undefined),
-      getGitBranch(port, projectId, chatId).catch(() => ({ branch: null })),
-    ])
-      .then(([statusFiles, stat, branchRes]) => {
-        if (cancelled) return;
-        setData({
-          files: gitStatusToFiles(statusFiles, stat),
-          totalAdditions: stat?.totalAdditions ?? 0,
-          totalDeletions: stat?.totalDeletions ?? 0,
-          branch: branchRes.branch,
-          loadError: false,
-        });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.warn('[ReviewPanel] failed to load git status', projectId, err);
-        setData({ ...EMPTY, loadError: true });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, port, projectId, chatId]);
-
-  return data;
+  return useMemo(
+    () => ({
+      // Every uncommitted row carries a status and counts, so the fallbacks here
+      // are unreachable — they only satisfy the shared shape, which allows the
+      // scopes that genuinely have neither.
+      files: files.map((file) => ({
+        path: file.path,
+        status: file.status ?? 'modified',
+        additions: file.additions ?? 0,
+        deletions: file.deletions ?? 0,
+      })),
+      totalAdditions: totalAdditions ?? 0,
+      totalDeletions: totalDeletions ?? 0,
+      branch,
+      loadError: error,
+    }),
+    [files, totalAdditions, totalDeletions, branch, error],
+  );
 }
