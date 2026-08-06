@@ -145,7 +145,9 @@ export function App() {
             </div>
           )}
         </ConnectionStatusProvider>
-        <Toaster position="bottom-right" offset={18} gap={9} visibleToasts={5} expand />
+        {/* Top-right: errors persist until dismissed, and bottom-right parked
+            them over the composer's Send corner. 48px clears the title bar. */}
+        <Toaster position="top-right" offset={{ top: 48, right: 18 }} gap={9} visibleToasts={5} expand />
         <ToastDetailsHost />
       </div>
     </MfErrorBoundary>
