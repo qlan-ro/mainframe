@@ -7,7 +7,7 @@
  * in sync. Actions come from the item RUNTIME, not the item state, and the row
  * is keyed by the stable `item.id` — never `remoteId`, which a new chat can adopt.
  */
-import { memo, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import {
   ThreadListItemPrimitive,
   ThreadListItemRuntimeProvider,
@@ -34,6 +34,7 @@ import { SessionMetaCard } from './SessionMetaCard';
 import { SessionRowMetaLine } from './SessionRowMetaLine';
 import { SessionRowRename } from './SessionRowRename';
 import { StatusDot } from './StatusDot';
+import { useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
 
 /** The section owns the horizontal inset; the row only keeps the stock pad. */
 const ROW_INDENT = 'pl-2';
@@ -144,10 +145,14 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   const unreadIds = useUnreadStore((s) => s.unread);
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
   const actions = useRowActions(item);
   // Captured on right-click so the menu's Tags action anchors the popover at the
   // cursor rather than at the host's default (0,0).
   const menuPoint = useRef<{ x: number; y: number } | null>(null);
+  const rowRef = useRef<HTMLLIElement | null>(null);
+  const closeMeta = useCallback(() => setMetaOpen(false), []);
+  useHoverCardWedgeGuard(metaOpen, rowRef, closeMeta);
 
   const unread = isSessionUnread(item, unreadIds);
   const title = item.title ?? 'Untitled session';
@@ -175,13 +180,17 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
     >
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
         <SidebarMenuItem
+          ref={rowRef}
           onContextMenu={(e) => {
             menuPoint.current = { x: e.clientX, y: e.clientY };
           }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          <HoverCard openDelay={500} closeDelay={60}>
+          {/* Controlled so the wedge guard can force-close: under load Radix's
+              open timer can fire after the pointer already left the row, and
+              then no pointerleave ever closes the card. */}
+          <HoverCard open={metaOpen} onOpenChange={setMetaOpen} openDelay={500} closeDelay={60}>
             <HoverCardTrigger asChild>
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton
