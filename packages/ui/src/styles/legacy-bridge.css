@@ -89,14 +89,6 @@
   --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
   --mf-directive-command-tint: rgba(10, 132, 255, 0.08);
   --mf-directive-session: #a84c08;
-  --mf-tool-read: #5b8def;
-  --mf-tool-read-tint: rgba(91, 141, 239, 0.11);
-  --mf-tool-search: #9b59c4;
-  --mf-tool-search-tint: rgba(155, 89, 196, 0.11);
-  --mf-tool-bash: #7a7a82;
-  --mf-tool-bash-tint: rgba(122, 122, 130, 0.11);
-  --mf-tool-web: #16a394;
-  --mf-tool-web-tint: rgba(22, 163, 148, 0.11);
   --mf-code-inline-fg: #7a4d2a;
   --mf-provider-claude-avatar: #d97757;
   --mf-provider-openai-avatar: #19c37d;
@@ -202,14 +194,6 @@
   --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
   --mf-directive-command-tint: rgba(10, 132, 255, 0.14);
   --mf-directive-session: #f0b429;
-  --mf-tool-read: #8fb2ff;
-  --mf-tool-read-tint: rgba(143, 178, 255, 0.14);
-  --mf-tool-search: #c18ee8;
-  --mf-tool-search-tint: rgba(193, 142, 232, 0.14);
-  --mf-tool-bash: #9a958d;
-  --mf-tool-bash-tint: rgba(154, 149, 141, 0.14);
-  --mf-tool-web: #2bd6c2;
-  --mf-tool-web-tint: rgba(43, 214, 194, 0.14);
   --mf-code-inline-fg: #e0a878;
 
   /* Dark-surface lightness overrides for the semantic glyph/tint hues */
@@ -273,14 +257,6 @@
   --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);
   --color-mf-directive-command-tint: var(--mf-directive-command-tint);
   --color-mf-directive-session: var(--mf-directive-session);
-  --color-mf-tool-read: var(--mf-tool-read);
-  --color-mf-tool-read-tint: var(--mf-tool-read-tint);
-  --color-mf-tool-search: var(--mf-tool-search);
-  --color-mf-tool-search-tint: var(--mf-tool-search-tint);
-  --color-mf-tool-bash: var(--mf-tool-bash);
-  --color-mf-tool-bash-tint: var(--mf-tool-bash-tint);
-  --color-mf-tool-web: var(--mf-tool-web);
-  --color-mf-tool-web-tint: var(--mf-tool-web-tint);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);
   --color-mf-task-type-bug: var(--mf-task-type-bug);
   --color-mf-task-type-enhancement: var(--mf-task-type-enhancement);
@@ -379,21 +355,11 @@
   }
 }
 
-/* Shimmer animation for running tool states */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-}
+/* `shimmer` and the collapsible animations were hand-rolled here and are
+   DELETED: tw-animate-css (already imported by the v2 sheet) ships
+   `animate-collapsible-down/up`, `fill-mode-*` and a `shimmer` text sweep.
+   Worse than redundant — an unlayered class here outranks every layered
+   utility, so the copies were silently shadowing the library. */
 
 /* Shimmering TEXT for the running ("Thinking…") indicator */
 @keyframes mf-text-shimmer {
@@ -429,33 +395,6 @@
   }
 }
 
-/* Collapsible animations for tool cards */
-@keyframes collapsible-down {
-  from {
-    height: 0;
-  }
-  to {
-    height: var(--radix-collapsible-content-height);
-  }
-}
-
-@keyframes collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height);
-  }
-  to {
-    height: 0;
-  }
-}
-
-.animate-collapsible-down {
-  animation: collapsible-down var(--animation-duration, 200ms) ease-out;
-}
-
-.animate-collapsible-up {
-  animation: collapsible-up var(--animation-duration, 200ms) ease-out;
-}
-
 /* Window-level state animations (TutorialOverlay halo). Referenced via
    Tailwind arbitrary `animate-[name_…]` utilities, which do NOT auto-generate
    keyframes — they must be declared here. */
@@ -470,7 +409,3 @@
 }
 
 /* ws-indeterminate moved to the v2 sheet — a v2 component animates with it. */
-
-.fill-mode-forwards {
-  animation-fill-mode: forwards;
-}

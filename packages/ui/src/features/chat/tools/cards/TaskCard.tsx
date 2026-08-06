@@ -22,10 +22,10 @@ import { useState, useCallback } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ReadonlyThreadProvider, ThreadPrimitive } from '@assistant-ui/react';
 import { Bot, ChevronDown } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { cn } from '@v2/lib/utils';
 import { ErrorDot } from '../shared';
 import { boundedMessageComponents } from '../../messages/bounded-messages';
 import { NestedTranscriptProvider } from '../../messages/nested-transcript-context';
@@ -44,19 +44,19 @@ interface TaskHeaderProps {
 function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isError }: TaskHeaderProps) {
   return (
     <div className="flex min-w-0 items-center gap-2 py-0.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-mf-selection" aria-hidden>
-        <Bot size={14} className="text-primary" />
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10" aria-hidden>
+        <Bot className="size-3.5 text-primary" />
       </span>
 
       {/* Agent name */}
       <TruncatedWithTooltip
         text={agentName}
         data-testid="chat-task-agent"
-        className="max-w-[180px] text-label font-semibold text-primary"
+        className="max-w-[180px] text-sm font-semibold text-primary"
       />
 
       {/* Model (mono, muted) */}
-      {model && <TruncatedWithTooltip text={model} className="font-mono text-caption text-mf-text-3" />}
+      {model && <TruncatedWithTooltip text={model} className="font-mono text-xs text-muted-foreground" />}
 
       {/* Description / prompt */}
       {description && (
@@ -64,7 +64,7 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
           <TooltipTrigger asChild>
             <span
               data-testid="chat-task-description"
-              className="min-w-0 flex-1 truncate text-caption text-muted-foreground"
+              className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
               tabIndex={0}
             >
               {description}
@@ -80,9 +80,10 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
 
       <span className="flex-1" />
 
-      {/* Running dot */}
+      {/* Running dot — `primary`, not amber: under v2 `warning` means
+          wrong-but-not-broken, and a running subagent is neither. */}
       {isRunning && (
-        <span aria-label="Subagent running" className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-mf-warning" />
+        <span aria-label="Subagent running" className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
       )}
 
       {/* Error dot */}
@@ -90,9 +91,8 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
 
       {/* Chevron (managed by Collapsible) */}
       <ChevronDown
-        size={14}
         className={cn(
-          'shrink-0 text-muted-foreground transition-transform duration-200',
+          'size-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
           'group-data-[state=open]/task-card:rotate-0',
           'group-data-[state=closed]/task-card:-rotate-90',
         )}
@@ -143,13 +143,13 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
     <Collapsible
       data-testid="chat-task-card"
       data-state={open ? 'open' : 'closed'}
-      className="group/task-card w-full rounded-lg border border-border bg-card px-[10px] py-[7px]"
+      className="group/task-card w-full rounded-lg border border-border bg-card px-3 py-2"
       open={open}
       onOpenChange={handleOpenChange}
     >
       <CollapsibleTrigger
         data-testid="chat-task-toggle"
-        className="w-full text-left hover:opacity-80 transition-opacity"
+        className="w-full text-left transition-opacity hover:opacity-80"
         aria-label={`Toggle ${agentName} transcript`}
       >
         <TaskHeader

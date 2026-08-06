@@ -4,14 +4,13 @@ import { memo, useCallback, useRef, useState, type FC, type PropsWithChildren } 
 import { ChevronDownIcon } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useScrollLock } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { cn } from '@v2/lib/utils';
 
 const ANIMATION_DURATION = 200;
 
 // ── Variants ──────────────────────────────────────────────────────────────────
-// Warm-chrome restyle: outline = hairline card, muted = muted-tinted card.
-// Colors via --mf-* tokens; no /opacity modifier (hex vars trap).
+// outline = hairline card, muted = muted-tinted card. v2 tokens.
 
 const toolGroupVariants = cva('aui-tool-group-root group/tool-group w-full', {
   variants: {
@@ -97,7 +96,7 @@ function ToolGroupTrigger({
       aria-busy={active}
       className={cn(
         'aui-tool-group-trigger group/trigger flex items-center gap-1.5',
-        'text-caption text-muted-foreground transition-colors hover:text-foreground',
+        'text-xs text-muted-foreground transition-colors hover:text-foreground',
         'group-data-[variant=outline]/tool-group-root:w-full group-data-[variant=outline]/tool-group-root:px-3',
         'group-data-[variant=muted]/tool-group-root:w-full group-data-[variant=muted]/tool-group-root:px-3',
         className,
@@ -123,7 +122,7 @@ function ToolGroupTrigger({
       <span
         data-testid="tool-group-trigger-count"
         data-slot="tool-group-trigger-count"
-        className="font-mono text-caption text-muted-foreground"
+        className="font-mono text-xs text-muted-foreground"
       >
         {countLabel}
       </span>
@@ -145,7 +144,7 @@ function ToolGroupContent({ className, children, ...props }: React.ComponentProp
     <CollapsibleContent
       data-slot="tool-group-content"
       className={cn(
-        'aui-tool-group-content relative overflow-hidden text-body outline-none',
+        'aui-tool-group-content relative overflow-hidden text-sm outline-none',
         'group/collapsible-content ease-out',
         'data-[state=closed]:animate-collapsible-up',
         'data-[state=open]:animate-collapsible-down',

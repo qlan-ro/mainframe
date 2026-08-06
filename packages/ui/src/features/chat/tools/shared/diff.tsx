@@ -2,23 +2,14 @@
  * Diff rendering primitives — DiffFromPatch, DiffFallback, and the pure math
  * helpers (countDiffStats, reconstructFromHunks, computeFallbackHunks).
  *
- * Token map (desktop → app-tauri warm-chrome):
- *   bg-mf-chat-diff-added/[8%]  → bg-mf-diff-add-bg   (opaque pre-tinted hex)
- *   bg-mf-chat-diff-removed/[8%] → bg-mf-diff-del-bg
- *   border-l-mf-chat-diff-added  → border-l-mf-diff-add-border
- *   border-l-mf-chat-diff-removed → border-l-mf-diff-del-border
- *   text-mf-chat-diff-added-text → text-mf-diff-add-text
- *   text-mf-chat-diff-removed-text → text-mf-diff-del-text
- *   text-mf-text-secondary        → text-muted-foreground
- *   text-mf-small                 → text-caption
- *   bg-mf-divider / h-px          → border-border
- *
- * No /opacity modifier is used on any --mf-* var (CSS-var hex trap).
+ * The `mf-diff-*` and `mf-code-*` palettes stay bridge-owned by design (they are
+ * the git/diff and code content palettes, shared with CmDiffEditor); everything
+ * around them — inks, rungs, rules — is v2.
  */
 import React from 'react';
 import { structuredPatch } from 'diff';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Pure math helpers (no React)
@@ -108,20 +99,24 @@ function DiffLineRow({ kind, content, oldNum = '', newNum = '', rowKey }: DiffLi
     'flex border-l-2 border-l-mf-diff-del-border bg-mf-diff-del-bg',
     'hover:brightness-95 transition-colors',
   );
-  const ctxRow = cn('flex border-l-2 border-l-transparent', 'hover:bg-accent transition-colors');
+  const ctxRow = cn('flex border-l-2 border-l-transparent', 'transition-colors hover:bg-muted');
 
   const rowClass = kind === 'add' ? addRow : kind === 'del' ? delRow : ctxRow;
 
-  const addSign = <span className="shrink-0 w-5 select-none text-mf-diff-add-text text-center">+</span>;
-  const delSign = <span className="shrink-0 w-5 select-none text-mf-diff-del-text text-center">-</span>;
-  const ctxSign = <span className="shrink-0 w-5 select-none text-mf-text-3 text-center"> </span>;
+  const addSign = <span className="w-5 shrink-0 text-center text-mf-diff-add-text select-none">+</span>;
+  const delSign = <span className="w-5 shrink-0 text-center text-mf-diff-del-text select-none">-</span>;
+  const ctxSign = <span className="w-5 shrink-0 text-center text-muted-foreground select-none"> </span>;
 
   return (
     <div key={rowKey} className={rowClass}>
       {/* old line number */}
-      <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-1">{kind === 'add' ? '' : oldNum}</span>
+      <span className="w-8 shrink-0 pr-1 text-right text-muted-foreground select-none">
+        {kind === 'add' ? '' : oldNum}
+      </span>
       {/* new line number */}
-      <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-2">{kind === 'del' ? '' : newNum}</span>
+      <span className="w-8 shrink-0 pr-2 text-right text-muted-foreground select-none">
+        {kind === 'del' ? '' : newNum}
+      </span>
       {/* sign column */}
       {kind === 'add' ? addSign : kind === 'del' ? delSign : ctxSign}
       {/* content */}
@@ -146,9 +141,9 @@ function DiffLineRow({ kind, content, oldNum = '', newNum = '', rowKey }: DiffLi
 function HunkSeparator() {
   return (
     <div className="flex items-center gap-2 px-3 py-1 select-none">
-      <div className="flex-1 h-px bg-border" />
-      <span className="text-mf-text-4 text-caption">···</span>
-      <div className="flex-1 h-px bg-border" />
+      <div className="h-px flex-1 bg-border" />
+      <span className="text-xs text-muted-foreground">···</span>
+      <div className="h-px flex-1 bg-border" />
     </div>
   );
 }
@@ -159,7 +154,7 @@ function HunkSeparator() {
 
 export function DiffFromPatch({ hunks }: { hunks: DiffHunk[] }) {
   return (
-    <div className="font-mono text-label leading-5 overflow-x-auto bg-mf-code-bg">
+    <div className="overflow-x-auto bg-mf-code-bg font-mono text-xs leading-5">
       {hunks.map((hunk, hi) => (
         <React.Fragment key={hi}>
           {hi > 0 && <HunkSeparator />}
@@ -211,7 +206,7 @@ export function DiffFallback({
   const hasLineNums = startLine !== null;
 
   return (
-    <div className="font-mono text-label leading-5 overflow-x-auto bg-mf-code-bg">
+    <div className="overflow-x-auto bg-mf-code-bg font-mono text-xs leading-5">
       {oldLines.map((line, i) => (
         <DiffLineRow
           key={`old-${i}`}
@@ -223,7 +218,7 @@ export function DiffFallback({
       ))}
       {oldLines.length > 0 && newLines.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-0.5 select-none">
-          <div className="flex-1 h-px bg-border" />
+          <div className="h-px flex-1 bg-border" />
         </div>
       )}
       {newLines.map((line, i) => (

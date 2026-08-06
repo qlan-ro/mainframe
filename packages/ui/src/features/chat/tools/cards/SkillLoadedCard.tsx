@@ -4,13 +4,12 @@
  * Rendered by SystemMessage from the system-message `skillLoaded` metadata (the
  * only place the daemon surfaces skill_loaded). Takes the skill fields directly.
  *
- * Design (desktop SkillLoadedCard.tsx + 10-chatcards.jsx):
- *   - Zap icon (text-primary) + 'Using skill: {skillName}' (skillName accent).
+ *   - Zap icon + 'Using skill: {skillName}' (skillName accent).
  *   - Tooltip = path. Expandable → MarkerBody with skill content. Collapsed default.
  *   - data-testid="chat-skill-loaded-pill".
  */
 import { ZapIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen } from './marker-pill';
 
 export interface SkillLoadedCardProps {
@@ -25,14 +24,14 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
   const expandable = content.length > 0;
 
   const pillLabel = (
-    <span className="font-mono text-label text-muted-foreground">
+    <>
       Using skill: <span className="text-primary">{skillName}</span>
-    </span>
+    </>
   );
 
   const pill = (
     <MarkerPill
-      icon={<ZapIcon size={12} className="text-primary" />}
+      icon={<ZapIcon className="text-primary" />}
       state="done"
       expandable={expandable}
       open={open}
@@ -50,7 +49,7 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
           <TooltipTrigger asChild>
             <span>{pill}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
+          <TooltipContent side="top" className="max-w-xs font-mono break-all">
             {path}
           </TooltipContent>
         </Tooltip>

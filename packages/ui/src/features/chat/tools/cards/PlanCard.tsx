@@ -17,8 +17,8 @@
 
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { FileText } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
+import { cn } from '@v2/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
 import { PlanBubble } from '../../messages/PlanBubble';
 import { parseApprovedPlanResult } from '../../messages/plan-message';
@@ -51,7 +51,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
     <Collapsible data-testid="chat-plan-card" open={open} onOpenChange={setOpen} disabled={!hasResult}>
       <div
         className={cn(
-          'rounded-lg border border-border bg-card overflow-hidden',
+          'overflow-hidden rounded-lg border border-border bg-card',
           isError && result !== undefined && 'border-destructive',
         )}
       >
@@ -61,13 +61,13 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
           disabled={!hasResult}
           className={cn(
             'flex w-full items-center gap-2 px-3 py-2 text-left',
-            hasResult ? 'hover:bg-accent transition-colors cursor-pointer' : 'cursor-default',
+            hasResult ? 'cursor-pointer transition-colors hover:bg-muted' : 'cursor-default',
           )}
         >
-          <FileText size={15} className={cn('shrink-0', hasResult ? 'text-muted-foreground' : 'text-mf-text-3')} />
+          <FileText className={cn('size-3.5 shrink-0 text-muted-foreground', !hasResult && 'opacity-60')} />
           <span
             data-testid="chat-plan-label"
-            className={cn('text-body flex-1', hasResult ? 'text-muted-foreground' : 'text-mf-text-3')}
+            className={cn('flex-1 text-sm text-muted-foreground', !hasResult && 'opacity-60')}
           >
             Updated plan
           </span>
@@ -80,7 +80,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
             <div className="ml-5 border-l border-border py-1">
               <pre
                 data-testid="chat-plan-body"
-                className="text-label font-mono text-muted-foreground whitespace-pre-wrap px-3"
+                className="px-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
               >
                 {resultText}
               </pre>

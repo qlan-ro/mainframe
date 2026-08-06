@@ -2,28 +2,19 @@
  * SearchCard — compact collapsible card for 'Glob', 'Grep', and 'LS' tools.
  *
  * Family: Search. One component, switches on part.toolName.
- * Header: family tile + tool verb + quoted pattern/glob + optional "in {path}" sub-header.
+ * Header: family glyph + tool verb + quoted pattern/glob + optional "in {path}" sub-header.
  * Body (collapsed by default): plain match-list pre or ErrorBody.
  *   - TruncatedResult → ToolResultExpand.
  *   - All string/JSON results → pre listing (the daemon never returns a
  *     structured GrepMatch array — that dead path has been removed).
- *
- * Token rules: no /opacity modifier on --mf-* hex vars.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { SearchIcon } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
-import { StatusDot, CollapsibleCardShell, FamilyTile, ErrorBody, resolveResultText } from '../shared';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { StatusDot, CollapsibleCardShell, ErrorBody, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
-
-// ---------------------------------------------------------------------------
-// Family constants
-// ---------------------------------------------------------------------------
-
-const FAMILY_COLOR = 'var(--mf-tool-search)';
-const FAMILY_BG = 'var(--mf-tool-search-tint)';
 
 // ---------------------------------------------------------------------------
 // Verb by tool name
@@ -43,7 +34,7 @@ function PlainBody({ resultText }: { resultText: string }) {
   return (
     <pre
       data-testid="search-card-plain-body"
-      className="font-mono text-label whitespace-pre-wrap break-words px-3 py-2 text-muted-foreground"
+      className="px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground"
     >
       {resultText}
     </pre>
@@ -73,39 +64,28 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
 
   const matchCount = resultText ? resultText.split('\n').filter(Boolean).length : null;
 
-  const tile = (
-    <FamilyTile color={FAMILY_COLOR} bg={FAMILY_BG}>
-      <SearchIcon size={13} style={{ color: FAMILY_COLOR }} />
-    </FamilyTile>
-  );
-
   const patternTarget = pattern ? (
-    <>
-      <span className="text-mf-text-4 shrink-0">·</span>
-      <TruncatedWithTooltip
-        text={`"${pattern}"`}
-        className="font-mono text-label text-muted-foreground min-w-0 max-w-[200px]"
-        contentClassName="font-mono break-all"
-      />
-    </>
+    <TruncatedWithTooltip
+      text={`"${pattern}"`}
+      className="min-w-0 max-w-[200px] font-mono text-sm text-muted-foreground"
+      contentClassName="font-mono break-all"
+    />
   ) : null;
 
   const trailing = (
     <>
-      {matchCount !== null && (
-        <span className="font-mono text-caption text-muted-foreground shrink-0">· {matchCount}</span>
-      )}
+      {matchCount !== null && <span className="shrink-0 font-mono text-xs text-muted-foreground">· {matchCount}</span>}
       <StatusDot result={result} isError={isError} />
     </>
   );
 
   const subHeader = searchPath ? (
-    <div className="px-2.5 pb-1 pl-[38px]">
+    <div className="px-3 pb-1.5 pl-[calc(0.75rem+0.875rem+0.5rem)]">
       <Tooltip>
         <TooltipTrigger asChild>
           <span
             data-testid="search-card-path"
-            className="font-mono text-caption text-muted-foreground truncate block cursor-default"
+            className="block cursor-default truncate font-mono text-xs text-muted-foreground"
             tabIndex={0}
           >
             in {searchPath}
@@ -143,7 +123,7 @@ export const SearchCard: ToolCallMessagePartComponent = ({ toolName, toolCallId,
       isError={isError}
       defaultOpen={false}
       disableTrigger={!hasBody}
-      tile={tile}
+      icon={<SearchIcon />}
       verb={verb}
       target={patternTarget}
       trailing={trailing}

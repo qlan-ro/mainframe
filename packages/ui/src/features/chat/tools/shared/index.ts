@@ -23,5 +23,5 @@ export { DiffFromPatch, DiffFallback } from './diff';
 export { StatusDot, ErrorDot, cardStyle, shortFilename, ClickableFilePath } from './chrome';
 
 // ── Card shell ───────────────────────────────────────────────────────────────
-export type { CollapsibleCardShellProps, FamilyTileProps, ErrorBodyProps } from './card-shell';
-export { CollapsibleCardShell, FamilyTile, ErrorBody } from './card-shell';
+export type { CollapsibleCardShellProps, ErrorBodyProps } from './card-shell';
+export { CollapsibleCardShell, ErrorBody } from './card-shell';

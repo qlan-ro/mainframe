@@ -2,9 +2,9 @@
  * WorktreeStatusPillCard — marker pill for EnterWorktree / ExitWorktree.
  *
  * Registry keys: 'EnterWorktree', 'ExitWorktree'.
- * Visual family: centered marker pill (MarkerWrap/MarkerPill).
+ * Visual family: centered marker row (MarkerWrap/MarkerPill).
  *
- * Behavior (from desktop WorktreeStatusPill.tsx + 10-chatcards.jsx):
+ * Behavior:
  *   - GitBranch icon.
  *   - Enter: 'Entered worktree: {name}' (name in text-primary).
  *     name = args.name ?? worktreeBranch ?? worktreePath from result JSON.
@@ -16,7 +16,7 @@
 import React from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { GitBranchIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, type MarkerState } from './marker-pill';
 import { isErrorResult, extractResultContent } from '../shared/result';
 
@@ -70,12 +70,12 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
 
     const pill = (
       <MarkerPill
-        icon={<GitBranchIcon size={12} />}
+        icon={<GitBranchIcon />}
         state={state}
         expandable={false}
         testId={`chat-worktree-${isEnter ? 'enter' : 'exit'}-pill`}
       >
-        <span className="font-mono text-label text-muted-foreground">{label}</span>
+        {label}
       </MarkerPill>
     );
 
@@ -86,7 +86,7 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
             <TooltipTrigger asChild>
               <span>{pill}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
+            <TooltipContent side="top" className="max-w-xs font-mono break-all">
               {tooltip}
             </TooltipContent>
           </Tooltip>

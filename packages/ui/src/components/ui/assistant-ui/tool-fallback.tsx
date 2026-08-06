@@ -3,8 +3,8 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import { ChevronDownIcon } from 'lucide-react';
 import { useScrollLock, type ToolCallMessagePartStatus, type ToolCallMessagePartComponent } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { cn } from '@v2/lib/utils';
 import { STATUS_ICON, STATUS_DOT_CLASS } from './tool-status';
 import { ToolFallbackArgs, ToolFallbackResult, ToolFallbackError } from './tool-fallback-parts';
 
@@ -87,7 +87,7 @@ function ToolFallbackTrigger({
       data-testid="chat-tool-fallback-trigger"
       className={cn(
         'aui-tool-fallback-trigger group/trigger flex w-full items-center gap-1.5 px-3',
-        'text-body transition-colors hover:text-foreground text-muted-foreground',
+        'text-sm text-muted-foreground transition-colors hover:text-foreground',
         className,
       )}
       {...props}
@@ -108,14 +108,14 @@ function ToolFallbackTrigger({
           isCancelled && 'opacity-50 line-through',
         )}
       >
-        <span className="text-label">
+        <span className="text-xs">
           {label}: <b className="text-foreground font-medium">{toolName}</b>
         </span>
         {isRunning && (
           <span
             aria-hidden
             data-slot="tool-fallback-trigger-shimmer"
-            className="aui-tool-fallback-trigger-shimmer shimmer text-label pointer-events-none absolute inset-0 motion-reduce:animate-none"
+            className="aui-tool-fallback-trigger-shimmer shimmer pointer-events-none absolute inset-0 text-xs motion-reduce:animate-none"
           >
             {label}: <b className="font-medium">{toolName}</b>
           </span>
@@ -141,7 +141,7 @@ function ToolFallbackContent({ className, children, ...props }: React.ComponentP
     <CollapsibleContent
       data-slot="tool-fallback-content"
       className={cn(
-        'aui-tool-fallback-content relative overflow-hidden text-body outline-none',
+        'aui-tool-fallback-content relative overflow-hidden text-sm outline-none',
         'group/collapsible-content ease-out',
         'data-[state=closed]:animate-collapsible-up',
         'data-[state=open]:animate-collapsible-down',

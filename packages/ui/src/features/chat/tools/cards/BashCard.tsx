@@ -3,23 +3,23 @@
 /**
  * BashCard — tool card for the 'Bash' tool.
  *
- * Collapsed by default. Header: terminal icon + truncated command (tooltip) +
+ * Collapsed by default. Header: terminal glyph + truncated command (tooltip) +
  * optional description sub-header + StatusDot. Body: color-coded terminal
- * output on bg-mf-term-bg. ToolResultExpand for truncated results.
+ * output on the terminal palette (bridge-owned by design — this IS terminal
+ * output). ToolResultExpand for truncated results.
  *
  * BashCard's header is a full-width monospace command string (not a file path),
- * so it uses Collapsible directly rather than CollapsibleCardShell which is
- * optimised for the tile+verb+path pattern.
+ * so it uses Collapsible directly rather than CollapsibleCardShell, which is
+ * optimised for the glyph+verb+path pattern.
  *
  * Native assistant-ui contract: `ToolCallMessagePartComponent`.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Terminal } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { cn } from '@v2/lib/utils';
 import { StatusDot, cardStyle, isTruncatedResult, resolveResultText } from '../shared';
-import { FamilyTile } from '../shared/card-shell';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
 
@@ -59,11 +59,11 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, trunca
   const lines = resultText.split('\n');
 
   return (
-    <div className={cn('border-t border-border rounded-b-lg px-3 py-2 bg-mf-term-bg', isError && 'border-destructive')}>
+    <div className={cn('rounded-b-lg border-t border-border bg-mf-term-bg px-3 py-2', isError && 'border-destructive')}>
       {truncated && chatId && toolCallId ? (
         <ToolResultExpand chatId={chatId} toolUseId={toolCallId} truncatedContent={resultText} fullBytes={fullBytes} />
       ) : (
-        <pre data-testid="chat-bash-output" className="font-mono text-label overflow-x-auto whitespace-pre-wrap">
+        <pre data-testid="chat-bash-output" className="overflow-x-auto font-mono text-xs whitespace-pre-wrap">
           <span className="text-mf-term-green">$ </span>
           <span className="text-mf-term-fg">{command}</span>
           {'\n'}
@@ -116,19 +116,17 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
           data-testid="chat-bash-trigger"
           disabled={!canExpand}
           className={cn(
-            'flex w-full items-center gap-2 px-3 py-[7px] text-left',
-            'hover:bg-accent transition-colors',
+            'flex w-full items-center gap-2 px-3 py-2 text-left',
+            'transition-colors hover:bg-muted',
             !canExpand && 'cursor-default',
           )}
         >
-          <FamilyTile color="var(--mf-tool-bash)" bg="var(--mf-tool-bash-tint)">
-            <Terminal size={13} />
-          </FamilyTile>
+          <Terminal className="size-3.5 shrink-0 text-muted-foreground" />
           <Tooltip>
             <TooltipTrigger asChild>
               <span
                 data-testid="chat-bash-command"
-                className="font-mono text-body text-foreground truncate min-w-0 flex-1"
+                className="min-w-0 flex-1 truncate font-mono text-sm text-foreground"
                 tabIndex={0}
               >
                 {command}
@@ -146,7 +144,7 @@ export const BashCard: ToolCallMessagePartComponent = (part) => {
             <TooltipTrigger asChild>
               <div
                 data-testid="chat-bash-description"
-                className="px-3 pb-1.5 -mt-0.5 text-caption text-muted-foreground truncate pl-9"
+                className="-mt-0.5 truncate px-3 pb-1.5 pl-[calc(0.75rem+0.875rem+0.5rem)] text-xs text-muted-foreground"
                 tabIndex={0}
               >
                 {description}

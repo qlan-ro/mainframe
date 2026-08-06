@@ -1,25 +1,28 @@
 /**
- * Shared Marker Pill chrome for the "centered pill on the chat spine" family.
+ * Shared chrome for the "centered note on the chat spine" tool family — MCP,
+ * worktree enter/exit, schedule/cron/monitor, skill-loaded.
  *
- * Design contract (10-chatcards.jsx MarkerWrap/MarkerPill/MarkerBody):
- *   - Centered column wrapper (MarkerWrap) — `flex flex-col items-center`
- *   - Pill: bg-mf-content2, border-border, rounded-full, font-mono text-label
- *     text-muted-foreground. Error: red-tinted border + bg. Pending: pulsing dot.
- *   - Expandable: chevron right/down; disclosure body below (rounded-lg, bg-mf-content2).
- *   - Accent token via text-primary for the meaningful name.
+ * These are the v2 `Marker variant="separator"` recipe: a centered label between
+ * two hairlines. That is already what `SystemMessage` renders for compaction and
+ * system notes, and these sit in the same column carrying the same role — the
+ * bordered `rounded-full` pill they used to be read as a different feature next
+ * to its own siblings. The label drops its mono, too: these are prose notes, and
+ * mono is reserved for hashes, hosts, ports and counts.
  *
- * NO /opacity modifier on any --mf-* vars (CSS-var hex trap).
+ * The `MarkerPill` name and props are kept: the pill is the *interactive*
+ * element inside the row, and every card's testid hangs off it.
  */
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { cn } from '@v2/lib/utils';
+import { Hint } from '@v2/components/ui/hint';
+import { Marker, MarkerContent, MarkerIcon } from '@v2/components/ui/marker';
 
 // ── MarkerWrap ────────────────────────────────────────────────────────────────
 
-/** Centers its children on the chat spine with a vertical gap. */
+/** Stacks the marker row and its optional disclosure body on the chat spine. */
 export function MarkerWrap({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col items-center gap-4 my-2.5 w-full">{children}</div>;
+  return <div className="my-1.5 flex w-full flex-col gap-2">{children}</div>;
 }
 
 // ── MarkerPill ────────────────────────────────────────────────────────────────
@@ -53,41 +56,33 @@ export function MarkerPill({
   const clickable = expandable && !isPending && !isError;
 
   return (
-    <Hint label={title}>
-      <button
-        data-testid={testId}
-        type="button"
-        disabled={!clickable}
-        onClick={clickable ? onClick : undefined}
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-full pt-[4px] pr-[11px] pb-[4px] pl-[9px]',
-          'font-mono text-label text-muted-foreground select-none',
-          'border border-border bg-mf-content2',
-          'transition-colors duration-100',
-          clickable && 'hover:bg-accent cursor-pointer',
-          !clickable && 'cursor-default',
-          isError && 'border-destructive bg-mf-destructive-tint',
-          'max-w-full overflow-hidden',
-        )}
-      >
-        <span className="shrink-0 text-muted-foreground">{icon}</span>
-        <span className="truncate min-w-0">{children}</span>
-        {isPending && <span className="w-1.5 h-1.5 rounded-full bg-mf-text-4 animate-pulse shrink-0" />}
-        {isError && <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />}
-        {clickable &&
-          (open ? (
-            <ChevronDownIcon size={12} className="text-muted-foreground shrink-0" />
-          ) : (
-            <ChevronRightIcon size={12} className="text-muted-foreground shrink-0" />
-          ))}
-      </button>
-    </Hint>
+    <Marker variant="separator" className={cn('select-none', isError && 'text-destructive')}>
+      <Hint label={title}>
+        <button
+          data-testid={testId}
+          type="button"
+          disabled={!clickable}
+          onClick={clickable ? onClick : undefined}
+          className={cn(
+            'flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors',
+            clickable ? 'cursor-pointer hover:bg-muted hover:text-foreground' : 'cursor-default',
+          )}
+        >
+          <MarkerIcon>{icon}</MarkerIcon>
+          <MarkerContent>{children}</MarkerContent>
+          {isPending && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />}
+          {isError && <span className="size-1.5 shrink-0 rounded-full bg-destructive" />}
+          {clickable &&
+            (open ? <ChevronDownIcon className="size-3 shrink-0" /> : <ChevronRightIcon className="size-3 shrink-0" />)}
+        </button>
+      </Hint>
+    </Marker>
   );
 }
 
 // ── MarkerBody ────────────────────────────────────────────────────────────────
 
-/** Disclosure body shown below a marker pill when expanded. */
+/** Disclosure body shown below a marker row when expanded. */
 export function MarkerBody({
   children,
   testId = 'marker-body',
@@ -97,10 +92,7 @@ export function MarkerBody({
   testId?: string;
 }) {
   return (
-    <div
-      data-testid={testId}
-      className="w-full rounded-lg border border-border bg-mf-content2 px-3 py-2.5 overflow-hidden"
-    >
+    <div data-testid={testId} className="w-full overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5">
       {children}
     </div>
   );
@@ -110,7 +102,7 @@ export function MarkerBody({
 
 /** ARGUMENTS / RESULT section label inside a MarkerBody. */
 export function MarkerCapsLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-caption font-medium text-muted-foreground mb-1">{children}</div>;
+  return <div className="mb-1 text-xs font-medium text-muted-foreground">{children}</div>;
 }
 
 // ── MarkerPre ─────────────────────────────────────────────────────────────────
@@ -120,7 +112,7 @@ export function MarkerPre({ children, muted = false }: { children: React.ReactNo
   return (
     <pre
       className={cn(
-        'font-mono text-label whitespace-pre-wrap break-words leading-snug',
+        'font-mono text-xs leading-snug wrap-break-word whitespace-pre-wrap',
         muted ? 'text-muted-foreground' : 'text-foreground',
       )}
     >
@@ -131,7 +123,7 @@ export function MarkerPre({ children, muted = false }: { children: React.ReactNo
 
 // ── useMarkerOpen ─────────────────────────────────────────────────────────────
 
-/** Local open/close state for expandable marker pills. */
+/** Local open/close state for expandable marker rows. */
 export function useMarkerOpen(defaultOpen = false) {
   const [open, setOpen] = useState(defaultOpen);
   const toggle = () => setOpen((v) => !v);

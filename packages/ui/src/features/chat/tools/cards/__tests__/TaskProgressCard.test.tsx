@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { TaskProgressCard } from '../TaskProgressCard';
 import type { ToolCallMessagePartProps } from '@assistant-ui/react';
 import type { TaskProgressItem } from '@/features/chat/view-model/message-meta';
