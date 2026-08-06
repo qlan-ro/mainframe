@@ -26,7 +26,11 @@ export function TagRegistryItemMenu({ tagName, onRename, onRecolor, onDelete, ch
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="min-w-44">
+      {/* No close-focus-restore: every action here opens something that wants
+          focus (rename input, palette, confirm). The default restore lands on
+          the still-mounted CommandInput one macrotask later, which blurs the
+          just-mounted rename input and silently commits the unchanged name. */}
+      <ContextMenuContent className="min-w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
         <ContextMenuItem data-testid="sessions-tag-registry-rename" onSelect={() => onRename(tagName)}>
           Rename
         </ContextMenuItem>

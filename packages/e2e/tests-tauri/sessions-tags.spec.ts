@@ -285,35 +285,12 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible();
   });
 
-  // TODO(bug): the rename input is destroyed by the context menu's focus restore,
-  // so renaming a registry tag is unreachable in the UI. Chain, all in product
-  // code, no timing assumption left in it:
-  //   1. `TagRegistryItemMenu` is a Radix `ContextMenu`; selecting an item closes
-  //      it, and `ContextMenuContent` does NOT preventDefault `onCloseAutoFocus`
-  //      unless the close came from an outside interaction
-  //      (@radix-ui/react-context-menu 2.3.7, dist/index.mjs:137-141).
-  //   2. `FocusScope`'s unmount cleanup therefore runs `setTimeout(…, 0)` →
-  //      `focus(previouslyFocusedElement)` (@radix-ui/react-focus-scope 1.1.16,
-  //      dist/index.mjs:92-101). A right-clicked cmdk `CommandItem` is not
-  //      focusable, so that element is the still-mounted `CommandInput`.
-  //   3. `TagRegistryRow`'s `RenameInput` is `autoFocus` with
-  //      `onBlur={() => onCommit(value.trim().toLowerCase())}`, and
-  //      `TagRegistryList.onCommitRename` calls `setRenaming(null)` — so the
-  //      macrotask focus-restore blurs the input one tick after it mounts and
-  //      immediately unmounts it. `useTagMutations.rename` then short-circuits on
-  //      `to === from`, so the rename is silently dropped.
-  // The popover already works around the same restore with
-  // `onFocusOutside={(e) => e.preventDefault()}` (TagPopover.tsx); the menu needs
-  // the equivalent `onCloseAutoFocus` guard (or the row must stop committing on
-  // blur). Fixing it means changing packages/ui, which is out of this pass's scope.
+  // The context menu's close-focus-restore used to blur-and-commit the rename
+  // input one macrotask after it mounted; TagRegistryItemMenu now preventDefaults
+  // `onCloseAutoFocus`, so the input keeps focus (fixed 2026-08-06).
   test('renames a tag via the registry item context menu, cascading to the row', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-
-    test.skip(
-      true,
-      "TODO(bug): the registry rename input is blurred-and-committed by the context menu's focus restore one macrotask after it mounts, so `sessions-tag-rename-input` is never observable and the rename is dropped (to === from short-circuit). Needs onCloseAutoFocus preventDefault in TagRegistryItemMenu.tsx — product change.",
-    );
 
     await openViaHoverAction(page, row);
     await openRegistryItemMenu(page, TAG_A);
@@ -340,18 +317,17 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
   // independent `useTagRegistry` instance with no cross-invalidation). Fixed
   // by the product-bug-fix campaign; the dot now picks up the new color.
   //
-  // Recolors TAG_A, not the renamed name: rename is skipped above (TODO(bug)),
-  // and a test that only reaches its subject through another test's side effect
-  // fails for that other test's reason instead of its own.
+  // Recolors TAG_A_RENAMED: this describe shares one page, and the rename test
+  // above has already renamed TAG_A — the old name no longer exists anywhere.
   test('recolors a tag via the recolor panel (registry-only — no cascade needed for the name)', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-    const dot = row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`);
+    const dot = row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`);
     const readBackgroundColor = () => dot.evaluate((el) => (el as HTMLElement).style.backgroundColor);
     const styleBefore = await readBackgroundColor();
 
     await openViaHoverAction(page, row);
-    await openRegistryItemMenu(page, TAG_A);
+    await openRegistryItemMenu(page, TAG_A_RENAMED);
     await page.getByTestId('sessions-tag-registry-recolor').click();
 
     const panel = page.getByTestId('sessions-tag-recolor-panel');
@@ -366,7 +342,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     // Recolor closes the panel but leaves the popover + registry row open.
     await expect(panel).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId(`sessions-tag-registry-row-${TAG_A}`)).toBeVisible();
+    await expect(page.getByTestId(`sessions-tag-registry-row-${TAG_A_RENAMED}`)).toBeVisible();
 
     await closePopover(page);
 
@@ -396,15 +372,15 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await closePopover(page);
   });
 
-  // Deletes TAG_A (see the recolor test's note on not depending on the skipped
-  // rename). TAG_A is still applied to the seeded chat, so this exercises the full
+  // Deletes TAG_A_RENAMED (TAG_A's post-rename name — see the recolor test's
+  // note). It is still applied to the seeded chat, so this exercises the full
   // cascade: registry row → row dot → filter chip.
   test('delete confirm dialog: OK removes the tag from the registry, the row, and the filter bar', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
 
     await openViaHoverAction(page, row);
-    await openRegistryItemMenu(page, TAG_A);
+    await openRegistryItemMenu(page, TAG_A_RENAMED);
     await page.getByTestId('sessions-tag-registry-delete').click();
 
     const confirmDialog = page.getByTestId('sessions-tag-delete-confirm');
@@ -412,14 +388,14 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await page.getByTestId('sessions-tag-delete-confirm-ok').click();
     await expect(confirmDialog).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(page.getByTestId(`sessions-tag-registry-row-${TAG_A}`)).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId(`sessions-tag-registry-row-${TAG_A_RENAMED}`)).toHaveCount(0, { timeout: 5_000 });
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toHaveCount(0, {
+    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toHaveCount(0, {
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`sessions-tag-filter-${TAG_A}`)).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId(`sessions-tag-filter-${TAG_A_RENAMED}`)).toHaveCount(0, { timeout: 10_000 });
   });
 
   test('shows an inline validation message for a disallowed tag name and suppresses create', async () => {

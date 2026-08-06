@@ -642,3 +642,11 @@ Recorded so nobody "fixes" them back:
 - `SidebarRail` drag-resizes as well as toggling (3px slop separates the gestures).
 - A parked section header and its content are **siblings**, never wrapped together — a sticky element
   cannot be lifted above its own containing block, so a wrapper would pin the header below the fold.
+- The session-row `HoverCard` is **controlled + wedge-guarded** (`use-hover-card-wedge-guard`). Radix
+  opens from a delay timer; under a busy main thread that timer can fire after the pointer already left
+  the row, and then no pointerleave ever closes the card — it wedges open over the chat and eats clicks
+  (measured 2026-08-06). Any long-open HoverCard whose content overlays other surfaces wants this guard.
+- A Radix `ContextMenu` whose items swap in a focusable element (rename input, palette) needs
+  `onCloseAutoFocus={(e) => e.preventDefault()}` on its content — the default close-restore focuses the
+  previously-focused element one macrotask later, blurring the just-mounted input (TagRegistryItemMenu;
+  same family as TagPopover's `onFocusOutside` guard).
