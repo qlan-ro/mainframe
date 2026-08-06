@@ -1,11 +1,27 @@
 /* ════════════════════════════════════════════════════════════════════════
    Legacy bridge — the v1 warm-chrome tokens the un-ported areas still need.
 
-   The main entry renders the v2 shell on the v2 token layer; everything not
-   yet ported (toolbar, surfaces, inspector, dialogs) still speaks mf-* and
-   the v1 type rungs. This sheet keeps those areas usable — right colours,
-   legible states — while each area port deletes its slice. When the last
-   port lands, this file is empty and gets deleted.
+   The main entry renders the v2 shell on the v2 token layer. This sheet keeps
+   the un-ported areas usable — right colours, legible states — while each area
+   port deletes its slice. When the last port lands, this file is empty and gets
+   deleted.
+
+   The shell, the title bar, the dialogs, the workspace surface and the chat
+   surface have all ported. What still speaks mf-* and the v1 type rungs, as of
+   the 2026-08-06 chat pass:
+   - whole areas awaiting their own port: context-panel, tasks, automations,
+     review, settings panes, the files tree, sessions' v1 leftovers, tour
+   - one cluster inside the ported chat surface: the workflow / background-
+     activity family (features/chat/workflow/* + composer/{BackgroundActivityBar,
+     WorkflowActivityPopover}), which the chat port did not reach
+   - the surviving v1 primitives: components/ui/{tooltip,hint,dropdown-menu,
+     popover,menu-variants,count-badge,section-header,read-more,scroll-area}
+
+   Kept by design, not pending: the content palettes (mf-code-*, mf-cm-*,
+   mf-term-*, mf-diff-*, mf-viewer-*), the automations step-kind and
+   tasks/priority palettes, the composer's amber edit ring, and mf-scrim.
+   Some members of those palettes have no consumer of their own — they are
+   pinned as a set so a theme reads consistently; do not pick them off.
 
    Deliberately NOT carried from v1 globals.css:
    - the warm shadcn token values (--background, --border, …) — v2 wins
@@ -58,11 +74,6 @@
   --mf-term-cyan: #5ac8fa;
   --mf-term-amber: #ff9f0a;
 
-  --mf-um-card: linear-gradient(180deg, #f4f6fb 0%, #eef1f9 100%);
-  --mf-um-fade: #eef1f9;
-  --mf-um-ink: #1b1e26;
-  --mf-um-edge: rgba(40, 70, 150, 0.13);
-
   --mf-viewer-matte: #e6e2da;
   --mf-viewer-check-a: #efece6;
   --mf-viewer-check-b: #dcd8d0;
@@ -86,8 +97,6 @@
   --mf-border-hover: rgba(0, 0, 0, 0.14);
   --mf-surface-run: #1f9d4d;
   --mf-directive-skill: #7a4dd0;
-  --mf-directive-skill-tint: rgba(122, 77, 208, 0.08);
-  --mf-directive-command-tint: rgba(10, 132, 255, 0.08);
   --mf-directive-session: #a84c08;
   --mf-code-inline-fg: #7a4d2a;
   --mf-provider-claude-avatar: #d97757;
@@ -124,8 +133,6 @@
     0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
-
-  --mf-um-dash: rgba(40, 70, 150, 0.32);
 
   /* Diff tint tokens — LIGHT */
   --mf-diff-add-bg: #e6f2e5;
@@ -171,11 +178,6 @@
   --mf-term-cyan: #84e8f5;
   --mf-term-amber: #ffb86c;
 
-  --mf-um-card: linear-gradient(180deg, #2b2f40 0%, #252938 100%);
-  --mf-um-fade: #252938;
-  --mf-um-ink: #ebeefb;
-  --mf-um-edge: rgba(160, 180, 250, 0.22);
-
   --mf-viewer-matte: #181922;
   --mf-viewer-check-a: #1e2029;
   --mf-viewer-check-b: #292b38;
@@ -192,8 +194,6 @@
   --mf-border-hover: rgba(255, 255, 255, 0.16);
   --mf-surface-run: #50d97c;
   --mf-directive-skill: #b48cff;
-  --mf-directive-skill-tint: rgba(180, 140, 255, 0.14);
-  --mf-directive-command-tint: rgba(10, 132, 255, 0.14);
   --mf-directive-session: #f0b429;
   --mf-code-inline-fg: #e0a878;
 
@@ -217,8 +217,6 @@
   --mf-shadow-user-card: 0 1px 2px rgba(0, 0, 0, 0.24);
   --mf-accent-amber: #ff9f0a;
   --mf-accent-violet: #bd9bf5;
-
-  --mf-um-dash: rgba(160, 180, 250, 0.34);
 
   --mf-diff-add-bg: #1e2b1d;
   --mf-diff-add-border: #244f2e;
@@ -255,8 +253,6 @@
   --color-mf-border-hover: var(--mf-border-hover);
   --color-mf-surface-run: var(--mf-surface-run);
   --color-mf-directive-skill: var(--mf-directive-skill);
-  --color-mf-directive-skill-tint: var(--mf-directive-skill-tint);
-  --color-mf-directive-command-tint: var(--mf-directive-command-tint);
   --color-mf-directive-session: var(--mf-directive-session);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);
   --color-mf-task-type-bug: var(--mf-task-type-bug);
@@ -289,9 +285,6 @@
   --color-mf-term-green: var(--mf-term-green);
   --color-mf-term-cyan: var(--mf-term-cyan);
   --color-mf-term-amber: var(--mf-term-amber);
-  --color-mf-um-ink: var(--mf-um-ink);
-  --color-mf-um-edge: var(--mf-um-edge);
-  --color-mf-um-dash: var(--mf-um-dash);
   --color-mf-viewer-matte: var(--mf-viewer-matte);
   --color-mf-viewer-check-a: var(--mf-viewer-check-a);
   --color-mf-viewer-check-b: var(--mf-viewer-check-b);
