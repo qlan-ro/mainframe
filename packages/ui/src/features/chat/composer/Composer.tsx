@@ -40,12 +40,19 @@ function SendOrCancelButton() {
   const canSubmit = useCanSubmit();
 
   if (isRunning) {
-    // Stop is `ghost` + a destructive filled square — the app's one Stop
-    // treatment (WorkspaceTabPill, ToolbarLaunchControls), not a second one.
+    // The composer's Stop gets a soft destructive fill — it swaps in for the
+    // primary Send, so it must read as THE action, unlike the ghost stops on
+    // WorkspaceTabPill / ToolbarLaunchControls which are incidental chrome.
     return (
       <ComposerPrimitive.Cancel asChild>
-        <Button data-testid="chat-composer-cancel" aria-label="Stop" variant="ghost" size="icon-xs">
-          <SquareIcon className="text-destructive" fill="currentColor" />
+        <Button
+          data-testid="chat-composer-cancel"
+          aria-label="Stop"
+          variant="ghost"
+          size="icon-xs"
+          className="bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
+        >
+          <SquareIcon fill="currentColor" />
         </Button>
       </ComposerPrimitive.Cancel>
     );
