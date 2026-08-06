@@ -1,0 +1,152 @@
+/**
+ * SummarySection — the panel's top section: what this session IS (branch,
+ * context fill) and what it has produced (detected PRs, working changes).
+ *
+ * Never collapsible, so its heading is a static row rather than a trigger —
+ * same rhythm and ink as the section headers below it, minus the chevron.
+ *
+ * The four row kinds come out of `deriveSummaryRows`, which owns every
+ * visibility rule (no branch, no PRs, unresolved usage), and one renderer draws
+ * them. A row that has nothing to say is not emitted; when nothing is emitted at
+ * all the section says so rather than rendering an empty card.
+ */
+import { useAuiState } from '@assistant-ui/react';
+import { Gauge, GitBranch, GitCompare, GitPullRequest, Info } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { Badge } from '@v2/components/ui/badge';
+import { Hint } from '@v2/components/ui/hint';
+import { cn } from '@v2/lib/utils';
+import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useDisplayBranch } from '@/features/sessions/use-display-branch';
+import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
+import { useHost } from '@/lib/host';
+import { emitSurfaceIntent } from '@/store/surface-intents';
+import { SECTION_HEAD } from './PanelSection';
+import { deriveSummaryRows, type SummaryRow } from './summary-view';
+import { useContextPercent } from './use-context-percent';
+
+const ROW = 'flex items-center gap-2 rounded-md bg-muted px-2 py-1.5';
+const ROW_LABEL = 'min-w-0 flex-1 truncate text-sm';
+const ROW_TRAILING = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
+
+const ROW_ICON: Record<SummaryRow['kind'], ComponentType<{ className?: string }>> = {
+  branch: GitBranch,
+  context: Gauge,
+  pr: GitPullRequest,
+  changes: GitCompare,
+};
+
+function rowTestId(row: SummaryRow): string {
+  return row.kind === 'pr' ? `session-panel-summary-pr-${row.number}` : `session-panel-summary-${row.kind}`;
+}
+
+/** The branch row leads with the name itself; every other kind leads with its label. */
+function rowText(row: SummaryRow): string {
+  return row.kind === 'branch' ? row.value : row.label;
+}
+
+function RowTrailing({ row }: { row: SummaryRow }) {
+  if (row.kind === 'branch') {
+    return row.isWorktree ? (
+      <Badge data-testid="session-panel-summary-branch-wt" variant="outline">
+        wt
+      </Badge>
+    ) : null;
+  }
+  if (row.kind === 'changes') {
+    return (
+      <>
+        <span className={ROW_TRAILING}>{row.value}</span>
+        {/* A clean tree has no diff to count — "+0 −0" would be noise. */}
+        {row.fileCount > 0 && row.additions != null && (
+          <span className="shrink-0 font-mono text-xs tabular-nums text-success">+{row.additions}</span>
+        )}
+        {row.fileCount > 0 && row.deletions != null && (
+          <span className="shrink-0 font-mono text-xs tabular-nums text-destructive">−{row.deletions}</span>
+        )}
+      </>
+    );
+  }
+  return <span className={ROW_TRAILING}>{row.value}</span>;
+}
+
+function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () => void }) {
+  const Icon = ROW_ICON[row.kind];
+  const body = (
+    <>
+      <Icon className={cn('size-3.5 shrink-0', row.kind === 'pr' ? 'text-success' : 'text-muted-foreground')} />
+      <span className={ROW_LABEL}>{rowText(row)}</span>
+      <RowTrailing row={row} />
+    </>
+  );
+
+  return (
+    <Hint label={row.tooltip}>
+      {onActivate ? (
+        <button
+          type="button"
+          data-testid={rowTestId(row)}
+          onClick={onActivate}
+          className={cn(ROW, 'w-full text-left transition-colors hover:bg-accent')}
+        >
+          {body}
+        </button>
+      ) : (
+        <div data-testid={rowTestId(row)} className={ROW}>
+          {body}
+        </div>
+      )}
+    </Hint>
+  );
+}
+
+export function SummarySection({ port, sectionRef }: { port: number; sectionRef?: (el: HTMLElement | null) => void }) {
+  const host = useHost();
+  const { projectId, chatId, branchName, isWorktree } = useActiveIdentity();
+  const { branch } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
+  const percent = useContextPercent();
+  const usage = useChatExtras()?.state.contextUsage;
+  const prs = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems))?.detectedPrs ?? [];
+  const changes = useWorkingChanges({ port, projectId, chatId });
+
+  const rows = deriveSummaryRows({
+    branch: { name: branch ?? null, isWorktree },
+    context: { percent, usedTokens: usage?.totalTokens, maxTokens: usage?.maxTokens },
+    prs,
+    // Loading and error both mean "unknown", and a zero count would claim the
+    // tree is clean. The row waits rather than lying.
+    changes: projectId && !changes.loading && !changes.error ? toChangesSummary(changes) : null,
+  });
+
+  return (
+    <section ref={sectionRef} data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
+      <div className={SECTION_HEAD}>
+        <Info className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate text-sm font-medium">Summary</span>
+      </div>
+      <div className="flex flex-col gap-1.5 px-3 pb-3">
+        {rows.length === 0 ? (
+          <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
+            No session details yet
+          </div>
+        ) : (
+          rows.map((row) => (
+            <SummaryRowView
+              key={rowTestId(row)}
+              row={row}
+              onActivate={
+                row.kind === 'pr'
+                  ? () => void host.shell.openExternal(row.url)
+                  : row.kind === 'changes'
+                    ? () => emitSurfaceIntent({ type: 'open-review' })
+                    : undefined
+              }
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}

@@ -7,6 +7,8 @@ interface ContextFileItemProps {
   path: string;
   displayName?: string;
   badge?: string;
+  /** Defaults to the bottom panel's own id; the session panel scopes its own. */
+  testId?: string;
 }
 
 /** Per-badge-type text color: '@'=accent, auto=muted, plan=amber, skill=violet. */
@@ -30,7 +32,7 @@ const BADGE_BG_CLASS: Record<string, string> = {
  * Click opens the file via the surface-intent bus (mirrors desktop's
  * ContextFileItem → openEditorTab). Out-of-project global files are best-effort.
  */
-export function ContextFileItem({ path, displayName, badge }: ContextFileItemProps) {
+export function ContextFileItem({ path, displayName, badge, testId }: ContextFileItemProps) {
   const fileName = displayName ?? path.split('/').pop() ?? path;
   const badgeColorClass = badge ? (BADGE_COLOR_CLASS[badge] ?? 'text-muted-foreground') : '';
   const badgeBgClass = badge ? (BADGE_BG_CLASS[badge] ?? 'bg-mf-text-3/[0.20]') : '';
@@ -39,7 +41,7 @@ export function ContextFileItem({ path, displayName, badge }: ContextFileItemPro
       <TooltipTrigger asChild>
         <button
           type="button"
-          data-testid={`sidebar-context-item-${path}`}
+          data-testid={testId ?? `sidebar-context-item-${path}`}
           aria-label={path}
           onClick={() => emitSurfaceIntent({ type: 'open-file', path })}
           style={{ paddingLeft: CONTEXT_SECTION_BASE_INSET_PX + CONTEXT_INDENT_STEP_PX }}

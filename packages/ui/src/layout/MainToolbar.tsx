@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, FolderGit2, GitBranch, Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { getGitBranch } from '@/lib/api/git';
+import { useDisplayBranch } from '@/features/sessions/use-display-branch';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
@@ -96,43 +96,17 @@ export function MainToolbar({
   const toggleInspector = useUiPrefs((s) => s.toggleInspector);
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
 
-  // Read the live current branch from git so the chip shows for EVERY session,
-  // not just worktrees: a main-repo session has no persisted `chat.branchName`,
-  // so without this fetch the whole chip disappears. Re-runs on identity change
-  // (fresh, cancellation-guarded so a late response from a previous chat can't
-  // leak) and after a popover write via handleBranchChanged — BranchPopover
-  // writes don't broadcast `chat.updated`, so the prop alone would go stale.
-  const [liveBranch, setLiveBranch] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    setLiveBranch(undefined);
-    if (!projectId) return;
-    let cancelled = false;
-    getGitBranch(port, projectId, chatId)
-      .then(({ branch }) => {
-        if (!cancelled) setLiveBranch(branch ?? undefined);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) console.warn('[MainToolbar] failed to read current branch', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [port, projectId, chatId, branchName]);
-  const handleBranchChanged = useCallback(() => {
-    if (!projectId) return;
-    getGitBranch(port, projectId, chatId)
-      .then(({ branch }) => setLiveBranch(branch ?? undefined))
-      .catch((err: unknown) => {
-        console.warn('[MainToolbar] failed to refresh branch after popover write', err);
-      });
-  }, [port, projectId, chatId]);
-  // A worktree DRAFT (no chatId yet — the chat is created on first send) can't
-  // resolve its branch live: without a chatId the fetch reads the project ROOT.
-  // Trust the draft's own branch name there; every other state prefers live.
-  // The popover stays off too — useBranchActions without a chatId would mutate
-  // the ROOT repo while the chip advertises worktree isolation.
-  const isDraftWorktree = isWorktree && !chatId;
-  const displayBranch = isDraftWorktree ? (branchName ?? liveBranch) : (liveBranch ?? branchName);
+  // The chip shows for EVERY session, not just worktrees — see use-display-branch
+  // for why that needs a live git read. `refetch` is the popover-write path: a
+  // BranchPopover write broadcasts no `chat.updated`, so nothing else invalidates
+  // it. The popover itself stays off for a worktree draft — useBranchActions
+  // without a chatId would mutate the ROOT repo while the chip advertises
+  // worktree isolation.
+  const {
+    branch: displayBranch,
+    isDraftWorktree,
+    refetch: handleBranchChanged,
+  } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
 
   return (
     <div

@@ -5,9 +5,15 @@
  * a "Changed files" heading, then rows with a tinted square status badge,
  * filename + dir, and a 5-square +/- stat meter. The active row gets the
  * selection tint; viewed (non-active) rows dim and strike through.
+ *
+ * Badge and meter are per-file facts the daemon only reports for some change
+ * scopes, so each is omitted when absent rather than defaulted: a "modified"
+ * badge on a file nobody classified, or a flat meter on a file nobody counted,
+ * both state something the payload never said.
  */
 import { KIND_LABEL } from '@/lib/git-status-kind';
 import type { ReviewFile } from './git-status-to-files';
+import type { WorkingChangeFile } from './use-working-changes';
 
 /**
  * Square badge tint per semantic status (text + chip background).
@@ -26,7 +32,7 @@ const BADGE_CLASS: Record<ReviewFile['status'], string> = {
 };
 
 interface ReviewFileTreeProps {
-  files: ReviewFile[];
+  files: WorkingChangeFile[];
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
   viewedFiles?: Set<string>;
@@ -74,11 +80,14 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   isSelected ? 'bg-sidebar-selection' : 'bg-transparent'
                 } ${isViewed && !isSelected ? 'opacity-55' : ''}`}
               >
-                <span
-                  className={`inline-flex size-4 shrink-0 items-center justify-center rounded font-mono text-xs font-extrabold ${BADGE_CLASS[f.status]}`}
-                >
-                  {KIND_LABEL[f.status]}
-                </span>
+                {f.status && (
+                  <span
+                    data-testid={`review-file-status-${f.path}`}
+                    className={`inline-flex size-4 shrink-0 items-center justify-center rounded font-mono text-xs font-extrabold ${BADGE_CLASS[f.status]}`}
+                  >
+                    {KIND_LABEL[f.status]}
+                  </span>
+                )}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span
                     title={f.path}
@@ -88,7 +97,9 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   </span>
                   {dirPath && <span className="truncate text-xs text-muted-foreground">{dirPath}</span>}
                 </span>
-                <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
+                {f.additions !== undefined && f.deletions !== undefined && (
+                  <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
+                )}
               </button>
             );
           })}

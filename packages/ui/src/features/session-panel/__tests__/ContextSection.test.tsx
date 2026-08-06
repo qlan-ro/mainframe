@@ -1,0 +1,228 @@
+/**
+ * ContextSection — unit tests.
+ *
+ * Behaviors covered:
+ *  - memory files render per scope with a `global`/`project` badge and an
+ *    estimated token size, and open on click
+ *  - in-session file mentions render as their own sub-group, badged (D14)
+ *  - skills render with their scope chip, and the Manage entry point reaches the
+ *    Setup Advisor's skills sheet — the only route to it
+ *  - agents are gone from the product surface (D15)
+ *  - the attachments grid mounts only when the session has attachments
+ *
+ * Replaces `context-panel/__tests__/{ContextSection,SkillsList,SkillsList.manage-link}.test.tsx`.
+ */
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import type { SessionContext, Skill } from '@qlan-ro/mainframe-types';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider as LegacyTooltipProvider } from '@/components/ui/tooltip';
+
+let mockContext: SessionContext | null = null;
+vi.mock('@/features/context-panel/use-session-context', () => ({
+  useSessionContext: () => ({ context: mockContext, chatId: 'chat-9' }),
+}));
+
+let mockSkills: Skill[] = [];
+let mockSkillsLoading = false;
+vi.mock('@/features/context-panel/use-sidebar-skills', () => ({
+  useSidebarSkills: () => ({ skills: mockSkills, agents: [], loading: mockSkillsLoading }),
+}));
+
+const openSheet = vi.fn();
+vi.mock('@/features/setup-advisor/use-setup-advisor', () => ({
+  useSetupAdvisor: (selector: (s: { openSheet: typeof openSheet }) => unknown) => selector({ openSheet }),
+}));
+
+const emitSurfaceIntent = vi.fn();
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => emitSurfaceIntent(...a) }));
+
+const getAttachment = vi.fn().mockResolvedValue({
+  name: 'shot.png',
+  mediaType: 'image/png',
+  sizeBytes: 1,
+  kind: 'image',
+  data: 'QUJD',
+});
+vi.mock('@/lib/api/attachments', () => ({ getAttachment: (...a: unknown[]) => getAttachment(...a) }));
+
+const { ContextSection } = await import('../ContextSection');
+
+function Wrapper({ children }: { children: ReactNode }) {
+  return (
+    <LegacyTooltipProvider>
+      <TooltipProvider>{children}</TooltipProvider>
+    </LegacyTooltipProvider>
+  );
+}
+const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: Wrapper });
+
+const emptyContext: SessionContext = {
+  globalFiles: [],
+  projectFiles: [],
+  mentions: [],
+  attachments: [],
+  modifiedFiles: [],
+  skillFiles: [],
+};
+
+const skill = (id: string, name: string, scope: Skill['scope']): Skill => ({
+  id,
+  adapterId: 'claude',
+  name,
+  displayName: name,
+  description: `${name} does things`,
+  scope,
+  filePath: `/skills/${name}/SKILL.md`,
+  content: '',
+});
+
+const onToggle = vi.fn();
+const section = () => <ContextSection port={31415} open onToggle={onToggle} />;
+
+beforeEach(() => {
+  mockContext = emptyContext;
+  mockSkills = [];
+  mockSkillsLoading = false;
+  openSheet.mockReset();
+  emitSurfaceIntent.mockReset();
+  getAttachment.mockClear();
+  onToggle.mockReset();
+});
+
+describe('ContextSection — memory files', () => {
+  beforeEach(() => {
+    mockContext = {
+      ...emptyContext,
+      globalFiles: [{ path: '/Users/dev/.claude/CLAUDE.md', content: 'x'.repeat(12_800), source: 'global' }],
+      projectFiles: [{ path: 'CLAUDE.md', content: 'y'.repeat(4000), source: 'project' }],
+    };
+  });
+
+  it('renders a row per file with its scope and an estimated size', () => {
+    render(section());
+    const global = screen.getByTestId('session-panel-context-file-/Users/dev/.claude/CLAUDE.md');
+    expect(global).toHaveTextContent('CLAUDE.md');
+    expect(global).toHaveTextContent('global');
+    expect(global).toHaveTextContent('~3.2k');
+
+    const project = screen.getByTestId('session-panel-context-file-CLAUDE.md');
+    expect(project).toHaveTextContent('project');
+    expect(project).toHaveTextContent('~1k');
+  });
+
+  it('opens a file on click', () => {
+    render(section());
+    fireEvent.click(screen.getByTestId('session-panel-context-file-CLAUDE.md'));
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'CLAUDE.md' });
+  });
+});
+
+describe('ContextSection — session items (D14)', () => {
+  it('renders in-session file mentions with their badges', () => {
+    mockContext = {
+      ...emptyContext,
+      mentions: [
+        {
+          id: 'm-1',
+          kind: 'file',
+          name: 'app.ts',
+          path: 'src/app.ts',
+          source: 'user',
+          timestamp: '2026-08-06T10:00:00Z',
+        },
+      ],
+      modifiedFiles: ['src/edited.ts'],
+      skillFiles: [{ path: '/skills/review/SKILL.md', displayName: 'review' }],
+    };
+    render(section());
+
+    expect(screen.getByTestId('session-panel-session-item-src/app.ts')).toHaveTextContent('@');
+    expect(screen.getByTestId('session-panel-session-item-src/edited.ts')).toHaveTextContent('plan');
+    expect(screen.getByTestId('session-panel-session-item-/skills/review/SKILL.md')).toHaveTextContent('skill');
+  });
+
+  it('renders no session sub-group when nothing was touched', () => {
+    render(section());
+    expect(screen.queryByTestId('session-panel-session-item-src/app.ts')).toBeNull();
+  });
+});
+
+describe('ContextSection — skills', () => {
+  it('renders a row per skill with its scope chip', () => {
+    mockSkills = [skill('s-1', 'review', 'project'), skill('s-2', 'deploy', 'global')];
+    render(section());
+    expect(screen.getByTestId('session-panel-skill-s-1')).toHaveTextContent('/review');
+    expect(screen.getByTestId('session-panel-skill-s-1')).toHaveTextContent('project');
+    expect(screen.getByTestId('session-panel-skill-s-2')).toHaveTextContent('global');
+  });
+
+  it('opens a skill file on click', () => {
+    mockSkills = [skill('s-1', 'review', 'project')];
+    render(section());
+    fireEvent.click(screen.getByTestId('session-panel-skill-s-1'));
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: '/skills/review/SKILL.md' });
+  });
+
+  it('keeps Manage — the only route to the advisor skills sheet', () => {
+    render(section());
+    fireEvent.click(screen.getByTestId('session-panel-skills-manage'));
+    expect(openSheet).toHaveBeenCalledWith('skills');
+  });
+
+  it('says so while loading and when there are none', () => {
+    mockSkillsLoading = true;
+    const { rerender } = render(section());
+    expect(screen.getByTestId('session-panel-skills-empty')).toHaveTextContent('Loading');
+
+    mockSkillsLoading = false;
+    rerender(section());
+    expect(screen.getByTestId('session-panel-skills-empty')).toHaveTextContent('No skills');
+  });
+
+  it('renders no agent rows — agents left the product surface (D15)', () => {
+    mockSkills = [skill('s-1', 'review', 'project')];
+    render(section());
+    expect(screen.queryByTestId('sidebar-agent-item-a-1')).toBeNull();
+    expect(screen.queryByText('Agents')).toBeNull();
+  });
+});
+
+describe('ContextSection — attachments', () => {
+  it('mounts the grid only when the session has attachments', () => {
+    render(section());
+    expect(screen.queryByTestId('session-panel-attachment-grid')).toBeNull();
+
+    mockContext = {
+      ...emptyContext,
+      attachments: [{ id: 'att-1', name: 'shot.png', mediaType: 'image/png', sizeBytes: 10, kind: 'image' }],
+    };
+    render(section());
+    expect(screen.getByTestId('session-panel-attachment-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('session-panel-attachment-att-1')).toBeInTheDocument();
+  });
+});
+
+describe('ContextSection — section count', () => {
+  it('counts every item across the four sub-groups', () => {
+    mockContext = {
+      ...emptyContext,
+      projectFiles: [{ path: 'CLAUDE.md', content: 'x', source: 'project' }],
+      mentions: [
+        {
+          id: 'm-1',
+          kind: 'file',
+          name: 'app.ts',
+          path: 'src/app.ts',
+          source: 'user',
+          timestamp: '2026-08-06T10:00:00Z',
+        },
+      ],
+      attachments: [{ id: 'att-1', name: 'shot.png', mediaType: 'image/png', sizeBytes: 10, kind: 'image' }],
+    };
+    mockSkills = [skill('s-1', 'review', 'project')];
+    render(section());
+    expect(screen.getByTestId('session-panel-section-toggle-context')).toHaveTextContent('4');
+  });
+});

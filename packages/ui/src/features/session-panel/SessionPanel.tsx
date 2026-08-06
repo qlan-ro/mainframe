@@ -21,14 +21,51 @@ import { useCallback, useEffect, useRef } from 'react';
 import { cn } from '@v2/lib/utils';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import type { SessionPanelSectionId } from '@/store/ui-prefs';
+import { ActivitySection } from './ActivitySection';
+import { ContextSection } from './ContextSection';
+import { LaunchSection } from './LaunchSection';
+import { PlanSection } from './PlanSection';
 import { SessionPanelRail } from './SessionPanelRail';
+import { SummarySection } from './SummarySection';
 import type { SessionPanelState } from './use-session-panel-state';
 
 const PANEL_CHROME = 'flex w-80 flex-col overflow-hidden rounded-xl border border-border bg-card';
 
-/** Where the sections scroll. Owns the panel's only scroll region. */
-function PanelBody() {
-  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" />;
+/**
+ * Where the sections scroll — the panel's only scroll region. Section order is
+ * Summary · Plan · Background Activity · Launch · Context: the three
+ * process-shaped sections cluster in the middle (what the agent is doing, what
+ * is running, what you can run) and Context stays at the bottom as reference.
+ */
+function PanelBody({ state, port }: { state: SessionPanelState; port: number }) {
+  const { isSectionOpen, toggleSection, registerSection } = state;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <SummarySection port={port} sectionRef={registerSection('summary')} />
+      <PlanSection
+        open={isSectionOpen('plan')}
+        onToggle={() => toggleSection('plan')}
+        sectionRef={registerSection('plan')}
+      />
+      <ActivitySection
+        open={isSectionOpen('activity')}
+        onToggle={() => toggleSection('activity')}
+        sectionRef={registerSection('activity')}
+      />
+      <LaunchSection
+        port={port}
+        open={isSectionOpen('launch')}
+        onToggle={() => toggleSection('launch')}
+        sectionRef={registerSection('launch')}
+      />
+      <ContextSection
+        port={port}
+        open={isSectionOpen('context')}
+        onToggle={() => toggleSection('context')}
+        sectionRef={registerSection('context')}
+      />
+    </div>
+  );
 }
 
 export function SessionPanel({ state }: { state: SessionPanelState }) {
@@ -58,7 +95,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
     <div ref={state.rootRef} data-testid="session-panel-root" className="relative flex h-full">
       {mode === 'inline' && (
         <div data-testid="session-panel" className={cn(PANEL_CHROME, 'my-2 ml-2 shadow-lg')}>
-          <PanelBody />
+          <PanelBody state={state} port={port} />
         </div>
       )}
       {mode === 'overlay' && (
@@ -68,7 +105,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
           aria-label="Session panel"
           className={cn(PANEL_CHROME, 'absolute top-2 right-full bottom-2 z-30 shadow-xl')}
         >
-          <PanelBody />
+          <PanelBody state={state} port={port} />
         </div>
       )}
       <SessionPanelRail state={state} port={port} registerButton={registerButton} />

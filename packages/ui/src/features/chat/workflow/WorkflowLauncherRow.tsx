@@ -20,10 +20,10 @@ import { WorkflowRunPanel } from './WorkflowRunPanel';
 const ROW = 'flex w-full items-center gap-[9px] rounded-lg border border-border bg-card px-[10px] py-[7px] text-left';
 
 const DOT_FILL: Record<string, string> = {
-  green: 'bg-mf-success',
-  amber: 'bg-mf-warning',
+  green: 'bg-success',
+  amber: 'bg-warning',
   red: 'bg-destructive',
-  hollow: 'border border-mf-text-3',
+  hollow: 'border border-muted-foreground',
 };
 
 function LauncherDot({ tone, pulse }: OutcomeDot) {
@@ -112,13 +112,13 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
         <button
           type="button"
           data-testid={`chat-workflow-launcher-${launch.runId}`}
-          className={cn(ROW, 'cursor-pointer transition-colors hover:border-mf-border-hover')}
+          className={cn(ROW, 'cursor-pointer transition-colors hover:border-input hover:bg-accent')}
         >
           <LauncherTile />
           <LauncherDot {...outcomeDot(view, now)} />
           <span className="min-w-0 flex-1 truncate text-label font-medium text-foreground">{name}</span>
           <span className="shrink-0 text-caption tabular-nums text-muted-foreground">{runMetaString(view, now)}</span>
-          <ChevronRight size={12} className="shrink-0 text-mf-text-3" aria-hidden />
+          <ChevronRight size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[380px] p-0" onOpenAutoFocus={(event) => event.preventDefault()}>

@@ -8,9 +8,13 @@
  *  - The onAppend prop calls runtime.threads.main.append({ role, content }).
  *  - Empty git status renders "No changes to review".
  *  - Close button sets reviewOpen to false.
+ *  - The change-scope switcher: default scope, per-scope data source, the branch
+ *    comparison line, and the omitted +/− totals. These three scope cases came
+ *    from the retired inspector `ChangesPanel`, the only surface that used to
+ *    offer the scopes.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useOverlaysStore } from '@/store/overlays';
 
@@ -20,14 +24,22 @@ import { useOverlaysStore } from '@/store/overlays';
 
 const mockGetGitStatus = vi.fn();
 const mockGetWorkingStat = vi.fn();
+const mockGetBranchDiffs = vi.fn();
+const mockGetSessionFiles = vi.fn();
 const mockGitCommit = vi.fn();
 vi.mock('@/lib/api/git', () => ({
   getGitStatus: (...args: unknown[]) => mockGetGitStatus(...args),
   getWorkingStat: (...args: unknown[]) => mockGetWorkingStat(...args),
+  getBranchDiffs: (...args: unknown[]) => mockGetBranchDiffs(...args),
   getGitBranch: () => Promise.resolve({ branch: 'feat/rail-collapse' }),
   gitCommit: (...args: unknown[]) => mockGitCommit(...args),
   // getWorkingDiff is used by ReviewDiffView; mock it to prevent actual calls
   getWorkingDiff: () => Promise.resolve({ original: '', modified: '', diff: '', source: 'git' }),
+}));
+
+vi.mock('@/lib/api/files', async (orig) => ({
+  ...(await orig<typeof import('@/lib/api/files')>()),
+  getSessionFiles: (...args: unknown[]) => mockGetSessionFiles(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -94,6 +106,8 @@ beforeEach(() => {
   mockGetGitStatus.mockReset();
   mockGetWorkingStat.mockReset();
   mockGetWorkingStat.mockResolvedValue({ files: [], totalAdditions: 0, totalDeletions: 0 });
+  mockGetBranchDiffs.mockReset();
+  mockGetSessionFiles.mockReset();
   mockGitCommit.mockReset();
   mockGitCommit.mockResolvedValue({ commit: 'abc123' });
   mockAppend.mockReset();
@@ -260,6 +274,115 @@ describe('ReviewPanel — commit rail', () => {
     expect(screen.getByTestId('review-commit-submit')).toBeDisabled();
     await userEvent.type(screen.getByTestId('review-commit-input'), 'fix: x');
     expect(screen.getByTestId('review-commit-submit')).not.toBeDisabled();
+  });
+});
+
+describe('ReviewPanel — change-scope switcher', () => {
+  // Radix TabsTrigger activates on mouse-down, not click.
+  function chooseScope(scope: 'session' | 'uncommitted' | 'branch') {
+    fireEvent.mouseDown(screen.getByTestId(`review-scope-${scope}`));
+  }
+
+  it('opens on the Uncommitted scope and reads only the working tree', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-file-row-src/a.ts')).not.toBeNull();
+    });
+
+    expect(screen.getByTestId('review-scope-uncommitted')).toHaveAttribute('aria-selected', 'true');
+    expect(mockGetGitStatus).toHaveBeenCalledWith(31415, 'proj-1', 'chat-1');
+    expect(mockGetSessionFiles).not.toHaveBeenCalled();
+    expect(mockGetBranchDiffs).not.toHaveBeenCalled();
+  });
+
+  it('Session reads the session files and renders rows with no status badge', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetSessionFiles.mockResolvedValue(['src/touched.ts']);
+
+    render(<ReviewPanel />);
+    openReview();
+    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+
+    chooseScope('session');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-file-row-src/touched.ts')).not.toBeNull();
+    });
+    expect(mockGetSessionFiles).toHaveBeenCalledWith(31415, 'chat-1');
+    // The daemon reports paths only for this scope — no per-file git status.
+    expect(screen.queryByTestId('review-file-status-src/touched.ts')).toBeNull();
+  });
+
+  it('Branch reads the branch diff and renders the comparison line', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetBranchDiffs.mockResolvedValue({
+      branch: 'feat/x',
+      baseBranch: 'main',
+      mergeBase: 'abc1234def',
+      files: [{ path: 'src/b.ts', status: 'A' }],
+    });
+
+    render(<ReviewPanel />);
+    openReview();
+    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+
+    chooseScope('branch');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('review-file-row-src/b.ts')).not.toBeNull();
+    });
+    expect(mockGetBranchDiffs).toHaveBeenCalledWith(31415, 'proj-1', 'chat-1');
+    expect(screen.getByTestId('review-scope-compare-line').textContent).toBe('feat/x ↔ main · abc1234');
+    // Branch rows do carry a status, so the badge stays.
+    expect(screen.queryByTestId('review-file-status-src/b.ts')).not.toBeNull();
+  });
+
+  it('omits the +/− totals on session and branch rather than showing zeros', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+    mockGetWorkingStat.mockResolvedValue({
+      files: [{ path: 'src/a.ts', additions: 4, deletions: 1 }],
+      totalAdditions: 4,
+      totalDeletions: 1,
+    });
+    mockGetSessionFiles.mockResolvedValue(['src/touched.ts']);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-file-counts').textContent).toBe('1 file · +4 −1');
+    });
+
+    chooseScope('session');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-file-counts').textContent).toBe('1 file');
+    });
+  });
+
+  it('resets to Uncommitted on the next open — the scope is never persisted', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetBranchDiffs.mockResolvedValue({ branch: 'feat/x', baseBranch: 'main', mergeBase: null, files: [] });
+
+    render(<ReviewPanel />);
+    openReview();
+    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+
+    chooseScope('branch');
+    await waitFor(() => {
+      expect(screen.getByTestId('review-scope-branch')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    act(() => useOverlaysStore.getState().setReviewOpen(false));
+    openReview();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-scope-uncommitted')).toHaveAttribute('aria-selected', 'true');
+    });
   });
 });
 

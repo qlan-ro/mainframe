@@ -10,12 +10,16 @@
  *  - dismissing the overlay hands focus back to the rail button that opened it
  *  - dismissal does NOT steal focus when the user has already moved it (the
  *    outside-click path)
+ *  - the body carries the five sections, in render order
  *
  * Mocked dependencies (the rail's data sources — the real rail renders here, so
  * the focus-return assertion lands on a real button):
  *  - ./use-context-percent, @/features/run/use-launch-actions,
  *    @/features/sessions/use-active-identity,
  *    @/features/chat/runtime/use-chat-thread-runtime
+ *
+ * The five sections are stubbed: each owns its own suite, and this one is about
+ * the shell.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
@@ -46,6 +50,12 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
   useChatExtras: () => ({ state: { backgroundTasks: {} } }),
 }));
+
+vi.mock('../SummarySection', () => ({ SummarySection: () => <div data-testid="stub-summary" /> }));
+vi.mock('../PlanSection', () => ({ PlanSection: () => <div data-testid="stub-plan" /> }));
+vi.mock('../ActivitySection', () => ({ ActivitySection: () => <div data-testid="stub-activity" /> }));
+vi.mock('../LaunchSection', () => ({ LaunchSection: () => <div data-testid="stub-launch" /> }));
+vi.mock('../ContextSection', () => ({ ContextSection: () => <div data-testid="stub-context" /> }));
 
 const { SessionPanel } = await import('../SessionPanel');
 
@@ -111,6 +121,21 @@ describe('SessionPanel — mode rendering', () => {
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
     rerender(<SessionPanel state={panelState('overlay', { id: 'activity', seq: 1 })} />);
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
+  });
+});
+
+describe('SessionPanel — body', () => {
+  it('renders the five sections in order', () => {
+    render(<SessionPanel state={panelState('inline')} />);
+    const rendered = Array.from(document.querySelectorAll('[data-testid^="stub-"]')).map((el) =>
+      el.getAttribute('data-testid'),
+    );
+    expect(rendered).toEqual(['stub-summary', 'stub-plan', 'stub-activity', 'stub-launch', 'stub-context']);
+  });
+
+  it('renders no section body in rail mode', () => {
+    render(<SessionPanel state={panelState('rail')} />);
+    expect(screen.queryByTestId('stub-summary')).toBeNull();
   });
 });
 
