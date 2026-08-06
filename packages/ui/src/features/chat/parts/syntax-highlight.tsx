@@ -15,7 +15,7 @@ import { useInstructionChipForLine } from '../smart-actions/use-instruction-chip
 
 const PRE_CLASS = cn(
   'bg-mf-code-bg text-mf-code-fg overflow-x-auto p-3 mt-0 mb-3',
-  'border border-t-0 border-border rounded-b-md font-mono text-label leading-5',
+  'border border-t-0 border-border rounded-b-md font-mono text-xs leading-5',
 );
 
 export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }) => {

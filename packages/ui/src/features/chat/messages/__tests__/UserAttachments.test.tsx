@@ -118,21 +118,26 @@ describe('UserAttachments — B1: TypeScript file with size preview', () => {
     expect(screen.getByText('TypeScript · 6.4 KB')).toBeInTheDocument();
   });
 
-  it('the pill root has pr-5 (12px right padding, 7.3)', () => {
-    __attachmentName = 'Layout.tsx';
-    __meta = { attachmentPreviews: [{ name: 'Layout.tsx', kind: 'file', sizeBytes: 6554 }] };
-    renderAttachments();
-    expect(screen.getByTestId('chat-user-attachment-Layout.tsx').className).toContain('pr-5');
-  });
-
-  it('the ext icon tile is size-[36px] (7.4)', () => {
+  it('the tile is the kit Attachment compound, sized "sm"', () => {
     __attachmentName = 'Layout.tsx';
     __meta = { attachmentPreviews: [{ name: 'Layout.tsx', kind: 'file', sizeBytes: 6554 }] };
     renderAttachments();
     const tile = screen.getByTestId('chat-user-attachment-Layout.tsx');
-    const iconTile = tile.querySelector('span');
-    expect(iconTile).not.toBeNull();
-    expect(iconTile!.className).toContain('size-[36px]');
+    expect(tile).toHaveAttribute('data-slot', 'attachment');
+    expect(tile).toHaveAttribute('data-size', 'sm');
+  });
+
+  it('renders the media tile with the .tsx extension label tinted via inline style', () => {
+    __attachmentName = 'Layout.tsx';
+    __meta = { attachmentPreviews: [{ name: 'Layout.tsx', kind: 'file', sizeBytes: 6554 }] };
+    renderAttachments();
+    const tile = screen.getByTestId('chat-user-attachment-Layout.tsx');
+    expect(tile.querySelector('[data-slot="attachment-media"]')).not.toBeNull();
+    // The per-extension tint is the one thing this component still owns
+    // (file-ext-colors.ts) — the kit's Attachment primitive has no concept of it.
+    const extLabel = screen.getByText('.tsx');
+    expect(extLabel).toHaveAttribute('style');
+    expect(extLabel.getAttribute('style')).toContain('color');
   });
 });
 
@@ -249,17 +254,14 @@ describe('UserAttachments — B5: image attachment with matching capture renders
     expect(screen.getByText('nav > .x')).toBeInTheDocument();
   });
 
-  it('the context chip carries gap-[7px], rounded-md, py-1 pl-1, and max-w-[250px] (7.13)', () => {
+  it("the context tile is a kit Attachment capped at max-w-[250px] (own contract; the rest of the geometry is the kit primitive's)", () => {
     __attachmentName = 'element1.png';
     __meta = {
       captures: [{ label: 'element1', imageName: 'element1.png', selector: 'nav > .x' }],
     };
     renderAttachments();
     const chip = screen.getByTestId('chat-user-attachment-element1.png');
-    expect(chip.className).toContain('gap-[7px]');
-    expect(chip.className).toContain('rounded-md');
-    expect(chip.className).toContain('py-1');
-    expect(chip.className).toContain('pl-1');
+    expect(chip).toHaveAttribute('data-slot', 'attachment');
     expect(chip.className).toContain('max-w-[250px]');
   });
 });

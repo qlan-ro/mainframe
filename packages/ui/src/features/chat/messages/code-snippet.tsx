@@ -1,7 +1,7 @@
 /** `L42–46` / `L42` — shared snippet helpers for review-comment cards. */
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
 
 /** Numbered mono snippet rows (line numbers from `start`) — shared with
  *  ReviewCommentCard. select-text keeps the code copyable despite the
@@ -12,10 +12,8 @@ export function SnippetLines({ lines, start }: { lines: readonly string[]; start
       {lines.map((line, i) => (
         // 18px line-height pins the line-number gutter alignment — a fixed
         // layout metric (matches the prototype), not a typography token.
-        <div key={i} className="flex min-h-[18px] font-mono text-label" style={{ lineHeight: '18px' }}>
-          <span className="w-10 flex-shrink-0 select-none pr-3 text-right text-caption text-mf-text-3">
-            {start + i}
-          </span>
+        <div key={i} className="flex min-h-[18px] font-mono text-xs" style={{ lineHeight: '18px' }}>
+          <span className="w-10 shrink-0 select-none pr-3 text-right text-xs text-muted-foreground">{start + i}</span>
           <span className="flex-1 whitespace-pre pr-3 text-foreground">{line}</span>
         </div>
       ))}
@@ -70,12 +68,11 @@ export function SnippetBlock({ id, lines, start }: { id: string; lines: readonly
       </div>
 
       {collapsed && (
-        // Matches the fade pattern in ReadMoreBubble — inline gradient, not a
-        // Tailwind gradient-stop utility, since --mf-raised is a CSS var.
+        // The ramp has to end on the snippet's own fill, so it names the token
+        // the container uses (`bg-muted`) rather than a gradient-stop utility.
         <div
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-0 right-0 h-6"
-          style={{ background: 'linear-gradient(to bottom, transparent, var(--mf-raised))' }}
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-[linear-gradient(to_bottom,transparent,var(--muted))]"
         />
       )}
 
@@ -84,7 +81,7 @@ export function SnippetBlock({ id, lines, start }: { id: string; lines: readonly
           data-testid={`chat-user-snippet-expand-${id}`}
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-px flex w-full items-center justify-center gap-[5px] border-t-[0.5px] border-border bg-mf-content2 py-[7px] text-caption font-semibold text-primary hover:bg-mf-raised"
+          className="mt-px flex w-full items-center justify-center gap-1 border-t border-border bg-card py-1.5 text-xs font-semibold text-primary hover:bg-muted"
         >
           {expanded ? 'Collapse' : `Show all ${lines.length} lines`}
           {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}

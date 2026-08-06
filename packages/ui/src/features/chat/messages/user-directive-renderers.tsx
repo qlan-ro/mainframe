@@ -18,9 +18,11 @@ import { mainframeUserFormatter, mainframeUserInlineFormatter } from './user-dir
 
 const COMPLETE = { type: 'complete' } as const;
 
-/** The toolbar branch-chip shape on directive inks, so a reference reads as the same object class. */
+/** The toolbar chip shape, so a reference reads as the same object class. On v2
+ *  this is `Badge variant="outline"` geometry with a `muted` fill — `accent` is
+ *  already an alpha token, so a fill modifier on it compounds toward invisible. */
 const SESSION_CHIP =
-  'inline-flex h-[22px] min-w-0 max-w-[230px] items-center gap-[5px] rounded-[6px] border-[0.5px] border-solid border-border bg-mf-chip px-[6px] align-middle font-mono text-label font-normal text-mf-directive-session';
+  'inline-flex h-5 min-w-0 max-w-[230px] items-center gap-1 rounded-4xl border border-border bg-muted px-2 align-middle font-mono text-xs font-normal text-muted-foreground';
 
 /**
  * A session reference, shown as its disambiguated label. The path and project

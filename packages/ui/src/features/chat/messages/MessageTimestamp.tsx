@@ -13,7 +13,7 @@ export function MessageTimestamp() {
   if (!createdAt) return null;
   const label = createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return (
-    <span data-testid="chat-message-timestamp" className="font-mono text-caption tabular-nums text-mf-text-3">
+    <span data-testid="chat-message-timestamp" className="font-mono text-xs tabular-nums text-muted-foreground">
       {label}
     </span>
   );

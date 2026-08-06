@@ -21,9 +21,9 @@ export interface ReadMoreBubbleProps {
 /**
  * Clamps long message content behind a "Read more" button.
  *
- * The fade overlay sits above the last visible line and uses
- * `--mf-um-fade` (the solid end-stop of the card gradient) so the
- * transition looks seamless on both light and dark skins.
+ * The fade overlay sits above the last visible line and has to end on the
+ * bubble's OWN fill, which is why that fill has a token (`--bubble-tinted`):
+ * the background token would resolve to the thread and leave a visible seam.
  */
 export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
   return (
@@ -31,9 +31,9 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
       measureText={extractText(children)}
       threshold={600}
       clampLines={4}
-      fadeColor="var(--mf-um-fade)"
+      fadeColor="var(--bubble-tinted)"
       fadeOffsetClass="bottom-6"
-      contentClassName="aui-md text-body leading-loose tracking-tight"
+      contentClassName="aui-md"
       contentProps={{ 'data-text-part': '' }}
       className={className}
       testId="chat-user-readmore-toggle"

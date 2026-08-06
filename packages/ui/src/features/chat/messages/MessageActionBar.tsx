@@ -17,9 +17,9 @@
 import type { FC } from 'react';
 import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { cn } from '@v2/lib/utils';
 
 // ── Shared ghost icon button with tooltip ────────────────────────────────────
 
@@ -33,7 +33,7 @@ interface IconButtonProps {
 const ActionIconButton = ({ tooltip, children, className, ...rest }: IconButtonProps) => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <Button variant="ghost" size="icon-sm" className={cn('text-muted-foreground', className)} {...rest}>
+      <Button variant="ghost" size="icon-xs" className={cn('text-muted-foreground', className)} {...rest}>
         {children}
       </Button>
     </TooltipTrigger>
@@ -47,10 +47,10 @@ const CopyButton: FC = () => (
   <ActionBarPrimitive.Copy asChild>
     <ActionIconButton tooltip="Copy" data-testid="chat-message-copy">
       <AuiIf condition={(s) => s.message.isCopied}>
-        <CheckIcon className="size-3.5" />
+        <CheckIcon />
       </AuiIf>
       <AuiIf condition={(s) => !s.message.isCopied}>
-        <CopyIcon className="size-3.5" />
+        <CopyIcon />
       </AuiIf>
     </ActionIconButton>
   </ActionBarPrimitive.Copy>
@@ -64,9 +64,9 @@ const MoreMenu: FC = () => (
       <ActionIconButton
         tooltip="More"
         data-testid="chat-message-more"
-        className="data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
+        className="data-[state=open]:bg-muted data-[state=open]:text-foreground"
       >
-        <MoreHorizontalIcon className="size-3.5" />
+        <MoreHorizontalIcon />
       </ActionIconButton>
     </ActionBarMorePrimitive.Trigger>
 
@@ -74,9 +74,8 @@ const MoreMenu: FC = () => (
       side="bottom"
       align="start"
       className={cn(
-        'z-50 min-w-36 overflow-hidden rounded-lg border border-border',
-        'bg-popover text-popover-foreground p-1',
-        'shadow-[var(--mf-shadow-pop)]',
+        'z-50 min-w-36 overflow-hidden rounded-md border border-border p-1',
+        'bg-popover text-popover-foreground shadow-md',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -87,12 +86,13 @@ const MoreMenu: FC = () => (
           data-testid="chat-message-export"
           className={cn(
             'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
-            'text-body outline-none transition-colors',
-            'focus:bg-accent focus:text-accent-foreground',
+            'text-sm outline-none transition-colors',
+            'focus:bg-muted focus:text-foreground',
             'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+            "[&_svg:not([class*='size-'])]:size-4",
           )}
         >
-          <DownloadIcon className="size-3.5 shrink-0" />
+          <DownloadIcon className="shrink-0" />
           Export as Markdown
         </ActionBarMorePrimitive.Item>
       </ActionBarPrimitive.ExportMarkdown>

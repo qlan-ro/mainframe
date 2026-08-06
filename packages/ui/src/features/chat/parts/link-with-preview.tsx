@@ -102,7 +102,7 @@ export function LinkWithPreview({
           className={cn(
             'shrink-0 px-1.5 py-0.5 rounded-sm',
             'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',
-            'transition-colors text-caption',
+            'transition-colors text-xs',
           )}
         >
           {copied ? 'Copied' : 'Copy'}

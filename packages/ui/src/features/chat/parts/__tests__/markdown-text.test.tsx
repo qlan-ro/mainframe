@@ -259,13 +259,15 @@ describe('markdownComponents link underline', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Markdown body tracking — tracking-tight applied to the .aui-md container.
+// Markdown body tracking — v1's uniform `tracking-tight` was a warm-chrome
+// choice; v2 prose runs at the stock tracking its 13px body rung was measured
+// for, so the root class only marks the prose container.
 // ---------------------------------------------------------------------------
 
 describe('MarkdownText container tracking', () => {
-  it('exports MARKDOWN_ROOT_CLASS with tracking-tight applied', () => {
-    expect(MARKDOWN_ROOT_CLASS).toContain('tracking-tight');
+  it('exports MARKDOWN_ROOT_CLASS marking the prose container, with no tracking override', () => {
     expect(MARKDOWN_ROOT_CLASS).toContain('aui-md');
+    expect(MARKDOWN_ROOT_CLASS).not.toContain('tracking-');
   });
 });
 

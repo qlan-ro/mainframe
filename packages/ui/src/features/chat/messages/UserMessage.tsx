@@ -1,15 +1,12 @@
 /**
- * UserMessage — the "cool card" user turn for the warm-chrome theme.
+ * UserMessage — the user turn, on the v2 chat kit.
  *
- * Visual contract (§5.1, component-map.md):
- *   - `--mf-um-card` gradient background  (set via inline style — it's a gradient,
- *     not a solid color, so `bg-*` Tailwind utilities can't address it)
- *   - `--mf-um-edge` hairline border
- *   - `--mf-um-ink` text color
- *   - radius `xl` (13px)
- *   - 0.5px box-shadow for soft lift
- *   - right-aligned, max-width 75% of thread
- *   - long unbreakable tokens wrap (overflow-wrap) — the card is the containment boundary
+ * The shell is `Message align="end"` › `MessageContent` › `Bubble variant="tinted"`
+ * › `BubbleContent`: aui supplies the message state, the kit supplies the pixels.
+ * `tinted` is the kit's soft-primary fill — the v2 analogue of the warm-chrome
+ * `--mf-um-card` gradient this replaced. The 470px cap is kept over the kit's
+ * relative `max-w-[80%]`: at this column width 80% measures ~582px, and the
+ * absolute cap is a deliberate app value (an e2e case pins it).
  *
  * Variants rendered by this file:
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
@@ -35,7 +32,9 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Wrench, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Message, MessageContent } from '@v2/components/ui/message';
+import { Bubble, BubbleContent } from '@v2/components/ui/bubble';
+import { Badge } from '@v2/components/ui/badge';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { useChatExtras, useChatQueuedMessages } from '../runtime/use-chat-thread-runtime';
@@ -58,38 +57,19 @@ import { parsePlanUserMessage } from './plan-message';
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cool-card shell
+// Bubble shell
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CARD_STYLE = {
-  background: 'var(--mf-um-card)',
-  boxShadow: 'var(--mf-shadow-user-card)',
-} as const;
-
-interface CoolCardProps {
-  children: ReactNode;
-  className?: string;
-}
-
-function CoolCard({ children, className }: CoolCardProps) {
+function UserBubble({ children }: { children: ReactNode }) {
   return (
-    <div
-      data-testid="chat-user-bubble"
-      style={CARD_STYLE}
-      className={cn(
-        'relative max-w-[470px] rounded-xl border-[0.5px] px-[15px] py-[10px]',
-        'border-mf-um-edge text-mf-um-ink',
-        'text-body leading-loose tracking-tight break-words',
-        className,
-      )}
-    >
-      {children}
-    </div>
+    <Bubble variant="tinted" align="end" className="max-w-[470px]">
+      <BubbleContent data-testid="chat-user-bubble">{children}</BubbleContent>
+    </Bubble>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Slash (command / skill) pill — metadata-driven leading badge
+// Slash (command / skill) badge — metadata-driven leading badge
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SlashPillProps {
@@ -97,19 +77,14 @@ interface SlashPillProps {
   name: string;
 }
 
+/** The GLYPH carries the kind (wrench = command, zap = skill); one Badge variant
+ *  serves both, so the two `mf-directive-*` tints are gone. */
 function SlashPill({ kind, name }: SlashPillProps) {
   const Icon = kind === 'command' ? Wrench : Zap;
-  const colorClass = kind === 'command' ? 'text-primary' : 'text-mf-directive-skill';
-  const bgClass = kind === 'command' ? 'bg-mf-directive-command-tint' : 'bg-mf-directive-skill-tint';
-
   return (
-    // Design 7.5: padding 2px 8px 2px 6px, gap 5, marginRight 8 — py-0.5 (2px)
-    // and pl-1.5 (6px) already match the compressed scale; mr-4/pr-4 hit the
-    // exact 8px tokens, gap-[5px] has no matching integer step (arbitrary).
-    <span className={cn('mr-4 inline-flex items-center gap-[5px] rounded-md py-0.5 pl-1.5 pr-4', bgClass)}>
-      <Icon size={12} className={colorClass} />
-      <span className={cn('font-mono text-label font-semibold', colorClass)}>/{name}</span>
-    </span>
+    <Badge variant="secondary" className="mr-2 align-middle font-mono font-semibold">
+      <Icon data-icon="inline-start" />/{name}
+    </Badge>
   );
 }
 
@@ -217,68 +192,66 @@ function UserMessageImpl() {
   const hasExtras = imageParts.length > 0 || attachmentCount > 0;
 
   return (
-    <MessagePrimitive.Root
-      data-testid="chat-user-message"
-      data-message-id={messageId}
-      // Design 7.7: marginBottom 16 to the next transcript element — pb-6
-      // hits the compressed 16px token; pt-2 (4px) is the existing top gap.
-      className="flex flex-col items-end gap-2 pt-2 pb-6"
-    >
-      {reviewCard}
+    <MessagePrimitive.Root data-testid="chat-user-message" data-message-id={messageId} className="pt-1 pb-4">
+      <Message align="end">
+        <MessageContent>
+          {reviewCard}
 
-      {isQueued ? (
-        (body || hasExtras) && (
-          <QueuedUserTurn
-            messageId={messageId}
-            content={cleanText}
-            extrasSlot={extras}
-            position={queuePos}
-            total={queueTotal}
-          >
-            {body}
-          </QueuedUserTurn>
-        )
-      ) : planBody ? (
-        // The gate shell's max-width cap should govern the record's width, not
-        // the root's `items-end` alignment — an explicit full-width wrapper
-        // escapes the flex item's default shrink-to-fit sizing.
-        <div className="w-full">
-          <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
-        </div>
-      ) : (
-        <>
-          {body && <CoolCard>{body}</CoolCard>}
-          {extras}
-        </>
-      )}
-
-      {sendError != null && (
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            <span data-testid="chat-user-message-send-failed" className="text-label text-destructive">
-              Failed to send
-            </span>
-            {/* Retry re-sends the text only, so it would silently drop the
-                attachments the runtime just put back into the composer. */}
-            {retryClientId && chatExtras && !meta.attachmentsRestored && (
-              <button
-                type="button"
-                data-testid="chat-user-message-retry"
-                onClick={() => void chatExtras.retryMessage(retryClientId)}
-                className="text-label font-medium text-primary hover:underline"
+          {isQueued ? (
+            (body || hasExtras) && (
+              <QueuedUserTurn
+                messageId={messageId}
+                content={cleanText}
+                extrasSlot={extras}
+                position={queuePos}
+                total={queueTotal}
               >
-                Retry
-              </button>
-            )}
-          </div>
-          <p
-            data-testid="chat-user-message-send-error"
-            className="max-w-[470px] break-words text-right text-label text-muted-foreground"
-          >
-            {sendError}
-          </p>
-        </div>
-      )}
+                {body}
+              </QueuedUserTurn>
+            )
+          ) : planBody ? (
+            // The gate shell's max-width cap should govern the record's width,
+            // not MessageContent's end-alignment of its slotted children — an
+            // explicit full-width wrapper escapes the shrink-to-fit sizing.
+            <div className="w-full">
+              <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+            </div>
+          ) : (
+            <>
+              {body && <UserBubble>{body}</UserBubble>}
+              {extras}
+            </>
+          )}
+
+          {sendError != null && (
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <span data-testid="chat-user-message-send-failed" className="text-xs text-destructive">
+                  Failed to send
+                </span>
+                {/* Retry re-sends the text only, so it would silently drop the
+                    attachments the runtime just put back into the composer. */}
+                {retryClientId && chatExtras && !meta.attachmentsRestored && (
+                  <button
+                    type="button"
+                    data-testid="chat-user-message-retry"
+                    onClick={() => void chatExtras.retryMessage(retryClientId)}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+              <p
+                data-testid="chat-user-message-send-error"
+                className="max-w-[470px] wrap-break-word text-right text-xs text-muted-foreground"
+              >
+                {sendError}
+              </p>
+            </div>
+          )}
+        </MessageContent>
+      </Message>
     </MessagePrimitive.Root>
   );
 }

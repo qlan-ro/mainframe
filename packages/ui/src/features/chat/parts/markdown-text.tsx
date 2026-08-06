@@ -72,11 +72,11 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
     <code
       className={cn(
         'aui-md-inline-code',
-        // Dedicated warm-brown inline-code fg token (design #7a4d2a light);
-        // distinct from the fenced-code-block `mf-code-fg` token.
-        'bg-mf-raised text-mf-code-inline-fg',
-        'rounded-xs border border-border px-1.5 py-0.5',
-        'font-mono text-label',
+        // `mf-code-inline-fg` stays: the code palette is deliberately
+        // bridge-owned (see the v2 ledger), unlike the surface it sits on.
+        'bg-muted text-mf-code-inline-fg',
+        'rounded-sm border border-border px-1.5 py-0.5',
+        'font-mono text-xs',
         className,
       )}
       {...props}
@@ -105,19 +105,20 @@ function SmartActionSpan({ children, ...props }: React.ComponentProps<'span'>) {
 // ── Component map ─────────────────────────────────────────────────────────────
 
 export const markdownComponents = unstable_memoizeMarkdownComponents({
-  // Design: all heading levels share one flat top margin (mt-0.5); size alone
-  // differentiates level — no per-level margin scale.
+  // All heading levels share one flat top margin (mt-0.5). On the v2 scale the
+  // top two levels carry the size step (18/16) and the bottom two the weight
+  // step, since `text-sm` (13px) is the body rung and nothing sits between.
   h1: ({ className, ...props }) => (
-    <h1 className={cn('aui-md-h1 text-title font-bold mt-0.5 mb-2 first:mt-0', className)} {...props} />
+    <h1 className={cn('aui-md-h1 text-lg font-bold mt-0.5 mb-2 first:mt-0', className)} {...props} />
   ),
   h2: ({ className, ...props }) => (
-    <h2 className={cn('aui-md-h2 text-heading font-bold mt-0.5 mb-1.5 first:mt-0', className)} {...props} />
+    <h2 className={cn('aui-md-h2 text-base font-bold mt-0.5 mb-1.5 first:mt-0', className)} {...props} />
   ),
   h3: ({ className, ...props }) => (
-    <h3 className={cn('aui-md-h3 text-body font-bold mt-0.5 mb-1 first:mt-0', className)} {...props} />
+    <h3 className={cn('aui-md-h3 text-sm font-bold mt-0.5 mb-1 first:mt-0', className)} {...props} />
   ),
   h4: ({ className, ...props }) => (
-    <h4 className={cn('aui-md-h4 text-body font-semibold mt-0.5 mb-1 first:mt-0', className)} {...props} />
+    <h4 className={cn('aui-md-h4 text-sm font-semibold mt-0.5 mb-1 first:mt-0', className)} {...props} />
   ),
   p: ({ className, ...props }) => (
     <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
@@ -163,8 +164,9 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
 
 const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkAppLinks, remarkSmartActions];
 
-// Design: the whole markdown block sets a uniform tight letter-spacing.
-export const MARKDOWN_ROOT_CLASS = 'aui-md tracking-tight';
+// v1's uniform `tracking-tight` is gone: it was a warm-chrome choice, and v2
+// prose runs at the stock tracking its 13px body rung was measured for.
+export const MARKDOWN_ROOT_CLASS = 'aui-md';
 
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
 

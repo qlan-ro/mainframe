@@ -15,7 +15,7 @@ import type { ComponentProps } from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Unordered dot: a 5px round dot in `mf-text-3`, centered in the 22px hung
+// Unordered dot: a 5px round dot in `muted-foreground`, centered in the 22px hung
 // marker gutter (`pl-[22px]` on the `li`), rendered via an absolutely
 // positioned `::before` pseudo-element on each direct `li` child (no per-item
 // context needed — CSS handles it from the `ul` down). Excludes task-list
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 const UL_MARKER_CLASS =
   '[&>li:not(.task-list-item)]:before:content-[""] [&>li:not(.task-list-item)]:before:absolute' +
   ' [&>li:not(.task-list-item)]:before:size-[5px] [&>li:not(.task-list-item)]:before:rounded-full' +
-  ' [&>li:not(.task-list-item)]:before:bg-mf-text-3' +
+  ' [&>li:not(.task-list-item)]:before:bg-muted-foreground' +
   ' [&>li:not(.task-list-item)]:before:left-[8.5px] [&>li:not(.task-list-item)]:before:top-[7px]';
 
 // Ordered index: a mono, bold, accent 2-digit counter, rendered the same way —
@@ -33,7 +33,7 @@ const OL_MARKER_CLASS =
   '[counter-reset:aui-md-ol] [&>li]:[counter-increment:aui-md-ol]' +
   ' [&>li]:before:content-[counter(aui-md-ol,decimal-leading-zero)]' +
   ' [&>li]:before:font-mono [&>li]:before:font-bold [&>li]:before:text-primary' +
-  ' [&>li]:before:text-caption [&>li]:before:absolute [&>li]:before:left-0' +
+  ' [&>li]:before:text-xs [&>li]:before:absolute [&>li]:before:left-0' +
   ' [&>li]:before:w-[22px]';
 
 export function MarkdownUl({ className, ...props }: ComponentProps<'ul'>) {
@@ -58,7 +58,8 @@ export function MarkdownLi({ className, children, ...props }: ComponentProps<'li
         'aui-md-li relative pl-[22px] leading-relaxed mt-1',
         // Checked task items get a line-through label: :has() reaches the
         // sibling checkbox's data-checked state without per-item React context.
-        isTask && 'aui-md-li-task has-[[data-checked=true]]:text-muted-foreground has-[[data-checked=true]]:line-through',
+        isTask &&
+          'aui-md-li-task has-[[data-checked=true]]:text-muted-foreground has-[[data-checked=true]]:line-through',
         className,
       )}
       {...props}
@@ -81,7 +82,7 @@ export function MarkdownTaskCheckbox({ checked, ...props }: ComponentProps<'inpu
         // checkbox is the only marker-like glyph and sits inline at the
         // start of the text run, nudged down to align with the label).
         'inline-flex size-[15px] shrink-0 translate-y-[2px] items-center justify-center rounded-xs border-[1.5px] me-1.5',
-        checked ? 'border-mf-success bg-mf-success' : 'border-border bg-transparent',
+        checked ? 'border-success bg-success' : 'border-border bg-transparent',
       )}
     >
       {checked ? <Check size={11} className="text-white" strokeWidth={3} /> : null}

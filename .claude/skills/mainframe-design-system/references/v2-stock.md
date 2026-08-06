@@ -379,6 +379,55 @@ insertion does; and any measurement of that path must add a node, or it measures
 kit's per-item `[content-visibility:auto] [contain-intrinsic-size:auto_10rem]` is plain CSS — it can be
 applied to aui message rows on its own merits, without the scroller.
 
+### Thread skeleton (Phase 2)
+
+Message rows are `Message align=…` › `MessageContent` › (user) `Bubble variant="tinted"` ›
+`BubbleContent`. aui's `MessagePrimitive.Root` stays the outer element — it carries `data-message-id`,
+which in-chat Find walks — and the kit's `Message` provides the `group/message` the footer keys off.
+
+- **The user bubble keeps its 470px cap over the kit's `max-w-[80%]`.** Measured: 80% resolves to
+  ~582px in the thread column, and an e2e case pins the absolute value. Overriding a primitive's
+  `max-w` is layout, not chrome, so it belongs at the call site.
+- **`--bubble-tinted` is a new token.** Upstream inlines the tinted fill as a bare `oklch(from …)`
+  twice, once per mode; the user bubble's read-more fade has to END on that exact fill, and an inline
+  expression gives the fade no way to follow the mode. `bubble.tsx` reads the token too. Measured
+  contrast against `foreground`: **10.03:1 light, 10.72:1 dark**.
+- **System notes are `Marker variant="separator"`** — a centered label between two hairlines,
+  replacing three hand-rolled `rounded-full` pills. The `chat-compaction-pill` /
+  `chat-compacting-pill` testids predate the recipe and are kept; e2e keys off them.
+- **DegradedChatCard is ONE recipe now** (user decision): a destructive `Alert` per cause plus a
+  single row of `Button variant="outline"`. The three banners used to differ in chrome, which read as
+  three features. Paths inside it stay `break-all`, not `wrap-break-word` — an absolute path is one
+  unbreakable token in a narrow card.
+- **Attachments are the kit's `Attachment` compound**; the hand-rolled thumb and file pill are gone.
+  The only per-extension signal the kit lacks is the ext accent, which survives as an inline tint on
+  `AttachmentMedia` (`file-ext-colors.ts` — no token exists per extension, by design).
+- **A glyph carries the kind, one variant carries the chrome.** The slash-command pill is a single
+  `Badge variant="secondary"` with a wrench (command) or zap (skill), so `mf-directive-command-tint`
+  and `mf-directive-skill-tint` are gone — same rule the workspace tab strip already follows.
+- **`warning` is not "working".** The running indicator and the queued-turn dot moved off amber onto
+  `primary`: in v2 `warning` means wrong-but-not-broken, and neither state is wrong.
+- **Markdown headings split the scale across size and weight** — h1 `text-lg`, h2 `text-base`, h3
+  `text-sm font-bold`, h4 `text-sm font-semibold`, because `text-sm` (13px) is the body rung and
+  nothing sits between it and `text-base`. v1's uniform `tracking-tight` on `.aui-md` is gone; it was
+  a warm-chrome choice.
+- **Inside a tooltip the secondary ink is `text-background/70`, never `muted-foreground`** — the
+  tooltip inverts `foreground` into its fill, so the muted ink vanishes on it (MessageTiming).
+- **The action bar's buttons are `icon-xs` (24px), not `icon-sm` (32px)** — they sit in the 24px
+  reserved footer row, which `icon-sm` overflows.
+- Tests: any suite rendering a component that uses the **v2** `Hint` needs the **v2**
+  `TooltipProvider` as a wrapper; the v1 provider satisfies nothing. This caught
+  `ReviewCommentCard.test.tsx` (18 failures, all one missing wrapper) and one case in
+  `instruction-chip.test.tsx`.
+
+**Left for later phases, deliberately:** `PlanBubble` (shares `GateCardShell` with the gate cards, so
+it converts with them) and `MessagePathContextMenu` (the last v1 `context-menu` consumer on this
+surface).
+
+**Pre-existing breakage found, NOT caused by this port:** `src/styles/__tests__/contrast.test.ts`
+reads `src/styles/globals.css`, which no longer exists — the guardrail has been inert since the v1
+sheet was deleted, so no color token added since then has been checked by it.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:

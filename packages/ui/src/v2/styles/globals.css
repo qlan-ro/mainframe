@@ -34,6 +34,12 @@
    selected session row reads as a blue wash, and stock's `sidebar-accent` is
    the neutral hover, which would make hovered and selected rows identical.
 
+   `--bubble-tinted` is the chat kit's soft-primary bubble fill, which upstream
+   inlines as a bare `oklch(from …)` expression twice (once per mode). A user
+   bubble that clamps needs its fade to END on that exact fill, and an inline
+   expression gives the fade no way to follow the mode — so the fill gets a
+   name, declared per theme, and `bubble.tsx` reads it too.
+
    Nothing else Mainframe-specific lives here on purpose: the point of the
    clone is to see the stock baseline before anything is added back. The old
    warm-chrome sheet is NOT imported — no schemes, no window styles, no mf-*
@@ -66,6 +72,7 @@
   --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-bubble-tinted: var(--bubble-tinted);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -125,6 +132,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.62 0.16 150);
   --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --bubble-tinted: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--primary);
@@ -163,6 +171,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.75 0.17 150);
   --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --bubble-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: var(--primary);
