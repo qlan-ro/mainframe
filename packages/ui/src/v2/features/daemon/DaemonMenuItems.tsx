@@ -2,10 +2,10 @@
  * The switcher dropdown's body: the fallback banner, the local row, and the
  * remote section with its per-daemon manage submenu.
  *
- * The shipped picker is a hand-built 324px card over `components/ui/menu`; this
- * is the stock team-switcher shape, so a remote's manage actions live in a
- * `DropdownMenuSub` rather than a nested popover. "Add remote daemon…" and
- * "Re-pair…" open the legacy pairing dialog until that flow is ported.
+ * The v1 picker this replaced was a hand-built 324px card; this is the stock
+ * team-switcher shape, so a remote's manage actions live in a `DropdownMenuSub`
+ * rather than a nested popover. "Add remote daemon…" and "Re-pair…" open the
+ * legacy pairing dialog until that flow is ported.
  */
 import {
   CheckIcon,

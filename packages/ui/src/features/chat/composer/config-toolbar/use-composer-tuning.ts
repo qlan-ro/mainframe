@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Composer tuning hooks — data layer for EffortPicker + FeaturesPopover.
+ * Composer tuning hooks — data layer for ComposerToolbar and the per-model
+ * effort/options flyout in ModelMenuRow.
  *
  * Three independent concerns:
  *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded

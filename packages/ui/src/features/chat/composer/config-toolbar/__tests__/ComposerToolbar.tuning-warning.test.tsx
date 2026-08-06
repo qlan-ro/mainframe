@@ -146,7 +146,7 @@ async function openModelPicker(): Promise<void> {
  * Effort now lives in the model row's hover flyout, not a chip of its own.
  * Hover opens it; clicking the row would choose the model and close the menu.
  */
-async function openEffortPicker(): Promise<void> {
+async function openEffortFlyout(): Promise<void> {
   await userEvent.click(screen.getByTestId('composer-model-select'));
   await userEvent.hover(screen.getByTestId('composer-model-select-option-sonnet'));
   await screen.findByTestId('composer-model-sonnet-effort-high');
@@ -221,7 +221,7 @@ describe('ComposerToolbar — effort change mid-session', () => {
     fakeAuiState.thread.messages = [A_MESSAGE];
     renderToolbar();
 
-    await openEffortPicker();
+    await openEffortFlyout();
     pickEffort('max');
     await screen.findByTestId('composer-tuning-warning');
 
@@ -235,7 +235,7 @@ describe('ComposerToolbar — effort change mid-session', () => {
     fakeAuiState.thread.messages = [A_MESSAGE];
     renderToolbar();
 
-    await openEffortPicker();
+    await openEffortFlyout();
     pickEffort('max');
     await screen.findByTestId('composer-tuning-warning');
 
@@ -266,7 +266,7 @@ describe('ComposerToolbar — no warning before the first message', () => {
     {
       label: 'effort change',
       pick: async () => {
-        await openEffortPicker();
+        await openEffortFlyout();
         pickEffort('max');
       },
       assertApplied: () =>
@@ -295,7 +295,7 @@ describe('ComposerToolbar — no-op re-pick', () => {
     fakeExtras.state.chatConfig = makeChat({ effort: 'high' });
     renderToolbar();
 
-    await openEffortPicker();
+    await openEffortFlyout();
     pickEffort('high');
 
     expect(screen.queryByTestId('composer-tuning-warning')).toBeNull();

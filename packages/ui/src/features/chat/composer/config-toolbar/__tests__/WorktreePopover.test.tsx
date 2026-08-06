@@ -419,7 +419,7 @@ describe('WorktreePopover — trigger shape', () => {
 
 // ---------------------------------------------------------------------------
 // 10. Isolated-state indicator — absolute 5px corner dot (design 03-content.jsx:602),
-//     matching the FeaturesPopover treatment, not an inline Check glyph.
+//     not an inline Check glyph.
 // ---------------------------------------------------------------------------
 
 describe('WorktreePopover — isolated-state indicator', () => {
