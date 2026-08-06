@@ -2,9 +2,10 @@
  * §chat-header — ChatCardHeader (the chat surface's own header row) specs.
  *
  * Cluster B, spec #14 of docs/plans/2026-07-03-tauri-e2e-test-plan.md. New surface
- * (no legacy 1:1 predecessor) — covers the model chip, the context meter +
- * percentage, the worktree-gated Review button, the split-right/split-down
- * controls, and the dynamic-floor Hide-Chat control.
+ * (no legacy 1:1 predecessor) — covers the model chip, the worktree-gated Review
+ * button, the split-right/split-down controls, and the dynamic-floor Hide-Chat
+ * control. The context meter left this header in the right-sidebar revamp (T5.5);
+ * see session-panel.spec.ts.
  *
  * Source read: packages/ui/src/features/chat/thread/{ChatCardHeader,ChatSessionInline}.tsx,
  * packages/ui/src/store/layout.ts, packages/ui/src/store/intent-subscriber.ts,
@@ -18,8 +19,6 @@
  * Testid reference (all verified against source):
  *   chat-header                — header root (real chat)
  *   chat-header-model           — adapter dot + model label (ChatSessionInline part="model")
- *   chat-header-context         — 8-segment context meter (part="status")
- *   chat-header-context-pct     — context percentage text, e.g. "42%"
  *   chat-header-review          — Review button, disabled without a worktree
  *   chat-header-pr-<number>     — per-PR chip (needs PR detection — unseedable, see skip below)
  *   chat-header-split-right     — place the Workspace beside Chat in the top row
@@ -37,19 +36,24 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
-// ─── Model chip + context meter (needs the `chat-status` recording) ──────────
+// ─── Model chip ───────────────────────────────────────────────────────────────
+//
+// The context meter that used to share this describe is GONE (right-sidebar
+// revamp, T5.5): the header no longer reports context fill — the session panel's
+// Summary row does. Its coverage moved verbatim to session-panel.spec.ts's
+// "§session-panel — Summary rows", which is why that file carries the
+// `chat-status` recording this describe no longer needs.
 
-test.describe('§chat-header — model chip + context meter', () => {
+test.describe('§chat-header — model chip', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'chat-status' });
+    app = await launchTauriApp();
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
@@ -72,30 +76,6 @@ test.describe('§chat-header — model chip + context meter', () => {
     await expect(chip).toBeVisible({ timeout: 10_000 });
     const text = await chip.textContent();
     expect(text?.trim().length ?? 0).toBeGreaterThan(0);
-
-    // No usage data yet — the context meter must not render.
-    await expect(page.getByTestId('chat-header-context')).toHaveCount(0);
-  });
-
-  test('context meter and percentage appear after a turn, with a positive percentage', async () => {
-    const { page } = app;
-    // Same prompt as the legacy §32 chat-status-context spec — the recording replays
-    // an onMessage + onResult carrying real usage numbers for this exact turn.
-    await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
-    await waitForIdle(page, 60_000);
-
-    const meter = page.getByTestId('chat-header-context');
-    const pct = page.getByTestId('chat-header-context-pct');
-    await expect(meter).toBeVisible({ timeout: 10_000 });
-    await expect(pct).toBeVisible();
-
-    // Assert the percentage is a real positive number, not a specific tier —
-    // the tier boundaries (50/75/90%) are an implementation detail of segmentColor.
-    const text = await pct.textContent();
-    expect(text).toMatch(/^\d+%$/);
-    const value = Number(text!.replace('%', ''));
-    expect(value).toBeGreaterThan(0);
-    expect(value).toBeLessThanOrEqual(100);
   });
 });
 
