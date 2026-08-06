@@ -422,7 +422,102 @@ which in-chat Find walks — and the kit's `Message` provides the `group/message
 
 **Left for later phases, deliberately:** `PlanBubble` (shares `GateCardShell` with the gate cards, so
 it converts with them) and `MessagePathContextMenu` (the last v1 `context-menu` consumer on this
-surface).
+surface). Both landed in Phase 3 below.
+
+### Tool cards + gates (Phase 3)
+
+The engine is untouched — `GroupedParts`, the `tools.by_name` map, `ToolFallback`, subagent transcripts
+via `part.messages`, the shiki `CodeHeader`/`SyntaxHighlighter` slots, and the gates' queue-front-only
+reply seam all stand. This was skins.
+
+- **The family tile is deleted, and its six hues with it.** A 22px square tinted from one of
+  `--mf-tool-read/-search/-bash/-web` (plus `warning` for Edit and `success` for Write) read as six
+  features stacked down a transcript, and state was already carried by the trailing `StatusDot`. The
+  glyph now carries the family **by shape alone** — the same rule the workspace tab strip and the
+  slash-command badge follow. The four `--mf-tool-*` pairs are gone from the bridge. `warning` for
+  "Edit" was also just wrong: it means wrong-but-not-broken here.
+- **The marker-pill family is the `Marker variant="separator"` recipe** (MCP, worktree enter/exit,
+  schedule/cron/monitor, skill-loaded). `SystemMessage` already renders that recipe for compaction and
+  system notes, and these sit in the same column carrying the same role, so the bordered `rounded-full`
+  pill read as a different feature beside its own siblings — `SkillLoadedCard` is literally mounted BY
+  `SystemMessage`. The labels drop their mono too: prose notes, and mono is for hashes/hosts/ports/counts.
+  The `MarkerPill` name and props stay — it is the interactive element inside the row, and every card's
+  testid hangs off it.
+- **`GateButton` is deleted.** It was `Button variant="ghost"` plus a three-entry class map, and v2's
+  `default` / `outline` / `destructive` are those three kinds exactly — `destructive` is already the
+  tinted, non-shouty treatment the `danger` kind hand-mixed. A wrapper that re-specifies a primitive's
+  variants IS the wrong-component tell.
+- **The gate's live-card glow is `border-*/40 ring-3 ring-*/15`**, Radix's own focus vocabulary, so it
+  tracks light/dark for free. It replaced an inline `boxShadow` built from `color-mix(…)` per accent,
+  which could not, and which was the shell's only inline style.
+- **`GATE_BODY_INSET` replaces two magic `pl-[49px]`** — one exported constant computed from the head's
+  own gutter + tile + gap (`pl-[calc(1rem+1.5rem+0.625rem)]`), so a body row cannot drift from the title
+  column it aligns to.
+- **PlanGate drops its private markdown map** for the shared `markdownComponents` + PlanBubble's plugin
+  set. The gate preview and the durable PlanBubble record are the same plan and now render identically;
+  the duplicate map was also the last `mf-raised` consumer here.
+- **The permission payload dump moves off the terminal palette onto `bg-muted`** — the surface
+  `ToolFallback`'s args pre uses. It is a JSON dump, not terminal output; `mf-term-*` stays bridge-owned
+  for real terminals (BashCard's body legitimately keeps it, and an e2e case pins `text-mf-term-green`).
+- **`PlanExecModeControl` stays hand-rolled buttons, deliberately.** Every segment is `Hint`-wrapped, and
+  `TooltipTrigger asChild` overwrites the child's `data-state`, so `ToggleGroupItem`'s entire
+  `data-[state=on]:*` treatment would be dead and re-specified at the call site anyway. Radix
+  `type="single"` also swaps `aria-pressed` for `role="radio"`/`aria-checked`, and `gates.spec.ts` pins
+  `aria-pressed`. Chrome is the documented segmented recipe: `bg-muted` pad, active `bg-background shadow-sm`.
+- **`CopyMenuItem` moved to the v2 context menu, which flipped all three chat consumers at once**
+  (message paths, image copy, link menu) — the brief expected one. No v1 `context-menu` consumer remains
+  on this surface; `FileTreeRowMenu` and `EditorContextMenu` are what is left for Phase 5.
+- **The bridge's hand-rolled `shimmer`, `animate-collapsible-down/up` and `fill-mode-forwards` are
+  DELETED, not moved.** `tw-animate-css` — already imported by the v2 sheet — ships all three, with a
+  multi-framework content-height fallback and a `prefers-reduced-motion` reset ours lacked. Worse than
+  redundant: an unlayered class in the bridge outranks every layered utility, so the copies were silently
+  shadowing the library. Verified by compiling `app.css` with the real Tailwind CLI and reading the emitted
+  rules — do that rather than trusting that a class "works". (`mf-text-shimmer` survives: its one consumer
+  is ChatThread's running indicator, and swapping its look is a Phase 5 call.)
+- Tests: the v2-`TooltipProvider` trap hit **17 more suites** (every tool-card, every gate). Same fix,
+  same reason. `marker-pill.test.tsx` renders bare, so it shadows `render` with the wrapper.
+
+#### shadcn `Questionnaire` for AskUserQuestionGate — VERDICT: not adopted, pixels only
+
+Evaluated against `@shadcn/react@0.3.0`'s `questionnaire` primitive (reading the shipped `.d.ts` and
+dist, not the docs). Three findings, in order of weight:
+
+- **Its only value surface is native FormData.** `Questionnaire.Root` IS a `<form>`; there is no
+  `values` prop and no `onValuesChange`. Answers would have to be read back out of the form on submit,
+  while the gate needs a structured `AskAnswer[]` that `answers.ts` already assembles under test.
+- **Its Skip is per-question; ours answers the whole request.** `QuestionnaireSkip` marks one item
+  `skipped` (dropping its inputs' `name`, so they fall out of FormData) and advances. The gate's Skip
+  replies once with no answers and unmounts. Two different verbs at the same spot in the layout.
+- **Freeform is a sibling of the choices, not an "Other…" reveal.** An item is `answered` when any
+  choice is checked **or** the input is filled, so the `OTHER` sentinel — and `resolveChosen`'s rule that
+  Other-with-empty-text counts as unanswered — has no equivalent. Adopting it means changing the UX and
+  rewriting `answers.ts` plus its tests. `Root.items` must also be declared twice (a prop array AND the
+  rendered elements) or it dev-warns.
+
+What it does offer — per-choice letter/number shortcuts, `Progress`, internal index, aria — is real but
+not worth reinstating a days-old sub-1.0 dependency to own the gate's answer collection. Same reasoning
+that failed the MessageScroller. **What was adopted is the CSS:** `QuestionnaireChoice`'s row recipe
+(`min-h-11`, hairline `border-input`, `border-primary/40 bg-muted` when chosen, a `size-4` indicator with
+a filled dot) now styles `AskQuestionWizard`'s `OptionRow`. `@shadcn/react` stays uninstalled.
+
+#### `content-visibility` on message rows — VERDICT: not adopted (measured)
+
+400 synthetic rows in a 700px scroller, Playwright, `content-visibility: auto` +
+`contain-intrinsic-size: auto 10rem` per row vs none:
+
+| | off | on |
+|---|---|---|
+| full-list relayout | 2.6 ms | 0.4 ms |
+| `scrollHeight` | 53,216 px (real) | 73,480 px (**+38%**) |
+| off-screen `Range.getBoundingClientRect().top` | 50,565 | 69,805 |
+
+The Find worry was wrong — `Range.getBoundingClientRect()` forces layout on a skipped subtree and
+returns a real rect (16×89.5), so in-chat Find still paints and measures. The **scroll height** is what
+kills it: a 38% overestimate, because a 160px intrinsic placeholder stands in for a ~133px row, and this
+surface's rows run from a one-line marker to a 300-line diff card, so no single `contain-intrinsic-size`
+fixes it. Positions off by ~19,000px until the rows are actually visited is precisely the anchoring the
+Phase-1 spike spent its budget proving correct (`turnAnchor`, full-history re-seed without a jump,
+jump-to-bottom). 2.2 ms saved on a 400-message re-seed — under one frame — does not buy that.
 
 **Pre-existing breakage found, NOT caused by this port:** `src/styles/__tests__/contrast.test.ts`
 reads `src/styles/globals.css`, which no longer exists — the guardrail has been inert since the v1
