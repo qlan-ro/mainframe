@@ -31,6 +31,8 @@ import { useSessionFilters } from '@/store/session-filters';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
+// PROTOTYPE — remove with features/session-panel-prototype
+import { SessionPanelPrototype } from '@/features/session-panel-prototype/SessionPanelPrototype';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
@@ -137,8 +139,12 @@ export function ChatSurface({ port: _port }: { port: number }) {
       <ChatCardHeader />
       {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
           height — otherwise the sticky composer footer collapses/clips. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <ChatThread emptyState={welcome} />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ChatThread emptyState={welcome} />
+        </div>
+        {/* PROTOTYPE — remove with features/session-panel-prototype */}
+        <SessionPanelPrototype />
       </div>
     </div>
   );
