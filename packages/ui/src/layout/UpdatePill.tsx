@@ -54,7 +54,7 @@ export function UpdatePill() {
       disabled={status.state === 'downloading'}
       className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-primary/8 px-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-default"
     >
-      <Download className="size-3" aria-hidden />
+      <Download className="size-4" aria-hidden />
       <span>{label}</span>
     </button>
   );

@@ -11,7 +11,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { ListTodoIcon, SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
-import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail } from '@v2/components/ui/sidebar';
+import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@v2/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
@@ -87,6 +87,7 @@ function HeaderActions() {
       >
         <SettingsIcon />
       </Button>
+      <SidebarTrigger data-testid="sidebar-collapse" title="Hide sidebar" />
     </div>
   );
 }

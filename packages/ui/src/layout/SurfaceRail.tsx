@@ -57,7 +57,7 @@ export function SurfaceRail() {
                 isFloor && 'disabled:opacity-60',
               )}
             >
-              <Icon size={12} className={on ? activeColor : 'text-muted-foreground'} />
+              <Icon size={16} className={on ? activeColor : 'text-muted-foreground'} />
             </ToggleGroupItem>
           </Hint>
         );

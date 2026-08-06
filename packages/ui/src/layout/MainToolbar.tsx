@@ -51,10 +51,12 @@ function chipClass(open: boolean, isWorktree: boolean): string {
 function BranchChipContent({ branch, isWorktree }: { branch: string; isWorktree: boolean }) {
   return (
     <>
+      {/* Primary glyphs run 16px across the title bar — the sidebar header's
+          icon size; only secondary chevrons stay 12px. */}
       {isWorktree ? (
-        <FolderGit2 className="size-3 shrink-0 text-primary" />
+        <FolderGit2 className="size-4 shrink-0 text-primary" />
       ) : (
-        <GitBranch className="size-3 shrink-0 text-muted-foreground" />
+        <GitBranch className="size-4 shrink-0 text-muted-foreground" />
       )}
       <span className="truncate">{branch}</span>
       {isWorktree && (
@@ -152,7 +154,7 @@ export function MainToolbar({
               onClick={onExpandSidebar}
               className="text-muted-foreground"
             >
-              <SidebarLeftGlyph size={14} />
+              <SidebarLeftGlyph size={16} />
             </Button>
           </Hint>
         )}
@@ -225,7 +227,7 @@ export function MainToolbar({
             onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
             className="text-muted-foreground"
           >
-            <Search className="size-3.5" />
+            <Search className="size-4" />
             <kbd
               data-testid="main-toolbar-search-hint"
               className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-xs font-medium text-muted-foreground"
@@ -244,7 +246,7 @@ export function MainToolbar({
               onClick={() => openSetupAdvisor()}
               className="text-muted-foreground"
             >
-              <ScanSearch className="size-3.5" />
+              <ScanSearch className="size-4" />
             </Button>
           </Hint>
         )}
@@ -260,7 +262,7 @@ export function MainToolbar({
             onClick={toggleTheme}
             className="text-muted-foreground"
           >
-            {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+            {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
         </Hint>
         <Hint label="Toggle inspector">
@@ -276,7 +278,7 @@ export function MainToolbar({
               inspectorVisible ? 'bg-accent text-foreground' : 'text-muted-foreground',
             )}
           >
-            <SidebarRightGlyph size={14} />
+            <SidebarRightGlyph size={16} />
           </Toggle>
         </Hint>
       </div>
