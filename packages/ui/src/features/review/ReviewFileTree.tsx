@@ -12,14 +12,17 @@ import type { ReviewFile } from './git-status-to-files';
 /**
  * Square badge tint per semantic status (text + chip background).
  * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%).
- * Amber mf-warning + mf-diff-del-text stay: they belong to the git/diff color
- * family that lives with CmDiffEditor until the diff engine is ported.
+ * These are the app's ordinary status hues, not the diff engine's palette: the
+ * bridge's `mf-warning` / `mf-diff-del-text` were only ever here because v2
+ * `warning` used to be a destructive mix. Measured on the amber: the badge
+ * letter reads at 10.2–12.0:1 on every tint in both themes, so no bespoke
+ * add/del token is warranted.
  */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
   added: 'text-foreground bg-success/[12.16%]',
-  modified: 'text-foreground bg-mf-warning/[12.16%]',
-  deleted: 'text-foreground bg-mf-diff-del-text/[12.16%]',
-  renamed: 'text-foreground bg-mf-warning/[12.16%]',
+  modified: 'text-foreground bg-warning/[12.16%]',
+  deleted: 'text-foreground bg-destructive/[12.16%]',
+  renamed: 'text-foreground bg-warning/[12.16%]',
 };
 
 interface ReviewFileTreeProps {
@@ -39,11 +42,7 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
       {Array.from({ length: 5 }, (_, i) => {
         const frac = (i + 1) / 5;
         const color =
-          frac <= addFrac
-            ? 'bg-success'
-            : frac <= delFrac + 0.0001 && addFrac < frac
-              ? 'bg-mf-diff-del-text'
-              : 'bg-accent';
+          frac <= addFrac ? 'bg-success' : frac <= delFrac + 0.0001 && addFrac < frac ? 'bg-destructive' : 'bg-accent';
         return <span key={i} className={`size-[9px] rounded-[2px] ${color}`} />;
       })}
     </span>

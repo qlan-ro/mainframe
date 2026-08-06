@@ -21,5 +21,7 @@
     "hooks": "@v2/hooks"
   },
   "iconLibrary": "lucide",
-  "registries": {}
+  "registries": {
+    "@assistant-ui": "https://r.assistant-ui.com/{name}.json"
+  }
 }

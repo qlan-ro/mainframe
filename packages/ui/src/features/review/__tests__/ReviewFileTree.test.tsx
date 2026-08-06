@@ -50,6 +50,34 @@ describe('ReviewFileTree', () => {
     expect(screen.getByText('R')).toBeTruthy();
   });
 
+  // The badges used to straddle two token trees (v2 `success` beside bridge
+  // `mf-warning` / `mf-diff-del-text`). They are v2-only now that `warning` is a
+  // real amber, so pin the hue per status kind — a silent slide back to a bridge
+  // token is exactly what this catches.
+  it.each([
+    ['added', 'A', 'bg-success/[12.16%]'],
+    ['modified', 'M', 'bg-warning/[12.16%]'],
+    ['deleted', 'D', 'bg-destructive/[12.16%]'],
+    ['renamed', 'R', 'bg-warning/[12.16%]'],
+  ])('tints the %s badge with the v2 status hue', (_status, label, expected) => {
+    render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
+    expect(screen.getByText(label).className).toContain(expected);
+  });
+
+  it('paints the stat meter with v2 success and destructive, not bridge diff tokens', () => {
+    render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
+    const meter = screen.getByTestId('review-file-stat-src/a.ts');
+    const classes = [...meter.children].map((c) => c.className).join(' ');
+    expect(classes).toContain('bg-success');
+    expect(classes).toContain('bg-destructive');
+    expect(classes).not.toContain('mf-');
+  });
+
+  it('carries no bridge tokens anywhere in the tree', () => {
+    const { container } = render(<ReviewFileTree files={FILES} selectedFile="src/a.ts" onSelectFile={vi.fn()} />);
+    expect(container.innerHTML).not.toContain('mf-');
+  });
+
   it('renders a stat meter for each file', () => {
     render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
     for (const f of FILES) {

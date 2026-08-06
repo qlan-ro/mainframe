@@ -11,15 +11,22 @@ interface ExtMeta {
   label: string;
 }
 
+/**
+ * Hues are spread around the wheel so no two mapped types collide at a glance,
+ * and none of them may equal FALLBACK_META — a known type reading as "unknown"
+ * is the bug this map exists to prevent.
+ */
 const EXT_META: Record<string, ExtMeta> = {
   ts: { color: 'oklch(0.54 0.13 254)', label: 'TypeScript' },
   tsx: { color: 'oklch(0.54 0.13 254)', label: 'TypeScript' },
   js: { color: 'oklch(0.70 0.13 88)', label: 'JavaScript' },
   json: { color: 'oklch(0.65 0.12 73)', label: 'JSON' },
-  log: { color: 'oklch(0.56 0.01 286)', label: 'Log file' },
+  log: { color: 'oklch(0.58 0.11 320)', label: 'Log file' },
   md: { color: 'oklch(0.52 0.17 285)', label: 'Markdown' },
   css: { color: 'oklch(0.60 0.09 180)', label: 'Stylesheet' },
   png: { color: 'oklch(0.60 0.12 160)', label: 'Image' },
+  pdf: { color: 'oklch(0.55 0.19 27)', label: 'PDF' },
+  txt: { color: 'oklch(0.60 0.05 230)', label: 'Text file' },
 };
 const FALLBACK_META: ExtMeta = { color: 'oklch(0.56 0.01 286)', label: 'File' };
 

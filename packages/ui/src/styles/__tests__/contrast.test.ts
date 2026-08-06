@@ -228,12 +228,16 @@ describe('bridge alias integrity', () => {
     }
   });
 
-  it.each(THEMES)('mf-warning deliberately does NOT track v2 warning — %s', (theme) => {
-    // Amber means "caution" (the composer edit ring, git divergence); v2's warning
-    // means wrong-but-not-broken and is a destructive/muted mix. Keeping them
-    // apart is a decision, so it gets a test rather than a comment.
+  it.each(THEMES)('mf-warning tracks v2 warning — %s', (theme) => {
+    // These were held apart while v2 `warning` was a destructive/muted mix: amber
+    // means "caution" (the composer edit ring, git divergence) and a red-ish mix
+    // said something else, so the islands kept their own hue. v2 `warning` is a
+    // real amber now (2026-08-06), so caution is one colour app-wide and the two
+    // tokens must resolve identically per mode. The bridge keeps its own literal
+    // rather than a var() alias — the git/diff palette stays bridge-owned — so
+    // this is the thing that stops them drifting apart again.
     const t = resolve(theme);
-    expect(color(t, '--mf-warning')).not.toEqual(color(t, '--warning'));
+    expect(color(t, '--mf-warning'), `mf-warning should track warning (${theme})`).toEqual(color(t, '--warning'));
   });
 
   it.each(THEMES)('focus rings and selection are built from the accent — %s', (theme) => {
