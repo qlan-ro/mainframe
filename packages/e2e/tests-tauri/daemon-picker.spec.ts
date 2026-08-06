@@ -105,7 +105,7 @@ function remoteRow(page: Page) {
   return page.locator(`${DAEMON_ROW}:not([data-testid="daemon-row-local"])`);
 }
 function manageButton(page: Page) {
-  return page.locator('[data-testid$="-manage"]');
+  return page.locator(`[data-testid^="daemon-row-"][data-testid$="-manage"]`);
 }
 /** The ⋯ SubTrigger is the row's sibling, so it is reached by the row's own id
  *  rather than as a descendant. */
@@ -114,10 +114,10 @@ async function openManageMenu(page: Page, row: ReturnType<Page['locator']>): Pro
   await page.getByTestId(`${rowTestId}-manage`).click();
 }
 function renameMenuRow(page: Page) {
-  return page.locator('[data-testid$="-rename"]');
+  return page.locator(`[data-testid^="daemon-row-"][data-testid$="-rename"]`);
 }
 function removeMenuRow(page: Page) {
-  return page.locator('[data-testid$="-remove"]');
+  return page.locator(`[data-testid^="daemon-row-"][data-testid$="-remove"]`);
 }
 /** Scopes a remote row by a substring of its displayed `d.host` text (e.g. a
  *  port) — needed only while 2 remotes briefly coexist (the auto-switch test's

@@ -88,7 +88,7 @@ export function ContextSection({ port, open, onToggle, sectionRef }: ContextSect
       id="context"
       label="Context"
       icon={Layers}
-      count={count}
+      count={count > 0 ? count : undefined}
       open={open}
       onToggle={onToggle}
       sectionRef={sectionRef}

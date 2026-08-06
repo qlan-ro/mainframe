@@ -32,7 +32,7 @@ export function ContextFileItem({ path, displayName, badge, testId }: ContextFil
         onClick={() => emitSurfaceIntent({ type: 'open-file', path })}
         className={SUB_GROUP_ROW}
       >
-        <FileText size={12} className="shrink-0 text-muted-foreground" aria-hidden />
+        <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-sm">{fileName}</span>
         {badge && <Badge variant="outline">{badge}</Badge>}
       </button>
