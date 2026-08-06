@@ -16,8 +16,11 @@
 /* App theme overrides on top of the stock v2 preset. The preset's light
    sidebar is a zero-chroma gray, which reads yellowish beside blue-leaning
    content; a violet-leaning cool gray (#F5F5F8, hover #ECECEF — the
-   Linear/macOS chrome family) keeps it cool. Dark mode needs no correction. */
-:root {
+   Linear/macOS chrome family) keeps it cool. Dark keeps the stock values.
+   MUST stay scoped to light: a bare `:root` ties the v2 `.dark` block on
+   specificity, and stylesheet order (which HMR reshuffles) then decides the
+   winner — the dark sidebar rendered light whenever this sheet came last. */
+:root:not(.dark) {
   --sidebar: oklch(0.97 0.004 286);
   --sidebar-accent: oklch(0.945 0.004 286);
 }
