@@ -4,7 +4,8 @@
  * Strategy:
  *  - Mock @/lib/api/git so network calls never hit the wire.
  *  - Mock useDaemonPort to return a known port.
- *  - Render inside a TooltipProvider (trigger uses Tooltip).
+ *  - Render inside the **v2** TooltipProvider (the trigger is Hint-wrapped and
+ *    the v2 Hint carries no provider of its own; the v1 one satisfies nothing).
  *  - Open the popover by clicking the trigger (composer-worktree-trigger).
  *  - Radix Popover renders into a portal under document.body — all
  *    screen.getByTestId / screen.findByText queries work across the portal.
@@ -21,7 +22,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before component import
@@ -257,9 +258,10 @@ describe('WorktreePopover — Existing tab', () => {
 
     openPopover();
 
-    // Switch to Existing tab
+    // Switch to Existing tab. Radix `TabsTrigger` activates on mouse-DOWN, not
+    // click — a `click` here selects nothing and the New tab stays rendered.
     const existingTab = await screen.findByTestId('composer-worktree-tab-existing');
-    fireEvent.click(existingTab);
+    fireEvent.mouseDown(existingTab);
 
     expect(await screen.findByTestId('composer-worktree-attach-/wt/feat-a')).toBeInTheDocument();
   });
@@ -276,7 +278,7 @@ describe('WorktreePopover — attachWorktree call', () => {
     openPopover();
 
     const existingTab = await screen.findByTestId('composer-worktree-tab-existing');
-    fireEvent.click(existingTab);
+    fireEvent.mouseDown(existingTab);
 
     const row = await screen.findByTestId('composer-worktree-attach-/wt/feat-a');
     fireEvent.click(row);
@@ -333,7 +335,7 @@ describe('WorktreePopover — a turn in flight', () => {
     openPopover();
     await screen.findByTestId('composer-worktree-busy');
 
-    fireEvent.click(screen.getByTestId('composer-worktree-tab-existing'));
+    fireEvent.mouseDown(screen.getByTestId('composer-worktree-tab-existing'));
 
     const row = await screen.findByTestId('composer-worktree-attach-/wt/feat-a');
     expect(row).toBeDisabled();
@@ -445,7 +447,7 @@ describe('WorktreePopover — isolated-state indicator', () => {
     const dot = trigger.querySelector('span[aria-hidden]');
     expect(dot).not.toBeNull();
     expect(dot!.className).toContain('bg-primary');
-    expect(dot!.className).not.toContain('bg-mf-success');
+    expect(dot!.className).not.toContain('bg-success');
   });
 
   it('does NOT render the corner dot when not isolated', () => {
@@ -475,7 +477,7 @@ describe('WorktreePopover — isolated-state indicator', () => {
 
     const trigger = screen.getByTestId('composer-worktree-trigger');
     expect(trigger).toHaveAttribute('aria-label', 'Worktree: alpha');
-    expect(trigger.className).toContain('border-mf-success');
+    expect(trigger.className).toContain('border-success');
     expect(trigger.querySelector('span[aria-hidden]')).not.toBeNull();
   });
 
@@ -514,7 +516,7 @@ describe('WorktreePopover — draft mode stashes instead of calling the daemon',
     renderPopover(makeDraftChat());
 
     openPopover();
-    fireEvent.click(await screen.findByTestId('composer-worktree-tab-existing'));
+    fireEvent.mouseDown(await screen.findByTestId('composer-worktree-tab-existing'));
     fireEvent.click(await screen.findByTestId('composer-worktree-attach-/wt/feat-a'));
 
     await waitFor(() => expect(getDraftConfig(DRAFT_ID)?.worktreePath).toBe('/wt/feat-a'));

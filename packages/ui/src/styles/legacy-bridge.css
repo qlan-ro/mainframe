@@ -119,7 +119,8 @@
   --mf-shadow-rail-active: 0 0.5px 0 var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
   --mf-shadow-user-card: 0 1px 2px rgba(30, 50, 120, 0.05);
   /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
-  --mf-shadow-edit-ring: 0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
+  --mf-shadow-edit-ring:
+    0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
     0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
@@ -355,45 +356,15 @@
   }
 }
 
-/* `shimmer` and the collapsible animations were hand-rolled here and are
-   DELETED: tw-animate-css (already imported by the v2 sheet) ships
-   `animate-collapsible-down/up`, `fill-mode-*` and a `shimmer` text sweep.
-   Worse than redundant — an unlayered class here outranks every layered
-   utility, so the copies were silently shadowing the library. */
+/* The hand-rolled `shimmer`, `animate-collapsible-down/up` and `fill-mode-*`
+   copies are DELETED: `tw-animate-css` ships the collapsible/fill-mode set and
+   `shadcn/tailwind.css` ships the `shimmer` text sweep (both imported by the v2
+   sheet). Worse than redundant — an unlayered class here outranks every layered
+   utility, so the copies were silently shadowing the libraries.
+   `mf-text-shimmer` went with them: ChatThread's running indicator, its only
+   consumer, is on stock `motion-safe:shimmer`.
 
-/* Shimmering TEXT for the running ("Thinking…") indicator */
-@keyframes mf-text-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.mf-text-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--mf-text-3) 0%,
-    var(--mf-text-3) 35%,
-    var(--foreground) 50%,
-    var(--mf-text-3) 65%,
-    var(--mf-text-3) 100%
-  );
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: mf-text-shimmer 2.4s linear infinite;
-}
-
-/* mf-claude-logo-working lives in the v2 sheet (both trees animate it). */
-@media (prefers-reduced-motion: reduce) {
-  .mf-text-shimmer {
-    animation: none;
-    color: var(--mf-text-3);
-  }
-}
+   mf-claude-logo-working lives in the v2 sheet (both trees animate it). */
 
 /* Window-level state animations (TutorialOverlay halo). Referenced via
    Tailwind arbitrary `animate-[name_…]` utilities, which do NOT auto-generate

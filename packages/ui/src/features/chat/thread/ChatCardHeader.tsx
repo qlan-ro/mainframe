@@ -8,22 +8,25 @@ import {
   LayoutPanelTop,
   MessageSquare,
 } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { Hint } from '@/components/ui/hint';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
 import { ChatSessionInline } from './ChatSessionInline';
 
-// 24×24 header buttons (hdrBtn in artboard), distinct from the 22×22 SurfaceTabStrip actions.
-const HDR_BTN =
-  'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent cursor-pointer transition-[background] duration-[120ms] hover:bg-accent';
-
-const HEADER_ROOT_CLASS =
-  'flex h-[36px] flex-shrink-0 items-center gap-[7px] pl-2 pr-1.5 [border-bottom:0.5px_solid_var(--border)]';
+/**
+ * The chat surface's header row. Same height, border and gutters as the
+ * workspace strip (`WorkspaceStripChrome.STRIP_ROW`) — one surface header
+ * treatment, not two — but its own file: the workspace's leading grip begins a
+ * surface DRAG, while `data-drag-region` here hands the row to the OS as a
+ * window drag region, so nothing is shared but the vocabulary.
+ */
+const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] border-b border-border pr-1.5 pl-2';
 
 /**
  * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): grip,
@@ -34,9 +37,9 @@ const HEADER_ROOT_CLASS =
 function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | null; projectName: string | null }) {
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
-      <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-initial truncate text-body font-semibold">New Session</span>
+      <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
+      <MessageSquare size={13} className="shrink-0 text-primary" />
+      <span className="min-w-0 flex-initial truncate text-sm font-semibold">New Session</span>
       {projectId != null && projectName != null && (
         <ProjectChip projectId={projectId} name={projectName} size={16} data-testid="chat-header-project" />
       )}
@@ -64,71 +67,73 @@ function ChatCardHeaderReal() {
 
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <GripHorizontal size={13} className="flex-shrink-0 cursor-grab text-mf-text-4" />
-      <MessageSquare size={13} className="flex-shrink-0 text-primary" />
-      <span className="min-w-0 flex-initial truncate text-body font-semibold">{title}</span>
+      <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
+      <MessageSquare size={13} className="shrink-0 text-primary" />
+      <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatSessionInline part="model" />
       <span className="flex-1" />
       <ChatSessionInline part="status" />
       <Hint label="Review changes (⌘⇧R)">
-        <button
+        <Button
           data-testid="chat-header-review"
-          type="button"
+          variant="ghost"
+          size="xs"
           disabled={!worktreePath}
           onClick={() => emitSurfaceIntent({ type: 'open-review' })}
-          className={`inline-flex h-6 flex-shrink-0 items-center gap-1.5 rounded-[6px] border-none bg-transparent px-2 text-caption text-muted-foreground ${!worktreePath ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-accent hover:text-foreground'}`}
+          className="text-muted-foreground"
         >
-          <ClipboardCheck size={13} />
+          <ClipboardCheck data-icon="inline-start" />
           Review
-        </button>
+        </Button>
       </Hint>
       {prs.map((pr) => (
         <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
-          <button
+          <Button
             data-testid={`chat-header-pr-${pr.number}`}
-            type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => void host.shell.openExternal(pr.url)}
-            className="inline-flex flex-shrink-0 items-center gap-1 font-mono text-caption font-semibold text-foreground hover:underline"
+            className="font-mono font-semibold"
           >
-            <GitPullRequest size={12} className="flex-shrink-0 text-mf-success" />#{pr.number}
-          </button>
+            <GitPullRequest data-icon="inline-start" className="text-success" />#{pr.number}
+          </Button>
         </Hint>
       ))}
       {splitAvailable && (
         <>
           <Hint label="Split right">
-            <button
+            <Button
               data-testid="chat-header-split-right"
-              type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={() => splitSurface('v')}
-              className={HDR_BTN}
             >
-              <LayoutPanelLeft size={13} className="text-muted-foreground" />
-            </button>
+              <LayoutPanelLeft className="text-muted-foreground" />
+            </Button>
           </Hint>
           <Hint label="Split down">
-            <button
+            <Button
               data-testid="chat-header-split-down"
-              type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={() => splitSurface('h')}
-              className={HDR_BTN}
             >
-              <LayoutPanelTop size={13} className="text-muted-foreground" />
-            </button>
+              <LayoutPanelTop className="text-muted-foreground" />
+            </Button>
           </Hint>
         </>
       )}
       {/* Hide Chat — disabled when chat is the last lit surface (the dynamic floor). */}
-      <Hint label="Hide Chat">
-        <button
+      <Hint label={chatIsFloor ? 'Chat is the only surface left' : 'Hide Chat'}>
+        <Button
           data-testid="chat-header-hide"
-          type="button"
+          variant="ghost"
+          size="icon-xs"
           disabled={chatIsFloor}
           onClick={() => toggleSurface('chat')}
-          className={`${HDR_BTN} ${chatIsFloor ? 'cursor-not-allowed opacity-40' : ''}`}
         >
-          <EyeOff size={13} className="text-muted-foreground" />
-        </button>
+          <EyeOff className="text-muted-foreground" />
+        </Button>
       </Hint>
     </div>
   );

@@ -3,19 +3,19 @@
 /**
  * SelectionToolbar — the floating action toolbar shown on a text selection
  * inside a message (portal), hand-ported from the assistant-ui shadcn
- * registry (https://www.assistant-ui.com/docs/ui/quote) and restyled with
- * our mf-* tokens. Only `SelectionToolbarPrimitive.Root` is native; the
- * actions are plain buttons (`ChatSelectionToolbar.tsx` reads
- * `window.getSelection()` itself and appends through the multi-quote segment
- * store, not the native single-quote composer state — see that file's
- * docstring for why `SelectionToolbarPrimitive.Quote`/`ComposerPrimitive.Quote`
- * aren't used).
+ * registry (https://www.assistant-ui.com/docs/ui/quote) and restyled on v2.
+ * Only `SelectionToolbarPrimitive.Root` is native; the actions are v2 Buttons
+ * (`ChatSelectionToolbar.tsx` reads `window.getSelection()` itself and appends
+ * through the multi-quote segment store, not the native single-quote composer
+ * state — see that file's docstring for why `SelectionToolbarPrimitive.Quote`/
+ * `ComposerPrimitive.Quote` aren't used).
  */
 
 import type { ComponentProps } from 'react';
 import { SelectionToolbarPrimitive } from '@assistant-ui/react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { cn } from '@v2/lib/utils';
 
 function SelectionToolbarRoot({ className, ...props }: ComponentProps<typeof SelectionToolbarPrimitive.Root>) {
   return (
@@ -23,7 +23,7 @@ function SelectionToolbarRoot({ className, ...props }: ComponentProps<typeof Sel
       data-slot="selection-toolbar"
       data-testid="chat-selection-toolbar"
       className={cn(
-        'flex items-center gap-1 rounded-lg border border-border bg-popover px-1 py-1 shadow-md',
+        'flex items-center gap-1 rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10',
         className,
       )}
       {...props}
@@ -40,21 +40,19 @@ function SelectionToolbarAction({
   icon: Icon,
   label,
   ...props
-}: ComponentProps<'button'> & { icon: LucideIcon; label: string }) {
+}: ComponentProps<typeof Button> & { icon: LucideIcon; label: string }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       data-slot="selection-toolbar-action"
       onMouseDown={(e) => e.preventDefault()}
-      className={cn(
-        'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-label text-popover-foreground transition-colors hover:bg-accent',
-        className,
-      )}
+      className={className}
       {...props}
     >
-      <Icon className="size-3.5" />
+      <Icon data-icon="inline-start" />
       {label}
-    </button>
+    </Button>
   );
 }
 

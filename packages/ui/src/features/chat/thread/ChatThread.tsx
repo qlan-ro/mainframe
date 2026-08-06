@@ -9,7 +9,9 @@
  */
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowDownIcon } from 'lucide-react';
+import { AlertTriangleIcon, ArrowDownIcon } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@v2/components/ui/alert';
+import { Button } from '@v2/components/ui/button';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
 import { BackgroundActivityBar } from '../composer/BackgroundActivityBar';
@@ -28,24 +30,23 @@ import { useFindHotkey } from '../find/use-find-hotkey';
 import '../tools/register-cards';
 
 /** Surfaces a failed history load (loadState reduced to error) with a retry —
- *  otherwise a failed load renders as a silent empty chat. */
+ *  otherwise a failed load renders as a silent empty chat. Same recipe as
+ *  DegradedChatCard: a destructive Alert plus an outline action. */
 function LoadErrorBanner() {
   const extras = useChatExtras();
   if (extras?.state.loadState.type !== 'error') return null;
   return (
-    <div
-      data-testid="chat-thread-load-error"
-      className="mx-auto my-8 flex max-w-sm flex-col items-center gap-3 rounded-lg border border-border bg-card px-4 py-6 text-center"
-    >
-      <p className="text-body text-muted-foreground">Couldn’t load this chat.</p>
-      <button
-        data-testid="chat-thread-load-retry"
-        type="button"
-        onClick={() => void extras.retry()}
-        className="rounded-md border border-border px-3 py-1.5 text-label text-foreground transition-colors hover:bg-accent"
-      >
-        Retry
-      </button>
+    <div data-testid="chat-thread-load-error" className="mx-auto my-8 flex max-w-sm flex-col gap-3">
+      <Alert variant="destructive">
+        <AlertTriangleIcon />
+        <AlertTitle>Couldn’t load this chat</AlertTitle>
+        <AlertDescription>Its history is on the daemon — retrying re-reads it.</AlertDescription>
+      </Alert>
+      <div className="flex">
+        <Button data-testid="chat-thread-load-retry" variant="outline" size="sm" onClick={() => void extras.retry()}>
+          Retry
+        </Button>
+      </div>
     </div>
   );
 }
@@ -60,7 +61,13 @@ function GeneratingIndicator() {
   if (!isRunning) return null;
   return (
     <div data-testid="chat-thread-running" className="px-1 pb-1.5">
-      <span data-testid="chat-thread-running-text" className="mf-text-shimmer text-caption font-medium">
+      {/* Stock `shimmer` (from shadcn/tailwind.css, which the v2 sheet imports)
+          replaces the bridge's hand-rolled `mf-text-shimmer`. It derives base and
+          highlight from currentColor, so `text-muted-foreground` gives the same
+          muted-with-a-brighter-sweep reading, and it ships its own unlayered
+          `prefers-reduced-motion` reset. Verified by compiling app.css with the
+          Tailwind CLI, not by assuming the class resolves. */}
+      <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground shimmer">
         {phrase}
       </span>
     </div>
@@ -119,13 +126,17 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             {/* Sticky footer — its height is measured into the scroll inset. */}
             <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
               <ThreadPrimitive.ScrollToBottom asChild>
-                <button
+                <Button
                   data-testid="chat-scroll-to-bottom"
                   aria-label="Scroll to bottom"
-                  className="absolute -top-10 left-1/2 z-10 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-[var(--mf-shadow-pop)] transition-opacity hover:text-foreground disabled:invisible"
+                  variant="outline"
+                  size="icon-sm"
+                  // shadow-md, not the variant's shadow-xs: this one floats over
+                  // the transcript rather than sitting in a row.
+                  className="absolute -top-10 left-1/2 z-10 -translate-x-1/2 rounded-full text-muted-foreground shadow-md disabled:invisible"
                 >
-                  <ArrowDownIcon className="size-3.5" />
-                </button>
+                  <ArrowDownIcon />
+                </Button>
               </ThreadPrimitive.ScrollToBottom>
 
               <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-3xl px-5 pb-4">

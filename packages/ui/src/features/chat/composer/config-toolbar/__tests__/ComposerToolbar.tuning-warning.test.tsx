@@ -26,7 +26,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider as V1TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider as V2TooltipProvider } from '@v2/components/ui/tooltip';
+
+/**
+ * Both providers: WorktreePopover's trigger is on the v2 `Hint`, while
+ * PermissionSelect / PlanModeToggle / ProviderModelSelect are still on the v1
+ * Tooltip. They are independent Radix contexts, so the toolbar needs both until
+ * the remaining chips convert.
+ */
+function TooltipProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <V2TooltipProvider>
+      <V1TooltipProvider>{children}</V1TooltipProvider>
+    </V2TooltipProvider>
+  );
+}
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
 import { useAdaptersStore } from '@/store/adapters';
 import { useUiPrefs } from '@/store/ui-prefs';

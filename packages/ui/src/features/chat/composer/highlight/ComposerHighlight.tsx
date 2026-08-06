@@ -13,7 +13,7 @@
  * lands below the overlay's last visible line.
  *
  * Typography MUST exactly match the textarea:
- *   font-sans text-body leading-relaxed px-[14px] pt-[10px] pb-[4px]
+ *   font-sans text-sm leading-relaxed px-3.5 pt-2.5 pb-1
  *   whitespace-pre-wrap break-words
  * Any deviation drifts the caret position.
  */
@@ -37,7 +37,7 @@ export function ComposerHighlight(): ReactElement {
     <div
       data-testid="composer-prompt-highlight"
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-foreground"
+      className="pointer-events-none absolute inset-0 break-words whitespace-pre-wrap px-3.5 pt-2.5 pb-1 font-sans text-sm leading-relaxed text-foreground"
     >
       {text ? renderHighlights(text + '​', labels) : null}
     </div>

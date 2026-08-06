@@ -10,22 +10,26 @@
  * the composer's BackgroundActivityBar, not here. Renders nothing until the
  * chat config is loaded (drafts / blank surface).
  */
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
+import { Hint } from '@v2/components/ui/hint';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useAdapters } from '../composer/config-toolbar/use-composer-tuning';
 import { providerDot } from '../composer/config-toolbar/ProviderModelSelect';
 import { deriveContextPct } from './session-bar-status';
-import { Hint } from '@/components/ui/hint';
 
 const SEGMENTS = 8;
 
+/**
+ * Not `Progress`: this is eight discrete cells, and the primitive draws one bar.
+ * `warning` is right for the 50–90% tiers — a context window filling up is
+ * wrong-but-not-broken; past 90% it is `destructive`.
+ */
 function segmentColor(pct: number): string {
   if (pct >= 90) return 'bg-destructive';
-  if (pct >= 75) return 'bg-mf-warning';
-  if (pct >= 50) return 'bg-mf-warning opacity-[0.67]';
-  // <50% tier keys off muted-foreground (design T.text2), not the lighter
-  // mf-text-3 — matches the design's ~67%-alpha low-fill segment (15.4).
-  return 'bg-muted-foreground opacity-60';
+  if (pct >= 75) return 'bg-warning';
+  if (pct >= 50) return 'bg-warning/70';
+  // Low tier keys off muted-foreground (design T.text2), never a lighter ink.
+  return 'bg-muted-foreground/60';
 }
 
 export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
@@ -50,8 +54,8 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
     if (modelLabel == null) return null;
     return (
       <Hint label={`${adapter?.name ?? chat.adapterId} · ${modelLabel}`}>
-        <span data-testid="chat-header-model" className="inline-flex min-w-0 shrink items-center gap-[5px] text-label">
-          <span className={cn('size-1.5 flex-shrink-0 rounded-full', providerDot(chat.adapterId))} />
+        <span data-testid="chat-header-model" className="inline-flex min-w-0 shrink items-center gap-1.5 text-xs">
+          <span className={cn('size-1.5 shrink-0 rounded-full', providerDot(chat.adapterId))} />
           <span className="truncate font-medium text-muted-foreground">{modelLabel}</span>
         </span>
       </Hint>
@@ -64,7 +68,7 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
   const fillClass = segmentColor(pct);
 
   return (
-    <span data-testid="chat-header-context" className="inline-flex flex-shrink-0 items-center gap-1.5">
+    <span data-testid="chat-header-context" className="inline-flex shrink-0 items-center gap-1.5">
       <Hint label={`Context: ${pct}% used`}>
         <span className="inline-flex gap-[1.5px]">
           {Array.from({ length: SEGMENTS }, (_, i) => (
@@ -72,16 +76,15 @@ export function ChatSessionInline({ part }: { part: 'model' | 'status' }) {
               key={i}
               className={cn(
                 'h-[9px] w-[3px] rounded-[1.5px]',
-                // Unfilled segments key off muted-foreground (design T.text2), not
-                // the lighter mf-text-3 — matches the design's ~15%-alpha unfilled
-                // segment color (15.4).
-                i < filled ? fillClass : 'bg-muted-foreground opacity-15',
+                // Unfilled segments key off muted-foreground (design T.text2), never a lighter ink.
+                i < filled ? fillClass : 'bg-muted-foreground/15',
               )}
             />
           ))}
         </span>
       </Hint>
-      <span data-testid="chat-header-context-pct" className="font-mono text-caption tabular-nums text-muted-foreground">
+      {/* Mono: a numeric count is one of the reserved mono cases. */}
+      <span data-testid="chat-header-context-pct" className="font-mono text-xs tabular-nums text-muted-foreground">
         {pct}%
       </span>
     </span>

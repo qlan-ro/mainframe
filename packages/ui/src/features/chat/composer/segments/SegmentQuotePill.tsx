@@ -7,6 +7,7 @@
  * `composer-quote-dismiss` testids since it fills the same visual role.
  */
 import { QuoteIcon, XIcon } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 
 export function SegmentQuotePill({
   segmentId,
@@ -24,17 +25,18 @@ export function SegmentQuotePill({
       className="mx-3 mt-2 flex items-start gap-2 rounded-lg bg-muted px-3 py-2"
     >
       <QuoteIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-      <p className="line-clamp-2 min-w-0 flex-1 text-label text-muted-foreground">{quote}</p>
-      <button
-        type="button"
+      <p className="line-clamp-2 min-w-0 flex-1 text-xs text-muted-foreground">{quote}</p>
+      <Button
+        variant="ghost"
+        size="icon-xs"
         data-testid="composer-quote-dismiss"
         data-segment-id={segmentId}
         aria-label="Dismiss quote"
         onClick={onDismiss}
-        className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="-my-0.5 -mr-1.5 text-muted-foreground"
       >
-        <XIcon className="size-3.5" />
-      </button>
+        <XIcon />
+      </Button>
     </div>
   );
 }

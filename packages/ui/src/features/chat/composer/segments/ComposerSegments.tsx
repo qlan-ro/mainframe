@@ -51,7 +51,7 @@ function ComposerSegmentTextarea({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       rows={1}
-      className="w-full resize-none overflow-hidden bg-transparent px-3 py-1.5 font-sans text-body leading-relaxed text-foreground outline-none placeholder:text-mf-text-3"
+      className="w-full resize-none overflow-hidden bg-transparent px-3 py-1.5 font-sans text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
     />
   );
 }

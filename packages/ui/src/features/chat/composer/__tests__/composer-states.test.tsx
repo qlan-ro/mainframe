@@ -49,7 +49,7 @@ vi.mock('../config-toolbar/ComposerToolbar', () => ({
   ComposerToolbar: () => null,
 }));
 
-vi.mock('@/components/ui/assistant-ui/attachment', () => ({
+vi.mock('../attachments/ComposerAttachmentStrip', () => ({
   ComposerAttachments: () => null,
   ComposerAddAttachment: () => <button data-testid="composer-add-attachment" />,
   ComposerAddMention: () => <button data-testid="composer-add-mention" />,
@@ -237,7 +237,7 @@ describe('Composer — hairline separator between attachment and toolbar control
     vi.clearAllMocks();
   });
 
-  it('renders a separator div with w-px and bg-border classes', () => {
+  it('renders a vertical Separator primitive between them', () => {
     // We need a Composer that renders the real attachment slot + toolbar.
     // ComposerAddAttachment is stubbed to a button; ComposerToolbar to null.
     // The separator is a sibling between them.
@@ -247,10 +247,12 @@ describe('Composer — hairline separator between attachment and toolbar control
       </TooltipProvider>,
     );
 
-    // The separator is aria-hidden and has w-px + bg-border in its class
+    // A hand-rolled `div.w-px.bg-border` became the v2 `Separator`; the
+    // hairline fill now comes from the primitive's own data-vertical rules.
     const toolbar = screen.getByTestId('chat-composer-toolbar');
-    const sep = toolbar.querySelector('[aria-hidden="true"][class*="w-px"]');
+    const sep = toolbar.querySelector('[data-slot="separator"]');
     expect(sep).not.toBeNull();
+    expect(sep).toHaveAttribute('data-orientation', 'vertical');
     expect((sep as HTMLElement).className).toContain('bg-border');
   });
 });

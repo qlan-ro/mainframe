@@ -13,9 +13,10 @@ type HintProps = {
 
 /**
  * Themed replacement for native `title=` tooltips: wraps a trigger element in the
- * shared shadcn/Radix tooltip. Self-contained `TooltipProvider` (matching
- * `TooltipIconButton`) so it works in isolation — in the app under the root
- * provider (app/main.tsx) and in unit tests that render a component bare.
+ * shared shadcn/Radix tooltip. Self-contained `TooltipProvider` so it works in
+ * isolation — in the app under the root provider (app/main.tsx) and in unit
+ * tests that render a component bare. (The v2 `Hint` deliberately does not:
+ * shadcn documents the provider as an app-root concern.)
  */
 export function Hint({ label, children, side, sideOffset }: HintProps) {
   if (label === null || label === undefined || label === '') return children;
