@@ -14,10 +14,16 @@
  *  RC3 — empty code: no snippet block inside the section; body still shown.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { ReviewCommentCard } from '../ReviewCommentCard';
 import type { ReviewComment } from '../../view-model/parse-review-comment';
+
+// ReviewCommentCard uses the v2 Hint, which requires the v2 TooltipProvider
+// (an app-root concern; the real app mounts it once at the root).
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 // ---------------------------------------------------------------------------
 // RC1 — single comment

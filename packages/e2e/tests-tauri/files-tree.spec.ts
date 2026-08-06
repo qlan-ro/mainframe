@@ -6,10 +6,18 @@
  * execFileSync, no shell interpolation).
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector   — toolbar button, toggles the Inspector pane
+ *   main-toolbar-inspector   — toolbar toggle for the Inspector pane. A v2 `Toggle`
+ *                              since the title-bar port; Radix Toggle still puts the
+ *                              pressed state on `aria-pressed` (only `data-state` is
+ *                              unusable — the wrapping `Hint`'s TooltipTrigger
+ *                              overwrites it with the tooltip's open-state).
  *   inspector-pane           — Inspector root (mounted only when visible)
  *   inspector-tab-files      — Files tab in the Inspector's Files/Changes switch
  *   inspector-tab-changes    — Changes tab (shows a live uncommitted-count badge)
+ *     Both, and `changes-mode-*` below, are still hand-rolled `<button aria-pressed>`
+ *     segments (InspectorPane.tsx / ChangesPanel.tsx): the Inspector body ports with
+ *     the review/changes surface, not with the tab-body chrome pass. Do NOT convert
+ *     these to the `data-state` form the viewers' `Segmented` uses.
  *   file-tree                — FileTree root
  *   file-tree-row-<path>     — a file or folder row (folders toggle expand/collapse)
  *   file-tree-refresh        — refetch the tree
@@ -23,13 +31,14 @@
  *   changes-status-<path>    — the row's status word (Added/Modified/Deleted/Renamed)
  *   diff-tab                 — the opened diff tab body
  *   viewer-shell-reveal      — a viewer tab's "Reveal in file tree" button
- *   surface-rail-files       — MainToolbar surface toggle for the Files surface
- *   files-tab-strip-add      — Files tab-strip "+" (opens the file picker)
+ *   surface-rail-workspace     — MainToolbar toggle for the workspace surface
+ *   workspace-picker-open-file — the empty-state card's "Open file…" row
+ *   workspace-pane-open-file-<paneId> — the same action inside a pane's `+` menu
  *   file-picker-dialog       — FilePickerDialog root
  *   file-picker-input        — search input
  *   file-picker-row-<path>   — a search result row
  *   file-picker-no-project   — no-project empty state
- *   files-tab-strip          — Files surface tab strip (role="tab" pills)
+ *   WORKSPACE.strip            — a workspace pane's tab strip (role="tab" pills)
  */
 
 import { test, expect } from '@playwright/test';
@@ -38,6 +47,9 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { workspace } from '../helpers/tauri/page-objects.js';
+import { closeMenus } from '../helpers/tauri/menus.js';
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
 
@@ -49,12 +61,18 @@ function gitCommit(cwd: string, message: string): void {
   git(cwd, ['-c', 'user.email=e2e@mainframe.test', '-c', 'user.name=Mainframe E2E', 'commit', '-m', message]);
 }
 
-/** Toggle the Files surface on (MainToolbar surface rail) so FilesTabStrip mounts. */
-async function ensureFilesSurfaceOn(page: import('@playwright/test').Page): Promise<void> {
-  const strip = page.getByTestId('files-tab-strip');
-  if (await strip.isVisible().catch(() => false)) return;
-  await page.getByTestId('surface-rail-files').click();
-  await expect(strip).toBeVisible({ timeout: 10_000 });
+/**
+ * Toggle the workspace surface on (MainToolbar surface rail).
+ *
+ * Wait on the SURFACE, not on a pane strip: with no tabs open the workspace renders
+ * `workspace-empty-state`, whose header is the same chrome row minus a pane
+ * (WorkspaceStripChrome), so `workspace-tab-strip-pane-<id>` does not exist yet.
+ */
+async function ensureWorkspaceOn(page: import('@playwright/test').Page): Promise<void> {
+  const surface = page.getByTestId('workspace-surface');
+  if (await surface.isVisible().catch(() => false)) return;
+  await page.getByTestId('surface-rail-workspace').click();
+  await expect(surface).toBeVisible({ timeout: 10_000 });
 }
 
 // ─── §files-tree — no project ──────────────────────────────────────────────────
@@ -80,13 +98,14 @@ test.describe('§files-tree — no project', () => {
 
   test('file picker shows the no-project state when opened with no active chat', async () => {
     const { page } = app;
-    await ensureFilesSurfaceOn(page);
-    await page.getByTestId('files-tab-strip-add').click();
+    await ensureWorkspaceOn(page);
+    await workspace(page).openFilePicker();
     // No `projectId` → FilePickerDialog renders the no-project empty state
     // directly (no `file-picker-dialog` wrapper — that testid only exists on
     // `PickerBody`, which is skipped when there's no active project).
     await expect(page.getByTestId('file-picker-no-project')).toBeVisible({ timeout: 5_000 });
     await page.keyboard.press('Escape');
+    await expect(page.getByTestId('file-picker-no-project')).toHaveCount(0, { timeout: 5_000 });
   });
 });
 
@@ -190,10 +209,12 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(page.getByTestId('file-tree-row-src/utils.ts')).toHaveCount(0);
   });
 
-  test('clicking a file opens it in a Files editor tab', async () => {
+  // "Files editor tab" in the old name — the Files surface is gone since the
+  // 2026-08-05 merge; the tab lands in the one `workspace` surface.
+  test('clicking a file opens it in a workspace editor tab', async () => {
     const { page } = app;
     await page.getByTestId('file-tree-row-CLAUDE.md').click();
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab')).toHaveCount(1, { timeout: 10_000 });
     await expect(strip.getByRole('tab', { selected: true })).toContainText('CLAUDE.md');
   });
@@ -212,7 +233,7 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(page.getByTestId('viewer-csv')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('viewer-shell-reveal').click();
-    // The reveal intent activates the Files surface but not the Inspector's own
+    // The reveal intent lights the workspace surface but not the Inspector's own
     // Files/Changes tab — switch to it to observe the highlight.
     await page.getByTestId('inspector-tab-files').click();
 
@@ -230,7 +251,7 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(page.getByTestId('file-tree-reveal')).toBeVisible();
     await expect(page.getByTestId('file-tree-copy-path')).toBeVisible();
     await expect(page.getByTestId('file-tree-copy-relative-path')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
   });
 
   test('the folder row context menu offers find-in-folder instead of find-in-file', async () => {
@@ -238,7 +259,7 @@ test.describe('§files-tree — Inspector pane', () => {
     await page.getByTestId('file-tree-row-src').click({ button: 'right' });
     await expect(page.getByTestId('file-tree-find-in-folder')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('file-tree-find-in-file')).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
   });
 
   test('the root row context menu is available from the header label', async () => {
@@ -247,7 +268,7 @@ test.describe('§files-tree — Inspector pane', () => {
     await rootLabel.click({ button: 'right' });
     await expect(page.getByTestId('file-tree-find-in-folder')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('file-tree-reveal')).toBeVisible();
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
   });
 
   test('reveal in Finder is enabled against the local test daemon', async () => {
@@ -260,7 +281,7 @@ test.describe('§files-tree — Inspector pane', () => {
     const reveal = page.getByTestId('file-tree-reveal');
     await expect(reveal).toBeVisible({ timeout: 5_000 });
     await expect(reveal).not.toHaveAttribute('data-disabled');
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
   });
 
   // ── Changes panel ─────────────────────────────────────────────────────────
@@ -318,8 +339,8 @@ test.describe('§files-tree — Inspector pane', () => {
 
   test('the file picker opens from the tab-strip add button with the search hint', async () => {
     const { page } = app;
-    await ensureFilesSurfaceOn(page);
-    await page.getByTestId('files-tab-strip-add').click();
+    await ensureWorkspaceOn(page);
+    await workspace(page).openFilePicker();
     const dialog = page.getByTestId('file-picker-dialog');
     await expect(dialog).toBeVisible({ timeout: 5_000 });
     await expect(dialog.getByText('Type to search files')).toBeVisible();
@@ -336,16 +357,17 @@ test.describe('§files-tree — Inspector pane', () => {
     await input.press('Enter');
 
     await expect(page.getByTestId('file-picker-dialog')).toHaveCount(0, { timeout: 5_000 });
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('CLAUDE.md');
   });
 
   test('the file picker shows a no-match empty state for an unmatched query', async () => {
     const { page } = app;
-    await page.getByTestId('files-tab-strip-add').click();
+    await workspace(page).openFilePicker();
     const input = page.getByTestId('file-picker-input');
     await input.fill('zzz-does-not-exist');
     await expect(page.getByText('No matching files')).toBeVisible({ timeout: 5_000 });
     await page.keyboard.press('Escape');
+    await expect(page.getByTestId('file-picker-input')).toHaveCount(0, { timeout: 5_000 });
   });
 });

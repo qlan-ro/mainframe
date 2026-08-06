@@ -1,9 +1,9 @@
 /**
  * SectionSwitcher — the Setup Advisor's top-level section control, sitting in
- * the dialog header next to the title. Same segmented recipe as the Tasks
- * board's List/Board switch.
+ * the dialog header next to the title. Same v2 Tabs segmented recipe as the
+ * Tasks board's List/Board switch (List/Trigger only — the host owns the body).
  */
-import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import type { AdvisorSection } from './use-setup-advisor';
 
 const SECTIONS: readonly { id: AdvisorSection; label: string }[] = [
@@ -18,22 +18,14 @@ interface SectionSwitcherProps {
 
 export function SectionSwitcher({ section, onSelect }: SectionSwitcherProps) {
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-0.5 rounded-[6px] bg-muted p-0.5">
-      {SECTIONS.map(({ id, label }) => (
-        <button
-          key={id}
-          data-testid={`setup-advisor-section-${id}`}
-          type="button"
-          onClick={() => onSelect(id)}
-          aria-pressed={section === id}
-          className={cn(
-            'flex items-center gap-1 rounded px-2 py-1 text-label transition-colors',
-            section === id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <Tabs value={section} onValueChange={(v) => onSelect(v as AdvisorSection)} className="ml-auto w-fit shrink-0">
+      <TabsList className="h-7 p-0.5">
+        {SECTIONS.map(({ id, label }) => (
+          <TabsTrigger key={id} value={id} data-testid={`setup-advisor-section-${id}`} className="px-2 text-xs">
+            {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }

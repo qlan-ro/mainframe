@@ -1,8 +1,10 @@
 import { useState, useCallback } from 'react';
 import { MessageCircleQuestionIcon } from 'lucide-react';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import { GateCardShell, GateHead } from './shared/GateShell';
-import { GateButton } from './shared/GateButton';
+import { Button } from '@v2/components/ui/button';
+import { Badge } from '@v2/components/ui/badge';
+import { cn } from '@v2/lib/utils';
+import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
 import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
@@ -67,25 +69,25 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
   const isLast = current === total - 1;
 
   return (
-    <div className="flex items-center gap-2 px-3.5 pb-3 pt-1">
-      <GateButton kind="ghost" data-testid="chat-question-skip" onClick={onSkip}>
+    <div className="flex items-center gap-2 px-4 pt-1 pb-3">
+      <Button variant="outline" size="sm" data-testid="chat-question-skip" onClick={onSkip}>
         Skip
-      </GateButton>
+      </Button>
       {current > 0 && (
-        <GateButton kind="ghost" data-testid="chat-question-back" onClick={onBack}>
+        <Button variant="outline" size="sm" data-testid="chat-question-back" onClick={onBack}>
           Back
-        </GateButton>
+        </Button>
       )}
       <div className="flex-1" />
       {!isLast && (
-        <GateButton kind="primary" data-testid="chat-question-next" disabled={!isAnswered} onClick={onNext}>
+        <Button size="sm" data-testid="chat-question-next" disabled={!isAnswered} onClick={onNext}>
           Next
-        </GateButton>
+        </Button>
       )}
       {isLast && (
-        <GateButton kind="primary" data-testid="chat-question-submit" disabled={!isAnswered} onClick={onSubmit}>
+        <Button size="sm" data-testid="chat-question-submit" disabled={!isAnswered} onClick={onSubmit}>
           Submit
-        </GateButton>
+        </Button>
       )}
     </div>
   );
@@ -153,20 +155,20 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
     <div data-testid="chat-question-gate">
       <GateCardShell>
         <GateHead
-          icon={<MessageCircleQuestionIcon className="size-[15px]" />}
-          tileClassName="bg-mf-selection text-primary"
+          icon={<MessageCircleQuestionIcon className="size-3.5" />}
+          tileClassName="bg-primary/10 text-primary"
           eyebrow={eyebrow}
           title={title}
           right={
             questions.length > 1 ? (
-              <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-caption font-semibold text-muted-foreground ring-1 ring-border">
+              <Badge variant="outline" className="shrink-0 font-mono tabular-nums">
                 {current + 1} of {questions.length}
-              </span>
+              </Badge>
             ) : undefined
           }
         />
         {questionBody && (
-          <p data-testid="chat-question-text" className="pl-[49px] pr-3.5 pb-1 text-body text-foreground">
+          <p data-testid="chat-question-text" className={cn('pr-4 pb-1 text-sm text-foreground', GATE_BODY_INSET)}>
             {questionBody}
           </p>
         )}

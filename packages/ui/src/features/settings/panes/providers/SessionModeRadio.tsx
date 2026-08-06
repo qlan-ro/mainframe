@@ -1,5 +1,6 @@
 import { MODE_OPTIONS } from '../../settings-tabs';
-import { RadioGroup, RadioGroupItem } from '../../../../components/ui/radio-group';
+import { RadioGroup, RadioGroupItem } from '@v2/components/ui/radio-group';
+import { Label } from '@v2/components/ui/label';
 import type { ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 
 interface SessionModeRadioProps {
@@ -11,12 +12,12 @@ interface SessionModeRadioProps {
 /** Three-option radio group for the provider's default session mode. */
 export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRadioProps) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-label font-semibold text-muted-foreground">Default Session Mode</label>
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs font-medium text-muted-foreground">Default Session Mode</Label>
       <RadioGroup
         value={config.defaultMode ?? 'default'}
         onValueChange={(v) => onChange({ defaultMode: v as NonNullable<ProviderConfig['defaultMode']> })}
-        className="space-y-1"
+        className="gap-1"
       >
         {MODE_OPTIONS.map((mode) => (
           <label
@@ -26,11 +27,11 @@ export function SessionModeRadio({ adapterId, config, onChange }: SessionModeRad
             <RadioGroupItem
               data-testid={`settings-${adapterId}-mode-option-${mode.id}`}
               value={mode.id}
-              className={`mt-0.5 ${mode.danger ? 'text-destructive data-[state=checked]:border-destructive' : ''}`}
+              className={`mt-0.5 ${mode.danger ? 'border-destructive/50 text-destructive [&_svg]:fill-destructive' : ''}`}
             />
             <div className="flex-1">
-              <span className={`text-body ${mode.danger ? 'text-destructive' : 'text-foreground'}`}>{mode.label}</span>
-              <p className="text-label text-muted-foreground">{mode.description}</p>
+              <span className={`text-sm ${mode.danger ? 'text-destructive' : 'text-foreground'}`}>{mode.label}</span>
+              <p className="text-xs text-muted-foreground">{mode.description}</p>
             </div>
           </label>
         ))}

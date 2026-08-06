@@ -9,6 +9,9 @@ export default defineConfig(() => ({
   plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
+      // Longest prefix first: Vite matches aliases in order, so a bare '@'
+      // would swallow '@v2/...' before the specific entry is ever tried.
+      '@v2': resolve(__dirname, './src/v2'),
       '@': resolve(__dirname, './src'),
     },
   },

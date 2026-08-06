@@ -55,14 +55,16 @@ describe('PlanBubble', () => {
     },
   );
 
-  it('drops the user-message card treatment', () => {
+  // The plan record used to be a user-message card: an inline gradient fill and
+  // shadow plus a width cap of its own. It shares GateCardShell with the gate
+  // cards now, so the shell governs width and nothing is styled inline. Asserted
+  // positively — the mf-um-*/mf-shadow-user-card tokens the old version named are
+  // deleted, so naming them could no longer fail.
+  it('takes its chrome from the gate card shell, not a card treatment of its own', () => {
     render(<PlanBubble plan="Some plan text" />);
     const bubble = screen.getByTestId('chat-plan-bubble');
-    expect(bubble.className).not.toContain('max-w-[530px]');
-    expect(bubble.className).not.toContain('border-mf-um-edge');
-    const style = bubble.getAttribute('style') ?? '';
-    expect(style).not.toContain('--mf-um-card');
-    expect(style).not.toContain('--mf-shadow-user-card');
+    expect(bubble.className).not.toMatch(/max-w-\[/);
+    expect(bubble.getAttribute('style')).toBeNull();
   });
 
   it('the plan card wraps long tokens instead of clipping them', () => {

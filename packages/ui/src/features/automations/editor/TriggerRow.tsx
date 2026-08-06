@@ -21,8 +21,8 @@
  */
 import { Calendar, Globe, X, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Hint } from '@v2/components/ui/hint';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 import type { AutomationEventName, AutomationTrigger, EventTrigger } from '../contract';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { SchedulePicker } from './SchedulePicker';
@@ -73,7 +73,7 @@ function EventTriggerFields({
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
       <Select value={trigger.event} onValueChange={(next) => handleEvent(next as AutomationEventName)}>
-        <SelectTrigger data-testid={`${testId}-event-name`} className="h-[28px] w-[240px] text-caption">
+        <SelectTrigger data-testid={`${testId}-event-name`} className="h-[28px] w-[240px] text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -90,9 +90,9 @@ function EventTriggerFields({
       </Select>
       {SOURCE_FILTERABLE.has(trigger.event) && (
         <>
-          <span className="text-caption text-muted-foreground">from</span>
+          <span className="text-xs text-muted-foreground">from</span>
           <Select value={trigger.automationId ?? ANY_SOURCE} onValueChange={handleSource}>
-            <SelectTrigger data-testid={`${testId}-event-source`} className="h-[28px] w-[190px] text-caption">
+            <SelectTrigger data-testid={`${testId}-event-source`} className="h-[28px] w-[190px] text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -143,7 +143,7 @@ export function TriggerRow({ trigger, onChange, automationId, testId }: TriggerR
         <Icon size={14} className="text-mf-auto-kind-call" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-label font-semibold text-foreground">{meta.label}</div>
+        <div className="text-xs font-semibold text-foreground">{meta.label}</div>
         {trigger.kind === 'schedule' && (
           <div className="mt-1.5">
             <SchedulePicker trigger={trigger} onChange={onChange} testId={`${testId}-schedule`} />

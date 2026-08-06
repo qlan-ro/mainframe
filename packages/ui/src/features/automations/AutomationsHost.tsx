@@ -7,6 +7,10 @@
  * opens it directly, alongside the production SidebarHeader entry point.
  */
 import React, { Suspense, useEffect } from 'react';
+// Radix replaces the v1 hand-rolled overlay — focus trap, scroll lock and
+// layering come with it, and Escape now closes in production too (the old
+// manual handler was dev-only).
+import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
 import { useActiveIdentity } from '../sessions/use-active-identity';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore } from './data/use-automations-store';
@@ -46,32 +50,31 @@ export function AutomationsHost(): React.ReactElement | null {
         e.preventDefault();
         openHost();
       }
-      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openHost, close]);
-
-  if (!open) return null;
+  }, [openHost]);
 
   return (
-    <div
-      data-testid="automations-host"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={close}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-[88vh] max-h-[880px] w-full max-w-[1040px] flex-col overflow-hidden rounded-xl bg-card shadow-xl"
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent
+        data-testid="automations-host"
+        showCloseButton={false}
+        // No autofocus: the first focusable is the header's Hint-wrapped close
+        // button, and focusing it opens its tooltip — whose layer then eats
+        // the first Escape meant for the dialog.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="flex h-[88vh] max-h-[880px] w-full flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-[1040px]"
       >
+        <DialogTitle className="sr-only">Automations</DialogTitle>
         <Suspense
           fallback={
-            <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>
+            <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>
           }
         >
           <AutomationsView />
         </Suspense>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

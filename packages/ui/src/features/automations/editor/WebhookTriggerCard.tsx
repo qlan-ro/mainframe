@@ -27,7 +27,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Copy, Globe, KeyRound } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import type { WebhookRegistration, WebhookTrigger } from '../contract';
@@ -89,10 +89,7 @@ function CopyRow({ icon, value, valueTestId, copyTestId, copyLabel, onCopy }: Co
   return (
     <div className="flex items-center gap-1.5">
       {icon}
-      <code
-        data-testid={valueTestId}
-        className="min-w-0 flex-1 truncate select-all font-mono text-caption text-foreground"
-      >
+      <code data-testid={valueTestId} className="min-w-0 flex-1 truncate select-all font-mono text-xs text-foreground">
         {value}
       </code>
       <Hint label={copyLabel}>
@@ -123,7 +120,7 @@ function UnregisteredWebhook({ testId, persisted, registering, onRegister }: Unr
       data-testid={`${testId}-webhook`}
       className="mt-1.5 flex flex-col items-start gap-1.5 rounded-md border-[0.5px] border-dashed border-border bg-card/60 p-2"
     >
-      <div className="text-caption text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         {persisted
           ? 'The daemon hasn’t registered this hook yet — there is no URL to call.'
           : 'Save the automation first — the daemon registers hooks from the saved definition.'}
@@ -134,7 +131,7 @@ function UnregisteredWebhook({ testId, persisted, registering, onRegister }: Unr
         onClick={onRegister}
         disabled={!persisted || registering}
         title={persisted ? undefined : SAVE_FIRST}
-        className="h-[24px] rounded-sm border-[0.5px] border-border px-2 text-caption font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+        className="h-[24px] rounded-sm border-[0.5px] border-border px-2 text-xs font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
       >
         {registering ? 'Registering…' : 'Register'}
       </button>
@@ -166,7 +163,7 @@ function RegisteredWebhook({ testId, registration, secret, persisted, registerin
         copyLabel="Copy webhook URL"
         onCopy={() => void copyWebhookUrl(registration.url)}
       />
-      <div className="text-caption text-muted-foreground">Local daemon URL — reachable only from this machine.</div>
+      <div className="text-xs text-muted-foreground">Local daemon URL — reachable only from this machine.</div>
       {secret ? (
         <>
           <CopyRow
@@ -177,7 +174,7 @@ function RegisteredWebhook({ testId, registration, secret, persisted, registerin
             copyLabel="Copy signing secret"
             onCopy={() => void copySigningSecret(secret)}
           />
-          <div data-testid={`${testId}-webhook-secret-note`} className="text-caption text-muted-foreground">
+          <div data-testid={`${testId}-webhook-secret-note`} className="text-xs text-muted-foreground">
             Signing secret — sign every delivery with it. Shown once here; reveal it again any time, it never changes.
           </div>
         </>
@@ -188,11 +185,11 @@ function RegisteredWebhook({ testId, registration, secret, persisted, registerin
         onClick={onReveal}
         disabled={!persisted || registering}
         title={persisted ? undefined : SAVE_FIRST}
-        className="h-[24px] self-start rounded-sm border-[0.5px] border-border px-2 text-caption font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+        className="h-[24px] self-start rounded-sm border-[0.5px] border-border px-2 text-xs font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
       >
         {registering ? 'Revealing…' : secret ? 'Reveal again' : 'Reveal signing secret'}
       </button>
-      <div data-testid={`${testId}-webhook-delivery`} className="text-caption text-muted-foreground">
+      <div data-testid={`${testId}-webhook-delivery`} className="text-xs text-muted-foreground">
         {deliveryLine(registration.lastDeliveryAt)}
       </div>
     </div>

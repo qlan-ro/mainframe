@@ -14,7 +14,7 @@
  */
 import { useState } from 'react';
 import { Plug, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@v2/components/ui/button';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsStore } from '../data/use-automations-store';
 
@@ -68,10 +68,10 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
     return (
       <span
         data-testid={`${testId}-connected`}
-        className="inline-flex h-[28px] items-center gap-1.5 rounded-full border-[0.5px] border-mf-success/40 bg-mf-success-tint pl-2.5 pr-1"
+        className="inline-flex h-[28px] items-center gap-1.5 rounded-full border-[0.5px] border-success/40 bg-success/10 pl-2.5 pr-1"
       >
-        <span className="size-1.5 rounded-full bg-mf-success" aria-hidden />
-        <span className="text-caption text-foreground">{service}</span>
+        <span className="size-1.5 rounded-full bg-success" aria-hidden />
+        <span className="text-xs text-foreground">{service}</span>
         <button
           type="button"
           data-testid={`${testId}-disconnect`}

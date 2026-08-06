@@ -108,7 +108,7 @@ export const TaskCard = React.memo(function TaskCard({
       onDragEnd={handleDragEnd}
       onClick={() => onEdit(todo)}
       className={cn(
-        'group cursor-pointer space-y-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
+        'group flex cursor-pointer flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-background px-[11px] py-[10px]',
         'transition-colors hover:border-border/80',
         isDragging && 'opacity-50',
       )}

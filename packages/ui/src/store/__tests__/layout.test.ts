@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { WorkspaceLayout } from '../layout';
+import type { SurfaceId, WorkspaceLayout } from '../layout';
 import { isSurfaceFloor, layoutCanSplit, litSurfaceCount, useLayoutStore } from '../layout';
 
 const FRESH: WorkspaceLayout = {
@@ -13,26 +13,25 @@ function store() {
   return useLayoutStore.getState();
 }
 
-function isActive(surface: string) {
+function isActive(surface: SurfaceId) {
   const { layout } = store();
-  return layout.top.includes(surface as never) || layout.bottom === surface;
+  return layout.top.includes(surface) || layout.bottom === surface;
 }
 
 describe('layout store', () => {
   beforeEach(() => {
-    useLayoutStore.setState({ layout: { ...FRESH } });
+    useLayoutStore.setState({ layout: { ...FRESH }, run: null });
   });
 
   it('default state has only chat active', () => {
     expect(isActive('chat')).toBe(true);
-    expect(isActive('files')).toBe(false);
-    expect(isActive('run')).toBe(false);
+    expect(isActive('workspace')).toBe(false);
   });
 
   it('toggleSurface turns an inactive surface on (placed in top row)', () => {
-    store().toggleSurface('files');
-    expect(isActive('files')).toBe(true);
-    expect(store().layout.top).toContain('files');
+    store().toggleSurface('workspace');
+    expect(isActive('workspace')).toBe(true);
+    expect(store().layout.top).toContain('workspace');
   });
 
   it('dynamic floor: the only lit surface (chat) cannot be hidden', () => {
@@ -41,76 +40,72 @@ describe('layout store', () => {
     expect(isActive('chat')).toBe(true);
   });
 
-  it('chat CAN be hidden once another surface is lit', () => {
-    store().toggleSurface('files'); // now chat + files lit → chat no longer the floor
+  it('chat CAN be hidden once the workspace is lit', () => {
+    store().toggleSurface('workspace'); // chat + workspace lit → chat no longer the floor
     expect(isSurfaceFloor(store().layout, 'chat')).toBe(false);
     store().toggleSurface('chat');
     expect(isActive('chat')).toBe(false);
-    expect(isActive('files')).toBe(true);
+    expect(isActive('workspace')).toBe(true);
   });
 
   it('the last remaining surface becomes the floor and cannot be hidden', () => {
-    store().toggleSurface('files'); // chat + files
-    store().toggleSurface('chat'); // hide chat → files alone
-    expect(isSurfaceFloor(store().layout, 'files')).toBe(true);
-    store().toggleSurface('files'); // no-op — files is now the floor
-    expect(isActive('files')).toBe(true);
+    store().toggleSurface('workspace');
+    store().toggleSurface('chat'); // hide chat → workspace alone
+    expect(isSurfaceFloor(store().layout, 'workspace')).toBe(true);
+    store().toggleSurface('workspace'); // no-op — the workspace is now the floor
+    expect(isActive('workspace')).toBe(true);
   });
 
   it('litSurfaceCount counts top + bottom surfaces', () => {
     expect(litSurfaceCount(store().layout)).toBe(1);
-    store().toggleSurface('files');
+    store().toggleSurface('workspace');
     expect(litSurfaceCount(store().layout)).toBe(2);
   });
 
-  it('files can be toggled off when active', () => {
-    store().toggleSurface('files');
-    store().toggleSurface('files');
-    expect(isActive('files')).toBe(false);
+  it('the workspace can be toggled off when active', () => {
+    store().toggleSurface('workspace');
+    store().toggleSurface('workspace');
+    expect(isActive('workspace')).toBe(false);
     expect(isActive('chat')).toBe(true);
   });
 
-  it('run can be toggled off when active', () => {
-    store().toggleSurface('run');
-    store().toggleSurface('run');
-    expect(isActive('run')).toBe(false);
-    expect(isActive('chat')).toBe(true);
+  // Hiding is not closing: the panes survive so re-showing returns the tabs.
+  it('toggling the workspace off then on preserves its panes', () => {
+    store().addRunTab({ id: 't1', kind: 'terminal', title: 'zsh' });
+    store().toggleSurface('workspace');
+    expect(isActive('workspace')).toBe(false);
+    expect(store().run?.panes[0]!.tabs.map((t) => t.id)).toEqual(['t1']);
+
+    store().toggleSurface('workspace');
+    expect(isActive('workspace')).toBe(true);
+    expect(store().run?.panes[0]!.tabs.map((t) => t.id)).toEqual(['t1']);
   });
 
-  it('3rd surface placed in bottom strip when top row is full', () => {
-    store().toggleSurface('files');
-    store().toggleSurface('run');
-    const { layout } = store();
-    expect(layout.top.length).toBe(2);
-    expect(layout.bottom).toBe('run');
-  });
-
-  it('bottom strip promoted to top row when a top surface is removed', () => {
-    store().toggleSurface('files');
-    store().toggleSurface('run'); // run → bottom
-    store().toggleSurface('files'); // remove files → run promoted to top
+  it('bottom strip promoted to top row when the top row loses a surface', () => {
+    store().splitSurface('h'); // workspace → bottom strip
+    expect(store().layout.bottom).toBe('workspace');
+    store().toggleSurface('chat'); // remove chat → workspace promoted to top
     const { layout } = store();
     expect(layout.bottom).toBeNull();
-    expect(layout.top).toContain('run');
+    expect(layout.top).toEqual(['workspace']);
   });
 
   it('setTopFrac updates flex fractions clamped 0.18–0.82', () => {
-    store().toggleSurface('files');
+    store().toggleSurface('workspace');
     store().setTopFrac(0.6);
     const { layout } = store();
     expect(layout.topFlex['chat']).toBeCloseTo(0.6);
-    expect(layout.topFlex['files']).toBeCloseTo(0.4);
+    expect(layout.topFlex['workspace']).toBeCloseTo(0.4);
   });
 
   it('setTopFrac clamps below 0.18 to 0.18', () => {
-    store().toggleSurface('files');
+    store().toggleSurface('workspace');
     store().setTopFrac(0.05);
     expect(store().layout.topFlex['chat']).toBeCloseTo(0.18);
   });
 
   it('setVFrac updates vertical flex fractions', () => {
-    store().toggleSurface('files');
-    store().toggleSurface('run');
+    store().splitSurface('h');
     store().setVFrac(0.7);
     const { layout } = store();
     expect(layout.vFlex.top).toBeCloseTo(0.7);
@@ -122,51 +117,34 @@ describe('layout store', () => {
       expect(layoutCanSplit(store().layout)).toBe(true);
     });
 
-    it('returns true when files is active but run is not', () => {
-      store().toggleSurface('files');
-      expect(layoutCanSplit(store().layout)).toBe(true);
+    it('returns false once the workspace is placed in the top row', () => {
+      store().toggleSurface('workspace');
+      expect(layoutCanSplit(store().layout)).toBe(false);
     });
 
-    it('returns false when both files and run are active', () => {
-      store().toggleSurface('files');
-      store().toggleSurface('run');
+    it('returns false once the workspace is placed in the bottom strip', () => {
+      store().splitSurface('h');
       expect(layoutCanSplit(store().layout)).toBe(false);
     });
   });
 
   describe('splitSurface', () => {
-    it('"v" adds the next missing surface to the top row', () => {
+    it('"v" adds the workspace to the top row', () => {
       store().splitSurface('v');
       const { layout } = store();
-      expect(layout.top).toContain('files');
+      expect(layout.top).toEqual(['chat', 'workspace']);
       expect(layout.bottom).toBeNull();
     });
 
-    it('"h" adds the next missing surface to the bottom strip', () => {
+    it('"h" adds the workspace to the bottom strip', () => {
       store().splitSurface('h');
       const { layout } = store();
-      expect(layout.bottom).toBe('files');
+      expect(layout.bottom).toBe('workspace');
       expect(layout.top).toEqual(['chat']);
     });
 
-    it('"h" does nothing when bottom strip is already occupied', () => {
-      store().splitSurface('h'); // files → bottom
-      store().splitSurface('h'); // run → nowhere (bottom occupied)
-      const { layout } = store();
-      expect(layout.bottom).toBe('files');
-      expect(layout.top).toEqual(['chat']);
-    });
-
-    it('"v" twice: first goes to top row, second goes to bottom (top is full)', () => {
-      store().splitSurface('v'); // files → top row
-      store().splitSurface('v'); // run → top is full → bottom
-      const { layout } = store();
-      expect(layout.bottom).toBe('run');
-    });
-
-    it('does nothing when both files and run are already active', () => {
-      store().toggleSurface('files');
-      store().toggleSurface('run');
+    it('does nothing when the workspace is already lit', () => {
+      store().toggleSurface('workspace');
       const before = store().layout;
       store().splitSurface('v');
       expect(store().layout).toEqual(before);

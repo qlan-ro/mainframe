@@ -78,7 +78,11 @@ export const warmHighlight = HighlightStyle.define([
 
 const CM6_THEME_SPEC = {
   '&': {
-    backgroundColor: 'var(--mf-code-bg)',
+    // The editor surface sits directly on a bg-background pane, so it takes
+    // the THEME background in both modes — the code palette's own paper
+    // (--mf-code-bg) stays for bordered code chips in chat/preview, where the
+    // offset tint is the point.
+    backgroundColor: 'var(--background)',
     color: 'var(--mf-code-fg)',
     fontSize: '12px',
     height: '100%',
@@ -89,7 +93,7 @@ const CM6_THEME_SPEC = {
     padding: '4px 0',
   },
   '.cm-gutters': {
-    backgroundColor: 'var(--mf-code-bg)',
+    backgroundColor: 'var(--background)',
     color: 'var(--mf-text-4)',
     border: 'none',
     paddingRight: '8px',

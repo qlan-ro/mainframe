@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -25,6 +25,11 @@ vi.mock('@/features/git/BranchPopover', () => ({
 
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+
+// v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 beforeEach(() => {
   localStorage.clear();
@@ -43,7 +48,7 @@ describe('MainToolbar — root element', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -62,7 +67,7 @@ describe('MainToolbar — project name', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -83,7 +88,7 @@ describe('MainToolbar — branch chip', () => {
         projectName="mainframe"
         projectId="p1"
         chatId="c1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -110,7 +115,7 @@ describe('MainToolbar — branch chip', () => {
         isWorktree
         projectId="p1"
         chatId="c1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -136,7 +141,7 @@ describe('MainToolbar — branch chip', () => {
         branchName="feat/wt-draft"
         isWorktree
         projectId="p1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -162,7 +167,7 @@ describe('MainToolbar — branch chip', () => {
         branchName="feat/wt-draft"
         isWorktree
         projectId="p1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -182,7 +187,7 @@ describe('MainToolbar — branch chip', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         branchName="feat/x"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -204,7 +209,7 @@ describe('MainToolbar — branch chip', () => {
         projectName="mainframe"
         projectId="p1"
         chatId="c1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -220,7 +225,7 @@ describe('MainToolbar — branch chip', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -246,7 +251,7 @@ describe('MainToolbar — branch chip refresh after popover write', () => {
         isWorktree
         projectId="p1"
         chatId="c1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -271,7 +276,7 @@ describe('MainToolbar — show-sidebar button', () => {
         sidebarRendered={false}
         onExpandSidebar={onExpandSidebar}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -291,7 +296,7 @@ describe('MainToolbar — show-sidebar button', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -308,7 +313,7 @@ describe('MainToolbar — launch controls', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -328,7 +333,7 @@ describe('MainToolbar — search button', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -346,7 +351,7 @@ describe('MainToolbar — inspector toggle', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -371,7 +376,7 @@ describe('MainToolbar — CMD+O hint chip in search button', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -389,7 +394,7 @@ describe('MainToolbar — theme toggle', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -412,7 +417,7 @@ describe('MainToolbar — Setup Advisor button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         projectId="p1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -429,7 +434,7 @@ describe('MainToolbar — Setup Advisor button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         projectId="p1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -446,7 +451,7 @@ describe('MainToolbar — Setup Advisor button', () => {
         sidebarRendered={true}
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
-        windowStyle="glass"
+
         port={31415}
       />,
     );
@@ -463,7 +468,7 @@ describe('MainToolbar — Setup Advisor button', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         projectId="p1"
-        windowStyle="glass"
+
         port={31415}
       />,
     );

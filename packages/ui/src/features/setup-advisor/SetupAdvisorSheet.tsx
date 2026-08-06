@@ -8,6 +8,7 @@
  * feeds the result back down as `copiedIds` (per-row) and `copiedCount` (the
  * footer's report-scoped total).
  */
+import { Button } from '@v2/components/ui/button';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { AutomationRecommendation, RecommendationCategory, SetupAdvisorReport } from '@qlan-ro/mainframe-types';
@@ -46,23 +47,18 @@ function ErrorBody({ error, onRetry }: { error: string; onRetry: () => void }) {
     <div className="p-4">
       <p className="text-body font-medium text-foreground">Couldn&apos;t analyze this project.</p>
       <p className="mt-1 text-caption text-muted-foreground">{error}</p>
-      <button
-        type="button"
-        data-testid="automation-recommender-retry"
-        onClick={onRetry}
-        className="mt-3 rounded-md bg-primary px-3 py-1.5 text-label font-medium text-primary-foreground transition-opacity hover:opacity-90"
-      >
+      <Button size="sm" className="mt-3" data-testid="automation-recommender-retry" onClick={onRetry}>
         Try again
-      </button>
+      </Button>
     </div>
   );
 }
 
 function Footer({ done, total, rows }: { done: number; total: number; rows: AutomationRecommendation[] }) {
   return (
-    <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-2.5 text-caption">
+    <div className="flex shrink-0 items-center justify-between border-t px-4 py-2.5 text-xs">
       <span className="text-muted-foreground">{payloadFooterText(rows)}</span>
-      <span className={cn('tabular-nums', done > 0 ? 'text-mf-success' : 'text-muted-foreground')}>
+      <span className={cn('tabular-nums', done > 0 ? 'text-success' : 'text-muted-foreground')}>
         {done} of {total} copied
       </span>
     </div>

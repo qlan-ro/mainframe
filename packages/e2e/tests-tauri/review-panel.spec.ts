@@ -52,7 +52,14 @@
  *   review-commit-error          — commit failure message
  *   chat-user-review-comment     — the parsed review-comment message card
  *   chat-user-review-comment-L<n> — a single comment section within that card
- *   files-tab-strip [role="tab"] — Files surface tab strip (open-in-workspace target)
+ *   WORKSPACE.strip + [role="tab"] — the workspace pane's tab strip and its pills
+ *                                  (open-in-workspace target; see helpers/tauri/testids.ts —
+ *                                  a strip is keyed by pane id since the Files+Run merge)
+ *
+ * Selected/viewed file rows carry no ARIA state (ReviewFileTree renders plain
+ * `<button>`s), so the selection tint is asserted by class — `bg-sidebar-selection`
+ * since the v2 port (it was `bg-mf-selection` in the warm-chrome tree; the legacy
+ * name now only survives as a bridge alias in styles/legacy-bridge.css).
  */
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'child_process';
@@ -60,6 +67,7 @@ import { appendFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
 
@@ -136,7 +144,7 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
     // Auto-select: whichever file rendered first in the list carries the
     // selection tint, and its diff loads into the center pane.
     const firstRow = page.locator('[data-testid^="review-file-row-"]').first();
-    await expect(firstRow).toHaveClass(/bg-mf-selection/);
+    await expect(firstRow).toHaveClass(/bg-sidebar-selection/);
     await expect(page.getByTestId('review-viewed-toggle')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('review-viewed-counter')).toHaveText(/0\/3 viewed/);
 
@@ -149,8 +157,8 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
   test('clicking a file row selects it and swaps the diff to that file', async () => {
     const { page } = app;
     await page.getByTestId('review-file-row-index.ts').click();
-    await expect(page.getByTestId('review-file-row-index.ts')).toHaveClass(/bg-mf-selection/);
-    await expect(page.getByTestId('review-file-row-CLAUDE.md')).not.toHaveClass(/bg-mf-selection/);
+    await expect(page.getByTestId('review-file-row-index.ts')).toHaveClass(/bg-sidebar-selection/);
+    await expect(page.getByTestId('review-file-row-CLAUDE.md')).not.toHaveClass(/bg-sidebar-selection/);
 
     const diffRoot = page.getByTestId('editor-diff');
     const modifiedPane = diffRoot.locator('.cm-content').nth(1);
@@ -178,13 +186,13 @@ test.describe('§review-panel — layout, files, diff, viewed toggle', () => {
     await expect(indexRow).toHaveClass(/opacity-55/);
   });
 
-  test('Open in workspace closes the modal and opens the file in the Files surface', async () => {
+  test('Open in workspace closes the modal and opens the file in the workspace', async () => {
     const { page } = app;
     // new-file.ts is selected from the previous test.
     await page.getByTestId('review-open-in-workspace').click();
     await expect(page.getByTestId('review-modal')).toHaveCount(0);
 
-    const tab = page.locator('[data-testid="files-tab-strip"] [role="tab"]').filter({ hasText: 'new-file.ts' });
+    const tab = page.locator(`${WORKSPACE.strip} [role="tab"]`).filter({ hasText: 'new-file.ts' });
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await expect(tab).toHaveAttribute('aria-selected', 'true');
   });
@@ -346,7 +354,12 @@ test.describe('§review-panel — close controls', () => {
   test('Escape closes the panel', async () => {
     const { page } = app;
     await openReview(page);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('review-modal')).toHaveCount(0);
+    // Escape can land before Radix has attached the dialog's own keydown listener —
+    // the panel is still animating in — and a swallowed press leaves it up. Retry the
+    // press until the panel is actually gone rather than pressing once and hoping.
+    await expect(async () => {
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 2_000 });
+    }).toPass({ timeout: 10_000, intervals: [300, 700, 1_500] });
   });
 });

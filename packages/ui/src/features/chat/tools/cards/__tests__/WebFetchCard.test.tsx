@@ -1,7 +1,7 @@
 /**
  * Behavior tests for WebFetchCard (WebFetch + WebSearch).
  *
- * Design contract (09-toolcards.jsx: TOOL_META.web + web body):
+ * Contract:
  *  - globe icon, verb "Fetch", clickable url (accent, mono), summary paragraph.
  *
  * Each test passes a fixed, concrete props object and asserts observable DOM
@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -51,9 +51,9 @@ const baseProps = {
 // WebFetch
 // ---------------------------------------------------------------------------
 
-describe('WebFetchCard — family color token', () => {
-  it('renders the family tile using the dedicated --mf-tool-web tint token', () => {
-    const { container } = render(
+describe('WebFetchCard — family glyph', () => {
+  it('carries the family by glyph shape alone, with no per-family fill', () => {
+    render(
       <Wrap>
         <WebFetchCard
           {...baseProps}
@@ -64,8 +64,11 @@ describe('WebFetchCard — family color token', () => {
         />
       </Wrap>,
     );
-    const tile = container.querySelector('span[aria-hidden]') as HTMLElement;
-    expect(tile).toHaveStyle({ backgroundColor: 'var(--mf-tool-web-tint)' });
+    const trigger = screen.getByTestId('web-fetch-card-trigger');
+    expect(trigger.querySelector('.lucide-globe')).toBeInTheDocument();
+    // The six --mf-tool-* tints are gone: nothing in the header sets a fill of
+    // its own, so state reads off the StatusDot instead of a tinted tile.
+    expect(trigger.querySelector('[style*="background"]')).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * EditorTab — renders the active 'code' or 'viewer' tab in the Files surface.
+ * EditorTab — renders the active 'code' or 'viewer' tab in the workspace surface.
  *
  * Responsibilities:
  *  - loads file content via lib/tauri bridge
@@ -19,7 +19,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { inferLanguage } from '@/lib/editor/file-types';
 import { useEditorStore } from '@/store/editor';
-import { useTabsStore } from '@/store/tabs';
+import { useLayoutStore } from '@/store/layout';
 import { ViewerRouter } from '@/features/viewers/viewer-router';
 import { lspClientManager, getLspLanguage } from '@/lib/lsp';
 import { EditorContextMenu } from './context-menu/EditorContextMenu';
@@ -46,7 +46,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
   const [cursorPos, setCursorPos] = useState<{ ln: number; col: number }>({ ln: 1, col: 1 });
   const host = useHost();
   const setBuffer = useEditorStore((s) => s.setBuffer);
-  const promoteTab = useTabsStore((s) => s.promoteTab);
+  const promoteTab = useLayoutStore((s) => s.promoteFileTab);
   const port = useDaemonPort();
   const { projectId, chatId, projectPath } = useActiveIdentity();
   // Stable ref for path so the unmount effect always sees the current path.
@@ -210,7 +210,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   if (loadState.status === 'loading') {
     return (
-      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-body text-muted-foreground">
+      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
     );
@@ -218,7 +218,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   if (loadState.status === 'error') {
     return (
-      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-body text-destructive">
+      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-destructive">
         {loadState.message}
       </div>
     );

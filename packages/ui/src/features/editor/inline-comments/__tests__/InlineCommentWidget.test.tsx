@@ -15,9 +15,14 @@
  *   - Send button fires onSend when text is non-empty
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
 import { InlineCommentWidget } from '../InlineCommentWidget';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 describe('InlineCommentWidget', () => {
   const defaultProps = {

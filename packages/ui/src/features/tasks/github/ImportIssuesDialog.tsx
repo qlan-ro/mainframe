@@ -12,9 +12,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '@v2/components/ui/dialog';
+import { Button } from '@v2/components/ui/button';
+import { Checkbox } from '@v2/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { RemoteIssue } from '@/lib/api/todos-github';
 import { runOrToast } from './run-or-toast';
@@ -43,18 +43,18 @@ function IssueRow({ issue, selected, onToggle }: RowProps): React.ReactElement {
         onCheckedChange={() => onToggle(issue.number)}
         className="shrink-0"
       />
-      <span className="shrink-0 font-mono text-label font-medium text-primary">#{issue.number}</span>
-      <span className={cn('min-w-0 flex-1 truncate text-body', paired ? 'text-muted-foreground' : 'text-foreground')}>
+      <span className="shrink-0 font-mono text-xs font-medium text-primary">#{issue.number}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-sm', paired ? 'text-muted-foreground' : 'text-foreground')}>
         {issue.title}
       </span>
       {paired ? (
-        <span className="shrink-0 text-caption text-muted-foreground">
+        <span className="shrink-0 text-xs text-muted-foreground">
           Already paired with task #{issue.pairedTodoNumber}
         </span>
       ) : (
         <span className="flex shrink-0 flex-wrap gap-1">
           {issue.labels.map((label) => (
-            <span key={label} className="rounded bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
+            <span key={label} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
               {label}
             </span>
           ))}
@@ -113,11 +113,11 @@ export function ImportIssuesDialog(): React.ReactElement | null {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {issues.length === 0 ? (
             error !== null ? (
-              <p data-testid="tasks-github-import-error" className="px-2 py-4 text-body text-destructive">
+              <p data-testid="tasks-github-import-error" className="px-2 py-4 text-sm text-destructive">
                 {error}
               </p>
             ) : (
-              <p className="px-2 py-4 text-body text-muted-foreground">No open issues to import.</p>
+              <p className="px-2 py-4 text-sm text-muted-foreground">No open issues to import.</p>
             )
           ) : (
             <>
@@ -131,8 +131,8 @@ export function ImportIssuesDialog(): React.ReactElement | null {
                   onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(importable))}
                   className="shrink-0"
                 />
-                <span className="text-label font-medium text-foreground">Select all</span>
-                <span className="text-caption text-muted-foreground">{issues.length} open</span>
+                <span className="text-xs font-medium text-foreground">Select all</span>
+                <span className="text-xs text-muted-foreground">{issues.length} open</span>
               </label>
               {issues.map((issue) => (
                 <IssueRow key={issue.number} issue={issue} selected={selected.has(issue.number)} onToggle={toggle} />

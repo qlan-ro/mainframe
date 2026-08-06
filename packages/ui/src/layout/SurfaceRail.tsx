@@ -1,7 +1,9 @@
 import type { SurfaceId } from '@/store/layout';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
-import { ChatGlyph, EditorGlyph, PreviewGlyph } from './surface-icons';
-import { Hint } from '@/components/ui/hint';
+import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
+import { Hint } from '@v2/components/ui/hint';
+import { cn } from '@/lib/utils';
+import { ChatGlyph, EditorGlyph } from './surface-icons';
 
 interface SurfaceDef {
   id: SurfaceId;
@@ -12,45 +14,54 @@ interface SurfaceDef {
 
 const SURFACES: SurfaceDef[] = [
   { id: 'chat', label: 'Chat', Icon: ChatGlyph, activeColor: 'text-primary' },
-  { id: 'files', label: 'Editor', Icon: EditorGlyph, activeColor: 'text-mf-surface-files' },
-  { id: 'run', label: 'Preview', Icon: PreviewGlyph, activeColor: 'text-mf-surface-run' },
+  { id: 'workspace', label: 'Workspace', Icon: EditorGlyph, activeColor: 'text-primary' },
 ];
 
 export function SurfaceRail() {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
 
+  const lit = SURFACES.filter(({ id }) => layout.top.includes(id) || layout.bottom === id).map(({ id }) => id);
+
   return (
-    <div data-testid="surface-rail" className="flex flex-shrink-0 gap-0.5 rounded-[8px] bg-mf-chip p-0.5">
+    <ToggleGroup
+      type="multiple"
+      data-testid="surface-rail"
+      value={lit}
+      onValueChange={(next) => {
+        // Radix hands back the whole value array; the toggled surface is the
+        // symmetric difference against the store-derived current state.
+        const changed = SURFACES.find(({ id }) => lit.includes(id) !== next.includes(id));
+        if (changed) toggleSurface(changed.id);
+      }}
+      className="shrink-0 gap-0.5 rounded-lg bg-muted p-0.5"
+    >
       {SURFACES.map(({ id, label, Icon, activeColor }) => {
-        const on = layout.top.includes(id) || layout.bottom === id;
+        const on = lit.includes(id);
         // Dynamic floor: the single lit surface (whichever it is) can't be toggled off.
         const isFloor = isSurfaceFloor(layout, id);
 
         return (
           <Hint key={id} label={label}>
-            <button
+            <ToggleGroupItem
+              value={id}
               data-testid={`surface-rail-${id}`}
-              data-tut={id === 'run' ? 'run' : undefined}
-              type="button"
+              data-tut={id === 'workspace' ? 'workspace' : undefined}
               disabled={isFloor}
-              onClick={() => toggleSurface(id)}
-              className={[
-                'inline-flex h-[21px] w-[26px] flex-shrink-0 items-center justify-center rounded-[6px] border-none p-0',
-                'transition-[background,box-shadow] duration-[120ms] ease',
-                on
-                  ? 'bg-mf-tab-active shadow-[var(--mf-shadow-rail-active)]'
-                  : 'cursor-pointer bg-transparent hover:bg-accent',
-                isFloor ? 'cursor-default opacity-60' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
+              className={cn(
+                'h-7 w-8 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
+                // Pressed chrome keys off store state, NOT data-[state=on]: the Hint's
+                // TooltipTrigger asChild overwrites the item's data-state with the
+                // tooltip's open-state ("closed"), so the Radix selector never matches.
+                on && 'bg-background shadow-sm hover:bg-background',
+                isFloor && 'disabled:opacity-60',
+              )}
             >
-              <Icon size={12} className={on ? activeColor : 'text-mf-text-3'} />
-            </button>
+              <Icon size={16} className={on ? activeColor : 'text-muted-foreground'} />
+            </ToggleGroupItem>
           </Hint>
         );
       })}
-    </div>
+    </ToggleGroup>
   );
 }

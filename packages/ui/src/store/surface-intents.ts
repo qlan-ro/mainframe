@@ -2,14 +2,14 @@ export type SurfaceIntent =
   | { type: 'open-file'; path: string; line?: number; character?: number }
   | { type: 'open-diff'; path: string; original?: string; modified?: string }
   | { type: 'reveal-file'; path: string }
-  | { type: 'activate-surface'; surface: 'chat' | 'files' | 'run' }
-  /** Trigger the file-open picker / command palette in the Files surface. */
+  | { type: 'activate-surface'; surface: 'chat' | 'workspace' }
+  /** Trigger the file-open picker / command palette. */
   | { type: 'open-file-picker' }
   /** Switch the InspectorPane to the specified tab. */
   | { type: 'inspector-tab'; tab: 'files' | 'changes' }
-  /** Spawn a new terminal in the Run surface (optionally targeting a pane). */
+  /** Spawn a new terminal in the workspace (optionally targeting a pane). */
   | { type: 'new-terminal'; paneId?: string }
-  /** Open (or focus) a URL tab in the Run surface (optionally targeting a pane). */
+  /** Open (or focus) a URL tab in the workspace (optionally targeting a pane). */
   | { type: 'open-url-tab'; url: string; paneId?: string }
   /** Open the global search / command palette overlay. */
   | { type: 'open-search-palette' }

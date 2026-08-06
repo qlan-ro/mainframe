@@ -13,16 +13,17 @@
  *  2. Loading — fetching branches/worktrees on first open
  *  3. Setup — New tab (create) / Existing tab (attach)
  *
- * Built on shadcn Popover + Menu* primitives. Real mf-* tokens only.
+ * A Popover, not a DropdownMenu: the body is a FORM (base-branch select, branch
+ * name, validation), and forms never live inside a Radix menu.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderGit2, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
-import { MenuDivider, MenuLabel } from '@/components/ui/menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import { Separator } from '@v2/components/ui/separator';
+import { Hint } from '@v2/components/ui/hint';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -30,8 +31,17 @@ import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/dr
 import { WorktreeDraftPanel } from './WorktreeDraftPanel';
 import { WorktreeNotice } from './WorktreeNotice';
 import { WorktreeNewForm } from './WorktreeNewForm';
-import { WorktreeTabBar, WorktreeExistingTab } from './WorktreeExistingTab';
+import { WorktreeTabBar, WorktreeExistingTab, WorktreeSectionLabel } from './WorktreeExistingTab';
 import type { WorktreeTab } from './WorktreeExistingTab';
+
+/** Centered spinner for the first-open fetch. */
+function WorktreeLoading() {
+  return (
+    <div className="flex items-center justify-center py-5">
+      <Loader2 size={14} className="animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Active-info panel (chat already isolated into a worktree)
@@ -39,21 +49,18 @@ import type { WorktreeTab } from './WorktreeExistingTab';
 
 function ActiveInfo({ chat }: { chat: Chat }) {
   return (
-    <div data-testid="composer-worktree-active-info" className="space-y-[6px] px-[8px] py-[6px]">
-      <div className="flex items-center gap-[6px]">
-        <span className="inline-block size-[7px] shrink-0 rounded-full bg-mf-success" aria-hidden />
-        <span className="text-caption font-medium text-foreground">Isolated in worktree</span>
+    <div data-testid="composer-worktree-active-info" className="flex flex-col gap-1.5 px-2 py-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+        <span className="text-xs font-medium text-foreground">Isolated in worktree</span>
       </div>
-      <MenuDivider />
-      <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
-        <span className="text-caption text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
-        <span className="text-caption text-muted-foreground">Path</span>
-        <TruncatedWithTooltip
-          text={chat.worktreePath ?? ''}
-          className="font-mono text-caption text-foreground"
-          contentClassName="font-mono break-all"
-        />
+      <Separator />
+      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-xs">
+        <span className="text-muted-foreground">Branch</span>
+        {/* Branch names are UI sans, never mono (2026-08-05 decision). */}
+        <span className="truncate text-foreground">{chat.branchName ?? '—'}</span>
+        <span className="text-muted-foreground">Path</span>
+        <TruncatedWithTooltip text={chat.worktreePath ?? ''} className="text-foreground" contentClassName="break-all" />
       </div>
     </div>
   );
@@ -186,53 +193,51 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              data-testid="composer-worktree-trigger"
-              aria-label={showIsolated ? `Worktree: ${branchLabel}` : 'Isolate in worktree'}
-              className={[
-                'relative flex h-[20px] w-[26px] shrink-0 items-center justify-center gap-[3px]',
-                'rounded-sm border-[0.5px] text-muted-foreground',
-                showIsolated ? 'border-mf-success text-mf-success' : 'border-border',
-                'hover:bg-accent hover:text-accent-foreground',
-                'data-[state=open]:border-primary data-[state=open]:bg-mf-selection',
-                'transition-colors focus-visible:outline-none',
-              ].join(' ')}
-            >
-              <FolderGit2 size={13} />
-              {showIsolated && (
-                <span className="absolute right-0.5 top-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
-              )}
-            </button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          {showIsolated ? `Worktree: ${branchLabel}` : 'Isolate session in a worktree'}
-        </TooltipContent>
-      </Tooltip>
+      {/* Hint WRAPS the PopoverTrigger — inside it, TooltipTrigger's asChild
+          would clobber the trigger's own data-state. */}
+      <Hint label={showIsolated ? `Worktree: ${branchLabel}` : 'Isolate session in a worktree'} side="top">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-testid="composer-worktree-trigger"
+            aria-label={showIsolated ? `Worktree: ${branchLabel}` : 'Isolate in worktree'}
+            // Geometry matches its untouched neighbours in the config chip row
+            // (PermissionSelect / PlanModeToggle); only the tokens moved to v2.
+            className={[
+              'relative flex h-[20px] w-[26px] shrink-0 items-center justify-center gap-[3px]',
+              'rounded-sm border text-muted-foreground',
+              showIsolated ? 'border-success text-success' : 'border-border',
+              'hover:bg-accent hover:text-accent-foreground',
+              'data-[state=open]:border-primary data-[state=open]:bg-sidebar-selection',
+              'transition-colors focus-visible:outline-none',
+            ].join(' ')}
+          >
+            <FolderGit2 size={13} />
+            {showIsolated && (
+              <span className="absolute top-0.5 right-0.5 size-[5px] rounded-full bg-primary" aria-hidden />
+            )}
+          </button>
+        </PopoverTrigger>
+      </Hint>
 
       <PopoverContent
         data-testid="composer-worktree-popover"
         align="start"
         side="top"
         sideOffset={6}
-        className="w-[280px] p-[5px]"
+        // w-72 is the primitive's own width; only the compact gap/padding differ.
+        className="gap-2 p-2"
       >
         {isLocalDraft && draft != null && showIsolated ? (
           <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
         ) : isIsolated ? (
           <>
             <ActiveInfo chat={chat} />
-            <div className="mt-[6px]">
-              <MenuLabel>Move to another worktree</MenuLabel>
+            <div className="flex flex-col gap-1.5">
+              <WorktreeSectionLabel>Move to another worktree</WorktreeSectionLabel>
               {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
               {loading ? (
-                <div className="flex items-center justify-center py-[20px]">
-                  <Loader2 size={14} className="animate-spin text-mf-text-3" />
-                </div>
+                <WorktreeLoading />
               ) : (
                 <WorktreeExistingTab
                   worktrees={otherWorktrees}
@@ -244,9 +249,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
             </div>
           </>
         ) : loading ? (
-          <div className="flex items-center justify-center py-[20px]">
-            <Loader2 size={14} className="animate-spin text-mf-text-3" />
-          </div>
+          <WorktreeLoading />
         ) : (
           <>
             {busy ? (
@@ -258,28 +261,26 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
                 </WorktreeNotice>
               )
             )}
-            <MenuLabel>Isolate session</MenuLabel>
+            <WorktreeSectionLabel>Isolate session</WorktreeSectionLabel>
             <WorktreeTabBar active={tab} onChange={setTab} />
-            <div className="mt-[6px]">
-              {tab === 'new' ? (
-                <WorktreeNewForm
-                  branches={branches}
-                  currentBranch={currentBranch}
-                  submitting={submitting}
-                  disabled={busy}
-                  apiError={apiError}
-                  onEnable={handleEnable}
-                  onCancel={() => setOpen(false)}
-                />
-              ) : (
-                <WorktreeExistingTab
-                  worktrees={worktrees}
-                  disabled={submitting || busy}
-                  onAttach={handleAttach}
-                  error={apiError}
-                />
-              )}
-            </div>
+            {tab === 'new' ? (
+              <WorktreeNewForm
+                branches={branches}
+                currentBranch={currentBranch}
+                submitting={submitting}
+                disabled={busy}
+                apiError={apiError}
+                onEnable={handleEnable}
+                onCancel={() => setOpen(false)}
+              />
+            ) : (
+              <WorktreeExistingTab
+                worktrees={worktrees}
+                disabled={submitting || busy}
+                onAttach={handleAttach}
+                error={apiError}
+              />
+            )}
           </>
         )}
       </PopoverContent>

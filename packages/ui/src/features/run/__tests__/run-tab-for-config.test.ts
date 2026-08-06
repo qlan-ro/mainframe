@@ -1,5 +1,5 @@
 /**
- * runTabForConfig — builds the Run tab for a launch config.
+ * runTabForConfig — builds the workspace tab for a launch config.
  *
  * Behaviors:
  *  - preview config → kind 'preview' + carries the resolved port

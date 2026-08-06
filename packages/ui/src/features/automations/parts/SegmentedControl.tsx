@@ -1,13 +1,14 @@
 /**
  * SegmentedControl — a one-of-N mode switch (`SchedulePicker`'s
- * preset/custom/once). `components/ui/` has no tabs or segmented primitive,
- * and Radix Tabs would tie the choice to panel mounting; this is a plain
- * `aria-pressed` button row, so callers stay free to render whatever the
+ * preset/custom/once) on the v2 Tabs primitives. Only the List/Trigger pair
+ * is used — no TabsContent — so callers stay free to render whatever the
  * chosen mode implies.
  *
- * Clicking the selected option is a no-op: `onChange` means "the value
- * changed", so callers can seed state from it without guarding re-entry.
+ * Radix Tabs never re-fires on the selected option, so `onChange` still
+ * means "the value changed" and callers can seed state from it without
+ * guarding re-entry.
  */
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 export interface SegmentedControlOption<T extends string> {
@@ -33,31 +34,26 @@ export function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className={cn('inline-flex h-[24px] items-center rounded-md border-[0.5px] bg-muted p-[2px]', className)}
+    // manual activation: automatic mode also activates on FOCUS, so a plain
+    // click would fire onChange twice before the parent re-renders.
+    <Tabs
+      value={value}
+      activationMode="manual"
+      onValueChange={(next) => onChange(next as T)}
+      className={cn('w-fit', className)}
     >
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
+      <TabsList aria-label={label} className="h-6 p-[2px]">
+        {options.map((option) => (
+          <TabsTrigger
             key={option.value}
-            type="button"
+            value={option.value}
             data-testid={`${testIdPrefix}-${option.value}`}
-            aria-pressed={active}
-            onClick={() => {
-              if (!active) onChange(option.value);
-            }}
-            className={cn(
-              'h-full rounded-[5px] px-2 text-caption font-medium transition-colors',
-              active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
+            className="px-2 text-xs font-medium"
           >
             {option.label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }

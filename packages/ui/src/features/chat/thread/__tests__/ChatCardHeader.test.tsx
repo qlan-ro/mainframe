@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
@@ -44,10 +45,15 @@ import { layoutCanSplit, useLayoutStore } from '@/store/layout';
 let fakeHost: FakeHostBridge;
 
 function renderHeader() {
+  // The header is full of v2 `Hint`s, which carry no provider of their own
+  // (shadcn treats that as an app-root concern; the v1 provider satisfies
+  // nothing). Compose it INTO the host wrapper rather than beside it.
   return render(
-    <HostProvider host={fakeHost}>
-      <ChatCardHeader />
-    </HostProvider>,
+    <TooltipProvider>
+      <HostProvider host={fakeHost}>
+        <ChatCardHeader />
+      </HostProvider>
+    </TooltipProvider>,
   );
 }
 
@@ -80,10 +86,10 @@ describe('ChatCardHeader — structure', () => {
     expect(screen.getByTestId('chat-header').hasAttribute('data-drag-region')).toBe(true);
   });
 
-  it('has the fixed h-[36px] height class (uniform SurfaceTabStrip height, 15.5)', () => {
+  it('has the 36px surface-header height (h-9, shared with the workspace strip)', () => {
     renderHeader();
 
-    expect(screen.getByTestId('chat-header')).toHaveClass('h-[36px]');
+    expect(screen.getByTestId('chat-header')).toHaveClass('h-9');
   });
 
   it('renders grip and message-square icons as SVGs inside the header', () => {
@@ -126,8 +132,8 @@ describe('ChatCardHeader — split buttons', () => {
     fireEvent.click(screen.getByTestId('chat-header-split-right'));
 
     const { layout } = useLayoutStore.getState();
-    // splitSurface('v') places the next missing surface (files) into the top row.
-    expect(layout.top).toContain('files');
+    // splitSurface('v') places the workspace surface into the top row.
+    expect(layout.top).toContain('workspace');
   });
 
   it('clicking split-down places a non-chat surface in the bottom strip', () => {
@@ -136,8 +142,8 @@ describe('ChatCardHeader — split buttons', () => {
     fireEvent.click(screen.getByTestId('chat-header-split-down'));
 
     const { layout } = useLayoutStore.getState();
-    // splitSurface('h') sets the bottom strip to the next missing surface (files).
-    expect(layout.bottom).toBe('files');
+    // splitSurface('h') puts the workspace surface in the bottom strip.
+    expect(layout.bottom).toBe('workspace');
   });
 });
 
@@ -246,14 +252,14 @@ describe('ChatCardHeader — Hide Chat (dynamic floor)', () => {
   });
 
   it('enables Hide-Chat once another surface is lit, and hiding removes chat', () => {
-    useLayoutStore.getState().toggleSurface('files'); // chat + files lit
+    useLayoutStore.getState().toggleSurface('workspace'); // chat + workspace lit
     renderHeader();
     const hide = screen.getByTestId('chat-header-hide');
     expect(hide).not.toBeDisabled();
     fireEvent.click(hide);
     const { layout } = useLayoutStore.getState();
     expect(layout.top.includes('chat') || layout.bottom === 'chat').toBe(false);
-    expect(layout.top.includes('files')).toBe(true);
+    expect(layout.top.includes('workspace')).toBe(true);
   });
 });
 

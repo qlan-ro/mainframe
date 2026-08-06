@@ -1,0 +1,13 @@
+{
+  "//": "Not a separate build — the package tsconfig already compiles src/**, this directory included. It exists so `shadcn add -c packages/ui/src/v2` resolves @v2 to this directory, and so editors resolve v2 files against the same options as the package (a nested tsconfig wins for the LSP whether or not we wanted one).",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@v2/*": ["./*"],
+      "@/*": ["../*"]
+    }
+  },
+  "//include": "setup.ts is what pulls in the jest-dom matcher types; without it the LSP reports toHaveAttribute as missing on every v2 test (the package-wide `tsc` is unaffected).",
+  "include": [".", "../vite-env.d.ts", "../__tests__/setup.ts"]
+}

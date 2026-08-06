@@ -25,30 +25,30 @@ export function SyncRunBanner(): React.ReactElement | null {
       data-testid="tasks-github-banner"
       className={cn(
         'flex shrink-0 items-start gap-2 border-b px-4 py-2',
-        failed ? 'border-mf-warning/40 bg-mf-warning-tint' : 'border-border bg-card',
+        failed ? 'border-warning/40 bg-warning-tint' : 'border-border bg-card',
       )}
     >
       {failed ? (
-        <TriangleAlert size={12} className="mt-0.5 shrink-0 text-mf-warning" aria-hidden />
+        <TriangleAlert size={12} className="mt-0.5 shrink-0 text-warning" aria-hidden />
       ) : (
-        <CircleDot size={12} className="mt-0.5 shrink-0 text-mf-text-3" aria-hidden />
+        <CircleDot size={12} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
       )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-caption text-foreground">{counts}</span>
+          <span className="text-xs text-foreground">{counts}</span>
           {lastRun.overwrites > 0 && (
             <button
               data-testid="tasks-github-banner-report"
               type="button"
               onClick={() => openDialog({ kind: 'report' })}
-              className="text-caption font-medium text-primary underline-offset-2 transition-colors hover:underline"
+              className="text-xs font-medium text-primary underline-offset-2 transition-colors hover:underline"
             >
               View report
             </button>
           )}
         </div>
-        {detail !== null && <span className="text-caption text-mf-text-3">{detail}</span>}
+        {detail !== null && <span className="text-xs text-muted-foreground">{detail}</span>}
       </div>
 
       <button

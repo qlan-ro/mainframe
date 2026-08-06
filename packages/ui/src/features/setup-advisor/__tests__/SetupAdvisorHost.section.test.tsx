@@ -79,8 +79,9 @@ describe('SetupAdvisorHost — section switcher', () => {
 
     const recs = screen.getByTestId('setup-advisor-section-recommendations');
     const skills = screen.getByTestId('setup-advisor-section-skills');
-    expect(recs.getAttribute('aria-pressed')).toBe('true');
-    expect(skills.getAttribute('aria-pressed')).toBe('false');
+    // v2 Tabs semantics: the active trigger carries data-state="active".
+    expect(recs.getAttribute('data-state')).toBe('active');
+    expect(skills.getAttribute('data-state')).toBe('inactive');
 
     const title = screen.getByRole('heading', { level: 2 });
     expect(title.parentElement?.contains(recs)).toBe(true);
@@ -98,11 +99,11 @@ describe('SetupAdvisorHost — section switcher', () => {
     act(() => useSetupAdvisor.getState().openSheet());
     render(<SetupAdvisorHost />);
 
-    fireEvent.click(screen.getByTestId('setup-advisor-section-skills'));
+    fireEvent.mouseDown(screen.getByTestId('setup-advisor-section-skills'));
     expect(screen.getByTestId('skills-section-stub')).toBeTruthy();
     expect(screen.queryByTestId('setup-advisor-sheet-stub')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('setup-advisor-section-recommendations'));
+    fireEvent.mouseDown(screen.getByTestId('setup-advisor-section-recommendations'));
     expect(screen.getByTestId('setup-advisor-sheet-stub')).toBeTruthy();
     expect(screen.queryByTestId('skills-section-stub')).toBeNull();
   });
@@ -145,7 +146,9 @@ describe('SetupAdvisorHost — header layout', () => {
     render(<SetupAdvisorHost />);
 
     const title = screen.getByRole('heading', { level: 2 });
-    const switcher = screen.getByTestId('setup-advisor-section-recommendations').parentElement;
+    // v2 Tabs wrap the triggers in TabsList inside the Tabs root; the ROOT
+    // shares the header row with the title.
+    const switcher = screen.getByTestId('setup-advisor-section-recommendations').closest('[data-slot="tabs"]');
     expect(switcher).not.toBeNull();
     expect(title.parentElement).toBe(switcher?.parentElement);
     expect(title.className).toContain('min-w-0');

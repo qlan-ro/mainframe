@@ -2,7 +2,7 @@
  * layout/SurfaceDragLayer.tsx — renders the drag ghost + drop-zone highlight
  * during a surface/tab drag and commits on pointer-up. Mounted once by
  * SurfaceHost. Drop targets opt in by tagging an element with
- * `data-drop-surface="chat|files|run"`.
+ * `data-drop-surface="chat|workspace"`.
  */
 import { useEffect } from 'react';
 import type { SurfaceId } from '@/store/layout';

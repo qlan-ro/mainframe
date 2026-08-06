@@ -18,6 +18,7 @@
  *  7. Clicking an enabled `tasks-github-menu-sync` calls `sync()`; clicking
  *     `tasks-github-menu-import` calls `openDialog({ kind: 'import' })`.
  */
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -64,19 +65,31 @@ beforeEach(() => {
 
 describe('GitHubSyncControl — unlinked', () => {
   it('renders tasks-github-link reading "Link GitHub repo"', () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     const button = screen.getByTestId('tasks-github-link');
     expect(button.textContent).toContain('Link GitHub repo');
   });
 
   it('clicking tasks-github-link opens the link dialog', async () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-link'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'link' });
   });
 
   it('does not render tasks-github-pill', () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     expect(screen.queryByTestId('tasks-github-pill')).toBeNull();
   });
 });
@@ -84,7 +97,11 @@ describe('GitHubSyncControl — unlinked', () => {
 describe('GitHubSyncControl — linked pill', () => {
   it('shows owner/repo and "never synced" before the first run', () => {
     storeState.link = LINK_FIXTURE;
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     const pill = screen.getByTestId('tasks-github-pill');
     expect(pill.textContent).toContain('qlan-ro/mainframe');
     expect(pill.textContent).toContain('never synced');
@@ -92,7 +109,11 @@ describe('GitHubSyncControl — linked pill', () => {
 
   it('shows a "synced ... ago" phrase once lastSyncedAt is set', () => {
     storeState.link = { ...LINK_FIXTURE, lastSyncedAt: new Date(Date.now() - 3 * 60 * 1000).toISOString() };
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     const pill = screen.getByTestId('tasks-github-pill');
     expect(pill.textContent).toMatch(/synced .+ ago/);
   });
@@ -100,7 +121,11 @@ describe('GitHubSyncControl — linked pill', () => {
   it('reads "syncing…" while a run is in progress, in place of the synced-ago text', () => {
     storeState.link = LINK_FIXTURE;
     storeState.running = true;
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     const pill = screen.getByTestId('tasks-github-pill');
     expect(pill.textContent).toContain('syncing…');
   });
@@ -112,7 +137,11 @@ describe('GitHubSyncControl — menu', () => {
   });
 
   it('opens with the four items reading Sync now / Import issues… / Last sync report / Unlink repo…', async () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
 
     expect(screen.getByTestId('tasks-github-menu-sync').textContent).toContain('Sync now');
@@ -122,34 +151,54 @@ describe('GitHubSyncControl — menu', () => {
   });
 
   it('disables tasks-github-menu-report until a run exists', async () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
     expect(screen.getByTestId('tasks-github-menu-report').getAttribute('aria-disabled')).toBe('true');
   });
 
   it('enables tasks-github-menu-report once lastRun is set', async () => {
     storeState.lastRun = RUN_FIXTURE;
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
     expect(screen.getByTestId('tasks-github-menu-report').getAttribute('aria-disabled')).not.toBe('true');
   });
 
   it('disables tasks-github-menu-sync while running (AC35)', async () => {
     storeState.running = true;
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
     expect(screen.getByTestId('tasks-github-menu-sync').getAttribute('aria-disabled')).toBe('true');
   });
 
   it('calls sync() when an enabled tasks-github-menu-sync is clicked', async () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
     await userEvent.click(screen.getByTestId('tasks-github-menu-sync'));
     expect(sync).toHaveBeenCalledOnce();
   });
 
   it('calls openDialog({ kind: "import" }) when tasks-github-menu-import is clicked', async () => {
-    render(<GitHubSyncControl />);
+    render(
+      <TooltipProvider>
+        <GitHubSyncControl />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-github-pill'));
     await userEvent.click(screen.getByTestId('tasks-github-menu-import'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'import' });

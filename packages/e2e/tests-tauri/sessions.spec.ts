@@ -7,38 +7,62 @@
  * All tests run in E2E_MODE=mock (no AI). Tests use REST-seeded chats and seed
  * external JSONL files for the import suite.
  *
- * Testid reference (app-tauri renames):
+ * Testid reference (verified against packages/ui/src/v2/features/sessions/):
  *   sessions-row                  — each session row (data-chat-id attr)
  *   sessions-new-button           — + new session button
  *   sessions-more-button          — ⋯ overflow menu trigger
  *   sessions-more-archived        — dropdown item: Archived sessions
  *   sessions-more-import          — dropdown item: Import external sessions
- *   sessions-row-action-rename    — hover action: rename
- *   sessions-row-action-archive   — hover action: archive
- *   sessions-rename-input         — inline rename input
+ *   sessions-row-action-pin/-tags/-archive — hover actions, mounted on row hover
+ *                                   (SessionRowHoverActions.tsx). There is no
+ *                                   `sessions-row-action-rename`: Rename is
+ *                                   context-menu-only.
+ *   sessions-ctx-rename           — right-click menu item: Rename (SessionContextMenu.tsx)
+ *   sessions-rename-input         — inline rename input (replaces the row's title)
  *   sessions-row-title            — the title span
  *   sessions-archive-confirm-dialog — dialog root (worktree-backed chats only)
  *   sessions-archived-dialog      — archived sessions dialog
  *   archived-session-item         — row inside archived dialog
  *   restore-session-btn           — restore button in archived dialog
  *   sessions-import-dialog        — import dialog root
- *   sessions-import-project-<id> — project picker button in import dialog
+ *   sessions-import-project-<id>  — project picker button in import dialog
  *   external-session-item         — row in session list inside import dialog
  *   import-session-btn            — Import button on each external-session row
- *   sessions-new-picker           — sidebar "New" project picker (no filter pill active)
+ *   sessions-new-picker           — sidebar "New" project picker (no project selected)
  *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
  *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button
  *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button
- *   sessions-import-load-more     — ImportSessionsDialog infinite-scroll sentinel (IntersectionObserver)
- *   sessions-import-retry         — ImportSessionsDialog "Try again" button (fetch error state)
+ *   sessions-import-load-more     — ImportSessionList paging sentinel (IntersectionObserver),
+ *                                   hung on the windowed list's FOOTER — see the pagination
+ *                                   describe: it only mounts once the list end is scrolled
+ *                                   into view
+ *   sessions-import-retry         — ImportSessionList "Try again" button (fetch error state)
+ *
+ * Both dialog lists are WINDOWED now (DialogRowList.tsx → react-virtuoso, ~340px of
+ * rows mounted), so a row count is a count of what fits, not of what exists. Rows
+ * carry Virtuoso's `data-item-index`, which is what the pagination block asserts on.
+ *
+ * THE ZERO-SESSION BOOT PICKER (why every §35 describe dismisses a menu in setup):
+ * `ChatSurface`'s `useZeroSessionBootPicker` force-opens the `sessions-new-picker`
+ * DropdownMenu BOOT_SETTLE_MS (1.5s) after the app settles on an unresolved boot
+ * draft with projects > 0, no project filter and no draft config — i.e. exactly a
+ * project with zero sessions. It is a MODAL Radix layer, so it owns `<html>`'s
+ * pointer events and every sidebar/toolbar click below it reports "waiting for
+ * element to be visible, enabled and stable" on an element that is plainly on
+ * screen. The §45 describes seed a chat and never reach that state; the §35
+ * describes MUST keep the session list empty (the imported row is asserted as
+ * `sessions-row` `.first()`), so they dismiss the menu once in `beforeAll`
+ * instead. One dismissal is enough: the effect re-arms only when its dead-end
+ * condition itself flips.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
@@ -81,6 +105,48 @@ function seedExternalSession(
  *  chars), which carries the zero-padded index so ids stay unique and lowercase-hex-valid. */
 function uuidForIndex(n: number): string {
   return `eeeeeeee-eeee-4eee-8eee-${n.toString(16).padStart(12, '0')}`;
+}
+
+// ── zero-session boot picker + import dialog helpers (see the header note) ────
+
+/** Wait out the boot-settle window and close the force-opened "New session in…"
+ *  menu, so the modal layer stops swallowing sidebar clicks. Bounded and
+ *  tolerant: if the picker never opens, `closeMenus` is a no-op assertion. */
+async function dismissBootPicker(page: Page): Promise<void> {
+  await page
+    .getByTestId('sessions-new-picker')
+    .waitFor({ timeout: 10_000 })
+    .catch(() => {
+      /* expected when the app is not at the boot dead-end */
+    });
+  await closeMenus(page);
+}
+
+/**
+ * Open the import dialog and advance past step 1 onto the session list.
+ *
+ * With no project filter active `ImportSessionsDialog` always renders the project
+ * picker first, so the pick is unconditional. The two waits before it are the
+ * layers that otherwise eat these clicks: a ⋯ menu still mounted through its exit
+ * animation swallows the trigger click that reopens it, and a dialog's overlay
+ * outlives its content's unmount, so a dialog reopened under the previous one's
+ * fading scrim has every click inside it intercepted.
+ */
+async function openImportForProject(page: Page, projectId: string): Promise<void> {
+  await closeMenus(page);
+  await waitForDialogScrimsGone(page);
+  await sessionsSidebar(page).openImport();
+  await expect(page.getByTestId('sessions-import-dialog')).toBeVisible({ timeout: 5_000 });
+  await sessionsSidebar(page).importProjectOption(projectId).click({ timeout: 10_000 });
+}
+
+/** Dismiss the import dialog and PROVE the content is gone — an unverified Escape
+ *  used to leave a modal dialog stacked under the next test's dialog. The scrim is
+ *  waited out on the OPEN side (`openImportForProject`), where it also covers the
+ *  dialogs this suite closes by importing rather than by Escape. */
+async function closeImportDialog(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('sessions-import-dialog')).toHaveCount(0, { timeout: 5_000 });
 }
 
 // ─── §45 Sessions panel ───────────────────────────────────────────────────────
@@ -329,6 +395,12 @@ test.describe('§35 External session import', () => {
         { timeout: 15_000 },
       )
       .toBe(2);
+
+    // `createTauriProject` reloaded into the zero-session boot dead-end, so the
+    // forced project picker is (or is about to be) open over the sidebar. This
+    // describe needs the session list empty, so dismiss it rather than seed a
+    // session — see the header note.
+    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {
@@ -347,48 +419,26 @@ test.describe('§35 External session import', () => {
     const importItem = page.getByTestId('sessions-more-import');
     await expect(importItem).toBeVisible({ timeout: 5_000 });
     await expect(importItem).not.toHaveAttribute('data-disabled', 'true');
-    // Close the menu by pressing Escape.
-    await page.keyboard.press('Escape');
+    await closeMenus(page);
   });
 
   test('opens dialog and shows importable sessions', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
-    await sidebar.openImport();
-
-    const importDialog = page.getByTestId('sessions-import-dialog');
-    await importDialog.waitFor({ timeout: 5_000 });
-
-    // Step 1: project picker — click our project.
-    const projectBtn = sidebar.importProjectOption(project.projectId);
-    await projectBtn.waitFor({ timeout: 5_000 }).catch(() => {});
-    if (await projectBtn.isVisible().catch(() => false)) {
-      await projectBtn.click();
-    }
+    await openImportForProject(page, project.projectId);
 
     // Step 2: session list should show both seeded sessions.
     const items = page.getByTestId('external-session-item');
     await expect(items).toHaveCount(2, { timeout: 10_000 });
     await expect(items.first()).toContainText(/(Fix the login bug|Add unit tests)/);
 
-    // Close dialog for next test.
-    await page.keyboard.press('Escape');
+    await closeImportDialog(page);
   });
 
   test('imports a session and closes dialog', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
-    await sidebar.openImport();
-    const importDialog = page.getByTestId('sessions-import-dialog');
-    await importDialog.waitFor({ timeout: 5_000 });
-
-    const projectBtn = sidebar.importProjectOption(project.projectId);
-    await projectBtn.waitFor({ timeout: 5_000 }).catch(() => {});
-    if (await projectBtn.isVisible().catch(() => false)) {
-      await projectBtn.click();
-    }
+    await openImportForProject(page, project.projectId);
 
     const items = page.getByTestId('external-session-item');
     await expect(items.first()).toBeVisible({ timeout: 10_000 });
@@ -419,7 +469,6 @@ test.describe('§35 External session import', () => {
   // chat.spec.ts. If this test fails due to that race, mark it fixme.
   test('import does not switch active chat', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
     // Select the first row as the active session.
     const firstRow = page.getByTestId('sessions-row').first();
@@ -432,15 +481,7 @@ test.describe('§35 External session import', () => {
     await expect(firstRow).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
 
     // Open import dialog and import the remaining external session.
-    await sidebar.openImport();
-    const importDialog = page.getByTestId('sessions-import-dialog');
-    await importDialog.waitFor({ timeout: 5_000 });
-
-    const projectBtn = sidebar.importProjectOption(project.projectId);
-    await projectBtn.waitFor({ timeout: 5_000 }).catch(() => {});
-    if (await projectBtn.isVisible().catch(() => false)) {
-      await projectBtn.click();
-    }
+    await openImportForProject(page, project.projectId);
 
     const remaining = page.getByTestId('external-session-item').first();
     await expect(remaining).toBeVisible({ timeout: 10_000 });
@@ -460,12 +501,20 @@ test.describe('§35 External session import', () => {
 
 // ─── §35 External session import — pagination ────────────────────────────────
 //
-// SessionList (ImportSessionsDialog.tsx) pages at PAGE=50 via an
-// IntersectionObserver sentinel (`sessions-import-load-more`), no root option
-// (defaults to the top-level viewport, but intersection is still clipped by the
-// dialog's ScrollArea ancestor) — so scrolling the sentinel into view is enough
-// to trigger `loadMore()` for real, no IntersectionObserver mocking needed here
-// (unlike the component test, which mocks the observer because jsdom has none).
+// `useExternalSessions` pages at PAGE=50 behind an IntersectionObserver on the
+// `sessions-import-load-more` sentinel, so scrolling the sentinel into view
+// triggers `loadMore()` for real — no observer mocking needed here (unlike the
+// component test, which mocks it because jsdom has none).
+//
+// What changed with the v2 dialog: the list is WINDOWED (DialogRowList.tsx →
+// react-virtuoso, MAX_HEIGHT 340), and the sentinel hangs off Virtuoso's Footer.
+// So neither "50 rows are in the DOM" nor "the sentinel is visible on open" is
+// true any more — only a screenful of rows is mounted, and the footer mounts
+// only once the end of the list is scrolled into view. The observable paging
+// contract is instead: scroll to the end → the sentinel appears → it pulls the
+// next page → it retires when `nextOffset` goes null, at which point the LAST
+// item's index is reachable. Rows carry Virtuoso's `data-item-index`, which is
+// how the total is asserted without counting mounted nodes.
 test.describe('§35 External session import — pagination', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
@@ -486,6 +535,8 @@ test.describe('§35 External session import — pagination', () => {
     // Trigger the daemon's external-session scan for the project (same pre-warm
     // pattern as the §35 import block above).
     await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+    // Zero sessions here too — dismiss the forced boot picker (header note).
+    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {
@@ -494,33 +545,53 @@ test.describe('§35 External session import — pagination', () => {
     await closeTauriApp(app);
   });
 
-  test('the import dialog shows the first page (50 rows) and a load-more sentinel', async () => {
+  /** Drive the windowed list to its current end. */
+  async function scrollListToEnd(page: Page): Promise<void> {
+    await page
+      .locator('[data-testid="sessions-import-dialog"] [data-virtuoso-scroller="true"]')
+      .evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  }
+
+  test('the import dialog opens on the first page, windowed', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
-
-    await sidebar.openImport();
     const importDialog = page.getByTestId('sessions-import-dialog');
-    await importDialog.waitFor({ timeout: 5_000 });
 
-    const projectBtn = sidebar.importProjectOption(project.projectId);
-    await projectBtn.waitFor({ timeout: 5_000 });
-    await projectBtn.click();
+    await openImportForProject(page, project.projectId);
 
     const items = page.getByTestId('external-session-item');
-    await expect(items).toHaveCount(50, { timeout: 20_000 });
-    await expect(page.getByTestId('sessions-import-load-more')).toBeVisible();
+    await expect(items.first()).toBeVisible({ timeout: 20_000 });
+    // The first page arrived (index 0 is the top of it) and the list is windowed:
+    // a 55-session project mounts a screenful, not 55 rows.
+    await expect(importDialog.locator('[data-item-index="0"]')).toHaveCount(1);
+    expect(await items.count()).toBeLessThan(TOTAL_SESSIONS);
   });
 
-  test('scrolling the sentinel into view loads page 2; the sentinel then disappears', async () => {
+  test('scrolling to the end pages in the rest, then retires the sentinel', async () => {
     const { page } = app;
+    const importDialog = page.getByTestId('sessions-import-dialog');
     const sentinel = page.getByTestId('sessions-import-load-more');
-    await sentinel.scrollIntoViewIfNeeded();
 
-    const items = page.getByTestId('external-session-item');
-    await expect(items).toHaveCount(TOTAL_SESSIONS, { timeout: 20_000 });
-    await expect(page.getByTestId('sessions-import-load-more')).toHaveCount(0);
+    // Each scroll to the end mounts the footer sentinel, which the observer turns
+    // into a `loadMore()`; the growing list then pushes the end further down. Poll
+    // the scroll rather than waiting a fixed beat for the fetch.
+    await expect
+      .poll(
+        async () => {
+          await scrollListToEnd(page);
+          return sentinel.count();
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(0);
 
-    await page.keyboard.press('Escape');
+    // Sentinel gone == nextOffset null == every page loaded. The last index is now
+    // reachable, which is the count assertion a windowed list can actually make.
+    await scrollListToEnd(page);
+    await expect(importDialog.locator(`[data-item-index="${TOTAL_SESSIONS - 1}"]`)).toHaveCount(1, {
+      timeout: 10_000,
+    });
+
+    await closeImportDialog(page);
   });
 });
 
@@ -546,6 +617,8 @@ test.describe('§35 External session import — retry on error', () => {
       gitBranch: 'main',
     });
     await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+    // Zero sessions here too — dismiss the forced boot picker (header note).
+    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {
@@ -556,7 +629,6 @@ test.describe('§35 External session import — retry on error', () => {
 
   test('a failed fetch shows the error state; retry recovers the list', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
     let failedOnce = false;
     await page.route(
@@ -575,17 +647,13 @@ test.describe('§35 External session import — retry on error', () => {
       },
     );
 
-    await sidebar.openImport();
-    const importDialog = page.getByTestId('sessions-import-dialog');
-    await importDialog.waitFor({ timeout: 5_000 });
-
-    const projectBtn = sidebar.importProjectOption(project.projectId);
-    await projectBtn.waitFor({ timeout: 5_000 });
-    await projectBtn.click();
+    await openImportForProject(page, project.projectId);
 
     const retryButton = page.getByTestId('sessions-import-retry');
     await expect(retryButton).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Failed to load sessions. Please try again.')).toBeVisible();
+    // "Please try again" moved out of the message and into the Retry button asserted
+    // above (use-external-sessions.ts sets the bare sentence).
+    await expect(page.getByText('Failed to load sessions.')).toBeVisible();
 
     await retryButton.click();
 
@@ -593,6 +661,6 @@ test.describe('§35 External session import — retry on error', () => {
     await expect(retryButton).toHaveCount(0);
 
     await page.unrouteAll({ behavior: 'ignoreErrors' });
-    await page.keyboard.press('Escape');
+    await closeImportDialog(page);
   });
 });

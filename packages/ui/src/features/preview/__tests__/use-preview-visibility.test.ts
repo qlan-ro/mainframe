@@ -85,7 +85,7 @@ function makeFakeHandle(): PreviewHandle {
 
 it('re-asserts setVisible(false) on a new handle even when the computed value is unchanged (recreated webview desync)', () => {
   useLayoutStore.setState({
-    layout: { top: ['run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: null,
     sessions: new Map(),
     activeSessionId: null,

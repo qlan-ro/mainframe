@@ -2,21 +2,18 @@ import { Fragment, memo, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
-import { useTheme } from '@/store/theme';
-import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
 import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
-import { FilesSurface } from './surfaces/FilesSurface';
-import { RunSurface } from './surfaces/RunSurface';
+import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
 const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '1': 'chat',
-  '2': 'files',
-  '3': 'run',
+  '2': 'workspace',
 };
 
 // Each surface is its own rounded floating card (geo.surface), per the prototype
@@ -26,8 +23,7 @@ const PANEL_LAYOUT = 'flex flex-col overflow-hidden';
 
 function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
   if (name === 'chat') return <ChatSurface port={port} />;
-  if (name === 'files') return <FilesSurface />;
-  return <RunSurface />;
+  return <WorkspaceSurface />;
 }
 
 interface Props {
@@ -39,8 +35,7 @@ function SurfaceHostImpl({ port }: Props) {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
   const setVFrac = useLayoutStore((s) => s.setVFrac);
-  const windowStyle = useTheme((s) => s.windowStyle);
-  const geo = windowStyleGeometry(windowStyle);
+  const geo = SHELL_GEOMETRY;
   const panelCls = `${PANEL_LAYOUT} ${geo.surface}`;
 
   const outerRef = useRef<HTMLDivElement>(null);
@@ -57,24 +52,24 @@ function SurfaceHostImpl({ port }: Props) {
     });
   }, []);
 
-  // Subscribe to open-file / reveal-file intents — opens tabs + activates Files surface.
+  // Subscribe to open-file / reveal-file intents — opens tabs + lights the workspace.
   // One stable subscription; no re-sub on layout change.
   useEffect(() => {
     return subscribeToFileIntents();
   }, []);
 
-  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds RunTab.
+  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds a tab.
   // One stable subscription; no re-sub on layout change.
   useEffect(() => {
     return subscribeToTerminalIntents();
   }, []);
 
-  // Subscribe to open-url-tab intents — normalizes the URL and adds the Run tab.
+  // Subscribe to open-url-tab intents — normalizes the URL and adds the tab.
   useEffect(() => {
     return subscribeToUrlTabIntents();
   }, []);
 
-  // Cmd/Ctrl + 1/2/3 toggle Chat/Files/Run.
+  // Cmd/Ctrl + 1/2 toggle Chat / Workspace.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -104,7 +99,17 @@ function SurfaceHostImpl({ port }: Props) {
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
           <Fragment key={name}>
-            <div data-drop-surface={name} style={{ flex: topFlex[name] ?? 1 }} className={`min-w-0 ${panelCls}`}>
+            {/* A lone pane always takes the whole row: drag fractions are < 1,
+                and a flex row whose grow factors sum below 1 hands out only
+                that fraction of its free space — the stale weight would leave
+                the survivor at 30-something percent after a close. The weights
+                stay in the store so re-opening restores the dragged ratio
+                (same guard the vertical axis has via `bottom ? vFlex.top : 1`). */}
+            <div
+              data-drop-surface={name}
+              style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
+              className={`min-w-0 ${panelCls}`}
+            >
               <SurfaceView name={name} port={port} />
             </div>
             {i < top.length - 1 &&

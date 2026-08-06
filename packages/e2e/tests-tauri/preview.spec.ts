@@ -1,7 +1,21 @@
 /**
- * §preview — Sandbox preview tab (Run surface) specs for app-tauri browser mode.
+ * §preview — Sandbox preview tab (workspace surface) specs for app-tauri browser mode.
  *
- * Cluster C, spec #22 of docs/plans/2026-07-03-tauri-e2e-test-plan.md.
+ * Cluster C, spec #22 of docs/plans/2026-07-03-tauri-e2e-test-plan.md. The preview
+ * tab lives in the merged `workspace-surface` since the 2026-08-05 Files+Run merge;
+ * its own toolbar/body are unchanged by that merge, but the v2 design-system port
+ * swapped three of its controls for stock primitives, so their state is now read
+ * from ARIA rather than from a class name:
+ *   - the device switch is a v2 `Tabs` List+Trigger (PreviewDeviceToggle.tsx) →
+ *     `aria-selected`, not a `bg-background` active class;
+ *   - Inspect / Region are v2 `Toggle`s (PreviewCaptureCluster.tsx) → `aria-pressed`.
+ *     Their `data-state` is NOT usable: each is wrapped in `Hint`, and
+ *     `TooltipTrigger asChild` overwrites the child's `data-state` with the
+ *     tooltip's own (documented in that file's header);
+ *   - the URL bar flags a bad address with `aria-invalid` (PreviewUrlBar.tsx). A
+ *     class assertion would be a phantom pass here — the v2 `Input` base carries
+ *     the literal `aria-invalid:ring-destructive/20` variant in its static class
+ *     list, so /ring-destructive/ matches whether the value is valid or not.
  *
  * Browser-mode limits (see `.superpowers/sdd/e2e-shared-brief.md` + the plan's "Not
  * testable in browser mode" section): there is no real Tauri webview in Chromium.
@@ -38,14 +52,16 @@
  * binary so the daemon's `child.once('error')` (ENOENT) path fires quickly.
  *
  * Testid reference (verified against source):
- *   surface-rail-run              — toggles the Run surface on
- *   run-surface / run-surface-picker (empty state)
- *   run-picker-launch-<config>    — a launch-config row in the empty-state picker
+ *   surface-rail-workspace              — toggles the workspace surface on
+ *   workspace-surface / workspace-empty-state (empty state)
+ *   workspace-picker-launch-<config>    — a launch-config row on the empty-state card
  *   preview-toolbar               — toolbar root
  *   preview-run-start / preview-run-stop / preview-run-restart
- *   preview-url-input / preview-url-reload / preview-url-open-browser / preview-url-clear-cache
- *   preview-device-toggle / preview-device-desktop / preview-device-mobile
- *   preview-capture-cluster / preview-toolbar-inspect / preview-toolbar-capture / preview-toolbar-region
+ *   preview-url-input (aria-invalid on a bad address) / preview-url-reload /
+ *     preview-url-open-browser / preview-url-clear-cache
+ *   preview-device-toggle / preview-device-desktop / preview-device-mobile (aria-selected)
+ *   preview-capture-cluster / preview-toolbar-inspect (aria-pressed) /
+ *     preview-toolbar-capture / preview-toolbar-region (aria-pressed)
  *   preview-inspect-active-indicator — "CLICK AN ELEMENT" badge, driven purely by local inspectActive state
  *   preview-body-stopped / preview-body-cta / preview-body-starting / preview-body-running / preview-body-failed
  *   preview-annotation-popover / preview-annotation-list / preview-annotation-item-<id> /
@@ -121,12 +137,12 @@ test.describe('§preview — running lifecycle', () => {
     cleanupTauriProject(project);
   });
 
-  test('Run surface picker lists the preview config', async () => {
+  test('the workspace empty-state card lists the preview config', async () => {
     const { page } = app;
-    await page.getByTestId('surface-rail-run').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('run-surface-picker')).toBeVisible();
-    const row = page.getByTestId(`run-picker-launch-${CONFIG_NAME}`);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('workspace-empty-state')).toBeVisible();
+    const row = page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText(CONFIG_NAME);
     await expect(row).toContainText('preview');
@@ -134,7 +150,7 @@ test.describe('§preview — running lifecycle', () => {
 
   test('starting the config shows the starting body and keeps toolbar controls locked', async () => {
     const { page } = app;
-    await page.getByTestId(`run-picker-launch-${CONFIG_NAME}`).click();
+    await page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`).click();
 
     await expect(page.getByTestId('preview-toolbar')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('preview-body-starting')).toBeVisible({ timeout: 10_000 });
@@ -178,7 +194,7 @@ test.describe('§preview — running lifecycle', () => {
     await input.fill('localhost:9999/foo');
     await input.press('Enter');
     await expect(input).toHaveValue('http://localhost:9999/foo');
-    await expect(input).not.toHaveClass(/ring-destructive/);
+    await expect(input).toHaveAttribute('aria-invalid', 'false');
 
     // Invalid: a malformed IPv6-bracket host reliably fails `new URL()` parsing.
     // CORRECTION (verified live against the real Chromium runtime this spec
@@ -190,12 +206,12 @@ test.describe('§preview — running lifecycle', () => {
     // in both Node and Chromium — a genuinely unparseable host.
     await input.fill('[invalid');
     await input.press('Enter');
-    await expect(input).toHaveClass(/ring-destructive/);
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
 
     // Escape reverts the draft and clears the invalid flag.
     await input.press('Escape');
     await expect(input).toHaveValue(`http://localhost:9999/foo`);
-    await expect(input).not.toHaveClass(/ring-destructive/);
+    await expect(input).toHaveAttribute('aria-invalid', 'false');
   });
 
   test('device toggle switches between the desktop and mobile frame', async () => {
@@ -206,15 +222,20 @@ test.describe('§preview — running lifecycle', () => {
     // observable signal that the frame kind switched.
     const mobileFrame = body.locator('div[class*="230px"]');
 
-    await expect(mobileFrame).toHaveCount(0);
-    await expect(page.getByTestId('preview-device-desktop')).toHaveClass(/bg-background/);
+    // The switch is a v2 Tabs List+Trigger, so the selected side is `aria-selected`.
+    const desktop = page.getByTestId('preview-device-desktop');
+    const mobile = page.getByTestId('preview-device-mobile');
 
-    await page.getByTestId('preview-device-mobile').click();
-    await expect(page.getByTestId('preview-device-mobile')).toHaveClass(/bg-background/);
+    await expect(mobileFrame).toHaveCount(0);
+    await expect(desktop).toHaveAttribute('aria-selected', 'true');
+
+    await mobile.click();
+    await expect(mobile).toHaveAttribute('aria-selected', 'true');
+    await expect(desktop).toHaveAttribute('aria-selected', 'false');
     await expect(mobileFrame).toBeVisible();
 
-    await page.getByTestId('preview-device-desktop').click();
-    await expect(page.getByTestId('preview-device-desktop')).toHaveClass(/bg-background/);
+    await desktop.click();
+    await expect(desktop).toHaveAttribute('aria-selected', 'true');
     await expect(mobileFrame).toHaveCount(0);
   });
 
@@ -227,14 +248,17 @@ test.describe('§preview — running lifecycle', () => {
     // TODO(tauri-native) test below.
     const inspectBtn = page.getByTestId('preview-toolbar-inspect');
     await expect(page.getByTestId('preview-inspect-active-indicator')).toHaveCount(0);
+    await expect(inspectBtn).toHaveAttribute('aria-pressed', 'false');
 
     await inspectBtn.click();
-    await expect(inspectBtn).toHaveClass(/bg-mf-chip/);
+    // v2 `Toggle` — pressed state is aria-pressed (its data-state is clobbered by
+    // the wrapping Hint's TooltipTrigger; see PreviewCaptureCluster.tsx).
+    await expect(inspectBtn).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('preview-inspect-active-indicator')).toBeVisible();
     await expect(page.getByTestId('preview-inspect-active-indicator')).toContainText('Click an element');
 
     await inspectBtn.click();
-    await expect(inspectBtn).not.toHaveClass(/bg-mf-chip/);
+    await expect(inspectBtn).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('preview-inspect-active-indicator')).toHaveCount(0);
   });
 
@@ -325,19 +349,19 @@ test.describe('§preview — failed config', () => {
   });
 
   // Previously: `preview-body-failed` never mounted — the same
-  // unguarded-stale-REST-overwrite bug fixed in run-surface.spec.ts's "Stop
+  // unguarded-stale-REST-overwrite bug fixed in workspace-surface.spec.ts's "Stop
   // reverts the toolbar to Start for sleep-long" (`use-launch-configs.ts`'s
   // `GET /launch/status` fetch had no guard against a newer WS
   // `launch.status` update superseding it), triggered here by
-  // `RunTabStrip` mounting its own fresh `useLaunchConfigs` instance right as
+  // `WorkspaceTabStrip` mounting its own fresh `useLaunchConfigs` instance right as
   // the daemon's async spawn-error (ENOENT) detection was racing to
   // complete. Fixed by the same `reconcileFetchedStatus` stale-response guard
   // in the product-bug-fix campaign.
   test('a config with a nonexistent executable reaches the failed state', async () => {
     const { page } = app;
-    await page.getByTestId('surface-rail-run').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId(`run-picker-launch-${CONFIG_NAME}`).click();
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId(`workspace-picker-launch-${CONFIG_NAME}`).click();
 
     await expect(page.getByTestId('preview-body-failed')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('preview-body-failed')).toContainText('Failed to start');

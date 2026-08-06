@@ -18,7 +18,7 @@
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { ReplyFn } from '../gate-types';
 import { AskUserQuestionGate } from '../AskUserQuestionGate';
@@ -176,9 +176,8 @@ describe('AskUserQuestionGate', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3b. Multi-select checkbox indicator reuses the shared pixel-accurate
-  //     Checkbox primitive (17x17, real checkmark icon) instead of a bespoke,
-  //     undersized dot indicator.
+  // 3b. Indicators follow the shadcn questionnaire kit's choice recipe: the
+  //     shared v2 Checkbox for multi-select, a size-4 filled dot for single.
   // -------------------------------------------------------------------------
 
   it('multi-select option row renders the shared Checkbox primitive as its indicator', () => {
@@ -187,19 +186,18 @@ describe('AskUserQuestionGate', () => {
     const option = screen.getByTestId('chat-question-option-0-a');
     const indicator = option.querySelector('button[role="checkbox"]');
     expect(indicator).not.toBeNull();
-    expect(indicator).toHaveClass('h-[17px]', 'w-[17px]');
   });
 
-  it('single-select option row radio indicator grows its border to 5px when selected (no fill)', () => {
+  it('single-select option row radio indicator fills when selected', () => {
     wrap(<AskUserQuestionGate entry={single()} reply={reply} />);
 
     const option = screen.getByTestId('chat-question-option-0-MP4');
     const indicator = option.querySelector('[data-radio-indicator]');
     expect(indicator).not.toBeNull();
-    expect(indicator).toHaveClass('size-[17px]', 'border-[1.5px]', 'border-input');
+    expect(indicator).toHaveClass('size-4', 'border-input');
 
     fireEvent.click(option);
-    expect(indicator).toHaveClass('border-[5px]', 'border-primary');
+    expect(indicator).toHaveClass('border-primary', 'bg-primary');
   });
 
   // -------------------------------------------------------------------------
@@ -328,8 +326,8 @@ describe('AskUserQuestionGate', () => {
     expect(body).toBeInTheDocument();
     expect(body).toHaveTextContent('Which auth approach?');
 
-    // Body row left-aligns under the head title (px-3.5 tile-inset + tile + gap = 49px = pl-[49px]).
-    expect(body).toHaveClass('pl-[49px]');
+    // Body row left-aligns under the head title column (GATE_BODY_INSET).
+    expect(body).toHaveClass('pl-[calc(1rem+1.5rem+0.625rem)]');
   });
 
   // -------------------------------------------------------------------------

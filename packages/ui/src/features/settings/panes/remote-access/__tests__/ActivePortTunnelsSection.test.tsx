@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { ActivePortTunnelsSection } from '../ActivePortTunnelsSection';
 import { applyPortTunnelEvent, resetPortTunnels } from '@/store/port-tunnels';
 

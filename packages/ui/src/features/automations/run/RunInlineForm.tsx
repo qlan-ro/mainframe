@@ -9,6 +9,9 @@
  * owns its own gateway call and store patch rather than taking callbacks for
  * them.
  */
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { Textarea } from '@v2/components/ui/textarea';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
@@ -46,7 +49,7 @@ function PillOption({
       data-testid={testId}
       onClick={onClick}
       className={cn(
-        'h-[28px] rounded-full border-[0.5px] px-[12px] text-caption font-medium',
+        'h-[28px] rounded-full border-[0.5px] px-[12px] text-xs font-medium',
         active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent',
       )}
     >
@@ -102,21 +105,21 @@ function FieldControl({
   }
   if (field.type === 'textarea') {
     return (
-      <textarea
+      <Textarea
         data-testid={`${testId}-input`}
         value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[52px] w-full resize-y rounded-md border-[0.5px] border-input bg-card px-2.5 py-1.5 text-body text-foreground outline-none"
+        className="min-h-[52px] resize-y"
       />
     );
   }
   return (
-    <input
+    <Input
       data-testid={`${testId}-input`}
       type={field.type === 'number' ? 'number' : 'text'}
       value={typeof value === 'string' ? value : ''}
       onChange={(e) => onChange(e.target.value)}
-      className="h-[30px] w-full rounded-md border-[0.5px] border-input bg-card px-2.5 text-body text-foreground outline-none"
+      className="h-8"
     />
   );
 }
@@ -162,12 +165,12 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
   return (
     <div
       data-testid={testId}
-      className="flex flex-col gap-[11px] rounded-lg border-[0.5px] border-mf-warning/35 bg-mf-warning/[0.06] p-[13px]"
+      className="flex flex-col gap-[11px] rounded-lg border-[0.5px] border-warning/35 bg-warning/[0.06] p-[13px]"
     >
-      <div className="text-label font-bold text-foreground">{interaction.title}</div>
+      <div className="text-xs font-bold text-foreground">{interaction.title}</div>
       {visibleFields.map((field) => (
         <div key={field.key} data-testid={`${testId}-field-${field.key}`} className="flex flex-col gap-[5px]">
-          <span className="text-caption font-semibold text-muted-foreground">
+          <span className="text-xs font-semibold text-muted-foreground">
             {field.label || field.key}
             {field.required && <span className="text-destructive"> *</span>}
           </span>
@@ -179,15 +182,15 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
           />
         </div>
       ))}
-      <button
-        type="button"
+      <Button
+        size="sm"
         data-testid={`${testId}-submit`}
         disabled={missingRequired || submitting}
         onClick={() => void handleSubmit()}
-        className="h-[30px] w-fit rounded-md bg-primary px-[15px] text-label font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-45"
+        className="w-fit"
       >
         Submit
-      </button>
+      </Button>
     </div>
   );
 }

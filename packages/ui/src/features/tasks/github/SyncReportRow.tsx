@@ -14,7 +14,7 @@
 import { useCallback, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 import type { ReportRow } from '@/lib/api/todos-github';
 import type { TodoStatus } from '@/lib/api/todos';
 import { fieldLabel, nowLine, ruleLine, statusLabel, winnerLabel } from './sync-format';
@@ -66,26 +66,26 @@ export function SyncReportRow({ row }: { row: ReportRow }) {
     >
       <div className="flex items-center gap-2">
         <Chevron size={12} className="shrink-0 text-muted-foreground" aria-hidden />
-        <span className="shrink-0 font-mono text-label text-muted-foreground">#{row.issueNumber}</span>
-        <span className="shrink-0 text-label font-semibold text-foreground">{fieldLabel(row.field)}</span>
-        <TruncatedWithTooltip text={row.todoTitle} className="min-w-0 flex-1 text-body text-muted-foreground" />
-        <span className="shrink-0 rounded-full bg-muted px-[8px] py-0.5 text-caption font-semibold text-muted-foreground">
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">#{row.issueNumber}</span>
+        <span className="shrink-0 text-xs font-semibold text-foreground">{fieldLabel(row.field)}</span>
+        <TruncatedWithTooltip text={row.todoTitle} className="min-w-0 flex-1 text-sm text-muted-foreground" />
+        <span className="shrink-0 rounded-full bg-muted px-[8px] py-0.5 text-xs font-semibold text-muted-foreground">
           {winnerLabel(row.winner)}
         </span>
       </div>
 
       {expanded ? (
         <div className="mt-2 flex flex-col items-start gap-1.5 pl-[22px]">
-          <p className="text-caption text-muted-foreground">{ruleLine(row)}</p>
-          <p className="max-w-full text-caption text-foreground">
+          <p className="text-xs text-muted-foreground">{ruleLine(row)}</p>
+          <p className="max-w-full text-xs text-foreground">
             <span className="font-semibold text-muted-foreground">Now</span>{' '}
             {fieldValue(row, nowLine(row, row.todoNumber))}
           </p>
           <div
             className={cn(
               'max-h-[132px] w-fit max-w-full overflow-y-auto whitespace-pre-wrap break-words',
-              'rounded-md border-[0.5px] border-mf-warning/30 bg-mf-warning/10 px-[11px] py-[8px]',
-              'font-mono text-caption leading-relaxed text-foreground',
+              'rounded-md border-[0.5px] border-warning/30 bg-warning/10 px-[11px] py-[8px]',
+              'font-mono text-xs leading-relaxed text-foreground',
             )}
           >
             {replaced}
@@ -94,7 +94,7 @@ export function SyncReportRow({ row }: { row: ReportRow }) {
             type="button"
             data-testid={`tasks-github-report-copy-${row.id}`}
             onClick={(e) => void handleCopy(e)}
-            className="inline-flex h-[24px] shrink-0 items-center gap-1.5 rounded-[6px] px-[8px] text-caption font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex h-[24px] shrink-0 items-center gap-1.5 rounded-[6px] px-[8px] text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
             Copy replaced {fieldLabel(row.field).toLowerCase()}

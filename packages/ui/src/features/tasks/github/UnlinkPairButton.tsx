@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { Unlink } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
 import { runOrToast } from './run-or-toast';
 import { useGitHubSyncStore } from './use-github-sync-store';

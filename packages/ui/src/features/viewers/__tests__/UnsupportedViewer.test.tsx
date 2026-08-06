@@ -14,15 +14,16 @@
  *  9. (toFileUrl) Relative path + projectPath → absolute file:// URL.
  * 10. (toFileUrl) Relative path + no projectPath → button is disabled.
  * 11. (toFileUrl) Absolute path → file:// URL passed through.
- * 12. "Open externally" button uses primary accent fill (bg-primary class).
- * 13. Icon chip is 46×46 with rounded-[11px] bg-mf-chip container.
- * 14. Card uses bg-background (not bg-card or bg-mf-tab-bar).
+ * 12. "Open externally" is the primary v2 Button; "Reveal in tree" is the outline one.
+ * 13. Icon chip is a 44×44 rounded-lg bg-muted container.
+ * 14. The centered panel is a v2 Card (bg-card) on a bg-muted/40 backdrop.
  * 15. (remote daemon) "Open externally" is disabled (aria-disabled) when useDaemonIsLocal() returns false.
  * 16. (remote daemon) Clicking the disabled button does NOT call host.shell.openExternal.
  * 17. (local daemon) Clicking "Open externally" calls host.shell.openExternal normally.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
@@ -48,6 +49,10 @@ vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => dae
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { UnsupportedViewer } from '../UnsupportedViewer';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const mockUseActiveIdentity = useActiveIdentity as ReturnType<typeof vi.fn>;
 const mockEmit = emitSurfaceIntent as ReturnType<typeof vi.fn>;

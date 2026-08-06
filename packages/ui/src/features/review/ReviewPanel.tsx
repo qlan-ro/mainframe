@@ -9,7 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+// Fixed-width columns as in v1 — resizable panels land with the review
+// surface port.
+import { Dialog, DialogContent } from '@v2/components/ui/dialog';
 import { useOverlaysStore } from '@/store/overlays';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { gitCommit } from '@/lib/api/git';
@@ -109,8 +111,8 @@ export function ReviewPanel() {
     <Dialog open={reviewOpen} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent
         data-testid="review-modal"
-        hideClose
-        className="flex h-[86vh] w-full max-w-[1180px] flex-col gap-0 overflow-hidden p-0 max-h-[880px]"
+        showCloseButton={false}
+        className="flex h-[86vh] max-h-[880px] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[1180px]"
       >
         <ReviewPanelHeader
           branch={branch}
@@ -122,7 +124,7 @@ export function ReviewPanel() {
         />
 
         {loadError && (
-          <div data-testid="review-load-error" className="px-4 py-4 text-caption text-destructive">
+          <div data-testid="review-load-error" className="px-4 py-4 text-xs text-destructive">
             Failed to load git status. Please try again.
           </div>
         )}

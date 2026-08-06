@@ -74,7 +74,7 @@ interface ViewerRouterProps {
   path: string;
   /**
    * Render prop called when the path resolves to a `"code"` kind.
-   * Phase 7 wires this to `<CmEditor>` via the Files surface.
+   * Phase 7 wires this to `<CmEditor>` via the workspace surface.
    * If omitted, a plain pre-formatted fallback is rendered.
    */
   renderCode?: (path: string) => ReactNode;
@@ -154,11 +154,11 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }, [path, port, projectId, chatId]);
 
   if (state.status === 'idle' || state.status === 'loading') {
-    return <div className="flex h-full items-center justify-center text-body text-muted-foreground">Loading…</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>;
   }
 
   if (state.status === 'error') {
-    return <div className="flex h-full items-center justify-center text-body text-destructive">{state.message}</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-destructive">{state.message}</div>;
   }
 
   const { kind, content } = state;

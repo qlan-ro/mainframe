@@ -9,7 +9,13 @@
 import React, { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuGroup,
+} from '@v2/components/ui/context-menu';
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
@@ -87,10 +93,12 @@ export function LinkWithPreview({
           </ContextMenuTrigger>
         </TooltipTrigger>
         <ContextMenuContent>
-          <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
-          <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
-            Open link
-          </ContextMenuItem>
+          <ContextMenuGroup>
+            <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
+            <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
+              Open link
+            </ContextMenuItem>
+          </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
       <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
@@ -102,7 +110,7 @@ export function LinkWithPreview({
           className={cn(
             'shrink-0 px-1.5 py-0.5 rounded-sm',
             'bg-accent hover:bg-muted text-muted-foreground hover:text-foreground',
-            'transition-colors text-caption',
+            'transition-colors text-xs',
           )}
         >
           {copied ? 'Copied' : 'Copy'}

@@ -33,8 +33,8 @@ function TriggerFieldRow({
       aria-selected={highlighted}
       data-highlighted={highlighted ? '' : undefined}
       data-testid={testId}
-      className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left
-                 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+      className="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left text-sm
+                 data-[highlighted]:bg-muted data-[highlighted]:text-foreground"
       // Keep the caret (and the field's own cursor tracking) alive through the click.
       onMouseDown={(e) => e.preventDefault()}
       onMouseMove={() => field.highlightIndex(index)}
@@ -45,7 +45,7 @@ function TriggerFieldRow({
         <span className="font-medium text-foreground">{entry.label}</span>
       </span>
       {isItem && entry.description != null && (
-        <span className="text-label text-muted-foreground">{entry.description}</span>
+        <span className="max-w-full truncate text-xs text-muted-foreground">{entry.description}</span>
       )}
     </button>
   );

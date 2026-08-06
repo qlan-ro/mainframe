@@ -1,42 +1,34 @@
 /**
- * BranchPopover — container + view routing for the branch management popover.
- *
- * The list and a selected branch's submenu render SIDE BY SIDE (the popover
- * grows to fit the adjacent submenu), matching the `13-popover` artboard — not a
- * drill-in that replaces the list. new-branch / rename / conflict remain
- * full-replace overlays.
+ * BranchPopover — the toolbar's branch menu, a native DropdownMenu: search +
+ * quick actions + grouped branch list, with each branch's actions in a
+ * DropdownMenuSub flyout. Forms don't live inside Radix menus, so New Branch /
+ * Rename are v2 Dialogs the menu hands off to, and an active merge/rebase
+ * conflict swaps the menu for a conflict Dialog.
  *
  * Branches are loaded LAZILY — only when `open` becomes true. The closed
- * popover never fires git fetches, so AppShell integration tests pass cleanly.
+ * menu never fires git fetches, so AppShell integration tests pass cleanly.
  *
- * Accepts `children` as the BARE popover trigger (PopoverTrigger asChild),
- * matching the TagPopover pattern — and an optional `triggerLabel` for a
- * tooltip. `triggerLabel` wraps `PopoverTrigger` (a real forwardRef Radix
- * component) in `Hint`, not `children` directly: `Hint` is a plain function
- * component that doesn't forward arbitrary props/refs, so nesting it inside
- * `PopoverTrigger asChild` would silently drop the `ref`/`aria-expanded`/
- * `data-state` Radix's Slot needs to clone onto the real trigger DOM node —
- * without that ref, Popper has no reference element to anchor the content to,
- * so it stays at its un-positioned placeholder transform (see the
- * Hint-inside-asChild-trigger trap in `NewSessionPickerPopover`).
+ * Accepts `children` as the BARE menu trigger (DropdownMenuTrigger asChild),
+ * and an optional `triggerLabel` for a tooltip. `triggerLabel` wraps
+ * `DropdownMenuTrigger` (a real forwardRef Radix component) in `Hint`, not
+ * `children` directly: `Hint` is a plain function component that doesn't
+ * forward arbitrary props/refs, so nesting it inside the asChild clone would
+ * drop the ref/aria-expanded/data-state Radix's Slot needs on the real
+ * trigger DOM node (the Hint-inside-asChild-trigger trap).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Hint } from '@/components/ui/hint';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@v2/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
+import { Hint } from '@v2/components/ui/hint';
 import { useBranchActions } from './use-branch-actions';
 import { useNewSessionAction } from './use-new-session-action';
-import { BranchPopoverListPane } from './BranchPopoverListPane';
-import { BranchPopoverOverlay } from './BranchPopoverOverlay';
-import type { BranchInfo } from '@qlan-ro/mainframe-types';
+import { BranchListView } from './BranchListView';
+import { ConflictView } from './ConflictView';
+import { NewBranchDialog } from './NewBranchDialog';
+import { RenameBranchDialog } from './RenameBranchDialog';
+import type { BranchRowActions } from './BranchSubmenu';
 
-type View = 'list' | 'new-branch' | 'conflict' | 'rename';
-
-// Each panel (list, submenu, overlay) is its own card; the popover container is
-// bare so the list + submenu read as two separate cards with a gap (13-popover
-// artboard), not one merged surface.
-const PANEL_CARD_SHELL = 'rounded-[11px] border border-border bg-popover shadow-[var(--mf-shadow-pop)] overflow-hidden';
-const PANEL_CARD = cn(PANEL_CARD_SHELL, 'p-[5px]');
+type DialogState = { kind: 'new-branch'; startFrom?: string } | { kind: 'rename'; target: string } | null;
 
 export interface BranchPopoverProps {
   port: number;
@@ -47,13 +39,8 @@ export interface BranchPopoverProps {
   onBranchChanged?: () => void;
   /** Bare trigger element — do NOT pre-wrap in `Hint` (see file header). */
   children?: React.ReactElement;
-  /** Optional tooltip label for the trigger; wraps `PopoverTrigger` in `Hint`. */
+  /** Optional tooltip label for the trigger; wraps `DropdownMenuTrigger` in `Hint`. */
   triggerLabel?: string;
-}
-
-interface SelectedBranch {
-  info: BranchInfo;
-  isRemote: boolean;
 }
 
 export function BranchPopover({
@@ -86,91 +73,57 @@ export function BranchPopover({
     handleUpdateAll,
   } = useBranchActions({ port, projectId, chatId });
 
-  // Load branches lazily — only when the popover opens.
+  // Load branches lazily — only when the menu opens.
   useEffect(() => {
     if (!open) return;
     void loadBranches();
   }, [open, loadBranches]);
 
-  const [view, setView] = useState<View>('list');
-  const [selected, setSelected] = useState<SelectedBranch | null>(null);
-  const [renameTarget, setRenameTarget] = useState('');
-  const [renameValue, setRenameValue] = useState('');
-  const [newBranchStartFrom, setNewBranchStartFrom] = useState<string | undefined>();
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [conflictOpen, setConflictOpen] = useState(false);
   const [search, setSearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
   const hasConflict = conflictFiles.length > 0 || !!branches?.activeOperation;
 
-  // Reset on open. hasConflict excluded intentionally — live-conflict effect keeps it current.
-  const hasConflictRef = useRef(hasConflict);
-  hasConflictRef.current = hasConflict;
+  // Reset search on open.
   useEffect(() => {
-    if (!open) return;
-    setView(hasConflictRef.current ? 'conflict' : 'list');
-    setSearch('');
-    setSelected(null);
+    if (open) setSearch('');
   }, [open]);
 
-  // Auto-route to conflict view when status changes while popover is open.
+  // An active merge/rebase replaces the menu with the conflict dialog — both
+  // on open and live, if the status flips while the menu is up.
   useEffect(() => {
-    if (!open) return;
-    if (hasConflict && view === 'list') setView('conflict');
-  }, [open, hasConflict, view]);
-
-  const goToList = useCallback(() => {
-    setView('list');
-    setSelected(null);
-    setSearch('');
-    requestAnimationFrame(() => searchRef.current?.focus());
-  }, []);
-
-  // Selecting a branch opens its submenu BESIDE the list (no view switch).
-  // Clicking the already-selected branch toggles the submenu closed.
-  const handleSelectBranch = useCallback((branch: BranchInfo, isRemote = false) => {
-    setSelected((prev) => (prev?.info.name === branch.name ? null : { info: branch, isRemote }));
-  }, []);
-
-  const handleNewBranch = useCallback((startFrom?: string) => {
-    setNewBranchStartFrom(startFrom);
-    setView('new-branch');
-  }, []);
-
-  const handleRenameRequest = useCallback((branch: string) => {
-    setRenameTarget(branch);
-    setRenameValue(branch);
-    setView('rename');
-  }, []);
-
-  const handleRenameSubmit = useCallback(async () => {
-    const ok = await handleRename(renameTarget, renameValue);
-    if (ok) {
-      onBranchChanged?.();
-      goToList();
+    if (open && hasConflict) {
+      onOpenChange(false);
+      setConflictOpen(true);
     }
-  }, [handleRename, renameTarget, renameValue, goToList, onBranchChanged]);
+  }, [open, hasConflict, onOpenChange]);
+
+  const closeMenu = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const handleNewSession = useNewSessionAction(port, projectId, closeMenu);
 
   const handleCreate = useCallback(
     async (name: string, startPoint: string) => {
       const ok = await handleCreateBranch(name, startPoint);
       if (ok) {
         onBranchChanged?.();
-        goToList();
+        setDialog(null);
       }
     },
-    [handleCreateBranch, goToList, onBranchChanged],
+    [handleCreateBranch, onBranchChanged],
   );
 
-  const closePopover = useCallback(() => onOpenChange(false), [onOpenChange]);
-  const handleNewSession = useNewSessionAction(port, projectId, closePopover);
-
-  const handleDeleteWorktreeAction = useCallback(
-    async (dirName: string, branchName?: string): Promise<boolean> => {
-      const ok = await handleDeleteWorktree(dirName, branchName);
-      if (ok) goToList();
-      return ok;
+  const handleRenameSubmit = useCallback(
+    (target: string, next: string) => {
+      void handleRename(target, next).then((ok) => {
+        if (ok) {
+          onBranchChanged?.();
+          setDialog(null);
+        }
+      });
     },
-    [handleDeleteWorktree, goToList],
+    [handleRename, onBranchChanged],
   );
 
   const currentBranch = branches?.current ?? '';
@@ -178,112 +131,107 @@ export function BranchPopover({
   const remoteNames = branches?.remote ?? [];
   const worktrees = branches?.worktrees ?? [];
 
-  // Remote BranchInfo stubs — same mapping as BranchList.tsx.
-  const remoteBranchInfos: BranchInfo[] = remoteNames.map((name) => ({ name, current: false }));
+  const rowActions: BranchRowActions = {
+    onCheckout: (b) => {
+      void handleCheckout(b).then(() => onBranchChanged?.());
+    },
+    onPull: (b) => {
+      void handlePull(b);
+    },
+    onPush: (b) => {
+      void handlePush(b);
+    },
+    onMerge: (b) => {
+      void handleMerge(b).then(() => onBranchChanged?.());
+    },
+    onRebase: (b) => {
+      void handleRebase(b).then(() => onBranchChanged?.());
+    },
+    onRename: (b) => setDialog({ kind: 'rename', target: b }),
+    onDelete: (b, isRemote) => {
+      void handleDelete(b, isRemote).then(() => onBranchChanged?.());
+    },
+    onNewBranchFrom: (b) => setDialog({ kind: 'new-branch', startFrom: b }),
+    onNewSession: handleNewSession,
+    onDeleteWorktree: (dirName, branchName) => {
+      void handleDeleteWorktree(dirName, branchName);
+    },
+    busy,
+  };
 
-  const trigger = children ? <PopoverTrigger asChild>{children}</PopoverTrigger> : null;
+  const trigger = children ? <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger> : null;
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      {trigger && (triggerLabel ? <Hint label={triggerLabel}>{trigger}</Hint> : trigger)}
-      <PopoverContent
-        data-testid="git-branch-popover"
-        className="w-auto rounded-none border-0 bg-transparent p-0 shadow-none overflow-visible"
-        align="start"
-        side="bottom"
-        sideOffset={4}
-      >
-        {view === 'list' && (
-          <BranchPopoverListPane
-            panelCard={PANEL_CARD}
-            localBranches={localBranches}
-            remoteNames={remoteNames}
+    <>
+      <DropdownMenu open={open} onOpenChange={onOpenChange}>
+        {trigger && (triggerLabel ? <Hint label={triggerLabel}>{trigger}</Hint> : trigger)}
+        <DropdownMenuContent
+          data-testid="git-branch-popover"
+          className="w-[300px]"
+          align="start"
+          side="bottom"
+          sideOffset={4}
+        >
+          <BranchListView
+            local={localBranches}
+            remote={remoteNames}
             worktrees={worktrees}
             currentBranch={currentBranch}
-            selected={selected}
             search={search}
             onSearch={setSearch}
-            onSelectBranch={(b) => {
-              // Remote branches come in as non-worktree BranchInfos with no `worktree`
-              // field, identified by checking against the remote name list.
-              const isRemote = remoteNames.includes(b.name);
-              handleSelectBranch(b, isRemote);
-            }}
-            onNewBranch={() => handleNewBranch()}
-            listActions={{
-              handleFetch,
-              handleUpdateAll,
-              handlePush,
-              handleDeleteWorktree: handleDeleteWorktreeAction,
-              handleNewSession,
-            }}
+            onNewBranch={() => setDialog({ kind: 'new-branch' })}
+            actions={{ handleFetch, handleUpdateAll, handlePush }}
+            rowActions={rowActions}
             busy={busy}
             busyAction={busyAction}
             searchRef={searchRef}
-            onCheckout={(b) => {
-              void handleCheckout(b).then(() => onBranchChanged?.());
-            }}
-            onPull={(b) => {
-              void handlePull(b);
-            }}
-            onPush={(b) => {
-              void handlePush(b);
-            }}
-            onMerge={(b) => {
-              void handleMerge(b).then(() => onBranchChanged?.());
-            }}
-            onRebase={(b) => {
-              void handleRebase(b).then(() => onBranchChanged?.());
-            }}
-            onRename={handleRenameRequest}
-            onDelete={(b, isRemote) => {
-              void handleDelete(b, isRemote).then(() => onBranchChanged?.());
-            }}
-            onNewBranchFrom={(b) => handleNewBranch(b)}
-            onNewSession={
-              selected?.info.worktree
-                ? (b) => {
-                    handleNewSession(selected.info.worktree!, b);
-                  }
-                : undefined
-            }
-            onDeleteWorktree={
-              selected?.info.worktree
-                ? (b) => {
-                    void handleDeleteWorktreeAction(selected.info.worktree!, b);
-                  }
-                : undefined
-            }
           />
-        )}
-        {view !== 'list' && (
-          <BranchPopoverOverlay
-            view={view}
-            panelCard={PANEL_CARD}
-            panelCardShell={PANEL_CARD_SHELL}
-            localBranches={localBranches.map((b) => b.name)}
-            remoteBranches={remoteBranchInfos.map((b) => b.name)}
-            currentBranch={currentBranch}
-            newBranchStartFrom={newBranchStartFrom}
-            onBack={goToList}
-            onCreate={handleCreate}
-            renameTarget={renameTarget}
-            renameValue={renameValue}
-            onRenameChange={setRenameValue}
-            onRenameSubmit={() => {
-              void handleRenameSubmit();
-            }}
-            onRenameCancel={goToList}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <NewBranchDialog
+        open={dialog?.kind === 'new-branch'}
+        onOpenChange={(o) => {
+          if (!o) setDialog(null);
+        }}
+        localBranches={localBranches.map((b) => b.name)}
+        remoteBranches={remoteNames}
+        currentBranch={currentBranch}
+        startFrom={dialog?.kind === 'new-branch' ? dialog.startFrom : undefined}
+        onCreate={handleCreate}
+      />
+
+      <RenameBranchDialog
+        open={dialog?.kind === 'rename'}
+        onOpenChange={(o) => {
+          if (!o) setDialog(null);
+        }}
+        target={dialog?.kind === 'rename' ? dialog.target : ''}
+        onSubmit={(next) => {
+          if (dialog?.kind === 'rename') handleRenameSubmit(dialog.target, next);
+        }}
+        busy={busy}
+      />
+
+      <Dialog
+        open={conflictOpen}
+        onOpenChange={(o) => {
+          if (!o) setConflictOpen(false);
+        }}
+      >
+        <DialogContent className="gap-0 p-0 sm:max-w-sm" closeButtonClassName="top-2.5">
+          <DialogTitle className="sr-only">Merge / Rebase Conflicts</DialogTitle>
+          <DialogDescription className="sr-only">Resolve or abort the git operation in progress.</DialogDescription>
+          <ConflictView
             conflictFiles={conflictFiles}
             activeOperation={branches?.activeOperation}
             onAbort={() => {
-              void handleAbort().then(goToList);
+              void handleAbort().then(() => setConflictOpen(false));
             }}
             aborting={busyAction === 'abort'}
-            busy={busy}
           />
-        )}
-      </PopoverContent>
-    </Popover>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

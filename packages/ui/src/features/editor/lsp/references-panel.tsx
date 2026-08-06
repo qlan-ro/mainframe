@@ -10,6 +10,8 @@
  * `data-testid="editor-references-row-<path>:<line>"` on each row.
  */
 import { useCallback } from 'react';
+import { X } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 import type { LspLocation } from '@/lib/lsp';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
@@ -70,28 +72,26 @@ export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose 
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-label font-medium">
+        <span className="text-xs font-medium">
           {title}
-          <span className="ml-1.5 text-caption text-muted-foreground">({count})</span>
+          <span className="ml-1.5 text-xs text-muted-foreground">({count})</span>
         </span>
         {onClose && (
-          <button
-            type="button"
+          <Button
             data-testid="editor-references-panel-close"
+            variant="ghost"
+            size="icon-xs"
             onClick={onClose}
-            className="rounded-sm p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="Close references panel"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-              <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+            <X aria-hidden />
+          </Button>
         )}
       </div>
 
       {/* Location list */}
       {count === 0 ? (
-        <div className="px-3 py-4 text-center text-caption text-muted-foreground">No references found.</div>
+        <div className="px-3 py-4 text-center text-xs text-muted-foreground">No references found.</div>
       ) : (
         <ul className="max-h-64 overflow-y-auto" role="list">
           {locations.map((loc) => {
@@ -106,10 +106,10 @@ export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose 
                   type="button"
                   data-testid={testId}
                   onClick={() => handleRowClick(loc)}
-                  className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                 >
-                  <span className="min-w-0 flex-1 truncate font-mono text-label text-foreground">{basename(path)}</span>
-                  <span className="shrink-0 text-caption text-muted-foreground">:{line}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-foreground">{basename(path)}</span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">:{line}</span>
                 </button>
               </li>
             );

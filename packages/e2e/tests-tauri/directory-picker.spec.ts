@@ -1,13 +1,14 @@
 /**
  * §directory-picker — DirectoryPickerModal (plan spec #25) for app-tauri browser mode.
  *
- * Entry point: the sidebar's dashed "Add project" pill (`sessions-add-project`,
- * ProjectFilterPillBar.tsx) opens the picker via `pickDirectory({ mode: 'directory' })`
- * (features/files/use-directory-picker.ts). This is the ONLY reachable UI entry point
- * today — grepped every `pickDirectory`/`useDirectoryPicker` call site;
- * `features/sessions/use-add-project.ts` is the sole caller and is hardcoded to
- * `mode: 'directory'`. There is no file-mode consumer, so the file-mode scenario is
- * `test.skip`'d below.
+ * Entry point: the Projects section's "+" action in the sidebar header
+ * (`sidebar-projects-add`, v2/features/sessions/ProjectSection.tsx) opens the picker
+ * via `pickDirectory({ mode: 'directory' })` (features/files/use-directory-picker.ts).
+ * The v1 dashed "Add project" pill and its `sessions-add-project` id died with
+ * ProjectFilterPillBar — the v2 projects switcher is a plain list with a
+ * `SidebarGroupAction` instead. This is still the ONLY reachable UI entry point:
+ * `features/sessions/use-add-project.ts` is the sole `pickDirectory` caller and is
+ * hardcoded to `mode: 'directory'`, so the file-mode scenario is `test.skip`'d below.
  *
  * KNOWN SIDE EFFECT: confirming a directory in the add-project flow calls
  * `createProject` on the daemon (features/sessions/use-add-project.ts) — the daemon
@@ -18,12 +19,21 @@
  * Each describe below runs its own daemon (fresh SQLite per `launchTauriApp`), so
  * registered projects never leak across describes.
  *
- * Testid reference (verified against packages/ui/src/components/overlays/):
+ * Testid reference (verified against packages/ui/src/v2/features/files/ — the picker
+ * is v2-native now; the v1 components/overlays/ tree it used to live in is gone,
+ * and only the non-visual `use-picker-tree`/`picker-tree-model` are still imported
+ * from there):
  *   directory-picker                     — dialog root (DirectoryPickerModal.tsx)
- *   directory-picker-close               — header X close button
+ *   dialog-close                         — the STOCK v2 DialogContent close button. The
+ *                                          picker's own `directory-picker-close` header X is
+ *                                          gone: it dropped `showCloseButton={false}`, so
+ *                                          the primitive's built-in close (one shared
+ *                                          `dialog-close` testid for whatever dialog is
+ *                                          open) is the only X. Scope it to the picker root.
  *   directory-picker-path-input          — PathCrumbInput editable crumb
- *   directory-picker-row-<path>          — a tree row (PickerTree.tsx)
+ *   directory-picker-row-<path>          — a tree row (PickerTree.tsx FlatTreeView)
  *   directory-picker-node-empty-<path>   — per-node "Empty" state (expanded, 0 children)
+ *   directory-picker-node-loading-<path> — per-node "Loading…" state (expanding)
  *   directory-picker-load-error-<path>   — per-node "Failed to load" state
  *   directory-picker-empty               — root-level empty state
  *   directory-picker-loading             — root-level "Loading…" state
@@ -33,15 +43,32 @@
  *   directory-picker-confirm             — footer Select (confirm) button
  *   directory-picker-recent              — RecentDirs section root (home root only)
  *   directory-picker-recent-<path>       — a Recent row (RecentDirs.tsx)
- *   sessions-add-project                 — sidebar dashed "Add project" pill (entry point)
- *   toast-root                           — WsToastCard root (add-project outcome toast)
+ *   sidebar-projects-add                 — the Projects section's "+" action (entry point)
+ *   TOAST.root (helpers/tauri/testids.ts) — native sonner toast; WsToastCard is gone
+ *
+ * TWO STRAY LAYERS make clicks inside this dialog time out on elements Playwright
+ * itself calls "visible, enabled and stable". Both are handled in setup, not with
+ * retries:
+ *
+ *  1. THE ZERO-SESSION BOOT PICKER — hence each describe seeds a session it never
+ *     looks at. A registered project with ZERO sessions is the app's boot dead-end,
+ *     and `ChatSurface`'s `useZeroSessionBootPicker` force-opens the
+ *     `sessions-new-picker` DropdownMenu 1.5s after the app settles there. It is a
+ *     modal layer that takes over the page's pointer events, and it re-arms whenever
+ *     that condition is re-entered (e.g. after this suite registers another project),
+ *     so dismissing it once is not enough — one real session removes the condition.
+ *  2. THE DYING DIALOG SCRIM — hence `openPicker` below. See its doc comment: the
+ *     overlay outlives the content's unmount, so the next picker opens underneath
+ *     the previous one's fading scrim and every click in it is intercepted.
  */
 
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
+import { TOAST } from '../helpers/tauri/testids.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -51,6 +78,24 @@ async function projectCount(page: Page): Promise<number> {
   const res = await page.request.get(`${DAEMON_BASE}/api/projects`);
   const body = (await res.json()) as { data?: unknown[] };
   return body.data?.length ?? 0;
+}
+
+/**
+ * Open the picker from the Projects section's "+", never on top of a dying scrim.
+ *
+ * A dialog's content and its overlay are separate elements with separate exit
+ * animations, so `directory-picker` reaching count 0 proves only that the CONTENT
+ * unmounted — the `bg-black/10` scrim can still be fading. Open the next picker in
+ * that window and every click inside it is intercepted by the previous dialog's
+ * overlay (measured live on `directory-picker-confirm`, retried for the full 60s
+ * budget on a button Playwright itself calls "visible, enabled and stable"). Since
+ * this describe opens and dismisses the picker in nearly every test, the wait
+ * belongs on the OPEN side, once.
+ */
+async function openPicker(page: Page): Promise<void> {
+  await waitForDialogScrimsGone(page);
+  await page.getByTestId('sidebar-projects-add').click();
+  await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
 }
 
 // ─── §directory-picker Open, browse, select, confirm ─────────────────────────
@@ -71,6 +116,9 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
     srcPath = path.join(projectTree.projectPath, 'src');
     libPath = path.join(srcPath, 'lib');
     mkdirSync(libPath, { recursive: true });
+    // Keeps the app off its zero-session boot dead-end for the whole describe —
+    // see the header note. Nothing below reads this chat.
+    await createTauriChat(app.page, projectTree.projectId);
   });
 
   test.afterAll(async () => {
@@ -81,9 +129,8 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
 
   test('opens seeded at the home root with the directory-mode title', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
+    await openPicker(page);
 
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Select Project Directory')).toBeVisible();
     await expect(page.getByTestId('directory-picker-path-input')).toHaveValue('~');
   });
@@ -139,8 +186,7 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
 
   test('confirming a directory registers it as a project and adds it to Recents', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
+    await openPicker(page);
 
     const input = page.getByTestId('directory-picker-path-input');
     await input.fill(projectTree.projectPath);
@@ -151,12 +197,12 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
     await page.getByTestId('directory-picker-confirm').click();
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('toast-root').filter({ hasText: 'Project added' })).toBeVisible({
+    await expect(page.locator(TOAST.root).filter({ hasText: 'Project added' })).toBeVisible({
       timeout: 10_000,
     });
 
     // Recents only render at the home root — reopen and land back at '~'.
-    await page.getByTestId('sessions-add-project').click();
+    await openPicker(page);
     await expect(page.getByTestId('directory-picker-recent')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId(`directory-picker-recent-${srcPath}`)).toBeVisible();
   });
@@ -167,7 +213,7 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
     // `src` was already registered by the previous test — the daemon reports a duplicate.
-    await expect(page.getByTestId('toast-root').filter({ hasText: 'Project already added' })).toBeVisible({
+    await expect(page.locator(TOAST.root).filter({ hasText: 'Project already added' })).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -182,6 +228,8 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
+    // Zero-session boot dead-end again — see the header note.
+    await createTauriChat(app.page, project.projectId);
   });
 
   test.afterAll(async () => {
@@ -191,8 +239,7 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
 
   test('an unreachable path shows an inline load error, not stale rows', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
+    await openPicker(page);
 
     const input = page.getByTestId('directory-picker-path-input');
     await input.fill('/definitely/not/a/real/path/xyz-e2e');
@@ -213,7 +260,7 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
   // Escape now reverts the draft in place and leaves the dialog open.
   test('Escape reverts an edited crumb draft without closing the dialog', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
+    await openPicker(page);
     const input = page.getByTestId('directory-picker-path-input');
     await expect(input).toHaveValue('~', { timeout: 10_000 });
 
@@ -231,21 +278,24 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
 
   test('Escape with an unedited crumb closes the dialog', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
+    await openPicker(page);
 
     await page.keyboard.press('Escape');
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('the header Close button dismisses without registering a project', async () => {
+  // The picker's own header X (`directory-picker-close`) is gone — DirectoryPickerModal
+  // no longer passes `showCloseButton={false}`, so the close affordance is the v2
+  // DialogContent's built-in one. Its testid (`dialog-close`) is shared by every
+  // dialog in the app, hence the scoping to the picker root.
+  test('the built-in Close button dismisses without registering a project', async () => {
     const { page } = app;
     const before = await projectCount(page);
 
-    await page.getByTestId('sessions-add-project').click();
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId('directory-picker-close').click();
+    await openPicker(page);
+    const picker = page.getByTestId('directory-picker');
+    await picker.getByTestId('dialog-close').click();
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
     expect(await projectCount(page)).toBe(before);
@@ -253,8 +303,7 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
 
   test('shows a loading indicator while a browse request is in flight', async () => {
     const { page } = app;
-    await page.getByTestId('sessions-add-project').click();
-    await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
+    await openPicker(page);
     // Let the initial home-root browse settle before delaying the next one.
     await expect(page.getByTestId('directory-picker-loading')).toHaveCount(0, { timeout: 15_000 });
 

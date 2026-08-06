@@ -11,8 +11,7 @@ import { Folder, GitCompare } from 'lucide-react';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { cn } from '@/lib/utils';
-import { useTheme } from '@/store/theme';
-import { windowStyleGeometry } from '@/lib/appearance/window-style';
+import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { CountBadge } from '@/components/ui/count-badge';
 import { BottomPanel } from '@/features/context-panel/BottomPanel';
 import { PanelResizeHandle } from '@/features/context-panel/PanelResizeHandle';
@@ -27,13 +26,12 @@ const SEG_BASE =
 
 export function InspectorPane({ port }: { port: number }) {
   const { projectId, chatId } = useActiveIdentity();
-  const windowStyle = useTheme((s) => s.windowStyle);
-  const geo = windowStyleGeometry(windowStyle);
+  const geo = SHELL_GEOMETRY;
   const [tab, setTab] = useState<Tab>('files');
   const changesCount = useChangesCount(port, projectId, chatId);
 
   // Subscribe to inspector-tab intents so external triggers (e.g. the
-  // SurfacePicker "View changes" button) can switch the active tab.
+  // the workspace empty state's "View changes" button) can switch the active tab.
   useEffect(() => {
     return onSurfaceIntent((intent) => {
       if (intent.type === 'inspector-tab') {

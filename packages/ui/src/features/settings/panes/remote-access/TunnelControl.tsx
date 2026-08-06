@@ -38,7 +38,7 @@ export function TunnelControl({ port, tunnel }: TunnelControlProps): React.React
   if (hasNamedConfig === null) return <></>;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <NamedTunnelSection
         tunnel={tunnel}
         hasConfig={hasNamedConfig}

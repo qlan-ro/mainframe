@@ -7,9 +7,9 @@
  * a sibling.
  */
 import { GripVertical, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Input } from '@v2/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Switch } from '@v2/components/ui/switch';
 import type { AutomationFormField } from '../contract';
 import { OptionsEditor } from './OptionsEditor';
 
@@ -36,7 +36,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
           value={field.label ?? ''}
           onChange={(e) => onPatch({ label: e.target.value })}
           placeholder="Label"
-          className="h-[26px] min-w-[60px] flex-1 px-2 py-0 text-caption"
+          className="h-[26px] min-w-[60px] flex-1 px-2 py-0 text-xs"
         />
         <Select
           value={field.type}
@@ -48,7 +48,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
             });
           }}
         >
-          <SelectTrigger data-testid={`${testId}-type`} className="h-[26px] w-[104px] font-mono text-caption">
+          <SelectTrigger data-testid={`${testId}-type`} className="h-[26px] w-[104px] font-mono text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,7 +60,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
           </SelectContent>
         </Select>
         <label className="flex shrink-0 items-center gap-1.5" title="Required">
-          <span className="text-caption font-medium text-muted-foreground">Req</span>
+          <span className="text-xs font-medium text-muted-foreground">Req</span>
           <Switch
             data-testid={`${testId}-required`}
             checked={!!field.required}
@@ -90,12 +90,12 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
 
       {field.showWhen ? (
         <div className="flex flex-wrap items-center gap-1.5 pl-[20px]">
-          <span className="text-caption font-medium text-muted-foreground">Show when</span>
+          <span className="text-xs font-medium text-muted-foreground">Show when</span>
           <Select
             value={field.showWhen.key}
             onValueChange={(key) => onPatch({ showWhen: { key, equals: field.showWhen?.equals ?? '' } })}
           >
-            <SelectTrigger data-testid={`${testId}-showwhen-key`} className="h-[26px] w-[120px] font-mono text-caption">
+            <SelectTrigger data-testid={`${testId}-showwhen-key`} className="h-[26px] w-[120px] font-mono text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,13 +111,13 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
               ))}
             </SelectContent>
           </Select>
-          <span className="font-mono text-caption text-muted-foreground">=</span>
+          <span className="font-mono text-xs text-muted-foreground">=</span>
           <Input
             data-testid={`${testId}-showwhen-equals`}
             value={field.showWhen.equals}
             onChange={(e) => onPatch({ showWhen: { key: field.showWhen?.key ?? '', equals: e.target.value } })}
             placeholder="value"
-            className="h-[26px] w-[120px] px-2 py-0 text-caption"
+            className="h-[26px] w-[120px] px-2 py-0 text-xs"
           />
           <button
             type="button"
@@ -135,7 +135,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
             type="button"
             data-testid={`${testId}-add-showwhen`}
             onClick={() => onPatch({ showWhen: { key: others[0]?.key ?? '', equals: '' } })}
-            className="ml-[20px] self-start text-caption font-medium text-muted-foreground hover:text-primary"
+            className="ml-[20px] self-start text-xs font-medium text-muted-foreground hover:text-primary"
           >
             + show only when…
           </button>

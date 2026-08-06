@@ -4,16 +4,16 @@
  * Registry key: '_Mcp' (catches all mcp__* via resolveToolCard).
  * Visual family: centered marker pill on the chat spine (MarkerWrap/MarkerPill).
  *
- * Behavior (from desktop MCPToolCard.tsx):
+ * Behavior:
  *   - Parse mcp__<server>__<tool>; strip leading 'claude_ai_' from server; capitalize.
- *   - Pill: Plug icon + '{server} executed {tool}' (tool in text-primary).
+ *   - Row: Plug icon + '{server} executed {tool}' (tool in text-primary).
  *   - Pending: 'executing', Error: '{server} failed: {tool}'.
  *   - Expandable (success only) → MarkerBody with ARGUMENTS + RESULT sections.
  *   - Tooltip on the pill = the raw toolName.
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { PlugIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import {
   MarkerWrap,
   MarkerPill,
@@ -65,10 +65,10 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
   const resultText = extractResultText(result);
 
   const pillContent = (
-    <span className="font-mono text-label text-muted-foreground">
+    <>
       {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
       {state === 'error' && <span className="text-destructive">{tool}</span>}
-    </span>
+    </>
   );
 
   return (
@@ -77,7 +77,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
         <TooltipTrigger asChild>
           <span>
             <MarkerPill
-              icon={<PlugIcon size={12} />}
+              icon={<PlugIcon />}
               state={state}
               expandable={expandable}
               open={open}
@@ -88,7 +88,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
             </MarkerPill>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" className="font-mono text-label max-w-xs break-all">
+        <TooltipContent side="top" className="max-w-xs font-mono break-all">
           {toolName}
         </TooltipContent>
       </Tooltip>

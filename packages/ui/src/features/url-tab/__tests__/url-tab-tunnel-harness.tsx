@@ -14,12 +14,13 @@ import { vi } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { HostProvider, setHostForTesting } from '@/lib/host';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { useLayoutStore } from '@/store/layout';
 import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels';
 import { useSandboxStore } from '@/store/sandbox';
 import { UrlTabInstance } from '../UrlTabInstance';
 
-const FRESH_LAYOUT = { top: ['run' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['workspace' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
 export function makeFakeHandle(): PreviewHandle {
   return {
@@ -73,6 +74,11 @@ export function renderTab(url: string, { tabId = 't1' }: { tabId?: string } = {}
   if (installedHost === null) throw new Error('renderTab() called before installFakeHost()');
   const host = installedHost;
   return render(<UrlTabInstance tabId={tabId} url={url} visible />, {
-    wrapper: ({ children }) => <HostProvider host={host}>{children}</HostProvider>,
+    // The url-tab toolbar is full of v2 `Hint`s — the v2 TooltipProvider is part of the stack.
+    wrapper: ({ children }) => (
+      <HostProvider host={host}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </HostProvider>
+    ),
   });
 }

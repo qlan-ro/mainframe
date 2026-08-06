@@ -1,30 +1,39 @@
 /**
- * §daemon-picker — the sidebar footer daemon trigger, its picker popover, the
+ * §daemon-picker — the sidebar footer daemon trigger, its picker menu, the
  * add-remote pairing dialog, and the rename/remove/unreachable surfaces.
  *
  * Spec: docs/plans/2026-07-03-tauri-e2e-test-plan.md #8 (Cluster A, P3 — lowest
  * priority in the wave; scenarios below are deliberately conservative).
  *
- * Source: packages/ui/src/features/daemon/{DaemonFooterStatus,DaemonPicker,
- * DaemonRow,AddRemoteDialog,pairing-steps,PairCodeInput,DaemonSmallDialog,
- * DaemonUnreachableBody,use-daemon-registry,active-daemon-context}.
+ * Source: packages/ui/src/v2/features/daemon/{DaemonSwitcher,DaemonMenuItems,
+ * AddRemoteDialog,pairing-steps,pairing-shared,DaemonSmallDialog,DaemonUnreachableBody}
+ * plus packages/ui/src/features/daemon/{apply-pairing,pair-daemon,use-daemon-registry,
+ * active-daemon-context}. The 2026-08 shell port replaced DaemonFooterStatus/DaemonPicker/
+ * DaemonRow with the v2 switcher: the picker is a native DropdownMenu (menu-shaped = native
+ * DropdownMenu, ledger rule), the manage ⋯ is a DropdownMenuSub, and the pairing/rename/remove
+ * dialogs are stock v2 Dialogs (six slots of `InputOTP` for the code).
  *
  * Testid reference (verified against source):
- *   daemon-footer-trigger        — DaemonFooterStatus popover trigger; ConnDot
- *                                   inside carries aria-label Connected/Connecting…/Unreachable
- *   daemon-picker                — DaemonPicker root
+ *   daemon-footer-trigger        — DaemonSwitcher trigger; ConnDot inside carries
+ *                                   aria-label Connected/Connecting…/Unreachable
+ *   daemon-footer-trigger-label  — the active daemon's LABEL alone; the trigger also
+ *                                   prints the host, and the local host is 127.0.0.1:<port>,
+ *                                   so only the label separates local from a remote
+ *   daemon-picker                — the menu body (DaemonMenuItems root)
  *   daemon-picker-empty          — "No remote daemons yet…" empty state
- *   daemon-picker-add            — "Add remote daemon…" footer row
- *   daemon-row-<id>              — DaemonRow root (id='local' for the synthetic local entry)
+ *   daemon-picker-add            — "Add remote daemon…" item
+ *   daemon-row-<id>              — one daemon item (id='local' for the synthetic local entry)
  *   daemon-row-<id>-active       — Check icon, only rendered when that row is active
  *   daemon-row-<id>-dot          — wrapper around ConnDot (aria-label carries the status word)
- *   daemon-row-<id>-manage       — ⋯ button, remote rows only
- *   daemon-row-<id>-rename / -repair / -remove — manage popover menu rows
+ *   daemon-row-<id>-manage       — ⋯ SubTrigger, remote rows only — the row's SIBLING
+ *   daemon-row-<id>-rename / -repair / -remove — items in the manage SubContent
  *   daemon-add-url / daemon-add-verify / daemon-add-continue / daemon-add-back /
- *   daemon-add-close / daemon-add-device / daemon-add-confirm / daemon-pair-code
- *                                 — AddRemoteDialog (pairing-steps.tsx)
- *   daemon-rename-dialog / daemon-rename-input / daemon-rename-save
- *   daemon-remove-dialog / daemon-remove-confirm
+ *   daemon-add-cancel / daemon-add-retry / daemon-add-device / daemon-add-confirm /
+ *   daemon-pair-code             — AddRemoteDialog (pairing-steps.tsx). There is no
+ *                                   `daemon-add-close`: the stock dialog's own X and the
+ *                                   footer's Cancel are the two exits.
+ *   daemon-dialog-rename / daemon-dialog-remove — DaemonSmallDialog, one per kind
+ *   daemon-dialog-input / daemon-dialog-confirm / daemon-dialog-cancel — its shared controls
  *   daemon-unreachable / daemon-unreachable-switchlocal — DaemonUnreachableBody
  *     (rendered inside ConnectionOverlay, portalled to document.body)
  *
@@ -33,21 +42,16 @@
  * `FakeHostBridge` (lib/host/fake-adapter.ts), which holds `daemons` in a plain
  * in-memory `Map` with no persistence — a `page.reload()` wipes it. Likewise the
  * "active daemon" singleton (lib/daemon/active-daemon.ts) is a bare in-module
- * variable. The connection state that gates the unreachable overlay
- * (`useConnectionState` in app/useConnectionState.ts) polls the LOCAL daemon's
- * fixed `/health` port unconditionally — it is NOT aware of which daemon is
- * "active" — so merely switching to an unreachable remote's WS target never
- * flips `connState` to `disconnected` on its own (this matches the module doc
- * in DaemonFooterStatus.tsx: "no live polling — documented known
- * simplification"). Adapted approach used below instead of localStorage seeding:
+ * variable. So the approach below seeds nothing:
  *   1. A real remote daemon entry is added by driving the actual AddRemoteDialog
  *      pairing flow, with `page.route()` mocking only the `/health` and
  *      `/api/auth/confirm` calls to the fake remote origin (network-level fault
  *      injection, not fabricated React/store state).
- *   2. The unreachable overlay is then forced by intercepting the LOCAL daemon's
- *      `/health` poll (the actual signal `connState` reacts to) with
- *      `route.abort()`, while the remote stays active — this reproduces the real
- *      `showUnreachableOverlay` condition through the app's real polling loop.
+ *   2. The unreachable overlay then comes for free: `useConnectionState` polls the
+ *      ACTIVE daemon's `/health` (`getActiveDaemon().baseUrl`, not a fixed local port),
+ *      and a paired remote is stored as `https://<host>` — which no route in this file
+ *      mocks — so the poll fails and `showUnreachableOverlay` raises through the app's
+ *      real loop. Aborting the LOCAL health route reproduces it while local is active.
  * Every daemon switch in this suite is undone before the describe ends (CAUTION
  * in the dispatch); the final test re-asserts the app is back on the local daemon.
  *
@@ -62,21 +66,21 @@
  * snapshot; `onDone`/`onClose` are separate callbacks) — pairing now switches
  * on the first click and briefly shows "Paired".
  *
- * FIXED BUGS (see the "pairing auto-switches…" and "manage menu
- * rename/remove…" tests below): (1) the auto-switch above used to remount
- * `<AppShell key={target.id}>` synchronously inside `handleConfirm`,
- * destroying the still-open `AddRemoteDialog` before it reached the "done"
- * phase — `AddRemoteDialog.handleConfirm` now defers `registry.switchTo()`
- * until after the dialog's own deferred `onClose`. (2) the picker Popover
- * (`DaemonFooterStatus.tsx`) used to close itself whenever the nested
- * rename/remove `DaemonSmallDialog` dismissed (Radix modal-Dialog-vs-Popover
- * interaction) — `DaemonFooterStatus` now suppresses the Popover's
- * `onOpenChange(false)` while a dialog is open.
+ * FIXED BUG (see the "pairing auto-switches…" test below): the auto-switch above
+ * used to remount `<AppShell key={target.id}>` synchronously inside
+ * `handleConfirm`, destroying the still-open `AddRemoteDialog` before it reached
+ * the "done" phase — `AddRemoteDialog.handleConfirm` now defers
+ * `registry.switchTo()` until after the dialog's own deferred `onClose`.
+ *
+ * (A second historical bug — the picker Popover closing itself whenever a nested
+ * rename/remove dialog dismissed — died with the Popover. A DropdownMenu closes on
+ * item select by design, so the dialogs open over a closed menu and each
+ * post-dialog assertion below reopens the picker.)
  */
 
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
@@ -86,14 +90,28 @@ const LOCAL_HEALTH_URL = `http://127.0.0.1:${DAEMON_PORT}/health`;
  *  time by the point these are used (the auto-switch test below adds and then
  *  removes its own second remote before any other test runs), so there is
  *  never an id-ambiguity to resolve. `renameMenuRow`/`removeMenuRow` are safe
- *  even with 2+ remotes present because Radix Popover only mounts its portalled
- *  `PopoverContent` (and thus these testids) while open, and only one manage
- *  popover is ever open at a time. */
+ *  even with 2+ remotes present because Radix only mounts a `SubContent` (and
+ *  thus these testids) while that submenu is open, and only one manage submenu
+ *  is ever open at a time.
+ *
+ *  Every `daemon-row-*` testid is a menu item now (DaemonMenuItems.tsx), including
+ *  the manage SubTrigger and its three actions, so a row locator has to exclude
+ *  them by suffix — the manage trigger is the row's SIBLING, not its child. */
+const ROW_KIDS = ':not([data-testid$="-manage"]):not([data-testid$="-rename"])';
+const ROW_KIDS_2 = ':not([data-testid$="-repair"]):not([data-testid$="-remove"])';
+const DAEMON_ROW = `[role="menuitem"][data-testid^="daemon-row-"]${ROW_KIDS}${ROW_KIDS_2}`;
+
 function remoteRow(page: Page) {
-  return page.locator('[data-testid^="daemon-row-"]').filter({ has: page.locator('[data-testid$="-manage"]') });
+  return page.locator(`${DAEMON_ROW}:not([data-testid="daemon-row-local"])`);
 }
 function manageButton(page: Page) {
   return page.locator('[data-testid$="-manage"]');
+}
+/** The ⋯ SubTrigger is the row's sibling, so it is reached by the row's own id
+ *  rather than as a descendant. */
+async function openManageMenu(page: Page, row: ReturnType<Page['locator']>): Promise<void> {
+  const rowTestId = await row.getAttribute('data-testid');
+  await page.getByTestId(`${rowTestId}-manage`).click();
 }
 function renameMenuRow(page: Page) {
   return page.locator('[data-testid$="-rename"]');
@@ -106,7 +124,12 @@ function removeMenuRow(page: Page) {
  *  own second pairing), where the generic `remoteRow`/`manageButton` helpers
  *  above would be ambiguous. */
 function daemonRowByHost(page: Page, hostSubstr: string) {
-  return page.locator('[data-testid^="daemon-row-"]').filter({ hasText: hostSubstr });
+  return page.locator(DAEMON_ROW).filter({ hasText: hostSubstr });
+}
+/** The trigger prints label AND host, and the local host is `127.0.0.1:<port>` —
+ *  so only the label discriminates local ("This Mac") from a remote ("127"). */
+function footerLabel(page: Page) {
+  return page.getByTestId('daemon-footer-trigger-label');
 }
 
 async function openPicker(page: Page): Promise<void> {
@@ -128,6 +151,10 @@ async function openPicker(page: Page): Promise<void> {
   // artifact, NOT a product bug (a real user's local connection is unaffected
   // by verifying a bad remote URL). Every non-post-verify call clicks first-try.
   await expect(async () => {
+    // Any OTHER Radix layer left open — a menu closing after an item select, or
+    // the zero-session boot picker (see the describe's beforeAll) — owns the
+    // page's pointer events and makes this trigger unhittable while it lives.
+    await page.keyboard.press('Escape');
     await page.getByTestId('daemon-footer-trigger').click({ timeout: 5_000 });
     await expect(page.getByTestId('daemon-picker')).toBeVisible({ timeout: 5_000 });
   }).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000, 3_000] });
@@ -143,7 +170,7 @@ async function recoverToLocal(page: Page): Promise<void> {
   await page.getByTestId('daemon-unreachable-switchlocal').click();
   await expect(page.getByTestId('daemon-unreachable')).toHaveCount(0, { timeout: 5_000 });
   await waitConnected(page, 30_000);
-  await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+  await expect(footerLabel(page)).toHaveText('This Mac');
 }
 
 test.describe('§daemon-picker', () => {
@@ -153,6 +180,11 @@ test.describe('§daemon-picker', () => {
   test.beforeAll(async () => {
     app = await launchTauriApp();
     project = await createTauriProject(app.page);
+    // A project with ZERO sessions is the app's "boot dead-end": ChatSurface's
+    // useZeroSessionBootPicker force-opens the "New session in…" menu 1.5s in, and
+    // that modal layer swallows the pointer events this suite's footer trigger needs.
+    // Seeding one session is what a real user's workspace looks like anyway.
+    await createTauriChat(app.page, project.projectId, 'default');
   });
 
   test.afterAll(async () => {
@@ -204,7 +236,7 @@ test.describe('§daemon-picker', () => {
       await expect(page.getByTestId('daemon-pair-code')).toHaveCount(0);
 
       // Close without ever calling confirm/pair
-      await page.getByTestId('daemon-add-close').click();
+      await page.getByTestId('daemon-add-cancel').click();
       await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
     } finally {
       await page.unroute(`${origin}/health`);
@@ -239,7 +271,7 @@ test.describe('§daemon-picker', () => {
     // Continue must not appear for an unreachable URL — Verify/Retry only.
     await expect(page.getByTestId('daemon-add-continue')).toHaveCount(0);
 
-    await page.getByTestId('daemon-add-close').click();
+    await page.getByTestId('daemon-add-cancel').click();
     await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
   });
 
@@ -267,7 +299,9 @@ test.describe('§daemon-picker', () => {
     await page.getByTestId('daemon-add-continue').click();
 
     await expect(page.getByTestId('daemon-pair-code')).toBeVisible();
-    await page.getByTestId('daemon-pair-code').locator('input').first().click();
+    // `daemon-pair-code` IS the input: shadcn's InputOTP spreads props onto input-otp's
+    // single hidden field, and the six boxes are sibling divs — there is no input inside it.
+    await page.getByTestId('daemon-pair-code').click();
     await page.keyboard.type('ABC123');
     await page.getByTestId('daemon-add-device').fill('E2E Remote Device');
 
@@ -280,7 +314,7 @@ test.describe('§daemon-picker', () => {
     await expect(page.getByTestId('daemon-add-url')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('daemon-pair-code')).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
+    await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
     await recoverToLocal(page);
 
     // The row is added — label is derived from the host
@@ -307,7 +341,7 @@ test.describe('§daemon-picker', () => {
     // meaningful, not inherited ambient state.
     await openPicker(page);
     await page.getByTestId('daemon-row-local').click();
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac', { timeout: 10_000 });
+    await expect(footerLabel(page)).toHaveText('This Mac', { timeout: 10_000 });
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
 
@@ -333,7 +367,9 @@ test.describe('§daemon-picker', () => {
     await page.getByTestId('daemon-add-continue').click();
 
     await expect(page.getByTestId('daemon-pair-code')).toBeVisible();
-    await page.getByTestId('daemon-pair-code').locator('input').first().click();
+    // `daemon-pair-code` IS the input: shadcn's InputOTP spreads props onto input-otp's
+    // single hidden field, and the six boxes are sibling divs — there is no input inside it.
+    await page.getByTestId('daemon-pair-code').click();
     await page.keyboard.type('ABC123');
     await page.getByTestId('daemon-add-device').fill('E2E Auto-switch Device');
 
@@ -349,8 +385,8 @@ test.describe('§daemon-picker', () => {
 
     // Pairing itself auto-switches the active daemon — no second click needed
     // (started this test on local, above; it's since moved off it).
-    await expect(page.getByTestId('daemon-footer-trigger')).not.toContainText('This Mac', { timeout: 10_000 });
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
+    await expect(footerLabel(page)).not.toHaveText('This Mac', { timeout: 10_000 });
+    await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
 
     await recoverToLocal(page);
 
@@ -358,10 +394,14 @@ test.describe('§daemon-picker', () => {
     // invariant the rest of this suite relies on holds after.
     await openPicker(page);
     const newRow = daemonRowByHost(page, '58203');
-    await newRow.locator('[data-testid$="-manage"]').click();
+    await openManageMenu(page, newRow);
     await removeMenuRow(page).click();
-    await page.getByTestId('daemon-remove-confirm').click();
-    await expect(page.getByTestId('daemon-remove-dialog')).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('daemon-dialog-confirm').click();
+    await expect(page.getByTestId('daemon-dialog-remove')).toHaveCount(0, { timeout: 5_000 });
+
+    // Choosing a manage action closes the menu (Radix item select), so the row is
+    // gone from the DOM either way — reopen to prove the entry itself is gone.
+    await openPicker(page);
     await expect(newRow).toHaveCount(0, { timeout: 5_000 });
     await closePicker(page);
   });
@@ -374,7 +414,7 @@ test.describe('§daemon-picker', () => {
     // added and removed its own separate remote, cleaning up after itself).
     await openPicker(page);
     await remoteRow(page).click();
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('127', { timeout: 10_000 });
+    await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
 
     // Force connState to 'disconnected' by failing the LOCAL daemon's health poll —
     // the real signal DaemonFooterStatus/DaemonGatedShell react to (see file header).
@@ -395,7 +435,7 @@ test.describe('§daemon-picker', () => {
     }
 
     await waitConnected(page, 30_000);
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await expect(footerLabel(page)).toHaveText('This Mac');
   });
 
   // Previously: renaming or removing a NON-active remote row was broken —
@@ -407,33 +447,30 @@ test.describe('§daemon-picker', () => {
   // every `MenuRow` inside `DaemonRowManage`'s popover now calls
   // `e.stopPropagation()` before invoking its handler.
   //
-  // FIXED: a SEPARATE bug used to remain even after the stopPropagation fix
-  // above — the outer `daemon-picker` Popover (DaemonFooterStatus.tsx) closed
-  // itself once the nested `DaemonSmallDialog` (a modal Radix Dialog,
-  // rename/remove confirm) dismissed. Root cause was Radix's default
-  // modal-Dialog-vs-Popover interaction: dismissing the inner modal Dialog
-  // fires a dismiss-time interaction that the outer Popover's dismissable
-  // layer treats as an outside interaction. Fixed in `DaemonFooterStatus.tsx`
-  // by suppressing the picker Popover's `onOpenChange(false)` while a
-  // rename/remove/add dialog is open; explicit Escape/outside-click still
-  // closes the picker once no dialog is active.
+  // The picker no longer stays open behind these dialogs, and no longer needs to:
+  // choosing a manage action is a Radix item select, which closes the menu before
+  // `DaemonSwitcher` mounts the dialog as a sibling. The old
+  // suppress-`onOpenChange(false)`-while-a-dialog-is-open workaround (and the
+  // portal-click bubble-through it guarded) died with the Popover it patched — so
+  // each assertion below reads the row from a FRESH open.
   test('manage menu rename updates the remote row label', async () => {
     const { page } = app;
     await openPicker(page);
     await manageButton(page).click();
     await renameMenuRow(page).click();
 
-    const dialog = page.getByTestId('daemon-rename-dialog');
+    const dialog = page.getByTestId('daemon-dialog-rename');
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    const input = page.getByTestId('daemon-rename-input');
+    const input = page.getByTestId('daemon-dialog-input');
     await input.fill('E2E Renamed Remote');
-    await page.getByTestId('daemon-rename-save').click();
+    await page.getByTestId('daemon-dialog-confirm').click();
     await expect(dialog).toHaveCount(0, { timeout: 5_000 });
 
     // The row picked up the new label, and the active daemon never switched
-    // away from local (no bubble-through remount).
+    // away from local (choosing a manage action must not select the row).
+    await openPicker(page);
     await expect(remoteRow(page)).toContainText('E2E Renamed Remote', { timeout: 5_000 });
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await expect(footerLabel(page)).toHaveText('This Mac');
     await closePicker(page);
   });
 
@@ -443,19 +480,20 @@ test.describe('§daemon-picker', () => {
     await manageButton(page).click();
     await removeMenuRow(page).click();
 
-    const dialog = page.getByTestId('daemon-remove-dialog');
+    const dialog = page.getByTestId('daemon-dialog-remove');
     await expect(dialog).toBeVisible({ timeout: 5_000 });
-    await page.getByTestId('daemon-remove-confirm').click();
+    await page.getByTestId('daemon-dialog-confirm').click();
     await expect(dialog).toHaveCount(0, { timeout: 5_000 });
 
+    await openPicker(page);
     await expect(page.getByTestId('daemon-picker-empty')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await expect(footerLabel(page)).toHaveText('This Mac');
     await closePicker(page);
   });
 
   test('ends the suite back on the local daemon', async () => {
     const { page } = app;
-    await expect(page.getByTestId('daemon-footer-trigger')).toContainText('This Mac');
+    await expect(footerLabel(page)).toHaveText('This Mac');
     await expect(page.getByTestId('daemon-footer-trigger').locator('[aria-label="Connected"]')).toBeVisible({
       timeout: 15_000,
     });

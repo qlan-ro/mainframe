@@ -1,36 +1,39 @@
 /**
- * BranchSubmenu.test.tsx — disabled states, action callbacks, testids.
+ * BranchSubmenu.test.tsx — disabled states, action callbacks, testids, on the
+ * native DropdownMenuSubContent build. Items are Radix menu items (divs with
+ * aria-disabled), so disabled-ness is asserted via aria-disabled, and the
+ * component renders inside a real DropdownMenu > Sub harness.
  *
  * Behaviors covered:
- *  1. Checkout is disabled when isCurrent=true.
- *  2. Checkout is disabled when isWorktree=true.
- *  3. Checkout is enabled for a non-current, non-worktree local branch.
- *  4. Merge and Rebase are disabled when isCurrent=true.
- *  5. Rename is disabled when isWorktree=true.
- *  6. Delete is disabled when isCurrent=true or isWorktree=true.
- *  7. Clicking each action button fires its callback with the expected args
- *     (Checkout/Pull/Push/Merge/Rebase/Rename/Delete/New Branch from) — table-driven.
- *  8. isWorktree=true: Delete Worktree button fires onDeleteWorktree(branch).
- *  9. isWorktree=true + onNewSession provided: New Session button fires onNewSession(branch).
- * 10. isRemote=true: only remote-specific items are rendered (Checkout, New Branch From, Merge, Rebase, Delete Remote).
- * 11. isRemote + Delete fires onDelete(branch, true).
- * 12. busy=true disables all action buttons.
+ *  1. Checkout is disabled when isCurrent=true or the branch is in a worktree.
+ *  2. Merge and Rebase are disabled when isCurrent=true.
+ *  3. Rename is disabled for a worktree branch.
+ *  4. Delete is disabled when isCurrent=true or worktree.
+ *  5. Clicking each action item fires its callback with the expected args — table-driven.
+ *  6. worktree set: Delete Worktree fires onDeleteWorktree(worktreeDir, branch).
+ *  7. worktree set + onNewSession: New Session fires onNewSession(worktreeDir, branch).
+ *  8. isRemote=true: only remote-specific items are rendered.
+ *  9. isRemote + Delete fires onDelete(branch, true).
+ * 10. busy=true disables all action items.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BranchSubmenu, type BranchSubmenuProps } from '../BranchSubmenu';
 
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
+// The harness renders the menu structurally open (no trigger interaction), so
+// Radix's modal body pointer-events:none is still in force; disable
+// user-event's pointer-events assertion — the click path itself is Radix's.
+const user = userEvent.setup({ pointerEventsCheck: 0 });
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+} from '@v2/components/ui/dropdown-menu';
+import { BranchSubmenu, type BranchRowActions, type BranchSubmenuProps } from '../BranchSubmenu';
 
-function makeProps(overrides: Partial<BranchSubmenuProps> = {}): BranchSubmenuProps {
+function makeActions(overrides: Partial<BranchRowActions> = {}): BranchRowActions {
   return {
-    branch: 'feat/test',
-    isCurrent: false,
-    isRemote: false,
-    isWorktree: false,
     onCheckout: vi.fn(),
     onPull: vi.fn(),
     onPush: vi.fn(),
@@ -46,72 +49,77 @@ function makeProps(overrides: Partial<BranchSubmenuProps> = {}): BranchSubmenuPr
   };
 }
 
-// ---------------------------------------------------------------------------
-// 2–3. Checkout disabled when isCurrent or isWorktree
-//
-// (root-testid presence is exercised implicitly by every test below that
-// queries a child testid — no bare presence smoke needed.)
-// ---------------------------------------------------------------------------
+function makeProps(overrides: Partial<BranchSubmenuProps> = {}): BranchSubmenuProps {
+  return {
+    branch: 'feat/test',
+    isCurrent: false,
+    isRemote: false,
+    worktree: undefined,
+    actions: makeActions(),
+    ...overrides,
+  };
+}
+
+/** SubContent needs the full menu context; both menu and sub render open. */
+function renderSubmenu(props: BranchSubmenuProps) {
+  return render(
+    <DropdownMenu open>
+      <DropdownMenuContent>
+        <DropdownMenuSub open>
+          <DropdownMenuSubTrigger>feat/test</DropdownMenuSubTrigger>
+          <BranchSubmenu {...props} />
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>,
+  );
+}
+
+const expectDisabled = (testId: string) => expect(screen.getByTestId(testId)).toHaveAttribute('aria-disabled', 'true');
+const expectEnabled = (testId: string) => expect(screen.getByTestId(testId)).not.toHaveAttribute('aria-disabled');
 
 describe('BranchSubmenu — Checkout disabled states', () => {
   it('disables git-submenu-checkout when isCurrent=true', () => {
-    render(<BranchSubmenu {...makeProps({ isCurrent: true })} />);
-    expect(screen.getByTestId('git-submenu-checkout')).toBeDisabled();
+    renderSubmenu(makeProps({ isCurrent: true }));
+    expectDisabled('git-submenu-checkout');
   });
 
-  it('disables git-submenu-checkout when isWorktree=true', () => {
-    render(<BranchSubmenu {...makeProps({ isWorktree: true })} />);
-    expect(screen.getByTestId('git-submenu-checkout')).toBeDisabled();
+  it('disables git-submenu-checkout for a worktree branch', () => {
+    renderSubmenu(makeProps({ worktree: 'wt-dir' }));
+    expectDisabled('git-submenu-checkout');
   });
 
   it('enables git-submenu-checkout for a normal non-current branch', () => {
-    render(<BranchSubmenu {...makeProps({ isCurrent: false, isWorktree: false })} />);
-    expect(screen.getByTestId('git-submenu-checkout')).not.toBeDisabled();
+    renderSubmenu(makeProps());
+    expectEnabled('git-submenu-checkout');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. Merge and Rebase disabled when isCurrent
-// ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — Merge/Rebase disabled for current branch', () => {
   it('disables git-submenu-merge and git-submenu-rebase when isCurrent=true', () => {
-    render(<BranchSubmenu {...makeProps({ isCurrent: true })} />);
-    expect(screen.getByTestId('git-submenu-merge')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-rebase')).toBeDisabled();
+    renderSubmenu(makeProps({ isCurrent: true }));
+    expectDisabled('git-submenu-merge');
+    expectDisabled('git-submenu-rebase');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Rename disabled when isWorktree
-// ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — Rename disabled for worktree branch', () => {
-  it('disables git-submenu-rename when isWorktree=true', () => {
-    render(<BranchSubmenu {...makeProps({ isWorktree: true })} />);
-    expect(screen.getByTestId('git-submenu-rename')).toBeDisabled();
+  it('disables git-submenu-rename for a worktree branch', () => {
+    renderSubmenu(makeProps({ worktree: 'wt-dir' }));
+    expectDisabled('git-submenu-rename');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. Delete disabled when isCurrent or isWorktree
-// ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — Delete disabled states', () => {
   it('disables git-submenu-delete when isCurrent=true', () => {
-    render(<BranchSubmenu {...makeProps({ isCurrent: true })} />);
-    expect(screen.getByTestId('git-submenu-delete')).toBeDisabled();
+    renderSubmenu(makeProps({ isCurrent: true }));
+    expectDisabled('git-submenu-delete');
   });
 
-  it('disables git-submenu-delete when isWorktree=true', () => {
-    render(<BranchSubmenu {...makeProps({ isWorktree: true })} />);
-    expect(screen.getByTestId('git-submenu-delete')).toBeDisabled();
+  it('disables git-submenu-delete for a worktree branch', () => {
+    renderSubmenu(makeProps({ worktree: 'wt-dir' }));
+    expectDisabled('git-submenu-delete');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7–15. Action callbacks
-// ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — action callbacks', () => {
   it.each([
@@ -124,52 +132,40 @@ describe('BranchSubmenu — action callbacks', () => {
     ['Delete', 'git-submenu-delete', 'onDelete', ['feat/test', false]],
     ['New Branch from', 'git-submenu-new-branch-from', 'onNewBranchFrom', ['feat/test']],
   ] as const)('clicking %s fires %s(%s)', async (_label, testId, callbackName, args) => {
-    const props = makeProps();
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId(testId));
-    expect(props[callbackName]).toHaveBeenCalledWith(...args);
+    const actions = makeActions();
+    renderSubmenu(makeProps({ actions }));
+    await user.click(screen.getByTestId(testId));
+    expect(actions[callbackName]).toHaveBeenCalledWith(...args);
   });
 });
 
-// ---------------------------------------------------------------------------
-// 16. isWorktree + Delete Worktree
-// ---------------------------------------------------------------------------
-
-describe('BranchSubmenu — isWorktree=true shows Delete Worktree', () => {
-  it('renders git-submenu-delete-worktree and fires onDeleteWorktree when clicked', async () => {
+describe('BranchSubmenu — worktree branch shows Delete Worktree', () => {
+  it('renders git-submenu-delete-worktree and fires onDeleteWorktree(worktreeDir, branch)', async () => {
     const onDeleteWorktree = vi.fn();
-    render(<BranchSubmenu {...makeProps({ isWorktree: true, onDeleteWorktree })} />);
+    renderSubmenu(makeProps({ worktree: 'wt-dir', actions: makeActions({ onDeleteWorktree }) }));
 
-    const btn = screen.getByTestId('git-submenu-delete-worktree');
-    expect(btn).toBeTruthy();
-    await userEvent.click(btn);
-    expect(onDeleteWorktree).toHaveBeenCalledWith('feat/test');
+    const item = screen.getByTestId('git-submenu-delete-worktree');
+    expect(item).toBeTruthy();
+    await user.click(item);
+    expect(onDeleteWorktree).toHaveBeenCalledWith('wt-dir', 'feat/test');
   });
 });
 
-// ---------------------------------------------------------------------------
-// 17. isWorktree + New Session
-// ---------------------------------------------------------------------------
-
-describe('BranchSubmenu — isWorktree=true + onNewSession fires callback', () => {
-  it('renders git-submenu-new-session and fires onNewSession when clicked', async () => {
+describe('BranchSubmenu — worktree branch + onNewSession fires callback', () => {
+  it('renders git-submenu-new-session and fires onNewSession(worktreeDir, branch)', async () => {
     const onNewSession = vi.fn();
-    render(<BranchSubmenu {...makeProps({ isWorktree: true, onNewSession })} />);
+    renderSubmenu(makeProps({ worktree: 'wt-dir', actions: makeActions({ onNewSession }) }));
 
-    const btn = screen.getByTestId('git-submenu-new-session');
-    expect(btn).toBeTruthy();
-    await userEvent.click(btn);
-    expect(onNewSession).toHaveBeenCalledWith('feat/test');
+    const item = screen.getByTestId('git-submenu-new-session');
+    expect(item).toBeTruthy();
+    await user.click(item);
+    expect(onNewSession).toHaveBeenCalledWith('wt-dir', 'feat/test');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 18–19. isRemote=true — only remote-specific items
-// ---------------------------------------------------------------------------
 
 describe('BranchSubmenu — isRemote=true renders remote-specific items', () => {
   it('renders Checkout, New Branch from, Merge, Rebase, Delete Remote', () => {
-    render(<BranchSubmenu {...makeProps({ isRemote: true })} />);
+    renderSubmenu(makeProps({ isRemote: true }));
     expect(screen.getByTestId('git-submenu-checkout')).toBeTruthy();
     expect(screen.getByTestId('git-submenu-new-branch-from')).toBeTruthy();
     expect(screen.getByTestId('git-submenu-merge')).toBeTruthy();
@@ -178,35 +174,30 @@ describe('BranchSubmenu — isRemote=true renders remote-specific items', () => 
   });
 
   it('does NOT render Pull, Push, Rename for remote branches', () => {
-    render(<BranchSubmenu {...makeProps({ isRemote: true })} />);
+    renderSubmenu(makeProps({ isRemote: true }));
     expect(screen.queryByTestId('git-submenu-pull')).toBeNull();
     expect(screen.queryByTestId('git-submenu-push')).toBeNull();
     expect(screen.queryByTestId('git-submenu-rename')).toBeNull();
   });
 
   it('clicking Delete fires onDelete(branch, true) for a remote branch', async () => {
-    const props = makeProps({ isRemote: true });
-    render(<BranchSubmenu {...props} />);
-    await userEvent.click(screen.getByTestId('git-submenu-delete'));
-    expect(props.onDelete).toHaveBeenCalledWith('feat/test', true);
+    const actions = makeActions();
+    renderSubmenu(makeProps({ isRemote: true, actions }));
+    await user.click(screen.getByTestId('git-submenu-delete'));
+    expect(actions.onDelete).toHaveBeenCalledWith('feat/test', true);
   });
 });
 
-// ---------------------------------------------------------------------------
-// 20. busy=true disables all action buttons
-// ---------------------------------------------------------------------------
+describe('BranchSubmenu — busy=true disables all action items', () => {
+  it('has all action items disabled when busy=true', () => {
+    renderSubmenu(makeProps({ actions: makeActions({ busy: true }) }));
 
-describe('BranchSubmenu — busy=true disables all action buttons', () => {
-  it('has all action buttons disabled when busy=true', () => {
-    render(<BranchSubmenu {...makeProps({ busy: true })} />);
-
-    // Checkout, Pull, Push, Merge, Rebase, Rename, Delete are all disabled
-    expect(screen.getByTestId('git-submenu-checkout')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-pull')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-push')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-merge')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-rebase')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-rename')).toBeDisabled();
-    expect(screen.getByTestId('git-submenu-delete')).toBeDisabled();
+    expectDisabled('git-submenu-checkout');
+    expectDisabled('git-submenu-pull');
+    expectDisabled('git-submenu-push');
+    expectDisabled('git-submenu-merge');
+    expectDisabled('git-submenu-rebase');
+    expectDisabled('git-submenu-rename');
+    expectDisabled('git-submenu-delete');
   });
 });

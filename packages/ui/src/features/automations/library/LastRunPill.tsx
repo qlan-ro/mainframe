@@ -25,8 +25,8 @@ export const RUN_STATUS_LABEL: Record<AutomationRunStatus, string> = {
 
 export const RUN_STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
   running: 'bg-primary',
-  waiting: 'bg-mf-warning',
-  succeeded: 'bg-mf-success',
+  waiting: 'bg-warning',
+  succeeded: 'bg-success',
   failed: 'bg-destructive',
   cancelled: 'bg-muted-foreground',
 };
@@ -42,7 +42,7 @@ export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): Re
 
   if (!run) {
     return (
-      <span data-testid={testId} className="text-caption text-muted-foreground">
+      <span data-testid={testId} className="text-xs text-muted-foreground">
         Never run
       </span>
     );
@@ -56,7 +56,7 @@ export function LastRunPill({ automationId, run, onOpen }: LastRunPillProps): Re
         e.stopPropagation();
         onOpen(run.id);
       }}
-      className="inline-flex items-center gap-[5px] rounded text-caption hover:underline"
+      className="inline-flex items-center gap-[5px] rounded text-xs hover:underline"
     >
       {run.status === 'running' ? (
         <span

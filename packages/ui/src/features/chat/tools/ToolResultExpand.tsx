@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Byte formatter (shared with the collapse state)
@@ -70,15 +70,17 @@ export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullByte
     }
   };
 
+  // A textual disclosure affordance, not a button-shaped control — same
+  // treatment ToolGroupTrigger uses one level up.
   const buttonClass = cn(
-    'text-caption text-muted-foreground hover:text-foreground',
-    'transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+    'text-xs text-muted-foreground hover:text-foreground',
+    'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
   );
 
   if (full !== null) {
     return (
       <div className="flex flex-col gap-1">
-        <pre className="whitespace-pre-wrap break-words text-caption text-foreground">{full}</pre>
+        <pre className="text-xs wrap-break-word whitespace-pre-wrap text-foreground">{full}</pre>
         <button
           data-testid="tool-result-expand-collapse"
           type="button"
@@ -93,9 +95,9 @@ export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullByte
 
   return (
     <div className="flex flex-col gap-1">
-      <pre className="whitespace-pre-wrap break-words text-caption text-muted-foreground">{truncatedContent}</pre>
+      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{truncatedContent}</pre>
       {fetchState === 'error' ? (
-        <span className="text-caption text-muted-foreground opacity-70">full output no longer available</span>
+        <span className="text-xs text-muted-foreground">full output no longer available</span>
       ) : (
         <button
           data-testid="tool-result-expand-toggle"

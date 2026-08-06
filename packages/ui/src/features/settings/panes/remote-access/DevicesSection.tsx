@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RotateCw, Trash2 } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
+import { Label } from '@v2/components/ui/label';
 import { getDevices, removeDevice } from '../../../../lib/api/remote-access';
 import type { Device } from '@qlan-ro/mainframe-types';
 
@@ -43,20 +45,20 @@ export function DevicesSection({ port }: DevicesSectionProps): React.ReactElemen
   );
 
   return (
-    <div data-testid="settings-remote-access-devices-section" className="space-y-3">
+    <div data-testid="settings-remote-access-devices-section" className="flex flex-col gap-3">
       <div>
-        <label className="text-label font-semibold text-muted-foreground">Paired Devices</label>
+        <Label className="text-xs font-medium text-muted-foreground">Paired Devices</Label>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RotateCw size={14} className="animate-spin" />
           Loading...
         </div>
       ) : devices.length === 0 ? (
-        <p className="text-label text-muted-foreground">No paired devices.</p>
+        <p className="text-xs text-muted-foreground">No paired devices.</p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-1.5">
           {devices.map((device) => (
             <DeviceRow key={device.deviceId} device={device} onRemove={handleRemove} />
           ))}
@@ -70,23 +72,21 @@ function DeviceRow({ device, onRemove }: { device: Device; onRemove: (id: string
   return (
     <div className="flex items-center justify-between p-2.5 bg-card border border-border rounded-md">
       <div>
-        <span className="text-label text-foreground">{device.deviceName}</span>
-        <span className="text-caption text-muted-foreground ml-2">
-          {new Date(device.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-xs text-foreground">{device.deviceName}</span>
+        <span className="text-xs text-muted-foreground ml-2">{new Date(device.createdAt).toLocaleDateString()}</span>
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            data-testid={`remote-access-device-remove-${device.deviceId}`}
-            onClick={() => onRemove(device.deviceId)}
-            className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <Trash2 size={14} />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Remove device</TooltipContent>
-      </Tooltip>
+      <Hint label="Remove device">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid={`remote-access-device-remove-${device.deviceId}`}
+          onClick={() => onRemove(device.deviceId)}
+          aria-label="Remove device"
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 />
+        </Button>
+      </Hint>
     </div>
   );
 }

@@ -6,10 +6,10 @@ describe('surface-intents bus', () => {
     const listener = vi.fn();
     const unsub = onSurfaceIntent(listener);
 
-    emitSurfaceIntent({ type: 'activate-surface', surface: 'files' });
+    emitSurfaceIntent({ type: 'activate-surface', surface: 'workspace' });
 
     expect(listener).toHaveBeenCalledOnce();
-    expect(listener).toHaveBeenCalledWith({ type: 'activate-surface', surface: 'files' });
+    expect(listener).toHaveBeenCalledWith({ type: 'activate-surface', surface: 'workspace' });
     unsub();
   });
 

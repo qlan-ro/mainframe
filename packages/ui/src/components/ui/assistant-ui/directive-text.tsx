@@ -1,5 +1,5 @@
 /**
- * directive-text — shadcn/assistant-ui vendored component, warm-chrome restyled.
+ * directive-text — shadcn/assistant-ui vendored component, on v2.
  *
  * Provides `createDirectiveText(formatter, options?)` for building inline-chip
  * text renderers from a custom `Unstable_DirectiveFormatter`.
@@ -7,13 +7,10 @@
  * Usage:
  *   const MyText = createDirectiveText(myFormatter, { iconMap: { mention: AtSign } });
  *   // Use MyText as a TextMessagePartComponent or as a markdown `p` child renderer.
- *
- * Chip styling follows warm-chrome mf-chip token (rgba overlay on current surface).
- * No /opacity modifier — uses solid token values only.
  */
 import { type FC } from 'react';
 import type { TextMessagePartComponent, Unstable_DirectiveFormatter } from '@assistant-ui/react';
-import { cn } from '@/lib/utils';
+import { Badge } from '@v2/components/ui/badge';
 
 type IconComponent = FC<{ className?: string }>;
 
@@ -33,7 +30,7 @@ export type CreateDirectiveTextOptions = {
   renderers?: Record<string, FC<{ type: string; label: string; id: string }>>;
 };
 
-// ── Warm-chrome chip ─────────────────────────────────────────────────────────
+// ── Chip ─────────────────────────────────────────────────────────────────────
 
 interface DirectiveChipProps {
   type: string;
@@ -42,25 +39,25 @@ interface DirectiveChipProps {
   Icon?: IconComponent;
 }
 
+/**
+ * The same `Badge variant="secondary"` the transcript's leading slash pill uses
+ * (`messages/UserMessage.tsx` SlashPill) — an inline `/command` and a whole-turn
+ * `/command` are one object class, so they resolve to one recipe. `data-slot`
+ * stays `directive-text-chip`: it is the seam callers and tests query on.
+ */
 function DirectiveChip({ type, label, id, Icon }: DirectiveChipProps) {
   return (
-    <span
+    <Badge
+      variant="secondary"
       data-slot="directive-text-chip"
       data-directive-type={type}
       data-directive-id={id}
       aria-label={`${type}: ${label}`}
-      className={cn(
-        'aui-directive-chip',
-        'inline-flex items-center gap-1',
-        'rounded-md px-1.5 py-0.5',
-        'bg-mf-chip text-primary',
-        'font-mono text-label font-medium',
-        'border border-border',
-      )}
+      className="align-middle font-mono font-semibold"
     >
-      {Icon && <Icon className="size-3.5 shrink-0" />}
+      {Icon && <Icon />}
       {label}
-    </span>
+    </Badge>
   );
 }
 

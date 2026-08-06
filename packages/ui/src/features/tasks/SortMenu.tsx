@@ -8,14 +8,15 @@
  * (asc for priority/type, desc otherwise).
  */
 import React from 'react';
-import { ArrowUpDown, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ArrowUpDown } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 import type { TodoSort, TodoSortKey } from './todos-filters';
 
 interface Props {
@@ -50,42 +51,27 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          data-testid="tasks-sort-menu"
-          type="button"
-          className={cn(
-            'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
-            'border border-border bg-background text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <ArrowUpDown size={12} />
+        <Button variant="outline" size="sm" data-testid="tasks-sort-menu" className="text-muted-foreground">
+          <ArrowUpDown />
           <span>
             {current?.label} {dirArrow(sort.dir)}
           </span>
-        </button>
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[172px] p-1">
-        {SORT_KEYS.map(({ key, label }) => {
-          const active = sort.key === key;
-          return (
-            <DropdownMenuItem
+      <DropdownMenuContent align="end" className="min-w-[172px]">
+        <DropdownMenuRadioGroup value={sort.key} onValueChange={(v) => pick(v as TodoSortKey)}>
+          {SORT_KEYS.map(({ key, label }) => (
+            <DropdownMenuRadioItem
               key={key}
+              value={key}
               data-testid={`tasks-sort-option-${key}`}
-              aria-selected={active}
-              onSelect={() => pick(key)}
-              className={cn(
-                'flex items-center gap-2 px-2 py-1.5 text-body cursor-pointer rounded',
-                active && 'font-semibold text-primary',
-              )}
+              onSelect={(e) => e.preventDefault()}
             >
-              <span className="w-3.5 shrink-0">
-                {active && <Check size={12} strokeWidth={2.5} className="text-primary" />}
-              </span>
               <span className="flex-1">{label}</span>
-              {active && <span className="text-primary">{dirArrow(sort.dir)}</span>}
-            </DropdownMenuItem>
-          );
-        })}
+              {sort.key === key && <span className="text-primary">{dirArrow(sort.dir)}</span>}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -13,6 +13,8 @@
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Badge } from '@v2/components/ui/badge';
+import { Button } from '@v2/components/ui/button';
 import type { AutomationRecommendation } from '@qlan-ro/mainframe-types';
 import { copyCommand } from './copy-command';
 
@@ -30,8 +32,10 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
   const label = `${rec.source.repo} · ${rec.source.installs.toLocaleString()} installs`;
   if (rec.provenance === 'third-party') {
     return (
-      <p className="mt-1 inline-flex items-center rounded-full border border-mf-warning/40 bg-mf-warning-tint px-2 py-0.5 text-caption text-mf-warning">
-        Third-party · {label}
+      <p className="mt-1">
+        <Badge variant="outline" className="border-warning/40 bg-warning/10 text-xs text-warning">
+          Third-party · {label}
+        </Badge>
       </p>
     );
   }
@@ -41,7 +45,7 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
 function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {
   if (rec.targetPath) {
     return (
-      <span className="min-w-0 truncate text-caption text-muted-foreground">
+      <span className="min-w-0 truncate text-xs text-muted-foreground">
         Paste into <span className="select-text font-mono text-foreground">{rec.targetPath}</span>
       </span>
     );
@@ -51,9 +55,9 @@ function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {
   const hidden = lines.length - 1;
   return (
     <>
-      <span className="min-w-0 select-text truncate font-mono text-caption">{lines[0] ?? rec.command}</span>
+      <span className="min-w-0 select-text truncate font-mono text-xs">{lines[0] ?? rec.command}</span>
       {hidden > 0 && (
-        <span className="flex-shrink-0 text-caption text-muted-foreground">
+        <span className="flex-shrink-0 text-xs text-muted-foreground">
           +{hidden} more {hidden === 1 ? 'line' : 'lines'}
         </span>
       )}
@@ -77,27 +81,25 @@ export function RecommendationRow({ rec, copied, onCopied }: RecommendationRowPr
 
   return (
     <div className="px-4 py-3">
-      <p className="text-body font-medium text-foreground">{rec.title}</p>
-      <p className="mt-1 text-caption text-muted-foreground">
-        <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-caption">{rec.signal}</span>
+      <p className="font-medium text-foreground">{rec.title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        <Badge variant="secondary" className="px-1.5 py-0 font-mono text-xs font-normal">
+          {rec.signal}
+        </Badge>
         {` ${EM_DASH} ${rec.why}`}
       </p>
       <SourceAttribution rec={rec} />
       <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
         <PayloadPreview rec={rec} />
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           data-testid={`automation-recommender-copy-${rec.id}`}
           onClick={() => void handleCopy()}
-          className={cn(
-            'ml-auto flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-caption transition-colors',
-            copied && !failed
-              ? 'border-transparent bg-mf-success-tint text-mf-success'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-          )}
+          className={cn('ml-auto h-7 shrink-0', copied && !failed && 'border-transparent bg-success/10 text-success')}
         >
           {failed ? 'Copy failed' : copied ? <CopiedLabel /> : <CopyLabel />}
-        </button>
+        </Button>
       </div>
     </div>
   );

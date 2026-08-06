@@ -1,11 +1,18 @@
 /**
  * Tests for marker-pill primitives: MarkerPill state rendering.
+ *
+ * The v2 `Hint` inside MarkerPill needs the **v2** TooltipProvider; the v1 one
+ * satisfies nothing, so `render` is shadowed to supply it once.
  */
+import type { ReactElement } from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { MarkerPill, MarkerWrap, MarkerBody, MarkerCapsLabel, MarkerPre } from '../marker-pill';
 import { nestedVerticalScrollers } from './_part-fixture';
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

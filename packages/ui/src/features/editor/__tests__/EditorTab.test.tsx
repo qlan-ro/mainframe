@@ -73,10 +73,8 @@ useEditorStoreMock.getState = () => editorState;
 vi.mock('@/store/editor', () => ({
   useEditorStore: useEditorStoreMock,
 }));
-vi.mock('@/store/tabs', () => ({
-  useTabsStore: (sel: (s: { promoteTab: () => void }) => unknown) => {
-    return sel({ promoteTab: vi.fn() });
-  },
+vi.mock('@/store/layout', () => ({
+  useLayoutStore: (sel: (s: { promoteFileTab: () => void }) => unknown) => sel({ promoteFileTab: vi.fn() }),
 }));
 vi.mock('@/features/viewers/viewer-router', () => ({
   ViewerRouter: ({ renderCode }: { path: string; renderCode: () => React.ReactNode }) => <>{renderCode()}</>,

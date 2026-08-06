@@ -18,6 +18,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Skill } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
+// ReviewCommentCard renders a v2 `Hint`, which the v1 provider does not satisfy.
+import { TooltipProvider as V2TooltipProvider } from '@v2/components/ui/tooltip';
 
 function skill(name: string): Skill {
   return {
@@ -250,12 +252,14 @@ describe('instruction chip — surfaces outside MarkdownText', () => {
 
   it('renders no chip inside a ReviewCommentCard', () => {
     const { container } = render(
-      <ReviewCommentCard
-        review={{
-          file: '/Users/x/app/globals.css',
-          comments: [{ start: 43, code: '--mf-app-bg: #f4f4f2;', body: 'Run /domain-modeling on this' }],
-        }}
-      />,
+      <V2TooltipProvider>
+        <ReviewCommentCard
+          review={{
+            file: '/Users/x/app/globals.css',
+            comments: [{ start: 43, code: '--mf-app-bg: #f4f4f2;', body: 'Run /domain-modeling on this' }],
+          }}
+        />
+      </V2TooltipProvider>,
     );
 
     expect(screen.queryByTestId('smart-action-instruction-append')).toBeNull();

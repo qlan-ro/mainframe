@@ -128,7 +128,7 @@ describe('MessagePathContextMenu — copied feedback', () => {
 
     const absoluteAfterClick = screen.getByTestId('tool-card-path-copy-absolute');
     expect(absoluteAfterClick.textContent).toContain('Copied');
-    expect(absoluteAfterClick.querySelector('svg')).toHaveClass('text-mf-success');
+    expect(absoluteAfterClick.querySelector('svg')).toHaveClass('text-success');
     expect(screen.getByTestId('tool-card-path-copy-relative').textContent).toContain('Copy Relative Path');
 
     act(() => {

@@ -3,8 +3,7 @@
  *
  * Behaviors covered:
  *  1.  Renders data-testid="git-new-branch-start" select seeded with local branches.
- *  2.  Back button (git-new-branch-back) fires onBack.
- *  3.  Cancel button (git-new-branch-cancel) fires onBack.
+ *  2.  Cancel button (git-new-branch-cancel) fires onOpenChange(false).
  *  4.  Create button is disabled when name is empty.
  *  5.  Submitting an empty name shows "Branch name is required" error.
  *  6.  Submitting an invalid name (starts with '-') shows "Invalid branch name" error.
@@ -26,10 +25,11 @@ import { NewBranchDialog, type NewBranchDialogProps } from '../NewBranchDialog';
 
 function makeProps(overrides: Partial<NewBranchDialogProps> = {}): NewBranchDialogProps {
   return {
+    open: true,
+    onOpenChange: vi.fn(),
     localBranches: ['main', 'develop'],
     remoteBranches: [],
     currentBranch: 'main',
-    onBack: vi.fn(),
     onCreate: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -46,36 +46,23 @@ function makeProps(overrides: Partial<NewBranchDialogProps> = {}): NewBranchDial
 describe('NewBranchDialog — start-point select', () => {
   it('renders git-new-branch-start with local branch options', () => {
     render(<NewBranchDialog {...makeProps()} />);
-    const select = screen.getByTestId('git-new-branch-start') as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toContain('main');
-    expect(options).toContain('develop');
+    // Radix Select: options render in a portal once the trigger is clicked.
+    fireEvent.click(screen.getByTestId('git-new-branch-start'));
+    expect(screen.getByTestId('git-new-branch-start-option-main')).toBeInTheDocument();
+    expect(screen.getByTestId('git-new-branch-start-option-develop')).toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Back button fires onBack
-// ---------------------------------------------------------------------------
-
-describe('NewBranchDialog — Back button', () => {
-  it('fires onBack when git-new-branch-back is clicked', async () => {
-    const props = makeProps();
-    render(<NewBranchDialog {...props} />);
-    await userEvent.click(screen.getByTestId('git-new-branch-back'));
-    expect(props.onBack).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 5. Cancel button fires onBack
+// 4. Cancel button closes the dialog
 // ---------------------------------------------------------------------------
 
 describe('NewBranchDialog — Cancel button', () => {
-  it('fires onBack when git-new-branch-cancel is clicked', async () => {
+  it('fires onOpenChange(false) when git-new-branch-cancel is clicked', async () => {
     const props = makeProps();
     render(<NewBranchDialog {...props} />);
     await userEvent.click(screen.getByTestId('git-new-branch-cancel'));
-    expect(props.onBack).toHaveBeenCalledTimes(1);
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
   });
 });
 
@@ -165,8 +152,8 @@ describe('NewBranchDialog — valid submission calls onCreate', () => {
 describe('NewBranchDialog — startFrom prop', () => {
   it('pre-selects "develop" in the start-point select when startFrom="develop"', () => {
     render(<NewBranchDialog {...makeProps({ startFrom: 'develop' })} />);
-    const select = screen.getByTestId('git-new-branch-start') as HTMLSelectElement;
-    expect(select.value).toBe('develop');
+    // Radix Select surfaces the current value as the trigger's text.
+    expect(screen.getByTestId('git-new-branch-start')).toHaveTextContent('develop');
   });
 });
 
@@ -177,10 +164,10 @@ describe('NewBranchDialog — startFrom prop', () => {
 describe('NewBranchDialog — remote branches in optgroup', () => {
   it('includes remote branch options when remoteBranches is non-empty', () => {
     render(<NewBranchDialog {...makeProps({ remoteBranches: ['origin/main', 'origin/feat'] })} />);
-    const select = screen.getByTestId('git-new-branch-start') as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toContain('origin/main');
-    expect(options).toContain('origin/feat');
+    fireEvent.click(screen.getByTestId('git-new-branch-start'));
+    expect(screen.getByTestId('git-new-branch-start-option-origin/main')).toBeInTheDocument();
+    expect(screen.getByTestId('git-new-branch-start-option-origin/feat')).toBeInTheDocument();
+    expect(screen.getByText('Remote')).toBeInTheDocument();
   });
 
   it('does NOT render a Remote optgroup when remoteBranches is empty', () => {

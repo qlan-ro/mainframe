@@ -39,11 +39,11 @@ export function PreviewBodyState({
       <div data-testid="preview-body-tunnel-failed" className="absolute inset-0 grid place-items-center bg-card">
         <div className="flex max-w-[80%] flex-col items-center gap-2.5 text-center">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-destructive" />
-            <span className="text-body text-muted-foreground">Preview tunnel unavailable</span>
+            <span className="size-2 rounded-full bg-destructive" />
+            <span className="text-sm text-muted-foreground">Preview tunnel unavailable</span>
           </div>
-          {tunnelError && <span className="line-clamp-2 font-mono text-caption text-mf-text-3">{tunnelError}</span>}
-          <span className="text-caption text-muted-foreground">Process logs are in the console below</span>
+          {tunnelError && <span className="line-clamp-2 font-mono text-xs text-muted-foreground">{tunnelError}</span>}
+          <span className="text-xs text-muted-foreground">Process logs are in the console below</span>
         </div>
       </div>
     );
@@ -52,9 +52,9 @@ export function PreviewBodyState({
   if (tunnelPending) {
     return (
       <div data-testid="preview-tunnel-pending" className="absolute inset-0 grid place-items-center bg-card">
-        <div className="flex items-center gap-[8px]">
-          <Loader2 size={12} className="animate-spin text-muted-foreground" />
-          <span className="text-label text-muted-foreground">Starting tunnel…</span>
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Starting tunnel…</span>
         </div>
       </div>
     );
@@ -67,15 +67,13 @@ export function PreviewBodyState({
           type="button"
           data-testid="preview-body-cta"
           onClick={onStart}
-          className="group flex flex-col items-center gap-2.5 px-[26px] py-[20px] rounded-xl border-none bg-transparent cursor-pointer hover:bg-accent transition-colors"
+          className="group flex cursor-pointer flex-col items-center gap-2.5 rounded-xl border-none bg-transparent px-6 py-5 transition-colors hover:bg-muted"
         >
-          <div className="w-10 h-10 rounded-full border border-border flex items-center justify-center transition-[border-color] duration-[120ms] group-hover:border-mf-success">
-            <Play size={16} className="fill-current text-mf-success" />
+          <div className="flex size-10 items-center justify-center rounded-full border border-border transition-colors group-hover:border-success">
+            <Play className="size-4 fill-current text-success" />
           </div>
-          <span className="text-label text-muted-foreground font-medium tracking-tight">
-            Run {configName || 'server'}
-          </span>
-          <span className="font-mono text-caption text-mf-text-3">launches localhost:{port ?? '…'}</span>
+          <span className="text-xs font-medium tracking-tight text-muted-foreground">Run {configName || 'server'}</span>
+          <span className="font-mono text-xs text-muted-foreground">launches localhost:{port ?? '…'}</span>
         </button>
       </div>
     );
@@ -84,9 +82,9 @@ export function PreviewBodyState({
   if (status === 'starting') {
     return (
       <div data-testid="preview-body-starting" className="absolute inset-0 grid place-items-center bg-card">
-        <div className="flex items-center gap-[8px]">
-          <Loader2 size={12} className="animate-spin text-muted-foreground" />
-          <span className="text-label text-muted-foreground">Waiting for localhost:{port ?? '…'}…</span>
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Waiting for localhost:{port ?? '…'}…</span>
         </div>
       </div>
     );
@@ -97,7 +95,7 @@ export function PreviewBodyState({
     const inspectBadge = inspectActive ? (
       <div
         data-testid="preview-inspect-active-indicator"
-        className="absolute top-[8px] left-[8px] z-10 rounded-[6px] bg-primary px-[7px] py-[2px] font-mono text-caption font-semibold text-primary-foreground"
+        className="absolute top-2 left-2 z-10 rounded-sm bg-primary px-1.5 py-0.5 font-mono text-xs font-semibold text-primary-foreground"
       >
         Click an element
       </div>
@@ -105,18 +103,16 @@ export function PreviewBodyState({
     return (
       <div data-testid="preview-body-running" className="absolute inset-0">
         {device === 'desktop' ? (
-          <div
-            className={`absolute inset-0 overflow-hidden rounded-md [border:0.5px_solid_var(--border)] ${inspectFrame}`}
-          >
+          <div className={`absolute inset-0 overflow-hidden rounded-md border border-border ${inspectFrame}`}>
             <div ref={anchorRef} className="absolute inset-0" />
             {inspectBadge}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex h-full items-center justify-center">
             <div
-              className={`relative w-[230px] h-[420px] overflow-hidden rounded-[22px] [border:0.5px_solid_var(--border)] [box-shadow:var(--mf-shadow-pop)] ${inspectFrame}`}
+              className={`relative h-[420px] w-[230px] overflow-hidden rounded-[22px] border border-border shadow-md ${inspectFrame}`}
             >
-              <div ref={anchorRef} className="w-full h-full" />
+              <div ref={anchorRef} className="size-full" />
               {inspectBadge}
             </div>
           </div>
@@ -129,8 +125,8 @@ export function PreviewBodyState({
   return (
     <div data-testid="preview-body-failed" className="absolute inset-0 grid place-items-center bg-card">
       <div className="flex items-center">
-        <span className="w-2 h-2 rounded-full bg-destructive mr-2" />
-        <span className="text-body text-muted-foreground">Failed to start</span>
+        <span className="mr-2 size-2 rounded-full bg-destructive" />
+        <span className="text-sm text-muted-foreground">Failed to start</span>
       </div>
     </div>
   );

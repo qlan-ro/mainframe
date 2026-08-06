@@ -1,6 +1,7 @@
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { AUTOMATION_FIXTURES } from '../fixtures/fixtures';
@@ -19,14 +20,22 @@ beforeEach(() => {
 
 it('renders nothing while closed', () => {
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  const { container } = render(<AutomationsHost />);
+  const { container } = render(
+    <TooltipProvider>
+      <AutomationsHost />
+    </TooltipProvider>,
+  );
   expect(container).toBeEmptyDOMElement();
 });
 
 it('loads automations even while closed, so the sidebar badge reflects pending interactions on boot', async () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  render(<AutomationsHost />);
+  render(
+    <TooltipProvider>
+      <AutomationsHost />
+    </TooltipProvider>,
+  );
 
   await vi.waitFor(() => {
     expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
@@ -36,18 +45,28 @@ it('loads automations even while closed, so the sidebar badge reflects pending i
 it('renders the view once opened, and loads automations from the gateway', async () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
-  render(<AutomationsHost />);
+  render(
+    <TooltipProvider>
+      <AutomationsHost />
+    </TooltipProvider>,
+  );
 
   expect(screen.getByTestId('automations-host')).toBeInTheDocument();
   expect(await screen.findByTestId('automations-view')).toBeInTheDocument();
   expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
 });
 
-it('clicking the backdrop closes the host', () => {
+it('dismissing the dialog closes the host', () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
-  render(<AutomationsHost />);
-  fireEvent.click(screen.getByTestId('automations-host'));
+  render(
+    <TooltipProvider>
+      <AutomationsHost />
+    </TooltipProvider>,
+  );
+  // Radix owns dismissal now (backdrop click and Escape both route through
+  // onOpenChange); Escape is the deterministic path in jsdom.
+  fireEvent.keyDown(document, { key: 'Escape' });
   expect(useAutomationsNav.getState().open).toBe(false);
 });
 
@@ -55,7 +74,11 @@ it('resolves the active project via useActiveIdentity into the store, scoping th
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
-  render(<AutomationsHost />);
+  render(
+    <TooltipProvider>
+      <AutomationsHost />
+    </TooltipProvider>,
+  );
 
   await vi.waitFor(() => {
     expect(useAutomationsStore.getState().activeProjectId).toBe('proj-1');

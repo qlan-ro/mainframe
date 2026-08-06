@@ -48,7 +48,7 @@
  *   sidebar-skill-item-<id> / sidebar-agent-item-<id> — ScopedListRow (SkillsList/AgentsList)
  *   sidebar-attachment-<id>           — SessionAttachmentsGrid thumbnail button
  *   image-lightbox-dialog             — ImageLightbox Dialog content (opened by an image thumb)
- *   files-tab-strip                   — layout/FilesTabStrip.tsx (opened file tabs land here)
+ *   WORKSPACE.strip                       — a workspace pane's tab strip (opened file tabs land here)
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -58,6 +58,7 @@ import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
@@ -241,7 +242,7 @@ test.describe('§context-panel — skills and agents rows', () => {
     await expect(row).toContainText('/Write Tests');
 
     await row.click();
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('SKILL.md', { timeout: 10_000 });
   });
 
@@ -254,7 +255,7 @@ test.describe('§context-panel — skills and agents rows', () => {
     await expect(row).toContainText('code-reviewer');
 
     await row.click();
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('code-reviewer.md', { timeout: 10_000 });
   });
 });
@@ -362,10 +363,10 @@ test.describe('§context-panel — sections, file-open, and attachments', () => 
     await expect(countChip(page.getByTestId('sidebar-bottom-tab-context'))).toHaveText('3', { timeout: 10_000 });
   });
 
-  test('clicking the file item opens it in the Files surface as an editor tab', async () => {
+  test('clicking the file item opens it in the workspace as an editor tab', async () => {
     const { page } = app;
     await page.getByTestId('sidebar-context-item-index.ts').click();
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('index.ts', { timeout: 10_000 });
   });
 

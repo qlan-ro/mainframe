@@ -10,7 +10,7 @@
  * only place a replaced value survives, so it always answers the question.
  */
 import { AlertTriangle } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import type { Report } from '@/lib/api/todos-github';
 import { useGitHubSyncStore } from './use-github-sync-store';
 import { SyncReportRow } from './SyncReportRow';
@@ -31,14 +31,14 @@ function ReportBody({ report }: { report: Report }) {
   return (
     <>
       {report.failure ? (
-        <div className="flex items-start gap-2 rounded-md bg-mf-warning/10 px-[11px] py-[8px] text-caption leading-relaxed text-foreground">
-          <AlertTriangle size={14} className="mt-px shrink-0 text-mf-warning" aria-hidden />
+        <div className="flex items-start gap-2 rounded-md bg-warning/10 px-[11px] py-[8px] text-xs leading-relaxed text-foreground">
+          <AlertTriangle size={14} className="mt-px shrink-0 text-warning" aria-hidden />
           <span>{report.failure.message}</span>
         </div>
       ) : null}
 
       {report.rows.length === 0 ? (
-        <p className="py-10 text-center text-body text-muted-foreground">Nothing was overwritten in this run.</p>
+        <p className="py-10 text-center text-sm text-muted-foreground">Nothing was overwritten in this run.</p>
       ) : (
         <div className="-mx-4 border-t border-border">
           {report.rows.map((row) => (
@@ -67,9 +67,7 @@ export function SyncReportDialog() {
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-10">
           <DialogTitle className="text-heading font-bold">Last sync report</DialogTitle>
-          <DialogDescription className="text-caption">
-            {report ? headline(report) : 'Loading the report…'}
-          </DialogDescription>
+          <DialogDescription className="text-xs">{report ? headline(report) : 'Loading the report…'}</DialogDescription>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3">

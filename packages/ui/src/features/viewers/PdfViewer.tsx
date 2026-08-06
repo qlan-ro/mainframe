@@ -19,7 +19,8 @@
  */
 import { useEffect, useState } from 'react';
 import { useHost } from '@/lib/host';
-import { Hint } from '@/components/ui/hint';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';
@@ -82,15 +83,15 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
 
   const actions = (
     <Hint label={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}>
-      <button
-        type="button"
+      <Button
         data-testid="viewer-pdf-fallback"
+        variant="ghost"
+        size="xs"
         onClick={() => void handleOpenExternal()}
         disabled={fileUrl === null}
-        className="rounded-sm px-2 py-0.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
       >
         Open externally
-      </button>
+      </Button>
     </Hint>
   );
 
@@ -98,11 +99,11 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
     <ViewerShell path={path} status={status} actions={actions}>
       <div data-testid="viewer-pdf" className="flex h-full flex-col bg-mf-viewer-matte">
         {base64 === null ? (
-          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : objectUrl ? (
           <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-body text-muted-foreground">Loading…</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         )}
       </div>
     </ViewerShell>

@@ -12,6 +12,7 @@
  */
 import { useMemo } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
+import { Message, MessageContent, MessageFooter } from '@v2/components/ui/message';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
@@ -31,7 +32,9 @@ function RunningIndicator() {
     <span
       data-slot="message-indicator"
       aria-label="Assistant is working"
-      className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-mf-warning"
+      // `warning` = wrong-but-not-broken in v2, and "working" is neither — the
+      // accent is what the app already uses for an in-progress signal.
+      className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-primary"
     />
   );
 }
@@ -46,12 +49,12 @@ export function AssistantMessage() {
   // Error turn → a styled destructive block instead of plain assistant prose.
   if (meta.errorText) {
     return (
-      <MessagePrimitive.Root
-        data-testid="chat-assistant-message"
-        data-message-id={messageId}
-        className="group/message flex flex-col gap-2 py-3"
-      >
-        <AssistantErrorBlock text={meta.errorText} />
+      <MessagePrimitive.Root data-testid="chat-assistant-message" data-message-id={messageId} className="py-2">
+        <Message>
+          <MessageContent>
+            <AssistantErrorBlock text={meta.errorText} />
+          </MessageContent>
+        </Message>
       </MessagePrimitive.Root>
     );
   }
@@ -102,19 +105,21 @@ export function AssistantMessage() {
   );
 
   return (
-    <MessagePrimitive.Root
-      data-testid="chat-assistant-message"
-      data-message-id={messageId}
-      className="group/message flex flex-col gap-2 py-3"
-    >
-      {isNested ? groupedParts : <MessagePathContextMenu>{groupedParts}</MessagePathContextMenu>}
+    <MessagePrimitive.Root data-testid="chat-assistant-message" data-message-id={messageId} className="py-2">
+      <Message>
+        <MessageContent>
+          {isNested ? groupedParts : <MessagePathContextMenu>{groupedParts}</MessagePathContextMenu>}
 
-      {/* Reserve the action-bar height so hover-revealing it doesn't shift the layout. */}
-      <div className="flex min-h-6 items-center gap-2 text-muted-foreground">
-        <MessageActionBar />
-        <MessageTimestamp />
-        <MessageTiming />
-      </div>
+          {/* Reserve the action-bar height so hover-revealing it doesn't shift the
+              layout. `px-0`: the kit pads the footer for a bubble turn, and an
+              assistant turn has none — the row would sit indented under its prose. */}
+          <MessageFooter className="min-h-6 gap-2 px-0">
+            <MessageActionBar />
+            <MessageTimestamp />
+            <MessageTiming />
+          </MessageFooter>
+        </MessageContent>
+      </Message>
     </MessagePrimitive.Root>
   );
 }

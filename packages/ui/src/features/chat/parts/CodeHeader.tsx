@@ -37,11 +37,11 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
     <div
       className={cn(
         'flex items-center justify-between',
-        'mt-3 bg-mf-content2 border border-border rounded-t-md',
+        'mt-3 bg-muted border border-border rounded-t-md',
         'px-3 py-1.5',
       )}
     >
-      <span className="text-caption font-mono uppercase tracking-[0.3px] text-muted-foreground">{displayLang}</span>
+      <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{displayLang}</span>
 
       <button
         data-testid="chat-code-copy"
@@ -50,13 +50,13 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
         aria-label={copied ? 'Copied' : 'Copy code'}
         className={cn(
           'flex items-center gap-1 px-1.5 py-0.5 rounded-sm',
-          'text-caption font-semibold text-muted-foreground',
+          'text-xs font-semibold text-muted-foreground',
           'transition-colors hover:text-foreground hover:bg-accent',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-          copied && 'text-mf-success',
+          copied && 'text-success',
         )}
       >
-        {copied ? <Check size={13} className="text-mf-success" /> : <Copy size={13} />}
+        {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
         {copied ? 'Copied' : 'Copy'}
       </button>
     </div>

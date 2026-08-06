@@ -266,21 +266,27 @@ describe('FilePickerDialog — keyboard navigation', () => {
     return input;
   }
 
-  it('first row is active (aria-selected + data-active) when results first appear', async () => {
+  it('first row is selected (aria-selected + data-selected) when results first appear', async () => {
     await openAndSearch();
+    // cmdk assigns the initial selection in an effect after the items commit.
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     const firstRow = screen.getByTestId('file-picker-row-src/App.tsx');
-    expect(firstRow.getAttribute('aria-selected')).toBe('true');
-    expect(firstRow.getAttribute('data-active')).toBe('true');
+    expect(firstRow.getAttribute('data-selected')).toBe('true');
     expect(firstRow.getAttribute('role')).toBe('option');
   });
 
-  it('ArrowDown moves active index from 0 to 1', async () => {
+  it('ArrowDown moves the selection from 0 to 1', async () => {
     const input = await openAndSearch();
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     await userEvent.keyboard('{ArrowDown}');
     const secondRow = screen.getByTestId('file-picker-row-src/Button.tsx');
     expect(secondRow.getAttribute('aria-selected')).toBe('true');
-    expect(secondRow.getAttribute('data-active')).toBe('true');
-    // First row should no longer be active
+    expect(secondRow.getAttribute('data-selected')).toBe('true');
+    // First row should no longer be selected
     const firstRow = screen.getByTestId('file-picker-row-src/App.tsx');
     expect(firstRow.getAttribute('aria-selected')).toBe('false');
     // suppress unused var warning
@@ -289,6 +295,9 @@ describe('FilePickerDialog — keyboard navigation', () => {
 
   it('ArrowDown clamps at last result (no wrap)', async () => {
     const input = await openAndSearch();
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     // move past end
     await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
     const lastRow = screen.getByTestId('file-picker-row-src/Card.tsx');
@@ -298,6 +307,9 @@ describe('FilePickerDialog — keyboard navigation', () => {
 
   it('ArrowUp clamps at first result (no wrap)', async () => {
     const input = await openAndSearch();
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     await userEvent.keyboard('{ArrowUp}');
     const firstRow = screen.getByTestId('file-picker-row-src/App.tsx');
     expect(firstRow.getAttribute('aria-selected')).toBe('true');
@@ -306,6 +318,9 @@ describe('FilePickerDialog — keyboard navigation', () => {
 
   it('ArrowDown then ArrowUp returns to first row', async () => {
     const input = await openAndSearch();
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     await userEvent.keyboard('{ArrowDown}{ArrowUp}');
     const firstRow = screen.getByTestId('file-picker-row-src/App.tsx');
     expect(firstRow.getAttribute('aria-selected')).toBe('true');
@@ -314,7 +329,10 @@ describe('FilePickerDialog — keyboard navigation', () => {
 
   it('Enter on active row emits open-file and closes dialog', async () => {
     const input = await openAndSearch();
-    // First row (index 0) is active by default
+    // First row is selected by default once cmdk's selection effect runs.
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     await userEvent.keyboard('{Enter}');
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/App.tsx' });
     await waitFor(() => expect(useFilesStore.getState().pickerOpen).toBe(false));
@@ -323,6 +341,9 @@ describe('FilePickerDialog — keyboard navigation', () => {
 
   it('Enter after ArrowDown selects second row', async () => {
     const input = await openAndSearch();
+    await waitFor(() => {
+      expect(screen.getByTestId('file-picker-row-src/App.tsx').getAttribute('aria-selected')).toBe('true');
+    });
     await userEvent.keyboard('{ArrowDown}{Enter}');
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/Button.tsx' });
     void input;

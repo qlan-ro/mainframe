@@ -40,10 +40,10 @@ const STEPS: TourStep[] = [
     body: 'Claude, Codex, or Gemini — choose per session. The provider locks once the conversation starts.',
   },
   {
-    target: 'run',
+    target: 'workspace',
     side: 'below',
-    title: 'Run & preview',
-    body: 'Launch a dev server and preview your app live, right beside the chat. Capture the screen straight back into context.',
+    title: 'Open the workspace',
+    body: 'Files, diffs, terminals, and a live preview of your app share one surface beside the chat. Capture the screen straight back into context.',
   },
 ];
 
@@ -167,7 +167,7 @@ function WsTourCore() {
               'top 0.28s cubic-bezier(0.22,1,0.36,1), left 0.28s cubic-bezier(0.22,1,0.36,1), width 0.28s, height 0.28s',
           }}
         >
-          {/* Inner halo — twPulse keyframe defined in globals.css */}
+          {/* Inner halo — twPulse keyframe defined in legacy-bridge.css */}
           <div
             className="absolute inset-[-2px] rounded-[8px] animate-[twPulse_1.8s_ease-in-out_infinite]"
             style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent)' }}

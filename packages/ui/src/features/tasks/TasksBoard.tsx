@@ -12,7 +12,9 @@
  */
 import React, { useState } from 'react';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Badge } from '@v2/components/ui/badge';
+import { Button } from '@v2/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';
@@ -88,69 +90,46 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
     // makes this fill available space regardless, threading through to
     // TaskBoardView/TaskListView (already flex-1) and the board's columns.
     <div data-testid="tasks-board-modal" className="flex flex-1 flex-col min-h-0 overflow-hidden">
-      {/* Header — fixed 52px height per design (12-todos.jsx:714) */}
-      <div className="flex items-center gap-5 h-[52px] px-[16px] border-b border-border shrink-0">
-        <button
-          data-testid="tasks-board-close"
-          type="button"
-          onClick={onClose}
-          className="flex items-center justify-center border-none bg-transparent text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Close (Esc)"
-        >
-          <X size={15} />
-        </button>
+      {/* Header band. Close sits at the far RIGHT — every dialog closes on the
+          right (stock shadcn position); the old left-side X predates the port. */}
+      <div className="flex h-[52px] shrink-0 items-center gap-4 border-b px-4">
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
-        <span className="text-body font-semibold text-foreground">Tasks</span>
-        <span className="font-mono text-caption text-muted-foreground bg-mf-chip rounded-md px-[8px] py-0.5">
+        <span className="text-base font-semibold text-foreground">Tasks</span>
+        <Badge variant="secondary" className="font-mono text-xs font-normal text-muted-foreground">
           {activeCount} active · {doneCount} done
-        </span>
+        </Badge>
 
-        {/* List / Board segmented switch */}
-        <div className="ml-auto flex items-center gap-0.5 rounded-[6px] bg-muted p-0.5">
-          <button
-            data-testid="tasks-view-list"
-            type="button"
-            onClick={() => setView('list')}
-            aria-pressed={view === 'list'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
-              view === 'list'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutList size={12} />
-            List
-          </button>
-          <button
-            data-testid="tasks-view-board"
-            type="button"
-            onClick={() => setView('board')}
-            aria-pressed={view === 'board'}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-label transition-colors',
-              view === 'board'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <LayoutGrid size={12} />
-            Board
-          </button>
-        </div>
+        {/* List / Board view switch */}
+        <Tabs value={view} onValueChange={(v) => setView(v as 'list' | 'board')} className="ml-auto">
+          <TabsList className="h-8">
+            <TabsTrigger value="list" data-testid="tasks-view-list">
+              <LayoutList />
+              List
+            </TabsTrigger>
+            <TabsTrigger value="board" data-testid="tasks-view-board">
+              <LayoutGrid />
+              Board
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         <GitHubSyncControl />
 
         {/* New task */}
-        <button
-          data-testid="tasks-board-new"
-          type="button"
-          onClick={handleNew}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-md bg-primary text-primary-foreground text-label hover:opacity-90 transition-opacity"
-        >
-          <Plus size={14} />
+        <Button size="sm" data-testid="tasks-board-new" onClick={handleNew}>
+          <Plus />
           New task
-        </button>
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid="tasks-board-close"
+          onClick={onClose}
+          aria-label="Close (Esc)"
+        >
+          <X />
+        </Button>
       </div>
 
       <SyncRunBanner />

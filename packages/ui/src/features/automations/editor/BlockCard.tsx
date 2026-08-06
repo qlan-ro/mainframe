@@ -60,7 +60,7 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
         <span className={cn('flex size-[27px] shrink-0 items-center justify-center rounded-md', meta.tintClass)}>
           <Icon size={14} className={meta.iconClass} aria-hidden />
         </span>
-        <span className="flex-1 text-body font-semibold tracking-tight text-foreground">{meta.label}</span>
+        <span className="flex-1 text-sm font-semibold tracking-tight text-foreground">{meta.label}</span>
         <button
           type="button"
           data-testid={`automations-step-delete-${step.id}`}
@@ -74,7 +74,7 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
       {bad && (
         <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
           {myIssues.map((issue, i) => (
-            <span key={i} className="flex items-start gap-1.5 text-caption font-semibold text-destructive">
+            <span key={i} className="flex items-start gap-1.5 text-xs font-semibold text-destructive">
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>

@@ -3,7 +3,7 @@
  *
  * The sanctioned cross-store bridge for the `open-url-tab` surface intent
  * (#281). Mounted once in SurfaceHost alongside subscribeToTerminalIntents.
- * Both entry points — the Run tab strip and the chat URL chip — funnel through
+ * Both entry points — the workspace tab strip and the chat URL chip — funnel through
  * here; neither calls `addRunTab` itself, because features never import layout/.
  *
  * Unlike the terminal bridge this is fully synchronous: a URL tab owns nothing

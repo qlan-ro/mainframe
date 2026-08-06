@@ -14,7 +14,7 @@ export function SkillsList() {
           type="button"
           data-testid="sidebar-skills-manage"
           onClick={() => useSetupAdvisor.getState().openSheet('skills')}
-          className="text-caption font-semibold text-primary transition-colors hover:underline"
+          className="text-xs font-semibold text-primary transition-colors hover:underline"
         >
           Manage
         </button>
@@ -25,8 +25,8 @@ export function SkillsList() {
 }
 
 function SkillRows({ skills, loading }: { skills: Skill[]; loading: boolean }) {
-  if (loading) return <div className="py-4 text-center text-caption text-muted-foreground">Loading…</div>;
-  if (skills.length === 0) return <div className="py-4 text-center text-caption text-muted-foreground">No skills</div>;
+  if (loading) return <div className="py-4 text-center text-xs text-muted-foreground">Loading…</div>;
+  if (skills.length === 0) return <div className="py-4 text-center text-xs text-muted-foreground">No skills</div>;
   return (
     <>
       {skills.map((s) => (

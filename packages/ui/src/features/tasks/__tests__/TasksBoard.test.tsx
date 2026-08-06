@@ -104,13 +104,13 @@ describe('TasksBoard — close button (finding 9.1)', () => {
     expect(screen.getByTestId('tasks-board-close')).toBeTruthy();
   });
 
-  it('positions the close button before the "Tasks" title in DOM order', () => {
+  it('positions the close button after the "Tasks" title (dialogs close on the right)', () => {
     renderBoard();
     const header = screen.getByTestId('tasks-board-modal').firstElementChild as HTMLElement;
     const closeBtn = screen.getByTestId('tasks-board-close');
     const title = screen.getByText('Tasks');
     const children = Array.from(header.querySelectorAll('*'));
-    expect(children.indexOf(closeBtn)).toBeLessThan(children.indexOf(title));
+    expect(children.indexOf(closeBtn)).toBeGreaterThan(children.indexOf(title));
   });
 
   it('calls onClose when clicked', async () => {

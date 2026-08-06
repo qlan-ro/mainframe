@@ -1,5 +1,5 @@
 /**
- * urlTabId / urlTabTitle — pure identity helpers for a `url` Run tab (#281).
+ * urlTabId / urlTabTitle — pure identity helpers for a `url` workspace tab (#281).
  *
  * The id must be a valid webview-label fragment ([A-Za-z0-9_-] only, per the
  * plan's AC16) and unique per call so two tabs on the same URL never collide.

@@ -1,12 +1,11 @@
 'use client';
 
 /**
- * Composer shell — the warm-chrome restyle of the native `ComposerPrimitive`.
+ * Composer shell — the v2 skin over the native `ComposerPrimitive`.
  *
  * Native ~90%: Root/Input own the draft + submit; Send↔Cancel swaps on
- * `thread.isRunning`. The bottom toolbar's left slot is where the config
- * controls (model · effort · features · plan · permission) mount in the next
- * increment; the daemon-backed queued banner + attachments rows land there too.
+ * `thread.isRunning`. The bottom bar's left slot carries the attachment
+ * affordances and the config toolbar (model · plan · permission · worktree).
  *
  * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
  * so its height registers as scroll inset — the last message never hides behind it.)
@@ -14,15 +13,13 @@
 import { useCallback, useRef } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
+import { Separator } from '@v2/components/ui/separator';
+import { cn } from '@v2/lib/utils';
 import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
 import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
-import {
-  ComposerAttachments,
-  ComposerAddAttachment,
-  ComposerAddMention,
-} from '@/components/ui/assistant-ui/attachment';
+import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from './attachments/ComposerAttachmentStrip';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
@@ -41,29 +38,29 @@ import { useSubmitComposition, useCanSubmit } from './segments/use-submit-compos
 function SendOrCancelButton() {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const canSubmit = useCanSubmit();
-  const base = 'flex size-[26px] shrink-0 items-center justify-center rounded-md transition-opacity';
 
   if (isRunning) {
+    // The composer's Stop gets a soft destructive fill — it swaps in for the
+    // primary Send, so it must read as THE action, unlike the ghost stops on
+    // WorkspaceTabPill / ToolbarLaunchControls which are incidental chrome.
     return (
-      <ComposerPrimitive.Cancel
-        data-testid="chat-composer-cancel"
-        aria-label="Stop"
-        className={cn(base, 'bg-foreground text-background hover:opacity-90')}
-      >
-        <SquareIcon className="size-3.5 fill-current" />
+      <ComposerPrimitive.Cancel asChild>
+        <Button
+          data-testid="chat-composer-cancel"
+          aria-label="Stop"
+          variant="ghost"
+          size="icon-xs"
+          className="bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
+        >
+          <SquareIcon fill="currentColor" />
+        </Button>
       </ComposerPrimitive.Cancel>
     );
   }
   return (
-    <button
-      type="submit"
-      data-testid="chat-composer-send"
-      aria-label="Send"
-      disabled={!canSubmit}
-      className={cn(base, 'bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40')}
-    >
-      <ArrowUpIcon className="size-3.5" />
-    </button>
+    <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-xs" disabled={!canSubmit}>
+      <ArrowUpIcon />
+    </Button>
   );
 }
 
@@ -111,20 +108,18 @@ export function Composer() {
           e.preventDefault();
           submit();
         }}
-        className="min-w-[240px] rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+        className="min-w-60 rounded-xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
           className={cn(
             'rounded-xl transition-colors',
             '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
-            '[&[data-dragging]]:bg-mf-selection',
+            '[&[data-dragging]]:bg-sidebar-selection',
           )}
         >
-          {/* Attachment tiles — renders nothing (empty:hidden) when no attachments pending */}
-          <div data-testid="composer-attachments" className="px-[14px] pt-[10px] empty:hidden">
-            <ComposerAttachments />
-          </div>
+          {/* Pending attachment tiles — the strip owns its own empty:hidden. */}
+          <ComposerAttachments />
 
           {/* Committed quote+prose segments + the pending live-quote pill (multi-quote composer, #280).
               Mounted above the scroll-wrapper, never inside it — that wrapper is ComposerHighlight's
@@ -143,17 +138,20 @@ export function Composer() {
               placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to Mainframe…'}
               rows={1}
               autoFocus
-              className="relative w-full resize-none overflow-hidden bg-transparent px-[14px] pt-[10px] pb-[4px] font-sans text-body leading-relaxed text-transparent caret-foreground outline-none placeholder:text-mf-text-3 disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative w-full resize-none overflow-hidden bg-transparent px-3.5 pt-2.5 pb-1 font-sans text-sm leading-relaxed text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
-          <div className="@container flex items-center justify-between gap-2 px-2.5 pt-[4px] pb-[6px]">
+          <div className="@container flex items-center justify-between gap-2 px-2.5 pt-1 pb-1.5">
             {/* Left slot: paperclip + mention + separator + config toolbar */}
-            <div data-testid="chat-composer-toolbar" className="flex min-w-0 min-h-8 items-center gap-1 text-mf-text-3">
+            <div
+              data-testid="chat-composer-toolbar"
+              className="flex min-h-8 min-w-0 items-center gap-1 text-muted-foreground"
+            >
               <ComposerAddAttachment />
               <ComposerAddMention />
-              {/* 1×12px hairline divider separating attachment actions from config chips */}
-              <div className="mx-1 h-3 w-px shrink-0 bg-border" aria-hidden />
+              {/* Hairline separating the attachment actions from the config chips. */}
+              <Separator orientation="vertical" className="mx-1 h-3 self-auto" />
               <ComposerToolbar />
             </div>
             <SendOrCancelButton />

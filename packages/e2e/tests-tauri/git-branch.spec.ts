@@ -1,32 +1,45 @@
 /**
- * §git-branch — Toolbar branch popover (BranchPopover) specs.
+ * §git-branch — Toolbar branch menu (BranchPopover) specs.
  *
- * Cluster D, spec #27 of docs/plans/2026-07-03-tauri-e2e-test-plan.md.
+ * Cluster D, spec #27 of docs/plans/2026-07-03-tauri-e2e-test-plan.md, rewired for
+ * the v2 design-system port: BranchPopover is a native Radix **DropdownMenu** now,
+ * not a Popover, and that changes the flow of nearly every scenario here.
  *
- * GROUND-TRUTH FINDING (source, not the plan): `main-toolbar-branch` / the
- * BranchPopover only render at all when the ACTIVE CHAT has a worktree —
- * `MainToolbar` gates the whole branch chip on `branchName`, and
- * `useActiveIdentity` reads `branchName` from `SessionCustom.branchName`,
- * which `chatToThreadCustom` sets from `chat.branchName` — a DB field the
- * daemon only ever writes via enable-worktree/attach-worktree/fork-to-worktree
- * (see chat-to-thread-custom.ts:32 "Worktree branch — read by the shell
- * MainToolbar identity"). So this spec seeds the chat with a worktree via REST
- * `enable-worktree` before any test touches the popover, and every git write
- * op the popover performs operates on that WORKTREE's checkout (GitService
- * resolves `getEffectivePath(ctx, projectId, chatId)` → chat.worktreePath),
- * not the project root.
+ * WHAT THE MENU PORT CHANGED (all read from packages/ui/src/features/git/*.tsx):
+ *   • Selecting ANY menu item CLOSES THE WHOLE MENU. Radix closes the root on
+ *     item-select unless the handler calls `preventDefault()`, and only
+ *     `git-update-all` / `git-push-current` do (BranchListView.tsx's own comment
+ *     says so). Every `git-submenu-*` row (BranchSubmenu.tsx) selects plainly, so a
+ *     checkout/merge/rename/delete leaves NO menu open — a post-action assertion on
+ *     a list row has to reopen the menu first, or it would pass vacuously against a
+ *     closed menu.
+ *   • Items are `<div role="menuitem">`, so disabled reads as `aria-disabled="true"`
+ *     rather than the `disabled` attribute of a real control.
+ *   • Branch rows are `DropdownMenuSubTrigger`s (BranchRow.tsx) and the per-branch
+ *     actions are a `DropdownMenuSubContent` flyout — clicking a row opens it.
+ *   • Forms don't live inside Radix menus: New Branch and Rename are v2 **Dialogs**
+ *     (NewBranchDialog / RenameBranchDialog), and an active merge/rebase conflict is
+ *     a third Dialog wrapping ConflictView. `git-new-branch-start` is a Select
+ *     TRIGGER (a button), so its value is text, not `toHaveValue`.
+ *   • Radix keeps a closing menu mounted through its exit animation and swallows a
+ *     trigger click landing in that window, so `openBranchPopover` waits for the
+ *     previous layer to unmount, and `closeBranchPopover` closes the flyout and the
+ *     root separately (one Escape only pops the innermost layer).
  *
- * SECOND FINDING: `MainToolbar` never passes `onBranchChanged` to
- * `BranchPopover`, and no git-write route emits a `chat.updated` broadcast —
- * so `chat.branchName` (and thus the outer toolbar chip text) is NEVER
- * refreshed after a checkout/merge/rebase performed through the popover. The
- * plan's "toolbar label updates" wording only holds for the ONE case where the
- * label is populated fresh from chat creation (the new-session-from-worktree
- * scenario, last test below). Every other checkout is verified via the
- * in-popover reactive state (the submenu's Checkout item disabling once
- * current) plus a `git rev-parse --abbrev-ref HEAD` read in the worktree —
- * per the shared brief's "assert state via git CLI reads where the UI is
- * ambiguous."
+ * TOOLBAR-CHIP FINDINGS (layout/MainToolbar.tsx — both of this file's older
+ * findings are now obsolete):
+ *   • The chip is no longer worktree-only: MainToolbar reads the live branch itself
+ *     (`getGitBranch(port, projectId, chatId)`), so every session shows one. This
+ *     spec still seeds a worktree via REST `enable-worktree`, because that is what
+ *     makes the popover's git writes land in an isolated checkout (GitService
+ *     resolves `getEffectivePath(ctx, projectId, chatId)` → chat.worktreePath)
+ *     instead of the project root.
+ *   • `onBranchChanged` IS wired now (`handleBranchChanged` → re-reads the live
+ *     branch), so the chip DOES refresh after a checkout / create through the menu.
+ *     That is asserted directly below; `git rev-parse --abbrev-ref HEAD` in the
+ *     worktree remains the authority for the git-level outcome. The chip is NOT
+ *     refreshed by this file's own `checkoutBase()` CLI calls — nothing broadcasts
+ *     them — so chip assertions only ever follow a UI action.
  *
  * Because checking out a branch elsewhere requires it not be checked out in
  * ANY worktree of the repo, every fixture branch below is built with a
@@ -39,21 +52,24 @@
  *
  * Testid reference (verified against packages/ui/src/features/git/*.tsx and
  * layout/MainToolbar.tsx):
- *   main-toolbar-branch          — toolbar branch chip / popover trigger
- *   git-branch-popover           — PopoverContent root
- *   git-branch-search            — search input (list view)
- *   git-fetch / git-new-branch / git-update-all / git-push-current — quick actions
+ *   main-toolbar-branch          — toolbar branch chip / menu trigger
+ *   git-branch-popover           — DropdownMenuContent root (name kept from the Popover era)
+ *   git-branch-search            — search input (menu body)
+ *   git-fetch                    — quick action; a real Button (disabled while busy)
+ *   git-new-branch / git-update-all / git-push-current — quick actions; menu ITEMS
  *   git-branch-list              — BranchList root
- *   git-branch-row-<name>        — a branch row (full branch name, incl. "/")
- *   git-branch-group-toggle-<prefix> — PrefixGroup collapse toggle (e.g. "feature")
- *   git-worktree-row-<dirName> / -toggle-<dirName> / -new-session-<dirName> / -delete-<dirName>
- *   git-submenu                  — per-branch submenu panel
+ *   git-branch-row-<name>        — a branch row / sub-trigger (full name, incl. "/")
+ *   git-branch-section-toggle-<slug> — Local/Remote section collapse (…-local-branches, …-remote)
+ *   git-branch-group-<prefix>    — a prefix group's label (e.g. "feature")
+ *   git-worktree-row-<dirName>   — a worktree group's label; it carries NO buttons —
+ *                                  new-session / delete-worktree moved into the flyout
+ *   git-submenu                  — the per-branch flyout (DropdownMenuSubContent)
  *   git-submenu-checkout/-pull/-push/-merge/-rebase/-rename/-delete/-new-branch-from
- *   git-submenu-new-session / -delete-worktree — worktree-only submenu rows
- *   git-new-branch-dialog / -name / -start / -create / -cancel / -back
- *   git-rename-view / -input / -submit / -cancel / -back
- *   git-conflict-view / git-conflict-abort
- *   git-confirm-dialog / -confirm / -cancel  (GitConfirmDialog, app-root mounted)
+ *   git-submenu-new-session / -delete-worktree — worktree-only flyout rows
+ *   git-new-branch-dialog / -name / -start / -create / -cancel
+ *   git-rename-view / -input / -submit / -cancel   (a Dialog now, not an in-menu view)
+ *   git-conflict-view / git-conflict-abort         (inside its own Dialog)
+ *   git-confirm-dialog / -confirm / -cancel  (ConfirmDialogHost, app-root mounted)
  *   sessions-row                 — session row (data-chat-id), reused from sessions.spec.ts
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -63,6 +79,8 @@ import { homedir } from 'os';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { TOAST } from '../helpers/tauri/testids.js';
+import { closeMenus } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -110,19 +128,60 @@ function seedBranchCommit(
   addCommitToExistingBranch(projectPath, branchName, fileRelPath, content, message);
 }
 
+/** True while any Radix menu layer (root menu or a flyout) is still mounted. */
+const menuLayers = (page: Page) => page.locator('[role="menu"]');
+
+/**
+ * Open the branch menu. Waits for a previous menu layer to unmount first: Radix
+ * keeps a closing menu mounted through its exit animation and swallows a trigger
+ * click that lands in that window, so the menu would silently fail to open.
+ */
 async function openBranchPopover(page: Page): Promise<void> {
+  await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
   await page.getByTestId('main-toolbar-branch').click();
   await expect(page.getByTestId('git-branch-search')).toBeVisible({ timeout: 10_000 });
 }
 
+/**
+ * Close whatever the branch menu currently has open, layer by layer. A single
+ * Escape only pops the innermost layer, so an open flyout would leave the root
+ * menu up — and a modal Radix menu puts `pointer-events: none` on <html>, which
+ * would make every control in the NEXT test unclickable. Selecting an item already
+ * closes the whole menu, so this no-ops in that case.
+ */
 async function closeBranchPopover(page: Page): Promise<void> {
-  await page.keyboard.press('Escape');
+  // One Escape per press, and a press that lands inside a layer's exit animation is
+  // swallowed — so this retries while any layer is left rather than pressing once and
+  // asserting. A single press was enough when this file ran alone and not in the full
+  // suite, where the animation window is longer.
+  await closeMenus(page);
   await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
+  await expect(page.getByTestId('git-submenu')).toHaveCount(0);
 }
 
+/** Open a branch row's action flyout (the row is a DropdownMenuSubTrigger). */
 async function openSubmenu(page: Page, branch: string): Promise<void> {
   await page.getByTestId(`git-branch-row-${branch}`).click();
   await expect(page.getByTestId('git-submenu')).toBeVisible({ timeout: 5_000 });
+}
+
+/** Open the branch menu and a branch's flyout in one step. */
+async function openBranchSubmenu(page: Page, branch: string): Promise<void> {
+  await openBranchPopover(page);
+  await openSubmenu(page, branch);
+}
+
+/**
+ * A menu item's enabled state. Radix renders `aria-disabled="true"` on a disabled
+ * `role="menuitem"` div and omits the attribute entirely when enabled — there is no
+ * `disabled` attribute to read, so `toBeDisabled()` is not the contract here.
+ */
+function expectItemDisabled(page: Page, testid: string) {
+  return expect(page.getByTestId(testid)).toHaveAttribute('aria-disabled', 'true');
+}
+
+function expectItemEnabled(page: Page, testid: string) {
+  return expect(page.getByTestId(testid)).not.toHaveAttribute('aria-disabled', 'true');
 }
 
 test.describe('§git-branch — Toolbar branch popover', () => {
@@ -256,7 +315,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await closeTauriApp(app);
   });
 
-  test('toolbar branch trigger opens the popover; branches lazy-load', async () => {
+  test('toolbar branch trigger opens the menu; branches lazy-load', async () => {
     const { page } = app;
     await openBranchPopover(page);
     await expect(page.getByTestId('git-branch-list')).toBeVisible();
@@ -281,106 +340,135 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await closeBranchPopover(page);
   });
 
-  // FIXED (commit ce7bc74c): `git-branch-popover` content was never positioned by
-  // Radix's Popper because `BranchPopover.tsx` wrapped its trigger as
-  // `<PopoverTrigger asChild><Hint label="Switch branch"><button>...` — `Hint`'s
-  // root render is a ref-less `<TooltipProvider>`, so `PopoverTrigger`'s `asChild`
-  // `Slot` cloned the reference ref onto `TooltipProvider` instead of the real
-  // button, leaving floating-ui with no reference element to measure. `Hint` now
-  // wraps `PopoverTrigger` instead of sitting inside it, so the popover positions
-  // correctly on every open. Re-enabled below.
+  test('the Local branches section header collapses and expands its rows', async () => {
+    const { page } = app;
+    // The only collapse affordance in the menu: BranchGroupSection wraps each
+    // section (Local / Remote) in a Collapsible whose trigger is NOT a menu item,
+    // so toggling it never closes the menu. Worktree groups have no toggle of their
+    // own any more — WorktreeSection renders a bare label.
+    await openBranchPopover(page);
+    const row = page.getByTestId('git-branch-row-main');
+    await expect(row).toBeVisible({ timeout: 10_000 });
 
-  test('new branch dialog creates a branch and checks it out', async () => {
+    await page.getByTestId('git-branch-section-toggle-local-branches').click();
+    await expect(row).toHaveCount(0);
+    await page.getByTestId('git-branch-section-toggle-local-branches').click();
+    await expect(row).toBeVisible();
+    // The menu itself survived both toggles.
+    await expect(page.getByTestId('git-branch-search')).toBeVisible();
+    await closeBranchPopover(page);
+  });
+
+  test('new branch dialog creates a branch, checks it out, and refreshes the toolbar chip', async () => {
     const { page } = app;
     await openBranchPopover(page);
+    // `git-new-branch` selects plainly, so the menu closes as the dialog opens.
     await page.getByTestId('git-new-branch').click();
     await expect(page.getByTestId('git-new-branch-dialog')).toBeVisible();
+    await expect(page.getByTestId('git-branch-popover')).toHaveCount(0);
     await page.getByTestId('git-new-branch-name').fill('feature/e2e-created');
     await page.getByTestId('git-new-branch-create').click();
     await expect(page.getByTestId('git-new-branch-dialog')).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('git-branch-row-feature/e2e-created')).toBeVisible({ timeout: 5_000 });
-    await closeBranchPopover(page);
 
     expect(git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/e2e-created');
+    // handleCreate → onBranchChanged → MainToolbar re-reads the live branch.
+    await expect(page.getByTestId('main-toolbar-branch')).toContainText('feature/e2e-created', { timeout: 10_000 });
+
+    // The new branch is in the list — assert it with the menu REOPENED, since the
+    // create closed it.
+    await openBranchPopover(page);
+    await expect(page.getByTestId('git-branch-row-feature/e2e-created')).toBeVisible({ timeout: 10_000 });
+    await closeBranchPopover(page);
+
     checkoutBase();
   });
 
-  test('branch row submenu: checkout switches the worktree current branch', async () => {
+  test('branch row flyout: checkout switches the worktree current branch', async () => {
     const { page } = app;
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/checkout-target');
-    await expect(page.getByTestId('git-submenu-checkout')).toBeEnabled();
+    await openBranchSubmenu(page, 'feature/checkout-target');
+    await expectItemEnabled(page, 'git-submenu-checkout');
     await page.getByTestId('git-submenu-checkout').click();
+    // Selecting the item closes the whole menu (BranchSubmenu items don't
+    // preventDefault) — the outcome is read from git and from the toolbar chip.
+    await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
 
     await expect
       .poll(() => git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim(), { timeout: 10_000 })
       .toBe('feature/checkout-target');
-    // In-popover reactivity: the submenu re-derives isCurrent from the refreshed
-    // branch list, so the Checkout item disables once the checkout lands (the
-    // outer toolbar chip itself is static — see file docstring).
-    await expect(page.getByTestId('git-submenu-checkout')).toBeDisabled({ timeout: 5_000 });
+    await expect(page.getByTestId('main-toolbar-branch')).toContainText('feature/checkout-target', {
+      timeout: 10_000,
+    });
+
+    // Reopened, the flyout re-derives isCurrent from the refreshed branch list, so
+    // Checkout is now disabled for that branch (aria-disabled — it's a menuitem div).
+    await openBranchSubmenu(page, 'feature/checkout-target');
+    await expectItemDisabled(page, 'git-submenu-checkout');
     await closeBranchPopover(page);
 
     checkoutBase();
   });
 
-  test('branch row submenu: new branch from a selected branch', async () => {
+  test('branch row flyout: new branch from a selected branch', async () => {
     const { page } = app;
-    await openBranchPopover(page);
-    await openSubmenu(page, 'main');
+    await openBranchSubmenu(page, 'main');
     await page.getByTestId('git-submenu-new-branch-from').click();
     await expect(page.getByTestId('git-new-branch-dialog')).toBeVisible();
-    await expect(page.getByTestId('git-new-branch-start')).toHaveValue('main');
+    // `git-new-branch-start` is a Select TRIGGER (a button showing SelectValue),
+    // not an input — the start point is its text.
+    await expect(page.getByTestId('git-new-branch-start')).toContainText('main');
     await page.getByTestId('git-new-branch-name').fill('feature/from-main');
     await page.getByTestId('git-new-branch-create').click();
     await expect(page.getByTestId('git-new-branch-dialog')).toHaveCount(0, { timeout: 10_000 });
-    await closeBranchPopover(page);
 
     expect(git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/from-main');
     checkoutBase();
   });
 
-  test('branch row submenu: merge fast-forwards a clean ancestor branch', async () => {
+  test('branch row flyout: merge fast-forwards a clean ancestor branch', async () => {
     const { page } = app;
     const ffHead = git(project.projectPath, ['rev-parse', 'feature/ff-branch']).trim();
     expect(git(worktreePath, ['rev-parse', 'HEAD']).trim()).not.toBe(ffHead);
 
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/ff-branch');
-    await expect(page.getByTestId('git-submenu-merge')).toBeEnabled();
+    await openBranchSubmenu(page, 'feature/ff-branch');
+    await expectItemEnabled(page, 'git-submenu-merge');
     await page.getByTestId('git-submenu-merge').click();
+    await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
 
     await expect.poll(() => git(worktreePath, ['rev-parse', 'HEAD']).trim(), { timeout: 10_000 }).toBe(ffHead);
     expect(git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('e2e-workspace');
-    await closeBranchPopover(page);
   });
 
-  test('branch row submenu: rename renames a branch', async () => {
+  test('branch row flyout: Rename… hands off to the rename dialog', async () => {
     const { page } = app;
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/rename-me');
+    await openBranchSubmenu(page, 'feature/rename-me');
     await page.getByTestId('git-submenu-rename').click();
 
-    const renameView = page.getByTestId('git-rename-view');
-    await expect(renameView).toBeVisible();
+    // Forms don't live in Radix menus: Rename is its own Dialog and the menu closes
+    // behind it (RenameBranchDialog / BranchPopover's DialogState).
+    const renameDialog = page.getByTestId('git-rename-view');
+    await expect(renameDialog).toBeVisible();
+    await expect(page.getByTestId('git-branch-popover')).toHaveCount(0);
     const input = page.getByTestId('git-rename-input');
     await expect(input).toHaveValue('feature/rename-me');
     await input.fill('feature/renamed-branch');
     await page.getByTestId('git-rename-submit').click();
 
-    await expect(renameView).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('git-branch-row-feature/renamed-branch')).toBeVisible({ timeout: 5_000 });
-    await closeBranchPopover(page);
-
+    await expect(renameDialog).toHaveCount(0, { timeout: 10_000 });
     const branches = git(project.projectPath, ['branch', '--list']);
     expect(branches).toContain('feature/renamed-branch');
     expect(branches).not.toContain('feature/rename-me');
+
+    // The reloaded list carries the new name — asserted with the menu reopened,
+    // since the rename closed it.
+    await openBranchPopover(page);
+    await expect(page.getByTestId('git-branch-row-feature/renamed-branch')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('git-branch-row-feature/rename-me')).toHaveCount(0);
+    await closeBranchPopover(page);
   });
 
-  test('branch row submenu: delete force-deletes a not-yet-merged branch (two-step confirm)', async () => {
+  test('branch row flyout: delete force-deletes a not-yet-merged branch (two-step confirm)', async () => {
     const { page } = app;
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/delete-me');
+    await openBranchSubmenu(page, 'feature/delete-me');
     await page.getByTestId('git-submenu-delete').click();
 
     const confirmDialog = page.getByTestId('git-confirm-dialog');
@@ -394,19 +482,24 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await expect(confirmDialog).toContainText('Force delete');
     await page.getByTestId('git-confirm-dialog-confirm').click();
 
-    await expect(page.getByTestId('git-branch-row-feature/delete-me')).toHaveCount(0, { timeout: 10_000 });
-    await closeBranchPopover(page);
+    await expect
+      .poll(() => git(project.projectPath, ['branch', '--list']), { timeout: 10_000 })
+      .not.toContain('feature/delete-me');
 
-    expect(git(project.projectPath, ['branch', '--list'])).not.toContain('feature/delete-me');
+    // Row gone from the reloaded list — the menu closed on the item select, so this
+    // has to be re-opened or it would assert against no list at all.
+    await openBranchPopover(page);
+    await expect(page.getByTestId('git-branch-row-feature/delete-me')).toHaveCount(0);
+    await expect(page.getByTestId('git-branch-row-main')).toBeVisible({ timeout: 10_000 });
+    await closeBranchPopover(page);
   });
 
-  test('branch row submenu: pull fast-forwards a branch from the bare remote', async () => {
+  test('branch row flyout: pull fast-forwards a branch from the bare remote', async () => {
     const { page } = app;
     const remoteHead = git(bareRepoPath, ['rev-parse', 'feature/pull-target']).trim();
     expect(git(project.projectPath, ['rev-parse', 'feature/pull-target']).trim()).not.toBe(remoteHead);
 
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/pull-target');
+    await openBranchSubmenu(page, 'feature/pull-target');
     await page.getByTestId('git-submenu-pull').click();
 
     await expect
@@ -415,13 +508,12 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await closeBranchPopover(page);
   });
 
-  test('branch row submenu: push sends a local-only commit to the bare remote', async () => {
+  test('branch row flyout: push sends a local-only commit to the bare remote', async () => {
     const { page } = app;
     const localHead = git(project.projectPath, ['rev-parse', 'feature/push-target']).trim();
     expect(git(bareRepoPath, ['rev-parse', 'feature/push-target']).trim()).not.toBe(localHead);
 
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/push-target');
+    await openBranchSubmenu(page, 'feature/push-target');
     await page.getByTestId('git-submenu-push').click();
 
     await expect
@@ -430,51 +522,62 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await closeBranchPopover(page);
   });
 
-  test('conflict view: a genuinely conflicting merge auto-routes to the conflict view; abort recovers', async () => {
+  test('conflict view: a conflicting merge routes the branch menu to the conflict dialog; abort recovers', async () => {
     const { page } = app;
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/conflict-a');
+    await openBranchSubmenu(page, 'feature/conflict-a');
     await page.getByTestId('git-submenu-checkout').click();
     await expect
       .poll(() => git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim(), { timeout: 10_000 })
       .toBe('feature/conflict-a');
-    await closeBranchPopover(page);
 
-    await openBranchPopover(page);
-    await openSubmenu(page, 'feature/conflict-b');
+    await openBranchSubmenu(page, 'feature/conflict-b');
     await page.getByTestId('git-submenu-merge').click();
 
+    // Selecting Merge closes the menu, and BranchPopover only swaps in the conflict
+    // dialog while the menu is OPEN (`if (open && hasConflict)`), so the conflict
+    // surfaces on the next open rather than immediately. Reopening the trigger
+    // therefore yields the conflict dialog INSTEAD of the branch list.
     const conflictView = page.getByTestId('git-conflict-view');
+    await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 10_000 });
+    await expect(conflictView).toHaveCount(0);
+    await expect
+      .poll(() => git(worktreePath, ['status', '--porcelain']).trim(), { timeout: 15_000 })
+      .toContain('conflict.txt');
+
+    await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('main-toolbar-branch').click();
     await expect(conflictView).toBeVisible({ timeout: 15_000 });
     await expect(conflictView).toContainText('conflict.txt');
+    await expect(page.getByTestId('git-branch-search')).toHaveCount(0);
 
+    // Abort closes the dialog outright — it does not fall back to the branch list.
     await page.getByTestId('git-conflict-abort').click();
     await expect(conflictView).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('git-branch-search')).toBeVisible();
-    await closeBranchPopover(page);
 
     expect(git(worktreePath, ['status', '--porcelain']).trim()).toBe('');
     expect(git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/conflict-a');
     checkoutBase();
+
+    // With the conflict cleared, the menu opens normally again.
+    await openBranchPopover(page);
+    await closeBranchPopover(page);
   });
 
-  test('worktree section: toggle collapses/expands rows; delete removes wt-delete', async () => {
+  test('worktree branch flyout: Delete Worktree removes wt-delete', async () => {
     const { page } = app;
+    // The worktree affordances moved OUT of the worktree label row and INTO each
+    // worktree branch's flyout (WorktreeSection.tsx: "the label row carries no
+    // buttons of its own"), so the delete is reached through the branch row.
     await openBranchPopover(page);
-    const row = page.getByTestId('git-branch-row-feature/worktree-delete');
-    await expect(row).toBeVisible({ timeout: 10_000 });
-
-    await page.getByTestId('git-worktree-toggle-wt-delete').click();
-    await expect(row).toHaveCount(0);
-    await page.getByTestId('git-worktree-toggle-wt-delete').click();
-    await expect(row).toBeVisible();
+    await expect(page.getByTestId('git-worktree-row-wt-delete')).toBeVisible({ timeout: 10_000 });
+    await openSubmenu(page, 'feature/worktree-delete');
 
     // Assert the daemon's own delete-worktree REST call actually succeeded, not just that
-    // the row disappeared from the (optimistically-updated) sidebar — this is the
+    // the row disappeared from the (optimistically-updated) list — this is the
     // observable server-side outcome the row-disappearance is supposed to reflect.
     const respPromise = page.waitForResponse((r) => r.url().includes('/git/delete-worktree'));
 
-    await page.getByTestId('git-worktree-delete-wt-delete').click();
+    await page.getByTestId('git-submenu-delete-worktree').click();
     const confirmDialog = page.getByTestId('git-confirm-dialog');
     await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
     await expect(confirmDialog).toContainText('wt-delete');
@@ -483,9 +586,6 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     const resp = await respPromise;
     expect(resp.status()).toBe(200);
 
-    await expect(page.getByTestId('git-worktree-row-wt-delete')).toHaveCount(0, { timeout: 15_000 });
-    await closeBranchPopover(page);
-
     // The daemon's delete-worktree route fully awaits `removeWorktree()` before responding, so
     // the git-level effects are already committed by the time the 200 above is observed — this
     // poll is a small safety margin against filesystem-visibility lag, not a real wait.
@@ -493,25 +593,37 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     await expect
       .poll(() => git(project.projectPath, ['worktree', 'list']), { timeout: 3_000 })
       .not.toContain('wt-delete');
+
+    // Gone from the reloaded list too (menu reopened — the item select closed it).
+    await openBranchPopover(page);
+    await expect(page.getByTestId('git-worktree-row-wt-delete')).toHaveCount(0, { timeout: 15_000 });
+    await closeBranchPopover(page);
   });
 
   test('quick actions: fetch, update all, and push current complete without error', async () => {
     const { page } = app;
-    const errorToasts = () => page.getByTestId('toast-root').filter({ hasText: /failed|error/i });
+    const errorToasts = () => page.locator(TOAST.root).filter({ hasText: /failed|error/i });
 
     await openBranchPopover(page);
 
+    // Fetch is a real Button (`disabled={busy}`), so enabled-again is its idle signal.
     await page.getByTestId('git-fetch').click();
     await expect(page.getByTestId('git-fetch')).toBeEnabled({ timeout: 15_000 });
     await expect(errorToasts()).toHaveCount(0);
 
+    // Update all / Push are menu ITEMS whose handlers preventDefault, so the menu
+    // stays OPEN for their busy spinners. Their completion shows up as the success
+    // toast `handleUpdateAll`/`handlePush` raise, not as a re-enabled control (a
+    // menuitem carries `aria-disabled`, and it clears too early to wait on).
     await page.getByTestId('git-update-all').click();
-    await expect(page.getByTestId('git-update-all')).toBeEnabled({ timeout: 15_000 });
+    await expect(page.getByTestId('git-branch-search')).toBeVisible();
+    await expect(page.locator(TOAST.root).filter({ hasText: /up to date|pulled|updated/i })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(errorToasts()).toHaveCount(0);
 
     const localHead = git(worktreePath, ['rev-parse', 'HEAD']).trim();
     await page.getByTestId('git-push-current').click();
-    await expect(page.getByTestId('git-push-current')).toBeEnabled({ timeout: 15_000 });
     await closeBranchPopover(page);
 
     // Push-current sends the worktree's checked-out branch (e2e-workspace) — the
@@ -523,20 +635,23 @@ test.describe('§git-branch — Toolbar branch popover', () => {
 
   // Last test: navigates the app to a NEW worktree-scoped chat, so nothing after
   // this can assume the original chat/worktree is still active.
-  test('worktree section: new session on worktree creates a worktree-scoped chat', async () => {
+  test('worktree branch flyout: New Session on Worktree creates a worktree-scoped chat', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
 
-    await openBranchPopover(page);
-    await page.getByTestId('git-worktree-new-session-wt-session').click();
+    // Also moved into the flyout — `git-submenu-new-session` is only rendered for a
+    // branch that IS checked out in a worktree (BranchSubmenu's isWorktree branch).
+    await openBranchSubmenu(page, 'feature/worktree-session');
+    await page.getByTestId('git-submenu-new-session').click();
 
-    // The popover self-closes as part of the new-session flow (onOpenChange(false)).
+    // The menu closes both ways here: the item select closes it, and the new-session
+    // flow calls `onDone`/closeMenu as well (useNewSessionAction).
     await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore + 1, { timeout: 15_000 });
 
-    // The new chat is worktree-scoped on feature/worktree-session — the toolbar
-    // branch chip reflects it immediately (fresh chat.branchName from creation,
-    // not a live update — see file docstring).
+    // The new chat is worktree-scoped on feature/worktree-session — the chip follows
+    // the newly-activated chat's own identity (MainToolbar re-reads the live branch
+    // for the new chatId).
     await expect(page.getByTestId('main-toolbar-branch')).toContainText('feature/worktree-session', {
       timeout: 15_000,
     });

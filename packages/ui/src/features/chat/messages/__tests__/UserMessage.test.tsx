@@ -26,8 +26,8 @@
  *       present.
  *  PB — a clear-context "Implement the following plan:" message renders the
  *       shared PlanBubble instead of the plain cool-card body.
- *  WB — the CoolCard shell (`chat-user-bubble`) and the send-failure detail
- *       (`chat-user-message-send-error`) both carry `break-words`, so a
+ *  WB — the bubble shell (`chat-user-bubble`) and the send-failure detail
+ *       (`chat-user-message-send-error`) both carry `wrap-break-word`, so a
  *       token longer than the card wraps instead of painting past the
  *       border (todo #298).
  */
@@ -252,10 +252,10 @@ describe('UserMessage — H6: message id and content rendering', () => {
     expect(screen.getByTestId('chat-user-message')).toBeInTheDocument();
   });
 
-  it('carries a 16px bottom margin to the next message (7.7 — pb-6)', () => {
+  it('carries a 16px bottom margin to the next message (pb-4, standard v2 scale)', () => {
     __messageFixture = makeFixture();
     renderUserMessage();
-    expect(screen.getByTestId('chat-user-message').className).toContain('pb-6');
+    expect(screen.getByTestId('chat-user-message').className).toContain('pb-4');
   });
 
   it('renders cleanText from metadata when present, ignoring raw text', () => {
@@ -300,42 +300,45 @@ describe('UserMessage — MT: @mention renders as plain text, not a chip', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Tests — SP: SlashPill spacing matches the design (7.5)
+// Tests — SP: SlashPill is a v2 Badge whose glyph (not a tint token) carries
+// command-vs-skill (the hand-rolled pill + its two `mf-directive-*` tint
+// tokens are gone: one Badge variant + a distinguishing glyph replaces both).
 // ---------------------------------------------------------------------------
 
-describe('UserMessage — SP: SlashPill spacing (mr-4, gap-[5px], pr-4)', () => {
+describe('UserMessage — SP: SlashPill renders as a secondary Badge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __skillsFixture = [];
   });
 
-  it('renders the pill wrapper with mr-4 (8px), gap-[5px], pl-1.5 (6px), pr-4 (8px)', () => {
+  it('renders the command label on a badge with data-slot="badge" and data-variant="secondary"', () => {
     __messageFixture = makeFixture({
       mainframe: { command: { name: 'debug', source: 'commands', userText: 'run this' } },
     });
     renderUserMessage();
-    const pillLabel = screen.getByText('/debug');
-    const pill = pillLabel.closest('span')?.parentElement;
-    expect(pill).not.toBeNull();
-    expect(pill!.className).toContain('mr-4');
-    expect(pill!.className).toContain('gap-[5px]');
-    expect(pill!.className).toContain('pl-1.5');
-    expect(pill!.className).toContain('pr-4');
+    const badge = screen.getByText('/debug').closest('[data-slot="badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge).toHaveAttribute('data-variant', 'secondary');
   });
 
-  // 7.12: command pill uses the purpose-built ~8% accent tint token, mirroring
-  // the skill pill's own dedicated `bg-mf-directive-skill-tint` treatment,
-  // instead of reusing the coarser text-selection `bg-mf-selection` token.
-  it('uses the bg-mf-directive-command-tint token for the command pill background', () => {
+  it('renders a Wrench glyph for a command-sourced turn', () => {
     __messageFixture = makeFixture({
       mainframe: { command: { name: 'debug', source: 'commands', userText: 'run this' } },
     });
     renderUserMessage();
-    const pillLabel = screen.getByText('/debug');
-    const pill = pillLabel.closest('span')?.parentElement;
-    expect(pill).not.toBeNull();
-    expect(pill!.className).toContain('bg-mf-directive-command-tint');
-    expect(pill!.className).not.toContain('bg-mf-selection');
+    const badge = screen.getByText('/debug').closest('[data-slot="badge"]');
+    expect(badge?.querySelector('.lucide-wrench')).toBeInTheDocument();
+    expect(badge?.querySelector('.lucide-zap')).not.toBeInTheDocument();
+  });
+
+  it('renders a Zap glyph (not the command Wrench) for a skill-sourced turn', () => {
+    __messageFixture = makeFixture({
+      mainframe: { command: { name: 'my-skill', source: 'skills', userText: 'do the thing' } },
+    });
+    renderUserMessage();
+    const badge = screen.getByText('/my-skill').closest('[data-slot="badge"]');
+    expect(badge?.querySelector('.lucide-zap')).toBeInTheDocument();
+    expect(badge?.querySelector('.lucide-wrench')).not.toBeInTheDocument();
   });
 });
 
@@ -512,11 +515,16 @@ describe('UserMessage — WB: word-breaking containment', () => {
     vi.clearAllMocks();
   });
 
-  it('the user bubble opts into word breaking', () => {
+  // The 470px cap is kept over the kit's relative `max-w-[80%]` (which measures
+  // ~582px at this column width) — an e2e case pins the absolute value.
+  it('the user bubble opts into word breaking, capped at 470px by its Bubble parent', () => {
     __messageFixture = makeFixture();
     renderUserMessage();
-    expect(screen.getByTestId('chat-user-bubble').className).toContain('break-words');
-    expect(screen.getByTestId('chat-user-bubble').className).toContain('max-w-[470px]');
+    const bubbleContent = screen.getByTestId('chat-user-bubble');
+    expect(bubbleContent.className).toContain('wrap-break-word');
+    const bubble = bubbleContent.closest('[data-slot="bubble"]');
+    expect(bubble).not.toBeNull();
+    expect(bubble!.className).toContain('max-w-[470px]');
   });
 
   it('the send-failure detail wraps long tokens', () => {
@@ -524,7 +532,7 @@ describe('UserMessage — WB: word-breaking containment', () => {
       mainframe: { pending: true, clientId: 'c-1', error: 'Network timeout' },
     });
     renderUserMessage();
-    expect(screen.getByTestId('chat-user-message-send-error').className).toContain('break-words');
+    expect(screen.getByTestId('chat-user-message-send-error').className).toContain('wrap-break-word');
   });
 });
 

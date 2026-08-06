@@ -22,15 +22,19 @@
  *   chat-header-context-pct     — context percentage text, e.g. "42%"
  *   chat-header-review          — Review button, disabled without a worktree
  *   chat-header-pr-<number>     — per-PR chip (needs PR detection — unseedable, see skip below)
- *   chat-header-split-right     — split Files/Run beside Chat in the top row
- *   chat-header-split-down      — split Files/Run into the bottom strip
+ *   chat-header-split-right     — place the Workspace beside Chat in the top row
+ *   chat-header-split-down      — dock the Workspace in the bottom strip
  *   chat-header-hide            — hide the Chat surface (disabled at the dynamic floor)
  *   review-modal                — the Review panel opened by chat-header-review
- *   surface-rail-<chat|files|run> / files-surface / run-surface — layout.spec.ts's own
- *                                  testids, referenced here only to observe split/hide effects
- *   [data-drop-surface="chat|files|run"] — layout engine's per-surface panel wrapper
+ *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
+ *                                  own testids, referenced here only to observe split/hide effects
+ *   [data-drop-surface="chat|workspace"] — layout engine's per-surface panel wrapper
+ *
+ * SurfaceId is 'chat' | 'workspace' since the 2026-08-05 Files+Run merge, so there
+ * is exactly one surface to split to and the split controls unmount once it is placed
+ * (packages/ui/CLAUDE.md, "Surface model").
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
@@ -161,7 +165,7 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
   test('enabled once Files is lit (⌘/Ctrl+2), and hides the chat surface when clicked', async () => {
     const { page } = app;
     await page.keyboard.press('ControlOrMeta+2');
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const hideButton = page.getByTestId('chat-header-hide');
     await expect(hideButton).toBeEnabled();
@@ -170,7 +174,7 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
     await expect(page.locator('[data-drop-surface="chat"]')).toHaveCount(0);
     await expect(page.getByTestId('chat-header')).toHaveCount(0);
     // Files remains the sole lit surface.
-    await expect(page.getByTestId('files-surface')).toBeVisible();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible();
   });
 });
 
@@ -191,33 +195,50 @@ test.describe('§chat-header — split controls', () => {
     await closeTauriApp(app);
   });
 
-  test('split-right lights a second surface beside Chat in the top row', async () => {
+  /**
+   * With two surfaces there is exactly one thing to split TO, so `layoutCanSplit`
+   * (store/layout-placement.ts) is false the moment the workspace is placed and the
+   * split controls unmount. Hiding it un-places it and brings them back.
+   */
+  async function collapseToChatOnly(page: Page): Promise<void> {
+    const hideWorkspace = page.getByTestId('workspace-surface-close');
+    if ((await hideWorkspace.count()) > 0) await hideWorkspace.first().click();
+    await expect(page.getByTestId('workspace-surface')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('chat-header-split-right')).toBeVisible();
+  }
+
+  test('split-right lights the workspace beside Chat in the top row', async () => {
     const { page } = app;
+    await collapseToChatOnly(page);
     await page.getByTestId('chat-header-split-right').click();
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const filesBox = await page.locator('[data-drop-surface="files"]').boundingBox();
+    const workspaceBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
-    expect(filesBox).not.toBeNull();
+    expect(workspaceBox).not.toBeNull();
     // Same row: comparable y, Chat stays leftmost.
-    expect(Math.abs(chatBox!.y - filesBox!.y)).toBeLessThan(5);
-    expect(chatBox!.x).toBeLessThan(filesBox!.x);
+    expect(Math.abs(chatBox!.y - workspaceBox!.y)).toBeLessThan(5);
+    expect(chatBox!.x).toBeLessThan(workspaceBox!.x);
+
+    // Nothing left to split to — both controls go away until the workspace is hidden.
+    await expect(page.getByTestId('chat-header-split-right')).toHaveCount(0);
+    await expect(page.getByTestId('chat-header-split-down')).toHaveCount(0);
   });
 
-  test('split-down lights a third surface into the bottom strip', async () => {
+  test('split-down docks the workspace in the bottom strip', async () => {
     const { page } = app;
-    // Chat's own header still carries the split controls regardless of how many
-    // surfaces are already lit, as long as one of files/run is still missing.
+    await collapseToChatOnly(page);
     await page.getByTestId('chat-header-split-down').click();
-    await expect(page.getByTestId('run-surface')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const filesBox = await page.locator('[data-drop-surface="files"]').boundingBox();
-    const runBox = await page.locator('[data-drop-surface="run"]').boundingBox();
-    expect(filesBox).not.toBeNull();
-    expect(runBox).not.toBeNull();
-    // Run sits below the top row.
-    expect(runBox!.y).toBeGreaterThan(filesBox!.y + filesBox!.height - 5);
+    const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
+    const workspaceBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    expect(chatBox).not.toBeNull();
+    expect(workspaceBox).not.toBeNull();
+    // The strip spans the full width below the top row, so Chat keeps the whole row.
+    expect(workspaceBox!.y).toBeGreaterThan(chatBox!.y + chatBox!.height - 5);
+    expect(Math.abs(workspaceBox!.x - chatBox!.x)).toBeLessThan(5);
   });
 });
 

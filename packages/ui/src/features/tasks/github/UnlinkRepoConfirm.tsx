@@ -6,7 +6,7 @@
  * spec requires: how many pairs stop syncing, and that nothing is deleted.
  */
 import React from 'react';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@v2/features/shared/ConfirmDialog';
 import { runOrToast } from './run-or-toast';
 import { useGitHubSyncStore } from './use-github-sync-store';
 

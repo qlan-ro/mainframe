@@ -1,6 +1,13 @@
 import { it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { AutomationsView } from '../AutomationsView';
+
+// The header's Hint needs the v2 TooltipProvider; the app mounts one at the
+// root (via SidebarProvider), so the test supplies its own.
+function render(ui: React.ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
+}
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 

@@ -13,13 +13,14 @@
  * normalized via `toFileRef` against the active bases (worktreePath /
  * projectPath, pushed into `useActiveBasesStore` by `useActiveBases`). This
  * gives all flavors — absolute tool-card paths, base-relative tree paths,
- * file:// LSP URIs — the same canonical relative key in the tabs store.
+ * file:// LSP URIs — the same canonical relative key in the pane model.
  *
  * Behaviour mirrored from 04-engine.jsx openTargetWS:
- *  - open-file: openTab(path, {mode:'preview'}) + ensure Files surface is active.
- *    When the intent carries a `line`/`character` position, also stashes a
- *    reveal target in useEditorStore so CmEditor can scroll to it on mount.
- *  - reveal-file: ensure Files surface is active and stash the path in
+ *  - open-file: openFileTab(path, 'preview') in the workspace's first pane
+ *    (`openFileTab` lights the surface itself). When the intent carries a
+ *    `line`/`character` position, also stashes a reveal target in
+ *    useEditorStore so CmEditor can scroll to it on mount.
+ *  - reveal-file: ensure the workspace is visible and stash the path in
  *    useFilesStore.revealTarget; FileTree auto-expands ancestors and scrolls.
  */
 import { pickViewerKind } from '@/features/viewers/viewer-router';
@@ -27,26 +28,27 @@ import { toFileRef } from '@/lib/files/file-ref';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useUiPrefs } from './ui-prefs';
-import { useTabsStore } from './tabs';
 import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
 import { useOverlaysStore } from './overlays';
 import { useActiveBasesStore } from './active-bases-store';
 import { useSettingsStore } from './settings';
-import type { OpenTabTarget } from './tabs';
+import type { FileTabKind } from './run-pane-file-tabs';
 
-/** Ensure the Files surface is visible in the layout. Pure store call. */
-function ensureFilesActive(): void {
+/** Ensure the workspace surface is visible in the layout. Pure store call. */
+function ensureWorkspaceActive(): void {
   const state = useLayoutStore.getState();
   const { layout } = state;
-  const isActive = layout.top.includes('files') || layout.bottom === 'files';
-  if (!isActive) {
-    state.toggleSurface('files');
-  }
+  if (!layout.top.includes('workspace') && layout.bottom !== 'workspace') state.toggleSurface('workspace');
+}
+
+/** The active session's launch scope, stamped onto every tab this subscriber opens. */
+function activeScopeKey(): string | undefined {
+  return useActiveBasesStore.getState().scopeKey ?? undefined;
 }
 
 /** Derive the tab kind for a file path using the viewer router's classifier. */
-function kindForPath(path: string): OpenTabTarget['kind'] {
+function kindForPath(path: string): FileTabKind {
   const vk = pickViewerKind(path);
   if (vk === 'code') return 'code';
   return 'viewer';
@@ -71,8 +73,8 @@ export function subscribeToFileIntents(): () => void {
       const title = path.split('/').pop() ?? path;
       const kind = kindForPath(path);
 
-      useTabsStore.getState().openTab({ kind, path, title }, { mode: 'preview' });
-      ensureFilesActive();
+      // openFileTab lights the workspace itself — no separate activation needed.
+      useLayoutStore.getState().openFileTab({ kind, path, title, scopeKey: activeScopeKey() }, 'preview');
 
       // Stash a reveal target if both line and character are provided.
       if (typeof line === 'number' && typeof character === 'number') {
@@ -94,14 +96,15 @@ export function subscribeToFileIntents(): () => void {
       // Pre-resolved sides (e.g. a chat Edit card) render the proposed
       // original-vs-modified diff directly; when absent, DiffTab fetches
       // HEAD-vs-working.
-      useTabsStore.getState().openTab({ kind: 'diff', path, title, original, modified }, { mode: 'preview' });
-      ensureFilesActive();
+      useLayoutStore
+        .getState()
+        .openFileTab({ kind: 'diff', path, title, original, modified, scopeKey: activeScopeKey() }, 'preview');
       return;
     }
 
     if (intent.type === 'reveal-file') {
-      // Activate Files surface so the user can see the tree.
-      ensureFilesActive();
+      // Show the workspace so the user can see the tree.
+      ensureWorkspaceActive();
       // Normalize the path (same logic as open-file) and stash it for the tree.
       const bases = useActiveBasesStore.getState().bases;
       const ref = toFileRef(intent.path, bases);

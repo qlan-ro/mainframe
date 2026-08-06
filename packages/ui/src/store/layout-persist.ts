@@ -1,6 +1,7 @@
 import { createJSONStorage, type PersistOptions } from 'zustand/middleware';
 import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 import type { LayoutStore, SessionWorkspace } from './layout';
+import type { SurfaceId, WorkspaceLayout } from './layout-placement';
 import type { RunState, RunTab } from './run-pane';
 
 /**
@@ -59,10 +60,43 @@ type PersistedLayout = { sessions: Record<string, SessionWorkspace> };
 
 const LAYOUT_BASE_KEY = 'mf:session-layout';
 
+/**
+ * v1 → v2: the `files` and `run` surfaces merged into one `workspace`, so a
+ * persisted placement can name the same surface twice. Fold both ids into
+ * `workspace`, dedupe, and drop a bottom strip that now duplicates the top row.
+ * Flex weights survive: the merged surface inherits whichever of the two had a
+ * weight (`run` wins a tie, being the one that carried the panes).
+ *
+ * Persisted tabs are kept as-is — they were already sanitized to the file/url
+ * kinds on write, and the merged model reads the same `RunTab` shape. Tabs whose
+ * `mode` is absent render as permanent, which is the safe default for a tab the
+ * user had open.
+ */
+function migrateLayoutIds(layout: WorkspaceLayout): WorkspaceLayout {
+  const fold = (id: string): SurfaceId => (id === 'files' || id === 'run' ? 'workspace' : (id as SurfaceId));
+  const top = [...new Set(layout.top.map(fold))];
+  const bottom = layout.bottom ? fold(layout.bottom) : null;
+  const legacy = layout.topFlex as Partial<Record<string, number>>;
+  const topFlex: Partial<Record<SurfaceId, number>> = {};
+  if (legacy['chat'] !== undefined) topFlex.chat = legacy['chat'];
+  const merged = legacy['run'] ?? legacy['files'];
+  if (merged !== undefined) topFlex.workspace = merged;
+  return { top, bottom: bottom && top.includes(bottom) ? null : bottom, topFlex, vFlex: layout.vFlex };
+}
+
+function migratePersisted(persisted: PersistedLayout | undefined): PersistedLayout {
+  const sessions: Record<string, SessionWorkspace> = {};
+  for (const [id, ws] of Object.entries(persisted?.sessions ?? {})) {
+    sessions[id] = { layout: migrateLayoutIds(ws.layout), run: ws.run };
+  }
+  return { sessions };
+}
+
 /** zustand persist config for the per-session layout store (`mf:session-layout`). */
 export const layoutPersistOptions: PersistOptions<LayoutStore, PersistedLayout> = {
   name: LAYOUT_BASE_KEY,
-  version: 1,
+  version: 2,
+  migrate: (persisted) => migratePersisted(persisted as PersistedLayout | undefined),
   storage: createJSONStorage(() => ({
     getItem: (name) => localStorage.getItem(daemonScopedKey(name)),
     setItem: (name, value) => localStorage.setItem(daemonScopedKey(name), value),

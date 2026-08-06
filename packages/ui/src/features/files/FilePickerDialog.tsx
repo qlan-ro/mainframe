@@ -1,26 +1,27 @@
 /**
- * FilePickerDialog — VS Code Cmd+P style file-open command palette.
+ * FilePickerDialog — VS Code Cmd+P style file-open palette, on the stock cmdk
+ * engine (the same shape as SpotlightPalette and FindInPathModal).
  *
  * Subscribes to `useFilesStore.pickerOpen`; the intent subscriber sets that
- * flag to true on `open-file-picker`. The dialog never reads the intent bus
- * directly — all state flows through the store.
+ * flag to true on `open-file-picker`. The daemon does the matching
+ * (useFileSearch), so cmdk runs with `shouldFilter={false}` and contributes
+ * the input, listbox semantics and keyboard navigation.
  *
  * On selection, emits `emitSurfaceIntent({ type: 'open-file', path })` and
- * closes. The intent subscriber then opens the file tab in the Files surface.
- *
- * Mounted once at the app root (AppShell) alongside ArchiveWorktreeDialog.
- * Port and project context come from DaemonPortContext + useActiveIdentity.
+ * closes. Mounted once at the app root (AppShell).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useCallback, useEffect, useState } from 'react';
+import { Command, CommandInput, CommandItem, CommandList } from '@v2/components/ui/command';
+import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
-import { useFileSearch, useListNavigation, FileRow } from './use-file-search';
+import { fileIconFor } from '@/lib/editor/file-types';
+import { dirOf, useFileSearch } from './use-file-search';
 
 // ---------------------------------------------------------------------------
-// Inner dialog body — only rendered when open (avoids stale search state)
+// Inner body — only rendered while open (avoids stale search state)
 // ---------------------------------------------------------------------------
 
 function PickerBody({
@@ -35,18 +36,17 @@ function PickerBody({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // minLength=1: the picker searches on any non-empty keystroke (original behaviour).
   const { results, searched, loading } = useFileSearch(port, projectId, chatId, query, 1);
 
-  // Autofocus on mount
+  // Controlled selection: results land ASYNC (debounced fetch), after cmdk's
+  // own select-first-on-search tick — without this, a replaced result set
+  // leaves nothing selected and Enter is a no-op.
+  const [selected, setSelected] = useState('');
   useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
+    if (results.length > 0 && !results.some((r) => r.path === selected)) setSelected(results[0]!.path);
+  }, [results, selected]);
 
   const handleSelect = useCallback(
     (path: string) => {
@@ -56,57 +56,45 @@ function PickerBody({
     [onClose],
   );
 
-  const handleConfirm = useCallback(
-    (index: number) => {
-      const result = results[index];
-      if (result) handleSelect(result.path);
-    },
-    [results, handleSelect],
-  );
-
-  const { activeIndex, handleKeyDown, rowRefs } = useListNavigation(results.length, handleConfirm);
-
   const showHint = !query.trim();
   const showEmpty = query.trim().length > 0 && searched && results.length === 0;
 
   return (
-    <div data-testid="file-picker-dialog" className="flex flex-col overflow-hidden">
-      <div className="flex items-center border-b border-border px-3">
-        <input
-          ref={inputRef}
-          data-noring=""
-          data-testid="file-picker-input"
-          type="text"
-          placeholder="Type to search files…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="flex h-10 w-full bg-transparent py-3 text-body outline-none placeholder:text-muted-foreground"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </div>
-      <div role="listbox" className="max-h-80 overflow-y-auto overflow-x-hidden p-1">
-        {showHint && <p className="py-6 text-center text-body text-muted-foreground">Type to search files</p>}
+    <Command shouldFilter={false} value={selected} onValueChange={setSelected} data-testid="file-picker-dialog">
+      <CommandInput
+        autoFocus
+        data-testid="file-picker-input"
+        value={query}
+        onValueChange={setQuery}
+        placeholder="Type to search files…"
+      />
+      {/* Bespoke states instead of CommandEmpty: idle and loading say
+          different things than "no matches". */}
+      <CommandList className="max-h-80">
+        {showHint && <p className="py-6 text-center text-muted-foreground">Type to search files</p>}
         {loading && !results.length && (
-          <p data-testid="file-picker-loading" className="py-6 text-center text-body text-muted-foreground">
+          <p data-testid="file-picker-loading" className="py-6 text-center text-muted-foreground">
             Searching…
           </p>
         )}
-        {showEmpty && <p className="py-6 text-center text-body text-muted-foreground">No matching files</p>}
-        {results.map((r, i) => (
-          <FileRow
-            key={r.path}
-            result={r}
-            isActive={i === activeIndex}
-            rowRef={(el) => {
-              rowRefs.current[i] = el;
-            }}
-            onSelect={handleSelect}
-          />
-        ))}
-      </div>
-    </div>
+        {showEmpty && <p className="py-6 text-center text-muted-foreground">No matching files</p>}
+        {results.map((result) => {
+          const Icon = fileIconFor(result.name);
+          return (
+            <CommandItem
+              key={result.path}
+              value={result.path}
+              data-testid={`file-picker-row-${result.path}`}
+              onSelect={() => handleSelect(result.path)}
+            >
+              <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate font-medium">{result.name}</span>
+              <span className="ml-auto truncate text-xs text-muted-foreground">{dirOf(result.path)}</span>
+            </CommandItem>
+          );
+        })}
+      </CommandList>
+    </Command>
   );
 }
 
@@ -122,16 +110,20 @@ export function FilePickerDialog() {
 
   const handleClose = useCallback(() => setPickerOpen(false), [setPickerOpen]);
 
-  if (!open) return null;
-
+  // Rendered closed rather than early-returning null: unmounting a Radix
+  // modal while it is still open leaves `pointer-events: none` on <body>.
   return (
-    <Dialog open onOpenChange={handleClose}>
-      <DialogContent className="overflow-hidden p-0 gap-0 max-w-xl" aria-describedby={undefined}>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent
+        showCloseButton={false}
+        className="gap-0 overflow-hidden p-0 sm:max-w-xl"
+        aria-describedby={undefined}
+      >
         <DialogTitle className="sr-only">Open file</DialogTitle>
         {projectId != null ? (
           <PickerBody port={port} projectId={projectId} chatId={chatId} onClose={handleClose} />
         ) : (
-          <div data-testid="file-picker-no-project" className="py-6 text-center text-body text-muted-foreground">
+          <div data-testid="file-picker-no-project" className="py-6 text-center text-muted-foreground">
             No project selected
           </div>
         )}

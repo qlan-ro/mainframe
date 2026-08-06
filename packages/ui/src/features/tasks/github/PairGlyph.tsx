@@ -11,7 +11,7 @@
 import React from 'react';
 import { CircleDotDashed, TriangleAlert, Unlink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import type { Pair } from '@/lib/api/todos-github';
 import { useGitHubSyncStore } from './use-github-sync-store';
@@ -33,7 +33,7 @@ function pairedAffordance(pair: Pair): { icon: React.ReactNode; hint: string } {
   switch (pair.pairState) {
     case 'overwritten':
       return {
-        icon: <span className="size-1.5 rounded-full bg-mf-warning shrink-0" aria-hidden />,
+        icon: <span className="size-1.5 rounded-full bg-warning shrink-0" aria-hidden />,
         hint: 'Overwritten in the last run — open the report',
       };
     case 'errored':
@@ -93,8 +93,8 @@ export function PairGlyph({ todo, surface }: Props): React.ReactElement | null {
     </>
   );
   const className = cn(
-    'shrink-0 inline-flex items-center gap-1 text-caption leading-4 px-1 py-0.5 rounded',
-    amber ? 'text-mf-warning' : 'text-muted-foreground',
+    'shrink-0 inline-flex items-center gap-1 text-xs leading-4 px-1 py-0.5 rounded',
+    amber ? 'text-warning' : 'text-muted-foreground',
     opensReport && 'hover:bg-accent transition-colors',
   );
 

@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { ControlUpdate } from '@qlan-ro/mainframe-types';
 import { PermissionGate, type ReplyFn } from '../PermissionGate';
@@ -90,17 +90,19 @@ describe('PermissionGate', () => {
     expect(pre.textContent).toContain('"command": "ls -la"');
   });
 
-  // --- Finding 6.8: JSON block uses the dark terminal palette, not a plain raised card ---
+  // --- The payload dump sits on `bg-muted`, the same surface ToolFallback's args
+  //     pre uses. It is JSON, not terminal output, so the terminal palette (which
+  //     stays bridge-owned for real terminals) is the wrong material. ---
 
-  it('the details JSON block uses the terminal bg/fg tokens', () => {
+  it('the details JSON block sits on the muted payload surface, not the terminal palette', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
     fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
 
     const pre = screen.getByTestId('chat-permission-details-pre');
-    expect(pre).toHaveClass('bg-mf-term-bg', 'text-mf-term-fg');
+    expect(pre).toHaveClass('bg-muted', 'text-foreground');
   });
 
-  // --- Finding 6.16: Details reveal mounts with an enter transition ---
+  // --- Details reveal mounts with an enter transition ---
 
   it('the details JSON block mounts with an enter transition', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
@@ -109,23 +111,24 @@ describe('PermissionGate', () => {
     expect(screen.getByTestId('chat-permission-details-pre')).toHaveClass('animate-in', 'fade-in-0');
   });
 
-  // --- Finding 6.2: ToolNameRow/DetailsDisclosure indent aligns to the head's own
-  //     49px title inset (px-3.5 tile-inset + 26px tile + gap-2.5), not pl-12 (64px) ---
+  // --- ToolNameRow/DetailsDisclosure indent aligns to the head's own title
+  //     column: the px-4 gutter + the size-6 tile + the gap-2.5 between them,
+  //     expressed once as GATE_BODY_INSET so the two cannot drift. ---
 
-  it('the tool-name row aligns to the head title inset (pl-[49px], not pl-12)', () => {
+  it('the tool-name row aligns to the head title column via GATE_BODY_INSET', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
     const row = screen.getByText('Bash').closest('div');
-    expect(row).toHaveClass('pl-[49px]');
+    expect(row).toHaveClass('pl-[calc(1rem+1.5rem+0.625rem)]');
     expect(row).not.toHaveClass('pl-12');
   });
 
-  // --- Finding 6.13: disclosure chevron is 11px, not 6px (size-3) ---
+  // --- disclosure chevron sits on the 12px step of the v2 scale ---
 
-  it('the details chevron is sized to the design spec (11px)', () => {
+  it('the details chevron is sized on the v2 scale (size-3)', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
     const toggle = screen.getByTestId('chat-permission-details-toggle');
     const chevron = toggle.querySelector('svg');
-    expect(chevron).toHaveClass('size-[11px]');
+    expect(chevron).toHaveClass('size-3');
   });
 
   // --- Behavior 3: deny button ---

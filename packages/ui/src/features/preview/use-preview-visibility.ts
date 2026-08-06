@@ -39,7 +39,7 @@ export function usePreviewVisibility(
   const [overlayMounted, setOverlayMounted] = useState(false);
   const surfaceVisible = useLayoutStore((s) => {
     const { layout } = s;
-    return (Array.isArray(layout.top) && layout.top.includes('run')) || layout.bottom === 'run';
+    return (Array.isArray(layout.top) && layout.top.includes('workspace')) || layout.bottom === 'workspace';
   });
   const prevVisibleRef = useRef<boolean | null>(null);
   const prevHandleRef = useRef<PreviewHandle | null>(null);

@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { ComponentProps } from 'react';
 import { MarkdownEditorTab } from '../MarkdownEditorTab';
 import { MarkdownPreview } from '../MarkdownPreview';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const MD = '# Title\n\nSome **bold** text.\n\n- one\n- two\n';
 
@@ -178,11 +183,11 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getByTestId('markdown-preview')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Title');
 
-    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
     expect(screen.queryByTestId('markdown-preview')).toBeNull();
     expect(screen.getByTestId('cm-editor-mock')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-preview'));
     expect(screen.getByTestId('markdown-preview')).toBeTruthy();
   });
 
@@ -193,14 +198,14 @@ describe('MarkdownEditorTab', () => {
     expect(screen.getAllByTestId('viewer-shell')).toHaveLength(1);
 
     // Source mode: still only ONE ViewerShell.
-    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
     expect(screen.getAllByTestId('viewer-shell')).toHaveLength(1);
   });
 
   it('ViewerShell is always present and contains the toggle in the header', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
     // Shell present in Source mode (not just the default Preview mode).
-    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
     expect(screen.getByTestId('viewer-shell-status')).toBeInTheDocument();
   });
@@ -209,7 +214,7 @@ describe('MarkdownEditorTab', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
 
     // Switch to Preview mode
-    fireEvent.click(screen.getByTestId('markdown-mode-preview'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-preview'));
 
     // ViewerShell should be present
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
@@ -232,7 +237,7 @@ describe('MarkdownEditorTab', () => {
   it('passes readOnly={true} to CmEditor when readOnly prop is set', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} readOnly />);
     // CmEditor only mounts in Source mode (Preview is the default).
-    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
 
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(true);
@@ -241,15 +246,19 @@ describe('MarkdownEditorTab', () => {
   it('passes readOnly={false} to CmEditor by default', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
     // CmEditor only mounts in Source mode (Preview is the default).
-    fireEvent.click(screen.getByTestId('markdown-mode-edit'));
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
 
     const lastProps = capturedCmEditorProps[capturedCmEditorProps.length - 1];
     expect(lastProps?.readOnly).toBe(false);
   });
 
-  it('Preview/Source toggle buttons use rounded-sm (6px) inner radius, not rounded-md (8px)', () => {
+  it('marks exactly one mode segment selected at a time', () => {
     render(<MarkdownEditorTab value={MD} path="/notes.md" onChange={() => {}} />);
-    expect(screen.getByTestId('markdown-mode-preview').className).toContain('rounded-sm');
-    expect(screen.getByTestId('markdown-mode-edit').className).toContain('rounded-sm');
+    expect(screen.getByTestId('markdown-mode-preview')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-selected', 'false');
+
+    fireEvent.mouseDown(screen.getByTestId('markdown-mode-edit'));
+    expect(screen.getByTestId('markdown-mode-edit')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('markdown-mode-preview')).toHaveAttribute('aria-selected', 'false');
   });
 });

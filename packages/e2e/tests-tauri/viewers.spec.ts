@@ -1,5 +1,5 @@
 /**
- * §viewers — Files-surface non-code viewers (spec #19 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
+ * §viewers — workspace-surface non-code viewers (spec #19 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
  *
  * UI-only: no recording needed (no agent turn). One project + one chat created
  * in `beforeAll`; fixture files (one per viewer kind) are written directly to
@@ -8,18 +8,27 @@
  * the file tree (`file-tree-row-${path}`) after revealing the Inspector
  * (`main-toolbar-inspector` — hidden by default), same as editor.spec.ts.
  *
+ * SEGMENTED TOGGLES ARE RADIX TABS NOW (2026-08-05 tab-body chrome pass). All three
+ * viewer toggles share `features/viewers/Segmented.tsx`, which renders a Radix
+ * `Tabs` List+Trigger pair (no TabsContent — the viewer body is the panel). A segment
+ * is therefore a `role="tab"` carrying `aria-selected` and `data-state`
+ * ("active"/"inactive"); the old `aria-pressed` button pair is gone, and so is the
+ * per-option `Hint` (every segment has a visible label, and `TooltipTrigger asChild`
+ * would have clobbered `data-state`) — so never assert a tooltip on one. Radix
+ * activates a trigger on mouse-DOWN, which a real-browser `.click()` delivers.
+ *
  * Testid reference (verified against packages/ui/src/features/viewers/):
  *   main-toolbar-inspector       — reveals the Inspector (file tree)
  *   file-tree-row-${path}        — a tree row; opens the file on click
- *   files-tab-strip              — tab strip root (role=tab pills)
+ *   WORKSPACE.strip              — a pane's tab-strip row (pane-id-keyed; see testids.ts)
  *   viewer-shell                 — ViewerShell root (wraps every non-code viewer)
  *   viewer-shell-status          — footer left status string
- *   viewer-shell-reveal          — footer/header "Reveal in file tree" button
+ *   viewer-shell-reveal          — header "Reveal in file tree" button
  *   viewer-image                 — ImageViewer root
  *   viewer-image-zoom-in / -out  — zoom buttons (disabled in Fit mode)
- *   viewer-image-fit-toggle / viewer-image-actual-toggle — Segmented Fit/100% (aria-pressed)
+ *   viewer-image-fit-toggle / viewer-image-actual-toggle — Segmented Fit/100% (data-state)
  *   viewer-svg                   — SvgViewer root
- *   viewer-svg-preview-toggle / viewer-svg-source-toggle — Segmented Preview/Code (aria-pressed)
+ *   viewer-svg-preview-toggle / viewer-svg-source-toggle — Segmented Preview/Code (data-state)
  *   viewer-svg-source            — raw <pre> source (Code mode only)
  *   viewer-csv                   — CsvViewer root
  *   viewer-csv-filter            — filter input
@@ -27,6 +36,7 @@
  *   viewer-csv-empty             — "no rows match" row (shown only when filter has no results)
  *   viewer-pdf                   — PdfViewer root
  *   viewer-pdf-fallback          — "Open externally" button (disabled only when fileUrl is null)
+ *   markdown-mode-preview        — MarkdownEditorTab's Segmented Preview segment
  *   markdown-preview             — rendered markdown body (MarkdownEditorTab default mode)
  *
  * GROUND-TRUTH FINDING (see report): `viewer-unsupported*` testids exist on
@@ -50,6 +60,7 @@ import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // Minimal 1x1 red PNG — same known-good fixture as composer.spec.ts's attachment test.
 // Raw bytes: 70 (verified) → formatBytes(70) === '0.1 KB'.
@@ -76,7 +87,7 @@ const FIXTURE_PDF =
 
 /** Locate a tab pill by its (unique-in-these-fixtures) visible title text. */
 function tabByTitle(page: Page, title: string) {
-  return page.locator('[data-testid="files-tab-strip"] [role="tab"]').filter({ hasText: title });
+  return page.locator(`${WORKSPACE.strip} [role="tab"]`).filter({ hasText: title });
 }
 
 /** The ViewerShell footer container (parent of the status testid) — holds both the
@@ -126,8 +137,8 @@ test.describe('§viewers', () => {
     await expect(tabByTitle(page, 'image.png')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-image')).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('viewer-image-fit-toggle')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('viewer-image-actual-toggle')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('viewer-image-fit-toggle')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('viewer-image-actual-toggle')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('viewer-image-zoom-in')).toBeDisabled();
     await expect(page.getByTestId('viewer-image-zoom-out')).toBeDisabled();
 
@@ -141,8 +152,8 @@ test.describe('§viewers', () => {
     await expect(tabByTitle(page, 'image.png')).toHaveAttribute('aria-selected', 'true');
 
     await page.getByTestId('viewer-image-actual-toggle').click();
-    await expect(page.getByTestId('viewer-image-actual-toggle')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('viewer-image-fit-toggle')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('viewer-image-actual-toggle')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('viewer-image-fit-toggle')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('viewer-image-zoom-in')).toBeEnabled();
     await expect(page.getByTestId('viewer-image-zoom-out')).toBeEnabled();
     await expect(viewerFooter(page)).toContainText('0.1 KB · 100%');
@@ -163,8 +174,8 @@ test.describe('§viewers', () => {
     await expect(tabByTitle(page, 'shape.svg')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-svg')).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('viewer-svg-preview-toggle')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('viewer-svg-source-toggle')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('viewer-svg-preview-toggle')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('viewer-svg-source-toggle')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('viewer-svg-source')).toHaveCount(0);
     // Preview mode renders the SVG via an <img src="blob:...">.
     await expect(page.locator('[data-testid="viewer-svg"] img[alt="SVG preview"]')).toBeVisible();
@@ -173,7 +184,7 @@ test.describe('§viewers', () => {
     await expect(viewerFooter(page)).toContainText('100×50 · 0.1 KB');
 
     await page.getByTestId('viewer-svg-source-toggle').click();
-    await expect(page.getByTestId('viewer-svg-source-toggle')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('viewer-svg-source-toggle')).toHaveAttribute('data-state', 'active');
     const source = page.getByTestId('viewer-svg-source');
     await expect(source).toBeVisible();
     await expect(source).toContainText('<rect width="100" height="50" fill="red"/>');
@@ -307,7 +318,7 @@ test.describe('§viewers', () => {
     await page.getByTestId('file-tree-row-notes.md').click();
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByTestId('markdown-mode-preview')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('markdown-mode-preview')).toHaveAttribute('data-state', 'active');
     await expect(page.getByTestId('markdown-preview')).toBeVisible();
     await expect(page.getByTestId('markdown-preview')).toContainText('Hello world.');
     await expect(page.getByTestId('editor-code')).toHaveCount(0);
@@ -322,7 +333,7 @@ test.describe('§viewers', () => {
     await expect(page.getByTestId('viewer-shell')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('viewer-shell-reveal').click();
-    // The reveal intent activates the Files surface but not the Inspector's own
+    // The reveal intent lights the workspace surface but not the Inspector's own
     // Files/Changes tab — switch to it to observe the highlight (same pattern
     // as files-tree.spec.ts's "revealing a file from its viewer" test).
     await page.getByTestId('inspector-tab-files').click();

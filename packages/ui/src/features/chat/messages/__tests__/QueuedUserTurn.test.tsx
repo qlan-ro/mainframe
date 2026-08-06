@@ -13,8 +13,9 @@
  *  P3 — position=2, total=3          → "2nd in line"
  *  P4 — position=3, total=3          → "3rd in line"
  *  P5 — position=4, total=4          → "4th in line"
- *  S1 — bubble ghost treatment       → chat-queued-bubble testid, dashed border,
- *                                       opacity-[0.82], break-words (todo #298)
+ *  S1 — bubble ghost treatment       → chat-queued-bubble testid, dashed hairline
+ *                                       (border-dashed border-border), opacity-80,
+ *                                       wrap-break-word (todo #298)
  *  A1 — QueuedAction has ghost border classes (border + border-transparent + hover:border-border)
  *  A2 — actions container has translate-x slide-in classes
  */
@@ -109,19 +110,21 @@ describe('QueuedUserTurn — hover-reveal ghost treatment', () => {
   it('bubble, Edit/Cancel actions, action-row gap, and slide-in classes are all present', () => {
     renderQueued({ content: 'some text' });
 
-    // S1 — bubble ghost treatment: dashed border + opacity + word-break containment
+    // S1 — bubble ghost treatment: dashed hairline + opacity + word-break containment
     const bubble = screen.getByTestId('chat-queued-bubble');
     expect(bubble).toBeInTheDocument();
     expect(bubble.className).toContain('border-dashed');
-    expect(bubble.className).toContain('opacity-[0.82]');
-    expect(bubble.className).toContain('break-words');
+    expect(bubble.className).toContain('border-border');
+    expect(bubble.className).toContain('opacity-80');
+    expect(bubble.className).toContain('wrap-break-word');
 
-    // A1 — QueuedAction ghost border classes (+ Edit-specific gap/radius)
+    // A1 — QueuedAction is now the kit's ghost/xs Button (own gap/radius geometry
+    // came with it; this component's remaining concern is just border-transparent).
     const editBtn = screen.getByTestId('chat-queued-edit');
     expect(editBtn.className).toContain('border');
     expect(editBtn.className).toContain('border-transparent');
-    expect(editBtn.className).toContain('gap-[4px]');
-    expect(editBtn.className).toContain('rounded-[7px]');
+    expect(editBtn).toHaveAttribute('data-variant', 'ghost');
+    expect(editBtn).toHaveAttribute('data-size', 'xs');
 
     const cancelBtn = screen.getByTestId('chat-queued-cancel');
     expect(cancelBtn.className).toContain('border');
@@ -133,10 +136,11 @@ describe('QueuedUserTurn — hover-reveal ghost treatment', () => {
     expect(actionsDiv!.className).toContain('translate-x-[6px]');
     expect(actionsDiv!.className).toContain('group-hover/queued:translate-x-0');
 
-    // AG — action-row-to-bubble gap matches the design (7.6)
+    // AG — action-row-to-bubble gap matches the design: v2's standard 8px scale
+    // (gap-2), not v1's compressed 8px (gap-4) — same rendered gap, new token.
     const row = actionsDiv?.parentElement;
     expect(row).not.toBeNull();
-    expect(row!.className).toContain('gap-4');
+    expect(row!.className).toContain('gap-2');
   });
 });
 

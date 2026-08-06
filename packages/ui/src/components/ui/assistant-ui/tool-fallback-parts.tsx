@@ -2,7 +2,7 @@
  * Sub-content slots for ToolFallback — split to keep parent file < 300 lines.
  * Args, Result, and Error are purely presentational; they only receive props.
  */
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
 import type { ToolCallMessagePartStatus } from '@assistant-ui/react';
 
 // ── Args ──────────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ export function ToolFallbackArgs({
       className={cn('aui-tool-fallback-args', className)}
       {...props}
     >
-      <pre className="aui-tool-fallback-args-value text-label text-muted-foreground whitespace-pre-wrap font-mono break-all">
+      <pre className="aui-tool-fallback-args-value text-xs text-muted-foreground whitespace-pre-wrap font-mono break-all">
         {argsText}
       </pre>
     </div>
@@ -44,8 +44,8 @@ export function ToolFallbackResult({
       className={cn('aui-tool-fallback-result border-t border-dashed border-border pt-2', className)}
       {...props}
     >
-      <p className="aui-tool-fallback-result-header text-label font-semibold text-muted-foreground mb-1">Result</p>
-      <pre className="aui-tool-fallback-result-content text-label text-muted-foreground whitespace-pre-wrap font-mono break-all">
+      <p className="aui-tool-fallback-result-header text-xs font-semibold text-muted-foreground mb-1">Result</p>
+      <pre className="aui-tool-fallback-result-content text-xs text-muted-foreground whitespace-pre-wrap font-mono break-all">
         {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
       </pre>
     </div>
@@ -76,8 +76,8 @@ export function ToolFallbackError({
       className={cn('aui-tool-fallback-error', className)}
       {...props}
     >
-      <p className="aui-tool-fallback-error-header text-label font-semibold text-destructive mb-1">{headerText}</p>
-      <p className="aui-tool-fallback-error-reason text-label text-muted-foreground">{errorText}</p>
+      <p className="aui-tool-fallback-error-header text-xs font-semibold text-destructive mb-1">{headerText}</p>
+      <p className="aui-tool-fallback-error-reason text-xs text-muted-foreground">{errorText}</p>
     </div>
   );
 }

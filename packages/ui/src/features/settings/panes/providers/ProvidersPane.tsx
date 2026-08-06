@@ -5,10 +5,13 @@ import { useAdapters } from '../../../../store/adapters';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
 import { ProviderConfigForm } from './ProviderConfigForm';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 
 interface ProvidersPaneProps {
   port: number;
 }
+
+const AUTO = '__auto__';
 
 /** Which adapter seeds a new chat. `null` (the "Auto" option) auto-picks the first installed adapter. */
 function DefaultProviderPicker({ port }: { port: number }) {
@@ -16,8 +19,8 @@ function DefaultProviderPicker({ port }: { port: number }) {
   const loadGeneral = useSettingsStore((s) => s.loadGeneral);
   const installed = useAdapters().filter((a) => a.installed);
 
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value || null;
+  function handleChange(v: string) {
+    const value = v === AUTO ? null : v;
     updateGeneralSettings(port, { defaultAdapterId: value })
       .then(() => loadGeneral({ ...useSettingsStore.getState().general, defaultAdapterId: value }))
       .catch((err: unknown) => console.warn('[settings/ProvidersPane]', err));
@@ -25,20 +28,22 @@ function DefaultProviderPicker({ port }: { port: number }) {
 
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-body text-muted-foreground">Default provider</span>
-      <select
-        data-testid="settings-default-provider-select"
-        value={defaultAdapterId ?? ''}
-        onChange={handleChange}
-        className="h-[30px] rounded border border-input bg-card px-2 text-body text-foreground outline-none focus:border-primary"
-      >
-        <option value="">Auto (first installed)</option>
-        {installed.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
-        ))}
-      </select>
+      <span className="text-sm text-muted-foreground">Default provider</span>
+      <Select value={defaultAdapterId ?? AUTO} onValueChange={handleChange}>
+        <SelectTrigger size="sm" data-testid="settings-default-provider-select">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={AUTO} data-testid="settings-default-provider-option-auto">
+            Auto (first installed)
+          </SelectItem>
+          {installed.map((a) => (
+            <SelectItem key={a.id} value={a.id} data-testid={`settings-default-provider-option-${a.id}`}>
+              {a.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -49,17 +54,17 @@ function ProviderHeader({ adapter }: { adapter: AdapterInfo }) {
     <div data-testid={`settings-provider-header-${adapter.id}`} className="flex items-center gap-3">
       <span
         className={cn(
-          'inline-flex size-[30px] shrink-0 items-center justify-center rounded-[8px] text-heading font-bold text-white',
+          'inline-flex size-[30px] shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white',
           providerDot(adapter.id),
         )}
       >
         {adapter.name.charAt(0).toUpperCase()}
       </span>
       <div className="min-w-0">
-        <h3 className="text-title font-bold text-foreground">{adapter.name}</h3>
+        <h3 className="text-base font-semibold text-foreground">{adapter.name}</h3>
         <div className="flex items-center gap-1.5">
-          <span className={cn('size-1.5 rounded-full', adapter.installed ? 'bg-mf-success' : 'bg-mf-text-3')} />
-          <span className="text-label text-muted-foreground">
+          <span className={cn('size-1.5 rounded-full', adapter.installed ? 'bg-success' : 'bg-muted-foreground')} />
+          <span className="text-xs text-muted-foreground">
             {adapter.installed ? 'Detected on PATH' : 'Not installed'}
           </span>
         </div>
@@ -80,10 +85,10 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
     <div data-testid="settings-pane-providers" className="flex flex-col gap-4 p-4">
       <DefaultProviderPicker port={port} />
       {!selectedProvider && (
-        <p className="text-body text-muted-foreground">Select a provider from the sidebar to configure it.</p>
+        <p className="text-sm text-muted-foreground">Select a provider from the sidebar to configure it.</p>
       )}
       {selectedProvider && !adapter && adapters.length > 0 && (
-        <p className="text-body text-muted-foreground">Provider &ldquo;{selectedProvider}&rdquo; not found.</p>
+        <p className="text-sm text-muted-foreground">Provider &ldquo;{selectedProvider}&rdquo; not found.</p>
       )}
       {selectedProvider && adapter && (
         <>

@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { ScanSearch } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
 import { selectCopiedCount, useSetupAdvisorStore } from './use-setup-advisor-store';
@@ -75,14 +75,15 @@ export function SetupAdvisorHost() {
     >
       <DialogContent
         data-testid="automation-recommender-sheet"
-        className="flex max-h-[85vh] w-full max-w-[640px] flex-col gap-0 p-0"
+        className="flex max-h-[85vh] w-full flex-col gap-0 p-0 sm:max-w-[640px]"
+        closeButtonClassName="top-1.5"
       >
-        {/* pr-9 clears the dialog's built-in close button (26px at right-3). */}
-        <DialogHeader className="shrink-0 flex-row items-center gap-2 border-b border-border px-4 py-3 pr-9">
-          <DialogTitle className="flex min-w-0 items-center gap-2 text-heading font-bold">
-            <ScanSearch size={14} className="shrink-0 text-primary" aria-hidden />
+        {/* pr-12 clears the dialog's built-in close button. */}
+        <DialogHeader className="shrink-0 flex-row items-center gap-2 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex min-w-0 items-center gap-2">
+            <ScanSearch className="size-3.5 shrink-0 text-primary" aria-hidden />
             Setup Advisor
-            <span className="min-w-0 truncate text-body font-medium text-muted-foreground">{projectName}</span>
+            <span className="min-w-0 truncate text-sm font-normal text-muted-foreground">{projectName}</span>
           </DialogTitle>
           <SectionSwitcher section={section} onSelect={setSection} />
         </DialogHeader>

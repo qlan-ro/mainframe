@@ -3,13 +3,18 @@
  *
  * `ImageViewer.test.tsx` mocks `ZoomableImage` away for its own rendering
  * contract, so it never proves the real `ZoomableImage → LightboxSurface →
- * ImageContextMenu` chain reaches the Files surface. This suite renders the
+ * ImageContextMenu` chain reaches the workspace surface. This suite renders the
  * real `ZoomableImage` (no mock) and asserts the menu opens, closing the gap
  * without pulling the Radix dialog into the mocked regression suite.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { ImageViewer } from '../ImageViewer';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 vi.mock('@/store/surface-intents', () => ({
   emitSurfaceIntent: vi.fn(),

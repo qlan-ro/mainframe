@@ -10,6 +10,7 @@
  * "still fetching," "the fetch failed," and "genuinely no automations yet."
  * BlankState only renders once loading has finished without an error.
  */
+import { Button } from '@v2/components/ui/button';
 import React from 'react';
 import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
@@ -22,9 +23,10 @@ import { BlankState } from './BlankState';
 function mostRecentRun(runs: AutomationRunSummary[], automationId: string): AutomationRunSummary | undefined {
   return runs
     .filter((r) => r.automationId === automationId)
-    .reduce<
-      AutomationRunSummary | undefined
-    >((latest, r) => (!latest || r.startedAt > latest.startedAt ? r : latest), undefined);
+    .reduce<AutomationRunSummary | undefined>(
+      (latest, r) => (!latest || r.startedAt > latest.startedAt ? r : latest),
+      undefined,
+    );
 }
 
 export function LibraryList(): React.ReactElement {
@@ -46,7 +48,7 @@ export function LibraryList(): React.ReactElement {
           className="flex h-full flex-col items-center justify-center gap-[8px]"
         >
           <Loader2 size={16} className="animate-spin text-muted-foreground" aria-hidden />
-          <span className="text-label text-muted-foreground">Loading automations…</span>
+          <span className="text-xs text-muted-foreground">Loading automations…</span>
         </div>
       </div>
     );
@@ -60,16 +62,11 @@ export function LibraryList(): React.ReactElement {
           className="flex h-full flex-col items-center justify-center gap-[8px] p-[32px] text-center"
         >
           <TriangleAlert size={20} className="text-destructive" aria-hidden />
-          <span className="text-body font-semibold text-foreground">Couldn't load your automations</span>
-          <span className="max-w-[360px] text-label text-muted-foreground">{error}</span>
-          <button
-            type="button"
-            data-testid="automations-library-retry"
-            onClick={() => void loadAll()}
-            className="mt-[4px] inline-flex h-[30px] items-center gap-[6px] rounded-md bg-primary px-[13px] text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
+          <span className="text-sm font-semibold text-foreground">Couldn't load your automations</span>
+          <span className="max-w-[360px] text-xs text-muted-foreground">{error}</span>
+          <Button size="sm" data-testid="automations-library-retry" onClick={() => void loadAll()} className="mt-1">
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -91,27 +88,22 @@ export function LibraryList(): React.ReactElement {
           className="flex shrink-0 items-center gap-[8px] border-b border-destructive/30 bg-destructive/8 px-[16px] py-[8px]"
         >
           <TriangleAlert size={12} className="shrink-0 text-destructive" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-caption text-foreground">{error}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{error}</span>
           <button
             type="button"
             data-testid="automations-library-error-retry"
             onClick={() => void loadAll()}
-            className="shrink-0 text-caption font-semibold text-destructive hover:underline"
+            className="shrink-0 text-xs font-semibold text-destructive hover:underline"
           >
             Retry
           </button>
         </div>
       )}
       <div className="flex shrink-0 items-center justify-end gap-[10px] border-b border-border px-[16px] py-[14px]">
-        <button
-          type="button"
-          data-testid="automations-library-new"
-          onClick={handleBuild}
-          className="inline-flex h-[30px] items-center gap-[6px] rounded-md bg-primary px-[13px] text-label font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <Plus size={12} aria-hidden />
+        <Button size="sm" data-testid="automations-library-new" onClick={handleBuild}>
+          <Plus aria-hidden />
           New
-        </button>
+        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {definitions.map((automation: AutomationSummary) => (

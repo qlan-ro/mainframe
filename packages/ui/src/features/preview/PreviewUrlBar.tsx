@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
-import { PreviewIconButton } from './PreviewIconButton';
+import { Hint } from '@v2/components/ui/hint';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@v2/components/ui/input-group';
 import { usePreviewAddress } from './use-preview-address';
 import { normalizePreviewUrl } from './normalize-url';
 import { useHost } from '@/lib/host';
@@ -72,55 +73,66 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
   }
 
   return (
-    <div className="min-w-0 flex-1 flex items-center gap-0.5 h-[26px] rounded-md border-[0.5px] border-border bg-card pl-0.5 pr-[4px]">
-      <PreviewIconButton testId="preview-url-reload" title="Reload preview" onClick={handleReload} disabled={!canAct}>
-        <RotateCw size={14} />
-      </PreviewIconButton>
+    <InputGroup className="h-7 min-w-0 flex-1">
+      <InputGroupAddon className="gap-1">
+        <Hint label="Reload preview">
+          <InputGroupButton
+            data-testid="preview-url-reload"
+            size="icon-xs"
+            aria-label="Reload preview"
+            onClick={handleReload}
+            disabled={!canAct}
+          >
+            <RotateCw />
+          </InputGroupButton>
+        </Hint>
+        {/* Live-address indicator: a pulse while the bar is wired to a webview. */}
+        <span
+          className={enabled ? 'size-1.5 animate-pulse rounded-full bg-success' : 'size-1.5 rounded-full bg-border'}
+          aria-hidden
+        />
+      </InputGroupAddon>
 
-      <span
-        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mx-0.5 ${
-          enabled ? 'bg-mf-success animate-pulse' : 'bg-mf-text-4'
-        }`}
-      />
-
-      <input
+      <InputGroupInput
         data-testid="preview-url-input"
         value={draft}
         disabled={!enabled}
         spellCheck={false}
         autoComplete="off"
         placeholder="localhost:…"
+        aria-invalid={invalid}
         onChange={(e) => {
           setDraft(e.target.value);
           setInvalid(false);
         }}
         onKeyDown={handleKeyDown}
-        className={`flex-1 min-w-0 bg-transparent outline-none font-mono text-body px-[4px] ${
-          invalid
-            ? 'text-destructive ring-1 ring-destructive rounded-sm'
-            : enabled
-              ? 'text-foreground'
-              : 'text-muted-foreground'
-        }`}
+        className="font-mono text-sm"
       />
 
-      <PreviewIconButton
-        testId="preview-url-open-browser"
-        title="Open in browser"
-        onClick={handleOpenBrowser}
-        disabled={!canAct}
-      >
-        <ExternalLink size={14} />
-      </PreviewIconButton>
-
-      <PreviewIconButton
-        testId="preview-url-clear-cache"
-        title="Clear cache"
-        onClick={handleClearCache}
-        disabled={!canAct}
-      >
-        <Eraser size={14} />
-      </PreviewIconButton>
-    </div>
+      <InputGroupAddon align="inline-end" className="gap-1">
+        <Hint label="Open in browser">
+          <InputGroupButton
+            data-testid="preview-url-open-browser"
+            size="icon-xs"
+            aria-label="Open in browser"
+            onClick={handleOpenBrowser}
+            disabled={!canAct}
+          >
+            <ExternalLink />
+          </InputGroupButton>
+        </Hint>
+        <Hint label="Clear cache">
+          <InputGroupButton
+            data-testid="preview-url-clear-cache"
+            size="icon-xs"
+            aria-label="Clear cache"
+            onClick={handleClearCache}
+            disabled={!canAct}
+          >
+            <Eraser />
+          </InputGroupButton>
+        </Hint>
+      </InputGroupAddon>
+    </InputGroup>
   );
 }

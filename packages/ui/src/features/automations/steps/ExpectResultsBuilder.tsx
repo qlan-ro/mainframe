@@ -10,8 +10,9 @@
  * itself, so — same documented exception as `ConditionRow` — the caller's
  * `testId` is index-keyed.
  */
+import { Input } from '@v2/components/ui/input';
 import { Plus, X } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 import type { AutomationExpectedOutput } from '../contract';
 import { OptionsEditor } from './OptionsEditor';
 
@@ -49,12 +50,12 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
           className="flex flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-card p-2"
         >
           <div className="flex items-center gap-2">
-            <input
+            <Input
               data-testid={`${testId}-key-${i}`}
               value={row.key}
               onChange={(e) => setRow(i, { key: e.target.value })}
               placeholder="key"
-              className="h-[26px] flex-1 rounded-md border-[0.5px] border-input bg-card px-2 font-mono text-caption text-foreground outline-none placeholder:text-muted-foreground"
+              className="h-7 flex-1 px-2 font-mono text-xs"
             />
             <Select
               value={row.type}
@@ -63,7 +64,7 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
                 setRow(i, { type, options: type === 'choice' ? (row.options ?? []) : undefined });
               }}
             >
-              <SelectTrigger data-testid={`${testId}-type-${i}`} className="h-[26px] w-[100px] font-mono text-caption">
+              <SelectTrigger data-testid={`${testId}-type-${i}`} className="h-[26px] w-[100px] font-mono text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -104,7 +105,7 @@ export function ExpectResultsBuilder({ expects, onChange, testId }: ExpectResult
         type="button"
         data-testid={`${testId}-add`}
         onClick={addRow}
-        className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-mf-border-hover px-2.5 py-1 text-caption font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-dashed border-input px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={10} aria-hidden />
         Add a result

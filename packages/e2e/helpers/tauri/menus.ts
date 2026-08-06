@@ -1,0 +1,52 @@
+import { expect, type Page } from '@playwright/test';
+
+/**
+ * Leave no Radix menu behind. Two hazards make this a hard requirement between
+ * steps that both open a menu — both measured in a live Chromium (2026-08-06),
+ * both invisible in jsdom:
+ *
+ *  1. A modal menu owns `<html>`'s pointer events while it is open, so a leftover
+ *     menu makes the NEXT trigger click unhittable ("waiting for element to be
+ *     visible, enabled and stable" on an element that is plainly there).
+ *  2. Radix keeps a CLOSING menu's content mounted through its exit animation. A
+ *     trigger click inside that window is SWALLOWED — the menu never reopens
+ *     (`aria-expanded` stays false; the click after it works) — and a testid
+ *     inside the dying menu still resolves, so the next menu's identical item
+ *     trips strict mode with "resolved to 2 elements".
+ *
+ * `[role=menu]` covers dropdown, context and sub menus in both render trees, so
+ * one Escape per nesting level plus the count assertion is the whole contract.
+ * Never substitute a `waitForTimeout` here: the wait is on state that Radix
+ * actually reports.
+ */
+export async function closeMenus(page: Page, maxLayers = 4): Promise<void> {
+  const menus = page.locator('[role="menu"]');
+  for (let layer = 0; layer < maxLayers && (await menus.count()) > 0; layer++) {
+    await page.keyboard.press('Escape');
+    // Each press needs its own settle before the count is read again. Firing them
+    // back-to-back sends every Escape into the same animation window, where Radix has
+    // already handled the first and ignores the rest — so the loop burns its budget
+    // and the menu is still up. Measured: one Escape plus a beat closes reliably.
+    await menus
+      .first()
+      .waitFor({ state: 'detached', timeout: 1_500 })
+      .catch(() => {
+        /* expected when an inner layer closed and an outer one is still up */
+      });
+  }
+  await expect(menus).toHaveCount(0, { timeout: 5_000 });
+}
+
+/**
+ * Wait until no dialog SCRIM is left on the page.
+ *
+ * A dialog's content and its overlay are separate elements with separate exit
+ * animations, so the content can unmount while the `bg-black/10` scrim is still
+ * fading. Assert the dialog's own testid reaches 0 and you can still open the next
+ * dialog UNDERNEATH that dying scrim: Playwright then reports
+ * `data-slot="dialog-overlay" intercepts pointer events` on a button it can see
+ * perfectly well. Between two dialogs in one describe, wait for this too.
+ */
+export async function waitForDialogScrimsGone(page: Page): Promise<void> {
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0, { timeout: 5_000 });
+}

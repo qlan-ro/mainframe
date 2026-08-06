@@ -145,7 +145,7 @@ describe('TutorialOverlay', () => {
   it('last step shows "Done" button label and clicking it calls store.complete', async () => {
     mockStep = 3; // last step (0-indexed)
     const user = userEvent.setup();
-    const anchor = insertAnchor('run');
+    const anchor = insertAnchor('workspace');
     render(<TutorialOverlay />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
@@ -214,7 +214,7 @@ describe('TutorialOverlay', () => {
     // transitions to the un-anchorable step.
     mockStep = 3;
     const user = userEvent.setup();
-    const anchor = insertAnchor('run');
+    const anchor = insertAnchor('workspace');
     const { rerender } = render(<TutorialOverlay />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));

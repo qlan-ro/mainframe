@@ -1,6 +1,6 @@
 import { ShieldIcon, PencilIcon, ZapIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
+import { cn } from '@v2/lib/utils';
+import { Hint } from '@v2/components/ui/hint';
 import type { ComponentType } from 'react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 
@@ -22,9 +22,17 @@ export interface PlanExecModeControlProps {
   onChange: (m: ExecutionMode) => void;
 }
 
+/**
+ * Deliberately NOT a `ToggleGroup`: every segment is Hint-wrapped, and
+ * `TooltipTrigger asChild` overwrites the child's `data-state`, so the
+ * primitive's whole `data-[state=on]:*` treatment would be dead and re-specified
+ * here anyway. Radix's `type="single"` also swaps `aria-pressed` for
+ * `role="radio"`/`aria-checked`, which an e2e case pins. Chrome is the ledger's
+ * segmented recipe: a `bg-muted` pad, active item `bg-background shadow-sm`.
+ */
 export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProps) {
   return (
-    <div className="inline-flex gap-0.5 rounded-md border border-border bg-mf-raised p-0.5">
+    <div className="inline-flex gap-0.5 rounded-md border border-border bg-muted p-0.5">
       {EXEC_MODE_OPTIONS.map(({ id, label, Icon, desc }) => {
         const selected = value === id;
         const isYolo = id === 'yolo';
@@ -38,13 +46,13 @@ export function PlanExecModeControl({ value, onChange }: PlanExecModeControlProp
               onClick={() => onChange(id)}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
-                'text-label font-semibold transition-colors',
+                'text-xs font-semibold transition-colors',
                 selected && isYolo && 'bg-background text-destructive shadow-sm',
                 selected && !isYolo && 'bg-background text-primary shadow-sm',
                 !selected && 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Icon className="size-[12px] shrink-0" />
+              <Icon className="size-3 shrink-0" />
               {label}
             </button>
           </Hint>

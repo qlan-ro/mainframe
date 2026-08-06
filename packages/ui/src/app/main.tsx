@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '../styles/globals.css';
+import '../styles/app.css';
 import { applyStoredTheme, applyStoredScale } from '../store/theme';
 import { TooltipProvider, TOOLTIP_DELAY_MS } from '../components/ui/tooltip';
 import { getHost, HostProvider } from '../lib/host';

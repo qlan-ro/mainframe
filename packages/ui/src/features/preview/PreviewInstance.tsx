@@ -38,7 +38,7 @@ export function PreviewInstance({ tabId, config, visible, scopeKey, port: portPr
   const daemonPort = useDaemonPort();
   const identity = useActiveIdentity();
   const chatId = identity.chatId;
-  // projectId arrives as a prop (RunSurface), but fall back to the live active
+  // projectId arrives as a prop (WorkspaceSurface), but fall back to the live active
   // identity so a launch never silently no-ops on an undefined prop.
   const effectiveProjectId = projectId ?? identity.projectId;
 

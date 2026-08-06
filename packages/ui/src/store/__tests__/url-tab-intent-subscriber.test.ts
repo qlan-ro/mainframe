@@ -23,7 +23,7 @@ import { subscribeToUrlTabIntents } from '../url-tab-intent-subscriber';
 import { clearUrlTunnelConsumers, registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
 import type { RunTab } from '../run-pane';
 
-const FRESH_LAYOUT = { top: ['chat', 'run'] as const, bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['chat', 'workspace'] as const, bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
 function resetLayout(): void {
   useLayoutStore.setState({
@@ -98,7 +98,7 @@ describe('subscribeToUrlTabIntents — creation', () => {
     emitSurfaceIntent({ type: 'open-url-tab', url: 'http://localhost:5173/' });
 
     const { layout } = useLayoutStore.getState();
-    expect(layout.top.includes('run') || layout.bottom === 'run').toBe(true);
+    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true);
     unsub();
   });
 
@@ -176,13 +176,15 @@ describe('URL tab tunnel release — the four store-level removal sites', () => 
     expect(stopPortTunnel).toHaveBeenCalledWith(31415, 5173);
   });
 
-  it("toggleSurface('run') while Run is lit stops an exclusively-started tunnel", () => {
+  // Hiding the workspace is not closing it: the panes (and their tunnels) survive
+  // so re-showing the surface returns the user's tabs. Only real closes release.
+  it("toggleSurface('workspace') hides the surface without stopping the tunnel", () => {
     seedRun([{ id: 'url-a', kind: 'url', title: 'a', url: 'http://localhost:5173/a' }]);
     registerUrlTunnelConsumer('url-a', { port: 5173, started: true, daemonHttpPort: 31415 });
 
-    useLayoutStore.getState().toggleSurface('run');
+    useLayoutStore.getState().toggleSurface('workspace');
 
-    expect(stopPortTunnel).toHaveBeenCalledTimes(1);
-    expect(stopPortTunnel).toHaveBeenCalledWith(31415, 5173);
+    expect(stopPortTunnel).not.toHaveBeenCalled();
+    expect(useLayoutStore.getState().run?.panes[0]!.tabs.map((t) => t.id)).toEqual(['url-a']);
   });
 });

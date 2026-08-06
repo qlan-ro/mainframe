@@ -4,27 +4,37 @@
  * Spec: docs/plans/2026-07-03-tauri-e2e-test-plan.md #23 (Cluster D).
  * UI-only surface — no recording needed (no agent turn is ever sent).
  *
- * Source: packages/ui/src/features/palette/{SpotlightPalette,SpotlightRow,
- * palette-modes,palette-commands,use-spotlight-results}.
+ * Source: the render layer is now the v2 palette
+ * (packages/ui/src/v2/features/palette/{SpotlightPalette,SpotlightRow}) over the
+ * unchanged shared logic (packages/ui/src/features/palette/{palette-modes,
+ * palette-commands,use-spotlight-results}).
+ *
+ * The v2 palette runs on the stock cmdk `Command` engine with
+ * `shouldFilter={false}` — the daemon still does the matching, and cmdk only
+ * contributes the input, listbox semantics and keyboard navigation the v1 version
+ * hand-rolled. Two consequences for this spec:
+ *   - a result row is a `CommandItem`, so the active row is marked by cmdk's
+ *     `data-selected` ("true"/"false"); the v1 hand-rolled `data-active` is gone;
+ *   - the empty state is cmdk's `CommandEmpty`, which the palette testids by
+ *     LOAD STATE: `search-palette-loading` while a fetch is in flight, otherwise
+ *     `search-palette-empty` (so `search-palette-loading` — previously absent from
+ *     source — does exist now).
  *
  * Testid reference (verified against source):
  *   main-toolbar-search                     — toolbar button that opens the palette (click fallback)
- *   search-palette                          — dialog root
+ *   search-palette                          — the `Command` root inside CommandDialog
  *   search-palette-input                    — text field
  *   search-palette-mode-chip                — mode chip, only rendered for `>`/`@`/`#`
- *   search-palette-empty                    — "No matches" empty state
+ *   search-palette-empty / -loading         — CommandEmpty, keyed by load state
+ *   search-palette-footer                   — ↑↓/⏎/esc hint row
  *   search-palette-file-row-<path>          — default-mode file result
  *   search-palette-session-row-<remoteId>   — default-mode session result
- *   search-palette-command-row-<id>         — `>` command result (ids: review/settings/sidebar/inspector/files/run)
+ *   search-palette-command-row-<id>         — `>` command result (ids:
+ *                                             review/settings/sidebar/inspector/workspace —
+ *                                             the old `files`/`run` ids merged into `workspace`)
  *   search-palette-change-row-<path>        — `#` changed-file result
- *   files-tab-strip / diff-tab              — Files-surface targets a row selection opens
- *   sessions-row / sessions-new-button      — sidebar chrome used to observe command effects
- *
- * NOT found in source (pre-work punch-list item #6, not added here — out of scope
- * for this spec per the shared brief "never modify packages/ui"): a palette
- * loading-state testid. `use-spotlight-results.test.tsx`/`SpotlightPalette.test.tsx`
- * reference `search-palette-loading`, but no such testid exists in
- * `SpotlightPalette.tsx` — not asserted here.
+ *   WORKSPACE.strip / diff-tab              — workspace-surface targets a row selection opens
+ *   sessions-row / show-sidebar-button      — shell chrome used to observe command effects
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -33,6 +43,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
@@ -139,7 +150,7 @@ test.describe('§spotlight', () => {
     await closePaletteIfOpen(page);
   });
 
-  test('clicking a file row opens it in the Files surface', async () => {
+  test('clicking a file row opens it in the workspace', async () => {
     const { page } = app;
     await openPalette(page);
     await page.getByTestId('search-palette-input').fill('greeter');
@@ -148,7 +159,7 @@ test.describe('§spotlight', () => {
     await row.click();
 
     await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
-    const activeTab = page.getByTestId('files-tab-strip').locator('[role="tab"][aria-selected="true"]');
+    const activeTab = page.locator(WORKSPACE.strip).locator('[role="tab"][aria-selected="true"]');
     await expect(activeTab).toContainText(UNIQUE_FILE, { timeout: 10_000 });
   });
 
@@ -165,6 +176,11 @@ test.describe('§spotlight', () => {
     await expect(activeRow).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
+  // Observed via `show-sidebar-button` (MainToolbar, rendered only while the panel
+  // is hidden) rather than the sidebar's own contents: the v2 `Sidebar` collapses by
+  // animating its width to 0 with `overflow-hidden` and keeps the full-width content
+  // mounted inside the clip, so `sessions-new-button` still has a bounding box and
+  // Playwright would never call it hidden.
   test('`>` command mode runs a command (Toggle Sidebar)', async () => {
     const { page } = app;
     await openPalette(page);
@@ -176,12 +192,14 @@ test.describe('§spotlight', () => {
     await commandRow.click();
 
     await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
-    await expect(page.getByTestId('sessions-new-button')).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByTestId('show-sidebar-button')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute('data-state', 'collapsed');
 
     // Restore sidebar visibility for the remaining tests in this describe.
     await openPalette(page);
     await page.getByTestId('search-palette-input').fill('>sidebar');
     await page.getByTestId('search-palette-command-row-sidebar').click();
+    await expect(page.getByTestId('show-sidebar-button')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('sessions-new-button')).toBeVisible({ timeout: 5_000 });
   });
 
@@ -226,12 +244,14 @@ test.describe('§spotlight', () => {
 
     const rows = page.locator('[data-testid^="search-palette-file-row-widget-"]');
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
-    await expect(rows.nth(0)).toHaveAttribute('data-active', 'true');
-    await expect(rows.nth(1)).toHaveAttribute('data-active', 'false');
+    // cmdk owns row selection now (`data-selected`); the v1 palette's own
+    // isActive/rowRef plumbing and its `data-active` attribute went with it.
+    await expect(rows.nth(0)).toHaveAttribute('data-selected', 'true');
+    await expect(rows.nth(1)).toHaveAttribute('data-selected', 'false');
 
     await page.keyboard.press('ArrowDown');
-    await expect(rows.nth(1)).toHaveAttribute('data-active', 'true');
-    await expect(rows.nth(0)).toHaveAttribute('data-active', 'false');
+    await expect(rows.nth(1)).toHaveAttribute('data-selected', 'true');
+    await expect(rows.nth(0)).toHaveAttribute('data-selected', 'false');
 
     // State the confirm target from the row actually made active by the key
     // press — not from an assumed search-result order.
@@ -240,7 +260,7 @@ test.describe('§spotlight', () => {
 
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
-    const activeTab = page.getByTestId('files-tab-strip').locator('[role="tab"][aria-selected="true"]');
+    const activeTab = page.locator(WORKSPACE.strip).locator('[role="tab"][aria-selected="true"]');
     await expect(activeTab).toContainText(expectedFile, { timeout: 10_000 });
   });
 

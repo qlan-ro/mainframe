@@ -32,7 +32,7 @@ vi.mock('@/lib/toast', () => ({
 import { SkillsSection } from '../SkillsSection';
 import * as skillsCliApi from '@/lib/api/skills-cli';
 import { mfToast } from '@/lib/toast';
-import { mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
+import { mockCatalogUnavailable, mockManifest, openInstallScopeMenu, resetSkillsStores } from './harness';
 
 beforeEach(() => {
   resetSkillsStores();
@@ -57,8 +57,8 @@ describe('SkillsSection — install success', () => {
     fireEvent.click(await screen.findByTestId('skills-section-skill-option-shadcn'));
 
     vi.mocked(skillsCliApi.getSkillsCliManifest).mockClear();
-    fireEvent.click(screen.getByTestId('skills-section-install'));
-    fireEvent.click(await screen.findByTestId('skills-section-install-scope-global'));
+    await openInstallScopeMenu();
+    fireEvent.click(screen.getByTestId('skills-section-install-scope-global'));
 
     await waitFor(() => expect(skillsCliApi.installSkills).toHaveBeenCalledTimes(1));
     expect(skillsCliApi.installSkills).toHaveBeenCalledWith('proj-a', 'shadcn/ui', ['shadcn'], 'global', undefined);

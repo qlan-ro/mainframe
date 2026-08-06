@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, type MouseEvent, type ReactNode } from 'react';
-import { DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { DialogContent, DialogTitle } from '@v2/components/ui/dialog';
 import { ImageContextMenu } from './ImageContextMenu';
 
 interface LightboxSurfaceProps {
@@ -27,7 +27,10 @@ export function LightboxSurface({ testId, imageTestId, src, alt = '', onDismiss,
     <DialogContent
       data-testid={testId}
       onClick={handleClick}
-      className="max-w-[92vw] border-none bg-transparent p-0 shadow-none"
+      // Bare-frame variant: the image IS the dialog, so the panel chrome
+      // (fill, ring, padding, radius) is stripped and only the close button
+      // and scrim remain.
+      className="max-w-[92vw] rounded-none bg-transparent p-0 shadow-none ring-0 sm:max-w-[92vw]"
     >
       <DialogTitle className="sr-only">Image preview</DialogTitle>
       <ImageContextMenu src={src}>

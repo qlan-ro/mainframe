@@ -80,65 +80,27 @@ describe("theme store — setMode('dark') updates mode and persists", () => {
 });
 
 // ---------------------------------------------------------------------------
-// theme store — scheme + windowStyle axes
+// theme store — applyStoredTheme
 // ---------------------------------------------------------------------------
 
-describe('theme store — scheme + windowStyle axes', () => {
+describe('theme store — applyStoredTheme', () => {
   beforeEach(() => {
     localStorage.clear();
-    // reset store to freshly-read defaults
-    useTheme.setState({ mode: 'light', scheme: 'classic', windowStyle: 'glass' });
+    useTheme.setState({ mode: 'light' });
     document.documentElement.className = '';
     document.documentElement.removeAttribute('data-scheme');
   });
 
-  it('defaults: classic scheme, glass window style', () => {
-    expect(useTheme.getState().scheme).toBe('classic');
-    expect(useTheme.getState().windowStyle).toBe('glass');
-  });
-
-  it('setScheme persists and updates', () => {
-    useTheme.getState().setScheme('ocean');
-    expect(useTheme.getState().scheme).toBe('ocean');
-    expect(localStorage.getItem('mf-scheme')).toBe('ocean');
-  });
-
-  it('setWindowStyle persists and updates', () => {
-    useTheme.getState().setWindowStyle('split');
-    expect(useTheme.getState().windowStyle).toBe('split');
-    expect(localStorage.getItem('mf-window-style')).toBe('split');
-  });
-
-  it('toggle flips mode but preserves scheme', () => {
-    useTheme.getState().setScheme('velvet');
-    useTheme.getState().toggle();
-    expect(useTheme.getState().mode).toBe('dark');
-    expect(useTheme.getState().scheme).toBe('velvet');
-  });
-
-  it('applyStoredTheme writes dark class + data-scheme from localStorage', () => {
+  it('writes the dark class from localStorage', () => {
     localStorage.setItem('mf-theme', 'dark');
-    localStorage.setItem('mf-scheme', 'ocean');
     applyStoredTheme();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(document.documentElement.getAttribute('data-scheme')).toBe('ocean');
   });
 
-  it('applyStoredTheme removes data-scheme for classic', () => {
+  it('removes a lingering data-scheme from an older build unconditionally', () => {
     document.documentElement.setAttribute('data-scheme', 'ocean');
-    localStorage.setItem('mf-scheme', 'classic');
     applyStoredTheme();
     expect(document.documentElement.hasAttribute('data-scheme')).toBe(false);
-  });
-
-  it('invalid persisted scheme and windowStyle fall back to defaults on a fresh import', async () => {
-    localStorage.setItem('mf-scheme', 'bogus');
-    localStorage.setItem('mf-window-style', 'bogus');
-    // Module registry was reset in the outer beforeEach; a dynamic import
-    // re-runs module init, which is where the stored values are validated.
-    const { useTheme: freshTheme } = await import('../theme');
-    expect(freshTheme.getState().scheme).toBe('classic');
-    expect(freshTheme.getState().windowStyle).toBe('glass');
   });
 });
 

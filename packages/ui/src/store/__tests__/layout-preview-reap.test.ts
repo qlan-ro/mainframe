@@ -4,7 +4,7 @@ import { useLayoutStore } from '../layout';
 
 function seedPreviewRun() {
   useLayoutStore.setState({
-    layout: { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],
@@ -46,7 +46,7 @@ it('closeRunTab keeps the non-preview terminal tab', () => {
 
 it('closePane removes the entire pane from run state', () => {
   useLayoutStore.setState({
-    layout: { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1, 1],

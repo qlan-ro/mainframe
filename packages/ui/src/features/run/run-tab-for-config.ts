@@ -2,7 +2,7 @@ import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import type { RunTab } from '@/store/run-pane';
 
 /**
- * Build the Run tab for a launch config: a `preview` webview tab or a `console`
+ * Build the workspace tab for a launch config: a `preview` webview tab or a `console`
  * process tab, carrying the resolved dev-server port (for the preview webview).
  *
  * The tab id doubles as the Tauri child-webview LABEL, which only allows

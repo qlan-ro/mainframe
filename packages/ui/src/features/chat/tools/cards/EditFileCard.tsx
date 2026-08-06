@@ -3,7 +3,7 @@
 /**
  * EditFileCard — tool card for the 'Edit' tool.
  *
- * Default-open. Header: amber family tile + "Edit" verb + ClickableFilePath
+ * Default-open. Header: diff glyph + "Edit" verb + ClickableFilePath
  * + +N/−N stat pills + open-in-diff icon button + StatusDot.
  * Body: structured diff patch when available, fallback hunks otherwise,
  * raw result text when neither parses, or a "diff unavailable" notice.
@@ -13,7 +13,8 @@
 import React, { useCallback } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ExternalLinkIcon, FileDiffIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@v2/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import {
   isStructuredResult,
   resolveResultText,
@@ -25,7 +26,6 @@ import {
   ClickableFilePath,
   StatusDot,
   CollapsibleCardShell,
-  FamilyTile,
 } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId, useOpenFile } from '../chat-tool-context';
@@ -38,7 +38,7 @@ import type { DiffHunk } from '@qlan-ro/mainframe-types';
 function StatPills({ added, removed }: { added: number | null; removed: number | null }) {
   if (added === null && removed === null) return null;
   return (
-    <span className="flex items-center gap-1.5 font-mono tabular-nums text-caption shrink-0 text-muted-foreground">
+    <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
       {added !== null && <span className="font-semibold">+{added}</span>}
       {removed !== null && <span className="font-semibold">−{removed}</span>}
     </span>
@@ -53,22 +53,30 @@ function OpenDiffButton({ onOpenDiff }: { onOpenDiff: (e: React.MouseEvent | Rea
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
+        {/* A span, not a <button>: it is nested inside the CollapsibleTrigger's
+            own button, so `asChild` keeps the v2 Button chrome without invalid
+            nested-button HTML. */}
+        <Button
+          asChild
+          variant="ghost"
+          size="icon-2xs"
           data-testid="chat-edit-open-diff"
-          role="button"
-          tabIndex={0}
           aria-label="Open in diff editor"
-          onClick={onOpenDiff}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onOpenDiff(e);
-            }
-          }}
-          className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
         >
-          <ExternalLinkIcon size={13} />
-        </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={onOpenDiff}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpenDiff(e);
+              }
+            }}
+          >
+            <ExternalLinkIcon />
+          </span>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top">Open in diff editor</TooltipContent>
     </Tooltip>
@@ -121,7 +129,7 @@ function EditCardBody({
           ) : (
             <pre
               data-testid="chat-edit-error-text"
-              className="text-label font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
+              className="overflow-x-auto font-mono text-xs whitespace-pre-wrap text-muted-foreground"
             >
               {resultText}
             </pre>
@@ -140,7 +148,7 @@ function RawResultTextBody({ text }: { text: string }) {
   return (
     <pre
       data-testid="edit-card-diff-raw"
-      className="border-t border-border px-3 py-1.5 text-label font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
+      className="overflow-x-auto border-t border-border px-3 py-1.5 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
     >
       {text}
     </pre>
@@ -151,7 +159,7 @@ function DiffUnavailableBody() {
   return (
     <div
       data-testid="edit-card-diff-unavailable"
-      className="border-t border-border px-3 py-1.5 text-label italic text-muted-foreground"
+      className="border-t border-border px-3 py-1.5 text-xs italic text-muted-foreground"
     >
       Diff unavailable
     </div>
@@ -239,12 +247,6 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
   const { args, result, isError, toolCallId } = part;
   const state = useEditCardState(args, result, isError, toolCallId);
 
-  const tile = (
-    <FamilyTile color="var(--mf-warning)" bg="var(--mf-warning-tint)">
-      <FileDiffIcon size={13} />
-    </FamilyTile>
-  );
-
   const trailing = (
     <>
       <StatPills added={state.addedCount} removed={state.removedCount} />
@@ -279,7 +281,7 @@ export const EditFileCard: ToolCallMessagePartComponent = (part) => {
       result={result}
       isError={isError}
       defaultOpen
-      tile={tile}
+      icon={<FileDiffIcon />}
       verb="Edit"
       target={<ClickableFilePath filePath={state.filePath} />}
       trailing={trailing}

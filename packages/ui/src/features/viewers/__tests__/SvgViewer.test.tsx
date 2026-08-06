@@ -14,8 +14,13 @@
  *  7. Active toggle is the raised bg-background segment (not bg-accent).
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { SvgViewer } from '../SvgViewer';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const SAMPLE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>';
 
@@ -62,7 +67,7 @@ describe('SvgViewer', () => {
     // The second toggle is now labelled "Code" (renamed from "Source")
     const sourceBtn = screen.getByTestId('viewer-svg-source-toggle');
     expect(sourceBtn.textContent).toBe('Code');
-    fireEvent.click(sourceBtn);
+    fireEvent.mouseDown(sourceBtn);
     // In source mode the raw SVG text should be visible
     expect(screen.getByTestId('viewer-svg-source')).toBeInTheDocument();
   });
@@ -70,9 +75,9 @@ describe('SvgViewer', () => {
   it('switches back to preview on Preview toggle click', () => {
     render(<SvgViewer content={SAMPLE_SVG} path="/a/b/icon.svg" />);
     const sourceBtn = screen.getByTestId('viewer-svg-source-toggle');
-    fireEvent.click(sourceBtn);
+    fireEvent.mouseDown(sourceBtn);
     const previewBtn = screen.getByTestId('viewer-svg-preview-toggle');
-    fireEvent.click(previewBtn);
+    fireEvent.mouseDown(previewBtn);
     // Back in preview mode — img is visible again
     const root = screen.getByTestId('viewer-svg');
     expect(root.querySelector('img')).not.toBeNull();

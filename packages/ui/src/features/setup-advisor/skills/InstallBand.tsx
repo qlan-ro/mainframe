@@ -12,10 +12,15 @@
  */
 import { useState } from 'react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MenuRow } from '@/components/ui/menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@v2/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
+import { Input } from '@v2/components/ui/input';
 import { SkillPicker } from './SkillPicker';
 import { SCOPE_LABEL } from './scope-label';
 import { useSkillsCliStore } from './use-skills-cli-store';
@@ -80,7 +85,7 @@ export function InstallBand({ projectId, adapterId }: InstallBandProps) {
       <div className="flex flex-wrap items-center gap-1.5">
         <Input
           data-testid="skills-section-source"
-          className="min-w-[160px] flex-1 font-mono text-label"
+          className="min-w-[160px] flex-1 font-mono text-xs"
           value={source}
           disabled={installing}
           placeholder="owner/repo"
@@ -93,27 +98,32 @@ export function InstallBand({ projectId, adapterId }: InstallBandProps) {
             probeSource();
           }}
         />
-        <Popover open={scopeOpen} onOpenChange={setScopeOpen}>
-          <PopoverTrigger asChild>
+        {/* Same question SkillAction's row menu asks, so it is the same
+            DropdownMenu — a floating list of actions is never a Popover. */}
+        <DropdownMenu open={scopeOpen} onOpenChange={setScopeOpen}>
+          <DropdownMenuTrigger asChild disabled={!canInstall}>
             <Button type="button" size="sm" data-testid="skills-section-install" disabled={!canInstall}>
               Install
             </Button>
-          </PopoverTrigger>
-          <PopoverContent data-testid="skills-section-install-scope" className="w-40" align="end">
-            {(['project', 'global'] as const).map((scope) => (
-              <MenuRow
-                key={scope}
-                data-testid={`skills-section-install-scope-${scope}`}
-                label={SCOPE_LABEL[scope]}
-                onClick={() => void submit(scope)}
-              />
-            ))}
-          </PopoverContent>
-        </Popover>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent data-testid="skills-section-install-scope" className="w-40" align="end">
+            <DropdownMenuGroup>
+              {(['project', 'global'] as const).map((scope) => (
+                <DropdownMenuItem
+                  key={scope}
+                  data-testid={`skills-section-install-scope-${scope}`}
+                  onSelect={() => void submit(scope)}
+                >
+                  {SCOPE_LABEL[scope]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {sourceError ? (
-        <p data-testid="skills-section-source-error" className="text-label text-destructive">
+        <p data-testid="skills-section-source-error" className="text-xs text-destructive">
           {sourceError}
         </p>
       ) : null}

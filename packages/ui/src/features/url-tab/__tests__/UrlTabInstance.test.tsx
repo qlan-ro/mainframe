@@ -11,6 +11,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { useLayoutStore } from '@/store/layout';
@@ -36,7 +37,7 @@ vi.mock('@/lib/api/tunnel-ports', () => ({
 
 import { UrlTabInstance } from '../UrlTabInstance';
 
-const FRESH_LAYOUT = { top: ['run' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['workspace' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
 
 /** Seed a single-pane Run holding one `url` tab, so setUrlTabTarget has something to retarget. */
 function seedUrlTab(tabId: string, url: string) {
@@ -91,8 +92,13 @@ afterEach(() => {
   resetHostForTesting();
 });
 
+/** The url-tab toolbar is full of v2 `Hint`s — the v2 TooltipProvider is part of the stack. */
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <HostProvider host={fakeHost}>{children}</HostProvider>;
+  return (
+    <HostProvider host={fakeHost}>
+      <TooltipProvider>{children}</TooltipProvider>
+    </HostProvider>
+  );
 }
 
 describe('UrlTabInstance — toolbar composition and the live address bar', () => {
@@ -172,7 +178,8 @@ describe('UrlTabInstance — toolbar composition and the live address bar', () =
     render(<UrlTabInstance tabId="t1" url="http://localhost:5173/" visible />, { wrapper });
     expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByTestId('preview-device-mobile'));
+    // The device toggle is the v2 Tabs recipe — triggers activate on mouse-down.
+    fireEvent.mouseDown(screen.getByTestId('preview-device-mobile'));
 
     expect(fakeHost.preview.mount).toHaveBeenCalledTimes(1);
     expect(fakeHandle.reanchor).toHaveBeenCalled();

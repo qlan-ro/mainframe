@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Composer tuning hooks — data layer for EffortPicker + FeaturesPopover.
+ * Composer tuning hooks — data layer for ComposerToolbar and the per-model
+ * effort/options flyout in ModelMenuRow.
  *
  * Three independent concerns:
  *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
@@ -66,6 +67,13 @@ export interface ComposerTuningHook {
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   setModel: (model: string) => void;
+  /**
+   * Switch to `model` AND apply one tuning field in the same gesture (a write
+   * from a non-active model's flyout). ONE guarded change — its apply issues
+   * the config PATCH and the tuning PATCH together, so the mid-session gate
+   * can never drop half of it.
+   */
+  setModelTuning: (model: string, tuning: SessionTuning) => void;
   setAdapter: (adapterId: string) => void;
   setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
@@ -194,6 +202,24 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     },
     [draftMode, chatId, patchConfig, guard],
   );
+  const setModelTuning = useCallback(
+    (m: string, tuning: SessionTuning) => {
+      if (draftMode && chatId) {
+        patchDraftConfig(chatId, { model: m, ...tuning });
+        return;
+      }
+      if (port == null || !patchChatId) return;
+      // Guarded as a model change — switching is the dominant act; the tuning
+      // rides in the same parked closure.
+      guard({ kind: 'model', to: m }, () => {
+        patchConfig({ model: m }, 'setModelTuning');
+        setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
+          console.warn('[composer/useComposerTuning] setModelTuning failed', { err }),
+        );
+      });
+    },
+    [draftMode, chatId, patchChatId, port, patchConfig, guard],
+  );
   const setAdapter = useCallback(
     (id: string) => {
       if (draftMode && chatId && draft && port != null) {
@@ -246,6 +272,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setEffort,
     setFeature,
     setModel,
+    setModelTuning,
     setAdapter,
     setPlanMode,
     setPermissionMode,

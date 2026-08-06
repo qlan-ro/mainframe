@@ -12,7 +12,7 @@
  * message. See `suppressRadixTrigger` for how that fall-through is kept.
  */
 import { useState, type ReactNode } from 'react';
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent } from '@/components/ui/context-menu';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuGroup } from '@v2/components/ui/context-menu';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
@@ -64,18 +64,20 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <CopyMenuItem
-          testId="tool-card-path-copy-absolute"
-          label="Copy Absolute Path"
-          status={statusFor('tool-card-path-copy-absolute')}
-          onSelect={copyAbsolute}
-        />
-        <CopyMenuItem
-          testId="tool-card-path-copy-relative"
-          label="Copy Relative Path"
-          status={statusFor('tool-card-path-copy-relative')}
-          onSelect={copyRelative}
-        />
+        <ContextMenuGroup>
+          <CopyMenuItem
+            testId="tool-card-path-copy-absolute"
+            label="Copy Absolute Path"
+            status={statusFor('tool-card-path-copy-absolute')}
+            onSelect={copyAbsolute}
+          />
+          <CopyMenuItem
+            testId="tool-card-path-copy-relative"
+            label="Copy Relative Path"
+            status={statusFor('tool-card-path-copy-relative')}
+            onSelect={copyRelative}
+          />
+        </ContextMenuGroup>
       </ContextMenuContent>
     </ContextMenu>
   );

@@ -27,11 +27,11 @@
  *     from opening, matching the effort/features controls' running-inertness
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { ProviderModelSelect } from '../ProviderModelSelect';
-import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { ProviderModelSelect, type ProviderModelSelectProps } from '../ProviderModelSelect';
+import type { AdapterInfo, AdapterModel, Chat, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -108,11 +108,17 @@ interface RenderProps {
   disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
+  setModelTuning?: ProviderModelSelectProps['setModelTuning'];
+  setEffort?: (effort: EffortLevel) => void;
+  setFeature?: (key: FeatureKey, on: boolean) => void;
 }
 
 function renderSelect(props: RenderProps = {}) {
   const setAdapter = props.setAdapter ?? vi.fn();
   const setModel = props.setModel ?? vi.fn();
+  const setModelTuning = props.setModelTuning ?? vi.fn();
+  const setEffort = props.setEffort ?? vi.fn();
+  const setFeature = props.setFeature ?? vi.fn();
   const chat = props.chat ?? makeChat({ adapterId: 'claude', model: 'sonnet' });
   const adapters = props.adapters ?? [ADAPTER_CLAUDE];
   const adapter = props.adapter !== undefined ? props.adapter : ADAPTER_CLAUDE;
@@ -131,11 +137,14 @@ function renderSelect(props: RenderProps = {}) {
         disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
+        setModelTuning={setModelTuning}
+        setEffort={setEffort}
+        setFeature={setFeature}
       />
     </TooltipProvider>,
   );
 
-  return { setAdapter, setModel };
+  return { setAdapter, setModel, setModelTuning, setEffort, setFeature };
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +199,7 @@ describe('ProviderModelSelect — popover contents after open', () => {
     expect(screen.getByTestId('composer-model-select-option-haiku')).toBeInTheDocument();
   });
 
-  it('marks the active model row with the brand selection tint (distinct from hover)', async () => {
+  it('shows the check glyph on the active model row only', async () => {
     renderSelect({
       adapters: [ADAPTER_CLAUDE],
       adapter: ADAPTER_CLAUDE,
@@ -200,10 +209,10 @@ describe('ProviderModelSelect — popover contents after open', () => {
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
-    const activeRow = screen.getByTestId('composer-model-select-option-sonnet');
-    const otherRow = screen.getByTestId('composer-model-select-option-haiku');
-    expect(activeRow.className).toContain('bg-mf-selection');
-    expect(otherRow.className).not.toContain('bg-mf-selection');
+    const check = (testId: string) =>
+      screen.getByTestId(testId).querySelector('svg.lucide-check')?.getAttribute('class') ?? '';
+    expect(check('composer-model-select-option-sonnet')).not.toContain('invisible');
+    expect(check('composer-model-select-option-haiku')).toContain('invisible');
   });
 });
 
@@ -277,6 +286,37 @@ describe('ProviderModelSelect — locked prop controls footer and pill state', (
 
     // gemini is installed but not active — should be disabled when locked
     expect(screen.getByTestId('composer-adapter-select-option-gemini')).toBeDisabled();
+  });
+
+  it('locked=true explains itself: the locked segment carries a tooltip, the active one does not', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      locked: true,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    // A disabled button swallows pointer events, so the tooltip rides on a
+    // wrapper span around the locked segment only.
+    expect(screen.getByTestId('composer-adapter-locked-gemini')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-adapter-locked-claude')).toBeNull();
+  });
+
+  it('locked=false renders no tooltip wrapper on any segment', async () => {
+    renderSelect({
+      adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI],
+      adapter: ADAPTER_CLAUDE,
+      model: SONNET,
+      locked: false,
+      chat: makeChat({ adapterId: 'claude', model: 'sonnet' }),
+    });
+
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-adapter-locked-gemini')).toBeNull();
   });
 
   it('locked=true does NOT disable the active provider pill', async () => {
@@ -491,6 +531,9 @@ describe('ProviderModelSelect — older models group', () => {
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
     expect(screen.getByTestId('composer-model-older-header').textContent).toContain('Older models');
+    // Collapsed by default — rows appear only after expanding the section.
+    expect(screen.queryByTestId('composer-model-select-option-claude-opus-4-1-20250805')).toBeNull();
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
     expect(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805')).toBeInTheDocument();
   });
 
@@ -503,6 +546,7 @@ describe('ProviderModelSelect — older models group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
 
     const header = screen.getByTestId('composer-model-older-header');
     const haiku = screen.getByTestId('composer-model-select-option-haiku');
@@ -535,6 +579,7 @@ describe('ProviderModelSelect — older models group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805'));
 
     expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
@@ -577,7 +622,10 @@ describe('ProviderModelSelect — endpoint model group', () => {
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
-    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toBe('CLIProxyAPI');
+    expect(screen.getByTestId('composer-model-group-header-cliproxyapi').textContent).toContain('CLIProxyAPI');
+    // Collapsed by default — rows appear only after expanding the section.
+    expect(screen.queryByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeNull();
+    await userEvent.click(screen.getByTestId('composer-model-group-header-cliproxyapi'));
     expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
     expect(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3')).toBeInTheDocument();
   });
@@ -591,6 +639,7 @@ describe('ProviderModelSelect — endpoint model group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-older-header'));
 
     const opus = screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805');
     const groupHeader = screen.getByTestId('composer-model-group-header-cliproxyapi');
@@ -635,6 +684,7 @@ describe('ProviderModelSelect — endpoint model group', () => {
     });
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
+    await userEvent.click(screen.getByTestId('composer-model-group-header-cliproxyapi'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3'));
 
     expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3');
@@ -654,5 +704,221 @@ describe('ProviderModelSelect — endpoint model group', () => {
 
     expect(screen.getByTestId('composer-model-select-option-cliproxy/gpt-5.6-sol')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-model-group-header-cliproxyapi')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Per-model tuning flyout (replaces the standalone EffortPicker/FeaturesPopover)
+// ---------------------------------------------------------------------------
+
+/** A model that exposes both effort levels and tunable options. */
+const TUNABLE: AdapterModel = {
+  id: 'tunable',
+  label: 'Tunable',
+  defaultEffort: 'medium',
+  supportedEfforts: ['low', 'medium', 'high'],
+  supportsFast: true,
+};
+
+const ADAPTER_TUNABLE: AdapterInfo = {
+  ...ADAPTER_CLAUDE,
+  models: [TUNABLE, HAIKU],
+};
+
+/**
+ * Opens the model menu, then a model row's flyout. HOVER, not click — clicking
+ * a row chooses that model and closes the whole menu, which is the point of the
+ * pattern.
+ */
+async function openFlyout(user: ReturnType<typeof userEvent.setup>, modelId: string) {
+  await user.click(screen.getByTestId('composer-model-select'));
+  await user.hover(screen.getByTestId(`composer-model-select-option-${modelId}`));
+  return screen.findByTestId(`composer-model-${modelId}-tuning`);
+}
+
+describe('ProviderModelSelect — per-model tuning flyout', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('gives a model with no effort levels and no options no flyout at all', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+    });
+
+    await user.click(screen.getByTestId('composer-model-select'));
+    await user.click(screen.getByTestId('composer-model-select-option-haiku'));
+
+    expect(screen.queryByTestId('composer-model-haiku-tuning')).toBeNull();
+  });
+
+  it("lists the model's own effort levels and options", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+    });
+
+    await openFlyout(user, 'tunable');
+
+    expect(screen.getByTestId('composer-model-tunable-effort-low')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-model-tunable-effort-high')).toBeInTheDocument();
+    // xhigh is not in supportedEfforts, so it must not appear.
+    expect(screen.queryByTestId('composer-model-tunable-effort-xhigh')).toBeNull();
+    expect(screen.getByTestId('composer-model-tunable-feature-fast')).toBeInTheDocument();
+    // The model does not advertise supportsUltracode.
+    expect(screen.queryByTestId('composer-model-tunable-feature-ultracode')).toBeNull();
+  });
+
+  it("checks the model's DEFAULT effort when the chat has set none", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+    });
+
+    await openFlyout(user, 'tunable');
+
+    expect(screen.getByTestId('composer-model-tunable-effort-medium')).toHaveAttribute('data-state', 'checked');
+    expect(screen.getByTestId('composer-model-tunable-effort-low')).toHaveAttribute('data-state', 'unchecked');
+  });
+
+  it("checks the chat's effort over the model default", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: { ...makeChat({ adapterId: 'claude', model: 'tunable' }), effort: 'high' },
+    });
+
+    await openFlyout(user, 'tunable');
+
+    expect(screen.getByTestId('composer-model-tunable-effort-high')).toHaveAttribute('data-state', 'checked');
+    expect(screen.getByTestId('composer-model-tunable-effort-medium')).toHaveAttribute('data-state', 'unchecked');
+  });
+
+  it('picking an effort writes it and leaves the menu open', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const setEffort = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+      setEffort,
+    });
+
+    await openFlyout(user, 'tunable');
+    // fireEvent, not userEvent: moving the pointer off the SubTrigger closes the
+    // flyout in jsdom, where Radix's grace-area rects are all zero.
+    fireEvent.click(screen.getByTestId('composer-model-tunable-effort-high'));
+
+    expect(setEffort).toHaveBeenCalledExactlyOnceWith('high');
+    expect(screen.getByTestId('composer-provider-model-popover')).toBeInTheDocument();
+  });
+
+  it('toggling an option writes only that field, inverted', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const setFeature = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: { ...makeChat({ adapterId: 'claude', model: 'tunable' }), fast: true },
+      setFeature,
+    });
+
+    await openFlyout(user, 'tunable');
+    expect(screen.getByTestId('composer-model-tunable-feature-fast')).toHaveAttribute('data-state', 'checked');
+
+    fireEvent.click(screen.getByTestId('composer-model-tunable-feature-fast'));
+
+    expect(setFeature).toHaveBeenCalledExactlyOnceWith('fast', false);
+  });
+
+  it('a non-active model previews its defaults; touching a control switches to it with that tuning', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const setEffort = vi.fn();
+    const setModelTuning = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      // haiku is selected, so the tunable row is NOT the active model
+      model: HAIKU,
+      chat: { ...makeChat({ adapterId: 'claude', model: 'haiku' }), effort: 'low' },
+      setEffort,
+      setModelTuning,
+    });
+
+    await openFlyout(user, 'tunable');
+
+    // Its own default, not the chat's 'low'.
+    expect(screen.getByTestId('composer-model-tunable-effort-medium')).toHaveAttribute('data-state', 'checked');
+
+    // One compound write: switch model AND apply the effort — never the plain
+    // active-model setter, which would tune the wrong model.
+    fireEvent.click(screen.getByTestId('composer-model-tunable-effort-high'));
+    expect(setModelTuning).toHaveBeenCalledExactlyOnceWith('tunable', { effort: 'high' });
+    expect(setEffort).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('composer-model-tunable-feature-fast'));
+    expect(setModelTuning).toHaveBeenCalledWith('tunable', { fast: true });
+  });
+
+  it('clicking a flyout row still selects that model', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const setModel = vi.fn();
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: HAIKU,
+      chat: makeChat({ adapterId: 'claude', model: 'haiku' }),
+      setModel,
+    });
+
+    await user.click(screen.getByTestId('composer-model-select'));
+    await user.click(screen.getByTestId('composer-model-select-option-tunable'));
+
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('tunable');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Trigger label carries the resolved effort
+// ---------------------------------------------------------------------------
+
+describe('ProviderModelSelect — trigger effort suffix', () => {
+  const CASES: { name: string; model: AdapterModel; chat: Chat; expected: string }[] = [
+    {
+      name: "the chat's own effort",
+      model: TUNABLE,
+      chat: { ...makeChat({ adapterId: 'claude', model: 'tunable' }), effort: 'high' },
+      expected: 'Tunable · High',
+    },
+    {
+      name: "the model's default effort when the chat sets none",
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+      expected: 'Tunable · Medium',
+    },
+    {
+      name: 'no suffix at all for a model with no effort axis',
+      model: HAIKU,
+      chat: makeChat({ adapterId: 'claude', model: 'haiku' }),
+      expected: 'Claude Haiku 4',
+    },
+  ];
+
+  it.each(CASES)('shows $name', ({ model, chat, expected }) => {
+    renderSelect({ adapters: [ADAPTER_TUNABLE], adapter: ADAPTER_TUNABLE, model, chat });
+
+    expect(screen.getByTestId('composer-model-select').textContent).toBe(expected);
   });
 });

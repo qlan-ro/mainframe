@@ -8,8 +8,8 @@
  */
 import React from 'react';
 import { ChevronDown, CircleDot, Download, FileText, RefreshCw, Unlink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Hint } from '@/components/ui/hint';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,15 +53,17 @@ export function GitHubSyncControl(): React.ReactElement {
             <button
               data-testid="tasks-github-pill"
               type="button"
-              className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border-[0.5px] border-mf-success/40 bg-mf-success-tint pl-2.5 pr-1.5 transition-colors hover:border-mf-success/60"
+              className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border-[0.5px] border-success/40 bg-success-tint pl-2.5 pr-1.5 transition-colors hover:border-success/60"
             >
-              <span className="size-1.5 shrink-0 rounded-full bg-mf-success" aria-hidden />
-              <span className="text-caption text-foreground">{`${link.owner}/${link.repo}`}</span>
-              <span className="text-caption text-mf-text-3" aria-hidden>
+              <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+              <span className="text-xs text-foreground">{`${link.owner}/${link.repo}`}</span>
+              <span className="text-xs text-muted-foreground" aria-hidden>
                 ·
               </span>
-              <span className="text-caption text-mf-text-3">{running ? 'syncing…' : syncedAgo(link.lastSyncedAt)}</span>
-              <ChevronDown size={11} className="shrink-0 text-mf-text-3" aria-hidden />
+              <span className="text-xs text-muted-foreground">
+                {running ? 'syncing…' : syncedAgo(link.lastSyncedAt)}
+              </span>
+              <ChevronDown size={11} className="shrink-0 text-muted-foreground" aria-hidden />
             </button>
           </DropdownMenuTrigger>
         </Hint>

@@ -1,28 +1,36 @@
 /**
- * ToolbarLaunchControls — the shell MainToolbar launch picker: a "Preview"
- * dropdown showing the selected config name + a run/stop button, wired to the
- * same launch subsystem as the Run surface's `LaunchPopover` (via
+ * ToolbarLaunchControls — the shell MainToolbar launch picker: a native
+ * DropdownMenu showing the selected config name + a run/stop button, wired to
+ * the same launch subsystem as the Run surface's `LaunchPopover` (via
  * `useLaunchActions`).
  *
- * Per the artboard `LaunchPicker`, a dropdown row click only SELECTS the config
- * (no tab, no start) while a separate per-row button starts/stops it. The
- * toolbar run button (`deriveLaunchRunControl`) starts the selected config (or
- * the first available), but switches to a Stop whenever ANY config in the scope
- * is live — so a process started outside the toolbar is always stoppable here.
- * Starting (either button) is what opens the preview tab. "Generate with Agent"
- * is a gated placeholder until a config-generation flow exists.
+ * Per the artboard `LaunchPicker`, a menu row click only SELECTS the config
+ * (no tab, no start) while a separate per-row button starts/stops it — the
+ * button stops pointer/click propagation so it never reads as a row select.
+ * The toolbar run button (`deriveLaunchRunControl`) starts the selected config
+ * (or the first available), but switches to a Stop whenever ANY config in the
+ * scope is live — so a process started outside the toolbar is always
+ * stoppable here. Starting (either button) is what opens the preview tab.
+ * "Generate with Agent" is a gated placeholder until a config-generation flow
+ * exists.
  *
  * Scoped testids: main-toolbar-launch, main-toolbar-play,
  * main-toolbar-launch-config-<name>, main-toolbar-launch-{start,stop}-<name>,
  * main-toolbar-launch-generate.
  */
 import { useCallback, useState } from 'react';
-import { ChevronDown, Eye, Play, Sparkles, Square, Terminal } from 'lucide-react';
+import { ChevronDown, Eye, Loader2, Play, Sparkles, Square, Terminal } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { MenuDivider, MenuEmpty, MenuRow, menuItemVariants } from '@/components/ui/menu';
+import { Button } from '@v2/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
+import { Hint } from '@v2/components/ui/hint';
 import { useLaunchActions } from './use-launch-actions';
 import { deriveLaunchRunControl, isLaunchStatusLive } from './derive-launch-control';
 
@@ -55,16 +63,6 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
     [refetch],
   );
 
-  // Row click selects (and closes); the per-row start/stop button keeps the
-  // popover open so the status change is visible.
-  const onSelectRow = useCallback(
-    (config: LaunchConfiguration) => {
-      setOpen(false);
-      handleSelect(config);
-    },
-    [handleSelect],
-  );
-
   const onRunClick = useCallback(() => {
     if (!runTarget) return;
     if (running) handleStop(runTarget);
@@ -73,22 +71,25 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
 
   return (
     <>
-      <Popover open={open} onOpenChange={handleOpen}>
+      <DropdownMenu open={open} onOpenChange={handleOpen}>
         <Hint label="Launch configurations">
-          <PopoverTrigger asChild>
-            <button
+          <DropdownMenuTrigger asChild>
+            <Button
               data-testid="main-toolbar-launch"
-              type="button"
-              className="inline-flex h-[24px] max-w-[200px] cursor-pointer items-center gap-[5px] rounded-[6px] bg-mf-chip px-[8px] text-label font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+              variant="secondary"
+              size="xs"
+              className="max-w-[200px] text-sm font-medium text-muted-foreground aria-expanded:text-foreground"
             >
               <span className="truncate">{label}</span>
-              <ChevronDown size={9} className="flex-shrink-0 text-mf-text-3" />
-            </button>
-          </PopoverTrigger>
+              <ChevronDown className="size-2.5 shrink-0 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
         </Hint>
-        <PopoverContent data-testid="main-toolbar-launch-popover" className="w-56" align="end">
+        <DropdownMenuContent data-testid="main-toolbar-launch-popover" className="w-56" align="end" sideOffset={4}>
           {configs.length === 0 ? (
-            <MenuEmpty>No launch configs found.</MenuEmpty>
+            <div className="flex flex-col items-center justify-center gap-1.5 px-2 py-4 text-xs text-muted-foreground">
+              No launch configs found.
+            </div>
           ) : (
             configs.map((cfg) => (
               <LaunchPickerRow
@@ -96,37 +97,35 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
                 config={cfg}
                 status={scopeStatuses[cfg.name] ?? 'stopped'}
                 selected={cfg.name === selectedConfigName}
-                onSelect={onSelectRow}
+                onSelect={handleSelect}
                 onStart={handleLaunch}
                 onStop={handleStop}
               />
             ))
           )}
-          <MenuDivider />
+          <DropdownMenuSeparator />
           <Hint label="Generate with Agent — coming soon">
-            <MenuRow
-              data-testid="main-toolbar-launch-generate"
-              icon={<Sparkles className="size-[12px] text-primary" />}
-              label="Generate with Agent"
-              disabled
-            />
+            <DropdownMenuItem data-testid="main-toolbar-launch-generate" disabled>
+              <Sparkles className="size-3 text-primary" />
+              <span className="min-w-0 flex-1 truncate">Generate with Agent</span>
+            </DropdownMenuItem>
           </Hint>
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Hint label={!runTarget ? 'No launch configs' : running ? `Stop ${runTarget.name}` : `Start ${runTarget.name}`}>
-        <button
+        <Button
           data-testid="main-toolbar-play"
-          type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={onRunClick}
           disabled={!runTarget}
-          className="inline-flex h-[24px] w-[28px] flex-shrink-0 items-center justify-center rounded-[6px] border-none bg-transparent enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         >
           {running ? (
-            <Square size={15} className="text-destructive" fill="currentColor" />
+            <Square className="size-3.5 text-destructive" fill="currentColor" />
           ) : (
-            <Play size={15} className="text-mf-success" fill="currentColor" />
+            <Play className="size-3.5 text-success" fill="currentColor" />
           )}
-        </button>
+        </Button>
       </Hint>
     </>
   );
@@ -142,55 +141,46 @@ interface LaunchPickerRowProps {
 }
 
 /**
- * A launch-config row: leading eye/terminal type icon, name, an amber spinner
- * while starting, and a trailing start/stop button. Clicking the row selects
- * the config; the trailing button starts/stops it (and stops propagation so it
- * doesn't also select).
+ * A launch-config row: leading eye/terminal type icon, name, a spinner while
+ * starting, and a trailing start/stop button. Selecting the row (Radix
+ * onSelect) picks the config and closes the menu; the trailing button
+ * starts/stops it and stops pointer + click propagation, or Radix's item
+ * pointerup path would treat it as a row select.
  */
 function LaunchPickerRow({ config, status, selected, onSelect, onStart, onStop }: LaunchPickerRowProps) {
   const live = isLaunchStatusLive(status);
   const TypeIcon = config.preview ? Eye : Terminal;
 
   return (
-    <div
+    <DropdownMenuItem
       data-testid={`main-toolbar-launch-config-${config.name}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(config)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(config);
-        }
-      }}
-      className={cn(menuItemVariants(), 'w-full cursor-pointer hover:bg-accent', selected && 'bg-accent')}
+      onSelect={() => onSelect(config)}
+      className={cn(selected && 'bg-accent')}
     >
-      <TypeIcon className={cn('size-[12px]', config.preview ? 'text-mf-surface-run' : 'text-mf-text-3')} />
+      <TypeIcon className={cn('size-3', config.preview ? 'text-mf-surface-run' : 'text-muted-foreground')} />
       <span className={cn('min-w-0 flex-1 truncate', selected ? 'font-semibold' : 'font-medium')}>{config.name}</span>
-      {status === 'starting' && (
-        <span
-          className="size-[10px] shrink-0 animate-spin rounded-full border-[1.5px] border-mf-warning border-t-transparent"
-          aria-hidden
-        />
-      )}
+      {status === 'starting' && <Loader2 className="size-2.5 animate-spin text-muted-foreground" aria-hidden />}
       <Hint label={live ? `Stop ${config.name}` : `Start ${config.name}`}>
-        <button
-          type="button"
+        <Button
           data-testid={`main-toolbar-launch-${live ? 'stop' : 'start'}-${config.name}`}
+          variant="ghost"
+          size="icon-xs"
+          className="pointer-events-auto"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             if (live) onStop(config);
             else onStart(config);
           }}
-          className="inline-flex h-[24px] w-[26px] shrink-0 items-center justify-center rounded-[6px] hover:bg-mf-chip"
         >
           {live ? (
-            <Square size={15} className="text-destructive" fill="currentColor" />
+            <Square className="size-3.5 text-destructive" fill="currentColor" />
           ) : (
-            <Play size={16} className="text-mf-success" fill="currentColor" />
+            <Play className="size-3.5 text-success" fill="currentColor" />
           )}
-        </button>
+        </Button>
       </Hint>
-    </div>
+    </DropdownMenuItem>
   );
 }

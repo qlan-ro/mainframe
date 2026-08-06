@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Queued user message — a PENDING variant of the cool-card that lands in narrative
- * order at the thread tail (NOT a banner over the composer). Same gradient/ink as a
- * sent turn, but a dashed `--mf-um-dash` hairline + slight ghost. Per-item Edit /
- * Cancel are hover/focus-revealed; the amber-spinner meta sits under the bubble.
+ * Queued user message — a PENDING variant of the user bubble that lands in
+ * narrative order at the thread tail (NOT a banner over the composer). Same
+ * `tinted` fill as a sent turn, but a dashed hairline + slight ghost. Per-item
+ * Edit / Cancel are hover/focus-revealed; the meta row sits under the bubble.
  *
  *  - Cancel → DELETE the queued message (it never sends).
  *  - Edit   → load it into the composer's edit mode (text stays editable there).
@@ -17,11 +17,11 @@
  */
 import { useCallback, type ReactNode } from 'react';
 import { PencilIcon, XIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
+import { Bubble, BubbleContent } from '@v2/components/ui/bubble';
+import { Button } from '@v2/components/ui/button';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useComposerEdit } from '../composer/edit/composer-edit-context';
-
-const PENDING_CARD = { background: 'var(--mf-um-card)' } as const;
 
 // ── Ordinal helper ────────────────────────────────────────────────────────────
 
@@ -43,22 +43,16 @@ interface QueuedActionProps {
 
 function QueuedAction({ icon: Icon, label, onClick, danger, testid }: QueuedActionProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="xs"
       data-testid={testid}
       onClick={onClick}
-      className={cn(
-        // Design 7.10: icon/label gap 4 (gap-1 was 2px), radius 7 (rounded-md
-        // is 8px) — both arbitrary, no exact compressed-scale token.
-        'inline-flex items-center gap-[4px] rounded-[7px] border border-transparent h-[24px] px-[9px]',
-        'text-caption text-muted-foreground transition-colors',
-        'hover:bg-mf-content2 hover:border-border',
-        danger && 'hover:text-destructive hover:border-destructive/35',
-      )}
+      className={cn('text-muted-foreground', danger && 'hover:text-destructive')}
     >
-      <Icon size={12} />
+      <Icon data-icon="inline-start" />
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -74,14 +68,13 @@ function QueuedMeta({ position = 1, total = 1 }: { position?: number; total?: nu
   const showSpinner = isHead || !isMulti;
 
   return (
-    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-caption tracking-tight text-muted-foreground">
+    <span className="mr-1 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+      {/* `warning` in v2 means wrong-but-not-broken; a queued turn is neither,
+          so the waiting signal is the accent, matching the running indicator. */}
       {showSpinner ? (
-        <span
-          className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-mf-warning"
-          style={{ borderTopColor: 'transparent' }}
-        />
+        <span className="inline-block size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent" />
       ) : (
-        <span className="inline-block h-[7px] w-[7px] shrink-0 rounded-full bg-mf-warning" />
+        <span className="inline-block size-2 shrink-0 rounded-full bg-primary" />
       )}
       {label}
     </span>
@@ -125,10 +118,9 @@ export function QueuedUserTurn({
     <div
       data-testid="chat-queued-message"
       data-queued-id={messageId}
-      className="group/queued flex w-full flex-col items-end gap-[5px]"
+      className="group/queued flex w-full flex-col items-end gap-1.5"
     >
-      {/* Design 7.6: gap 8 between the Edit/Cancel action group and the bubble. */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <div
           className={cn(
             'flex items-center gap-0.5 opacity-0',
@@ -145,20 +137,17 @@ export function QueuedUserTurn({
         {/* Skip the dashed bubble entirely for an attachment/image/capture-only
             queued message — otherwise it renders as an empty box. */}
         {children && (
-          <div
-            data-testid="chat-queued-bubble"
-            style={PENDING_CARD}
-            className={cn(
-              'max-w-[470px] rounded-xl border px-[15px] py-[10px] text-body leading-loose tracking-tight break-words text-mf-um-ink',
-              'transition-[opacity,border-color] duration-200 ease-in-out',
-              'border-dashed border-mf-um-dash opacity-[0.82]',
-            )}
-          >
-            {children}
-          </div>
+          <Bubble variant="tinted" align="end" className="max-w-[470px]">
+            <BubbleContent
+              data-testid="chat-queued-bubble"
+              className="border-dashed border-border opacity-80 transition-[opacity,border-color] duration-200 ease-in-out"
+            >
+              {children}
+            </BubbleContent>
+          </Bubble>
         )}
       </div>
-      {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-[0.9]">{extrasSlot}</div>}
+      {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-90">{extrasSlot}</div>}
       <QueuedMeta position={position} total={total} />
     </div>
   );

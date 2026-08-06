@@ -10,8 +10,14 @@
  *    to avoid Tailwind class computation in tests.
  *  - All expected text values are hardcoded — no derivation logic re-run here.
  */
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+
+// The v2 `Hint` carries no provider of its own (shadcn treats that as an
+// app-root concern), so every bare render needs one — the v1 provider is a
+// different context and satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
 
 // ---------------------------------------------------------------------------
 // Module mocks (hoisted — must be before the component import)

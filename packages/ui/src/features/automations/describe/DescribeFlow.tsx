@@ -8,9 +8,11 @@
  * `AutomationEditor`: reads/writes `use-automations-nav`/
  * `use-automations-store` directly.
  */
+import { Button } from '@v2/components/ui/button';
+import { Textarea } from '@v2/components/ui/textarea';
 import { useState } from 'react';
 import { ChevronLeft, Lightbulb, Sparkles, Wand2 } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
@@ -40,58 +42,52 @@ export function DescribeFlow() {
           </button>
         </Hint>
         <Wand2 size={16} className="text-primary" aria-hidden />
-        <span className="text-heading font-bold tracking-tight text-foreground">Describe your workflow</span>
+        <span className="text-base font-semibold tracking-tight text-foreground">Describe your workflow</span>
       </div>
 
       <div className="flex shrink-0 gap-2.5 border-b border-border p-3.5">
-        <textarea
+        <Textarea
           data-testid="automations-describe-input"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="min-h-[54px] flex-1 resize-none rounded-md border-[0.5px] border-input bg-card px-3 py-2 text-body text-foreground outline-none"
+          className="min-h-[54px] flex-1 resize-none"
         />
-        <button
-          type="button"
-          data-testid="automations-describe-draft"
-          onClick={() => setDraft(CANNED_DRAFT)}
-          className="inline-flex h-[38px] shrink-0 items-center gap-1.5 self-end rounded-md bg-primary px-3.5 text-label font-semibold text-primary-foreground hover:opacity-90"
-        >
-          <Wand2 size={13} aria-hidden />
+        <Button data-testid="automations-describe-draft" onClick={() => setDraft(CANNED_DRAFT)} className="self-end">
+          <Wand2 aria-hidden />
           Draft it
-        </button>
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {draft ? (
           <div className="flex flex-col gap-3.5">
-            <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Sparkles size={12} className="text-primary" aria-hidden />
               Here's a draft. Open it to tweak anything.
             </div>
             <DraftPreview draft={draft} catalog={catalog} />
             <div className="flex gap-2">
-              <button
-                type="button"
+              <Button
+                size="sm"
                 data-testid="automations-describe-open-editor"
                 onClick={() => openEditor({ mode: 'new', draft })}
-                className="h-[34px] rounded-md bg-primary px-3.5 text-label font-semibold text-primary-foreground hover:opacity-90"
               >
                 Open in editor
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 data-testid="automations-describe-retry"
                 onClick={() => setDraft(null)}
-                className="h-[34px] rounded-md border-[0.5px] border-border px-3.5 text-label font-medium text-muted-foreground hover:bg-accent"
               >
                 Try a different description
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
             <Lightbulb size={20} aria-hidden />
-            <p className="max-w-[320px] text-caption leading-relaxed">
+            <p className="max-w-[320px] text-xs leading-relaxed">
               The artifact is always an editable block list — never a buried prompt. Try “When a PR opens, review it and
               post a summary.”
             </p>

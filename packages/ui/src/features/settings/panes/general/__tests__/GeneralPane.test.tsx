@@ -41,16 +41,6 @@ describe('GeneralPane', () => {
     expect(useTheme.getState().mode).toBe('dark');
     expect(updateGeneralSettings).not.toHaveBeenCalled();
   });
-  it('scheme picker writes useTheme.scheme', () => {
-    render(<GeneralPane port={31415} />);
-    fireEvent.click(screen.getByTestId('settings-appearance-scheme-ocean'));
-    expect(useTheme.getState().scheme).toBe('ocean');
-  });
-  it('window-style picker writes useTheme.windowStyle', () => {
-    render(<GeneralPane port={31415} />);
-    fireEvent.click(screen.getByTestId('settings-appearance-window-style-glass'));
-    expect(useTheme.getState().windowStyle).toBe('glass');
-  });
   it('UI size picker writes useTheme.uiScale', () => {
     useTheme.setState({ uiScale: 'normal' });
     render(<GeneralPane port={31415} />);
@@ -62,10 +52,8 @@ describe('GeneralPane', () => {
   describe('update channel', () => {
     it('renders the current channel as selected', () => {
       render(<GeneralPane port={31415} />);
-      expect(screen.getByTestId('settings-updates-channel-stable').className).toContain('bg-accent text-foreground');
-      expect(screen.getByTestId('settings-updates-channel-prerelease').className).not.toContain(
-        'bg-accent text-foreground',
-      );
+      expect(screen.getByTestId('settings-updates-channel-stable')).toHaveAttribute('data-state', 'on');
+      expect(screen.getByTestId('settings-updates-channel-prerelease')).toHaveAttribute('data-state', 'off');
     });
 
     it('selecting Pre-release PUTs the patch and updates the displayed selection optimistically', async () => {
@@ -73,13 +61,9 @@ describe('GeneralPane', () => {
       fireEvent.click(screen.getByTestId('settings-updates-channel-prerelease'));
       expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { updateChannel: 'prerelease' });
       await waitFor(() => {
-        expect(screen.getByTestId('settings-updates-channel-prerelease').className).toContain(
-          'bg-accent text-foreground',
-        );
+        expect(screen.getByTestId('settings-updates-channel-prerelease')).toHaveAttribute('data-state', 'on');
       });
-      expect(screen.getByTestId('settings-updates-channel-stable').className).not.toContain(
-        'bg-accent text-foreground',
-      );
+      expect(screen.getByTestId('settings-updates-channel-stable')).toHaveAttribute('data-state', 'off');
     });
   });
 });

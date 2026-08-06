@@ -14,9 +14,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+} from '@v2/components/ui/dialog';
+import { Button } from '@v2/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@v2/components/ui/radio-group';
 import { listGitHubRemotes, type GitHubRemote } from '@/lib/api/git';
 import { CredentialConnect } from '@/features/automations/steps/CredentialConnect';
 import { useAutomationsStore } from '@/features/automations/data/use-automations-store';
@@ -29,8 +29,8 @@ function RemoteRow({ remote }: { remote: GitHubRemote }): React.ReactElement {
   return (
     <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-accent">
       <RadioGroupItem data-testid={`tasks-github-remote-${remote.name}`} value={remote.name} className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate text-body text-foreground">{`${remote.owner}/${remote.repo}`}</span>
-      <span className="shrink-0 font-mono text-caption text-mf-text-3">{remote.name}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{`${remote.owner}/${remote.repo}`}</span>
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{remote.name}</span>
     </label>
   );
 }
@@ -96,9 +96,9 @@ export function LinkRepoDialog(): React.ReactElement {
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           {loadError !== null ? (
-            <p className="px-2 py-4 text-body text-destructive">{loadError}</p>
+            <p className="px-2 py-4 text-sm text-destructive">{loadError}</p>
           ) : remotes.length === 0 ? (
-            <p className="px-2 py-4 text-body text-muted-foreground">
+            <p className="px-2 py-4 text-sm text-muted-foreground">
               No GitHub remotes in this project&apos;s repository.
             </p>
           ) : (
@@ -110,7 +110,7 @@ export function LinkRepoDialog(): React.ReactElement {
           )}
 
           <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-            <span className="text-caption text-muted-foreground">GitHub credential</span>
+            <span className="text-xs text-muted-foreground">GitHub credential</span>
             <CredentialConnect
               service={GITHUB_SERVICE}
               testId="tasks-github-credential"

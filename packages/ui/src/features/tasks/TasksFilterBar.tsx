@@ -9,8 +9,8 @@
  */
 import React from 'react';
 import { Search, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
 import type { Todo, TodoType, TodoPriority } from '@/lib/api/todos';
 import type { TodoFilters, TodoSort } from './todos-filters';
 import { FilterMenu, type FilterOption } from './FilterMenu';
@@ -105,7 +105,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Search tasks…"
-            className="h-[30px] w-[230px] pl-6 pr-6 text-label"
+            className="h-8 w-[230px] pr-6 pl-6"
           />
           {filters.search && (
             <button
@@ -136,18 +136,16 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
 
         {/* Clear button */}
         {active && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             data-testid="tasks-filter-clear"
+            className="text-primary"
             onClick={clearAll}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded text-label font-medium transition-colors',
-              'text-primary hover:underline',
-            )}
-            type="button"
           >
-            <X size={12} />
+            <X />
             Clear
-          </button>
+          </Button>
         )}
 
         {/* Sort menu — right-aligned */}

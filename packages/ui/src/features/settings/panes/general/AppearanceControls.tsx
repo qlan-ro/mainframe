@@ -1,21 +1,9 @@
-import { useTheme, type ThemeMode, type ColorScheme, type WindowStyle, type UiScale } from '../../../../store/theme';
-import { cn } from '@/lib/utils';
+import { useTheme, type ThemeMode, type UiScale } from '../../../../store/theme';
+import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
 
 const MODES: { id: ThemeMode; label: string }[] = [
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
-];
-
-const SCHEMES: { id: ColorScheme; label: string }[] = [
-  { id: 'classic', label: 'Classic' },
-  { id: 'ocean', label: 'Ocean' },
-  { id: 'velvet', label: 'Velvet' },
-];
-
-const WINDOW_STYLES: { id: WindowStyle; label: string }[] = [
-  { id: 'unified', label: 'Unified' },
-  { id: 'split', label: 'Split' },
-  { id: 'glass', label: 'Glass' },
 ];
 
 const UI_SIZES: { id: UiScale; label: string }[] = [
@@ -39,37 +27,30 @@ export function PickerRow<T extends string>({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-body text-muted-foreground">{label}</span>
-      <div className="flex gap-1">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        value={current}
+        onValueChange={(v) => {
+          if (v) onSelect(v as T);
+        }}
+      >
         {options.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            data-testid={`${prefix}-${opt.id}`}
-            onClick={() => onSelect(opt.id)}
-            className={cn(
-              'px-3 py-1 rounded text-body transition-colors',
-              current === opt.id
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-            )}
-          >
+          <ToggleGroupItem key={opt.id} value={opt.id} data-testid={`${prefix}-${opt.id}`} className="px-3">
             {opt.label}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </div>
   );
 }
 
 export function AppearanceControls() {
   const mode = useTheme((s) => s.mode);
-  const scheme = useTheme((s) => s.scheme);
-  const windowStyle = useTheme((s) => s.windowStyle);
   const uiScale = useTheme((s) => s.uiScale);
   const setMode = useTheme((s) => s.setMode);
-  const setScheme = useTheme((s) => s.setScheme);
-  const setWindowStyle = useTheme((s) => s.setWindowStyle);
   const setUiScale = useTheme((s) => s.setUiScale);
 
   return (
@@ -82,20 +63,6 @@ export function AppearanceControls() {
         onSelect={setUiScale}
       />
       <PickerRow label="Mode" options={MODES} current={mode} prefix="settings-appearance-mode" onSelect={setMode} />
-      <PickerRow
-        label="Color Scheme"
-        options={SCHEMES}
-        current={scheme}
-        prefix="settings-appearance-scheme"
-        onSelect={setScheme}
-      />
-      <PickerRow
-        label="Window Style"
-        options={WINDOW_STYLES}
-        current={windowStyle}
-        prefix="settings-appearance-window-style"
-        onSelect={setWindowStyle}
-      />
     </div>
   );
 }

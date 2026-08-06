@@ -1,0 +1,256 @@
+/* ════════════════════════════════════════════════════════════════════════
+   v2 token layer — shadcn preset b2D0wqNxT, radix-vega style.
+
+   The style is a component-class choice, not a token one: radix-luma and
+   radix-vega ship byte-identical stylesheets, so nothing here moved when
+   we switched off Luma's pill geometry.
+
+   Taken from the preset verbatim, with two deviations. `primary` and
+   `sidebar-primary` are the macOS system blue #0a84ff — oklch(0.624 0.206
+   255.486), one value for both modes — instead of the preset's two indigos.
+   That is the accent the app already uses, and on a desktop app the system
+   blue is the one users read as "selected".
+
+   The near-black ink family is pulled off pure black — 0.32 in light, 0.92 in
+   dark, where stock sits at 0.145/0.985. Stock assumes ink on white; this panel
+   is a field of muted grey, and against it full-strength ink reads as a
+   different, louder application. The tooltip is the clearest case: it inverts
+   the token into a FILL, so every stock value put a near-black slab over the
+   sidebar. `muted-foreground` is untouched — it is the resting ink and already
+   calibrated; softening the loud end just narrows the step between them.
+
+   `--success` is the third, and the only hue here that is a convention rather
+   than a choice: a connection indicator is green because that is what green has
+   meant to users for decades. The accent would have said "this is selected".
+
+   `--warning` is the second: a state that is wrong-but-not-broken — a missing
+   worktree — had only `destructive` to reach for, and full-chroma red was the
+   one saturated thing in an otherwise muted panel. It is that same red pulled
+   most of the way to the resting ink, so it keeps the hue that reads as
+   "wrong" at a chroma the panel can hold. Declared per theme rather than once,
+   so it never resolves against the wrong mode's inputs.
+
+   `--sidebar-selection` is the one token the preset does not ship: the
+   selected session row reads as a blue wash, and stock's `sidebar-accent` is
+   the neutral hover, which would make hovered and selected rows identical.
+
+   `--bubble-tinted` is the chat kit's soft-primary bubble fill, which upstream
+   inlines as a bare `oklch(from …)` expression twice (once per mode). A user
+   bubble that clamps needs its fade to END on that exact fill, and an inline
+   expression gives the fade no way to follow the mode — so the fill gets a
+   name, declared per theme, and `bubble.tsx` reads it too.
+
+   Nothing else Mainframe-specific lives here on purpose: the point of the
+   clone is to see the stock baseline before anything is added back. The old
+   warm-chrome sheet is NOT imported — no schemes, no window styles, no mf-*
+   tokens, no custom type or spacing scale.
+   ════════════════════════════════════════════════════════════════════════ */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/* Automatic source detection roots at this file's directory, which would
+   scan only styles/. Point it at the v2 tree. */
+@source "../";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /*
+   * A desktop type scale, not the web one. Stock Tailwind sizes body copy on a
+   * page (12/14/16); every surface here is chrome, so the UI size is 13 — what
+   * Cursor and the macOS HIG land on — and metadata steps to 11. Names, not
+   * numbers: `text-sm` is still "the UI size", it just resolves to 13px.
+   */
+  --text-xs: 0.6875rem;
+  --text-xs--line-height: calc(1 / 0.6875);
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: calc(1.125 / 0.8125);
+
+  --font-heading: var(--font-sans);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-bubble-tinted: var(--bubble-tinted);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-selection: var(--sidebar-selection);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.32 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.32 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.32 0 0);
+  --primary: oklch(0.624 0.206 255.486);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.967 0 0);
+  --secondary-foreground: oklch(0.32 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.32 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.62 0.16 150);
+  --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --bubble-tinted: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: var(--primary);
+  --chart-1: oklch(0.845 0.143 164.978);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.596 0.145 163.225);
+  --chart-4: oklch(0.508 0.118 165.612);
+  --chart-5: oklch(0.432 0.095 166.913);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.32 0 0);
+  --sidebar-primary: oklch(0.624 0.206 255.486);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-selection: color-mix(in oklch, var(--sidebar-primary) 10%, transparent);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.32 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: var(--sidebar-primary);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.92 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.92 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.92 0 0);
+  --primary: oklch(0.624 0.206 255.486);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.274 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.92 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.75 0.17 150);
+  --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --bubble-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--primary);
+  --chart-1: oklch(0.845 0.143 164.978);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.596 0.145 163.225);
+  --chart-4: oklch(0.508 0.118 165.612);
+  --chart-5: oklch(0.432 0.095 166.913);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: oklch(0.624 0.206 255.486);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-selection: color-mix(in oklch, var(--sidebar-primary) 30%, transparent);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.92 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--sidebar-primary);
+}
+
+/**
+ * Overflow fades out instead of ending in an ellipsis. At these row heights an
+ * ellipsis is three more glyphs competing with the label it is truncating; the
+ * ramp says "there is more" without spending characters to say it.
+ *
+ * Only safe on a label that FILLS its row (flex-1 / full width). On a
+ * content-sized one the ramp lands on the last glyphs of text that fits.
+ */
+@utility truncate-fade {
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /*
+   * The UI size is the document's size. Without this, anything that forgets a
+   * size class inherits the browser's 16px and towers over a 13px panel — which
+   * is how the hover card first shipped.
+   *
+   * On `body`, never `html`: Tailwind's spacing, heights and radii are rem-based
+   * and anchored to the root, so moving the root would shrink the entire layout
+   * along with the text.
+   */
+  body {
+    @apply bg-background text-sm text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Indeterminate progress sweep (daemon-unreachable card; referenced via the
+   arbitrary `animate-[ws-indeterminate_…]` utility, which does not generate
+   keyframes). Lives here, not the bridge — a v2 component animates with it. */
+@keyframes ws-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+/* Carried over verbatim — the working-session spin the provider logo animates
+   with. A keyframe has no theme dimension, so it is not a token. */
+@keyframes mf-claude-logo-working {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[mf-claude-logo-working_1\.52s_linear_infinite\] {
+    animation: none;
+  }
+}

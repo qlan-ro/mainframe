@@ -1,6 +1,6 @@
 import type { AdapterModel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../../lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 
 const CLIPROXY_GROUP = 'CLIProxyAPI';
 const AUTO = '__auto__';
@@ -31,31 +31,28 @@ export function CliProxyStatus({ adapterId, models, config, onChange }: CliProxy
   const detected = proxyModels.length > 0;
 
   return (
-    <div data-testid={`settings-${adapterId}-cliproxy`} className="space-y-1.5">
-      <span className="text-label font-semibold text-muted-foreground">{CLIPROXY_GROUP}</span>
+    <div data-testid={`settings-${adapterId}-cliproxy`} className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{CLIPROXY_GROUP}</span>
       <div className="flex items-center gap-1.5">
-        <span className={cn('size-1.5 rounded-full', detected ? 'bg-mf-success' : 'bg-mf-text-3')} />
-        <span data-testid={`settings-${adapterId}-cliproxy-status`} className="text-body text-foreground">
+        <span className={cn('size-1.5 rounded-full', detected ? 'bg-success' : 'bg-muted-foreground')} />
+        <span data-testid={`settings-${adapterId}-cliproxy-status`} className="text-sm text-foreground">
           {detected ? `${proxyModels.length} models available` : 'Not detected'}
         </span>
       </div>
-      <p className="text-label text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {detected
           ? 'These models appear in the model picker under their own section.'
           : 'Start it with `brew services start cliproxyapi`. Set MAINFRAME_CLIPROXY_CONFIG if its config lives outside the standard paths.'}
       </p>
 
       {detected && (
-        <label className="block space-y-1.5 pt-1.5">
-          <span className="text-label font-semibold text-muted-foreground">Background model</span>
+        <label className="flex flex-col gap-1.5 pt-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Background model</span>
           <Select
             value={config.cliproxySmallFastModel ?? AUTO}
             onValueChange={(v) => onChange({ cliproxySmallFastModel: v === AUTO ? '' : v })}
           >
-            <SelectTrigger
-              data-testid={`settings-${adapterId}-cliproxy-small-fast-model`}
-              className="h-[30px] border border-input px-[11px]"
-            >
+            <SelectTrigger size="sm" className="w-full" data-testid={`settings-${adapterId}-cliproxy-small-fast-model`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -73,7 +70,7 @@ export function CliProxyStatus({ adapterId, models, config, onChange }: CliProxy
               ))}
             </SelectContent>
           </Select>
-          <p className="text-label text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             What the CLI uses for summaries, compaction, and its other background calls on a proxy session — the proxy
             has no Haiku to fall back on.
           </p>

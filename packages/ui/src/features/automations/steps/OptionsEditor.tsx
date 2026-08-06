@@ -28,7 +28,7 @@ export function OptionsEditor({ options, onChange, testId }: OptionsEditorProps)
       {options.map((option, i) => (
         <span
           key={i}
-          className="inline-flex h-[20px] items-center gap-1 rounded-full bg-muted px-2 text-caption text-foreground"
+          className="inline-flex h-[20px] items-center gap-1 rounded-full bg-muted px-2 text-xs text-foreground"
         >
           {option}
           <button
@@ -53,7 +53,7 @@ export function OptionsEditor({ options, onChange, testId }: OptionsEditorProps)
         }}
         onBlur={commit}
         placeholder={options.length ? 'Add…' : 'Type an option, ⏎'}
-        className="min-w-[90px] flex-1 border-none bg-transparent text-caption text-foreground outline-none placeholder:text-muted-foreground"
+        className="min-w-[90px] flex-1 border-none bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
       />
     </div>
   );

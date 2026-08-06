@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Module mocks — factories must not reference out-of-scope variables
@@ -69,6 +69,7 @@ vi.mock('../use-composer-tuning', () => ({
     adapter: null,
     model: null,
     setModel: vi.fn(),
+    setModelTuning: vi.fn(),
     setAdapter: vi.fn(),
     setPermissionMode: vi.fn(),
     setPlanMode: vi.fn(),
@@ -124,6 +125,7 @@ describe('ComposerToolbar — no render when chat is null', () => {
       adapter: null,
       model: null,
       setModel: vi.fn(),
+      setModelTuning: vi.fn(),
       setAdapter: vi.fn(),
       setPermissionMode: vi.fn(),
       setPlanMode: vi.fn(),

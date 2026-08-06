@@ -19,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { ViewerShell } from './ViewerShell';
 import { Segmented } from './Segmented';
+import { checkerStyle } from './viewer-checker';
 import { splitSvgStatus } from './viewer-status';
 
 interface SvgViewerProps {
@@ -87,16 +88,10 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
       <div data-testid="viewer-svg" className="flex h-full flex-col">
         <div className="flex flex-1 overflow-auto">
           {content === null ? (
-            <span className="m-auto text-body text-muted-foreground">Loading…</span>
+            <span className="m-auto text-sm text-muted-foreground">Loading…</span>
           ) : mode === 'preview' ? (
-            <div
-              className="flex flex-1 items-center justify-center p-[32px]"
-              style={{
-                background:
-                  'repeating-conic-gradient(var(--mf-viewer-check-b) 0% 25%, var(--mf-viewer-check-a) 0% 50%) 0 0 / 18px 18px',
-              }}
-            >
-              <div className="rounded-[11px] bg-background p-[36px] shadow-[var(--mf-shadow-pop)]">
+            <div className="flex flex-1 items-center justify-center p-8" style={checkerStyle}>
+              <div className="rounded-lg bg-background p-9 shadow-md">
                 {objectUrl && (
                   <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />
                 )}
@@ -105,7 +100,7 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
           ) : (
             <pre
               data-testid="viewer-svg-source"
-              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg px-[18px] py-[16px] leading-relaxed text-label font-mono text-mf-code-fg"
+              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg px-4.5 py-4 font-mono text-xs leading-relaxed text-mf-code-fg"
             >
               {content}
             </pre>

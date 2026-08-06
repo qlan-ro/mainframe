@@ -12,8 +12,8 @@
 import { useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import { Switch } from '@v2/components/ui/switch';
 import { BranchSelect } from '@/features/git/BranchSelect';
 import type { AskAgentStep } from '../../contract';
 import { textToChipText } from '../../domain/chip-text-convert';
@@ -44,16 +44,14 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <ChipButton icon={GitBranch} label={`Worktree: ${summary}`} testId={`${testId}-worktree`} className="min-w-0">
-          <span className={branchName ? 'max-w-40 truncate font-mono text-caption' : 'max-w-40 truncate'}>
-            {summary}
-          </span>
+          <span className={branchName ? 'max-w-40 truncate font-mono text-xs' : 'max-w-40 truncate'}>{summary}</span>
         </ChipButton>
       </PopoverTrigger>
       <PopoverContent
         data-testid={`${testId}-worktree-menu`}
         align="start"
         sideOffset={6}
-        className="w-72 space-y-2.5 p-3"
+        className="w-72 flex flex-col gap-2.5 p-3"
       >
         <label className="flex items-center gap-2.5">
           <Switch
@@ -61,11 +59,11 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
             checked={!!worktree}
             onCheckedChange={(on) => onChange({ worktree: on ? { baseBranch: 'main', branchName: [] } : undefined })}
           />
-          <span className="text-caption text-foreground">Run in a fresh worktree</span>
+          <span className="text-xs text-foreground">Run in a fresh worktree</span>
         </label>
 
         {worktree && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <TriggerTextField
               value={branchName}
               onChange={(next) => onChange({ worktree: { ...worktree, branchName: textToChipText(next) } })}
@@ -75,7 +73,7 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
               testId={`${testId}-worktree-branch`}
             />
             <div className="flex items-center gap-2.5">
-              <span className="shrink-0 text-caption font-medium text-muted-foreground">from</span>
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">from</span>
               <div className="min-w-0 flex-1">
                 <BranchSelect
                   value={worktree.baseBranch ?? ''}

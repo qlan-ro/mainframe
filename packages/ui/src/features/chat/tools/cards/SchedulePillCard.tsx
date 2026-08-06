@@ -2,9 +2,9 @@
  * SchedulePillCard — marker pill for schedule/cron/monitor tool calls.
  *
  * Registry keys: 'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList', 'Monitor'.
- * Visual family: centered marker pill (MarkerWrap/MarkerPill).
+ * Visual family: centered marker row (MarkerWrap/MarkerPill).
  *
- * Behavior (from desktop SchedulePill.tsx + 10-chatcards.jsx SchedulePill):
+ * Behavior:
  *   - Icon by kind: clock=wakeup, calendar=create/delete/list, activity=monitor.
  *   - Label by kind (see buildLabel below).
  *   - CronList and Monitor are expandable when done.
@@ -13,7 +13,7 @@
 import React from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { AlarmClockIcon, CalendarClockIcon, CalendarXIcon, CalendarDaysIcon, ActivityIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen, type MarkerState } from './marker-pill';
 import { isErrorResult, extractResultContent } from '../shared/result';
 
@@ -22,11 +22,11 @@ import { isErrorResult, extractResultContent } from '../shared/result';
 type ScheduleKind = 'ScheduleWakeup' | 'CronCreate' | 'CronDelete' | 'CronList' | 'Monitor';
 
 const TOOL_ICONS: Record<ScheduleKind, React.ReactElement> = {
-  ScheduleWakeup: <AlarmClockIcon size={12} />,
-  CronCreate: <CalendarClockIcon size={12} />,
-  CronDelete: <CalendarXIcon size={12} />,
-  CronList: <CalendarDaysIcon size={12} />,
-  Monitor: <ActivityIcon size={12} />,
+  ScheduleWakeup: <AlarmClockIcon />,
+  CronCreate: <CalendarClockIcon />,
+  CronDelete: <CalendarXIcon />,
+  CronList: <CalendarDaysIcon />,
+  Monitor: <ActivityIcon />,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,8 +89,8 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
       <>
         Scheduled: <span className="text-primary">{human}</span>
         {' · '}
-        <span className="text-mf-text-3">{recurring ? 'recurring' : 'one-shot'}</span>
-        {durable === false && <span className="text-mf-text-3"> · session-only</span>}
+        {recurring ? 'recurring' : 'one-shot'}
+        {durable === false && ' · session-only'}
       </>
     );
   }
@@ -126,19 +126,16 @@ function buildBody(kind: ScheduleKind, parsed: unknown, text: string): React.Rea
     const jobs = Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
     if (jobs.length === 0) return null;
     return (
-      <div className="flex flex-col gap-1.5 font-mono text-label text-muted-foreground">
+      <div className="flex flex-col gap-1.5 font-mono text-xs text-muted-foreground">
         {jobs.map((j) => (
           <div key={String(j['id'] ?? '')}>
             <div>
               {'• '}
               <span className="text-primary">{String(j['id'] ?? '')}</span>{' '}
-              {String(j['humanSchedule'] ?? j['cron'] ?? '')}{' '}
-              <span className="text-mf-text-3">
-                ({j['recurring'] ? 'recurring' : 'one-shot'}
-                {j['durable'] === false ? ', session-only' : ''})
-              </span>
+              {String(j['humanSchedule'] ?? j['cron'] ?? '')} ({j['recurring'] ? 'recurring' : 'one-shot'}
+              {j['durable'] === false ? ', session-only' : ''})
             </div>
-            {Boolean(j['prompt']) && <div className="pl-3 text-mf-text-3">prompt: {String(j['prompt'])}</div>}
+            {Boolean(j['prompt']) && <div className="pl-3">prompt: {String(j['prompt'])}</div>}
           </div>
         ))}
       </div>
@@ -195,7 +192,7 @@ function buildScheduleCard(kind: ScheduleKind): ToolCallMessagePartComponent {
         onClick={toggle}
         testId={`chat-schedule-${kind.toLowerCase()}-pill`}
       >
-        <span className="font-mono text-label text-muted-foreground">{label}</span>
+        {label}
       </MarkerPill>
     );
 

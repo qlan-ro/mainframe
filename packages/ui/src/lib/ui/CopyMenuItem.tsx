@@ -8,7 +8,7 @@
  * image menu would otherwise carry three copies of this markup.
  */
 import { AlertTriangle, Check, Copy } from 'lucide-react';
-import { ContextMenuItem } from '@/components/ui/context-menu';
+import { ContextMenuItem } from '@v2/components/ui/context-menu';
 import type { CopyStatus } from '@/lib/ui/use-menu-copy-feedback';
 
 export interface CopyMenuItemProps {
@@ -21,10 +21,12 @@ export interface CopyMenuItemProps {
 
 export function CopyMenuItem({ testId, label, status, onSelect }: CopyMenuItemProps) {
   return (
+    // No sizing or margin on the icons: v2 ContextMenuItem owns both (gap-2 +
+    // the [&_svg] size rule).
     <ContextMenuItem data-testid={testId} onSelect={onSelect}>
-      {status === 'copied' && <Check className="mr-2 size-3.5 text-mf-success" />}
-      {status === 'failed' && <AlertTriangle className="mr-2 size-3.5 text-destructive" />}
-      {status === 'idle' && <Copy className="mr-2 size-3.5" />}
+      {status === 'copied' && <Check className="text-success" />}
+      {status === 'failed' && <AlertTriangle className="text-destructive" />}
+      {status === 'idle' && <Copy />}
       {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : label}
     </ContextMenuItem>
   );

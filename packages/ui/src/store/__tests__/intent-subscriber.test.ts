@@ -4,15 +4,16 @@
  * Tests the subscriber logic in isolation (not the React component).
  *
  * The subscriber:
- *  - on open-file: calls openTab + activates the Files surface
+ *  - on open-file: opens a preview tab in the workspace pane model, which lights
+ *    the workspace surface
  *  - on open-file with position: also stashes a reveal target in the editor store
- *  - on reveal-file: activates the Files surface (tree reveal is a TODO)
+ *  - on reveal-file: lights the workspace and stashes the tree reveal target
  *  - normalizes mixed path flavors to a canonical relative key (F1 fix)
+ *  - stamps the active session's launch scope onto every tab it opens
  */
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useLayoutStore } from '../layout';
-import { useTabsStore } from '../tabs';
 import { useEditorStore } from '../editor';
 import { useFilesStore } from '../files';
 import { useActiveBasesStore } from '../active-bases-store';
@@ -22,19 +23,33 @@ import { useOverlaysStore } from '../overlays';
 const WORKTREE = '/Users/dev/myapp/.worktrees/feat-wt';
 const PROJECT = '/Users/dev/myapp';
 
-function isFilesActive() {
+function isWorkspaceActive() {
   const { layout } = useLayoutStore.getState();
-  return layout.top.includes('files') || layout.bottom === 'files';
+  return layout.top.includes('workspace') || layout.bottom === 'workspace';
+}
+
+/** Every tab across the workspace's panes, in strip order. */
+function tabs() {
+  return useLayoutStore.getState().run?.panes.flatMap((p) => p.tabs) ?? [];
+}
+
+function activeTabId() {
+  const run = useLayoutStore.getState().run;
+  return run?.panes[0]?.active ?? null;
 }
 
 beforeEach(() => {
-  useLayoutStore.setState({ layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } } });
-  useTabsStore.setState({ tabs: [], activeTabId: null });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: null,
+  });
   // Clear any stashed reveal targets between tests.
   useEditorStore.setState({ revealTargets: new Map() });
   useFilesStore.setState({ revealTarget: null });
   // Reset bases to empty by default (tests that need bases set them explicitly).
-  useActiveBasesStore.setState({ bases: {} });
+  useActiveBasesStore.setState({ bases: {}, scopeKey: null });
 });
 
 afterEach(() => {
@@ -42,17 +57,15 @@ afterEach(() => {
 });
 
 describe('open-file intent subscriber', () => {
-  it('open-file opens a preview tab + activates Files surface', () => {
+  it('open-file opens a preview tab + lights the workspace surface', () => {
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: '/src/main.ts' });
-
-    const { tabs, activeTabId } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe('/src/main.ts');
-    expect(tabs[0]!.mode).toBe('preview');
-    expect(activeTabId).toBe(tabs[0]!.id);
-    expect(isFilesActive()).toBe(true);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe('/src/main.ts');
+    expect(tabs()[0]!.mode).toBe('preview');
+    expect(activeTabId()).toBe(tabs()[0]!.id);
+    expect(isWorkspaceActive()).toBe(true);
 
     unsub();
   });
@@ -63,10 +76,9 @@ describe('open-file intent subscriber', () => {
     emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
     emitSurfaceIntent({ type: 'open-file', path: '/src/b.ts' });
 
-    const { tabs } = useTabsStore.getState();
     // Only one tab — the preview slot was replaced.
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe('/src/b.ts');
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe('/src/b.ts');
 
     unsub();
   });
@@ -75,24 +87,22 @@ describe('open-file intent subscriber', () => {
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
-    const firstId = useTabsStore.getState().tabs[0]!.id;
+    const firstId = tabs()[0]!.id;
 
     emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
-
-    const { tabs } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.id).toBe(firstId);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.id).toBe(firstId);
 
     unsub();
   });
 
-  it('Files surface stays active after multiple open-file intents', () => {
+  it('workspace surface stays active after multiple open-file intents', () => {
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: '/a.ts' });
     emitSurfaceIntent({ type: 'open-file', path: '/b.ts' });
 
-    expect(isFilesActive()).toBe(true);
+    expect(isWorkspaceActive()).toBe(true);
 
     unsub();
   });
@@ -121,15 +131,13 @@ describe('open-file intent subscriber', () => {
     unsub();
   });
 
-  it('open-file with position still opens the tab + activates Files', () => {
+  it('open-file with position still opens the tab + lights the workspace', () => {
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: '/src/lib.ts', line: 10, character: 0 });
-
-    const { tabs } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe('/src/lib.ts');
-    expect(isFilesActive()).toBe(true);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe('/src/lib.ts');
+    expect(isWorkspaceActive()).toBe(true);
 
     unsub();
   });
@@ -150,12 +158,12 @@ describe('open-file intent subscriber', () => {
 });
 
 describe('reveal-file intent subscriber', () => {
-  it('reveal-file activates Files surface', () => {
+  it('reveal-file lights the workspace surface', () => {
     const unsub = subscribeToFileIntents();
 
-    expect(isFilesActive()).toBe(false);
+    expect(isWorkspaceActive()).toBe(false);
     emitSurfaceIntent({ type: 'reveal-file', path: '/src/main.ts' });
-    expect(isFilesActive()).toBe(true);
+    expect(isWorkspaceActive()).toBe(true);
 
     unsub();
   });
@@ -166,8 +174,7 @@ describe('reveal-file intent subscriber', () => {
     emitSurfaceIntent({ type: 'reveal-file', path: '/src/main.ts' });
 
     // reveal-file does NOT open a tab — it only activates the surface.
-    const { tabs } = useTabsStore.getState();
-    expect(tabs).toHaveLength(0);
+    expect(tabs()).toHaveLength(0);
 
     unsub();
   });
@@ -204,13 +211,13 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
 
     // Simulate a chat tool-card emitting an absolute path.
     emitSurfaceIntent({ type: 'open-file', path: `${WORKTREE}/src/a.ts` });
-    const afterFirst = useTabsStore.getState().tabs;
+    const afterFirst = tabs();
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]!.path).toBe('src/a.ts');
 
     // Simulate the file-tree emitting the relative path — must NOT create a new tab.
     emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
-    const afterSecond = useTabsStore.getState().tabs;
+    const afterSecond = tabs();
     expect(afterSecond).toHaveLength(1);
     expect(afterSecond[0]!.path).toBe('src/a.ts');
 
@@ -223,13 +230,13 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
 
     // Simulate LSP go-to-def emitting a file:// URI.
     emitSurfaceIntent({ type: 'open-file', path: `file://${WORKTREE}/src/b.ts` });
-    const afterFirst = useTabsStore.getState().tabs;
+    const afterFirst = tabs();
     expect(afterFirst).toHaveLength(1);
     expect(afterFirst[0]!.path).toBe('src/b.ts');
 
     // Same file from file-tree — must NOT create a second tab.
     emitSurfaceIntent({ type: 'open-file', path: 'src/b.ts' });
-    const afterSecond = useTabsStore.getState().tabs;
+    const afterSecond = tabs();
     expect(afterSecond).toHaveLength(1);
 
     unsub();
@@ -240,13 +247,12 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: `${PROJECT}/lib/util.ts` });
-    const tabs = useTabsStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe('lib/util.ts');
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe('lib/util.ts');
 
     // Relative form is the same tab.
     emitSurfaceIntent({ type: 'open-file', path: 'lib/util.ts' });
-    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    expect(tabs()).toHaveLength(1);
 
     unsub();
   });
@@ -257,9 +263,8 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
 
     const extPath = '/usr/local/share/system.ts';
     emitSurfaceIntent({ type: 'open-file', path: extPath });
-    const tabs = useTabsStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe(extPath);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe(extPath);
 
     unsub();
   });
@@ -269,10 +274,52 @@ describe('F1 regression: path-flavor normalization prevents duplicate tabs', () 
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-file', path: 'src/c.ts' });
-    const tabs = useTabsStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.path).toBe('src/c.ts');
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.path).toBe('src/c.ts');
 
+    unsub();
+  });
+});
+
+describe('scope stamping', () => {
+  it('stamps the active session launch scope onto an opened file tab', () => {
+    useActiveBasesStore.setState({ bases: { projectPath: PROJECT }, scopeKey: 'proj-1:/Users/dev/myapp' });
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
+
+    expect(tabs()[0]!.scopeKey).toBe('proj-1:/Users/dev/myapp');
+    unsub();
+  });
+
+  it('stamps the scope onto a diff tab too', () => {
+    useActiveBasesStore.setState({ bases: { projectPath: PROJECT }, scopeKey: 'proj-1:/Users/dev/myapp' });
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-diff', path: 'src/a.ts' });
+
+    expect(tabs()[0]!.scopeKey).toBe('proj-1:/Users/dev/myapp');
+    unsub();
+  });
+
+  it('leaves scopeKey undefined on a draft session with no resolved scope', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
+
+    expect(tabs()[0]!.scopeKey).toBeUndefined();
+    unsub();
+  });
+
+  it('the same path under a DIFFERENT scope opens its own tab (no cross-project leak)', () => {
+    useActiveBasesStore.setState({ bases: {}, scopeKey: 'proj-a:/a' });
+    const unsub = subscribeToFileIntents();
+    emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
+
+    useActiveBasesStore.setState({ bases: {}, scopeKey: 'proj-b:/b' });
+    emitSurfaceIntent({ type: 'open-file', path: 'src/a.ts' });
+
+    expect(tabs().map((t) => t.scopeKey)).toEqual(['proj-a:/a', 'proj-b:/b']);
     unsub();
   });
 });
@@ -305,7 +352,7 @@ describe('intent-subscriber overlay intents', () => {
 });
 
 describe('open-diff intent subscriber', () => {
-  it('open-diff with original/modified opens ONE preview tab of kind diff and activates Files surface', () => {
+  it('open-diff with original/modified opens ONE preview tab of kind diff and lights the workspace surface', () => {
     const unsub = subscribeToFileIntents();
 
     // Cast through unknown to allow fields not yet on the type (TDD red phase).
@@ -315,18 +362,16 @@ describe('open-diff intent subscriber', () => {
       original: 'before\n',
       modified: 'after\n',
     } as unknown as Parameters<typeof emitSurfaceIntent>[0]);
-
-    const { tabs, activeTabId } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.kind).toBe('diff');
-    expect(tabs[0]!.mode).toBe('preview');
-    expect(activeTabId).toBe(tabs[0]!.id);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.kind).toBe('diff');
+    expect(tabs()[0]!.mode).toBe('preview');
+    expect(activeTabId()).toBe(tabs()[0]!.id);
     // original / modified must be forwarded onto the tab model.
-    const diffTab = tabs[0] as import('../tabs').DiffTabModel;
+    const diffTab = tabs()[0] as import('../run-pane').RunTab;
     expect(diffTab.original).toBe('before\n');
     expect(diffTab.modified).toBe('after\n');
-    // Files surface must be activated.
-    expect(isFilesActive()).toBe(true);
+    // workspace surface must be activated.
+    expect(isWorkspaceActive()).toBe(true);
 
     unsub();
   });
@@ -341,11 +386,9 @@ describe('open-diff intent subscriber', () => {
       original: 'a',
       modified: 'b',
     } as unknown as Parameters<typeof emitSurfaceIntent>[0]);
-
-    const { tabs } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
+    expect(tabs()).toHaveLength(1);
     // Must be stripped to the worktree-relative form.
-    expect(tabs[0]!.path).toBe('src/x.ts');
+    expect(tabs()[0]!.path).toBe('src/x.ts');
 
     unsub();
   });
@@ -354,11 +397,9 @@ describe('open-diff intent subscriber', () => {
     const unsub = subscribeToFileIntents();
 
     emitSurfaceIntent({ type: 'open-diff', path: '/src/y.ts' });
-
-    const { tabs } = useTabsStore.getState();
-    expect(tabs).toHaveLength(1);
-    expect(tabs[0]!.kind).toBe('diff');
-    const diffTab = tabs[0] as import('../tabs').DiffTabModel;
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.kind).toBe('diff');
+    const diffTab = tabs()[0] as import('../run-pane').RunTab;
     expect(diffTab.original).toBeUndefined();
     expect(diffTab.modified).toBeUndefined();
 

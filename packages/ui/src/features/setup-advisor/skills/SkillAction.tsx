@@ -13,9 +13,14 @@
  */
 import { Check, Loader2, Trash2 } from 'lucide-react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Button } from '@/components/ui/button';
-import { MenuRow } from '@/components/ui/menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@v2/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { SCOPE_LABEL } from './scope-label';
 import type { SkillRow } from './skill-rows';
@@ -69,7 +74,7 @@ export function SkillAction(props: SkillActionProps) {
     // Installed in both scopes: uninstalling has to say which one it means.
     if (only) return trigger;
     return (
-      <ScopePopover
+      <ScopeMenu
         row={row}
         scopes={row.scopes}
         open={openScope}
@@ -81,7 +86,7 @@ export function SkillAction(props: SkillActionProps) {
   }
 
   return (
-    <ScopePopover
+    <ScopeMenu
       row={row}
       scopes={['project', 'global']}
       open={openScope}
@@ -96,32 +101,32 @@ export function SkillAction(props: SkillActionProps) {
   );
 }
 
-interface ScopePopoverProps {
+interface ScopeMenuProps {
   row: SkillRow;
   scopes: readonly SkillsCliScope[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  trigger: React.ReactNode;
+  trigger: React.ReactElement;
   onPick: (row: SkillRow, scope: SkillsCliScope) => void;
 }
 
-function ScopePopover({ row, scopes, open, onOpenChange, trigger, onPick }: ScopePopoverProps) {
+function ScopeMenu({ row, scopes, open, onOpenChange, trigger, onPick }: ScopeMenuProps) {
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent data-testid={`skills-row-scope-${row.key}`} className="w-40" align="end">
-        {scopes.map((scope) => (
-          <MenuRow
-            key={scope}
-            data-testid={`skills-row-scope-${row.key}-${scope}`}
-            label={SCOPE_LABEL[scope]}
-            onClick={() => {
-              onOpenChange(false);
-              onPick(row, scope);
-            }}
-          />
-        ))}
-      </PopoverContent>
-    </Popover>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent data-testid={`skills-row-scope-${row.key}`} className="w-40" align="end">
+        <DropdownMenuGroup>
+          {scopes.map((scope) => (
+            <DropdownMenuItem
+              key={scope}
+              data-testid={`skills-row-scope-${row.key}-${scope}`}
+              onSelect={() => onPick(row, scope)}
+            >
+              {SCOPE_LABEL[scope]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

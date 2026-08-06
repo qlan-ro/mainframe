@@ -27,7 +27,8 @@ import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatu
 import { ConnectionOverlay } from './ConnectionOverlay';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@v2/components/ui/sonner';
+import { ToastDetailsHost } from '@/components/overlays/ToastDetailsHost';
 
 /**
  * Inner shell — must run inside ActiveDaemonProvider so it can read the active
@@ -40,7 +41,7 @@ import { Toaster } from '@/components/ui/sonner';
  *
  * Post-boot disconnect overlay lives here (not in App) so useActiveDaemon() is
  * in scope. It is suppressed when the active daemon is REMOTE — the remote case
- * is owned by DaemonFooterStatus's DaemonUnreachableBody overlay.
+ * is owned by the v2 DaemonSwitcher's DaemonUnreachableBody overlay.
  */
 function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const { target } = useActiveDaemon();
@@ -52,7 +53,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   const activePort = urlPort > 0 ? urlPort : fallbackPort;
 
   // Only show the generic reconnect overlay for LOCAL daemon disconnects.
-  // REMOTE disconnects are handled by DaemonFooterStatus → DaemonUnreachableBody.
+  // REMOTE disconnects are handled by DaemonSwitcher → DaemonUnreachableBody.
   const showReconnectOverlay = target.kind === 'local' && state !== 'connected';
 
   // Daemon switch / first port: reset baseline + reseed.
@@ -121,7 +122,7 @@ export function App() {
 
   return (
     <MfErrorBoundary>
-      <div className="flex h-screen flex-col bg-mf-window text-foreground font-sans">
+      <div className="flex h-screen flex-col bg-background text-foreground font-sans">
         <ThemeEffect />
         <ConnectionStatusProvider value={{ state, daemonStatus }}>
           {/* Gate the data shell on `ready` (first successful /health), not merely
@@ -133,7 +134,7 @@ export function App() {
               <DaemonGatedShell fallbackPort={port} />
             </ActiveDaemonProvider>
           ) : (
-            <div className="relative flex-1 bg-mf-window">
+            <div className="relative flex-1 bg-background">
               <ConnectionOverlay
                 open
                 embedded
@@ -144,7 +145,10 @@ export function App() {
             </div>
           )}
         </ConnectionStatusProvider>
-        <Toaster />
+        {/* Top-right: errors persist until dismissed, and bottom-right parked
+            them over the composer's Send corner. 48px clears the title bar. */}
+        <Toaster position="top-right" offset={{ top: 48, right: 18 }} gap={9} visibleToasts={5} expand />
+        <ToastDetailsHost />
       </div>
     </MfErrorBoundary>
   );

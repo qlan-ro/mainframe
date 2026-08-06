@@ -18,8 +18,9 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { MessageCircleQuestion, Check } from 'lucide-react';
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
+import { Badge } from '@v2/components/ui/badge';
+import { cn } from '@v2/lib/utils';
 import { StatusDot } from '../shared';
 import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 
@@ -49,28 +50,20 @@ function isResultWithAnswers(result: unknown): result is ResultWithAnswers {
 
 // ── AnswerPills ───────────────────────────────────────────────────────────────
 
+/** A chosen answer is a `Badge`; the freeform "Other…" text — a label the model
+ *  never offered — is the `outline` variant, so the distinction is one variant
+ *  rather than two hand-mixed fills. */
 function AnswerPills({ options, answer }: { options: { label: string }[]; answer: string[] }) {
   if (answer.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5 ml-2">
-      {answer.map((label) => {
-        const known = options.some((o) => o.label === label);
-        return (
-          <span
-            key={label}
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-caption',
-              known
-                ? 'bg-mf-content2 text-primary border border-border'
-                : 'bg-card text-muted-foreground border border-border',
-            )}
-          >
-            <Check size={12} className="shrink-0" />
-            {label}
-          </span>
-        );
-      })}
+    <div className="ml-2 flex flex-wrap gap-1.5">
+      {answer.map((label) => (
+        <Badge key={label} variant={options.some((o) => o.label === label) ? 'secondary' : 'outline'}>
+          <Check data-icon="inline-start" />
+          {label}
+        </Badge>
+      ))}
     </div>
   );
 }
@@ -79,18 +72,18 @@ function AnswerPills({ options, answer }: { options: { label: string }[]; answer
 
 function AnswerEntry({ entry, question }: { entry: AskUserQuestionAnswer; question: QuestionArg | undefined }) {
   return (
-    <div className="space-y-1.5">
-      <p data-testid="chat-ask-question-text" className="text-body text-foreground">
+    <div className="flex flex-col gap-1.5">
+      <p data-testid="chat-ask-question-text" className="text-sm text-foreground">
         {entry.question}
       </p>
       <AnswerPills options={question?.options ?? []} answer={entry.answer} />
       {entry.notes && (
-        <p data-testid="chat-ask-answer-notes" className="text-caption text-muted-foreground ml-2">
+        <p data-testid="chat-ask-answer-notes" className="ml-2 text-xs text-muted-foreground">
           {entry.notes}
         </p>
       )}
       {entry.preview && (
-        <p data-testid="chat-ask-answer-preview" className="text-caption text-muted-foreground ml-2">
+        <p data-testid="chat-ask-answer-preview" className="ml-2 text-xs text-muted-foreground">
           {entry.preview}
         </p>
       )}
@@ -103,7 +96,7 @@ function AnswerEntry({ entry, question }: { entry: AskUserQuestionAnswer; questi
 function PendingQuestion({ question }: { question: QuestionArg }) {
   return (
     <div>
-      <p className="text-body text-muted-foreground">{question.question}</p>
+      <p className="text-sm text-muted-foreground">{question.question}</p>
     </div>
   );
 }
@@ -129,18 +122,18 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
 
   return (
     <Collapsible data-testid="chat-ask-card" open={open} onOpenChange={setOpen} disabled={!hasBody}>
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         {/* Header trigger */}
         <CollapsibleTrigger
           data-testid="chat-ask-trigger"
           disabled={!hasBody}
           className={cn(
             'flex w-full items-center gap-2 px-3 py-2 text-left',
-            hasBody ? 'hover:bg-accent transition-colors cursor-pointer' : 'cursor-default',
+            hasBody ? 'cursor-pointer transition-colors hover:bg-muted' : 'cursor-default',
           )}
         >
-          <MessageCircleQuestion size={15} className="shrink-0 text-primary" />
-          <span data-testid="chat-ask-header" className="text-body text-muted-foreground flex-1 truncate min-w-0">
+          <MessageCircleQuestion className="size-3.5 shrink-0 text-primary" />
+          <span data-testid="chat-ask-header" className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
             {firstHeader}
             {shortAnswerText && (
               <span className="text-muted-foreground">
@@ -155,7 +148,7 @@ export const AskUserQuestionCard: ToolCallMessagePartComponent = (part) => {
         {/* Collapsible body */}
         {hasBody && (
           <CollapsibleContent>
-            <div data-testid="chat-ask-body" className="px-3 py-2 space-y-3 border-t border-border">
+            <div data-testid="chat-ask-body" className="flex flex-col gap-3 border-t border-border px-3 py-2">
               {askUserQuestion.length > 0
                 ? askUserQuestion.map((entry, i) => {
                     const question = questions.find((q) => q.question === entry.question) ?? questions[i];

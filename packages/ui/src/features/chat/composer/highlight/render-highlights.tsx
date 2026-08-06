@@ -21,6 +21,12 @@ import type { ReactNode } from 'react';
 import { mainframeUserFormatter, mainframeUserInlineFormatter } from '@/features/chat/messages/user-directives';
 import { findSessionMentions } from '@/features/chat/session-references/session-mention';
 
+/**
+ * `mf-directive-skill` / `mf-directive-session` stay bridge-owned deliberately.
+ * The overlay's contract forbids anything but color and weight — no glyph can
+ * carry the kind here the way the transcript's slash Badge does — so hue is the
+ * only signal available, which puts these in the same class as `mf-code-*`.
+ */
 const colorClass: Record<string, string> = {
   command: 'text-primary',
   mention: 'text-primary',

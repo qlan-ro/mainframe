@@ -35,7 +35,7 @@ export interface LineSelection {
 //
 // @codemirror/merge decorates changed/inserted/deleted lines with specific CSS
 // classes. We override their backgrounds + borders to match the warm-chrome
-// palette from --mf-diff-* tokens (defined in styles/globals.css).
+// palette from --mf-diff-* tokens (defined in styles/legacy-bridge.css).
 
 const diffTheme = EditorView.theme({
   '.cm-insertedLine': {

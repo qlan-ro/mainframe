@@ -17,7 +17,8 @@
  * 10. Separator (bg-border w-px) is always present even with no actions.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
 import { ViewerShell } from '../ViewerShell';
 
@@ -27,6 +28,10 @@ vi.mock('@/store/surface-intents', () => ({
 
 // Import after mock so we get the mocked version.
 import { emitSurfaceIntent } from '@/store/surface-intents';
+
+/** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 const mockEmit = emitSurfaceIntent as ReturnType<typeof vi.fn>;
 

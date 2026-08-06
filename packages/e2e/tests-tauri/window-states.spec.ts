@@ -5,16 +5,21 @@
  * Spec: docs/plans/2026-07-03-tauri-e2e-test-plan.md #31 (Cluster D, P3).
  * UI-only surface — no recording needed (no agent turn is ever sent).
  *
- * Source: packages/ui/src/components/ui/ws-toast.tsx (WsToastCard) +
- * packages/ui/src/lib/toast.ts (mfToast); packages/ui/src/features/tour/
+ * Source: packages/ui/src/lib/toast.ts (mfToast) over the v2 sonner Toaster
+ * (App.tsx, `position="bottom-right"`); packages/ui/src/features/tour/
  * {TutorialOverlay,WsTourLabel,use-first-run-tour} + packages/ui/src/store/tutorial.ts;
  * packages/ui/src/app/ConnectionOverlay.tsx + useConnectionState.ts;
  * packages/ui/src/features/shared/ErrorState.tsx.
  *
  * Testid reference (verified against source):
- *   sessions-add-project                — dashed "Add project" affordance (ProjectFilterPillBar)
+ *   sidebar-projects-add                — the Projects section's "+" action
+ *                                         (v2/features/sessions/ProjectSection.tsx). The v1
+ *                                         dashed "Add project" pill and its
+ *                                         `sessions-add-project` id died with
+ *                                         ProjectFilterPillBar.
  *   directory-picker / -path-input / -row-<path> / -confirm  — DirectoryPickerModal (add-project UI flow)
- *   toast-root / toast-status-chip / toast-countdown-rail / toast-dismiss — WsToastCard (ws-toast.tsx)
+ *   TOAST.* (helpers/tauri/testids.ts)  — sonner's own attribute contract; WsToastCard's
+ *                                         toast-root/status-chip/countdown-rail/dismiss are gone
  *   tour-overlay / tour-spotlight / tour-label-card / tour-step-dot-<i> /
  *   tour-back-btn / tour-next-btn / tour-skip-btn                        — TutorialOverlay + WsTourLabel
  *   connection-overlay                  — ConnectionOverlay (default testId, App.tsx local-disconnect usage)
@@ -36,6 +41,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { TOAST } from '../helpers/tauri/testids.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 /** Create a fresh, real directory under `~/tmp` (same convention as helpers/tauri/setup.ts). */
@@ -46,13 +52,13 @@ function makeTempProjectDir(prefix: string): string {
 }
 
 /**
- * Add a project via the real UI flow (sessions-add-project → DirectoryPickerModal),
+ * Add a project via the real UI flow (sidebar-projects-add → DirectoryPickerModal),
  * not REST — this is the only path that produces an mfToast (see use-add-project.ts).
  * Navigates the picker to the directory's parent via the path-crumb input, then
  * selects the directory row and confirms.
  */
 async function addProjectViaUi(page: Page, projectPath: string): Promise<void> {
-  await page.getByTestId('sessions-add-project').click();
+  await page.getByTestId('sidebar-projects-add').click();
   await expect(page.getByTestId('directory-picker')).toBeVisible({ timeout: 10_000 });
 
   const pathInput = page.getByTestId('directory-picker-path-input');
@@ -85,55 +91,49 @@ test.describe('§window-states Toasts', () => {
     await closeTauriApp(app);
   });
 
-  test('a real add-project success flow shows the success status chip variant + description', async () => {
+  test('a real add-project success flow raises a success-typed toast with the path', async () => {
     const { page } = app;
     const projectPath = makeTempProjectDir('mf-e2e-toast-success-');
     createdDirs.push(projectPath);
 
     await addProjectViaUi(page, projectPath);
 
-    const toast = page.getByTestId('toast-root').filter({ hasText: 'Project added' });
+    const toast = page.locator(TOAST.root).filter({ hasText: 'Project added' });
     await expect(toast).toBeVisible({ timeout: 10_000 });
     await expect(toast).toContainText(projectPath);
-
-    const chip = toast.getByTestId('toast-status-chip');
-    await expect(chip).toBeVisible();
-    await expect(chip).toHaveClass(/bg-mf-success-tint/);
-    await expect(chip).toHaveClass(/text-mf-success/);
+    // The type is sonner's own attribute now; the old status chip (and its
+    // mf-success-tint classes) went with WsToastCard.
+    await expect(toast).toHaveAttribute('data-type', 'success');
+    await expect(toast.locator(TOAST.description)).toContainText(projectPath);
   });
 
-  test('the auto-dismiss countdown rail hides on hover and reappears on mouse leave', async () => {
+  test('a success toast auto-dismisses on its own', async () => {
     const { page } = app;
-    const projectPath = makeTempProjectDir('mf-e2e-toast-rail-');
+    const projectPath = makeTempProjectDir('mf-e2e-toast-autodismiss-');
     createdDirs.push(projectPath);
 
     await addProjectViaUi(page, projectPath);
 
-    const toast = page.getByTestId('toast-root').filter({ hasText: 'Project added' }).filter({ hasText: projectPath });
+    const toast = page.locator(TOAST.root).filter({ hasText: projectPath });
     await expect(toast).toBeVisible({ timeout: 10_000 });
-    await expect(toast.getByTestId('toast-countdown-rail')).toBeVisible({ timeout: 5_000 });
-
-    await toast.hover();
-    await expect(toast.getByTestId('toast-countdown-rail')).toHaveCount(0);
-
-    // Move away from the bottom-right toast stack (Toaster position="bottom-right")
-    // to fire mouseleave and let the rail resume.
-    await page.mouse.move(10, 10);
-    await expect(toast.getByTestId('toast-countdown-rail')).toBeVisible({ timeout: 5_000 });
+    // mfToast's policy table: non-persistent types carry AUTO_DISMISS_MS (~4.2s).
+    // The countdown rail that used to visualise it is gone with WsToastCard, so the
+    // expiry itself is the assertion.
+    await expect(toast).toHaveCount(0, { timeout: 15_000 });
   });
 
-  test('the dismiss button removes the toast', async () => {
+  test('a success toast carries no close button — only persistent types get one', async () => {
     const { page } = app;
-    const projectPath = makeTempProjectDir('mf-e2e-toast-dismiss-');
+    const projectPath = makeTempProjectDir('mf-e2e-toast-close-');
     createdDirs.push(projectPath);
 
     await addProjectViaUi(page, projectPath);
 
-    const toast = page.getByTestId('toast-root').filter({ hasText: 'Project added' }).filter({ hasText: projectPath });
+    const toast = page.locator(TOAST.root).filter({ hasText: projectPath });
     await expect(toast).toBeVisible({ timeout: 10_000 });
-
-    await toast.getByTestId('toast-dismiss').click();
-    await expect(toast).toHaveCount(0, { timeout: 5_000 });
+    // `closeButton: persistent` in lib/toast.ts — error and permission toasts get an
+    // exit that isn't an action; a self-dismissing success toast does not.
+    await expect(toast.locator(TOAST.close)).toHaveCount(0);
   });
 
   test('error toast does not auto-dismiss', async () => {
@@ -172,24 +172,30 @@ test.describe('§window-states First-run tour', () => {
     await closeTauriApp(app);
   });
 
+  // The v2 sidebar rebuild briefly dropped `data-tut="sessions"` from
+  // SessionsNewButton, which made STEPS[0] unanchorable and let `remeasure`'s
+  // auto-skip (built for structurally-absent steps like `model`) swallow "Start a
+  // session". The anchor is restored; the walk below covers the step order.
   test('auto-opens ~1.5s after settle on an empty-sessions workspace', async () => {
     const { page } = app;
     // use-first-run-tour.ts SETTLE_MS=1500 — generous timeout for the settle
     // window plus app boot/reload overhead.
     await expect(page.getByTestId('tour-overlay')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('tour-label-card')).toContainText('Step 1 of 4');
-    await expect(page.getByTestId('tour-label-card')).toContainText('Start a session');
+    // A label card AND a measured spotlight — together these prove the tour armed
+    // on a step whose anchor it could actually find.
+    await expect(page.getByTestId('tour-label-card')).toBeVisible();
+    await expect(page.getByTestId('tour-spotlight')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tour-skip-btn')).toBeVisible();
   });
 
-  // Previously: step 3's ("model") spotlight had no anchor to measure on a
-  // genuinely empty (zero-session) workspace — `composer-model-select`
-  // (`data-tut="model"`) is rendered by `ComposerToolbar`, which still gates
-  // its entire toolbar on a resolved `chat` (`if (!chat) return null`), so the
-  // anchor never mounts on a fresh workspace. Fixed by the product-bug-fix
-  // campaign at the TOUR level (not the toolbar): `TutorialOverlay.remeasure`
-  // now detects an un-anchorable step after its settle window and
-  // auto-skips it in the current direction of travel, so a first-time user
-  // never sees a label card pointing at nothing.
+  // Step 3 ("model") legitimately has no anchor on a genuinely empty (zero-session)
+  // workspace — `composer-model-select` (`data-tut="model"`) is rendered by
+  // `ComposerToolbar`, which gates its whole toolbar on a resolved `chat`
+  // (`if (!chat) return null`). `TutorialOverlay.remeasure` detects that after its
+  // settle window and auto-skips the step in the current direction of travel, so a
+  // first-time user never sees a label card pointing at nothing. That part still
+  // works and is unit-covered (TutorialOverlay.test.tsx).
+  //
   test('Next/Back walk the reachable steps, auto-skipping the anchorless model step; Done completes the tour', async () => {
     const { page } = app;
     const label = page.getByTestId('tour-label-card');
@@ -209,10 +215,10 @@ test.describe('§window-states First-run tour', () => {
     await expect(page.getByTestId('tour-back-btn')).toBeVisible();
 
     // Next auto-skips the anchorless step 3 (model) and lands directly on
-    // step 4 (run) — the settle window is ~30ms, so a short poll suffices.
+    // step 4 (workspace) — the settle window is ~30ms, so a short poll suffices.
     await page.getByTestId('tour-next-btn').click();
     await expect(label).toContainText('Step 4 of 4', { timeout: 2_000 });
-    await expect(label).toContainText('Run & preview');
+    await expect(label).toContainText('Open the workspace');
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
 
@@ -241,9 +247,8 @@ test.describe('§window-states First-run tour', () => {
   test('Skip dismisses the tour permanently across reload', async () => {
     const { page } = app;
 
-    // Re-arm: the previous test completed the tour (completed:true persisted to
-    // localStorage), so TutorialOverlay structurally returns null on mount —
-    // clear the key again to re-run the settle gate.
+    // Re-arm unconditionally: the walk test above finishes with completed:true in
+    // localStorage, and TutorialOverlay then structurally returns null on mount.
     await page.evaluate(() => localStorage.removeItem('mf:tutorial'));
     await page.reload();
     await waitConnected(page);

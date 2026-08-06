@@ -31,29 +31,26 @@ export function AboutPane() {
   return (
     <div data-testid="settings-pane-about">
       <div className="mb-8 flex items-center gap-3.5">
-        <div className="inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary),oklch(0.62_0.23_304))] text-hero font-bold text-white shadow-md">
+        <div className="inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,var(--primary),oklch(0.62_0.23_304))] text-2xl font-bold text-white shadow-md">
           m
         </div>
         <div className="min-w-0">
-          <div className="text-display font-bold tracking-tight text-foreground">Mainframe</div>
-          <div className="text-label text-muted-foreground">AI-native development environment</div>
+          <div className="text-lg font-semibold tracking-tight text-foreground">Mainframe</div>
+          <div className="text-xs text-muted-foreground">AI-native development environment</div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border-[0.5px] border-border">
+      <div className="overflow-hidden rounded-lg border">
         {rows.map((row, i) => (
           <div
             key={row.label}
-            className={cn(
-              'flex items-center gap-6 px-3.5 py-[11px]',
-              i < rows.length - 1 && 'border-b-[0.5px] border-border',
-            )}
+            className={cn('flex items-center gap-6 px-3.5 py-[11px]', i < rows.length - 1 && 'border-b')}
           >
-            <span className="w-20 shrink-0 text-label text-muted-foreground">{row.label}</span>
+            <span className="w-20 shrink-0 text-xs text-muted-foreground">{row.label}</span>
             <TruncatedWithTooltip
               text={row.value}
               data-testid={row.testId}
-              className={cn('min-w-0 text-label text-foreground', row.mono && 'font-mono')}
+              className={cn('min-w-0 text-xs text-foreground', row.mono && 'font-mono')}
             />
           </div>
         ))}

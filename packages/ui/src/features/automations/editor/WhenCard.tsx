@@ -7,11 +7,15 @@
  * The add-trigger trigger is wrapped in `Hint` (wraps, never sits inside —
  * see `TokenPicker`'s identical binding convention).
  */
-import { useState } from 'react';
 import { Calendar, Globe, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Hint } from '@v2/components/ui/hint';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@v2/components/ui/dropdown-menu';
 import type { AutomationTrigger } from '../contract';
 import { TriggerRow } from './TriggerRow';
 
@@ -45,8 +49,6 @@ export interface WhenCardProps {
 }
 
 export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
-  const [open, setOpen] = useState(false);
-
   function setAt(index: number, next: AutomationTrigger | null) {
     const arr = triggers.slice();
     if (next === null) arr.splice(index, 1);
@@ -56,7 +58,6 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
 
   function add(kind: AutomationTrigger['kind']) {
     onChange([...triggers, newTrigger(kind)]);
-    setOpen(false);
   }
 
   return (
@@ -71,43 +72,42 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
         />
       ))}
       {triggers.length === 0 && (
-        <div className="text-label text-muted-foreground">No trigger yet — you’ll run it by hand.</div>
+        <div className="text-xs text-muted-foreground">No trigger yet — you’ll run it by hand.</div>
       )}
-      <Popover open={open} onOpenChange={setOpen}>
+      <DropdownMenu>
         <Hint label="Add a trigger">
-          <PopoverTrigger asChild>
+          <DropdownMenuTrigger asChild>
             <button
               type="button"
               data-testid="automations-when-add"
-              className="self-start text-caption font-semibold text-primary"
+              className="self-start text-xs font-semibold text-primary"
             >
               + Add a trigger
             </button>
-          </PopoverTrigger>
+          </DropdownMenuTrigger>
         </Hint>
-        <PopoverContent data-testid="automations-when-add-menu" align="start" className="w-64 p-1.5">
+        <DropdownMenuContent data-testid="automations-when-add-menu" align="start" className="w-64">
           {TRIGGER_ADD_OPTIONS.map((option) => {
             const Icon = option.icon;
             return (
-              <button
+              <DropdownMenuItem
                 key={option.kind}
-                type="button"
                 data-testid={`automations-when-add-${option.kind}`}
-                onClick={() => add(option.kind)}
-                className="flex w-full items-start gap-2.5 rounded-md p-2 text-left hover:bg-accent"
+                onSelect={() => add(option.kind)}
+                className="items-start gap-2.5 p-2"
               >
-                <span className="flex size-[24px] shrink-0 items-center justify-center rounded-sm bg-mf-auto-kind-call/12">
-                  <Icon size={12} className="text-mf-auto-kind-call" aria-hidden />
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-mf-auto-kind-call/12">
+                  <Icon className="size-3 text-mf-auto-kind-call" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-label font-semibold text-foreground">{option.label}</span>
-                  <span className="mt-0.5 block text-caption text-muted-foreground">{option.hint}</span>
+                  <span className="block text-xs font-semibold">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.hint}</span>
                 </span>
-              </button>
+              </DropdownMenuItem>
             );
           })}
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

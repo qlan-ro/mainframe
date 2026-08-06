@@ -7,7 +7,7 @@
  * as the section — this pins the click landing on `recommendations`, never
  * the event object, and that the button's testid stays put.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
@@ -18,6 +18,11 @@ vi.mock('@/features/git/BranchPopover', () => ({
 
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+
+// v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern; SidebarProvider mounts it live).
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
 beforeEach(() => {
   // Seed a decoy section so a click that fails to normalize (either because
@@ -35,7 +40,6 @@ describe('MainToolbar — Setup Advisor open action arity', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         projectId="p1"
-        windowStyle="glass"
         port={31415}
       />,
     );
@@ -57,7 +61,6 @@ describe('MainToolbar — Setup Advisor open action arity', () => {
         onExpandSidebar={vi.fn()}
         projectName="mainframe"
         projectId="p1"
-        windowStyle="glass"
         port={31415}
       />,
     );

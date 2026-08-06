@@ -1,30 +1,40 @@
 /**
- * EditorTabBody — dispatches to the correct tab body component based on tab.kind.
+ * EditorTabBody — dispatches a file-backed workspace tab (code/diff/skill/viewer)
+ * to its body component.
  *
- * Centralises the kind → component routing so FilesSurface stays under 30 lines.
+ * The three bodies are lazy: CodeMirror, the merge view and the viewer family are
+ * the heaviest modules in the app, and the workspace surface mounts on nearly
+ * every session — a terminal-only workspace must not pay for the editor.
  *
  * data-testid: delegated to each body component.
  */
-import type { EditorTabModel, DiffTabModel } from '@/store/tabs';
-import { EditorTab } from '@/features/editor/EditorTab';
-import { DiffTab } from '@/features/editor/DiffTab';
-import { ViewerRouter } from '@/features/viewers/viewer-router';
+import { lazy, Suspense } from 'react';
+import type { RunTab } from '@/store/run-pane';
 
-interface EditorTabBodyProps {
-  tab: EditorTabModel;
+const EditorTab = lazy(() => import('@/features/editor/EditorTab').then((m) => ({ default: m.EditorTab })));
+const DiffTab = lazy(() => import('@/features/editor/DiffTab').then((m) => ({ default: m.DiffTab })));
+const ViewerRouter = lazy(() => import('@/features/viewers/viewer-router').then((m) => ({ default: m.ViewerRouter })));
+
+function BodyFallback({ label }: { label: string }) {
+  return <div className="grid h-full place-items-center text-xs text-muted-foreground">{label}</div>;
 }
 
-export function EditorTabBody({ tab }: EditorTabBodyProps) {
-  if (tab.kind === 'diff') {
-    const diffTab = tab as DiffTabModel;
-    return <DiffTab path={tab.path} original={diffTab.original} modified={diffTab.modified} />;
-  }
+export function EditorTabBody({ tab }: { tab: RunTab }) {
+  // A file tab always carries a path; a corrupt persisted tab without one says so
+  // rather than mounting an editor on `undefined`.
+  if (!tab.path) return <BodyFallback label={`${tab.title} — no file path`} />;
 
-  if (tab.kind === 'viewer') {
-    return <ViewerRouter path={tab.path} />;
-  }
-
-  // kind === 'code' — a skill file is just a code/markdown file at a different
-  // path; it opens through the normal editor (no dedicated skill tab).
-  return <EditorTab tabId={tab.id} path={tab.path} />;
+  return (
+    <Suspense fallback={<BodyFallback label="Loading…" />}>
+      {tab.kind === 'diff' ? (
+        <DiffTab path={tab.path} original={tab.original} modified={tab.modified} />
+      ) : tab.kind === 'viewer' ? (
+        <ViewerRouter path={tab.path} />
+      ) : (
+        // code / skill — a skill file is a markdown file at a different path, so
+        // it opens through the normal editor (no dedicated skill tab).
+        <EditorTab tabId={tab.id} path={tab.path} />
+      )}
+    </Suspense>
+  );
 }

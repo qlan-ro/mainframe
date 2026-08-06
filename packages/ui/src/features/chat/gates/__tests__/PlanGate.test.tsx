@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import { PlanGate } from '../PlanGate';
 import type { ReplyFn } from '../gate-types';
@@ -69,17 +69,17 @@ describe('PlanGate', () => {
     expect(screen.getByText(/Second step/)).toBeInTheDocument();
   });
 
-  // --- Finding 6.5/6.17: head icon is design-sized (15px) and uses a checklist glyph ---
+  // --- head icon sits on the 14px step of the v2 scale and uses a checklist glyph ---
 
-  it('the head icon tile renders a 15px checklist-style icon', () => {
+  it('the head icon tile renders a 14px checklist-style icon', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
     const tile = screen.getByTestId('gate-head-tile');
     const icon = tile.querySelector('svg');
-    expect(icon).toHaveClass('size-[15px]');
+    expect(icon).toHaveClass('size-3.5');
     expect(icon).toHaveClass('lucide-square-check');
   });
 
-  // --- Finding 6.10: exec-mode segmented control outer radius (8px) and icon size (12px) ---
+  // --- exec-mode segmented control: outer radius and icon size ---
 
   it('the exec-mode segmented control outer container uses rounded-md (8px), not rounded-lg', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
@@ -88,10 +88,10 @@ describe('PlanGate', () => {
     expect(outer).not.toHaveClass('rounded-lg');
   });
 
-  it('the exec-mode option icons are sized to the design spec (12px)', () => {
+  it('the exec-mode option icons sit on the 12px step of the v2 scale', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
     const icon = screen.getByTestId('chat-plan-execmode-default').querySelector('svg');
-    expect(icon).toHaveClass('size-[12px]');
+    expect(icon).toHaveClass('size-3');
   });
 
   // --- Behavior 2: approve with default exec-mode and unchecked clear-context ---
@@ -165,7 +165,7 @@ describe('PlanGate', () => {
     const textarea = screen.getByTestId('chat-plan-feedback-input');
     expect(textarea).toBeInTheDocument();
 
-    // Finding 6.16: the revise row mounts with an enter transition.
+    // The revise row mounts with an enter transition.
     expect(textarea.closest('div')).toHaveClass('animate-in', 'fade-in-0');
 
     // Send-feedback is disabled while textarea is empty

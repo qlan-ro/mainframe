@@ -23,12 +23,12 @@ export function CliUnavailable({ executable, packageRunner }: CliUnavailableProp
       data-testid="skills-section-cli-unavailable"
       className="flex flex-col gap-1 rounded-md border-[0.5px] border-border bg-muted/40 px-2 py-1.5"
     >
-      <p className="text-body text-foreground">
-        Mainframe could not run <span className="font-mono text-label">{executable}</span> or{' '}
-        <span className="font-mono text-label">{packageRunner}</span>
+      <p className="text-sm text-foreground">
+        Mainframe could not run <span className="font-mono text-xs">{executable}</span> or{' '}
+        <span className="font-mono text-xs">{packageRunner}</span>
         {where}.
       </p>
-      <p className="text-label text-muted-foreground">Install the skills CLI to manage skills from here.</p>
+      <p className="text-xs text-muted-foreground">Install the skills CLI to manage skills from here.</p>
     </div>
   );
 }

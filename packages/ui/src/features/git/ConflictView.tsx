@@ -3,7 +3,7 @@
  * merge/rebase operation. No in-app conflict editor (parity with desktop).
  */
 import { AlertTriangle, Loader2, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Button } from '@v2/components/ui/button';
 
 export interface ConflictFile {
   status: string;
@@ -28,20 +28,20 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
   return (
     <div data-testid="git-conflict-view" className="min-w-[280px]">
       {/* No rounded-t here — the parent card (PANEL_CARD_SHELL) is overflow-hidden with
-          the matching rounded-[11px] corner, so this header bleeds edge-to-edge under it
+          the matching rounded corner, so this header bleeds edge-to-edge under it
           per the design's edge-to-edge danger header (finding 10.1). */}
-      <div className="flex items-center gap-2 border-b border-destructive/15 bg-mf-destructive-tint px-3 py-2">
-        <AlertTriangle size={14} className="text-destructive shrink-0" />
-        <span className="text-body font-semibold text-destructive">{headerLabel}</span>
+      <div className="flex items-center gap-2 border-b border-destructive/15 bg-destructive/10 px-3 py-2">
+        <AlertTriangle size={14} className="shrink-0 text-destructive" />
+        <span className="text-sm font-semibold text-destructive">{headerLabel}</span>
         {hasConflicts && (
-          <span className="font-mono text-caption font-bold text-destructive bg-destructive/10 rounded-full px-1.5 py-0.5 shrink-0">
+          <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-0.5 font-mono text-xs font-bold text-destructive">
             {conflictFiles.length}
           </span>
         )}
       </div>
 
       {operationInProgress ? (
-        <div className="px-3 py-3 text-body text-muted-foreground leading-relaxed">
+        <div className="px-3 py-3 text-sm leading-relaxed text-muted-foreground">
           A {activeOperation} is in progress. Ask an agent to continue the {activeOperation}, use an external editor, or
           abort to return to the previous state.
         </div>
@@ -49,19 +49,19 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
         <>
           <div className="max-h-40 overflow-y-auto py-1">
             {conflictFiles.map((f) => (
-              <div key={f.path} className="flex items-center gap-2 px-3 py-1 text-body">
-                <span className="inline-flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded bg-destructive/10 text-destructive font-mono text-caption font-bold">
+              <div key={f.path} className="flex items-center gap-2 px-3 py-1 text-sm">
+                <span className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm bg-destructive/10 font-mono text-xs font-bold text-destructive">
                   C
                 </span>
-                <span className="text-foreground truncate" style={{ direction: 'rtl', textAlign: 'left' }}>
+                <span className="truncate text-foreground" style={{ direction: 'rtl', textAlign: 'left' }}>
                   {f.path}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="px-3 py-2 border-t border-border">
-            <p className="text-label text-muted-foreground leading-relaxed">
+          <div className="border-t border-border px-3 py-2">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               Ask an agent to resolve the conflicts, or use an external editor. Once resolved, stage and commit to
               complete the operation.
             </p>
@@ -69,20 +69,18 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
         </>
       )}
 
-      <div className="px-3 py-2 border-t border-border">
-        <button
+      <div className="border-t border-border px-3 py-2">
+        <Button
           data-testid="git-conflict-abort"
+          variant="destructive"
+          size="sm"
           onClick={onAbort}
           disabled={aborting}
-          className={cn(
-            'w-full flex items-center justify-center gap-1.5 px-3 h-[32px] text-body rounded',
-            'bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity',
-            aborting && 'opacity-40 cursor-not-allowed',
-          )}
+          className="w-full"
         >
-          {aborting ? <Loader2 size={12} className="animate-spin" /> : <X size={12} strokeWidth={2.4} />}
+          {aborting ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" strokeWidth={2.4} />}
           {aborting ? 'Aborting...' : 'Abort'}
-        </button>
+        </Button>
       </div>
     </div>
   );

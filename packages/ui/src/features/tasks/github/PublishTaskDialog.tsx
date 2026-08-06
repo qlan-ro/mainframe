@@ -6,8 +6,8 @@
  * the board.
  */
 import React from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Button } from '@v2/components/ui/button';
 import { useGitHubSyncStore } from './use-github-sync-store';
 import { runOrToast } from './run-or-toast';
 import { partitionLabels, withheldLabelsSentence } from './workflow-labels';
@@ -15,7 +15,7 @@ import { partitionLabels, withheldLabelsSentence } from './workflow-labels';
 function PayloadRow({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-caption font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -52,12 +52,12 @@ export function PublishTaskDialog(): React.ReactElement | null {
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           <PayloadRow label="Title">
-            <p className="text-body text-foreground">{todo.title}</p>
+            <p className="text-sm text-foreground">{todo.title}</p>
           </PayloadRow>
 
           {todo.body !== '' && (
             <PayloadRow label="Body">
-              <p className="whitespace-pre-wrap text-label leading-relaxed text-foreground">{todo.body}</p>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground">{todo.body}</p>
             </PayloadRow>
           )}
 
@@ -65,7 +65,7 @@ export function PublishTaskDialog(): React.ReactElement | null {
             <PayloadRow label="Labels">
               <div data-testid="tasks-github-publish-labels" className="flex flex-wrap gap-1">
                 {syncable.map((label) => (
-                  <span key={label} className="rounded bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
+                  <span key={label} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {label}
                   </span>
                 ))}
@@ -73,7 +73,7 @@ export function PublishTaskDialog(): React.ReactElement | null {
             </PayloadRow>
           )}
 
-          {withheldSentence !== '' && <p className="text-caption text-muted-foreground">{withheldSentence}</p>}
+          {withheldSentence !== '' && <p className="text-xs text-muted-foreground">{withheldSentence}</p>}
         </div>
 
         <DialogFooter className="shrink-0 gap-2">

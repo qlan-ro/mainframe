@@ -20,8 +20,8 @@
 import React, { useState } from 'react';
 import { Pencil, Play, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@/components/ui/hint';
-import { Switch } from '@/components/ui/switch';
+import { Hint } from '@v2/components/ui/hint';
+import { Switch } from '@v2/components/ui/switch';
 import { mfToast } from '@/lib/toast';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
@@ -110,10 +110,10 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-[8px]">
-          <span className="truncate text-body font-semibold tracking-tight text-foreground">{automation.name}</span>
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">{automation.name}</span>
         </div>
         {automation.description && (
-          <div className="mt-[2px] truncate text-label text-muted-foreground">{automation.description}</div>
+          <div className="mt-[2px] truncate text-xs text-muted-foreground">{automation.description}</div>
         )}
         <div className="mt-[7px] flex flex-wrap items-center gap-[7px]">
           <TriggerChips triggers={automation.definition.triggers} />
@@ -128,7 +128,7 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
           disabled={running}
           title="Run now"
           onClick={stopAnd(() => void handleRun())}
-          className="inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] border-border bg-transparent px-[11px] text-label font-semibold text-muted-foreground transition-colors group-hover:bg-card hover:bg-card disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] border-border bg-transparent px-[11px] text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-card hover:bg-card disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Play size={12} className="fill-current text-primary" aria-hidden />
           Run

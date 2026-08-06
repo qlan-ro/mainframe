@@ -25,7 +25,7 @@ vi.mock('@/lib/api/skills-cli', () => ({
 
 import { SkillsSection } from '../SkillsSection';
 import * as skillsCliApi from '@/lib/api/skills-cli';
-import { makeEntry, mockCatalogUnavailable, mockManifest, resetSkillsStores } from './harness';
+import { makeEntry, mockCatalogUnavailable, mockManifest, openScopeMenu, resetSkillsStores } from './harness';
 
 const RESULT = { source: 'obscure/repo', skillId: 'yaml-linter', name: 'YAML Linter', installs: 12, isOfficial: null };
 
@@ -75,7 +75,7 @@ describe('SkillsSection — catalog unavailable', () => {
 
     fireEvent.change(screen.getByTestId('skills-browse-search'), { target: { value: 'yaml' } });
 
-    fireEvent.click(await screen.findByTestId('skills-row-action-obscure/repo/yaml-linter'));
+    await openScopeMenu('obscure/repo/yaml-linter');
     fireEvent.click(await screen.findByTestId('skills-row-scope-obscure/repo/yaml-linter-project'));
 
     expect(skillsCliApi.installSkills).toHaveBeenCalledWith(

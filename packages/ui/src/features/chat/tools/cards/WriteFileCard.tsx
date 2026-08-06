@@ -3,7 +3,7 @@
 /**
  * WriteFileCard — tool card for the 'Write' tool.
  *
- * Collapsed by default. Header: green family tile + "Write" verb +
+ * Collapsed by default. Header: plus glyph + "Write" verb +
  * ClickableFilePath + +N stat pill + StatusDot.
  * Body: structured diff patch when available, otherwise an all-add line view.
  *
@@ -19,7 +19,6 @@ import {
   ClickableFilePath,
   StatusDot,
   CollapsibleCardShell,
-  FamilyTile,
 } from '../shared';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
 import { ToolResultExpand } from '../ToolResultExpand';
@@ -32,16 +31,16 @@ import { useChatId } from '../chat-tool-context';
 function AllAddLines({ content }: { content: string }) {
   const lines = content.split('\n');
   return (
-    <div className="font-mono text-label leading-5 overflow-x-auto bg-mf-code-bg">
+    <div className="overflow-x-auto bg-mf-code-bg font-mono text-xs leading-5">
       {lines.map((line, i) => (
         <div
           key={i}
-          className="flex border-l-2 border-l-mf-diff-add-border bg-mf-diff-add-bg hover:brightness-95 transition-colors"
+          className="flex border-l-2 border-l-mf-diff-add-border bg-mf-diff-add-bg transition-colors hover:brightness-95"
         >
-          <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-1" />
-          <span className="shrink-0 w-8 select-none text-mf-text-3 text-right pr-2">{i + 1}</span>
-          <span className="shrink-0 w-5 select-none text-mf-diff-add-text text-center font-bold">+</span>
-          <span className="select-text whitespace-pre-wrap break-all pr-3 text-mf-diff-add-text">{line}</span>
+          <span className="w-8 shrink-0 pr-1 text-right text-muted-foreground select-none" />
+          <span className="w-8 shrink-0 pr-2 text-right text-muted-foreground select-none">{i + 1}</span>
+          <span className="w-5 shrink-0 text-center font-bold text-mf-diff-add-text select-none">+</span>
+          <span className="pr-3 break-all whitespace-pre-wrap text-mf-diff-add-text select-text">{line}</span>
         </div>
       ))}
     </div>
@@ -88,7 +87,7 @@ function WriteCardBody({
           ) : (
             <pre
               data-testid="chat-write-error-text"
-              className="text-label font-mono overflow-x-auto whitespace-pre-wrap text-muted-foreground"
+              className="overflow-x-auto font-mono text-xs whitespace-pre-wrap text-muted-foreground"
             >
               {resultText}
             </pre>
@@ -118,16 +117,10 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
   const hasError = Boolean(resultText && isError);
   const showExpand = hasError && truncated && Boolean(chatId) && Boolean(toolCallId);
 
-  const tile = (
-    <FamilyTile color="var(--mf-success)" bg="var(--mf-success-tint)">
-      <PlusIcon size={13} />
-    </FamilyTile>
-  );
-
   const trailing = (
     <>
       {stats?.added != null && (
-        <span className="font-mono tabular-nums text-caption shrink-0 font-semibold text-muted-foreground">
+        <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
           +{stats.added}
         </span>
       )}
@@ -156,7 +149,7 @@ export const WriteFileCard: ToolCallMessagePartComponent = (part) => {
       result={result}
       isError={isError}
       defaultOpen={false}
-      tile={tile}
+      icon={<PlusIcon />}
       verb="Write"
       target={<ClickableFilePath filePath={filePath} />}
       trailing={trailing}

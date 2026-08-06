@@ -108,10 +108,10 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
               value={step.title}
               onChange={(e) => patchTitle(e.target.value)}
               placeholder={meta.label}
-              className="w-full border-none bg-transparent p-0 text-body font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+              className="w-full border-none bg-transparent p-0 text-sm font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
             />
           ) : (
-            <span className="block text-body font-semibold tracking-tight text-foreground">{meta.label}</span>
+            <span className="block text-sm font-semibold tracking-tight text-foreground">{meta.label}</span>
           )}
           <div className="mt-0.5">
             <StepSummary step={step} tokens={tokens} catalog={catalog} />
@@ -123,7 +123,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className={cn(
-            'mt-0.5 inline-flex h-[26px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] px-2.5 text-caption font-semibold',
+            'mt-0.5 inline-flex h-[26px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] px-2.5 text-xs font-semibold',
             open
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-border text-muted-foreground hover:bg-accent',
@@ -148,15 +148,15 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-level={bad ? 'error' : 'warning'}
           className={cn(
             'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
-            bad ? 'border-destructive/20 bg-destructive/[0.06]' : 'border-mf-warning/30 bg-mf-warning-tint',
+            bad ? 'border-destructive/20 bg-destructive/[0.06]' : 'border-warning/30 bg-warning/10',
           )}
         >
           {myIssues.map((issue, i) => (
             <span
               key={i}
               className={cn(
-                'flex items-start gap-1.5 text-caption font-semibold',
-                issue.level === 'error' ? 'text-destructive' : 'text-mf-warning',
+                'flex items-start gap-1.5 text-xs font-semibold',
+                issue.level === 'error' ? 'text-destructive' : 'text-warning',
               )}
             >
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />

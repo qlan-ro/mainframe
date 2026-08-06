@@ -3,51 +3,25 @@
 /**
  * CollapsibleCardShell — shared chrome for all tool cards.
  *
- * Encapsulates: the card border/radius, CollapsibleTrigger header with a
- * 22×22 family tile (icon or glyph + token colour), a verb label, optional
- * target slot (e.g. ClickableFilePath), optional trailing slot (stat pills /
- * StatusDot), and the collapsible body.
+ * Encapsulates the card frame, a CollapsibleTrigger header (leading glyph, verb
+ * label, optional target slot such as ClickableFilePath, optional trailing slot
+ * for stat pills / StatusDot) and the collapsible body.
  *
- * Token rules: no /opacity modifier on --mf-* hex vars (CSS-var hex trap).
- * Uses real globals.css tokens only.
+ * The header glyph carries the TOOL FAMILY by shape only. The six
+ * `--mf-tool-*` hues that used to tint a 22px tile are gone: the same rule the
+ * workspace tab strip and the slash-command badge already follow — six tinted
+ * tiles stacked down a transcript read as six features, and state is already
+ * carried by the trailing StatusDot.
  *
- * ErrorBody — the destructive-tinted pre shared by ReadFileCard and SearchCard
- * (previously byte-identical in both files).
+ * ErrorBody — the destructive-tinted pre shared by ReadFileCard and SearchCard.
  */
 import React from 'react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { cn } from '@v2/lib/utils';
 import { cardStyle } from './chrome';
 
 // ---------------------------------------------------------------------------
-// FamilyTile — 22×22 coloured square holding an icon or a glyph character
-// ---------------------------------------------------------------------------
-
-export interface FamilyTileProps {
-  /** Token-backed colour for the icon/glyph. */
-  color: string;
-  /** Token-backed background color string. */
-  bg: string;
-  /** React node rendered inside the tile (icon component or string glyph). */
-  children: React.ReactNode;
-}
-
-export function FamilyTile({ color, bg, children }: FamilyTileProps) {
-  return (
-    <span
-      aria-hidden
-      className="w-[22px] h-[22px] rounded-sm shrink-0 flex items-center justify-center"
-      style={{ backgroundColor: bg }}
-    >
-      <span className="text-caption font-bold leading-none select-none" style={{ color }}>
-        {children}
-      </span>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ErrorBody — destructive-tinted pre (shared by ReadFileCard & SearchCard)
+// ErrorBody
 // ---------------------------------------------------------------------------
 
 export interface ErrorBodyProps {
@@ -58,15 +32,12 @@ export interface ErrorBodyProps {
 
 export function ErrorBody({ text, testId }: ErrorBodyProps) {
   return (
-    <div className="relative">
-      <div className="absolute inset-0 bg-destructive opacity-10 pointer-events-none" aria-hidden />
-      <pre
-        data-testid={testId}
-        className="relative font-mono text-label whitespace-pre-wrap break-words px-3 py-2 text-destructive"
-      >
-        {text}
-      </pre>
-    </div>
+    <pre
+      data-testid={testId}
+      className="bg-destructive/10 px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-destructive"
+    >
+      {text}
+    </pre>
   );
 }
 
@@ -86,8 +57,8 @@ export interface CollapsibleCardShellProps {
   defaultOpen?: boolean;
   /** Disable the trigger (no body to show yet). */
   disableTrigger?: boolean;
-  /** The 22×22 family tile (use FamilyTile or a custom element). */
-  tile: React.ReactNode;
+  /** Leading family glyph — a bare lucide icon; the trigger sizes and inks it. */
+  icon: React.ReactNode;
   /** Short verb label, e.g. "Edit", "Write", "Bash". */
   verb: string;
   /** Optional clickable target (e.g. ClickableFilePath). Flex min-w-0 truncate. */
@@ -109,7 +80,7 @@ export function CollapsibleCardShell({
   isError,
   defaultOpen = false,
   disableTrigger = false,
-  tile,
+  icon,
   verb,
   target,
   trailing,
@@ -129,16 +100,16 @@ export function CollapsibleCardShell({
         data-testid={triggerId}
         disabled={disableTrigger || !hasBody}
         className={cn(
-          'flex w-full items-center gap-[9px] px-[10px] py-[7px]',
-          'text-body transition-colors hover:bg-accent',
+          'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted',
+          "[&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
           (disableTrigger || !hasBody) && 'cursor-default',
         )}
       >
-        {tile}
-        <span className="text-label font-semibold text-foreground shrink-0">{verb}</span>
+        {icon}
+        <span className="shrink-0 font-medium text-foreground">{verb}</span>
         {target && <span className="min-w-0 truncate">{target}</span>}
         <span className="min-w-2 flex-1" />
-        {trailing && <span className="flex items-center gap-1.5 shrink-0">{trailing}</span>}
+        {trailing && <span className="flex shrink-0 items-center gap-1.5">{trailing}</span>}
       </CollapsibleTrigger>
 
       {subHeader}

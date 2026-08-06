@@ -15,6 +15,9 @@
 
 import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
 import { BranchSelect } from '@/features/git/BranchSelect';
 
 // ---------------------------------------------------------------------------
@@ -72,10 +75,12 @@ export function WorktreeNewForm({
   }
 
   return (
-    <div className="space-y-[6px]">
+    // px-2 matches the popover's section label and attach rows, so the fields
+    // line up with the column above them rather than drifting 4px left.
+    <div className="flex flex-col gap-2 px-2">
       {/* Base branch */}
-      <div>
-        <label className="mb-[3px] block text-label text-muted-foreground">Base branch</label>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Base branch</Label>
         <BranchSelect
           value={effectiveBranch}
           options={branches}
@@ -86,14 +91,13 @@ export function WorktreeNewForm({
         />
       </div>
 
-      {/* Branch name */}
-      <div>
-        <label className="mb-[3px] block text-label text-muted-foreground" htmlFor="wt-branch-name">
+      {/* Branch name — sans, not mono: the identifier signal is weight, not face. */}
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="wt-branch-name" className="text-xs text-muted-foreground">
           Branch name
-        </label>
-        <input
+        </Label>
+        <Input
           id="wt-branch-name"
-          type="text"
           data-testid="composer-worktree-branch-name"
           disabled={disabled}
           value={branchName}
@@ -103,46 +107,28 @@ export function WorktreeNewForm({
           }}
           placeholder="feat/my-branch"
           autoComplete="off"
-          className={[
-            'w-full rounded-[6px] border-[0.5px] bg-muted px-[8px] py-[4px]',
-            'font-mono text-label text-foreground placeholder:text-mf-text-3',
-            'outline-none transition-colors focus:border-primary',
-            validationError ? 'border-destructive' : 'border-border',
-          ].join(' ')}
+          // The control styles its own invalid state off aria-invalid.
+          aria-invalid={validationError != null}
+          className="h-8 text-xs md:text-xs"
         />
-        {validationError && <p className="mt-[2px] text-label text-destructive">{validationError}</p>}
+        {validationError && <p className="text-xs text-destructive">{validationError}</p>}
       </div>
 
-      {apiError && !validationError && <p className="text-label text-destructive">{apiError}</p>}
+      {apiError && !validationError && <p className="text-xs text-destructive">{apiError}</p>}
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-[6px] pt-[2px]">
-        <button
-          type="button"
-          data-testid="composer-worktree-cancel"
-          onClick={onCancel}
-          className={[
-            'rounded-[6px] px-[10px] py-[4px] text-label text-muted-foreground',
-            'hover:bg-accent hover:text-foreground transition-colors',
-          ].join(' ')}
-        >
+      <div className="flex items-center justify-end gap-1.5">
+        <Button variant="ghost" size="sm" data-testid="composer-worktree-cancel" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          type="button"
-          data-testid="composer-worktree-enable"
-          disabled={!canSubmit}
-          onClick={handleEnable}
-          className={[
-            'flex items-center gap-[4px] rounded-[6px] px-[10px] py-[4px]',
-            'bg-primary text-label text-primary-foreground',
-            'hover:opacity-90 transition-opacity',
-            'disabled:pointer-events-none disabled:opacity-40',
-          ].join(' ')}
-        >
-          {submitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+        </Button>
+        <Button size="sm" data-testid="composer-worktree-enable" disabled={!canSubmit} onClick={handleEnable}>
+          {submitting ? (
+            <Loader2 data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <Check data-icon="inline-start" />
+          )}
           Enable
-        </button>
+        </Button>
       </div>
     </div>
   );

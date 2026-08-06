@@ -26,6 +26,7 @@
  * "Amber" is asserted via a semantic `data-amber` attribute rather than a Tailwind
  * class string, per the suite's no-styling-pin convention.
  */
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -76,24 +77,40 @@ beforeEach(() => {
 
 describe('PairGlyph — unpaired', () => {
   it('renders the publish button, not the pair testid', () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-list-row-publish-285')).toBeTruthy();
     expect(screen.queryByTestId('tasks-list-row-pair-285')).toBeNull();
   });
 
   it('opens the publish dialog for this todo when clicked', async () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-list-row-publish-285'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'publish', todo: TODO });
   });
 
   it('is never amber', () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-list-row-publish-285').getAttribute('data-amber')).not.toBe('true');
   });
 
   it('uses the card surface prefix when surface="card"', () => {
-    render(<PairGlyph todo={TODO} surface="card" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="card" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-card-publish-285')).toBeTruthy();
   });
 });
@@ -104,7 +121,11 @@ describe('PairGlyph — paired, clean', () => {
   });
 
   it('renders #{issueNumber} and is not amber', () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     const glyph = screen.getByTestId('tasks-list-row-pair-285');
     expect(glyph.textContent).toContain('219');
     expect(glyph.getAttribute('data-amber')).not.toBe('true');
@@ -117,12 +138,20 @@ describe('PairGlyph — paired, overwritten in the last run', () => {
   });
 
   it('is amber', () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
   });
 
   it('opens the report when clicked', async () => {
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     await userEvent.click(screen.getByTestId('tasks-list-row-pair-285'));
     expect(openDialog).toHaveBeenCalledWith({ kind: 'report' });
   });
@@ -131,7 +160,11 @@ describe('PairGlyph — paired, overwritten in the last run', () => {
 describe('PairGlyph — errored', () => {
   it('is amber', () => {
     pairs = { [TODO.id]: PAIR_FIXTURE({ pairState: 'errored', stateReason: 'issue fetch failed: 502' }) };
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
   });
 });
@@ -139,7 +172,11 @@ describe('PairGlyph — errored', () => {
 describe('PairGlyph — remotely-unlinked', () => {
   it('is amber', () => {
     pairs = { [TODO.id]: PAIR_FIXTURE({ pairState: 'remotely-unlinked', stateReason: 'issue not found' }) };
-    render(<PairGlyph todo={TODO} surface="list" />);
+    render(
+      <TooltipProvider>
+        <PairGlyph todo={TODO} surface="list" />
+      </TooltipProvider>,
+    );
     expect(screen.getByTestId('tasks-list-row-pair-285').getAttribute('data-amber')).toBe('true');
   });
 });

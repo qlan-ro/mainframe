@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Input } from '@/components/ui/input';
+import { Input } from '@v2/components/ui/input';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useSkillsNonce } from '@/features/skills/use-skills-revalidation';
 import { CliUnavailable } from './CliUnavailable';
@@ -136,14 +136,14 @@ export function SkillsSection({ projectId, adapterId }: SkillsSectionProps) {
         </div>
 
         {adapterId && adapterId !== 'claude' ? (
-          <p data-testid="skills-section-adapter-note" className="pt-1.5 text-label text-muted-foreground">
+          <p data-testid="skills-section-adapter-note" className="pt-1.5 text-xs text-muted-foreground">
             {"The composer and sidebar skill lists show Claude's skills."}
           </p>
         ) : null}
 
         {/* Without the manifest every row looks new, which is a claim the panel can't make. */}
         {status === 'error' ? (
-          <p data-testid="skills-browse-manifest-error" className="pt-1.5 text-label text-muted-foreground">
+          <p data-testid="skills-browse-manifest-error" className="pt-1.5 text-xs text-muted-foreground">
             {"Couldn't read your installed skills, so none are marked here."}
           </p>
         ) : null}

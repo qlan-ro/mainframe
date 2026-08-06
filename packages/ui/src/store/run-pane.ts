@@ -1,21 +1,25 @@
 /**
- * store/run-pane.ts — Run surface multi-pane model (Phase 8).
+ * store/run-pane.ts — the workspace surface's multi-pane model.
  *
- * Mirrors the Run engine in prototype/04-engine.jsx: a Run surface holds 1–2
- * panes laid out along an axis (`dir`), each pane a tab strip. A Files tab
- * dragged onto Run becomes a GUEST (center = join the existing pane as a tab,
- * edge = split into a second pane). All functions here are PURE — the store
- * (`layout.ts`) owns the wiring + side-effects.
+ * The workspace holds 1–2 panes laid out along an axis (`dir`), each pane a tab
+ * strip. Every tab kind lives here — launched previews/consoles, terminals, URL
+ * tabs, and file-backed tabs (code/diff/skill/viewer) — since the Files and Run
+ * surfaces merged into one. All functions are PURE; the store (`layout.ts`) owns
+ * the wiring + side-effects. File-tab open/promote semantics live beside this in
+ * `run-pane-file-tabs.ts`.
  */
 
 export type RunTabKind = 'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer' | 'url';
 
-/** A tab inside a Run pane (a launched preview/console, a terminal, a Files guest, or a URL tab). */
+/** Preview = the single italic replace-me slot per pane; permanent = pinned. File tabs only. */
+export type TabMode = 'preview' | 'permanent';
+
+/** A tab inside a workspace pane (a launched preview/console, a terminal, a file, or a URL tab). */
 export interface RunTab {
   id: string;
   kind: RunTabKind;
   title: string;
-  /** File path for code/diff/skill/viewer guests; absent for preview/console/terminal/url. */
+  /** File path for code/diff/skill/viewer tabs; absent for preview/console/terminal/url. */
   path?: string;
   /** Launch-config name for preview (webview) and console (process) tabs. */
   config?: string;
@@ -23,15 +27,20 @@ export interface RunTab {
   port?: number;
   /** Normalized address for a `url` tab (http/https only — see normalizePreviewUrl). */
   url?: string;
+  /** Preview/permanent slot for file-backed tabs; absent on every other kind. */
+  mode?: TabMode;
+  /** Pre-resolved diff sides for a `diff` tab; absent means HEAD-vs-working. */
+  original?: string;
+  modified?: string;
   /**
    * Launch scope this tab belongs to (`buildLaunchScope(projectId,
-   * effectivePath)`), captured at creation from the active session. Run tabs are
-   * global (not bound to the active chat), so each carries its own scope: launch
-   * tabs filter their console/status by it, and the Run surface shows only the
-   * tabs matching the active session's scope (so they don't leak across
-   * projects/worktrees). Stamped on EVERY tab — launch configs, terminals, and
-   * Files guests — from the active session; only absent on a draft/unresolved
-   * session (no scope yet).
+   * effectivePath)`), captured at creation from the active session. Workspace
+   * tabs are global (not bound to the active chat), so each carries its own
+   * scope: launch tabs filter their console/status by it, and the workspace
+   * shows only the tabs matching the active session's scope (so they don't leak
+   * across projects/worktrees). Stamped on EVERY tab — launch configs,
+   * terminals, and files — from the active session; only absent on a
+   * draft/unresolved session (no scope yet).
    */
   scopeKey?: string;
 }
@@ -71,23 +80,23 @@ export interface RunState {
   panes: RunPane[];
 }
 
-/** Where a dragged tab lands on the Run region. */
+/** Where a dragged tab lands on the workspace region. */
 export type RunDropEdge = 'center' | 'left' | 'right' | 'top' | 'bottom';
 
 const MAX_PANES = 2;
 
-function genId(prefix: string): string {
+export function genId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-/** A Run surface with one empty pane. */
+/** A workspace with one empty pane. */
 export function emptyRun(): RunState {
   return { dir: 'v', flex: [1, 1], panes: [{ id: genId('pane'), tabs: [], active: null }] };
 }
 
 /**
  * Append a tab to a pane and focus it. With no `paneId`, targets the first pane
- * (back-compat) and creates the Run state if absent. Returns a new `RunState` on
+ * (back-compat) and creates the workspace state if absent. Returns a new `RunState` on
  * success. Returns `null` to signal an explicit no-op — the given `paneId` no
  * longer exists — so the caller disposes the orphan terminal; never silently
  * falls back to pane 0 (M6). `null` is the unambiguous no-op signal: it does not
@@ -134,7 +143,7 @@ export function activateRunTab(run: RunState, paneId: string, tabId: string): Ru
 
 /**
  * Remove a tab from a pane; drop any pane left empty. Returns `null` when the
- * whole Run surface is now empty (caller closes the Run surface).
+ * whole workspace is now empty (caller closes the workspace surface).
  */
 export function closeRunTab(run: RunState, paneId: string, tabId: string): RunState | null {
   const panes = run.panes
@@ -158,7 +167,7 @@ export function closePane(run: RunState, paneId: string): RunState | null {
   return { ...run, panes, flex: [1, 1] };
 }
 
-/** Every tab id of `kind` in the run state (across all panes). */
+/** Every tab id of `kind` in the workspace state (across all panes). */
 export function tabIdsInRun(run: RunState | null, kind: RunTabKind): string[] {
   if (!run) return [];
   return run.panes.flatMap((p) => p.tabs.filter((t) => t.kind === kind).map((t) => t.id));
@@ -181,7 +190,7 @@ export function tabIdsForScope(run: RunState | null, scopeKey: string, kind: Run
 /**
  * Remove every tab of a launch scope (across all panes); drop any pane left
  * empty. A pane whose active tab was removed re-points to its last survivor.
- * Returns `null` when the whole Run surface is now empty. Mirrors closeRunTab's
+ * Returns `null` when the whole workspace is now empty. Mirrors closeRunTab's
  * flex reset on collapse to a single pane.
  */
 export function releaseRunScope(run: RunState, scopeKey: string): RunState | null {
@@ -220,8 +229,8 @@ export function retargetUrlTab(run: RunState, tabId: string, url: string, title:
 }
 
 /**
- * Drop a guest tab onto the Run region. `center` joins the first pane as a tab;
- * an edge splits Run into a second pane with the guest beside what's running.
+ * Drop a tab onto the workspace region. `center` joins the first pane as a tab;
+ * an edge splits the workspace into a second pane beside what's already open.
  * Caps at MAX_PANES — an edge drop while already split joins as a tab instead.
  *
  * Edge case: when `run` is null OR every existing pane is empty, treat the drop

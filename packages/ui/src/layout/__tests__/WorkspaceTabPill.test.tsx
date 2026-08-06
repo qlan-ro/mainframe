@@ -1,0 +1,97 @@
+/**
+ * WorkspaceTabPill — the file-tab affordances the merge added: an italic title for
+ * the preview slot, double-click to promote, and a pill that is its own drag
+ * handle. (The type glyphs and the launch Stop are covered by the strip's test.)
+ */
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLayoutStore } from '@/store/layout';
+import { useSurfaceDragStore } from '../use-surface-drag';
+import { WorkspaceTabPill } from '../WorkspaceTabPill';
+import type { RunPane, RunTab } from '@/store/run-pane';
+
+// v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvider });
+
+const preview: RunTab = { id: 'tab-a', kind: 'code', title: 'a.ts', path: 'a.ts', mode: 'preview' };
+const permanent: RunTab = { id: 'tab-b', kind: 'code', title: 'b.ts', path: 'b.ts', mode: 'permanent' };
+
+function seed(tabs: RunTab[], active = tabs[0]!.id): RunPane {
+  const pane: RunPane = { id: 'pane-1', tabs, active };
+  useLayoutStore.setState({
+    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    run: { dir: 'v', flex: [1, 1], panes: [pane] },
+    sessions: new Map(),
+    activeSessionId: null,
+  });
+  return pane;
+}
+
+const pill = (pane: RunPane, tab: RunTab) => (
+  <WorkspaceTabPill pane={pane} tab={tab} configs={[]} scopeStatuses={{}} onStop={vi.fn()} />
+);
+
+beforeEach(() => {
+  useSurfaceDragStore.getState().cancel();
+});
+
+describe('WorkspaceTabPill — preview vs permanent', () => {
+  it('italicises a preview tab title', () => {
+    const pane = seed([preview]);
+    render(pill(pane, preview));
+    expect(screen.getByText('a.ts').className).toContain('italic');
+  });
+
+  it('does not italicise a permanent tab title', () => {
+    const pane = seed([permanent]);
+    render(pill(pane, permanent));
+    expect(screen.getByText('b.ts').className).not.toContain('italic');
+  });
+
+  it('double-clicking promotes the preview tab to permanent', () => {
+    const pane = seed([preview]);
+    render(pill(pane, preview));
+
+    fireEvent.doubleClick(screen.getByTestId('workspace-tab-tab-a'));
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs[0]!.mode).toBe('permanent');
+  });
+});
+
+describe('WorkspaceTabPill — activation, close, drag', () => {
+  it('clicking the pill activates that tab', () => {
+    const pane = seed([permanent, preview], 'tab-b');
+    render(pill(pane, preview));
+
+    fireEvent.click(screen.getByTestId('workspace-tab-tab-a'));
+    expect(useLayoutStore.getState().run!.panes[0]!.active).toBe('tab-a');
+  });
+
+  it('the close button removes the tab without activating it', () => {
+    const pane = seed([permanent, preview], 'tab-b');
+    render(pill(pane, preview));
+
+    fireEvent.click(screen.getByTestId('workspace-tab-close-tab-a'));
+    const run = useLayoutStore.getState().run!;
+    expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['tab-b']);
+    expect(run.panes[0]!.active).toBe('tab-b');
+  });
+
+  it('a left-button press on the pill begins a tab drag', () => {
+    const pane = seed([permanent, preview]);
+    render(pill(pane, preview));
+
+    fireEvent.pointerDown(screen.getByTestId('workspace-tab-tab-a'), { button: 0, clientX: 4, clientY: 6 });
+    const drag = useSurfaceDragStore.getState();
+    expect(drag.kind).toBe('tab');
+    expect(drag.tabId).toBe('tab-a');
+  });
+
+  it('a right-button press does NOT begin a drag', () => {
+    const pane = seed([permanent, preview]);
+    render(pill(pane, preview));
+
+    fireEvent.pointerDown(screen.getByTestId('workspace-tab-tab-a'), { button: 2, clientX: 4, clientY: 6 });
+    expect(useSurfaceDragStore.getState().kind).toBeNull();
+  });
+});

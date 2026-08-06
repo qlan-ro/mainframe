@@ -29,7 +29,7 @@ async function openPresets(user: ReturnType<typeof userEvent.setup>): Promise<st
 describe('SchedulePicker — modes', () => {
   it('starts in preset mode when the pattern is one of the curated presets', () => {
     render(<SchedulePicker trigger={schedule()} onChange={vi.fn()} testId="sched" />);
-    expect(screen.getByTestId('sched-mode-preset')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('sched-mode-preset')).toHaveAttribute('data-state', 'active');
     expect(screen.getByTestId('sched-preset')).toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe('SchedulePicker — modes', () => {
         testId="sched"
       />,
     );
-    expect(screen.getByTestId('sched-mode-custom')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('sched-mode-custom')).toHaveAttribute('data-state', 'active');
     expect(screen.getByTestId('sched-at')).toHaveValue('07:15');
   });
 
@@ -53,7 +53,7 @@ describe('SchedulePicker — modes', () => {
         testId="sched"
       />,
     );
-    expect(screen.getByTestId('sched-mode-once')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('sched-mode-once')).toHaveAttribute('data-state', 'active');
     expect(screen.getByTestId('sched-once-at')).toHaveValue('2026-08-01T14:00');
   });
 

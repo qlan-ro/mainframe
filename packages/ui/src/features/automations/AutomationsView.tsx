@@ -9,7 +9,8 @@
  */
 import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
-import { Hint } from '@/components/ui/hint';
+import { Button } from '@v2/components/ui/button';
+import { Hint } from '@v2/components/ui/hint';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
 import { DescribeFlow } from './describe/DescribeFlow';
@@ -22,7 +23,7 @@ const AutomationDetails = lazy(() =>
 );
 
 function SectionFallback(): React.ReactElement {
-  return <div className="flex flex-1 items-center justify-center text-label text-muted-foreground">Loading…</div>;
+  return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>;
 }
 
 export function AutomationsView(): React.ReactElement {
@@ -36,23 +37,21 @@ export function AutomationsView(): React.ReactElement {
 
   return (
     <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-card font-sans">
-      <div className="flex h-[50px] flex-shrink-0 items-center gap-[11px] border-b border-border px-[14px]">
-        <Hint label="Close">
-          <button
-            type="button"
-            data-testid="automations-close"
-            onClick={close}
-            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-          >
-            <X size={15} aria-hidden />
-          </button>
-        </Hint>
+      {/* Header band. Close sits at the far RIGHT — every dialog closes on the
+          right (stock shadcn position); the old left-side X predates the port. */}
+      <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
         <Zap size={16} className="text-primary" aria-hidden />
-        <span className="text-heading font-bold tracking-tight text-foreground">Workflows</span>
-        <span data-testid="automations-title-count" className="text-caption text-muted-foreground">
+        <span className="text-base font-semibold text-foreground">Workflows</span>
+        <span data-testid="automations-title-count" className="text-xs text-muted-foreground">
           {definitions.length} automation{definitions.length === 1 ? '' : 's'}
           {pending > 0 ? ` · ${pending} need you` : ''}
         </span>
+        <div className="flex-1" />
+        <Hint label="Close">
+          <Button variant="ghost" size="icon-sm" data-testid="automations-close" onClick={close} aria-label="Close">
+            <X aria-hidden />
+          </Button>
+        </Hint>
       </div>
 
       <Suspense fallback={<SectionFallback />}>

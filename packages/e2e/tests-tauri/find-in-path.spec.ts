@@ -21,14 +21,21 @@
  *   file-tree-find-in-file          — context-menu item on a file row
  *   file-tree-find-in-folder        — context-menu item on a folder row
  *   find-in-path                    — FindInPathModal DialogContent root
- *   find-in-path-input              — search input
- *   find-in-path-include-ignored    — checkbox, directory scope only
+ *   find-in-path-input              — search input (cmdk `CommandInput`; the testid rides
+ *                                     the real <input>, so `fill`/`press` work directly)
+ *   find-in-path-include-ignored    — v2 `Checkbox` (a `role="checkbox"` button, not an
+ *                                     <input>), directory scope only
  *   find-in-path-hint               — "Type at least 2 characters to search" (query.length===1)
  *   find-in-path-idle-hint          — "Type to search" (query empty)
  *   find-in-path-empty              — "No matches" (debounced query >=2 chars, 0 results)
- *   find-in-path-result-${file}:${line}:${column} — a result row
- *   files-tab-strip                 — Files surface tab strip (role="tab" pills)
+ *   find-in-path-result-${file}:${line}:${column} — a result row (`CommandItem`)
+ *   WORKSPACE.strip                 — a workspace pane's tab-strip row (pane-id-keyed;
+ *                                     see helpers/tauri/testids.ts)
  *   viewer-shell-status             — footer status string ("Ln x, Col y" for code files)
+ *
+ * One `CommandGroup` per matched file supplies the per-file grouping: cmdk renders the
+ * heading as an aria-hidden div and its items wrapper as `role="group"` labelled by that
+ * heading, which is what the `getByRole('group', { name: file })` assertions below read.
  *
  * Cursor-position assertions expect the true 1-based match position rendered in
  * the footer: FindInPathModal converts the daemon's 1-based search hits to the
@@ -41,6 +48,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { WORKSPACE } from '../helpers/tauri/testids.js';
 
 // ── Fixture content ────────────────────────────────────────────────────────────
 // Every file is written WITHOUT a trailing newline so its CM6 document has exactly
@@ -151,7 +159,8 @@ test.describe('§find-in-path', () => {
     await expect(page.getByTestId('find-in-path-result-src/alpha.ts:3:7')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('find-in-path-result-src/beta.ts:2:17')).toBeVisible();
 
-    // Grouped by file: one sticky header per matched file.
+    // Grouped by file: one cmdk CommandGroup per matched file, its role="group"
+    // items wrapper labelled by the group heading.
     await expect(page.getByRole('group', { name: 'src/alpha.ts' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'src/beta.ts' })).toBeVisible();
 
@@ -204,9 +213,9 @@ test.describe('§find-in-path', () => {
     await expect(result).toBeVisible({ timeout: 5_000 });
     await result.click();
 
-    // Dialog closes and the Files surface opens the matched file.
+    // Dialog closes and the workspace opens the matched file.
     await expect(page.getByTestId('find-in-path')).toHaveCount(0);
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('alpha.ts', { timeout: 10_000 });
 
     await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 3, Col 7', { timeout: 5_000 });
@@ -226,7 +235,7 @@ test.describe('§find-in-path', () => {
     await input.press('Enter');
 
     await expect(page.getByTestId('find-in-path')).toHaveCount(0);
-    const strip = page.getByTestId('files-tab-strip');
+    const strip = page.locator(WORKSPACE.strip);
     await expect(strip.getByRole('tab', { selected: true })).toContainText('gamma.ts', { timeout: 10_000 });
 
     await expect(page.getByTestId('viewer-shell-status')).toHaveText('Ln 2, Col 7', { timeout: 5_000 });

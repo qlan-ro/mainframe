@@ -29,8 +29,8 @@ function DraftStepLine({ step, catalog }: { step: AutomationStep; catalog: Actio
         <Icon size={12} className={meta.iconClass} aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-label font-semibold text-foreground">{stepLabel(step, catalog)}</div>
-        {subtitle && <div className="mt-0.5 text-caption text-muted-foreground">{subtitle}</div>}
+        <div className="text-xs font-semibold text-foreground">{stepLabel(step, catalog)}</div>
+        {subtitle && <div className="mt-0.5 text-xs text-muted-foreground">{subtitle}</div>}
       </div>
     </div>
   );
@@ -45,15 +45,15 @@ export function DraftPreview({ draft, catalog }: DraftPreviewProps) {
   return (
     <div data-testid="automations-draft-preview" className="flex flex-col gap-4">
       <div>
-        <div className="mb-1.5 text-label font-semibold text-muted-foreground">When</div>
+        <div className="mb-1.5 text-xs font-semibold text-muted-foreground">When</div>
         {draft.definition.triggers.length > 0 ? (
           <TriggerChips triggers={draft.definition.triggers} />
         ) : (
-          <span className="text-caption text-muted-foreground">Manually</span>
+          <span className="text-xs text-muted-foreground">Manually</span>
         )}
       </div>
       <div>
-        <div className="mb-1.5 text-label font-semibold text-muted-foreground">Do</div>
+        <div className="mb-1.5 text-xs font-semibold text-muted-foreground">Do</div>
         <div className="flex flex-col gap-1.5">
           {draft.definition.steps.map((step) => (
             <DraftStepLine key={step.id} step={step} catalog={catalog} />

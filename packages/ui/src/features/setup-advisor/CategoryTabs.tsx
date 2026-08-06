@@ -3,7 +3,8 @@
  * always in canonical order (mcp, skills, hooks, subagents, plugins)
  * regardless of the input array's order, each carrying a count badge.
  */
-import { cn } from '@/lib/utils';
+import { Badge } from '@v2/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import type { AutomationRecommendation, RecommendationCategory } from '@qlan-ro/mainframe-types';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER } from './categories';
 
@@ -26,29 +27,25 @@ export function CategoryTabs({ recommendations, active, onSelect }: CategoryTabs
   const present = CATEGORY_ORDER.filter((category) => (counts.get(category) ?? 0) > 0);
 
   return (
-    <div className="flex shrink-0 gap-4 border-b border-border px-4">
-      {present.map((category) => {
-        const Icon = CATEGORY_ICON[category];
-        const isActive = category === active;
-        return (
-          <button
-            key={category}
-            type="button"
-            data-testid={`automation-recommender-tab-${category}`}
-            onClick={() => onSelect(category)}
-            className={cn(
-              '-mb-px flex items-center gap-1.5 border-b-2 py-2 text-body transition-colors',
-              isActive
-                ? 'border-primary font-medium text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Icon size={14} />
-            {CATEGORY_LABEL[category]}
-            <span className="rounded-full bg-muted px-1.5 text-caption tabular-nums">{counts.get(category)}</span>
-          </button>
-        );
-      })}
-    </div>
+    <Tabs
+      value={active}
+      onValueChange={(v) => onSelect(v as RecommendationCategory)}
+      className="shrink-0 border-b px-4 pb-2"
+    >
+      <TabsList className="h-8">
+        {present.map((category) => {
+          const Icon = CATEGORY_ICON[category];
+          return (
+            <TabsTrigger key={category} value={category} data-testid={`automation-recommender-tab-${category}`}>
+              <Icon size={14} />
+              {CATEGORY_LABEL[category]}
+              <Badge variant="secondary" className="px-1 py-0 text-xs tabular-nums">
+                {counts.get(category)}
+              </Badge>
+            </TabsTrigger>
+          );
+        })}
+      </TabsList>
+    </Tabs>
   );
 }

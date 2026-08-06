@@ -8,8 +8,9 @@
  * created by the coordinator right after the chat. Cancel un-stashes so the
  * session starts in the main repo instead.
  */
-import { MenuDivider } from '@/components/ui/menu';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { Button } from '@v2/components/ui/button';
+import { Separator } from '@v2/components/ui/separator';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 
 export interface WorktreeDraftPanelProps {
@@ -22,42 +23,37 @@ export function WorktreeDraftPanel({ draft, onCancel }: WorktreeDraftPanelProps)
   const branch = pending?.branchName ?? draft.branchName ?? '—';
 
   return (
-    <div data-testid="composer-worktree-draft-panel" className="space-y-[6px] px-[8px] py-[6px]">
-      <div className="flex items-center gap-[6px]">
-        <span className="inline-block size-[7px] shrink-0 rounded-full bg-mf-success" aria-hidden />
-        <span className="text-caption font-medium text-foreground">
+    <div data-testid="composer-worktree-draft-panel" className="flex flex-col gap-1.5 px-2 py-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+        <span className="text-xs font-medium text-foreground">
           {pending ? 'New worktree on first message' : 'Isolates in worktree on first message'}
         </span>
       </div>
-      <MenuDivider />
-      <div className="grid grid-cols-[auto_1fr] items-start gap-x-[8px] gap-y-[2px]">
-        <span className="text-caption text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-caption text-foreground">{branch}</span>
+      <Separator />
+      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-xs">
+        <span className="text-muted-foreground">Branch</span>
+        <span className="truncate text-foreground">{branch}</span>
         {pending ? (
           <>
-            <span className="text-caption text-muted-foreground">From</span>
-            <span className="truncate font-mono text-caption text-foreground">{pending.baseBranch}</span>
+            <span className="text-muted-foreground">From</span>
+            <span className="truncate text-foreground">{pending.baseBranch}</span>
           </>
         ) : (
           <>
-            <span className="text-caption text-muted-foreground">Path</span>
+            <span className="text-muted-foreground">Path</span>
             <TruncatedWithTooltip
               text={draft.worktreePath ?? ''}
-              className="font-mono text-caption text-foreground"
-              contentClassName="font-mono break-all"
+              className="text-foreground"
+              contentClassName="break-all"
             />
           </>
         )}
       </div>
-      <div className="flex justify-end pt-[2px]">
-        <button
-          type="button"
-          data-testid="composer-worktree-draft-cancel"
-          onClick={onCancel}
-          className="rounded-[6px] px-[10px] py-[4px] text-label text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" data-testid="composer-worktree-draft-cancel" onClick={onCancel}>
           Don&apos;t isolate
-        </button>
+        </Button>
       </div>
     </div>
   );

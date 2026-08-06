@@ -4,14 +4,14 @@
  * Vendored + warm-chrome restyled shadcn Reasoning block.
  * Upstream: assistant-ui/packages/ui reasoning.tsx
  * Deltas: BrainIcon→SparklesIcon, collapsed default, "Thought for Ns" copy,
- * warm-chrome tokens (no /opacity on --mf-* vars), data-testid on trigger.
+ * v2 tokens + the v2 collapsible, data-testid on trigger.
  */
 import { useCallback, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { SparklesIcon, ChevronDownIcon } from 'lucide-react';
 import { useScrollLock } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { cn } from '@v2/lib/utils';
 
 const ANIMATION_DURATION = 200;
 
@@ -132,7 +132,7 @@ function ReasoningTrigger({
       data-testid="chat-reasoning-toggle"
       className={cn(
         'aui-reasoning-trigger group/trigger text-muted-foreground hover:text-foreground',
-        'flex max-w-[75%] items-center gap-1.5 py-1 text-caption transition-colors',
+        'flex max-w-[75%] items-center gap-1.5 py-1 text-xs transition-colors',
         className,
       )}
       {...props}
@@ -159,7 +159,7 @@ function ReasoningTrigger({
       <ChevronDownIcon
         data-slot="reasoning-trigger-chevron"
         className={cn(
-          'aui-reasoning-trigger-chevron mt-0.5 size-[10px] shrink-0',
+          'aui-reasoning-trigger-chevron mt-0.5 size-2.5 shrink-0',
           'transition-transform duration-(--animation-duration) ease-out',
           'group-data-[state=closed]/trigger:-rotate-90',
           'group-data-[state=open]/trigger:rotate-0',
@@ -174,7 +174,7 @@ function ReasoningContent({ className, children, ...props }: React.ComponentProp
     <CollapsibleContent
       data-slot="reasoning-content"
       className={cn(
-        'aui-reasoning-content text-muted-foreground relative overflow-hidden text-label outline-none',
+        'aui-reasoning-content text-muted-foreground relative overflow-hidden text-xs outline-none',
         'group/collapsible-content ease-out',
         'data-[state=closed]:animate-collapsible-up',
         'data-[state=open]:animate-collapsible-down',
@@ -197,7 +197,7 @@ function ReasoningText({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="reasoning-text"
       className={cn(
-        'aui-reasoning-text relative z-0 ms-2.5 max-h-64 space-y-3 overflow-y-auto border-l-2 border-border ps-3.5 pt-1.5 pb-2 leading-relaxed',
+        'aui-reasoning-text relative z-0 ms-2.5 flex max-h-64 flex-col gap-3 overflow-y-auto border-l-2 border-border ps-3.5 pt-1.5 pb-2 leading-relaxed',
         'transform-gpu transition-[transform,opacity]',
         'group-data-[state=open]/collapsible-content:animate-in',
         'group-data-[state=closed]/collapsible-content:animate-out',

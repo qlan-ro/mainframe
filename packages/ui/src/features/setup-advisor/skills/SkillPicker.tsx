@@ -7,7 +7,7 @@
  */
 import { Check, Loader2 } from 'lucide-react';
 import type { SkillsCliProbe } from '@qlan-ro/mainframe-types';
-import { Input } from '@/components/ui/input';
+import { Input } from '@v2/components/ui/input';
 import { cn } from '@/lib/utils';
 
 interface SkillPickerProps {
@@ -35,7 +35,7 @@ export function SkillPicker({
     return (
       <div
         data-testid="skills-section-skill-picker-spinner"
-        className="flex items-center gap-1.5 px-2 py-1.5 text-label text-muted-foreground"
+        className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground"
       >
         <Loader2 className="size-3.5 animate-spin" aria-hidden />
         Reading the source
@@ -48,7 +48,7 @@ export function SkillPicker({
   if (probe.status === 'unparseable') {
     return (
       <div className="flex flex-col gap-1.5">
-        <p className="text-label text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {probeError ?? "Mainframe couldn't read the skills in this source."} Name the skill to install.
         </p>
         <Input
@@ -65,7 +65,7 @@ export function SkillPicker({
 
   if (probe.skills.length === 0) {
     return (
-      <p data-testid="skills-section-skill-picker-empty" className="px-2 py-1.5 text-label text-muted-foreground">
+      <p data-testid="skills-section-skill-picker-empty" className="px-2 py-1.5 text-xs text-muted-foreground">
         This source has no skills.
       </p>
     );
@@ -90,9 +90,9 @@ export function SkillPicker({
             )}
           >
             <Check className={cn('size-3.5 shrink-0', isSelected ? 'text-primary' : 'text-transparent')} aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{skill.name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{skill.name}</span>
             {skill.description ? (
-              <span className="min-w-0 flex-[2] truncate text-label text-muted-foreground">{skill.description}</span>
+              <span className="min-w-0 flex-[2] truncate text-xs text-muted-foreground">{skill.description}</span>
             ) : null}
           </button>
         );

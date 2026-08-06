@@ -91,7 +91,7 @@ function RegistryHalf({
   if (mode === 'search') {
     if (searchStatus === 'error') {
       return (
-        <p data-testid="skills-browse-search-error" className="px-2 py-1.5 text-label text-destructive">
+        <p data-testid="skills-browse-search-error" className="px-2 py-1.5 text-xs text-destructive">
           {searchError ?? 'Could not search the skills registry'}
         </p>
       );
@@ -123,7 +123,7 @@ function Skeletons() {
 
 function Note({ testId, children }: { testId: string; children: string }) {
   return (
-    <p data-testid={testId} className="px-2 py-1.5 text-label text-muted-foreground">
+    <p data-testid={testId} className="px-2 py-1.5 text-xs text-muted-foreground">
       {children}
     </p>
   );

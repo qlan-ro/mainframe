@@ -3,7 +3,7 @@
  * useLaunchConfigs — reconcile path: scope-aware tab creation.
  *
  * The reconcile path runs on every fetch: for each already-running config it
- * ensures a Run tab exists in the layout store. The production bug is that
+ * ensures a workspace tab exists in the layout store. The production bug is that
  * `tabbed` (the "already has a tab" guard) is keyed only by config NAME, not
  * by scopeKey. So when scope A already has a 'dev' tab, fetching scope B's
  * statuses (also 'dev') finds 'dev' in `tabbed` and skips creating a tab for
@@ -148,7 +148,12 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
     // Seed the store with an EXISTING 'dev' tab for scope A BEFORE rendering.
     useLayoutStore.setState({
       ...CLEAN_LAYOUT,
-      layout: { top: ['chat', 'run'] as ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: {
+        top: ['chat', 'workspace'] as ['chat', 'workspace'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
       run: {
         dir: 'v',
         flex: [1, 1],
@@ -196,7 +201,12 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
     // Seed with a 'dev' tab that is ALREADY for scope B — reconcile must be a no-op.
     useLayoutStore.setState({
       ...CLEAN_LAYOUT,
-      layout: { top: ['chat', 'run'] as ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: {
+        top: ['chat', 'workspace'] as ['chat', 'workspace'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
       run: {
         dir: 'v',
         flex: [1, 1],
@@ -239,7 +249,7 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
 
 describe('useLaunchConfigs — stale REST fetch does not clobber a fresher WS update', () => {
   it('keeps the WS-driven status when a slow REST fetch resolves after it with a stale value', async () => {
-    // Regression: `run-surface.spec.ts`'s "Stop reverts the toolbar" — opening
+    // Regression: `workspace-surface.spec.ts`'s "Stop reverts the toolbar" — opening
     // the toolbar's launch popover triggers `refetch()` (a fresh GET
     // /launch/status). If a Stop click's WS `launch.status:'stopped'` event
     // lands while that REST request is still in flight, the request's `.then`

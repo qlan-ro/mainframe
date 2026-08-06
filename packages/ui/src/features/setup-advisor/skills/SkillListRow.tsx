@@ -53,15 +53,13 @@ export function SkillListRow({ row, running, disabled, onInstall, onUninstall }:
       onFocus={() => setFocusWithin(true)}
       onBlur={() => setFocusWithin(false)}
     >
-      <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{row.name}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{row.name}</span>
       {row.isOfficial ? <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Official" /> : null}
       {row.source ? (
-        <span className="min-w-0 max-w-[180px] truncate font-mono text-caption text-muted-foreground">
-          {row.source}
-        </span>
+        <span className="min-w-0 max-w-[180px] truncate font-mono text-xs text-muted-foreground">{row.source}</span>
       ) : null}
       {/* Fixed width so the counts right-align into a column instead of raggedly trailing each source. */}
-      <span className="w-[44px] shrink-0 text-right text-caption tabular-nums text-muted-foreground">
+      <span className="w-[44px] shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {row.installs === undefined ? '' : formatInstalls(row.installs)}
       </span>
       <div className="flex w-[88px] shrink-0 justify-end">

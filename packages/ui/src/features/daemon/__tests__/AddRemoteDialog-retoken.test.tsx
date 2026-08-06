@@ -61,7 +61,11 @@ import React from 'react';
 import { confirmPairing } from '../pair-daemon';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider } from '../active-daemon-context';
-import { AddRemoteDialog } from '../AddRemoteDialog';
+import { AddRemoteDialog } from '@v2/features/daemon/AddRemoteDialog';
+
+// input-otp polls document.elementFromPoint from a timer; jsdom doesn't
+// implement it.
+document.elementFromPoint ??= () => null;
 
 const TEST_PORT = 31415;
 const VALID_CODE = 'ABC123';
@@ -99,14 +103,12 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+// The v2 code field is an input-otp: one hidden input behind slot divs, so
+// the code is typed as a whole after focusing the field.
 async function typeCode(user: ReturnType<typeof userEvent.setup>, code: string) {
   const codeInput = screen.getByTestId('daemon-pair-code');
-  const boxes = codeInput.querySelectorAll('input');
-  expect(boxes).toHaveLength(6);
-  for (let i = 0; i < code.length; i++) {
-    await user.click(boxes[i]!);
-    await user.keyboard(code[i]!);
-  }
+  await user.click(codeInput);
+  await user.keyboard(code);
 }
 
 let fakeHost: FakeHostBridge;

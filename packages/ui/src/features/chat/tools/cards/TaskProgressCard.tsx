@@ -22,9 +22,9 @@ import { useMemo } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Check } from 'lucide-react';
 import { extractTaskId } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { cn } from '@v2/lib/utils';
 import type { TaskProgressItem } from '@/features/chat/view-model/message-meta';
 
 // ── Internal types ────────────────────────────────────────────────────────────
@@ -80,16 +80,16 @@ function reduceTaskItems(items: TaskProgressItem[]): TaskState[] {
 function TaskStatusIcon({ status }: { status: string }) {
   if (status === 'completed') {
     return (
-      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-mf-success bg-mf-success">
-        <Check size={10} className="text-background" strokeWidth={3} />
+      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-success bg-success">
+        <Check className="size-2.5 text-background" strokeWidth={3} />
       </span>
     );
   }
   if (status === 'in_progress') {
-    return <span className="h-3.5 w-3.5 shrink-0 animate-pulse rounded-sm border border-primary bg-primary" />;
+    return <span className="size-3.5 shrink-0 animate-pulse rounded-sm border border-primary bg-primary" />;
   }
   // pending / unknown
-  return <span className="h-3.5 w-3.5 shrink-0 rounded-sm border border-mf-text-3" />;
+  return <span className="size-3.5 shrink-0 rounded-sm border border-muted-foreground" />;
 }
 
 // ── Single task row ───────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ function TaskRow({ task }: { task: TaskState }) {
         <TooltipTrigger asChild>
           <span
             className={cn(
-              'truncate text-body',
+              'truncate text-sm',
               isCompleted && 'text-muted-foreground line-through',
               isInProgress && 'text-foreground',
               !isCompleted && !isInProgress && 'text-muted-foreground',
@@ -134,13 +134,13 @@ export const TaskProgressCard: ToolCallMessagePartComponent = (part) => {
     <Collapsible data-testid="chat-task-progress-card" defaultOpen>
       <CollapsibleTrigger
         data-testid="chat-task-progress-toggle"
-        className="flex w-full items-center gap-1.5 py-0.5 text-caption text-muted-foreground hover:text-foreground transition-colors"
+        className="flex w-full items-center gap-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <span className="font-medium">Tasks</span>
-        <span className="text-mf-text-3">({tasks.length})</span>
+        <span className="font-mono tabular-nums">({tasks.length})</span>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="space-y-0.5 py-0.5">
+        <div className="flex flex-col gap-0.5 py-0.5">
           {tasks.map((task) => (
             <TaskRow key={task.id} task={task} />
           ))}

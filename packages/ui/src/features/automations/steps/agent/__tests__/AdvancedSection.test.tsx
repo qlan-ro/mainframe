@@ -41,7 +41,7 @@ describe('AdvancedToggle', () => {
     expect(screen.getByTestId('agent-a-advanced-toggle').className).not.toContain('bg-mf-selection');
 
     rerender(<AdvancedToggle open onToggle={vi.fn()} testId="agent-a" />);
-    expect(screen.getByTestId('agent-a-advanced-toggle').className).toContain('bg-mf-selection');
+    expect(screen.getByTestId('agent-a-advanced-toggle').className).toContain('bg-sidebar-selection');
   });
 });
 

@@ -31,7 +31,7 @@ export function TriggerChips({ triggers }: { triggers: AutomationTrigger[] }): R
         return (
           <span
             key={trigger.id}
-            className="inline-flex h-[20px] items-center gap-[5px] rounded-full bg-mf-auto-kind-call/12 px-[8px] text-caption font-medium text-muted-foreground"
+            className="inline-flex h-[20px] items-center gap-[5px] rounded-full bg-mf-auto-kind-call/12 px-[8px] text-xs font-medium text-muted-foreground"
           >
             <Icon size={12} className="text-mf-auto-kind-call" aria-hidden />
             {summarizeTrigger(trigger)}

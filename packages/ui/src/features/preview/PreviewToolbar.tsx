@@ -41,7 +41,7 @@ export function PreviewToolbar({
   return (
     <div
       data-testid="preview-toolbar"
-      className="flex h-[38px] flex-shrink-0 items-center gap-[8px] [border-bottom:0.5px_solid_var(--border)] bg-background px-[8px]"
+      className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-background px-2"
     >
       <PreviewRunControl status={status} onRun={onRun} onStop={onStop} onRestart={onRestart} />
       <PreviewUrlBar handle={handle} seedUrl={seedUrl} enabled={isRunning} />

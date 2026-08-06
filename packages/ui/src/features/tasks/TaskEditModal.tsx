@@ -12,25 +12,16 @@
 import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@v2/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Input } from '@v2/components/ui/input';
+import { Label } from '@v2/components/ui/label';
+import { Textarea } from '@v2/components/ui/textarea';
 import { useTodosStore } from './use-todos-store';
 import { TaskAttachments, type PendingAttachment } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';
 import { TaskSelectFields } from './TaskSelectFields';
 import type { Todo, TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
-
-// Physical padding avoids Chromium scroll-clip on <input>.
-const inputCls = cn(
-  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5',
-  'text-label text-foreground focus:outline-none focus:ring-1 focus:ring-ring w-full',
-);
-const textareaWrap = cn(
-  'bg-mf-content2 border-[0.5px] border-border rounded-md pl-3 pr-3 py-1.5 focus-within:ring-1 focus-within:ring-ring',
-);
-const textareaInner = cn(
-  'w-full bg-transparent border-0 p-0 resize-none text-label text-foreground outline-none focus:outline-none focus-visible:outline-none',
-);
 
 interface Props {
   port: number;
@@ -156,9 +147,10 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent hideClose className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+      <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0" closeButtonClassName="top-1.5">
+        {/* pr-12 clears the stock close button. */}
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex items-center gap-2">
             {todo ? (
               <>
                 <Pencil size={14} className="text-primary shrink-0" aria-hidden />
@@ -174,12 +166,14 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
-            <div className="flex flex-col gap-1">
-              <label className="text-label text-muted-foreground">Title *</label>
-              <input
+          <div className="p-4 gap-3 overflow-y-auto flex-1 min-h-0">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tasks-edit-title" className="text-muted-foreground">
+                Title *
+              </Label>
+              <Input
+                id="tasks-edit-title"
                 data-testid="tasks-edit-title"
-                className={inputCls}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Task title"
@@ -197,25 +191,26 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               onStatusChange={setStatus}
             />
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
-                <label className="text-label text-muted-foreground">Description (markdown)</label>
-                <span className="text-caption text-muted-foreground">Paste image to attach</span>
+                <Label htmlFor="tasks-edit-body" className="text-muted-foreground">
+                  Description (markdown)
+                </Label>
+                <span className="text-xs text-muted-foreground">Paste image to attach</span>
               </div>
-              <div className={textareaWrap}>
-                <textarea
-                  data-testid="tasks-edit-body"
-                  className={textareaInner}
-                  rows={4}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  onPaste={handlePaste}
-                  placeholder="Describe the task…"
-                />
-              </div>
+              <Textarea
+                id="tasks-edit-body"
+                data-testid="tasks-edit-body"
+                className="resize-none"
+                rows={4}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onPaste={handlePaste}
+                placeholder="Describe the task…"
+              />
             </div>
 
-            {attachErr && <p className="text-label text-destructive">{attachErr}</p>}
+            {attachErr && <p className="text-xs text-destructive">{attachErr}</p>}
 
             <TaskAttachments
               port={port}
@@ -253,35 +248,25 @@ export function TaskEditModal({ port, projectId, todo, allTodos, allLabels, onCl
               </button>
             )}
             {todo && todo.status === 'in_progress' && onStartSession && (
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="secondary"
                 data-testid="tasks-edit-start"
                 onClick={() => {
                   onStartSession(todo.id);
                   onClose();
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity"
               >
-                <Play size={14} aria-hidden />
+                <Play aria-hidden />
                 Start session
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              data-testid="tasks-edit-cancel"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-label text-muted-foreground hover:bg-muted transition-colors"
-            >
+            <Button size="sm" variant="outline" data-testid="tasks-edit-cancel" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              data-testid="tasks-edit-save"
-              disabled={!title.trim() || saving}
-              className="px-3 py-1.5 rounded-md text-label bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition-opacity"
-            >
+            </Button>
+            <Button size="sm" type="submit" data-testid="tasks-edit-save" disabled={!title.trim() || saving}>
               {saving ? 'Saving…' : todo ? 'Save changes' : 'Create task'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>

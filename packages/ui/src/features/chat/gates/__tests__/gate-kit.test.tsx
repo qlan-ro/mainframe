@@ -1,23 +1,23 @@
 /**
- * gate-kit — behavior tests for three shared presentational primitives:
- * GateButton, GateCardShell, and GateHead (the last two exported from GateShell).
+ * gate-kit — behavior tests for the two shared gate primitives, GateCardShell
+ * and GateHead.
  *
  * Strategy:
- *  - Wrap renders in TooltipProvider for Radix compatibility.
+ *  - Wrap renders in the **v2** TooltipProvider for Radix compatibility.
  *  - All expected values are hardcoded; no logic is duplicated from the
  *    components under test.
  *
  * Behaviors covered:
- *  - GateButton: children text, data-testid forwarding, onClick callback,
- *    kind→class mapping (primary/danger/default).
- *  - GateCardShell: renders children, resolved/unresolved border classes,
- *    absence of a self-declared max-width, default testid.
+ *  - GateCardShell: renders children, resolved/unresolved framing, per-accent
+ *    ring, absence of a self-declared max-width, default testid.
  *  - GateHead: eyebrow text, title text, right slot, tileClassName on icon tile.
+ *
+ * (GateButton is gone: v2 `Button`'s default/outline/destructive variants are
+ * exactly the three kinds it wrapped.)
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { GateButton } from '../shared/GateButton';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { GateCardShell, GateHead } from '../shared/GateShell';
 
 // ---------------------------------------------------------------------------
@@ -27,44 +27,6 @@ import { GateCardShell, GateHead } from '../shared/GateShell';
 function wrap(ui: React.ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
 }
-
-// ---------------------------------------------------------------------------
-// GateButton
-// ---------------------------------------------------------------------------
-
-describe('GateButton', () => {
-  it('renders children text and forwards data-testid', () => {
-    wrap(<GateButton data-testid="gb-1">Approve</GateButton>);
-    expect(screen.getByTestId('gb-1')).toHaveTextContent('Approve');
-  });
-
-  it('calls onClick handler when clicked', () => {
-    const handler = vi.fn();
-    wrap(
-      <GateButton data-testid="gb-click" onClick={handler}>
-        Click me
-      </GateButton>,
-    );
-    fireEvent.click(screen.getByTestId('gb-click'));
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    ['primary', ['bg-primary', 'text-primary-foreground']],
-    ['danger', ['text-destructive']],
-    [undefined, ['bg-background']],
-  ] as const)('kind=%s applies the expected classes', (kind, expectedClasses) => {
-    wrap(
-      <GateButton data-testid="gb-kind" kind={kind}>
-        Label
-      </GateButton>,
-    );
-    const el = screen.getByTestId('gb-kind');
-    for (const cls of expectedClasses) {
-      expect(el).toHaveClass(cls);
-    }
-  });
-});
 
 // ---------------------------------------------------------------------------
 // GateCardShell
@@ -89,18 +51,20 @@ describe('GateCardShell', () => {
     expect(screen.getByTestId('shell-resolved')).toHaveClass('border-border');
   });
 
-  it('resolved=false: root element has border-mf-border-hover class', () => {
+  it('resolved=false: root element carries the accent border, not the neutral one', () => {
     wrap(
       <GateCardShell data-testid="shell-unresolved" resolved={false}>
         content
       </GateCardShell>,
     );
-    expect(screen.getByTestId('shell-unresolved')).toHaveClass('border-mf-border-hover');
+    const el = screen.getByTestId('shell-unresolved');
+    expect(el).toHaveClass('border-primary/40');
+    expect(el).not.toHaveClass('border-border');
   });
 
-  it('omitting resolved: root element has border-mf-border-hover class', () => {
+  it('omitting resolved: root element carries the accent border', () => {
     wrap(<GateCardShell data-testid="shell-omitted">content</GateCardShell>);
-    expect(screen.getByTestId('shell-omitted')).toHaveClass('border-mf-border-hover');
+    expect(screen.getByTestId('shell-omitted')).toHaveClass('border-primary/40');
   });
 
   it('root element uses bg-card (card surface) not bg-background (white)', () => {
@@ -125,34 +89,39 @@ describe('GateCardShell', () => {
     expect(screen.getByTestId('chat-gate-card')).toHaveTextContent('content');
   });
 
-  it('unresolved + accent="primary": shadow is tinted with the primary accent var', () => {
+  it('unresolved + accent="primary": the live ring is tinted with primary', () => {
     wrap(
       <GateCardShell data-testid="shell-accent-primary" accent="primary">
         content
       </GateCardShell>,
     );
-    const style = screen.getByTestId('shell-accent-primary').getAttribute('style') ?? '';
-    expect(style).toContain('--primary');
+    expect(screen.getByTestId('shell-accent-primary')).toHaveClass('ring-primary/15');
   });
 
-  it('unresolved + accent="warning": shadow is tinted with the mf-warning accent var', () => {
+  it('unresolved + accent="warning": the live ring is tinted with warning', () => {
     wrap(
       <GateCardShell data-testid="shell-accent-warning" accent="warning">
         content
       </GateCardShell>,
     );
-    const style = screen.getByTestId('shell-accent-warning').getAttribute('style') ?? '';
-    expect(style).toContain('--mf-warning');
+    const el = screen.getByTestId('shell-accent-warning');
+    expect(el).toHaveClass('ring-warning/15');
+    expect(el).not.toHaveClass('ring-primary/15');
   });
 
-  it('resolved=true: no accent-tinted shadow style is applied', () => {
+  it('resolved=true: no accent ring at all', () => {
     wrap(
       <GateCardShell data-testid="shell-resolved-noglow" resolved accent="primary">
         content
       </GateCardShell>,
     );
-    const style = screen.getByTestId('shell-resolved-noglow').getAttribute('style') ?? '';
-    expect(style).not.toContain('--primary');
+    const className = screen.getByTestId('shell-resolved-noglow').className;
+    expect(className).not.toMatch(/ring-/);
+  });
+
+  it('carries no inline style: the live treatment is token-driven, not a color-mix boxShadow', () => {
+    wrap(<GateCardShell data-testid="shell-no-inline">content</GateCardShell>);
+    expect(screen.getByTestId('shell-no-inline')).not.toHaveAttribute('style');
   });
 });
 
@@ -178,16 +147,16 @@ describe('GateHead', () => {
         eyebrow="Gate"
         title="Run script"
         icon={<span data-testid="head-icon" />}
-        tileClassName="bg-mf-warning-tint"
+        tileClassName="bg-warning/10"
       />,
     );
     // The icon tile span (wrapping the icon) must carry the tileClassName.
     const tile = screen.getByTestId('gate-head-tile');
-    expect(tile).toHaveClass('bg-mf-warning-tint');
+    expect(tile).toHaveClass('bg-warning/10');
   });
 
-  it('icon tile is sized to the design spec (26px, size-[26px])', () => {
+  it('icon tile sits on the 24px step of the v2 scale', () => {
     wrap(<GateHead eyebrow="Gate" title="Run script" icon={<span data-testid="head-icon" />} />);
-    expect(screen.getByTestId('gate-head-tile')).toHaveClass('size-[26px]');
+    expect(screen.getByTestId('gate-head-tile')).toHaveClass('size-6');
   });
 });

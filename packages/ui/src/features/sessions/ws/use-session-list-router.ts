@@ -150,7 +150,7 @@ export function useSessionListRouter(): void {
       // First-send handoff (todo #210): the draft's initialize stamped a remoteId,
       // and the chat.created reload re-keyed the list to the canonical remote item —
       // stranding the selection on the orphaned local draft (custom-less → no launch
-      // scope → the Run surface empties; the sidebar shows the new session
+      // scope → the workspace empties; the sidebar shows the new session
       // unselected). Adopt the remote item, exactly like the manual sidebar click.
       const draftRemoteId = threadItems.find((t) => t.id === mainThreadId)?.remoteId;
       if (draftRemoteId != null && items.some((t) => t.id === draftRemoteId)) {

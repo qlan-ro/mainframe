@@ -4,72 +4,58 @@
  * SystemMessage — centered marker for system-level chat events.
  *
  * Priority (highest wins):
- *   1. isCompacted  → CompactionPill ("Context compacted")
+ *   1. isCompacted  → CompactionMarker ("Context compacted")
  *   2. skillLoaded  → the rich SkillLoadedCard ("Using skill: X", expandable)
- *   3. plain text   → quiet pill (AlertTriangle for CLI errors, else Zap)
+ *   3. plain text   → quiet marker (AlertTriangle for CLI errors, else Zap)
  *
- * Metadata via the one `useMainframeMeta()` contract. Tokens: bg-mf-content2 /
- * text-muted-foreground (no /opacity on --mf-* vars). data-testid: chat-system-message.
+ * All three are the v2 `Marker variant="separator"` recipe: a centered label
+ * between two hairlines. Metadata via the one `useMainframeMeta()` contract.
+ * The `*-pill` testids predate the recipe and are kept — e2e keys off them.
  */
 import { AlertTriangleIcon, LayersIcon, ZapIcon } from 'lucide-react';
 import { MessagePrimitive } from '@assistant-ui/react';
-import { cn } from '@/lib/utils';
+import { cn } from '@v2/lib/utils';
+import { Marker, MarkerContent, MarkerIcon } from '@v2/components/ui/marker';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { SkillLoadedCard } from '../tools/cards/SkillLoadedCard';
 
-/** "Context compacted" centered pill. */
+/** "Context compacted" centered marker. */
 export function CompactionPill() {
   return (
-    <div className="my-2 flex justify-center">
-      <div
-        data-testid="chat-compaction-pill"
-        className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-mf-content2 px-3 py-1 font-mono text-caption text-muted-foreground"
-      >
-        <LayersIcon size={12} className="shrink-0 text-muted-foreground" />
-        <span>Context compacted</span>
-      </div>
-    </div>
+    <Marker variant="separator" data-testid="chat-compaction-pill" className="my-2 select-none">
+      <MarkerIcon>
+        <LayersIcon />
+      </MarkerIcon>
+      <MarkerContent>Context compacted</MarkerContent>
+    </Marker>
   );
 }
 
-/** Transient "Compacting…" pill — shown at the transcript tail while a
+/** Transient "Compacting…" marker — shown at the transcript tail while a
  *  compaction runs, replaced by CompactionPill when it completes. */
 export function CompactingPill() {
   return (
-    <div className="my-2 flex justify-center">
-      <div
-        data-testid="chat-compacting-pill"
-        className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-mf-content2 px-3 py-1 font-mono text-caption text-muted-foreground"
-      >
-        <span
-          className="inline-block h-[7px] w-[7px] shrink-0 animate-spin rounded-full border-[1.5px] border-muted-foreground"
-          style={{ borderTopColor: 'transparent' }}
-        />
-        <span>Compacting…</span>
-      </div>
-    </div>
+    <Marker variant="separator" data-testid="chat-compacting-pill" className="my-2 select-none">
+      <MarkerIcon>
+        <span className="block size-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+      </MarkerIcon>
+      <MarkerContent>Compacting…</MarkerContent>
+    </Marker>
   );
 }
 
 const CLI_ERROR_RE = /^Unknown (?:command|skill):/i;
 
-function SystemTextPill({ text }: { text: string }) {
+function SystemTextMarker({ text }: { text: string }) {
   const isError = CLI_ERROR_RE.test(text);
   const Icon = isError ? AlertTriangleIcon : ZapIcon;
   return (
-    <div className="my-1.5 flex justify-center">
-      <div
-        className={cn(
-          'inline-flex select-none items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-caption',
-          isError
-            ? 'border-destructive bg-mf-destructive-tint text-destructive'
-            : 'border-border bg-mf-content2 text-muted-foreground',
-        )}
-      >
-        <Icon size={12} className="shrink-0" />
-        <span>{text}</span>
-      </div>
-    </div>
+    <Marker variant="separator" className={cn('my-1.5 select-none', isError && 'text-destructive')}>
+      <MarkerIcon>
+        <Icon />
+      </MarkerIcon>
+      <MarkerContent>{text}</MarkerContent>
+    </Marker>
   );
 }
 
@@ -77,7 +63,7 @@ export function SystemMessage() {
   const { isCompacted, skillLoaded } = useMainframeMeta();
 
   let body = (
-    <MessagePrimitive.Parts components={{ Text: ({ text }) => (text ? <SystemTextPill text={text} /> : null) }} />
+    <MessagePrimitive.Parts components={{ Text: ({ text }) => (text ? <SystemTextMarker text={text} /> : null) }} />
   );
   if (isCompacted) body = <CompactionPill />;
   else if (skillLoaded) {

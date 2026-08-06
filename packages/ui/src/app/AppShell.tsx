@@ -3,21 +3,27 @@
  *
  * DaemonPortProvider → AssistantRuntimeProvider feed the sidebar + surface host.
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
+ *
+ * The chrome is the v2 shell (SidebarProvider + the ported SessionSidebar); the
+ * surfaces, toolbar, inspector and overlay hosts are legacy islands that port
+ * in place, one at a time.
  */
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
-import { ArchiveWorktreeDialog } from '../features/sessions/sidebar/ArchiveWorktreeDialog';
+import { SidebarInset, SidebarProvider } from '@v2/components/ui/sidebar';
+import { DirectoryPickerModal } from '@v2/features/files/DirectoryPickerModal';
+import { FindInPathModal } from '@v2/features/files/FindInPathModal';
+import { SpotlightPalette } from '@v2/features/palette/SpotlightPalette';
+import { ArchiveWorktreeDialog } from '@v2/features/sessions/ArchiveWorktreeDialog';
+import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
+import { TagPopoverHost } from '@v2/features/sessions/TagPopoverHost';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { InspectorPane } from '../features/files/InspectorPane';
-import { TagPopoverHost } from '../features/sessions/tags/TagPopoverHost';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
 import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
 import { SettingsDialog } from '../features/settings/SettingsDialog';
-import { SpotlightPalette } from '../features/palette/SpotlightPalette';
-import { FindInPathModal } from '../components/overlays/FindInPathModal';
-import { DirectoryPickerModal } from '../components/overlays/DirectoryPickerModal';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
@@ -30,29 +36,15 @@ import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
 import { useUiPrefs } from '../store/ui-prefs';
-import { useTheme } from '../store/theme';
-import { windowStyleGeometry } from '../lib/appearance/window-style';
 import { MainToolbar } from '../layout/MainToolbar';
-import { SidebarCollapseHandle } from '../layout/SidebarCollapseHandle';
-import { SIDEBAR_EXPANDED_WIDTH, SidebarShell } from '../layout/SidebarShell';
 import { SurfaceHost } from '../layout/SurfaceHost';
-import { TRAFFIC_LIGHTS_SPACER_WIDTH } from '../layout/SidebarHeader';
-import { useSidebarResize } from '../layout/useSidebarResize';
 import { setSessionNavigator } from '../lib/session-nav';
 import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
  *  native traffic lights, so the MainToolbar's left group insets to clear them. */
-function getLeadingInset(sidebarRendered: boolean, sidebarWidth: number): number {
-  if (!sidebarRendered) return TRAFFIC_LIGHTS_SPACER_WIDTH;
-  return Math.max(0, TRAFFIC_LIGHTS_SPACER_WIDTH - sidebarWidth);
-}
-
-function getMainOverlap(sidebarRendered: boolean, sidebarWidth: number): number {
-  if (!sidebarRendered) return 0;
-  return Math.max(0, SIDEBAR_EXPANDED_WIDTH - sidebarWidth);
-}
+const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
@@ -77,7 +69,9 @@ function RuntimeBody({ port }: { port: number }) {
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
   const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
-  const toggleSidebar = useUiPrefs((s) => s.toggleSidebar);
+  const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
+  const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
+  const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   const { projectName, branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
 
@@ -100,79 +94,31 @@ function RuntimeBody({ port }: { port: number }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const windowStyle = useTheme((s) => s.windowStyle);
-  const geo = windowStyleGeometry(windowStyle);
-
-  const {
-    dragCollapsed,
-    dragging,
-    expand,
-    finishDrag,
-    handleKeyDown,
-    handlePointerDown,
-    handlePointerMove,
-    sidebarWidth,
-    willCollapse,
-  } = useSidebarResize(sidebarVisible);
-
-  const sidebarRendered = sidebarVisible && !dragCollapsed;
-  // One-click expand from either collapsed state: a drag-collapse leaves the
-  // sidebar "visible" but dragCollapsed, so clear that; a button-hide flips
-  // sidebarVisible back on (the hook resets dragCollapsed on that transition).
-  const expandSidebar = () => {
-    if (sidebarVisible) expand();
-    else toggleSidebar();
-  };
-  const leadingInset = getLeadingInset(sidebarRendered, sidebarWidth);
-  const mainOverlap = getMainOverlap(sidebarRendered, sidebarWidth);
-
   return (
-    <div data-window-style={windowStyle} className={`flex flex-1 overflow-hidden ${geo.windowRoot}`}>
-      {/* Floating panels (prototype 04-engine root: padding + gap). The native
-          traffic lights stay over the sidebar header; when collapsed, the
-          MainToolbar's left group insets to clear them. */}
-      {sidebarRendered && (
-        <div className="flex flex-shrink-0">
-          <SidebarShell
-            dimmed={willCollapse}
-            dragging={dragging}
-            width={Math.max(SIDEBAR_EXPANDED_WIDTH, sidebarWidth)}
-            windowStyle={windowStyle}
-          />
-        </div>
-      )}
+    <SidebarProvider
+      data-testid="app-shell-root"
+      open={sidebarVisible}
+      onOpenChange={setSidebarVisible}
+      defaultWidth={sidebarWidth}
+      onWidthChange={setSidebarWidth}
+      className="min-h-0 flex-1 overflow-hidden"
+    >
+      <SessionSidebar />
 
-      <div
-        data-testid="main-surface-shell"
-        className={`relative flex flex-1 flex-col overflow-hidden ${geo.pane}`}
-        style={{ marginLeft: mainOverlap > 0 ? -mainOverlap : undefined }}
-      >
-        {sidebarVisible && (
-          <SidebarCollapseHandle
-            collapsed={dragCollapsed}
-            left={0}
-            onKeyDown={handleKeyDown}
-            onPointerCancel={finishDrag}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishDrag}
-            width={sidebarWidth}
-          />
-        )}
+      <SidebarInset data-testid="main-surface-shell" className="overflow-hidden">
         <MainToolbar
-          leadingInset={leadingInset}
-          sidebarRendered={sidebarRendered}
-          onExpandSidebar={expandSidebar}
+          leadingInset={sidebarVisible ? 0 : TRAFFIC_LIGHTS_SPACER_WIDTH}
+          sidebarRendered={sidebarVisible}
+          onExpandSidebar={() => setSidebarVisible(true)}
           projectName={projectName}
           branchName={branchName}
           isWorktree={isWorktree}
-          windowStyle={windowStyle}
           port={port}
           projectId={projectId}
           chatId={chatId}
         />
         <SurfaceHost port={port} />
-      </div>
+      </SidebarInset>
 
       {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar. */}
       {inspectorVisible && <InspectorPane port={port} />}
@@ -194,7 +140,7 @@ function RuntimeBody({ port }: { port: number }) {
       <ConfirmDialogHost />
       <SettingsDialog port={port} />
       {showTour && <TutorialOverlay />}
-    </div>
+    </SidebarProvider>
   );
 }
 

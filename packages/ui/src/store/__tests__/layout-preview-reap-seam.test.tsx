@@ -107,7 +107,7 @@ beforeEach(() => {
   });
 
   useLayoutStore.setState({
-    layout: { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     run: {
       dir: 'v',
       flex: [1],

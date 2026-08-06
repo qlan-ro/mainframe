@@ -22,7 +22,7 @@ export function FailureTail({ message, tail }: FailureTailProps) {
 
   return (
     <div className="flex flex-col gap-1 rounded-md border-[0.5px] border-destructive/30 bg-destructive/8 px-2 py-1.5">
-      <p className="text-label font-medium text-destructive">{message}</p>
+      <p className="text-xs font-medium text-destructive">{message}</p>
       {clean ? (
         <>
           <button
@@ -30,7 +30,7 @@ export function FailureTail({ message, tail }: FailureTailProps) {
             data-testid="skills-section-failure-tail-toggle"
             aria-expanded={expanded}
             onClick={() => setExpanded((prev) => !prev)}
-            className="flex items-center gap-1 text-caption text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             CLI output
@@ -38,7 +38,7 @@ export function FailureTail({ message, tail }: FailureTailProps) {
           {expanded ? (
             <pre
               data-testid="skills-section-failure-tail"
-              className="max-h-[160px] overflow-auto whitespace-pre-wrap break-words font-mono text-caption text-muted-foreground"
+              className="max-h-[160px] overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground"
             >
               {clean}
             </pre>

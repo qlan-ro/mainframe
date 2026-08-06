@@ -1,8 +1,8 @@
 import type { AdapterModel, EffortLevel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
 import { effortOptions, visibleFeatures } from '../../../../lib/model-tuning';
-import { Switch } from '../../../../components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { Switch } from '@v2/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
 
 const INHERIT = '__inherit__';
 
@@ -24,18 +24,15 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {efforts.length > 0 && (
-        <label className="block space-y-1.5">
-          <span className="text-label font-semibold text-muted-foreground">Default Effort</span>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Default Effort</span>
           <Select
             value={config.defaultEffort ?? INHERIT}
             onValueChange={(v) => onChange({ defaultEffort: (v === INHERIT ? '' : v) as EffortLevel | '' })}
           >
-            <SelectTrigger
-              data-testid={`settings-${adapterId}-default-effort`}
-              className="h-[30px] px-[11px] border border-input"
-            >
+            <SelectTrigger size="sm" className="w-full" data-testid={`settings-${adapterId}-default-effort`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -56,8 +53,8 @@ export function ProviderTuningDefaults({ adapterId, model, config, onChange }: P
         return (
           <div key={f.key} className="flex items-center justify-between gap-3">
             <div className="flex-1">
-              <span className="text-body text-foreground">{f.label}</span>
-              <p className="text-label text-muted-foreground">{f.desc}</p>
+              <span className="text-sm text-foreground">{f.label}</span>
+              <p className="text-xs text-muted-foreground">{f.desc}</p>
             </div>
             <Switch
               data-testid={`settings-${adapterId}-default-feature-${f.key}`}

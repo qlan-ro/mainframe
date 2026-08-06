@@ -6,12 +6,25 @@
  * UI-only — no agent-turn recording needed (Tasks live entirely in daemon REST
  * + a zustand store; no CLI/adapter involvement).
  *
- * Entry points (verified against packages/ui/src/features/tasks/*):
+ * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   sidebar-tasks-button → dispatches `mf:open-tasks` (SidebarHeader.tsx) → tasks-board-modal
- *   TasksSidebarSection (left sidebar) — replaced the old Inspector-pane
- *     TasksDrawer; always mounted while a project is active (renders null
- *     without one), so no toggle is needed to reach it.
+ *   sidebar-tasks → dispatches `mf:open-tasks` (v2/features/sessions/SessionSidebar.tsx
+ *     HeaderActions; the old `sidebar-tasks-button` id died with the v1 SidebarHeader)
+ *     → tasks-board-modal
+ *   TasksSidebarSection (left sidebar) — rebuilt in v2/features/tasks/; always
+ *     mounted while a project is active (renders null without one), so no toggle
+ *     is needed to reach it.
+ *
+ * Two render trees own this feature since the v2 shell landed, and both are
+ * exercised here:
+ *   - the board modal + quick dialog are still the v1 bodies
+ *     (packages/ui/src/features/tasks/*) inside a v2 dialog shell;
+ *   - the sidebar section and the modal it opens are v2
+ *     (packages/ui/src/v2/features/tasks/*).
+ * Both TaskEditModal implementations carry the same `tasks-edit-*` testids, so
+ * the assertions below are shared; only their select option labels differ
+ * slightly (v1 renders PRIORITIES raw, v2 runs every option through
+ * `replace('_', ' ')` — identical for the underscore-free priorities).
  *
  * Testid reference (verified against source):
  *   tasks-quick-dialog / tasks-quick-feature / tasks-quick-bug / tasks-quick-title /
@@ -31,15 +44,33 @@
  *   tasks-label-pill-<label> / tasks-label-remove-<label> / tasks-label-input
  *   tasks-dep-pill-<n> / tasks-dep-remove-<n> / tasks-dep-input / tasks-dep-opt-<n>
  *   tasks-attach-add / tasks-attach-<id> (root) / tasks-attach-delete-<id>
- *   tasks-sidebar-section / tasks-sidebar-section-toggle / tasks-sidebar-expand /
- *     tasks-sidebar-new / tasks-sidebar-empty / tasks-sidebar-row-<n> /
- *     tasks-sidebar-view-all (TasksSidebarSection.tsx + TasksSidebarList.tsx;
- *     the list caps at VISIBLE_TASKS = 5 rows — no count chip, no resize handle)
+ *   tasks-sidebar-section / tasks-sidebar-section-jump / tasks-sidebar-new /
+ *     tasks-sidebar-empty / tasks-sidebar-row-<n> / tasks-sidebar-overflow
+ *     (v2 TasksSidebarSection.tsx + TasksSidebarList.tsx; the list still caps at
+ *     VISIBLE_TASKS = 5 rows)
+ *
+ * Deliberately deleted by the v2 sidebar rebuild (do not re-assert):
+ *   - `tasks-sidebar-expand` — the v2 section header carries no expand-to-modal
+ *     button (TasksSidebarSection.tsx docstring: "a control that opens nothing is
+ *     worse than a missing one"). The board is reached via `sidebar-tasks`.
+ *   - `tasks-sidebar-section-toggle` — SidebarJumpSection replaced the collapse
+ *     with a scroll-to-content jump (`tasks-sidebar-section-jump`); with one
+ *     scroller a collapse only shortened the scroll.
+ *   - `tasks-sidebar-view-all` — the overflow row is now a STATIC `<div>`
+ *     (`tasks-sidebar-overflow`, text "N more"), not a link: TasksSidebarList.tsx
+ *     says "the full Tasks view has no host in v2 yet".
+ *
+ * v2 interaction contracts that changed how these controls are driven:
+ *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
+ *     marker is `data-state="active"` — `aria-pressed` is gone.
+ *   - FilterMenu/SortMenu are native `DropdownMenu`s whose items `preventDefault()`
+ *     on select, so the menu STAYS OPEN across picks. Never re-click the trigger to
+ *     "reopen" it (that toggles it shut); pick again in place, and close with Escape
+ *     so the modal menu's `pointer-events: none` never leaks into the next test.
  *
  * shadcn <Select> (TaskSelectFields type/priority/status): SelectItem forwards no
  * data-testid, so options are selected via Radix's own `role="option"` (verified
- * against @radix-ui/react-select dist source) + exact display text (TYPES/STATUSES
- * render `value.replace('_', ' ')`; PRIORITIES render the raw value).
+ * against @radix-ui/react-select dist source) + exact display text.
  *
  * Testid gaps found (not fixed here — out of scope, flagged in the report):
  *   - TaskEditModal's DialogContent has no root data-testid (only its field children do).
@@ -70,7 +101,7 @@ async function openQuickDialog(page: Page): Promise<void> {
 }
 
 async function openBoard(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-tasks-button').click();
+  await page.getByTestId('sidebar-tasks').click();
   await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
 }
 
@@ -124,7 +155,7 @@ test.describe('§tasks', () => {
     // The left-sidebar Tasks section is always mounted while a project is active.
     const sectionEmpty = page.getByTestId('tasks-sidebar-empty');
     await expect(sectionEmpty).toBeVisible({ timeout: 10_000 });
-    await expect(sectionEmpty).toContainText('No active tasks.');
+    await expect(sectionEmpty).toHaveText('No active tasks');
   });
 
   // ─── Quick-create (⌘⇧T) ─────────────────────────────────────────────────
@@ -176,7 +207,7 @@ test.describe('§tasks', () => {
 
   test('sidebar tasks button opens the board populated with both seeded tasks', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-tasks-button').click();
+    await page.getByTestId('sidebar-tasks').click();
     const modal = page.getByTestId('tasks-board-modal');
     await expect(modal).toBeVisible({ timeout: 10_000 });
     await expect(modal).toContainText('2 active');
@@ -188,20 +219,23 @@ test.describe('§tasks', () => {
 
   // ─── List / board view toggle ───────────────────────────────────────────
 
+  // The switch is a Radix `Tabs` (List+Trigger only) since the v2 conversion, so
+  // the selected segment is marked by `data-state`, not the hand-rolled
+  // `aria-pressed` the old toggle pair carried.
   test('board: list/board view toggle switches TaskListView and TaskBoardView', async () => {
     const { page } = app;
     await openBoard(page);
 
     await page.getByTestId('tasks-view-board').click();
-    await expect(page.getByTestId('tasks-view-board')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('tasks-view-board')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('data-state', 'inactive');
     await expect(page.getByTestId('tasks-column-open').getByTestId('tasks-card-1')).toBeVisible({
       timeout: 5_000,
     });
     await expect(page.getByTestId('tasks-column-in_progress').getByTestId('tasks-card-2')).toBeVisible();
 
     await page.getByTestId('tasks-view-list').click();
-    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('tasks-view-list')).toHaveAttribute('data-state', 'active');
     await expect(page.getByTestId('tasks-list-row-1')).toBeVisible();
     await expect(page.getByTestId('tasks-list-row-2')).toBeVisible();
     await closeBoard(page);
@@ -406,10 +440,14 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-list-row-4')).toHaveCount(0);
     await page.getByTestId('tasks-filter-search').fill('');
 
-    // Only task #5 ("Zulu security review") has priority=critical.
+    // Only task #5 ("Zulu security review") has priority=critical. FilterMenu is a
+    // native DropdownMenu of checkbox items that `preventDefault()` on select (so
+    // several filters can be ticked in one open); Escape is the deterministic close,
+    // and the next click must not race the menu's exit.
     await page.getByTestId('tasks-filter-priority').click();
     await page.getByTestId('tasks-filter-opt-critical').click();
     await page.keyboard.press('Escape');
+    await expect(page.getByTestId('tasks-filter-opt-critical')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('tasks-list-row-5')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tasks-list-row-1')).toHaveCount(0);
     await expect(page.getByTestId('tasks-list-row-3')).toHaveCount(0);
@@ -447,15 +485,23 @@ test.describe('§tasks', () => {
     // Default sort = priority ascending (critical=0 first): #5, #3, #4.
     await expect(cards).toHaveText([/#5/, /#3/, /#4/]);
 
-    // Switch to Number — first click defaults to descending: #5, #4, #3.
+    // SortMenu is a native DropdownMenu whose radio items `preventDefault()` on
+    // select (SortMenu.tsx), so it stays open across picks — one trigger click,
+    // then both picks in place. Re-clicking the trigger would toggle the open
+    // menu SHUT, and the second option would never be there to click.
     await page.getByTestId('tasks-sort-menu').click();
+    // First pick of Number defaults to descending: #5, #4, #3.
     await page.getByTestId('tasks-sort-option-number').click();
     await expect(cards).toHaveText([/#5/, /#4/, /#3/]);
 
-    // Click Number again to flip to ascending: #3, #4, #5.
-    await page.getByTestId('tasks-sort-menu').click();
+    // Picking the already-active key flips its direction: #3, #4, #5.
     await page.getByTestId('tasks-sort-option-number').click();
     await expect(cards).toHaveText([/#3/, /#4/, /#5/]);
+
+    // Close deterministically — a modal DropdownMenu left open puts
+    // `pointer-events: none` on the document and breaks the next click.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('tasks-sort-option-number')).toHaveCount(0, { timeout: 5_000 });
 
     await page.getByTestId('tasks-view-list').click();
     await closeBoard(page);
@@ -463,17 +509,20 @@ test.describe('§tasks', () => {
 
   // ─── Sidebar section ─────────────────────────────────────────────────────
 
-  test('sidebar section: rows, New button, row opens edit, and expand-to-modal', async () => {
+  // The expand-to-modal affordance was deliberately dropped by the v2 rebuild
+  // (TasksSidebarSection.tsx), so this covers what the section still offers:
+  // rows, the New button, and row → edit modal.
+  test('sidebar section: rows, New button, and a row opening its edit modal', async () => {
     const { page } = app;
 
     await expect(page.getByTestId('tasks-sidebar-section')).toBeVisible({ timeout: 10_000 });
 
     // All 5 tasks are still open/in_progress (none done) at this point —
-    // exactly VISIBLE_TASKS, so every row shows and there is no overflow link.
+    // exactly VISIBLE_TASKS, so every row shows and there is no overflow row.
     for (const n of [1, 2, 3, 4, 5]) {
       await expect(page.getByTestId(`tasks-sidebar-row-${n}`)).toBeVisible({ timeout: 10_000 });
     }
-    await expect(page.getByTestId('tasks-sidebar-view-all')).toHaveCount(0);
+    await expect(page.getByTestId('tasks-sidebar-overflow')).toHaveCount(0);
 
     // New button opens a section-local create modal (independent of the board).
     await page.getByTestId('tasks-sidebar-new').click();
@@ -486,40 +535,37 @@ test.describe('§tasks', () => {
     await page.getByTestId('tasks-sidebar-row-3').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Alpha bug report', { timeout: 5_000 });
     await page.getByTestId('tasks-edit-cancel').click();
-
-    // Expand button opens the full board modal.
-    await page.getByTestId('tasks-sidebar-expand').click();
-    await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 5_000 });
-    await closeBoard(page);
+    await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('sidebar section: a 6th active task overflows into a View-all row', async () => {
+  test('sidebar section: a 6th active task overflows into a static "N more" row', async () => {
     const { page } = app;
 
-    // The section caps at VISIBLE_TASKS = 5 rows — a 6th active task overflows
-    // into a "View all N tasks" link instead of scrolling.
+    // The section caps at VISIBLE_TASKS = 5 rows — a 6th active task collapses
+    // into a residual count instead of scrolling.
     await openQuickDialog(page);
     await page.getByTestId('tasks-quick-title').fill('Overflow fixture task');
     await page.getByTestId('tasks-quick-create').click();
     await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
 
-    const viewAll = page.getByTestId('tasks-sidebar-view-all');
-    await expect(viewAll).toHaveText('View all 6 tasks', { timeout: 10_000 });
+    // Was a "View all N tasks" link; the v2 list renders the residual count as
+    // plain text because the full Tasks view has no v2 host to link to yet, so
+    // there is no click target to assert here — the board is reached via
+    // `sidebar-tasks` below instead.
+    const overflow = page.getByTestId('tasks-sidebar-overflow');
+    await expect(overflow).toHaveText('1 more', { timeout: 10_000 });
     // Daemon list order is status, order_index, created_at — #6 (the newest
     // 'open' task) is the row past the cap.
     await expect(page.getByTestId('tasks-sidebar-row-6')).toHaveCount(0);
 
-    // The View-all link opens the full board modal.
-    await viewAll.click();
-    await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 5_000 });
-
     // Delete the fixture so the later delete tests keep their active counts.
+    await openBoard(page);
     await page.getByTestId('tasks-list-row-6').hover();
     await page.getByTestId('tasks-list-row-delete-6').click();
     await expect(page.getByTestId('tasks-list-row-6')).toHaveCount(0, { timeout: 5_000 });
     await closeBoard(page);
 
-    await expect(viewAll).toHaveCount(0, { timeout: 5_000 });
+    await expect(overflow).toHaveCount(0, { timeout: 5_000 });
   });
 
   // ─── Delete ──────────────────────────────────────────────────────────────
@@ -570,7 +616,7 @@ test.describe('§tasks', () => {
   // after is a plausible race against that mount (same class of "fire an
   // action, then immediately read/write derived state before React has
   // re-rendered" gap as `use-launch-configs.ts`'s already-documented races
-  // in run-surface.spec.ts/preview.spec.ts) — though unlike those two, I could
+  // in workspace-surface.spec.ts/preview.spec.ts) — though unlike those two, I could
   // not fully confirm this exact mechanism by reading assistant-ui's
   // (minified, vendored) internals within this session's budget. Not
   // touchable from this spec (packages/ui/.../use-start-todo-session.ts).

@@ -15,7 +15,7 @@
  *   launch.tunnel         → appendLog + setTunnelUrl(scope, name, url)
  *   launch.tunnel.failed  → appendLog + setTunnelError(scope, name, error)
  *   launch.port.timeout   → appendLog (log-only)
- *   launch.scopeReleased  → releaseRunScope(scopeKey) — prune Run tabs/PTYs
+ *   launch.scopeReleased  → releaseRunScope(scopeKey) — prune workspace tabs/PTYs
  *   everything else       → no-op
  */
 import { useEffect } from 'react';

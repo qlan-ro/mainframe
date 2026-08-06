@@ -75,14 +75,14 @@ test.describe('§permission gate details', () => {
     // Recording's suggestions carry [{type:setMode,...},{type:addDirectories,...}] — non-empty.
     await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeVisible();
 
-    // Narrow surface: lighting Files alongside chat shrinks the column in the same window.
-    await page.getByTestId('surface-rail-files').click();
-    await expect(page.getByTestId('files-surface')).toBeVisible({ timeout: 10_000 });
+    // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
     await expectGateMatchesComposerWidth(page);
     const column = await page.getByTestId('chat-thread-footer').boundingBox();
     const narrowGate = await page.getByTestId('chat-gate-card').boundingBox();
     expect(narrowGate!.width).toBeLessThanOrEqual(column!.width);
-    await page.getByTestId('surface-rail-files').click();
+    await page.getByTestId('surface-rail-workspace').click();
 
     // Clean up: deny so the AI finishes.
     await page.locator('[data-testid="chat-permission-deny"]').click();
@@ -261,11 +261,13 @@ test.describe('§plan gate exec-mode', () => {
     await closeTauriApp(app);
   });
 
-  // Approving unmounts the gate entirely (todo #296) — there is no post-approve state left on
-  // the gate itself to assert, since under E2E_MODE=mock the chat runs on `mock-cli`, which
-  // exposes no plan-mode handler, so an approval with `clearContext` never reaches
-  // `ClaudePlanModeHandler`. The post-approve surface is covered by
-  // tool-cards.spec.ts:363-372 (escalation path) and T12's live run.
+  // Approving unmounts the gate entirely (todo #296 — see ChatGateMount: an answered gate just
+  // returns null) so there is no post-approve state left on the gate itself to assert. Under
+  // E2E_MODE=mock the chat runs on `mock-cli`, which exposes no plan-mode handler, so an approval
+  // with `clearContext` never reaches `ClaudePlanModeHandler`. The post-approve surface is covered
+  // by tool-cards.spec.ts's "§tool-cards — Plan (plan-approval)" describe (its approved-PlanBubble
+  // test) and T12's live run. Named, not line-numbered — the previous `tool-cards.spec.ts:363-372`
+  // pointer went stale the moment that file's header changed length.
   test('selecting Unattended + clear-context marks both controls selected', async () => {
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');

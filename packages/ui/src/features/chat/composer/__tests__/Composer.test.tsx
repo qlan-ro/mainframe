@@ -13,13 +13,13 @@
  *        `<button type="submit">` inside `ComposerPrimitive.Root`, not a primitive)
  *  - Mock `./edit/composer-edit-context` to return { editing: null, cancelEdit: vi.fn() }
  *    (edit mode is inactive in all cases tested here).
- *  - Mock `./config-toolbar/ComposerToolbar` and `@/components/ui/assistant-ui/attachment`
+ *  - Mock `./config-toolbar/ComposerToolbar` and `./attachments/ComposerAttachmentStrip`
  *    to plain no-op stubs so their internal hooks don't run.
  *  - All assertions use hardcoded expected values.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, createEvent, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { useComposerSegments } from '../segments/segment-store';
 
 const THREAD_ID = 'thread-1';
@@ -94,8 +94,8 @@ vi.mock('../config-toolbar/ComposerToolbar', () => ({
   ComposerToolbar: () => null,
 }));
 
-// Attachment components call useAuiState internally — stub them.
-vi.mock('@/components/ui/assistant-ui/attachment', () => ({
+// The attachment strip calls useAuiState internally — stub it.
+vi.mock('../attachments/ComposerAttachmentStrip', () => ({
   ComposerAttachments: () => null,
   ComposerAddAttachment: () => null,
   ComposerAddMention: () => null,

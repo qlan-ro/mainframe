@@ -157,7 +157,8 @@ describe('SetupAdvisorSheet — tabs', () => {
     expect(screen.getByText('Add the Supabase MCP server')).toBeTruthy();
     expect(screen.queryByText('Add the Storybook skill')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-skills'));
 
     expect(screen.getByText('Add the Storybook skill')).toBeTruthy();
     expect(screen.queryByText('Add the Supabase MCP server')).toBeNull();
@@ -193,7 +194,8 @@ describe('SetupAdvisorSheet — rows', () => {
 describe('SetupAdvisorSheet — file payloads', () => {
   it('names the destination file instead of the snippet’s first line, for hooks', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-hooks'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-hooks'));
 
     expect(screen.getByText('.claude/settings.json')).toBeTruthy();
     expect(screen.getByText('Paste into', { exact: false })).toBeTruthy();
@@ -202,7 +204,8 @@ describe('SetupAdvisorSheet — file payloads', () => {
 
   it('names the destination file instead of the frontmatter fence, for subagents', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-subagents'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-subagents'));
 
     expect(screen.getByText('.claude/agents/security-reviewer.md')).toBeTruthy();
     expect(screen.queryByText('---')).toBeNull();
@@ -210,7 +213,8 @@ describe('SetupAdvisorSheet — file payloads', () => {
 
   it('distinguishes a SKILL.md scaffold from an install command inside the one skills tab', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-skills'));
 
     expect(screen.getByText('.claude/skills/project-conventions/SKILL.md')).toBeTruthy();
     expect(screen.getByText('default-command')).toBeTruthy();
@@ -227,7 +231,8 @@ describe('SetupAdvisorSheet — footer', () => {
 
     expect(screen.getByText('Read-only — nothing runs until you paste it in your terminal.')).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-plugins'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-plugins'));
 
     expect(screen.getByText('Read-only — nothing runs until you paste it into Claude Code.')).toBeTruthy();
     expect(screen.queryByText('Read-only — nothing runs until you paste it in your terminal.')).toBeNull();
@@ -239,7 +244,7 @@ describe('SetupAdvisorSheet — footer', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
 
     for (const tab of ['hooks', 'subagents']) {
-      fireEvent.click(screen.getByTestId(`automation-recommender-tab-${tab}`));
+      fireEvent.mouseDown(screen.getByTestId(`automation-recommender-tab-${tab}`));
       expect(screen.getByText('Read-only — nothing is written until you paste it into your project.')).toBeTruthy();
       expect(screen.queryByText('Read-only — nothing runs until you paste it in your terminal.')).toBeNull();
     }
@@ -247,7 +252,8 @@ describe('SetupAdvisorSheet — footer', () => {
 
   it('falls back to the shared promise on a tab that mixes a command with a file payload', () => {
     render(<SetupAdvisorSheet {...baseProps()} report={REPORT_ALL_KINDS} />);
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-skills'));
 
     expect(screen.getByText('Read-only — nothing is applied until you paste it.')).toBeTruthy();
   });
@@ -257,7 +263,8 @@ describe('SetupAdvisorSheet — footer', () => {
 
     expect(screen.getByText('0 of 4 copied')).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId('automation-recommender-tab-skills'));
+    // Radix TabsTrigger activates on mouse-down, not click.
+    fireEvent.mouseDown(screen.getByTestId('automation-recommender-tab-skills'));
 
     expect(screen.getByText('0 of 4 copied')).toBeTruthy();
   });
