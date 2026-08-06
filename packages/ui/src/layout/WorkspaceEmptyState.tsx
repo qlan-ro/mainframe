@@ -152,13 +152,15 @@ function RunRows() {
 export function WorkspaceEmptyState() {
   return (
     <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
-      <Card data-testid="workspace-empty-state" className="w-72 gap-0 overflow-hidden py-0">
-        <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto p-1">
+      {/* max-h-full + min-h-0: in a short bottom strip the card must shrink and
+          scroll its rows rather than clip top and bottom against the centering. */}
+      <Card data-testid="workspace-empty-state" className="max-h-full w-72 gap-0 overflow-hidden py-0">
+        <div className="flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto p-1">
           <FileRows />
           <Separator className="my-1" />
           <RunRows />
         </div>
-        <div className="border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
+        <div className="shrink-0 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
           files, terminals, and previews share this surface
         </div>
       </Card>
