@@ -1,7 +1,7 @@
 /**
  * Behavior tests for WebFetchCard (WebFetch + WebSearch).
  *
- * Design contract (09-toolcards.jsx: TOOL_META.web + web body):
+ * Contract:
  *  - globe icon, verb "Fetch", clickable url (accent, mono), summary paragraph.
  *
  * Each test passes a fixed, concrete props object and asserts observable DOM

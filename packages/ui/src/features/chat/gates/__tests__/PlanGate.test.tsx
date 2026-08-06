@@ -79,7 +79,7 @@ describe('PlanGate', () => {
     expect(icon).toHaveClass('lucide-square-check');
   });
 
-  // --- Finding 6.10: exec-mode segmented control outer radius (8px) and icon size (12px) ---
+  // --- exec-mode segmented control: outer radius and icon size ---
 
   it('the exec-mode segmented control outer container uses rounded-md (8px), not rounded-lg', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} />);
@@ -165,7 +165,7 @@ describe('PlanGate', () => {
     const textarea = screen.getByTestId('chat-plan-feedback-input');
     expect(textarea).toBeInTheDocument();
 
-    // Finding 6.16: the revise row mounts with an enter transition.
+    // The revise row mounts with an enter transition.
     expect(textarea.closest('div')).toHaveClass('animate-in', 'fade-in-0');
 
     // Send-feedback is disabled while textarea is empty

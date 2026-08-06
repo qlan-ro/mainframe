@@ -102,7 +102,7 @@ describe('PermissionGate', () => {
     expect(pre).toHaveClass('bg-muted', 'text-foreground');
   });
 
-  // --- Finding 6.16: Details reveal mounts with an enter transition ---
+  // --- Details reveal mounts with an enter transition ---
 
   it('the details JSON block mounts with an enter transition', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
