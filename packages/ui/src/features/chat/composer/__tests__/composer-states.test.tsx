@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Mocks for Composer (AUI plumbing)

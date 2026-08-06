@@ -45,9 +45,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@v2/components/ui/dropdown-menu';
+import { Hint } from '@v2/components/ui/hint';
 import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { ProviderLogo } from '@v2/features/shared/ProviderLogo';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { RunningHint } from './RunningHint';
 import { ModelMenuRow } from './ModelMenuRow';
@@ -151,16 +151,11 @@ function ProviderTabs({
           // A disabled button swallows pointer events, so the mid-session
           // explanation rides on a wrapper span.
           return (
-            <Tooltip key={a.id}>
-              <TooltipTrigger asChild>
-                <span data-testid={`composer-adapter-locked-${a.id}`} className="h-full flex-1">
-                  {trigger}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                Locked for this session — start a new session to switch providers.
-              </TooltipContent>
-            </Tooltip>
+            <Hint key={a.id} label="Locked for this session — start a new session to switch providers." side="top">
+              <span data-testid={`composer-adapter-locked-${a.id}`} className="h-full flex-1">
+                {trigger}
+              </span>
+            </Hint>
           );
         })}
       </TabsList>
@@ -217,37 +212,34 @@ export function ProviderModelSelect({
   return (
     <RunningHint active={disabled}>
       <DropdownMenu open={open} onOpenChange={setOpen}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* Radix gates opening on the TRIGGER's own `disabled`; a disabled
-                child button alone still lets pointerdown open the menu. */}
-            <DropdownMenuTrigger asChild disabled={disabled}>
-              <button
-                type="button"
-                data-testid="composer-model-select"
-                data-tut="model"
-                disabled={disabled}
-                aria-label={`Provider and model: ${triggerLabel}`}
-                className={cn(
-                  'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-xs text-muted-foreground',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  // Driven by state, not data-[state=open]: TooltipTrigger asChild
-                  // overwrites the child's data-state with the tooltip's own.
-                  open && 'border-primary bg-mf-selection',
-                  'transition-colors focus-visible:outline-none',
-                  'disabled:pointer-events-none disabled:opacity-40',
-                )}
-              >
-                <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
-                <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
-                  {triggerLabel}
-                </span>
-                <ChevronDown size={12} className="flex-shrink-0 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top">Provider &amp; model</TooltipContent>
-        </Tooltip>
+        <Hint label="Provider &amp; model" side="top">
+          {/* Radix gates opening on the TRIGGER's own `disabled`; a disabled
+              child button alone still lets pointerdown open the menu. */}
+          <DropdownMenuTrigger asChild disabled={disabled}>
+            <button
+              type="button"
+              data-testid="composer-model-select"
+              data-tut="model"
+              disabled={disabled}
+              aria-label={`Provider and model: ${triggerLabel}`}
+              className={cn(
+                'flex h-[20px] min-w-0 items-center gap-[5px] rounded-[11px] border-[0.5px] border-border pl-[8px] pr-[7px] text-xs text-muted-foreground',
+                'hover:bg-accent hover:text-accent-foreground',
+                // Driven by state, not data-[state=open]: TooltipTrigger asChild
+                // overwrites the child's data-state with the tooltip's own.
+                open && 'border-primary bg-sidebar-selection',
+                'transition-colors focus-visible:outline-none',
+                'disabled:pointer-events-none disabled:opacity-40',
+              )}
+            >
+              <span className={cn('inline-block size-1.5 flex-shrink-0 rounded-full', providerDot(activeId))} />
+              <span className="max-w-[150px] truncate font-medium @max-[560px]:max-w-[90px] @max-[430px]:max-w-[56px]">
+                {triggerLabel}
+              </span>
+              <ChevronDown size={12} className="flex-shrink-0 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+        </Hint>
 
         <DropdownMenuContent
           data-testid="composer-provider-model-popover"

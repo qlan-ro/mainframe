@@ -328,15 +328,15 @@ test.describe('§composer plan-mode toggle', () => {
     const toggle = page.getByTestId('composer-plan-toggle');
     await expect(toggle).toBeVisible({ timeout: 10_000 });
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle).not.toHaveClass(/border-mf-warning/);
+    await expect(toggle).not.toHaveClass(/border-primary/);
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
-    await expect(toggle).toHaveClass(/border-mf-warning/);
+    await expect(toggle).toHaveClass(/border-primary/);
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 5_000 });
-    await expect(toggle).not.toHaveClass(/border-mf-warning/);
+    await expect(toggle).not.toHaveClass(/border-primary/);
   });
 });
 
