@@ -138,7 +138,10 @@ export function MainToolbar({
     <div
       data-testid="main-toolbar"
       data-drag-region
-      className="flex h-10 shrink-0 items-center justify-between gap-2 border-b bg-background pr-3"
+      // The hairline is an inset shadow, not border-b: a border eats 1px of the
+      // content box and shifts the centered row to a 23.5px midline, off the
+      // sidebar header's 24px.
+      className="flex h-12 shrink-0 items-center justify-between gap-2 bg-background pr-3 [box-shadow:inset_0_-1px_var(--border)]"
     >
       {/* Left: identity */}
       <div
@@ -150,7 +153,7 @@ export function MainToolbar({
             <Button
               data-testid="show-sidebar-button"
               variant="ghost"
-              size="icon-xs"
+              size="icon-sm"
               onClick={onExpandSidebar}
               className="text-muted-foreground"
             >
@@ -218,12 +221,12 @@ export function MainToolbar({
 
       {/* Right: controls — the artboard's three groups: search │ project tools
           (Setup Advisor · launch · play) │ workspace (surfaces · theme · inspector). */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-0.5">
         <Hint label="Search (⌘O)">
           <Button
             data-testid="main-toolbar-search"
             variant="ghost"
-            size="xs"
+            size="sm"
             onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
             className="text-muted-foreground"
           >
@@ -242,7 +245,7 @@ export function MainToolbar({
             <Button
               data-testid="automation-recommender-open"
               variant="ghost"
-              size="icon-xs"
+              size="icon-sm"
               onClick={() => openSetupAdvisor()}
               className="text-muted-foreground"
             >
@@ -258,7 +261,7 @@ export function MainToolbar({
           <Button
             data-testid="main-toolbar-theme"
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             onClick={toggleTheme}
             className="text-muted-foreground"
           >
@@ -274,7 +277,7 @@ export function MainToolbar({
             // Pressed chrome keys off the store flag, not data-[state=on] — the Hint's
             // TooltipTrigger asChild overwrites data-state with the tooltip's open-state.
             className={cn(
-              'size-6 min-w-6 p-0',
+              'size-8 min-w-8 p-0',
               inspectorVisible ? 'bg-accent text-foreground' : 'text-muted-foreground',
             )}
           >

@@ -49,7 +49,7 @@ export function SurfaceRail() {
               data-tut={id === 'workspace' ? 'workspace' : undefined}
               disabled={isFloor}
               className={cn(
-                'h-6 w-7 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
+                'h-7 w-8 min-w-0 flex-none rounded-md p-0 first:rounded-md last:rounded-md',
                 // Pressed chrome keys off store state, NOT data-[state=on]: the Hint's
                 // TooltipTrigger asChild overwrites the item's data-state with the
                 // tooltip's open-state ("closed"), so the Radix selector never matches.
