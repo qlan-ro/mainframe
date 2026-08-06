@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe('SurfaceHost — flat shell geometry', () => {
   it('applies no inset classes to the outer wrapper', () => {
-    render(<SurfaceHost port={31415} />);
+    render(<SurfaceHost />);
 
     const outer = screen.getByTestId('chat-thread-area');
     expect(outer.className).not.toContain('pt-[4px]');
@@ -46,7 +46,7 @@ describe('SurfaceHost — flat shell geometry', () => {
     useLayoutStore.setState({
       layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 1 } },
     });
-    const { container } = render(<SurfaceHost port={31415} />);
+    const { container } = render(<SurfaceHost />);
 
     const divider = container.querySelector('[data-testid="surf-divider-x"]') as HTMLElement | null;
     expect(divider?.style.width).toBe('9px');
@@ -62,7 +62,7 @@ describe('SurfaceHost — lone pane reclaims the full row', () => {
     useLayoutStore.setState({
       layout: { top: ['chat'], bottom: null, topFlex: { chat: 0.3, workspace: 0.7 }, vFlex: { top: 1, bottom: 1 } },
     });
-    const { container } = render(<SurfaceHost port={31415} />);
+    const { container } = render(<SurfaceHost />);
 
     const pane = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
     expect(pane.style.flex).toBe('1 1 0%');
@@ -77,7 +77,7 @@ describe('SurfaceHost — lone pane reclaims the full row', () => {
         vFlex: { top: 1, bottom: 1 },
       },
     });
-    const { container } = render(<SurfaceHost port={31415} />);
+    const { container } = render(<SurfaceHost />);
 
     const chat = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
     const ws = container.querySelector('[data-drop-surface="workspace"]') as HTMLElement;

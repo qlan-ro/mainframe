@@ -21,16 +21,12 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
 // NOT inside a white card.
 const PANEL_LAYOUT = 'flex flex-col overflow-hidden';
 
-function SurfaceView({ name, port }: { name: SurfaceId; port: number }) {
-  if (name === 'chat') return <ChatSurface port={port} />;
+function SurfaceView({ name }: { name: SurfaceId }) {
+  if (name === 'chat') return <ChatSurface />;
   return <WorkspaceSurface />;
 }
 
-interface Props {
-  port: number;
-}
-
-function SurfaceHostImpl({ port }: Props) {
+function SurfaceHostImpl() {
   const layout = useLayoutStore((s) => s.layout);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
@@ -110,7 +106,7 @@ function SurfaceHostImpl({ port }: Props) {
               style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
               className={`min-w-0 ${panelCls}`}
             >
-              <SurfaceView name={name} port={port} />
+              <SurfaceView name={name} />
             </div>
             {i < top.length - 1 &&
               (twoCol ? (
@@ -134,7 +130,7 @@ function SurfaceHostImpl({ port }: Props) {
           <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} gutter={geo.gutter} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${panelCls}`}>
-              <SurfaceView name={bottom} port={port} />
+              <SurfaceView name={bottom} />
             </div>
           </div>
         </>
@@ -144,7 +140,7 @@ function SurfaceHostImpl({ port }: Props) {
   );
 }
 
-// Memoized: `port` is stable, so SurfaceHost (and the mounted surfaces beneath it)
+// Memoized: SurfaceHost takes no props, so it (and the mounted surfaces beneath it)
 // re-render only on their OWN store subscriptions (layout/theme), NOT every time the
 // parent RuntimeBody re-renders on a sidebar-resize pixel or a session switch.
 export const SurfaceHost = memo(SurfaceHostImpl);

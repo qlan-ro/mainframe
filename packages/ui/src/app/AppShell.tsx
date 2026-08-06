@@ -117,7 +117,7 @@ function RuntimeBody({ port }: { port: number }) {
           projectId={projectId}
           chatId={chatId}
         />
-        <SurfaceHost port={port} />
+        <SurfaceHost />
       </SidebarInset>
 
       {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar. */}

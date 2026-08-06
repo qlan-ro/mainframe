@@ -24,10 +24,17 @@
  *   exist — see the effect below for how the cancel-on-redirect works.
  * - Everything else (a sent local thread, a pre-existing chat, or a new local
  *   thread with no project resolved yet) shows the plain ChatThread.
+ *
+ * The session panel is a flex sibling of the thread column in the last two
+ * cases. Its state machine lives here because the row the two of them share is
+ * the width the panel follows — it shrinks when the surface is split, which the
+ * panel measuring itself would never see.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
+import { SessionPanel } from '@/features/session-panel/SessionPanel';
+import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
@@ -67,9 +74,20 @@ function useZeroSessionBootPicker(args: { isDeadEnd: boolean }): void {
   }, [isDeadEnd]);
 }
 
-export function ChatSurface({ port: _port }: { port: number }) {
+export function ChatSurface() {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
   useNewThreadAutoConfig();
+
+  const panelState = useSessionPanelState();
+  const { hostRef } = panelState;
+  // A callback ref, because `hostRef` is typed to the generic HTMLElement the
+  // panel measures — a div's own ref prop would not accept it.
+  const setHostRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      hostRef.current = el;
+    },
+    [hostRef],
+  );
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // s.threadListItem is the native active ThreadListItemState; its `status`
@@ -135,10 +153,15 @@ export function ChatSurface({ port: _port }: { port: number }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
-      {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
-          height — otherwise the sticky composer footer collapses/clips. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <ChatThread emptyState={welcome} />
+      {/* The row the panel shares with the thread column — what the panel's
+          ResizeObserver measures. */}
+      <div ref={setHostRef} className="flex min-h-0 flex-1 overflow-hidden">
+        {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
+            height — otherwise the sticky composer footer collapses/clips. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <ChatThread emptyState={welcome} />
+        </div>
+        <SessionPanel state={panelState} />
       </div>
     </div>
   );

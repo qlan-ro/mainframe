@@ -14,10 +14,17 @@
  *  4. Zero-session boot fallback: projects>0, "All" view, still on the boot
  *     draft with no resolved project after a settle window → open the shared
  *     project-picker store instead of leaving a dead-end projectless surface.
+ *
+ * The session panel mounts in branch 2/3 only, and `SessionPanel` is stubbed
+ * here: it is covered by its own suite, and rendering it for real would drag the
+ * whole panel tree (daemon port, WS, launch actions) into a branch-selection
+ * test. What this file owns is where the panel mounts and what it is handed —
+ * including that the ResizeObserver measures the thread row, not the panel.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import type { SessionPanelState } from '@/features/session-panel/use-session-panel-state';
 
 let __mainThreadId: string | null = '__LOCALID_1';
 let __itemStatus: string | undefined = 'new';
@@ -63,12 +70,30 @@ vi.mock('../../../chat/thread/ChatCardHeader', () => ({ ChatCardHeader: () => <d
 vi.mock('../ChatEmptyState', () => ({
   ChatEmptyState: ({ variant }: { variant: string }) => <div data-testid={`empty-${variant}`} />,
 }));
+vi.mock('@/features/session-panel/SessionPanel', () => ({
+  SessionPanel: ({ state }: { state: SessionPanelState }) => (
+    <div data-testid="session-panel-root" data-mode={state.mode} />
+  ),
+}));
+
+// The shared setup's ResizeObserver stub is inert; this one records what was
+// observed so the host-row wiring is assertable.
+let observed: Element[] = [];
+class RecordingResizeObserver {
+  observe(el: Element) {
+    observed.push(el);
+  }
+  unobserve() {}
+  disconnect() {}
+}
+(globalThis as { ResizeObserver?: unknown }).ResizeObserver = RecordingResizeObserver;
 
 import { useNewSessionPickerTarget } from '../../sidebar/use-new-session-picker-target';
 import { ChatSurface } from '../ChatSurface';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
+    observed = [];
     __mainThreadId = '__LOCALID_1';
     __itemStatus = 'new';
     __messageCount = 0;
@@ -83,7 +108,7 @@ describe('ChatSurface', () => {
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {
     __projects = [];
     __loading = false;
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
     expect(screen.getByTestId('empty-firstrun')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
   });
@@ -91,13 +116,13 @@ describe('ChatSurface', () => {
   it('does not show the first-run hero while projects are still loading', () => {
     __projects = [];
     __loading = true;
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
   });
 
   it('renders ChatThread with the welcome empty-state for a resolved draft', () => {
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
@@ -106,14 +131,14 @@ describe('ChatSurface', () => {
     __mainThreadId = 'chat-123';
     __itemStatus = 'regular';
     __messageCount = 4;
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
   });
 
   it('hides ChatThread and its composer while initialization is pending', () => {
     __initialization = { status: 'initializing' };
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
 
     expect(screen.getByText('Initializing session…')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
@@ -123,7 +148,7 @@ describe('ChatSurface', () => {
     __draftMap = new Map();
     __filterProjectId = 'proj-a';
     __initialization = { status: 'idle' };
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
 
     expect(screen.getByText('Initializing session…')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
@@ -132,11 +157,53 @@ describe('ChatSurface', () => {
   it('hides ChatThread on error and retries the same initialization', async () => {
     const retry = vi.fn(async () => undefined);
     __initialization = { status: 'error', retry };
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
 
     expect(screen.queryByTestId('chat-thread')).toBeNull();
     await act(async () => screen.getByTestId('new-session-initialization-retry').click());
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('mounts the session panel beside the thread, handed the panel state', () => {
+    render(<ChatSurface />);
+
+    const panel = screen.getByTestId('session-panel-root');
+    expect(panel).toBeInTheDocument();
+    // jsdom reports a 0px host, which is below the inline threshold.
+    expect(panel).toHaveAttribute('data-mode', 'rail');
+  });
+
+  it('observes the row holding the thread, so a split surface measures what shrinks', () => {
+    render(<ChatSurface />);
+
+    expect(observed).toHaveLength(1);
+    const row = observed[0] as HTMLElement;
+    expect(row.contains(screen.getByTestId('chat-thread'))).toBe(true);
+    expect(row.contains(screen.getByTestId('session-panel-root'))).toBe(true);
+    expect(row.contains(screen.getByTestId('chat-header'))).toBe(false);
+  });
+
+  it('does not mount the session panel in the first-run branch', () => {
+    __projects = [];
+    __loading = false;
+    render(<ChatSurface />);
+
+    expect(screen.queryByTestId('session-panel-root')).toBeNull();
+    expect(observed).toHaveLength(0);
+  });
+
+  it('does not mount the session panel while initialization is pending', () => {
+    __initialization = { status: 'initializing' };
+    render(<ChatSurface />);
+
+    expect(screen.queryByTestId('session-panel-root')).toBeNull();
+  });
+
+  it('does not mount the session panel on an initialization error', () => {
+    __initialization = { status: 'error', retry: vi.fn(async () => undefined) };
+    render(<ChatSurface />);
+
+    expect(screen.queryByTestId('session-panel-root')).toBeNull();
   });
 });
 
@@ -158,7 +225,7 @@ describe('ChatSurface — zero-session boot fallback (All view, projects>0, unre
   });
 
   it('opens the shared project-picker store once the boot-settle window elapses', () => {
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
     expect(useNewSessionPickerTarget.getState().open).toBe(false);
 
     act(() => {
@@ -170,7 +237,7 @@ describe('ChatSurface — zero-session boot fallback (All view, projects>0, unre
 
   it('does not open the picker when a project pill is active', () => {
     __filterProjectId = 'proj-a';
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
 
     act(() => {
       vi.advanceTimersByTime(2000);
@@ -181,7 +248,7 @@ describe('ChatSurface — zero-session boot fallback (All view, projects>0, unre
 
   it('does not open the picker once the draft already resolved a project', () => {
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
-    render(<ChatSurface port={31415} />);
+    render(<ChatSurface />);
 
     act(() => {
       vi.advanceTimersByTime(2000);
@@ -191,7 +258,7 @@ describe('ChatSurface — zero-session boot fallback (All view, projects>0, unre
   });
 
   it('does not open the picker if the thread stops being the new local draft before settle (sessions loaded and redirected away)', () => {
-    const { rerender } = render(<ChatSurface port={31415} />);
+    const { rerender } = render(<ChatSurface />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -199,7 +266,7 @@ describe('ChatSurface — zero-session boot fallback (All view, projects>0, unre
     __mainThreadId = 'chat-123';
     __itemStatus = 'regular';
     __messageCount = 4;
-    rerender(<ChatSurface port={31415} />);
+    rerender(<ChatSurface />);
 
     act(() => {
       vi.advanceTimersByTime(2000);
