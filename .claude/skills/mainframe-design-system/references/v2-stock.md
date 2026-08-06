@@ -328,6 +328,57 @@ Details button that opens `ToastDetailsHost` (v2 Dialog at the app root, monospa
 payload via the `toast-details` store). Prefer `mfToast.error(title, { description, details })`
 over stuffing payloads into the toast body.
 
+## Chat surface (2026-08-06 port)
+
+**Layering rule (user decision):** aui owns state and behavior, shadcn owns pixels, and aui's *styled*
+registry components contribute nothing visual. Where both libraries have "the same" component it is
+behavior-vs-look — compose them.
+
+**The chat kit lives in the v2 registry:** `message` (MessageGroup/Message/MessageAvatar/Content/Header/
+Footer), `bubble` (7 variants + BubbleContent/BubbleReactions), `attachment` (the whole compound, states
+idle→done), `marker` (default/separator/border). Hand-added from
+`https://ui.shadcn.com/r/styles/radix-vega/<name>.json` — never `pnpm dlx shadcn add`, which churns the
+lockfile. Three upstream classes were dropped as phantom-or-wrong here and the reasons live in the files:
+`scroll-fade-b` (a mask fades a sticky child along with the content), the `scrollbar-*` family (app.css
+paints ONE global thin scrollbar; `[scrollbar-width:none]` is the opt-out idiom), and `shimmer` (a bridge
+class, and no attachment of ours has an upload state). `AttachmentGroup`'s `scroll-fade-x` went too: an
+unconditional both-ends ramp eats items that fit, and the app's other horizontal rails (tab strips) clip.
+
+### MessageScroller spike — VERDICT: fallback taken, aui's Viewport stays
+
+`@shadcn/react`'s `MessageScroller` was spiked against today's `ThreadPrimitive.Viewport` (aui autoscroll
+off, `ThreadPrimitive.Messages` inside `MessageScrollerViewport`/`Content`, one `MessageScrollerItem` per
+message id). **Both passed all four exercised behaviors** — streamed follow, scroll-away release,
+full-list history re-seed without a jump, jump-to-bottom — so nothing functional forced the choice. The
+kit primitive and the `@shadcn/react` dependency were **removed again**; carrying an unused primitive on a
+four-hour-old dependency is a leftover. Four reasons, in order of weight:
+
+- **The kit scroller has no footer-inset concept.** Measured: its footer is necessarily a flex sibling
+  *outside* the scroll region (viewport `clientHeight` 604 of a 700px window), while aui's
+  `ViewportFooter` sits *inside* it, sticky, with its height measured into the scroll inset (`clientHeight`
+  700). Adopting the kit means moving the composer out of the scroll region — messages would stop scrolling
+  under it. That is a composer layout change, and the composer's config toolbar is explicitly not to be
+  touched.
+- **aui's viewport is not the dumb stick-to-bottom the port assumed.** 0.14.27 already ships
+  `turnAnchor="top"` + `topAnchorMessageClamp` — the same anchor-the-user-turn-to-the-top model that is the
+  kit scroller's distinguishing feature. The premise that this was "the one real collision" did not hold.
+- **Feeding the kit needs two more unstable aui APIs.** `MessageScrollerItem` throws outside a
+  `MessageScrollerProvider` and must be a DIRECT child of `Content` (the primitive reads
+  `content.children` for `data-message-id`), so it cannot be the role components' root without also
+  breaking subagent transcripts, which reuse `boundedMessageComponents`. The working shape was
+  `unstable_useThreadMessageIds` + `ThreadPrimitive.Unstable_MessageById`, on top of the deprecated-hook
+  debt already tracked in `packages/ui/CLAUDE.md`.
+- **`@shadcn/react@0.3.0` is days old, sub-1.0, four versions ever**, and would own the most
+  behavior-critical mechanism on the surface — while aui is already pinned exactly, already owns thread
+  state, and its viewport is already wired to `thread.runStart`, `threadListItem.switchedTo`,
+  `useOnScrollToBottom` and `isAtBottom`, all of which would need re-bridging.
+
+Two facts worth keeping from the spike: aui's content observer **ignores `style` attribute mutations** by
+design (`useOnResizeContent`), so a footer that grows by autosize alone does not re-pin — growth by node
+insertion does; and any measurement of that path must add a node, or it measures the wrong thing. And the
+kit's per-item `[content-visibility:auto] [contain-intrinsic-size:auto_10rem]` is plain CSS — it can be
+applied to aui message rows on its own merits, without the scroller.
+
 ## Known deviations, and why
 
 Recorded so nobody "fixes" them back:
