@@ -4,8 +4,10 @@
  *
  * Replaces `context-panel.spec.ts`, which covered the bottom Context/Skills/Agents
  * panel deleted in the right-sidebar revamp (T5.4). Scenarios are retargeted, not
- * rewritten: the Session sub-group's mention/attachment/lightbox coverage and the
- * Skills-row coverage come straight from that spec.
+ * rewritten: the Session sub-group's mention/attachment/lightbox coverage comes
+ * straight from that spec. Its available-skills-catalog coverage did NOT survive
+ * — the Skills sub-group lists session-invoked skills now, and the catalog moved
+ * to the Setup Advisor (see the ground-truth note below).
  *
  * Source read: packages/ui/src/features/session-panel/{SessionPanel,SessionPanelRail,
  * SessionRailButton,PanelSection,PanelSubGroup,SummarySection,PlanSection,AgentPlan,
@@ -33,10 +35,14 @@
  *     projectFiles are ALWAYS empty, seeded CLAUDE.md or not. The Context
  *     section's memory-file sub-group therefore never renders here; its absence
  *     is asserted (with this reason) rather than left unstated.
- *   - `extract_plan_files()` / `extract_skill_files()` return `[]` — the 'plan'
- *     and 'skill' badges of the Session sub-group are unreachable.
- *   - `listSkills` IS implemented (project scope, `.claude/skills/<name>/SKILL.md`
- *     — skills.rs), so seeding that directory does populate the Skills sub-group.
+ *   - `extract_plan_files()` returns `[]` — the Session sub-group's 'plan' badge
+ *     is unreachable.
+ *   - `extract_skill_files()` returns `[]`, and the Skills sub-group now lists
+ *     the skills the SESSION INVOKED (`SessionContext.skillFiles`) rather than
+ *     the adapter's available-skills catalog. So no skill row is reachable here;
+ *     the empty-state row + the Manage link are asserted instead, the same way
+ *     the memory-file sub-group's absence is. Seeding `.claude/skills` no longer
+ *     affects this panel — `listSkills` feeds the Setup Advisor, not the panel.
  *   - The mock adapter emits NO `background_task.*` events (no recording carries
  *     one either — grepped), so Background Activity's running state is not
  *     reachable. Empty-state + rail affordance is the honest coverage.
@@ -84,7 +90,8 @@
  *   session-panel-launch-empty    — "No Launch Configurations"
  *   session-panel-context-file-<path> — a memory-file row (never rendered under mock-cli)
  *   session-panel-session-item-<path> — a Session sub-group row; click emits open-file
- *   session-panel-skill-<id>      — a Skills sub-group row; click opens its SKILL.md
+ *   session-panel-skill-<path>    — a Skills sub-group row: a skill THIS session
+ *                                   invoked; click opens its SKILL.md (unreachable here)
  *   session-panel-skills-empty / session-panel-skills-manage — its empty state / Manage link
  *   session-panel-attachment-grid / session-panel-attachment-<id> — attachment tiles
  *   image-lightbox-dialog         — ImageLightbox content (opened by an image tile)
@@ -151,16 +158,6 @@ function seedLaunchConfigs(projectPath: string): void {
       null,
       2,
     ),
-  );
-}
-
-/** MockCliAdapter.listSkills scans ONLY `<projectPath>/.claude/skills` (skills.rs). */
-function seedSkill(projectPath: string): void {
-  const skillDir = path.join(projectPath, '.claude', 'skills', 'write-tests');
-  mkdirSync(skillDir, { recursive: true });
-  writeFileSync(
-    path.join(skillDir, 'SKILL.md'),
-    '---\nname: Write Tests\ndescription: Write comprehensive unit tests for a module.\n---\n\n# Write Tests\n',
   );
 }
 
@@ -522,7 +519,6 @@ test.describe('§session-panel — Context section', () => {
     app = await launchTauriApp();
     await app.page.setViewportSize(WIDE);
     project = await createTauriProject(app.page);
-    seedSkill(project.projectPath);
     chatId = await createTauriChat(app.page, project.projectId, 'default');
 
     // Adapter-independent seeds (see the ground-truth note): one user file
@@ -552,8 +548,9 @@ test.describe('§session-panel — Context section', () => {
     await ensureInlinePanel(page);
     const header = page.getByTestId('session-panel-section-toggle-context');
     await expect(header).toBeVisible({ timeout: 15_000 });
-    // 1 mention + 1 skill + 2 attachments; memory files are always 0 under mock-cli.
-    await expect(header).toContainText('4', { timeout: 15_000 });
+    // 1 mention + 2 attachments; memory files and invoked skills are always 0
+    // under mock-cli (get_context_files / extract_skill_files return defaults).
+    await expect(header).toContainText('3', { timeout: 15_000 });
     // No memory-file rows exist here: get_context_files() returns the default empty
     // pair, so the "Context" sub-group has nothing to render.
     await expect(page.locator('[data-testid^="session-panel-context-file-"]')).toHaveCount(0);
@@ -576,18 +573,19 @@ test.describe('§session-panel — Context section', () => {
     await expect(strip.getByRole('tab', { selected: true })).toContainText('index.ts', { timeout: 10_000 });
   });
 
-  test('the Skills sub-group lists the seeded project skill and opens its SKILL.md', async () => {
+  // The sub-group lists SESSION-INVOKED skills, and mock-cli's
+  // `extract_skill_files()` returns `[]`, so no row is reachable here — same
+  // shape as the memory-file sub-group above. What must hold is that the group
+  // still renders: its Manage link is the only route to the advisor's skills
+  // sheet, which owns the available-skills catalog this panel stopped listing.
+  test('the Skills sub-group shows its empty state and keeps Manage reachable', async () => {
     const { page } = app;
     await ensureInlinePanel(page);
-    const row = page.getByTestId('session-panel-skill-mock-cli:project:write-tests');
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row).toContainText('/Write Tests');
-    await expect(page.getByTestId('session-panel-skills-empty')).toHaveCount(0);
+    const empty = page.getByTestId('session-panel-skills-empty');
+    await expect(empty).toBeVisible({ timeout: 15_000 });
+    await expect(empty).toContainText('No skills used');
+    await expect(page.locator('[data-testid^="session-panel-skill-/"]')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-skills-manage')).toBeVisible();
-
-    await row.click();
-    const strip = page.locator(WORKSPACE.strip);
-    await expect(strip.getByRole('tab', { selected: true })).toContainText('SKILL.md', { timeout: 10_000 });
   });
 
   test('attachment tiles render; the image tile opens the lightbox', async () => {

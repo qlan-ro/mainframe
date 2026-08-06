@@ -1,22 +1,18 @@
 /**
  * ContextSection — what the agent is working from: the memory files it loaded,
- * the files this session touched, the skills available to it, and the session's
+ * the files this session touched, the skills it invoked, and the session's
  * attachments.
  *
- * Four sub-groups, deliberately overlapping in one place: a skill FILE used this
- * session appears under Session with a `skill` badge, while Skills below lists
- * the adapter's AVAILABLE skills — two lists from two sources, as they are today.
- *
- * Manage is carried over from the retired bottom panel's skills tab: it is the
- * only route to the Setup Advisor's skills sheet.
+ * Every sub-group reads the SAME source, the session context. Skills lists the
+ * skills THIS session invoked (`skillFiles`), not the adapter's available-skills
+ * catalog — that catalog belongs to the Setup Advisor, which Manage reaches. It
+ * is the only route to that sheet, so the sub-group renders even when empty.
  */
 import { Layers } from 'lucide-react';
 import { Badge } from '@v2/components/ui/badge';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
-import type { Skill } from '@qlan-ro/mainframe-types';
 import { useSessionContext } from '@/features/sessions/use-session-context';
-import { useSidebarSkills } from '@/features/sessions/use-sidebar-skills';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ContextFileItem } from './ContextFileItem';
@@ -49,23 +45,6 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
   );
 }
 
-function SkillRow({ skill }: { skill: Skill }) {
-  return (
-    <Hint label={skill.description || skill.filePath}>
-      <button
-        type="button"
-        data-testid={`session-panel-skill-${skill.id}`}
-        onClick={() => emitSurfaceIntent({ type: 'open-file', path: skill.filePath })}
-        className={SUB_GROUP_ROW}
-      >
-        <span className="min-w-0 flex-1 truncate text-sm">/{skill.displayName || skill.name}</span>
-        {/* `scope` comes off the wire as project / global / plugin and reads verbatim. */}
-        <Badge variant="outline">{skill.scope}</Badge>
-      </button>
-    </Hint>
-  );
-}
-
 interface ContextSectionProps {
   port: number;
   open: boolean;
@@ -75,13 +54,13 @@ interface ContextSectionProps {
 
 export function ContextSection({ port, open, onToggle, sectionRef }: ContextSectionProps) {
   const { context, chatId } = useSessionContext();
-  const { skills, loading } = useSidebarSkills();
   const openSheet = useSetupAdvisor((s) => s.openSheet);
 
   const memoryFiles = deriveContextFiles(context);
   const sessionItems = context ? deriveSessionItems(context) : [];
+  const skillFiles = context?.skillFiles ?? [];
   const attachments = context?.attachments ?? [];
-  const count = memoryFiles.length + sessionItems.length + skills.length + attachments.length;
+  const count = memoryFiles.length + sessionItems.length + skillFiles.length + attachments.length;
 
   return (
     <PanelSection
@@ -108,7 +87,6 @@ export function ContextSection({ port, open, onToggle, sectionRef }: ContextSect
               key={item.path}
               testId={`session-panel-session-item-${item.path}`}
               path={item.path}
-              displayName={item.displayName}
               badge={item.badge}
             />
           ))}
@@ -117,7 +95,7 @@ export function ContextSection({ port, open, onToggle, sectionRef }: ContextSect
 
       <PanelSubGroup
         label="Skills"
-        count={skills.length}
+        count={skillFiles.length}
         action={
           <Button
             data-testid="session-panel-skills-manage"
@@ -129,12 +107,19 @@ export function ContextSection({ port, open, onToggle, sectionRef }: ContextSect
           </Button>
         }
       >
-        {skills.length === 0 ? (
+        {skillFiles.length === 0 ? (
           <div data-testid="session-panel-skills-empty" className={SUB_NOTE}>
-            {loading ? 'Loading…' : 'No skills'}
+            No skills used
           </div>
         ) : (
-          skills.map((skill) => <SkillRow key={skill.id} skill={skill} />)
+          skillFiles.map((f) => (
+            <ContextFileItem
+              key={f.path}
+              testId={`session-panel-skill-${f.path}`}
+              path={f.path}
+              displayName={f.displayName}
+            />
+          ))
         )}
       </PanelSubGroup>
 

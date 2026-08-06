@@ -5,8 +5,10 @@
  *  - memory files render per scope with a `global`/`project` badge and an
  *    estimated token size, and open on click
  *  - in-session file mentions render as their own sub-group, badged (D14)
- *  - skills render with their scope chip, and the Manage entry point reaches the
- *    Setup Advisor's skills sheet — the only route to it
+ *  - the Skills sub-group lists the skills THIS session invoked, never the
+ *    available-skills catalog, and never re-lists them under Session
+ *  - Manage renders even with no skills — the only route to the Setup Advisor's
+ *    skills sheet, which owns the catalog
  *  - agents are gone from the product surface (D15)
  *  - the attachments grid mounts only when the session has attachments
  *
@@ -15,19 +17,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { SessionContext, Skill } from '@qlan-ro/mainframe-types';
+import type { SessionContext } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { TooltipProvider as LegacyTooltipProvider } from '@/components/ui/tooltip';
 
 let mockContext: SessionContext | null = null;
 vi.mock('@/features/sessions/use-session-context', () => ({
   useSessionContext: () => ({ context: mockContext, chatId: 'chat-9' }),
-}));
-
-let mockSkills: Skill[] = [];
-let mockSkillsLoading = false;
-vi.mock('@/features/sessions/use-sidebar-skills', () => ({
-  useSidebarSkills: () => ({ skills: mockSkills, agents: [], loading: mockSkillsLoading }),
 }));
 
 const openSheet = vi.fn();
@@ -67,24 +63,11 @@ const emptyContext: SessionContext = {
   skillFiles: [],
 };
 
-const skill = (id: string, name: string, scope: Skill['scope']): Skill => ({
-  id,
-  adapterId: 'claude',
-  name,
-  displayName: name,
-  description: `${name} does things`,
-  scope,
-  filePath: `/skills/${name}/SKILL.md`,
-  content: '',
-});
-
 const onToggle = vi.fn();
 const section = () => <ContextSection port={31415} open onToggle={onToggle} />;
 
 beforeEach(() => {
   mockContext = emptyContext;
-  mockSkills = [];
-  mockSkillsLoading = false;
   openSheet.mockReset();
   emitSurfaceIntent.mockReset();
   getAttachment.mockClear();
@@ -140,7 +123,8 @@ describe('ContextSection — session items (D14)', () => {
 
     expect(screen.getByTestId('session-panel-session-item-src/app.ts')).toHaveTextContent('@');
     expect(screen.getByTestId('session-panel-session-item-src/edited.ts')).toHaveTextContent('plan');
-    expect(screen.getByTestId('session-panel-session-item-/skills/review/SKILL.md')).toHaveTextContent('skill');
+    // The invoked skill belongs to the Skills sub-group and is not re-listed here.
+    expect(screen.queryByTestId('session-panel-session-item-/skills/review/SKILL.md')).toBeNull();
   });
 
   it('renders no session sub-group when nothing was touched', () => {
@@ -150,39 +134,46 @@ describe('ContextSection — session items (D14)', () => {
 });
 
 describe('ContextSection — skills', () => {
-  it('renders a row per skill with its scope chip', () => {
-    mockSkills = [skill('s-1', 'review', 'project'), skill('s-2', 'deploy', 'global')];
+  const withSkills: SessionContext = {
+    ...emptyContext,
+    skillFiles: [
+      { path: '/skills/review/SKILL.md', displayName: 'Review' },
+      { path: '/skills/deploy/SKILL.md', displayName: 'Deploy' },
+    ],
+  };
+
+  it('renders a row per skill this session invoked, named and path-titled', () => {
+    mockContext = withSkills;
     render(section());
-    expect(screen.getByTestId('session-panel-skill-s-1')).toHaveTextContent('/review');
-    expect(screen.getByTestId('session-panel-skill-s-1')).toHaveTextContent('project');
-    expect(screen.getByTestId('session-panel-skill-s-2')).toHaveTextContent('global');
+    const row = screen.getByTestId('session-panel-skill-/skills/review/SKILL.md');
+    expect(row).toHaveTextContent('Review');
+    expect(row).toHaveAttribute('aria-label', '/skills/review/SKILL.md');
+    expect(screen.getByTestId('session-panel-skill-/skills/deploy/SKILL.md')).toHaveTextContent('Deploy');
   });
 
   it('opens a skill file on click', () => {
-    mockSkills = [skill('s-1', 'review', 'project')];
+    mockContext = withSkills;
     render(section());
-    fireEvent.click(screen.getByTestId('session-panel-skill-s-1'));
+    fireEvent.click(screen.getByTestId('session-panel-skill-/skills/review/SKILL.md'));
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: '/skills/review/SKILL.md' });
   });
 
-  it('keeps Manage — the only route to the advisor skills sheet', () => {
+  it('lists no available-skills catalog — only what the session invoked', () => {
+    mockContext = withSkills;
     render(section());
+    expect(screen.getAllByTestId(/^session-panel-skill-/)).toHaveLength(2);
+    expect(screen.queryByTestId('session-panel-skills-empty')).toBeNull();
+  });
+
+  it('keeps Manage with no skills — the only route to the advisor skills sheet', () => {
+    render(section());
+    expect(screen.getByTestId('session-panel-skills-empty')).toHaveTextContent('No skills used');
     fireEvent.click(screen.getByTestId('session-panel-skills-manage'));
     expect(openSheet).toHaveBeenCalledWith('skills');
   });
 
-  it('says so while loading and when there are none', () => {
-    mockSkillsLoading = true;
-    const { rerender } = render(section());
-    expect(screen.getByTestId('session-panel-skills-empty')).toHaveTextContent('Loading');
-
-    mockSkillsLoading = false;
-    rerender(section());
-    expect(screen.getByTestId('session-panel-skills-empty')).toHaveTextContent('No skills');
-  });
-
   it('renders no agent rows — agents left the product surface (D15)', () => {
-    mockSkills = [skill('s-1', 'review', 'project')];
+    mockContext = withSkills;
     render(section());
     expect(screen.queryByTestId('sidebar-agent-item-a-1')).toBeNull();
     expect(screen.queryByText('Agents')).toBeNull();
@@ -220,8 +211,8 @@ describe('ContextSection — section count', () => {
         },
       ],
       attachments: [{ id: 'att-1', name: 'shot.png', mediaType: 'image/png', sizeBytes: 10, kind: 'image' }],
+      skillFiles: [{ path: '/skills/review/SKILL.md', displayName: 'Review' }],
     };
-    mockSkills = [skill('s-1', 'review', 'project')];
     render(section());
     expect(screen.getByTestId('session-panel-section-toggle-context')).toHaveTextContent('4');
   });

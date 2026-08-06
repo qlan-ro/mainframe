@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionContext } from '@qlan-ro/mainframe-types';
-import { deriveSessionItems, sessionItemCount } from '../derive-session-items';
+import { deriveSessionItems } from '../derive-session-items';
 
 function ctx(partial: Partial<SessionContext>): SessionContext {
   return {
@@ -56,7 +56,7 @@ describe('deriveSessionItems', () => {
     ]);
   });
 
-  it('adds skill files with the skill badge + displayName only when not already present', () => {
+  it('excludes skill files — they are the Skills sub-group, not Session rows', () => {
     const result = deriveSessionItems(
       ctx({
         modifiedFiles: ['src/a.ts'],
@@ -66,20 +66,6 @@ describe('deriveSessionItems', () => {
         ],
       }),
     );
-    expect(result).toEqual([
-      { path: 'src/a.ts', badge: 'plan' },
-      { path: 'skills/run.sh', badge: 'skill', displayName: 'Run Tests' },
-    ]);
-  });
-
-  it('sessionItemCount counts derived items plus attachments', () => {
-    const c = ctx({
-      mentions: [{ id: '1', kind: 'file', source: 'user', name: 'a', path: 'src/a.ts', timestamp: 't' }],
-      attachments: [
-        { id: 'att1', name: 'p.png', mediaType: 'image/png', sizeBytes: 1, kind: 'image' },
-        { id: 'att2', name: 'd.pdf', mediaType: 'application/pdf', sizeBytes: 1, kind: 'file' },
-      ],
-    });
-    expect(sessionItemCount(c)).toBe(3);
+    expect(result).toEqual([{ path: 'src/a.ts', badge: 'plan' }]);
   });
 });

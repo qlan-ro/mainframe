@@ -1,9 +1,8 @@
 /**
  * use-skills-revalidation — a monotonic nonce bumped whenever the daemon's
  * on-disk skill set may have changed (a skills-cli install/uninstall, or a
- * daemon switch). Three subscribers read it: the composer `/`-trigger
- * provider (`use-chat-skills.tsx`), the sidebar Skills tab
- * (`use-sidebar-skills.ts`), and `reset-daemon-scoped-stores.ts`, which bumps
+ * daemon switch). Two subscribers read it: the composer `/`-trigger provider
+ * (`use-chat-skills.tsx`) and `reset-daemon-scoped-stores.ts`, which bumps
  * it on daemon switch (D9). The automations trigger-sources field
  * deliberately does not subscribe (spec Decision 22) — it is not a live skill
  * list, so a stale value there is not a correctness problem.
