@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { ChevronRight, ShieldIcon, TerminalIcon } from 'lucide-react';
+import { Button } from '@v2/components/ui/button';
+import { cn } from '@v2/lib/utils';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import { GateCardShell, GateHead } from './shared/GateShell';
-import { GateButton } from './shared/GateButton';
+import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
 import { buildPermissionResponse } from './build-control-response';
-import { cn } from '@/lib/utils';
 import type { ReplyFn } from './gate-types';
 
 export type { ReplyFn } from './gate-types';
@@ -15,9 +15,9 @@ export type { ReplyFn } from './gate-types';
 
 function ToolNameRow({ toolName }: { toolName: string }) {
   return (
-    <div className="flex items-center gap-2 px-3.5 pb-2 pl-[49px]">
+    <div className={cn('flex items-center gap-2 px-4 pb-2', GATE_BODY_INSET)}>
       <TerminalIcon className="size-3.5 text-muted-foreground" />
-      <span className="font-mono text-body font-semibold text-foreground">{toolName}</span>
+      <span className="font-mono text-sm font-semibold text-foreground">{toolName}</span>
     </div>
   );
 }
@@ -26,19 +26,21 @@ function DetailsDisclosure({ input }: { input: Record<string, unknown> }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="px-3.5 pb-3 pl-[49px]">
+    <div className={cn('px-4 pb-3', GATE_BODY_INSET)}>
       <button
         data-testid="chat-permission-details-toggle"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
-        <ChevronRight className={cn('size-[11px] transition-transform', open && 'rotate-90')} />
+        <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
         Details
       </button>
       {open && (
+        // `bg-muted`, not the terminal palette: this is a JSON payload dump, the
+        // same surface ToolFallback's args pre sits on — not terminal output.
         <pre
           data-testid="chat-permission-details-pre"
-          className="mt-2 max-h-60 animate-in fade-in-0 slide-in-from-top-1 duration-150 overflow-auto rounded-md bg-mf-term-bg p-3 font-mono text-caption text-mf-term-fg"
+          className="mt-2 max-h-60 animate-in overflow-auto rounded-md bg-muted p-3 font-mono text-xs text-foreground duration-150 fade-in-0 slide-in-from-top-1"
         >
           {JSON.stringify(input, null, 2)}
         </pre>
@@ -59,18 +61,18 @@ function ActionFooter({
   onAlwaysAllow: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 px-3.5 pb-3">
-      <GateButton kind="danger" data-testid="chat-permission-deny" onClick={onDeny}>
+    <div className="flex items-center gap-2 px-4 pb-3">
+      <Button variant="destructive" size="sm" data-testid="chat-permission-deny" onClick={onDeny}>
         Deny
-      </GateButton>
+      </Button>
       <div className="flex-1" />
-      <GateButton kind="ghost" data-testid="chat-permission-allow-once" onClick={onAllowOnce}>
+      <Button variant="outline" size="sm" data-testid="chat-permission-allow-once" onClick={onAllowOnce}>
         Allow once
-      </GateButton>
+      </Button>
       {hasSuggestions && (
-        <GateButton kind="primary" data-testid="chat-permission-always-allow" onClick={onAlwaysAllow}>
+        <Button size="sm" data-testid="chat-permission-always-allow" onClick={onAlwaysAllow}>
           Always allow
-        </GateButton>
+        </Button>
       )}
     </div>
   );
@@ -95,8 +97,8 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
     <div data-testid="chat-permission-gate">
       <GateCardShell accent="warning">
         <GateHead
-          icon={<ShieldIcon className="size-[15px]" />}
-          tileClassName="bg-mf-warning-tint text-mf-warning"
+          icon={<ShieldIcon className="size-3.5" />}
+          tileClassName="bg-warning/10 text-warning"
           eyebrow="Permission required"
           title="Permission Required"
         />

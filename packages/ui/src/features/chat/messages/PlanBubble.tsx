@@ -16,6 +16,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { SquareCheck, Check } from 'lucide-react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
+import { Badge } from '@v2/components/ui/badge';
 import { GateCardShell, GateHead } from '../gates/shared/GateShell';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
@@ -28,12 +29,14 @@ const EXEC_MODE_LABELS: Record<ExecutionMode, string> = {
   yolo: 'Unattended',
 };
 
+/** The semantic hue rides the glyph, not the label — so the pill is one stock
+ *  `Badge` variant rather than a hand-mixed success tint. */
 function ApprovedPill() {
   return (
-    <span className="inline-flex items-center gap-[4px] rounded-[20px] bg-mf-success-tint px-[8px] py-[2px] text-caption font-semibold text-muted-foreground">
-      <Check className="size-[12px] text-mf-success" strokeWidth={2.4} />
+    <Badge variant="secondary" className="shrink-0">
+      <Check data-icon="inline-start" className="text-success" strokeWidth={2.4} />
       Approved
-    </span>
+    </Badge>
   );
 }
 
@@ -59,14 +62,14 @@ export function PlanBubble({
       className="overflow-visible break-words"
     >
       <GateHead
-        icon={<SquareCheck className="size-[12px] text-mf-success" />}
-        tileClassName="bg-mf-success-tint"
+        icon={<SquareCheck className="size-3.5 text-success" />}
+        tileClassName="bg-success/10"
         eyebrow="Plan"
         title="Implementing plan"
         subtitle={caption == null ? undefined : <span data-testid="chat-plan-exec-mode">{caption}</span>}
         right={<ApprovedPill />}
       />
-      <div className="border-t border-border px-3.5 pb-3 pt-2.5 text-body">
+      <div className="aui-md border-t border-border px-4 pt-2.5 pb-3 text-sm">
         <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
           {plan}
         </Markdown>

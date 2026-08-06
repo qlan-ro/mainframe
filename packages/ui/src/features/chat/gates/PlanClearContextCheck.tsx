@@ -1,6 +1,6 @@
 import { useId } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '@v2/components/ui/checkbox';
+import { Label } from '@v2/components/ui/label';
 
 export interface PlanClearContextCheckProps {
   checked: boolean;
@@ -18,7 +18,7 @@ export function PlanClearContextCheck({ checked, onChange }: PlanClearContextChe
         checked={checked}
         onCheckedChange={(val) => onChange(val === true)}
       />
-      <Label htmlFor={id} className="cursor-pointer text-label text-muted-foreground">
+      <Label htmlFor={id} className="cursor-pointer text-xs text-muted-foreground">
         Clear context
       </Label>
     </div>

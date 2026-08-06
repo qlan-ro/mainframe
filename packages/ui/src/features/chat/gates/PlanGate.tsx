@@ -1,41 +1,24 @@
 import { useState } from 'react';
 import { SquareCheckIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
-import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
+import { Button } from '@v2/components/ui/button';
+import { Textarea } from '@v2/components/ui/textarea';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import type { ReplyFn } from './gate-types';
 import { GateCardShell, GateHead } from './shared/GateShell';
-import { GateButton } from './shared/GateButton';
-import { Textarea } from '@/components/ui/textarea';
+import { markdownComponents } from '../parts/markdown-text';
+import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { buildPlanResponse } from './build-control-response';
 import { PlanExecModeControl } from './PlanExecModeControl';
-import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import { PlanClearContextCheck } from './PlanClearContextCheck';
 
-// ---------------------------------------------------------------------------
-// Stable module-level markdown components map (warm-chrome typography)
-// ---------------------------------------------------------------------------
-
-const PLAN_MD_COMPONENTS: Components = {
-  p: ({ children }) => <p className="mb-2 text-body leading-relaxed">{children}</p>,
-  ul: ({ children }) => <ul className="mb-2 list-disc pl-5">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 list-decimal pl-5">{children}</ol>,
-  li: ({ children }) => <li className="mb-1">{children}</li>,
-  h1: ({ children }) => <h1 className="mb-1 mt-3 text-heading font-semibold text-foreground">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-1 mt-3 text-body font-semibold text-foreground">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-1 mt-3 text-body font-semibold text-foreground">{children}</h3>,
-  code: ({ children }) => <code className="rounded bg-mf-raised px-1 py-0.5 font-mono text-label">{children}</code>,
-  pre: ({ children }) => (
-    <pre className="mb-2 overflow-auto rounded-md bg-mf-raised p-3 font-mono text-label">{children}</pre>
-  ),
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  a: ({ href, children }) => (
-    <a href={href} className="text-primary underline">
-      {children}
-    </a>
-  ),
-};
+// The gate's preview and the durable PlanBubble record are the same plan, so
+// they render through the same markdown map and plugin set — the gate used to
+// carry a near-duplicate map of its own.
+const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
 export interface PlanGateProps {
   entry: ChatPermissionEntry;
@@ -48,12 +31,10 @@ export interface PlanGateProps {
 
 function PlanBody({ plan }: { plan: string }) {
   return (
-    <div className="px-3.5 pb-3">
-      <div className="max-h-[300px] overflow-auto rounded-md bg-card px-3 py-2.5 text-body text-foreground">
-        <Markdown remarkPlugins={[remarkGfm]} components={PLAN_MD_COMPONENTS}>
-          {plan}
-        </Markdown>
-      </div>
+    <div className="aui-md max-h-[300px] overflow-auto border-t border-border px-4 py-3 text-sm text-foreground">
+      <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
+        {plan}
+      </Markdown>
     </div>
   );
 }
@@ -74,7 +55,7 @@ function ControlsPanel({
   setClearContext: (v: boolean) => void;
 }) {
   return (
-    <div className="mx-3.5 mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
+    <div className="mx-4 my-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2.5">
       <PlanExecModeControl value={execMode} onChange={setExecMode} />
       <div className="flex-1" />
       <PlanClearContextCheck checked={clearContext} onChange={setClearContext} />
@@ -96,16 +77,16 @@ function ActionRow({
   onReject: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 px-3.5 pb-3">
-      <GateButton kind="primary" data-testid="chat-plan-approve" onClick={onApprove} className="flex-1">
+    <div className="flex items-center gap-2 px-4 pb-3">
+      <Button size="sm" data-testid="chat-plan-approve" onClick={onApprove} className="flex-1">
         Approve &amp; run
-      </GateButton>
-      <GateButton kind="ghost" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
+      </Button>
+      <Button variant="outline" size="sm" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
         Keep planning
-      </GateButton>
-      <GateButton kind="ghost" data-testid="chat-plan-reject" onClick={onReject}>
+      </Button>
+      <Button variant="outline" size="sm" data-testid="chat-plan-reject" onClick={onReject}>
         Reject
-      </GateButton>
+      </Button>
     </div>
   );
 }
@@ -126,7 +107,7 @@ function ReviseRow({
   onCancel: () => void;
 }) {
   return (
-    <div className="flex animate-in fade-in-0 slide-in-from-top-1 duration-150 flex-col gap-2 px-3.5 pb-3">
+    <div className="flex animate-in flex-col gap-2 px-4 pb-3 duration-150 fade-in-0 slide-in-from-top-1">
       <Textarea
         data-testid="chat-plan-feedback-input"
         rows={3}
@@ -136,17 +117,12 @@ function ReviseRow({
         className="resize-none"
       />
       <div className="flex items-center justify-end gap-2">
-        <GateButton kind="ghost" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
+        <Button variant="outline" size="sm" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
           Cancel
-        </GateButton>
-        <GateButton
-          kind="primary"
-          data-testid="chat-plan-send-feedback"
-          disabled={feedback.trim() === ''}
-          onClick={onSend}
-        >
+        </Button>
+        <Button size="sm" data-testid="chat-plan-send-feedback" disabled={feedback.trim() === ''} onClick={onSend}>
           Send feedback
-        </GateButton>
+        </Button>
       </div>
     </div>
   );
@@ -181,8 +157,8 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
     <div data-testid="chat-plan-gate">
       <GateCardShell>
         <GateHead
-          icon={<SquareCheckIcon className="size-[15px]" />}
-          tileClassName="bg-mf-selection text-primary"
+          icon={<SquareCheckIcon className="size-3.5" />}
+          tileClassName="bg-primary/10 text-primary"
           eyebrow="Plan"
           title="Ready to implement"
         />

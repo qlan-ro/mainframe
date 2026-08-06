@@ -1,25 +1,30 @@
-import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
-import { cn } from '@/lib/utils';
+import type { HTMLAttributes, ReactNode } from 'react';
+import { cn } from '@v2/lib/utils';
 
 type GateAccent = 'primary' | 'warning';
 
-// Accent-tinted "live card" glow per gate type (blue for Question/Plan, amber for
-// Permission) — replaces the generic popover shadow while a gate is unresolved.
-const ACCENT_SHADOW: Record<GateAccent, CSSProperties> = {
-  primary: {
-    boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 22px -12px color-mix(in srgb, var(--primary) 55%, transparent)',
-  },
-  warning: {
-    boxShadow: '0 1px 0 rgba(0,0,0,0.02), 0 6px 22px -12px color-mix(in srgb, var(--mf-warning) 55%, transparent)',
-  },
+/**
+ * An unresolved gate reads as live via a tinted border + ring — Radix's own
+ * focus vocabulary, so it follows light/dark for free. It replaced an inline
+ * `boxShadow` built from `color-mix(…)` per accent, which could not.
+ */
+const ACCENT_RING: Record<GateAccent, string> = {
+  primary: 'border-primary/40 ring-3 ring-primary/15',
+  warning: 'border-warning/40 ring-3 ring-warning/15',
 };
+
+/**
+ * Left inset that lines a gate's body rows up with GateHead's text column:
+ * the px-4 gutter + the size-6 tile + the gap-2.5 between them. One constant so
+ * the two consumers cannot drift from the head.
+ */
+export const GATE_BODY_INSET = 'pl-[calc(1rem+1.5rem+0.625rem)]';
 
 export function GateCardShell({
   resolved,
   accent = 'primary',
   children,
   className,
-  style,
   ...props
 }: HTMLAttributes<HTMLDivElement> & { resolved?: boolean; accent?: GateAccent; children: ReactNode }) {
   return (
@@ -28,10 +33,9 @@ export function GateCardShell({
       data-testid="chat-gate-card"
       className={cn(
         'overflow-hidden rounded-xl border bg-card',
-        resolved ? 'border-border' : 'border-mf-border-hover',
+        resolved ? 'border-border' : ACCENT_RING[accent],
         className,
       )}
-      style={resolved ? style : { ...ACCENT_SHADOW[accent], ...style }}
       {...props}
     >
       {children}
@@ -57,17 +61,17 @@ export function GateHead({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2.5 px-3.5 pb-2 pt-3">
+    <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
       <span
         data-testid="gate-head-tile"
-        className={cn('inline-flex size-[26px] items-center justify-center rounded-md', tileClassName)}
+        className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md', tileClassName)}
       >
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('text-caption font-medium', eyebrowClassName)}>{eyebrow}</span>
-        <span className="text-body font-semibold leading-tight text-foreground">{title}</span>
-        {subtitle != null && <span className="text-caption text-muted-foreground">{subtitle}</span>}
+        <span className={cn('text-xs font-medium', eyebrowClassName)}>{eyebrow}</span>
+        <span className="text-sm leading-tight font-semibold text-foreground">{title}</span>
+        {subtitle != null && <span className="text-xs text-muted-foreground">{subtitle}</span>}
       </div>
       {right}
     </div>
