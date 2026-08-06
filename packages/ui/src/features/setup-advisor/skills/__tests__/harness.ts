@@ -46,11 +46,20 @@ export function makeEntry(
 }
 
 /**
- * Opens a row's scope DropdownMenu. Radix menu triggers open on POINTERDOWN,
- * not click, so `fireEvent.click` alone leaves the menu shut.
+ * Radix menu triggers open on POINTERDOWN, not click, so `fireEvent.click`
+ * alone leaves the menu shut.
  */
-export async function openScopeMenu(key: string): Promise<void> {
-  const trigger = await screen.findByTestId(`skills-row-action-${key}`);
-  fireEvent.pointerDown(trigger, { button: 0 });
-  await screen.findByTestId(`skills-row-scope-${key}`);
+async function openMenu(triggerTestId: string, menuTestId: string): Promise<void> {
+  fireEvent.pointerDown(await screen.findByTestId(triggerTestId), { button: 0 });
+  await screen.findByTestId(menuTestId);
+}
+
+/** Opens a skill row's scope DropdownMenu. */
+export function openScopeMenu(key: string): Promise<void> {
+  return openMenu(`skills-row-action-${key}`, `skills-row-scope-${key}`);
+}
+
+/** Opens the InstallBand's scope DropdownMenu — the same question a row asks. */
+export function openInstallScopeMenu(): Promise<void> {
+  return openMenu('skills-section-install', 'skills-section-install-scope');
 }

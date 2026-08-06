@@ -19,6 +19,7 @@ vi.mock('@/lib/api/skills-cli', () => ({
 import { InstallBand } from '../InstallBand';
 import { useSkillsCliStore } from '../use-skills-cli-store';
 import * as skillsCliApi from '@/lib/api/skills-cli';
+import { openInstallScopeMenu } from './harness';
 
 beforeEach(() => {
   act(() => {
@@ -184,9 +185,9 @@ describe('InstallBand — install scope', () => {
     fireEvent.blur(source);
 
     fireEvent.click(await screen.findByTestId('skills-section-skill-option-shadcn'));
-    fireEvent.click(screen.getByTestId('skills-section-install'));
+    await openInstallScopeMenu();
 
-    const menu = await screen.findByTestId('skills-section-install-scope');
+    const menu = screen.getByTestId('skills-section-install-scope');
     expect(menu).toHaveTextContent('This project');
     expect(menu).toHaveTextContent('All projects');
 
@@ -209,9 +210,8 @@ describe('InstallBand — install scope', () => {
     fireEvent.blur(source);
 
     fireEvent.click(await screen.findByTestId('skills-section-skill-option-shadcn'));
-    fireEvent.click(screen.getByTestId('skills-section-install'));
+    await openInstallScopeMenu();
 
-    await screen.findByTestId('skills-section-install-scope');
     expect(skillsCliApi.installSkills).not.toHaveBeenCalled();
   });
 });

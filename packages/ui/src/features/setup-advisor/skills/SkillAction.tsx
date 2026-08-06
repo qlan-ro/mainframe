@@ -17,6 +17,7 @@ import { Button } from '@v2/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@v2/components/ui/dropdown-menu';
@@ -114,15 +115,17 @@ function ScopeMenu({ row, scopes, open, onOpenChange, trigger, onPick }: ScopeMe
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent data-testid={`skills-row-scope-${row.key}`} className="w-40" align="end">
-        {scopes.map((scope) => (
-          <DropdownMenuItem
-            key={scope}
-            data-testid={`skills-row-scope-${row.key}-${scope}`}
-            onSelect={() => onPick(row, scope)}
-          >
-            {SCOPE_LABEL[scope]}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuGroup>
+          {scopes.map((scope) => (
+            <DropdownMenuItem
+              key={scope}
+              data-testid={`skills-row-scope-${row.key}-${scope}`}
+              onSelect={() => onPick(row, scope)}
+            >
+              {SCOPE_LABEL[scope]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
