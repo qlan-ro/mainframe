@@ -78,7 +78,7 @@ export function ToolbarLaunchControls({ port, projectId, chatId }: ToolbarLaunch
               data-testid="main-toolbar-launch"
               variant="secondary"
               size="xs"
-              className="max-w-[200px] font-medium text-muted-foreground aria-expanded:text-foreground"
+              className="max-w-[200px] text-sm font-medium text-muted-foreground aria-expanded:text-foreground"
             >
               <span className="truncate">{label}</span>
               <ChevronDown className="size-2.5 shrink-0 text-muted-foreground" />
