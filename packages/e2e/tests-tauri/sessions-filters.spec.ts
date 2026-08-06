@@ -364,6 +364,13 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     );
   });
 
+  // KNOWN LOAD-SENSITIVE FLAKE (measured 2026-08-06): under full-suite
+  // parallel load the session hover card can wedge open and eat the row
+  // click (fails both attempts); isolated it passes 5/5 in ~3s. Not a UI
+  // regression — no sidebar/hover-card code changed in the failing range.
+  // Root-cause investigation (why the switch stalls mid-stream under load)
+  // is tracked separately; do not delete this test to silence it.
+  //
   // Attention badges are driven by useUnreadStore.markUnread, which is only
   // called by the session-list-router on a `chat.notification` /
   // `permission.requested{notify:true}` WS event. Previously that event never
