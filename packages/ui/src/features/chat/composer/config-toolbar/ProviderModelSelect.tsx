@@ -49,6 +49,7 @@ import { Hint } from '@v2/components/ui/hint';
 import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
 import { ProviderLogo } from '@v2/features/shared/ProviderLogo';
 import { cn } from '@/lib/utils';
+import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { RunningHint } from './RunningHint';
 import { ModelMenuRow } from './ModelMenuRow';
 import { groupSlug, modelRows, partitionModels } from './model-menu-rows';
@@ -184,7 +185,15 @@ export function ProviderModelSelect({
   const currentModelId = model?.id ?? chat.model ?? '';
   const rows = modelRows(active, chat.model);
   const { current, older, groups } = partitionModels(rows);
-  const triggerLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
+  const modelLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
+  // The trigger carries the resolved effort too ("Fable 5 · Medium") so the
+  // dominant tuning field is readable without opening the menu. Models with no
+  // effort axis show the bare name.
+  const effortLabel =
+    model != null && effortOptions(model).length > 0
+      ? EFFORT_META[displayEffort(chat, model, providerDefaults).value].label
+      : null;
+  const triggerLabel = effortLabel != null ? `${modelLabel} · ${effortLabel}` : modelLabel;
   const activeId = chat.adapterId ?? active?.id ?? '';
 
   const onPickProvider = (id: string): void => {

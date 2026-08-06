@@ -889,3 +889,36 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
     expect(setModel).toHaveBeenCalledExactlyOnceWith('tunable');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. Trigger label carries the resolved effort
+// ---------------------------------------------------------------------------
+
+describe('ProviderModelSelect — trigger effort suffix', () => {
+  const CASES: { name: string; model: AdapterModel; chat: Chat; expected: string }[] = [
+    {
+      name: "the chat's own effort",
+      model: TUNABLE,
+      chat: { ...makeChat({ adapterId: 'claude', model: 'tunable' }), effort: 'high' },
+      expected: 'Tunable · High',
+    },
+    {
+      name: "the model's default effort when the chat sets none",
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+      expected: 'Tunable · Medium',
+    },
+    {
+      name: 'no suffix at all for a model with no effort axis',
+      model: HAIKU,
+      chat: makeChat({ adapterId: 'claude', model: 'haiku' }),
+      expected: 'Claude Haiku 4',
+    },
+  ];
+
+  it.each(CASES)('shows $name', ({ model, chat, expected }) => {
+    renderSelect({ adapters: [ADAPTER_TUNABLE], adapter: ADAPTER_TUNABLE, model, chat });
+
+    expect(screen.getByTestId('composer-model-select').textContent).toBe(expected);
+  });
+});
