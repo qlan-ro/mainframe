@@ -94,7 +94,10 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
   return (
     <div ref={state.rootRef} data-testid="session-panel-root" className="relative flex h-full">
       {mode === 'inline' && (
-        <div data-testid="session-panel" className={cn(PANEL_CHROME, 'my-2 ml-2 shadow-lg')}>
+        <div
+          data-testid="session-panel"
+          className={cn(PANEL_CHROME, 'my-2 ml-2 max-h-[calc(100%-8px)] self-start shadow-lg')}
+        >
           <PanelBody state={state} port={port} />
         </div>
       )}
@@ -103,7 +106,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
           data-testid="session-panel-overlay"
           role="dialog"
           aria-label="Session panel"
-          className={cn(PANEL_CHROME, 'absolute top-2 right-full bottom-2 z-30 shadow-xl')}
+          className={cn(PANEL_CHROME, 'absolute top-2 right-full z-30 max-h-[calc(100%-8px)] shadow-xl')}
         >
           <PanelBody state={state} port={port} />
         </div>
