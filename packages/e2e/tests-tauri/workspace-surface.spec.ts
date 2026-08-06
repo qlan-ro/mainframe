@@ -51,7 +51,7 @@
  *   workspace-tab-close-<id> / workspace-tab-stop-<id> — per-tab controls
  *   workspace-add-menu-<paneId>               — the "+" menu content
  *   workspace-pane-new-terminal-<paneId> / workspace-pane-launch-<config>-<paneId> — its rows
- *   workspace-tab-strip-split-right / -split-down / workspace-surface-close — primary-pane controls
+ *   workspace-surface-close                   — primary-pane hide control
  *   workspace-pane-close-<paneId>             — secondary-pane close (un-split)
  *   run-console-pane                          — full-space ConsolePane (process tabs)
  *   main-toolbar-launch / main-toolbar-launch-popover — toolbar launch picker (shared status source)
@@ -408,11 +408,11 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
     await closeTauriApp(app);
   });
 
-  test('the strip offers no split controls while the workspace is the only non-chat surface', async () => {
+  test('the strip offers no split controls, only hide', async () => {
     const { page } = app;
-    // `layoutCanSplit` is false once the workspace is placed — with two surfaces
-    // there is no third to bring in, so WorkspaceStripActions renders neither
-    // split button. Splitting PANES is the tab-drag gesture below instead.
+    // The strip's split buttons were deleted (they could only render while the
+    // workspace was placed — exactly when `layoutCanSplit` is false). Splitting
+    // PANES is the tab-drag gesture below instead.
     await expect(page.getByTestId('workspace-tab-strip-split-right')).toHaveCount(0);
     await expect(page.getByTestId('workspace-tab-strip-split-down')).toHaveCount(0);
     await expect(page.getByTestId('workspace-surface-close')).toBeEnabled();

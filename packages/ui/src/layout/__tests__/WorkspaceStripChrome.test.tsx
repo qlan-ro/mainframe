@@ -1,8 +1,7 @@
 /**
  * WorkspaceStripChrome — the strip ends shared by the tab strip and the
- * empty-state header: the grip belongs to the primary pane only, the split
- * actions appear only while the workspace has somewhere to go, and closing is
- * refused at the dynamic floor.
+ * empty-state header: the grip belongs to the primary pane only, and closing
+ * is refused at the dynamic floor.
  */
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { TooltipProvider } from '@v2/components/ui/tooltip';
@@ -50,26 +49,10 @@ describe('WorkspaceStripLead', () => {
 });
 
 describe('WorkspaceStripActions', () => {
-  it('hides the split actions once the workspace is already placed', () => {
+  it('carries no split actions — the strip only renders while the workspace is placed', () => {
     render(<WorkspaceStripActions paneId="pane-1" primary />);
     expect(screen.queryByTestId('workspace-tab-strip-split-right')).not.toBeInTheDocument();
     expect(screen.queryByTestId('workspace-tab-strip-split-down')).not.toBeInTheDocument();
-  });
-
-  it('offers both splits while only chat is lit, and "v" places the workspace in the top row', () => {
-    seedLayout(['chat']);
-    render(<WorkspaceStripActions paneId="pane-1" primary />);
-
-    fireEvent.click(screen.getByTestId('workspace-tab-strip-split-right'));
-    expect(useLayoutStore.getState().layout.top).toEqual(['chat', 'workspace']);
-  });
-
-  it('"split down" puts the workspace in the bottom strip', () => {
-    seedLayout(['chat']);
-    render(<WorkspaceStripActions paneId="pane-1" primary />);
-
-    fireEvent.click(screen.getByTestId('workspace-tab-strip-split-down'));
-    expect(useLayoutStore.getState().layout.bottom).toBe('workspace');
   });
 
   it('close hides the workspace', () => {

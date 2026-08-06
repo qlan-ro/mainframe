@@ -21,7 +21,6 @@
  *   workspace-surface               — the merged surface root
  *   workspace-empty-state           — its inline picker card, shown while it has no tabs
  *   workspace-surface-close / -drag — hide the surface / its drag grip
- *   workspace-tab-strip-split-right / -split-down — split controls
  *   WORKSPACE.strip / .pane / .tab / .add — pane-id-keyed roots (see helpers/tauri/testids.ts)
  *   surf-divider-x / surf-divider-y — horizontal/vertical resize dividers
  *   surface-drag-layer              — ghost + drop-zone overlay, mounted only mid-drag
@@ -225,10 +224,11 @@ test.describe('§20 layout — splits + divider resize', () => {
     expect(chatBox!.x).toBeLessThan(wsBox!.x);
   });
 
-  test('with the workspace already placed, the split controls disappear (nothing left to split to)', async () => {
+  test('with the workspace already placed, no split controls render anywhere', async () => {
     const { page } = app;
-    // layoutCanSplit() is false once the workspace is lit — with two surfaces there
-    // is no third to bring in, so WorkspaceStripActions renders no split buttons.
+    // The strip's split buttons were deleted outright (they could only render
+    // while the workspace was placed — exactly when layoutCanSplit() is false).
+    // The chat header's split stays conditional and must be hidden here too.
     await expect(page.getByTestId('workspace-tab-strip-split-right')).toHaveCount(0);
     await expect(page.getByTestId('workspace-tab-strip-split-down')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-split-right')).toHaveCount(0);

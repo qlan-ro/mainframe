@@ -4,15 +4,14 @@
  * pane, so it cannot use the strip itself).
  *
  * data-testid:
- *   workspace-surface-drag                        — the surface drag grip
- *   workspace-tab-strip-split-right / -split-down — split actions (primary pane)
- *   workspace-surface-close                       — hide the workspace (primary pane)
- *   workspace-pane-close-<paneId>                 — un-split (secondary pane)
+ *   workspace-surface-drag        — the surface drag grip
+ *   workspace-surface-close       — hide the workspace (primary pane)
+ *   workspace-pane-close-<paneId> — un-split (secondary pane)
  */
-import { GripVertical, LayoutPanelLeft, LayoutPanelTop, X } from 'lucide-react';
+import { GripVertical, LayoutPanelLeft, X } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
-import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
+import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { EditorGlyph } from './surface-icons';
 import { useSurfaceDragStore } from './use-surface-drag';
 
@@ -45,43 +44,19 @@ export function WorkspaceStripLead({ primary }: { primary: boolean }) {
 }
 
 /**
- * Trailing controls. The primary pane owns the surface-level actions (split, and
- * hide — disabled at the dynamic floor); a secondary pane owns only its own
- * un-split.
+ * Trailing controls. The primary pane owns hide (disabled at the dynamic
+ * floor); a secondary pane owns only its own un-split. No split actions here:
+ * the strip only renders while the workspace is placed, which is exactly when
+ * `layoutCanSplit` is false — splitting to the workspace lives on the chat
+ * header, the one surface it can be triggered from.
  */
 export function WorkspaceStripActions({ paneId, primary }: { paneId?: string; primary: boolean }) {
-  const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
-  const splitSurface = useLayoutStore((s) => s.splitSurface);
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const isFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'workspace'));
   const closePane = useLayoutStore((s) => s.closePane);
 
   return (
     <div className="flex shrink-0 items-center gap-px pr-1.5 pl-0.5">
-      {primary && splitAvailable && (
-        <>
-          <Hint label="Split right">
-            <Button
-              data-testid="workspace-tab-strip-split-right"
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => splitSurface('v')}
-            >
-              <LayoutPanelLeft className="text-muted-foreground" />
-            </Button>
-          </Hint>
-          <Hint label="Split down">
-            <Button
-              data-testid="workspace-tab-strip-split-down"
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => splitSurface('h')}
-            >
-              <LayoutPanelTop className="text-muted-foreground" />
-            </Button>
-          </Hint>
-        </>
-      )}
       {primary ? (
         <Hint label={isFloor ? 'The workspace is the only surface left' : 'Hide workspace'}>
           <Button
