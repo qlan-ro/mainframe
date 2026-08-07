@@ -5,13 +5,13 @@
    radix-vega ship byte-identical stylesheets, so nothing here moved when
    we switched off Luma's pill geometry.
 
-   Taken from the preset verbatim, with two deviations. `primary` and
-   `sidebar-primary` are the macOS system blue #0a84ff — oklch(0.624 0.206
+   Taken from the preset verbatim, with six deviations, each below. First,
+   `primary` and `sidebar-primary` are the macOS system blue #0a84ff — oklch(0.624 0.206
    255.486), one value for both modes — instead of the preset's two indigos.
    That is the accent the app already uses, and on a desktop app the system
    blue is the one users read as "selected".
 
-   The near-black ink family is pulled off pure black — 0.32 in light, 0.92 in
+   Second, the near-black ink family is pulled off pure black — 0.32 in light, 0.92 in
    dark, where stock sits at 0.145/0.985. Stock assumes ink on white; this panel
    is a field of muted grey, and against it full-strength ink reads as a
    different, louder application. The tooltip is the clearest case: it inverts
@@ -20,21 +20,24 @@
    calibrated; softening the loud end just narrows the step between them.
 
    `--success` is the third, and the only hue here that is a convention rather
-   than a choice: a connection indicator is green because that is what green has
+   than a choice — a connection indicator is green because that is what green has
    meant to users for decades. The accent would have said "this is selected".
 
-   `--warning` is the second: a state that is wrong-but-not-broken — a missing
-   worktree — had only `destructive` to reach for, and full-chroma red was the
-   one saturated thing in an otherwise muted panel. It is that same red pulled
-   most of the way to the resting ink, so it keeps the hue that reads as
-   "wrong" at a chroma the panel can hold. Declared per theme rather than once,
-   so it never resolves against the wrong mode's inputs.
+   `--warning` is the fourth: caution — a missing worktree, a config conflict,
+   an unpushed divergence. It shipped as `destructive` pulled most of the way to
+   the resting ink, which meant every caution surface in the app read as a muted
+   red; a warning is not a failure, and the two must not share a hue. It is a
+   real amber now (2026-08-06), matching the bridge's `--mf-warning` exactly so
+   the legacy islands and the shell say caution in one colour — `contrast.test.ts`
+   pins that. Declared per theme rather than once: the light value is dark amber
+   on a white field, the dark value light amber on a near-black one, and neither
+   is derivable from the other.
 
-   `--sidebar-selection` is the one token the preset does not ship: the
+   `--sidebar-selection`, the fifth, is the one token the preset does not ship: the
    selected session row reads as a blue wash, and stock's `sidebar-accent` is
    the neutral hover, which would make hovered and selected rows identical.
 
-   `--bubble-tinted` is the chat kit's soft-primary bubble fill, which upstream
+   `--bubble-tinted`, the sixth, is the chat kit's soft-primary bubble fill, which upstream
    inlines as a bare `oklch(from …)` expression twice (once per mode). A user
    bubble that clamps needs its fade to END on that exact fill, and an inline
    expression gives the fade no way to follow the mode — so the fill gets a
@@ -131,7 +134,7 @@
   --accent-foreground: oklch(0.32 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.62 0.16 150);
-  --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --warning: oklch(0.535 0.125 59.112);
   --bubble-tinted: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
@@ -170,7 +173,7 @@
   --accent-foreground: oklch(0.92 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.75 0.17 150);
-  --warning: color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground));
+  --warning: oklch(0.794 0.127 63.093);
   --bubble-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);

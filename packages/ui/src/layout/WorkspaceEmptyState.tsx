@@ -77,7 +77,7 @@ function FileRows() {
         icon={<GitCompare className="size-3.5 text-muted-foreground" />}
         label="View changes…"
         chevron
-        onClick={() => emitSurfaceIntent({ type: 'inspector-tab', tab: 'changes' })}
+        onClick={() => emitSurfaceIntent({ type: 'open-review' })}
       />
       {recent.length > 0 && (
         <>

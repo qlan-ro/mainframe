@@ -12,7 +12,7 @@
  * lib/git-status-kind.ts, packages/core/src/server/routes/types.ts (getEffectivePath),
  * packages/core/src/git/git-service.ts (workingStat/commitAll).
  *
- * Entry point + worktree note: the header's `chat-header-review` button IS
+ * Entry point + worktree note: the global Cmd/Ctrl+Shift+R hotkey IS (the header Review button moved into the session panel)
  * disabled without a worktree (that gating is already fully covered by
  * chat-header.spec.ts's "review button (worktree gate)" describe — not
  * duplicated here). The global `⌘⇧R` hotkey (`use-global-overlay-hotkeys.ts`)
@@ -28,11 +28,25 @@
  * line-rewrite heuristics) and one untracked 3-line addition. This yields a
  * deterministic +5/-0 across 3 files every run.
  *
+ * Change scopes: the modal's header carries the Session · Uncommitted · Branch
+ * switcher (T3.7), which absorbed the three scopes the Inspector's deleted
+ * Changes panel used to offer (`changes-mode-*`, files-tree.spec.ts). It is the
+ * modal's only data-source control — it drives `useWorkingChanges`, which owns all
+ * three fetches. See the dedicated describe at the bottom of this file.
+ *
  * Testid reference (verified against source):
  *   review-modal                 — Dialog content root
  *   review-close                 — header "X" button
- *   review-branch-badge          — header branch chip (only rendered when branch != null)
- *   review-file-counts           — header "{n} files · +A −D"
+ *   review-scope-<session|uncommitted|branch> — ReviewScopeSwitcher segments. Radix
+ *                                  `TabsTrigger`, so the selected one carries
+ *                                  data-state="active" + aria-selected — NOT the
+ *                                  aria-pressed the retired changes-mode buttons used
+ *   review-scope-compare-line    — "feat/x ↔ main · <sha>" chip; `branch` scope only,
+ *                                  and only once both ends resolve (review-scope-view.ts)
+ *   review-branch-badge          — header branch chip (rendered when there is no
+ *                                  compare line and branch != null)
+ *   review-file-counts           — header "{n} files · +A −D"; the "· +A −D" half is
+ *                                  `uncommitted`-only (scopeHeaderView.showTotals)
  *   review-viewed-counter        — header "{viewed}/{total} viewed"
  *   review-file-row-<path>       — ReviewFileTree row (click to select)
  *   review-file-stat-<path>      — per-file 5-square +/- meter
@@ -361,5 +375,105 @@ test.describe('§review-panel — close controls', () => {
       await page.keyboard.press('Escape');
       await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 2_000 });
     }).toPass({ timeout: 10_000, intervals: [300, 700, 1_500] });
+  });
+});
+
+// ─── Change-scope switcher (Session · Uncommitted · Branch) ───────────────────
+//
+// This is where the Inspector Changes panel's `changes-mode-*` coverage landed.
+// Its own project, on a FEATURE branch: `compute_branch_diffs` (routes/git.rs)
+// returns `baseBranch: null` whenever the current branch IS the detected base, so
+// the `main`-only fixture the other describes use could never render a comparison
+// line. One commit on the branch also gives `branch` scope a non-empty file set,
+// which is what proves the "no +/− totals" claim (an empty set would prove nothing).
+
+test.describe('§review-panel — change scopes', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    const dir = project.projectPath;
+
+    git(dir, ['add', '-A']);
+    gitCommit(dir, 'baseline');
+    git(dir, ['checkout', '-b', 'feature/e2e-scopes']);
+    writeFileSync(path.join(dir, 'branch-only.ts'), 'export const onlyOnBranch = true;\n');
+    git(dir, ['add', '-A']);
+    gitCommit(dir, 'add branch-only file');
+    // Uncommitted work on top of that commit, so the two scopes report different sets.
+    appendFileSync(path.join(dir, 'index.ts'), 'export const farewell = "bye";\n');
+
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('the modal opens on Uncommitted, listing the dirty file with +/- totals', async () => {
+    const { page } = app;
+    await openReview(page);
+
+    await expect(page.getByTestId('review-scope-uncommitted')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('review-scope-session')).toHaveAttribute('data-state', 'inactive');
+    await expect(page.getByTestId('review-scope-branch')).toHaveAttribute('data-state', 'inactive');
+
+    await expect(page.getByTestId('review-file-row-index.ts')).toBeVisible({ timeout: 10_000 });
+    // branch-only.ts is committed — it is not an uncommitted change.
+    await expect(page.getByTestId('review-file-row-branch-only.ts')).toHaveCount(0);
+
+    const counts = (await page.getByTestId('review-file-counts').textContent()) ?? '';
+    expect(counts).toContain('1 file');
+    expect(counts).toContain('+1');
+    expect(counts).toContain('−0'); // U+2212 minus sign
+    // Only this scope describes one branch's working tree, so it gets the plain chip.
+    await expect(page.getByTestId('review-branch-badge')).toHaveText(/feature\/e2e-scopes/);
+    await expect(page.getByTestId('review-scope-compare-line')).toHaveCount(0);
+  });
+
+  test('Branch scope swaps in the comparison line and lists the branch commit without totals', async () => {
+    const { page } = app;
+    await page.getByTestId('review-scope-branch').click();
+    await expect(page.getByTestId('review-scope-branch')).toHaveAttribute('data-state', 'active');
+
+    // "feature/e2e-scopes ↔ main · <short sha>" — the badge that replaces the plain
+    // branch chip, because repeating the branch beside it would say it twice.
+    const compare = page.getByTestId('review-scope-compare-line');
+    await expect(compare).toBeVisible({ timeout: 10_000 });
+    await expect(compare).toContainText('feature/e2e-scopes');
+    await expect(compare).toContainText('main');
+    await expect(page.getByTestId('review-branch-badge')).toHaveCount(0);
+
+    await expect(page.getByTestId('review-file-row-branch-only.ts')).toBeVisible({ timeout: 10_000 });
+
+    // The daemon reports no per-file stat for this scope, so the header must NOT
+    // fabricate "+0 −0" — that would claim there is nothing to review.
+    const counts = (await page.getByTestId('review-file-counts').textContent()) ?? '';
+    expect(counts).toContain('1 file');
+    expect(counts).not.toContain('+');
+    expect(counts).not.toContain('−');
+  });
+
+  test('Session scope lists no files under mock-cli and still reports no totals', async () => {
+    const { page } = app;
+    await page.getByTestId('review-scope-session').click();
+    await expect(page.getByTestId('review-scope-session')).toHaveAttribute('data-state', 'active');
+
+    // No agent turn ran in this chat, so `GET /chats/:id/files` resolves empty.
+    await expect(page.getByTestId('review-file-tree-empty')).toBeVisible({ timeout: 10_000 });
+    const counts = (await page.getByTestId('review-file-counts').textContent()) ?? '';
+    expect(counts).toContain('0 files');
+    expect(counts).not.toContain('+');
+    expect(counts).not.toContain('−');
+  });
+
+  test('returning to Uncommitted restores its file set and totals', async () => {
+    const { page } = app;
+    await page.getByTestId('review-scope-uncommitted').click();
+    await expect(page.getByTestId('review-file-row-index.ts')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('review-file-counts')).toContainText('+1');
   });
 });

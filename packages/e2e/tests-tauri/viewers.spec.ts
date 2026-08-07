@@ -18,7 +18,8 @@
  * activates a trigger on mouse-DOWN, which a real-browser `.click()` delivers.
  *
  * Testid reference (verified against packages/ui/src/features/viewers/):
- *   main-toolbar-inspector       — reveals the Inspector (file tree)
+ *   main-toolbar-inspector       — reveals the Inspector, whose only body is the file
+ *                                  tree since T5.3 (no `inspector-tab-files` any more)
  *   file-tree-row-${path}        — a tree row; opens the file on click
  *   WORKSPACE.strip              — a pane's tab-strip row (pane-id-keyed; see testids.ts)
  *   viewer-shell                 — ViewerShell root (wraps every non-code viewer)
@@ -333,11 +334,8 @@ test.describe('§viewers', () => {
     await expect(page.getByTestId('viewer-shell')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('viewer-shell-reveal').click();
-    // The reveal intent lights the workspace surface but not the Inspector's own
-    // Files/Changes tab — switch to it to observe the highlight (same pattern
-    // as files-tree.spec.ts's "revealing a file from its viewer" test).
-    await page.getByTestId('inspector-tab-files').click();
-
+    // The Inspector is files-only since T5.3 — there is no Files/Changes tab to
+    // switch back to before observing the highlight.
     const row = page.getByTestId('file-tree-row-image.png');
     await expect(row).toHaveAttribute('data-highlighted', 'true', { timeout: 10_000 });
   });

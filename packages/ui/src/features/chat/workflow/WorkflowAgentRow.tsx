@@ -4,8 +4,9 @@
  * `title` — the visible row carries only what a status readout needs (D19).
  *
  * An `unknown` agent is one nobody observed finishing, so its ornament asserts
- * nothing: a hollow ring, a muted label and dimmed metrics that are still the
- * real numbers the snapshot reported.
+ * nothing: a hollow ring, a muted label and an `unknown` chip. Its metrics are
+ * still the real numbers the snapshot reported, at the same ink as everyone
+ * else's — v2 has one muted tier, so the extra dimming has no token.
  */
 import { cn } from '@/lib/utils';
 import {
@@ -23,22 +24,22 @@ import {
 import type { OutcomeTone } from './workflow-progress';
 
 const DOT_FILL: Record<Exclude<OutcomeTone, 'hollow'>, string> = {
-  green: 'bg-mf-success',
-  amber: 'bg-mf-warning',
+  green: 'bg-success',
+  amber: 'bg-warning',
   red: 'bg-destructive',
 };
 
 const DETAIL_TONE: Record<DetailKind, string> = {
-  stale: 'text-mf-text-3',
+  stale: 'text-muted-foreground',
   error: 'text-destructive',
-  result: 'text-mf-text-3',
+  result: 'text-muted-foreground',
   tool: 'text-muted-foreground',
 };
 
 function AgentDot({ agent }: { agent: ViewAgent }) {
   const tone = agentDotTone(agent);
   if (tone === 'hollow') {
-    return <span className="size-2 shrink-0 rounded-full border border-mf-text-3" aria-label="unknown" />;
+    return <span className="size-2 shrink-0 rounded-full border border-muted-foreground" aria-label="unknown" />;
   }
   return (
     <span
@@ -76,7 +77,7 @@ export function WorkflowAgentRow({ agent, run }: { agent: ViewAgent; run: ViewRu
             unknown
           </span>
         )}
-        <span className={cn('shrink-0 text-caption tabular-nums', unknown ? 'text-mf-text-4' : 'text-mf-text-3')}>
+        <span className="shrink-0 text-caption tabular-nums text-muted-foreground">
           {formatAgentTokens(agent.tokens)} · {formatAgentDuration(agent.durationMs)}
         </span>
       </div>

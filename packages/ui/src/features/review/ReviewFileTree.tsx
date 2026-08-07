@@ -5,25 +5,34 @@
  * a "Changed files" heading, then rows with a tinted square status badge,
  * filename + dir, and a 5-square +/- stat meter. The active row gets the
  * selection tint; viewed (non-active) rows dim and strike through.
+ *
+ * Badge and meter are per-file facts the daemon only reports for some change
+ * scopes, so each is omitted when absent rather than defaulted: a "modified"
+ * badge on a file nobody classified, or a flat meter on a file nobody counted,
+ * both state something the payload never said.
  */
 import { KIND_LABEL } from '@/lib/git-status-kind';
 import type { ReviewFile } from './git-status-to-files';
+import type { WorkingChangeFile } from './use-working-changes';
 
 /**
  * Square badge tint per semantic status (text + chip background).
  * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%).
- * Amber mf-warning + mf-diff-del-text stay: they belong to the git/diff color
- * family that lives with CmDiffEditor until the diff engine is ported.
+ * These are the app's ordinary status hues, not the diff engine's palette: the
+ * bridge's `mf-warning` / `mf-diff-del-text` were only ever here because v2
+ * `warning` used to be a destructive mix. Measured on the amber: the badge
+ * letter reads at 10.2–12.0:1 on every tint in both themes, so no bespoke
+ * add/del token is warranted.
  */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
   added: 'text-foreground bg-success/[12.16%]',
-  modified: 'text-foreground bg-mf-warning/[12.16%]',
-  deleted: 'text-foreground bg-mf-diff-del-text/[12.16%]',
-  renamed: 'text-foreground bg-mf-warning/[12.16%]',
+  modified: 'text-foreground bg-warning/[12.16%]',
+  deleted: 'text-foreground bg-destructive/[12.16%]',
+  renamed: 'text-foreground bg-warning/[12.16%]',
 };
 
 interface ReviewFileTreeProps {
-  files: ReviewFile[];
+  files: WorkingChangeFile[];
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
   viewedFiles?: Set<string>;
@@ -39,11 +48,7 @@ function StatMeter({ path, additions, deletions }: { path: string; additions: nu
       {Array.from({ length: 5 }, (_, i) => {
         const frac = (i + 1) / 5;
         const color =
-          frac <= addFrac
-            ? 'bg-success'
-            : frac <= delFrac + 0.0001 && addFrac < frac
-              ? 'bg-mf-diff-del-text'
-              : 'bg-accent';
+          frac <= addFrac ? 'bg-success' : frac <= delFrac + 0.0001 && addFrac < frac ? 'bg-destructive' : 'bg-accent';
         return <span key={i} className={`size-[9px] rounded-[2px] ${color}`} />;
       })}
     </span>
@@ -75,11 +80,14 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   isSelected ? 'bg-sidebar-selection' : 'bg-transparent'
                 } ${isViewed && !isSelected ? 'opacity-55' : ''}`}
               >
-                <span
-                  className={`inline-flex size-4 shrink-0 items-center justify-center rounded font-mono text-xs font-extrabold ${BADGE_CLASS[f.status]}`}
-                >
-                  {KIND_LABEL[f.status]}
-                </span>
+                {f.status && (
+                  <span
+                    data-testid={`review-file-status-${f.path}`}
+                    className={`inline-flex size-4 shrink-0 items-center justify-center rounded font-mono text-xs font-extrabold ${BADGE_CLASS[f.status]}`}
+                  >
+                    {KIND_LABEL[f.status]}
+                  </span>
+                )}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span
                     title={f.path}
@@ -89,7 +97,9 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   </span>
                   {dirPath && <span className="truncate text-xs text-muted-foreground">{dirPath}</span>}
                 </span>
-                <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
+                {f.additions !== undefined && f.deletions !== undefined && (
+                  <StatMeter path={f.path} additions={f.additions} deletions={f.deletions} />
+                )}
               </button>
             );
           })}

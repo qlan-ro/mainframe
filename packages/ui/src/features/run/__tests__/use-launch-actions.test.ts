@@ -6,7 +6,7 @@
  *  - ignores a selection stored under a DIFFERENT scopeKey (the fallback truth
  *    table itself — first-config default, stale-selection fallback, empty
  *    configs — is owned by derive-launch-control.test.ts)
- *  - handleSelect records the selection under the active scopeKey in the real sandbox store
+ *  - handleLaunch / handleStop refetch the daemon's REST status afterwards
  *
  * The real useSandboxStore is used (reset via setState in beforeEach) so the
  * scope-keyed behaviour is genuinely exercised, not mocked away.
@@ -77,9 +77,6 @@ const previewApp: LaunchConfiguration = {
 };
 const twoConfigs = [devServer, previewApp];
 
-// buildLaunchScope('proj-1', '/repo') = 'proj-1:/repo'
-const SCOPE_KEY = 'proj-1:/repo';
-
 // Standard statusData with effectivePath '/repo' so scopeKey = 'proj-1:/repo'
 const statusData = { statuses: {}, tunnelUrls: {}, effectivePath: '/repo' };
 
@@ -122,36 +119,13 @@ describe('useLaunchActions — selectedConfigName derivation', () => {
   });
 });
 
-describe('useLaunchActions — handleSelect records under the active scopeKey', () => {
-  it('calling handleSelect with a config writes to selectedConfigByScope[SCOPE_KEY]', async () => {
-    mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, 'proj-1', 'chat-9'));
-    act(() => {
-      result.current.handleSelect(previewApp);
-    });
-    expect(useSandboxStore.getState().selectedConfigByScope[SCOPE_KEY]).toBe('preview-app');
-  });
-
-  it('handleSelect does NOT write when projectId is undefined (no scope available)', async () => {
-    mockLaunchConfigsResult = { configs: twoConfigs, statusData: null, refetch: mockRefetch };
-    const { useLaunchActions } = await import('../use-launch-actions');
-    const { result } = renderHook(() => useLaunchActions(31415, undefined, 'chat-9'));
-    act(() => {
-      result.current.handleSelect(devServer);
-    });
-    // selectedConfigByScope should remain empty — no scope to write into
-    expect(useSandboxStore.getState().selectedConfigByScope).toEqual({});
-  });
-});
-
 describe('useLaunchActions — refetch after start/stop', () => {
   // Bug: the workspace's own launch path (add-menu, empty-state card)
   // shares this hook but never re-synced with the daemon after starting/stopping
   // a config — a fast subprocess's buffered output (seedOutputBuffer, only
   // reachable inside useLaunchConfigs's fetch effect) and a just-stopped
   // process's terminal status were both invisible until something ELSE
-  // (e.g. reopening the toolbar's launch popover) happened to call refetch().
+  // happened to call refetch().
   it('handleLaunch calls refetch() after startLaunchConfig resolves', async () => {
     mockLaunchConfigsResult = { configs: twoConfigs, statusData, refetch: mockRefetch };
     const { useLaunchActions } = await import('../use-launch-actions');

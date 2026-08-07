@@ -147,8 +147,8 @@ describe('WorkflowRunPanel — stopped run (AC 18)', () => {
     );
     const staleRow = screen.getByTestId('chat-workflow-agent-a-1');
     expect(staleRow.textContent).toContain('before the run stopped');
-    // Neutralized rows render a hollow ring — border-mf-text-3, per Task 37's contract.
-    expect(staleRow.querySelector('.border-mf-text-3')).not.toBeNull();
+    // Neutralized rows render a hollow ring — border-muted-foreground, per Task 37's contract.
+    expect(staleRow.querySelector('.border-muted-foreground')).not.toBeNull();
 
     const banner = screen.getByTestId('chat-workflow-stale-banner-run_1');
     expect(banner.textContent).toContain('1');
@@ -169,7 +169,7 @@ describe('WorkflowRunPanel — completed/failed run with an unreadable record (A
     );
     const row = screen.getByTestId('chat-workflow-agent-a-1');
     expect(row.textContent).toContain('before the run ended');
-    expect(row.querySelector('.border-mf-text-3')).not.toBeNull();
+    expect(row.querySelector('.border-muted-foreground')).not.toBeNull();
     expect(row.querySelector('.animate-pulse')).toBeNull();
     expect(screen.queryByTestId('chat-workflow-stale-banner-run_1')).not.toBeInTheDocument();
   });

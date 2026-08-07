@@ -34,8 +34,9 @@ The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure 
 | Color | ~90 `mf-*` extensions | shadcn contract only, **plus three additions below** |
 
 `text-sm` is the UI size — a row name, a card title, a dialog's body. `text-xs` is metadata: timestamps,
-field labels, the session row's second line. **`body` carries `text-sm`**, so unsized text lands on 13px
-rather than the browser's 16px; that rule exists because the hover card shipped at 16px without it.
+field labels, the session row's second line. There is no rung below `text-xs`: a surface that needs to
+read denser tightens its padding, not its type. **`body` carries `text-sm`**, so unsized text lands on
+13px rather than the browser's 16px; that rule exists because the hover card shipped at 16px without it.
 
 `mf-*` class names are **phantom** here — they compile to nothing, silently.
 

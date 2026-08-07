@@ -1,14 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import {
-  useUiPrefs,
-  clampBottomPanelHeight,
-  isSidebarSectionCollapsed,
-  BOTTOM_PANEL_MIN_HEIGHT,
-  BOTTOM_PANEL_DEFAULT_HEIGHT,
-  BOTTOM_PANEL_MAX_FALLBACK,
-} from '../ui-prefs';
+import { useUiPrefs, isSidebarSectionCollapsed, isSessionPanelSectionOpen } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
@@ -27,11 +20,11 @@ beforeEach(() => {
     sidebarVisible: true,
     inspectorVisible: false,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-    bottomPanelTab: 'context',
-    bottomPanelHeight: BOTTOM_PANEL_DEFAULT_HEIGHT,
     rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
     collapsedSidebarSections: {},
+    sessionPanelSections: {},
+    sessionPanelCollapsed: false,
   });
 });
 
@@ -41,11 +34,68 @@ describe('useUiPrefs defaults', () => {
     expect(s.sidebarVisible).toBe(true);
     expect(s.inspectorVisible).toBe(false);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
-    expect(s.bottomPanelTab).toBe('context');
-    expect(s.bottomPanelHeight).toBe(BOTTOM_PANEL_DEFAULT_HEIGHT);
     expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.collapsedSidebarSections).toEqual({});
+    expect(s.sessionPanelSections).toEqual({});
+    expect(s.sessionPanelCollapsed).toBe(false);
+  });
+});
+
+describe('isSessionPanelSectionOpen', () => {
+  it('applies the per-section defaults when nothing is recorded', () => {
+    expect(isSessionPanelSectionOpen({}, 'plan')).toBe(false);
+    expect(isSessionPanelSectionOpen({}, 'activity')).toBe(false);
+    expect(isSessionPanelSectionOpen({}, 'launch')).toBe(false);
+    expect(isSessionPanelSectionOpen({}, 'context')).toBe(true);
+  });
+
+  it('returns the recorded value when present', () => {
+    expect(isSessionPanelSectionOpen({ plan: true }, 'plan')).toBe(true);
+    expect(isSessionPanelSectionOpen({ context: false }, 'context')).toBe(false);
+  });
+});
+
+describe('session-panel section actions', () => {
+  it('toggleSessionPanelSection opens a collapsed section and closes it again', () => {
+    useUiPrefs.getState().toggleSessionPanelSection('plan');
+    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
+    useUiPrefs.getState().toggleSessionPanelSection('plan');
+    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(false);
+  });
+
+  it('toggleSessionPanelSection closes Context first — it defaults to open', () => {
+    useUiPrefs.getState().toggleSessionPanelSection('context');
+    expect(useUiPrefs.getState().sessionPanelSections.context).toBe(false);
+  });
+
+  it('expandSessionPanelSection is idempotent — twice on an open section leaves it open', () => {
+    useUiPrefs.getState().expandSessionPanelSection('launch');
+    expect(useUiPrefs.getState().sessionPanelSections.launch).toBe(true);
+    useUiPrefs.getState().expandSessionPanelSection('launch');
+    expect(useUiPrefs.getState().sessionPanelSections.launch).toBe(true);
+  });
+
+  it('expandSessionPanelSection re-opens a section the user collapsed', () => {
+    useUiPrefs.getState().toggleSessionPanelSection('context');
+    expect(useUiPrefs.getState().sessionPanelSections.context).toBe(false);
+    useUiPrefs.getState().expandSessionPanelSection('context');
+    expect(useUiPrefs.getState().sessionPanelSections.context).toBe(true);
+  });
+
+  it('persists the map to localStorage', () => {
+    useUiPrefs.getState().expandSessionPanelSection('plan');
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.sessionPanelSections).toEqual({ plan: true });
+  });
+
+  it('setSessionPanelCollapsed records the panel collapse, and persists it', () => {
+    useUiPrefs.getState().setSessionPanelCollapsed(true);
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(true);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state.sessionPanelCollapsed).toBe(true);
+
+    useUiPrefs.getState().setSessionPanelCollapsed(false);
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(false);
   });
 });
 
@@ -66,18 +116,6 @@ describe('useUiPrefs actions', () => {
     useUiPrefs.getState().setSidebarWidth(99999);
     // clampSidebarWidth caps at the v2 sidebar's SIDEBAR_MAX_WIDTH (480).
     expect(useUiPrefs.getState().sidebarWidth).toBe(480);
-  });
-
-  it('setBottomPanelTab stores the tab', () => {
-    useUiPrefs.getState().setBottomPanelTab('skills');
-    expect(useUiPrefs.getState().bottomPanelTab).toBe('skills');
-  });
-
-  it('setBottomPanelHeight clamps against the fallback ceiling', () => {
-    useUiPrefs.getState().setBottomPanelHeight(5);
-    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_MIN_HEIGHT);
-    useUiPrefs.getState().setBottomPanelHeight(99999);
-    expect(useUiPrefs.getState().bottomPanelHeight).toBe(BOTTOM_PANEL_MAX_FALLBACK);
   });
 
   it('dismissRightClickHint permanently suppresses the hint', () => {
@@ -117,30 +155,22 @@ describe('isSidebarSectionCollapsed', () => {
   });
 });
 
-describe('clampBottomPanelHeight', () => {
-  it('clamps to [min, maxHeight]', () => {
-    expect(clampBottomPanelHeight(5, 400)).toBe(BOTTOM_PANEL_MIN_HEIGHT);
-    expect(clampBottomPanelHeight(800, 400)).toBe(400);
-    expect(clampBottomPanelHeight(250, 400)).toBe(250);
-  });
-});
-
 describe('useUiPrefs persistence', () => {
   it('writes only the whitelisted fields to localStorage', () => {
-    useUiPrefs.getState().setBottomPanelTab('agents');
+    useUiPrefs.getState().setSidebarWidth(300);
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!);
     // zustand persist wraps as { state, version }.
-    expect(parsed.state.bottomPanelTab).toBe('agents');
+    expect(parsed.state.sidebarWidth).toBe(300);
     expect(Object.keys(parsed.state).sort()).toEqual(
       [
-        'bottomPanelHeight',
-        'bottomPanelTab',
         'collapsedSidebarSections',
         'dontWarnOnTuningChange',
         'inspectorVisible',
         'rightClickHintDismissed',
+        'sessionPanelCollapsed',
+        'sessionPanelSections',
         'sidebarVisible',
         'sidebarWidth',
       ].sort(),
@@ -150,12 +180,49 @@ describe('useUiPrefs persistence', () => {
   });
 });
 
+describe('useUiPrefs v1 → v2 migration', () => {
+  it('strips the bottom-panel keys from a v1 payload', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { sidebarWidth: 300, bottomPanelTab: 'skills', bottomPanelHeight: 420 },
+        version: 1,
+      }),
+    );
+    const fresh = await reloadStore();
+    // Proves hydration actually ran, so the next assertions aren't vacuous.
+    expect(fresh.getState().sidebarWidth).toBe(300);
+    // Stripped by migrate, so they never reach the store...
+    const state = fresh.getState() as unknown as Record<string, unknown>;
+    expect(state.bottomPanelTab).toBeUndefined();
+    expect(state.bottomPanelHeight).toBeUndefined();
+    // ...nor get written back out on the next persist.
+    fresh.getState().setSidebarWidth(320);
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.bottomPanelTab).toBeUndefined();
+    expect(parsed.state.bottomPanelHeight).toBeUndefined();
+  });
+
+  it('leaves a v1 payload without bottom-panel keys otherwise intact', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { sidebarVisible: false, sessionPanelSections: { launch: true } },
+        version: 1,
+      }),
+    );
+    const fresh = await reloadStore();
+    expect(fresh.getState().sidebarVisible).toBe(false);
+    expect(fresh.getState().sessionPanelSections).toEqual({ launch: true });
+  });
+});
+
 describe('useUiPrefs rehydration: dontWarnOnTuningChange', () => {
   it('fills the default when a legacy payload predates the key', async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { bottomPanelTab: 'skills' }, version: 1 }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { sidebarWidth: 300 }, version: 1 }));
     const fresh = await reloadStore();
     // Proves hydration actually ran, so the next assertion isn't vacuous.
-    expect(fresh.getState().bottomPanelTab).toBe('skills');
+    expect(fresh.getState().sidebarWidth).toBe(300);
     expect(fresh.getState().dontWarnOnTuningChange).toBe(false);
   });
 
@@ -163,7 +230,7 @@ describe('useUiPrefs rehydration: dontWarnOnTuningChange', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        state: { bottomPanelTab: 'skills', dontWarnOnTuningChange: true },
+        state: { sidebarWidth: 300, dontWarnOnTuningChange: true },
         version: 1,
       }),
     );

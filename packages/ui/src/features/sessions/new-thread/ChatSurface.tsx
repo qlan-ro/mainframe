@@ -24,10 +24,19 @@
  *   exist — see the effect below for how the cancel-on-redirect works.
  * - Everything else (a sent local thread, a pre-existing chat, or a new local
  *   thread with no project resolved yet) shows the plain ChatThread.
+ *
+ * The session panel floats over that row in the last two cases; the thread
+ * column keeps the full width and its own centred transcript. Its state machine
+ * lives here because the row is the width the panel follows — the panel sits in
+ * the gutter the centred transcript leaves, so it needs the row's TOTAL width,
+ * which shrinks when the surface is split and which the panel measuring its own
+ * box would never see.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
+import { SessionPanel } from '@/features/session-panel/SessionPanel';
+import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
@@ -67,9 +76,20 @@ function useZeroSessionBootPicker(args: { isDeadEnd: boolean }): void {
   }, [isDeadEnd]);
 }
 
-export function ChatSurface({ port: _port }: { port: number }) {
+export function ChatSurface() {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
   useNewThreadAutoConfig();
+
+  const panelState = useSessionPanelState();
+  const { hostRef } = panelState;
+  // A callback ref, because `hostRef` is typed to the generic HTMLElement the
+  // panel measures — a div's own ref prop would not accept it.
+  const setHostRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      hostRef.current = el;
+    },
+    [hostRef],
+  );
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // s.threadListItem is the native active ThreadListItemState; its `status`
@@ -135,10 +155,15 @@ export function ChatSurface({ port: _port }: { port: number }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
-      {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
-          height — otherwise the sticky composer footer collapses/clips. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <ChatThread emptyState={welcome} />
+      {/* The row the panel floats over — what its ResizeObserver measures, and
+          the containing block its absolute root resolves against. */}
+      <div ref={setHostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
+            height — otherwise the sticky composer footer collapses/clips. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <ChatThread emptyState={welcome} />
+        </div>
+        <SessionPanel state={panelState} />
       </div>
     </div>
   );

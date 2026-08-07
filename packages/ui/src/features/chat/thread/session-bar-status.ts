@@ -1,13 +1,12 @@
 /**
- * Context-usage derivation for the ChatCardHeader's inline meter
- * (ChatSessionInline; the textual status labels were removed with the
- * ChatSessionBar in the 2026-07-02 density pass — run state is conveyed by the
- * thread's own running indicator).
+ * Context-usage derivation for the session panel's rail ring and Summary row.
+ * It fed the ChatCardHeader's inline 8-cell meter until the right-sidebar
+ * revamp removed that third indicator of one number.
  */
 import type { ChatThreadState } from '../controller/chat-thread-state';
 
 /**
- * Context-usage percentage for the meter. Prefers the CLI-reported usage
+ * Context-usage percentage. Prefers the CLI-reported usage
  * (daemon `chat.contextUsage`); falls back to a token estimate only when the
  * model's context window is known — otherwise the bar would be a guess
  * against a default that may not match the real model (desktop rule).

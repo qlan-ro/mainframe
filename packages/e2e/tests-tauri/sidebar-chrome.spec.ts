@@ -34,44 +34,19 @@
  *   show-sidebar-button        — layout/MainToolbar.tsx (rendered only when `!sidebarVisible`)
  *   daemon-footer-trigger      — v2/features/daemon/DaemonSwitcher.tsx trigger; its ConnDot carries
  *                                aria-label="Connected" (v2/features/daemon/daemon-status.tsx)
- *   main-toolbar-inspector     — layout/MainToolbar.tsx (toggles ui-prefs.inspectorVisible; the
- *                                Context/Skills/Agents bottom panel lives in the right InspectorPane
- *                                now, hidden by default — not in the left sidebar anymore)
- *   sidebar-bottom-resize      — features/context-panel/PanelResizeHandle.tsx (role=separator, pointer-drag)
- *   sidebar-bottom-panel       — features/context-panel/BottomPanel.tsx root <div style={{height}}>
+ *   main-toolbar-inspector     — layout/MainToolbar.tsx (toggles ui-prefs.inspectorVisible)
+ *
+ * The bottom Context/Skills/Agents panel and its drag-resize handle
+ * (`sidebar-bottom-panel` / `sidebar-bottom-resize`) were deleted in the
+ * right-sidebar revamp (T5.4) along with `features/context-panel/`. There is no
+ * successor to resize: the session panel is a fixed-width card that switches to a
+ * rail on width, which session-panel.spec.ts covers. The two resize tests went
+ * with the surface rather than being retargeted.
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-
-/** Idempotent: the inspector starts hidden (ui-prefs default) and the toggle flips —
- *  only click when the pane isn't already mounted (retries re-enter with it open). */
-async function openInspector(page: Page): Promise<void> {
-  const pane = page.getByTestId('inspector-pane');
-  if (!(await pane.isVisible().catch(() => false))) {
-    await page.getByTestId('main-toolbar-inspector').click();
-    await expect(pane).toBeVisible({ timeout: 5_000 });
-  }
-}
-
-async function getBottomPanelHeight(page: Page): Promise<number> {
-  const box = await page.getByTestId('sidebar-bottom-panel').boundingBox();
-  if (!box) throw new Error('sidebar-chrome: bottom panel container not found');
-  return box.height;
-}
-
-async function dragResizeHandle(page: Page, deltaY: number): Promise<void> {
-  const handle = page.getByTestId('sidebar-bottom-resize');
-  const box = await handle.boundingBox();
-  if (!box) throw new Error('sidebar-chrome: sidebar-bottom-resize handle not found');
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x, y + deltaY, { steps: 10 });
-  await page.mouse.up();
-}
 
 test.describe('§sidebar-chrome', () => {
   let app: TauriAppFixture;
@@ -137,24 +112,6 @@ test.describe('§sidebar-chrome', () => {
   // switcher only. `useSessionCounts` survives but now feeds the new-session picker's
   // per-project labels (SessionsNewButton.tsx). Per-session working/waiting state is
   // covered on the row's status dot in sessions-rows.spec.ts.
-
-  test('dragging the resize handle up grows the bottom panel', async () => {
-    const { page } = app;
-    await openInspector(page);
-    const before = await getBottomPanelHeight(page);
-    await dragResizeHandle(page, -60);
-    const after = await getBottomPanelHeight(page);
-    expect(after).toBeGreaterThan(before);
-  });
-
-  test('dragging the resize handle down clamps at the minimum height', async () => {
-    const { page } = app;
-    await openInspector(page);
-    // BOTTOM_PANEL_MIN_HEIGHT = 120 (store/ui-prefs.ts clampBottomPanelHeight) — drag far past it.
-    await dragResizeHandle(page, 1000);
-    const after = await getBottomPanelHeight(page);
-    expect(Math.round(after)).toBe(120);
-  });
 
   // The v2 header carries no hide button (SessionSidebar.tsx HeaderActions is
   // workflows/tasks/settings only). Collapsing is the panel's own edge — clicking

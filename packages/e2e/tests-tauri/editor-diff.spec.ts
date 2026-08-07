@@ -2,11 +2,11 @@
  * §editor-diff — workspace-surface diff tab specs (spec #17 of docs/plans/2026-07-03-tauri-e2e-test-plan.md).
  *
  * Two describe blocks:
- *  - "§editor-diff — Changes panel" is UI-only (no agent turn, no recording): a
- *    HEAD-vs-working diff is opened by clicking a `changes-row-*` in the
- *    Inspector's Changes tab (`ChangesPanel.tsx`), which mutates the daemon's
- *    `open-diff` surface intent with a bare path (no pre-resolved sides) so
- *    `DiffTab` fetches HEAD-vs-working itself.
+ *  - "§editor-diff — bare-path diff (spotlight)" is UI-only (no agent turn, no
+ *    recording): a HEAD-vs-working diff is opened by clicking a
+ *    `search-palette-change-row-*` in the spotlight palette's `#` changes mode,
+ *    which emits an `open-diff` surface intent with a bare path (no pre-resolved
+ *    sides) so `DiffTab` fetches HEAD-vs-working itself.
  *  - "§editor-diff — Open in diff editor from EditFileCard" replays the
  *    `changes-tab` recording (E2E_MODE=mock), which contains a real `Edit` tool
  *    call with `structuredPatch`/`originalFile`/`modifiedFile` on its result —
@@ -27,13 +27,34 @@
  * diff tab's ready state first, then assert `diff-reveal` present (real,
  * reachable behavior), not absent.
  *
+ * ── T6.2 DECISION: this describe was rewritten onto the spotlight `#` route, not
+ * ── the review modal, and not deleted. ───────────────────────────────────────
+ * The right-sidebar revamp deleted `ChangesPanel` and the Inspector's Changes tab
+ * (T5.3), taking the `changes-row-*` entry point with them. The plan offered two
+ * options; a third turned out to be the correct one:
+ *   - "Reach the diff tab via the review modal's open-in-workspace action" DOES
+ *     NOT WORK. `ReviewPanel.tsx`'s `openInWorkspace()` emits
+ *     `{ type: 'open-file' }` (verified in source), so it opens an EDITOR tab.
+ *     There is no diff-tab route out of the review modal at all — its diff is
+ *     rendered inside the modal by `ReviewDiffPane`, not as a workspace tab.
+ *   - Deleting the describe and relying on the EditFileCard one would drop every
+ *     assertion about `DiffTab`'s daemon-FETCHED branch: the EditFileCard path
+ *     exercises only the PRE-resolved-sides branch (`hasPreResolved`). The chunk
+ *     count over a real HEAD-vs-working diff, prev/next chunk navigation, the
+ *     no-save-path guarantee and the "No diff available" state would all go
+ *     uncovered.
+ * `use-spotlight-results.ts`'s `#` changes mode is the surviving emitter of a
+ * bare-path `open-diff` (`emitSurfaceIntent({ type: 'open-diff', path: f.path })`)
+ * — the identical intent `ChangesPanel` used to emit, from the identical
+ * `getGitStatus` row set. So this is a selector swap onto a live entry point,
+ * which spotlight.spec.ts already proves reachable. Nothing about `DiffTab` is
+ * observed differently.
+ *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector    — reveals the Inspector pane
- *   inspector-tab-changes     — switches the Inspector to the Changes tab
- *   changes-panel             — ChangesPanel root
- *   changes-refresh           — refetch the changes row set
- *   changes-row-<path>        — a changed-file row; click opens a HEAD-vs-working diff
- *   changes-status-<path>     — the row's status word (Added/Modified/Deleted/Renamed)
+ *   main-toolbar-search       — opens the spotlight palette (CommandDialog)
+ *   search-palette-input      — its text field; a leading `#` selects Changes mode
+ *   search-palette-mode-chip  — the mode chip ("Changes" in `#` mode)
+ *   search-palette-change-row-<path> — a changed-file row; click emits a bare-path open-diff
  *   diff-tab                  — DiffTab root (also renders the "No diff available" / "Loading…" states)
  *   editor-diff               — CmDiffEditor host; MergeView mounts two `.cm-editor` panes inside
  *   diff-prev-change          — DiffHeader "previous change" button
@@ -95,9 +116,26 @@ function tallFileLines(marker?: { top?: boolean; bottom?: boolean }): string {
   return lines.join('\n') + '\n';
 }
 
-// ─── §editor-diff — Changes panel (HEAD-vs-working, UI-only) ──────────────────
+// ─── §editor-diff — bare-path diff via the spotlight `#` palette (UI-only) ────
 
-test.describe('§editor-diff — Changes panel', () => {
+/**
+ * Open the palette in `#` changes mode and click the row for `file`. The palette
+ * refetches `getGitStatus` on every open (`useGitChanges` is keyed on the mode
+ * being active), so this doubles as the refresh the retired panel's
+ * `changes-refresh` button provided.
+ */
+async function openDiffViaSpotlight(page: import('@playwright/test').Page, file: string): Promise<void> {
+  await page.getByTestId('main-toolbar-search').click();
+  await page.getByTestId('search-palette-input').waitFor({ timeout: 10_000 });
+  await page.getByTestId('search-palette-input').fill(`#${file}`);
+  await expect(page.getByTestId('search-palette-mode-chip')).toHaveText('Changes');
+  const row = page.getByTestId(`search-palette-change-row-${file}`);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+  await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
+}
+
+test.describe('§editor-diff — bare-path diff (spotlight)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -108,8 +146,8 @@ test.describe('§editor-diff — Changes panel', () => {
 
     // Baseline commit: tall.ts with no markers. createTauriProject already
     // wrote CLAUDE.md + index.ts (untracked) — commit everything as a clean
-    // HEAD so the Changes panel's default "Uncommitted" scope only shows our
-    // later mutation, not the project-seed noise.
+    // HEAD so the palette's changes rows only show our later mutation, not the
+    // project-seed noise.
     writeFileSync(path.join(dir, 'tall.ts'), tallFileLines());
     git(dir, ['add', '-A']);
     gitCommit(dir, 'seed baseline');
@@ -118,10 +156,6 @@ test.describe('§editor-diff — Changes panel', () => {
     writeFileSync(path.join(dir, 'tall.ts'), tallFileLines({ top: true, bottom: true }));
 
     await createTauriChat(app.page, project.projectId, 'default');
-    await app.page.getByTestId('main-toolbar-inspector').click();
-    await app.page.getByTestId('inspector-tab-changes').click();
-    await app.page.getByTestId('changes-panel').waitFor({ timeout: 10_000 });
-    await app.page.getByTestId('changes-row-tall.ts').waitFor({ timeout: 10_000 });
   });
 
   test.afterAll(async () => {
@@ -129,9 +163,9 @@ test.describe('§editor-diff — Changes panel', () => {
     await closeTauriApp(app);
   });
 
-  test('clicking a changed-file row opens a HEAD-vs-working diff with both panes rendered and the correct chunk count', async () => {
+  test('a spotlight changes row opens a HEAD-vs-working diff with both panes rendered and the correct chunk count', async () => {
     const { page } = app;
-    await page.getByTestId('changes-row-tall.ts').click();
+    await openDiffViaSpotlight(page, 'tall.ts');
 
     const diffTab = page.getByTestId('diff-tab');
     await expect(diffTab).toBeVisible({ timeout: 10_000 });
@@ -272,19 +306,25 @@ test.describe('§editor-diff — Changes panel', () => {
     const orphanPath = path.join(project.projectPath, 'orphan.txt');
     writeFileSync(orphanPath, 'temporary\n');
 
-    await page.getByTestId('inspector-tab-changes').click();
-    await page.getByTestId('changes-refresh').click();
-    const row = page.getByTestId('changes-row-orphan.txt');
+    // Opening the palette in `#` mode refetches git status, so the new untracked
+    // file appears as a row.
+    await page.getByTestId('main-toolbar-search').click();
+    await page.getByTestId('search-palette-input').waitFor({ timeout: 10_000 });
+    await page.getByTestId('search-palette-input').fill('#orphan');
+    const row = page.getByTestId('search-palette-change-row-orphan.txt');
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('changes-status-orphan.txt')).toHaveText('Added');
+    // The palette's status chip is the single-letter `KIND_LABEL` form ('A'), not
+    // the retired Changes panel's "Added" word — same `gitStatusKind`, terser chip.
+    await expect(row.getByText('A', { exact: true })).toBeVisible();
 
-    // Delete the file from disk WITHOUT refreshing the panel first — the row
-    // stays mounted (stale) and clickable. The daemon then has neither a HEAD
-    // copy (never committed) nor a working-tree copy (just deleted) to diff,
-    // so `getWorkingDiff` returns `{original:'', modified:''}` and DiffTab
-    // falls into its `status:'unavailable'` branch.
+    // Delete the file from disk WITHOUT reopening the palette — the row stays
+    // mounted (stale) and clickable. The daemon then has neither a HEAD copy
+    // (never committed) nor a working-tree copy (just deleted) to diff, so
+    // `getWorkingDiff` returns `{original:'', modified:''}` and DiffTab falls
+    // into its `status:'unavailable'` branch.
     rmSync(orphanPath);
     await row.click();
+    await expect(page.getByTestId('search-palette')).toHaveCount(0, { timeout: 5_000 });
 
     const diffTab = page.getByTestId('diff-tab');
     await expect(diffTab).toContainText('No diff available', { timeout: 10_000 });
@@ -293,7 +333,7 @@ test.describe('§editor-diff — Changes panel', () => {
     // This is the strongest form of "disabled": the controls are entirely
     // absent rather than present-but-disabled (DiffHeader only ever disables
     // prev/next together, gated on `changeCount === 0` in the ready state —
-    // that combination isn't reachable from any changes-panel/spotlight row,
+    // that combination isn't reachable from any spotlight changes row,
     // since every such row implies a real content diff; see spec report).
     await expect(page.getByTestId('diff-prev-change')).toHaveCount(0);
     await expect(page.getByTestId('diff-next-change')).toHaveCount(0);

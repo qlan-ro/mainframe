@@ -11,8 +11,8 @@ import { formatRunDuration, formatRunTokens, runKey, statusChipLabel, summarizeR
 
 /** The semantic hue rides the tint, never the ink. */
 const STATUS_CHIP: Record<ClaudeWorkflowRunStatus, string> = {
-  running: 'bg-mf-warning-tint text-foreground',
-  completed: 'bg-mf-success-tint text-foreground',
+  running: 'bg-warning/10 text-foreground',
+  completed: 'bg-success/10 text-foreground',
   failed: 'bg-destructive/10 text-foreground',
   stopped: 'bg-muted text-muted-foreground',
   paused: 'bg-muted text-muted-foreground',
@@ -49,7 +49,7 @@ export function WorkflowRunPanelHeader({ run, now }: { run: ViewRun; now: number
             {unavailable ? runKey(run) : summarizeRun(run, now)}
           </span>
           {!unavailable && (
-            <span className="shrink-0 text-caption tabular-nums text-mf-text-3">
+            <span className="shrink-0 text-caption tabular-nums text-muted-foreground">
               {formatRunTokens(run.totalTokens)} · {formatRunDuration(run.durationMs)}
             </span>
           )}

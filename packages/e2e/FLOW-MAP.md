@@ -5,6 +5,15 @@ list in [`COVERAGE-GAP-REPORT.md`](./COVERAGE-GAP-REPORT.md). These are the **ed
 preconditions, conditional rendering) that test-ids alone don't encode — the input for the
 `test-scenarios` skill and for authoring specs._
 
+> **STALE — do not trust the inventory (2026-08-06).** This file was generated against the
+> pre-v2 Electron renderer and predates both the UI-v2 port (PR #565) and the right-sidebar
+> revamp. It still lists ids from surfaces deleted since (e.g. `chat-session-bar-*`), and it is
+> missing every id added by the v2 shell and the session panel. The revamp deleted or renamed
+> `inspector-tab-*`, `changes-panel`, `changes-mode-*`, `changes-row-*`, `main-toolbar-launch*`,
+> `main-toolbar-play`, `composer-background-activity`, `chat-background-*`, `sidebar-bottom-*`,
+> `sidebar-context-*`, and `chat-header-context*` — none of which appear below, which is itself
+> the tell. Regenerating it is its own task; treat this as history until then.
+
 Priority key: **P0** critical user path · **P1** important · **P2** edge/secondary.
 
 > **Coverage note:** the first 5 sections (Todos, Chat cards, Composer, Sandbox, Branch) were the

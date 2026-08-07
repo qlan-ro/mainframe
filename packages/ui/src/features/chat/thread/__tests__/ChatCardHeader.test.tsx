@@ -25,18 +25,11 @@ vi.mock('../../../sessions/use-projects', () => ({
   useProjects: () => ({ projects: fakeProjects }),
 }));
 
-// ChatSessionInline pulls chat-thread + adapter-registry data that this suite
-// doesn't otherwise fixture; stub it to fixed testid markers so ChatCardHeader
+// ChatModelChip pulls chat-thread + adapter-registry data that this suite
+// doesn't otherwise fixture; stub it to a fixed testid marker so ChatCardHeader
 // structure/order assertions don't depend on that data layer.
-vi.mock('../ChatSessionInline', () => ({
-  ChatSessionInline: ({ part }: { part: 'model' | 'status' }) =>
-    part === 'model' ? (
-      <span data-testid="chat-header-model">Sonnet 4.6</span>
-    ) : (
-      <span data-testid="chat-header-context">
-        <span data-testid="chat-header-context-pct">42%</span>
-      </span>
-    ),
+vi.mock('../ChatModelChip', () => ({
+  ChatModelChip: () => <span data-testid="chat-header-model">Sonnet 4.6</span>,
 }));
 
 import { ChatCardHeader } from '../ChatCardHeader';
@@ -101,17 +94,17 @@ describe('ChatCardHeader — structure', () => {
     expect(svgs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('renders the ChatSessionInline model slot', () => {
+  it('renders the ChatModelChip slot', () => {
     renderHeader();
 
     expect(screen.getByTestId('chat-header-model')).toBeInTheDocument();
   });
 
-  it('renders the ChatSessionInline status (context meter) slot', () => {
+  it('no longer renders a context meter — the session panel owns that number', () => {
     renderHeader();
 
-    expect(screen.getByTestId('chat-header-context')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-header-context-pct')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-header-context')).toBeNull();
+    expect(screen.queryByTestId('chat-header-context-pct')).toBeNull();
   });
 });
 
@@ -193,56 +186,6 @@ describe('ChatCardHeader — PRs + review', () => {
     expect(screen.queryByTestId('chat-header-pr-249')).toBeNull();
     expect(document.querySelector('[data-testid^="chat-header-pr-"]')).toBeNull();
   });
-
-  it('renders a disabled Review button when worktreePath is absent', () => {
-    // fakeState has no worktreePath in custom
-    renderHeader();
-
-    expect(screen.getByTestId('chat-header-review')).toBeDisabled();
-  });
-
-  it('places the Review button before the first PR link in DOM order', () => {
-    fakeState.threadListItem.custom.detectedPrs = [
-      { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
-      { url: 'https://github.com/o/r/pull/250', owner: 'o', repo: 'r', number: 250, source: 'mentioned' },
-    ];
-
-    renderHeader();
-
-    const root = screen.getByTestId('chat-header');
-    const review = screen.getByTestId('chat-header-review');
-    const pr249 = screen.getByTestId('chat-header-pr-249');
-    const position = review.compareDocumentPosition(pr249);
-
-    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(root.contains(review)).toBe(true);
-    expect(root.contains(pr249)).toBe(true);
-  });
-});
-
-describe('ChatCardHeader — review button gating', () => {
-  it('review button is disabled when worktreePath is undefined', () => {
-    fakeState = { threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: undefined } } };
-    renderHeader();
-    expect(screen.getByTestId('chat-header-review')).toBeDisabled();
-  });
-
-  it('review button is enabled when worktreePath is set', () => {
-    fakeState = {
-      threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
-    };
-    renderHeader();
-    expect(screen.getByTestId('chat-header-review')).not.toBeDisabled();
-  });
-
-  it('clicking the enabled review button emits open-review', () => {
-    fakeState = {
-      threadListItem: { title: 'Chat', custom: { detectedPrs: [], worktreePath: '/Users/me/proj' } },
-    };
-    renderHeader();
-    fireEvent.click(screen.getByTestId('chat-header-review'));
-    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-review' });
-  });
 });
 
 describe('ChatCardHeader — Hide Chat (dynamic floor)', () => {
@@ -274,16 +217,14 @@ describe('ChatCardHeader — draft variant', () => {
     expect(screen.getByTestId('chat-header')).toHaveTextContent('New Session');
     expect(screen.getByTestId('chat-header-project')).toHaveTextContent('Mainframe');
     expect(screen.queryByTestId('chat-header-model')).toBeNull();
-    expect(screen.queryByTestId('chat-header-review')).toBeNull();
   });
 
-  it('renders the normal header (model chip, review) for a real chat', () => {
+  it('renders the normal header (model chip) for a real chat', () => {
     fakeState = { threadListItem: { id: 'chat-123', status: 'regular', title: 'Fix bug', custom: {} } };
 
     renderHeader();
 
     expect(screen.getByTestId('chat-header')).toHaveTextContent('Fix bug');
     expect(screen.getByTestId('chat-header-model')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-header-review')).toBeInTheDocument();
   });
 });

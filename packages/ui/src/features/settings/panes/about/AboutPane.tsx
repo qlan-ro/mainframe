@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import type { AppInfo } from '@qlan-ro/mainframe-types';
 import { useHost } from '@/lib/host';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 
 interface AboutRow {
   label: string;

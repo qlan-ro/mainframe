@@ -27,6 +27,11 @@
  *  B5 — image attachment with matching capture row renders thumb + selector text.
  *  B6 — image attachment with no selector/annotation renders thumb only.
  *  B7 — image attachment with no matching capture renders thumb, no crash.
+ *  B8 — capture selector uses the mf-code-fn token, not mf-success.
+ *  B9 — capture selector span carries `block` alongside `truncate` (truncate
+ *       is inert on an inline box, and AttachmentContent is a block
+ *       container), is wired as a Radix tooltip trigger, and the thumb keeps
+ *       the 40px group-modifier override.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -349,5 +354,95 @@ describe('UserAttachments — B7: image attachment with no matching capture rend
     expect(img).toHaveAttribute('src', 'data:img');
 
     expect(screen.queryByTestId('chat-capture-selector')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — B9: capture selector truncates inside the card
+// ---------------------------------------------------------------------------
+
+describe('UserAttachments — B9: capture selector truncates inside the card', () => {
+  const LONG_SELECTOR =
+    'div > div.min-h-screen.bg-background > div.fixed.top-4 > div.floating-nav.px-4 > a.btn-pill.btn-pill-primary';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __attachmentType = 'image';
+    __src = 'data:img';
+  });
+
+  it('carries both `block` and `truncate` in its className', () => {
+    __attachmentName = 'element1.png';
+    __meta = {
+      captures: [{ label: 'element1', imageName: 'element1.png', selector: LONG_SELECTOR }],
+    };
+
+    renderAttachments();
+
+    const selectorEl = screen.getByTestId('chat-capture-selector');
+    // `block` is load-bearing, not decorative: AttachmentContent (the parent)
+    // is a block container, and `truncate` (overflow:hidden + ellipsis +
+    // nowrap) is INERT on an inline box — dropping `block` regresses the tile
+    // to the pre-fix bug where the selector rendered at full natural width
+    // and escaped the 250px card.
+    expect(selectorEl.className).toContain('block');
+    expect(selectorEl.className).toContain('truncate');
+  });
+
+  it('lifts the context above the trigger overlay so the selector is hoverable', () => {
+    __attachmentName = 'element1.png';
+    __meta = {
+      captures: [{ label: 'element1', imageName: 'element1.png', selector: LONG_SELECTOR }],
+    };
+
+    renderAttachments();
+
+    // AttachmentTrigger is an `absolute inset-0` overlay covering the whole
+    // tile. Without this lift it swallows pointer events over the text, so the
+    // selector never receives hover and its tooltip can never open — the full
+    // selector becomes unreachable even though the visible text is clipped.
+    const content = screen
+      .getByTestId('chat-user-attachment-element1.png')
+      .querySelector('[data-slot="attachment-content"]');
+    expect(content).not.toBeNull();
+    expect(content!.className).toContain('relative');
+    expect(content!.className).toContain('z-20');
+  });
+
+  it('is wired as a Radix tooltip trigger', () => {
+    __attachmentName = 'element1.png';
+    __meta = {
+      captures: [{ label: 'element1', imageName: 'element1.png', selector: LONG_SELECTOR }],
+    };
+
+    renderAttachments();
+
+    // Radix's Tooltip.Trigger stamps `data-state` on the (asChild) trigger
+    // element regardless of open state — the stable hook that survives
+    // asChild-forwarding. Open-behavior itself is unassertable in jsdom:
+    // getBoundingClientRect() returns all zeros here, so useIsTruncated's
+    // scrollWidth > clientWidth check never reports true and the tooltip can
+    // never actually open in this environment.
+    const selectorEl = screen.getByTestId('chat-capture-selector');
+    expect(selectorEl).toHaveAttribute('data-state', 'closed');
+    expect(selectorEl).toHaveTextContent(LONG_SELECTOR);
+  });
+
+  it('the thumb keeps the 40px group-modifier override on the media tile', () => {
+    __attachmentName = 'element1.png';
+    __meta = {
+      captures: [{ label: 'element1', imageName: 'element1.png', selector: LONG_SELECTOR }],
+    };
+
+    renderAttachments();
+
+    const tile = screen.getByTestId('chat-user-attachment-element1.png');
+    const mediaEl = tile.querySelector('[data-slot="attachment-media"]');
+    expect(mediaEl).not.toBeNull();
+    // Re-declares the primitive's OWN group modifier (not a bare `w-10`) —
+    // tailwind-merge only dedupes classes whose modifier sets match, so a
+    // bare `w-10` would stack behind the kit's `sm`-size default instead of
+    // replacing it.
+    expect(mediaEl?.className).toContain('group-data-[size=sm]/attachment:w-10');
   });
 });

@@ -19,7 +19,7 @@ import { useFilesStore } from '@/store/files';
 import { useLayoutStore } from '@/store/layout';
 import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
 import { Hint } from '@/components/ui/hint';
 

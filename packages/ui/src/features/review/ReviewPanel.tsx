@@ -6,6 +6,11 @@
  * (ReviewDiffPane), and the commit composer (ReviewCommitRail). The diff body
  * keeps the side-by-side CmDiffEditor and its inline comment-to-agent form
  * (posted via the assistant-ui runtime's append) alongside the commit flow.
+ *
+ * The header's scope switcher (Session · Uncommitted · Branch) is the modal's
+ * only data-source control: it drives `useWorkingChanges`, which owns all three
+ * fetches and one invalidation policy. Row clicks still select into this modal's
+ * own diff pane; the workspace-diff route is the pane's "Open in workspace".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
@@ -21,7 +26,8 @@ import { ReviewFileTree } from './ReviewFileTree';
 import { ReviewDiffPane } from './ReviewDiffPane';
 import { ReviewCommitRail } from './ReviewCommitRail';
 import { ReviewPanelHeader } from './ReviewPanelHeader';
-import { useReviewData } from './use-review-data';
+import { DEFAULT_SCOPE } from './review-scope-view';
+import { useWorkingChanges, type ChangeScope } from './use-working-changes';
 
 export function ReviewPanel() {
   const reviewOpen = useOverlaysStore((s) => s.reviewOpen);
@@ -31,12 +37,16 @@ export function ReviewPanel() {
   const { projectId, chatId } = useActiveIdentity();
   const runtime = useAssistantRuntime();
 
-  const { files, totalAdditions, totalDeletions, branch, loadError } = useReviewData(
-    reviewOpen,
-    port,
-    projectId ?? null,
-    chatId,
-  );
+  const [scope, setScope] = useState<ChangeScope>(DEFAULT_SCOPE);
+  const {
+    files,
+    totalAdditions,
+    totalDeletions,
+    branch,
+    baseBranch,
+    mergeBase,
+    error: loadError,
+  } = useWorkingChanges({ port, projectId, chatId, scope, enabled: reviewOpen });
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [viewed, setViewed] = useState<Set<string>>(new Set());
@@ -45,9 +55,11 @@ export function ReviewPanel() {
   const [committed, setCommitted] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
-  // Reset transient state whenever the panel (re)opens.
+  // Reset transient state whenever the panel (re)opens. The scope is one of
+  // them by design: it is never persisted, so every open starts on Uncommitted.
   useEffect(() => {
     if (!reviewOpen) return;
+    setScope(DEFAULT_SCOPE);
     setSelectedFile(null);
     setViewed(new Set());
     setMessage('');
@@ -68,6 +80,13 @@ export function ReviewPanel() {
 
   function handleClose() {
     setReviewOpen(false);
+  }
+
+  // Each scope reports a different file set, so a selection made in one has no
+  // meaning in the next; clearing it re-arms the auto-select above.
+  function handleScopeChange(next: ChangeScope) {
+    setScope(next);
+    setSelectedFile(null);
   }
 
   const handleAppend = useCallback(
@@ -115,7 +134,11 @@ export function ReviewPanel() {
         className="flex h-[86vh] max-h-[880px] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[1180px]"
       >
         <ReviewPanelHeader
+          scope={scope}
+          onScopeChange={handleScopeChange}
           branch={branch}
+          baseBranch={baseBranch}
+          mergeBase={mergeBase}
           fileCount={files.length}
           totalAdditions={totalAdditions}
           totalDeletions={totalDeletions}
@@ -156,7 +179,7 @@ export function ReviewPanel() {
 
           <ReviewCommitRail
             fileCount={files.length}
-            totalLines={totalAdditions + totalDeletions}
+            totalLines={(totalAdditions ?? 0) + (totalDeletions ?? 0)}
             unviewedCount={unviewedCount}
             message={message}
             onMessageChange={setMessage}

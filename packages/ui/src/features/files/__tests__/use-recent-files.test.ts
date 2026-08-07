@@ -26,7 +26,7 @@ describe('useRecentFiles', () => {
     expect(getGitStatus).not.toHaveBeenCalled();
   });
 
-  // NOTE: the on-error path (`.catch` → []) mirrors the sibling use-changes-count
-  // guard verbatim and is covered by inspection; an effect-fire-and-forget reject
-  // test trips vitest's unhandled-rejection detector despite the attached .catch.
+  // NOTE: the on-error path (`.catch` → []) is covered by inspection; an
+  // effect-fire-and-forget reject test trips vitest's unhandled-rejection
+  // detector despite the attached .catch.
 });

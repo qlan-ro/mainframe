@@ -1,23 +1,14 @@
 import { useAuiState } from '@assistant-ui/react';
-import {
-  ClipboardCheck,
-  EyeOff,
-  GitPullRequest,
-  GripHorizontal,
-  LayoutPanelLeft,
-  LayoutPanelTop,
-  MessageSquare,
-} from 'lucide-react';
+import { EyeOff, GitPullRequest, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useHost } from '@/lib/host';
-import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
-import { ChatSessionInline } from './ChatSessionInline';
+import { ChatModelChip } from './ChatModelChip';
 
 /**
  * The chat surface's header row. Same height, border and gutters as the
@@ -31,7 +22,7 @@ const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] border-b bor
 /**
  * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): grip,
  * chat icon, a fixed "New Session" title, and the draft's project chip. No
- * model chip / context meter / Review / PR pills — that state doesn't exist
+ * model chip / PR pills — that state doesn't exist
  * until the chat is created on first send.
  */
 function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | null; projectName: string | null }) {
@@ -51,7 +42,7 @@ function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | n
 /**
  * The chat zone's surface header (the `SurfaceTabStrip` equivalent for chat):
  * drag-to-reposition grip (visual-only placeholder), chat icon, session title,
- * detected-PR links, a (gated) Review button, and the split controls. No
+ * detected-PR links and the split controls (Review moved to the session panel). No
  * traffic-light inset — the shell `MainToolbar` above owns the collapsed clearance.
  */
 function ChatCardHeaderReal() {
@@ -59,7 +50,6 @@ function ChatCardHeaderReal() {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
   const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
   const prs = custom?.detectedPrs ?? [];
-  const worktreePath = custom?.worktreePath;
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const chatIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'chat'));
@@ -70,22 +60,8 @@ function ChatCardHeaderReal() {
       <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
-      <ChatSessionInline part="model" />
+      <ChatModelChip />
       <span className="flex-1" />
-      <ChatSessionInline part="status" />
-      <Hint label="Review changes (⌘⇧R)">
-        <Button
-          data-testid="chat-header-review"
-          variant="ghost"
-          size="xs"
-          disabled={!worktreePath}
-          onClick={() => emitSurfaceIntent({ type: 'open-review' })}
-          className="text-muted-foreground"
-        >
-          <ClipboardCheck data-icon="inline-start" />
-          Review
-        </Button>
-      </Hint>
       {prs.map((pr) => (
         <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
           <Button

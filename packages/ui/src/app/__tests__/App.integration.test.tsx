@@ -155,7 +155,7 @@ vi.mock('@v2/features/sessions/TagPopoverHost', () => ({
 }));
 
 vi.mock('../../features/sessions/new-thread/ChatSurface', () => ({
-  ChatSurface: (p: { port: number }) => <div data-testid="chat-surface-stub" data-port={p.port} />,
+  ChatSurface: () => <div data-testid="chat-surface-stub" />,
 }));
 
 vi.mock('@v2/components/ui/sonner', () => ({

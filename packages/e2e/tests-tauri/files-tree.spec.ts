@@ -1,9 +1,16 @@
 /**
- * §files-tree — Inspector pane (Files tree / Changes panel) + FilePickerDialog specs.
+ * §files-tree — Inspector pane (Files tree) + FilePickerDialog specs.
  *
  * UI-only, no AI turns — no recording needed. All tests run against a REST-seeded
  * git repo the test process itself mutates with plain `git` calls (array-arg
  * execFileSync, no shell interpolation).
+ *
+ * The Inspector is FILES-ONLY since the right-sidebar revamp (T5.3): the Changes
+ * tab, the Files/Changes tab bar and `ChangesPanel` are deleted. The three change
+ * scopes moved into the review modal's scope switcher — their coverage lives in
+ * review-panel.spec.ts's "§review-panel — change scopes", not here. The
+ * HEAD-vs-working diff those rows used to open is reached through the spotlight
+ * `#` palette now (editor-diff.spec.ts).
  *
  * Testid reference (verified against packages/ui/src):
  *   main-toolbar-inspector   — toolbar toggle for the Inspector pane. A v2 `Toggle`
@@ -11,25 +18,14 @@
  *                              pressed state on `aria-pressed` (only `data-state` is
  *                              unusable — the wrapping `Hint`'s TooltipTrigger
  *                              overwrites it with the tooltip's open-state).
- *   inspector-pane           — Inspector root (mounted only when visible)
- *   inspector-tab-files      — Files tab in the Inspector's Files/Changes switch
- *   inspector-tab-changes    — Changes tab (shows a live uncommitted-count badge)
- *     Both, and `changes-mode-*` below, are still hand-rolled `<button aria-pressed>`
- *     segments (InspectorPane.tsx / ChangesPanel.tsx): the Inspector body ports with
- *     the review/changes surface, not with the tab-body chrome pass. Do NOT convert
- *     these to the `data-state` form the viewers' `Segmented` uses.
+ *   inspector-pane           — Inspector root (mounted only when visible); its body is
+ *                              the FileTree with no tab bar above it
  *   file-tree                — FileTree root
  *   file-tree-row-<path>     — a file or folder row (folders toggle expand/collapse)
  *   file-tree-refresh        — refetch the tree
  *   file-tree-find-in-file / file-tree-find-in-folder — context-menu item (file vs folder)
  *   file-tree-reveal         — context-menu "Reveal in Finder" (local-daemon gated)
  *   file-tree-copy-path / file-tree-copy-relative-path — context-menu copy actions
- *   changes-panel            — ChangesPanel root
- *   changes-mode-<session|uncommitted|branch> — scope switcher buttons
- *   changes-refresh          — refetch the changes list
- *   changes-row-<path>       — a changed-file row (click opens a HEAD-vs-working diff)
- *   changes-status-<path>    — the row's status word (Added/Modified/Deleted/Renamed)
- *   diff-tab                 — the opened diff tab body
  *   viewer-shell-reveal      — a viewer tab's "Reveal in file tree" button
  *   surface-rail-workspace     — MainToolbar toggle for the workspace surface
  *   workspace-picker-open-file — the empty-state card's "Open file…" row
@@ -43,7 +39,7 @@
 
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'child_process';
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
@@ -121,27 +117,16 @@ test.describe('§files-tree — Inspector pane', () => {
     const dir = project.projectPath;
 
     // Baseline tree fixture: a nested folder (for lazy-expand) + a viewer file
-    // (for the reveal-from-viewer test) + files we will later mutate for the
-    // Changes panel status-glyph scenarios.
+    // (for the reveal-from-viewer test).
     mkdirSync(path.join(dir, 'src'));
     writeFileSync(path.join(dir, 'src', 'utils.ts'), 'export const util = 1;\n');
     writeFileSync(path.join(dir, 'data.csv'), 'name,age\nAlice,30\nBob,25\n');
     writeFileSync(path.join(dir, 'notes.md'), '# notes\n');
-    writeFileSync(path.join(dir, 'delete-me.txt'), 'temp\n');
     // createTauriProject already wrote CLAUDE.md + index.ts (untracked). Commit
     // everything as a clean baseline so the tree/reveal/context-menu tests run
     // against a repo with no uncommitted noise.
     git(dir, ['add', '-A']);
     gitCommit(dir, 'seed baseline');
-
-    // Stage one of each git status kind for the Changes panel: added, modified,
-    // deleted, renamed. Staged (not just working-tree) so rename detection kicks
-    // in — matches how `git status --porcelain` reports a `git mv`.
-    writeFileSync(path.join(dir, 'index.ts'), 'export const greeting = "changed";\n');
-    rmSync(path.join(dir, 'delete-me.txt'));
-    renameSync(path.join(dir, 'notes.md'), path.join(dir, 'renamed-notes.md'));
-    writeFileSync(path.join(dir, 'new-file.txt'), 'new\n');
-    git(dir, ['add', '-A']);
 
     await createTauriChat(app.page, project.projectId, 'default');
   });
@@ -164,25 +149,13 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the changes tab badge shows the uncommitted file count', async () => {
+  test('the inspector body is the file tree, with no tab bar above it', async () => {
     const { page } = app;
-    // Seeded: added(new-file.txt) + modified(index.ts) + deleted(delete-me.txt) +
-    // renamed(notes.md->renamed-notes.md) = 4 uncommitted files.
-    await expect(page.getByTestId('inspector-tab-changes')).toContainText('4', { timeout: 10_000 });
-  });
-
-  test('Files tab is selected by default and Changes tab switches the body', async () => {
-    const { page } = app;
-    await expect(page.getByTestId('inspector-tab-files')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 10_000 });
-
-    await page.getByTestId('inspector-tab-changes').click();
-    await expect(page.getByTestId('inspector-tab-changes')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('changes-panel')).toBeVisible({ timeout: 10_000 });
-
-    // Switch back to Files for the tree tests below.
-    await page.getByTestId('inspector-tab-files').click();
-    await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 10_000 });
+    // T5.3 left one surface with one job — the Files/Changes switch is gone.
+    await expect(page.getByTestId('inspector-tab-files')).toHaveCount(0);
+    await expect(page.getByTestId('inspector-tab-changes')).toHaveCount(0);
+    await expect(page.getByTestId('changes-panel')).toHaveCount(0);
   });
 
   // ── File tree ──────────────────────────────────────────────────────────────
@@ -233,10 +206,7 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(page.getByTestId('viewer-csv')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('viewer-shell-reveal').click();
-    // The reveal intent lights the workspace surface but not the Inspector's own
-    // Files/Changes tab — switch to it to observe the highlight.
-    await page.getByTestId('inspector-tab-files').click();
-
+    // The tree is the Inspector's only body now — no tab to switch back to.
     const row = page.getByTestId('file-tree-row-data.csv');
     await expect(row).toHaveAttribute('data-highlighted', 'true', { timeout: 10_000 });
   });
@@ -282,57 +252,6 @@ test.describe('§files-tree — Inspector pane', () => {
     await expect(reveal).toBeVisible({ timeout: 5_000 });
     await expect(reveal).not.toHaveAttribute('data-disabled');
     await closeMenus(page);
-  });
-
-  // ── Changes panel ─────────────────────────────────────────────────────────
-
-  test('switching scope modes changes the changes-panel row set', async () => {
-    const { page } = app;
-    await page.getByTestId('inspector-tab-changes').click();
-    await expect(page.getByTestId('changes-panel')).toBeVisible({ timeout: 10_000 });
-
-    // Default scope is "Uncommitted" — our staged mutations are visible.
-    await expect(page.getByTestId('changes-mode-uncommitted')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('changes-row-index.ts')).toBeVisible({ timeout: 10_000 });
-
-    // Session scope: no agent turns ran in this chat, so no session-touched files.
-    await page.getByTestId('changes-mode-session').click();
-    await expect(page.getByTestId('changes-mode-session')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByText('No changes.')).toBeVisible({ timeout: 10_000 });
-
-    // Branch scope: single-branch repo, no divergence from base.
-    await page.getByTestId('changes-mode-branch').click();
-    await expect(page.getByTestId('changes-mode-branch')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByText('0 changed files')).toBeVisible({ timeout: 10_000 });
-
-    // Back to uncommitted for the remaining tests.
-    await page.getByTestId('changes-mode-uncommitted').click();
-    await expect(page.getByTestId('changes-row-index.ts')).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('uncommitted mode shows status glyphs for added, modified, deleted, and renamed files', async () => {
-    const { page } = app;
-    await expect(page.getByTestId('changes-status-new-file.txt')).toHaveText('Added', { timeout: 10_000 });
-    await expect(page.getByTestId('changes-status-index.ts')).toHaveText('Modified');
-    await expect(page.getByTestId('changes-status-delete-me.txt')).toHaveText('Deleted');
-    await expect(page.getByTestId('changes-status-renamed-notes.md')).toHaveText('Renamed');
-  });
-
-  test('clicking a changed file row opens a HEAD-vs-working diff tab', async () => {
-    const { page } = app;
-    await page.getByTestId('changes-row-index.ts').click();
-    const diffTab = page.getByTestId('diff-tab');
-    await expect(diffTab).toBeVisible({ timeout: 10_000 });
-    await expect(diffTab).not.toContainText('No diff available');
-  });
-
-  test('the changes refresh button re-fetches the row set', async () => {
-    const { page } = app;
-    await expect(page.getByTestId('changes-row-another-change.txt')).toHaveCount(0);
-    writeFileSync(path.join(project.projectPath, 'another-change.txt'), 'more\n');
-    await page.getByTestId('inspector-tab-changes').click();
-    await page.getByTestId('changes-refresh').click();
-    await expect(page.getByTestId('changes-row-another-change.txt')).toBeVisible({ timeout: 10_000 });
   });
 
   // ── FilePickerDialog ──────────────────────────────────────────────────────

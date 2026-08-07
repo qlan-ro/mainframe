@@ -2,6 +2,15 @@
 
 _Generated 2026-05-30. Source: renderer data-testids (338) minus e2e references (193). Unused: 164._
 
+> **STALE — do not trust the inventory (2026-08-06).** This file was generated against the
+> pre-v2 Electron renderer and predates both the UI-v2 port (PR #565) and the right-sidebar
+> revamp. It still lists ids from surfaces deleted since (e.g. `chat-session-bar-*`), and it is
+> missing every id added by the v2 shell and the session panel. The revamp deleted or renamed
+> `inspector-tab-*`, `changes-panel`, `changes-mode-*`, `changes-row-*`, `main-toolbar-launch*`,
+> `main-toolbar-play`, `composer-background-activity`, `chat-background-*`, `sidebar-bottom-*`,
+> `sidebar-context-*`, and `chat-header-context*` — none of which appear below, which is itself
+> the tell. Regenerating it is its own task; treat this as history until then.
+
 > "Unused" means the test-id string isn't referenced in a Playwright locator. Some of these
 > elements ARE exercised via role/text locators (e.g. permission buttons via getByRole), so
 > this lists selector gaps, not necessarily untested behavior. `${…}` marks templated id families.

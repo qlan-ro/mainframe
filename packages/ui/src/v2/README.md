@@ -20,10 +20,14 @@ surface is ported and looked at once, and the shipped app keeps working.
 ## What this is
 
 Stock shadcn: preset `b2D0wqNxT` on the **`radix-vega`** style.
-`styles/globals.css` is that preset's sheet, verbatim, with **one** deviation:
-`--primary` and `--sidebar-primary` are the macOS system blue `#0a84ff`
-(`oklch(0.624 0.206 255.486)`, one value for both modes) instead of the preset's
-two indigos. Both variables are stock shadcn names; only their values changed.
+`styles/globals.css` is that preset's sheet, verbatim, with **six** deviations.
+The sheet's own header block is authoritative and explains each; in short:
+`--primary` / `--sidebar-primary` (the macOS system blue `#0a84ff` instead of
+the preset's two indigos), the near-black ink family (pulled off pure black),
+`--success`, `--warning` (a real amber since 2026-08-06 — it shipped as a
+`destructive` mix, which made every caution surface read as red), plus two
+tokens the preset does not ship at all: `--sidebar-selection` and
+`--bubble-tinted`. Everything else is a stock shadcn name at a stock value.
 
 The sheet is short because the bulk of the style ships in the `shadcn` npm
 package via `@import "shadcn/tailwind.css"` — that's where utilities like
