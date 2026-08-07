@@ -72,7 +72,13 @@ function ImageAttachment({ name }: { name: string }) {
   // clickable thumb. A capture carries its selector/annotation alongside.
   const hasContext = !!capture?.selector || !!capture?.annotation;
 
-  const media = <AttachmentMedia variant="image">{src && <img src={src} alt="" />}</AttachmentMedia>;
+  // 40px thumb, not `sm`'s 32px. Re-declares the primitive's OWN group modifier —
+  // a bare `w-10` stacks behind it instead of replacing it.
+  const media = (
+    <AttachmentMedia variant="image" className="group-data-[size=sm]/attachment:w-10">
+      {src && <img src={src} alt="" />}
+    </AttachmentMedia>
+  );
 
   if (!hasContext) {
     return (
@@ -91,12 +97,16 @@ function ImageAttachment({ name }: { name: string }) {
         <AttachmentTrigger aria-label="Open image" />
       </AttachmentPreviewDialog>
       {media}
-      <AttachmentContent>
+      {/* Above the trigger's `absolute inset-0` overlay, which would otherwise
+          swallow hover and keep the selector's tooltip from ever opening. */}
+      <AttachmentContent className="relative z-20">
         {capture?.selector && (
           <TruncatedWithTooltip
             data-testid="chat-capture-selector"
             text={capture.selector}
-            className="font-mono text-xs text-mf-code-fn"
+            // `block` is load-bearing: `truncate` is inert on an inline box, and
+            // AttachmentContent is a block container (so is the kit's own title).
+            className="block font-mono text-xs font-medium text-mf-code-fn"
             contentClassName="font-mono break-all"
           />
         )}
