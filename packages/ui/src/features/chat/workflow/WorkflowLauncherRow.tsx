@@ -9,7 +9,7 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ChevronRight, Workflow } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { resolveResultText } from '../tools/shared';
 import { neutralizedRun } from './workflow-agent-view';
@@ -121,7 +121,13 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
           <ChevronRight size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[380px] p-0" onOpenAutoFocus={(event) => event.preventDefault()}>
+      {/* `overflow-hidden`: the panel's header band runs edge to edge, and the v2
+          PopoverContent (unlike v1's) does not clip it to the rounded corner. */}
+      <PopoverContent
+        align="start"
+        className="w-[380px] overflow-hidden p-0"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <WorkflowRunPanel run={effective} />
       </PopoverContent>
     </Popover>

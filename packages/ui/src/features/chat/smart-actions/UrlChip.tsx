@@ -13,7 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@v2/components/ui/dropdown-menu';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useUrlTunnel } from './use-url-tunnel';
 import type { PortTunnelEntry } from '@/store/port-tunnels';
