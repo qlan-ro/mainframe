@@ -67,8 +67,8 @@ function InertRow({
     <div data-testid={testId} className={ROW}>
       <LauncherTile />
       <LauncherDot {...dot} />
-      <span className="shrink-0 text-label font-medium text-foreground">{name}</span>
-      <span className={cn('min-w-0 flex-1 truncate text-caption text-muted-foreground', detailClass)}>{detail}</span>
+      <span className="shrink-0 text-xs font-medium text-foreground">{name}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', detailClass)}>{detail}</span>
     </div>
   );
 }
@@ -116,8 +116,8 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
         >
           <LauncherTile />
           <LauncherDot {...outcomeDot(view, now)} />
-          <span className="min-w-0 flex-1 truncate text-label font-medium text-foreground">{name}</span>
-          <span className="shrink-0 text-caption tabular-nums text-muted-foreground">{runMetaString(view, now)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{name}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{runMetaString(view, now)}</span>
           <ChevronRight size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </PopoverTrigger>

@@ -38,7 +38,7 @@ describe('AdvancedToggle', () => {
 
   it('highlights itself while the panel is open', () => {
     const { rerender } = render(<AdvancedToggle open={false} onToggle={vi.fn()} testId="agent-a" />);
-    expect(screen.getByTestId('agent-a-advanced-toggle').className).not.toContain('bg-mf-selection');
+    expect(screen.getByTestId('agent-a-advanced-toggle').className).not.toContain('bg-sidebar-selection');
 
     rerender(<AdvancedToggle open onToggle={vi.fn()} testId="agent-a" />);
     expect(screen.getByTestId('agent-a-advanced-toggle').className).toContain('bg-sidebar-selection');

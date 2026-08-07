@@ -42,12 +42,12 @@ export function SuggestionRow({
         <Icon size={14} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-medium text-foreground">{suggestion.title}</span>
-        <span className="truncate text-caption text-muted-foreground">{suggestion.meta}</span>
+        <span className="truncate text-sm font-medium text-foreground">{suggestion.title}</span>
+        <span className="truncate text-xs text-muted-foreground">{suggestion.meta}</span>
       </span>
       <span
         data-testid={`sessions-welcome-suggestion-insert-${index}`}
-        className="flex flex-shrink-0 items-center gap-1 text-caption text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        className="flex flex-shrink-0 items-center gap-1 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
       >
         <CornerDownLeft size={12} /> insert
       </span>

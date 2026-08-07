@@ -10,8 +10,8 @@ import { WorkflowAgentRow } from './WorkflowAgentRow';
 function PhaseHeader({ title, meta, first }: { title: string; meta: string; first: boolean }) {
   return (
     <div className={cn('flex items-baseline gap-2 px-1.5 pb-1', first ? 'pt-0.5' : 'pt-3.5')}>
-      <span className="min-w-0 flex-1 truncate text-caption font-medium text-muted-foreground">{title}</span>
-      <span className="shrink-0 text-caption text-muted-foreground">{meta}</span>
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">{title}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>
     </div>
   );
 }

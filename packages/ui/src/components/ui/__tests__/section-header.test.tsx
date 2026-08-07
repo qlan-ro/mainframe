@@ -16,7 +16,7 @@ describe('SectionHeader', () => {
     expect(cls).toContain('text-muted-foreground');
     expect(cls).not.toContain('uppercase');
     expect(cls).not.toContain('font-bold');
-    expect(cls).not.toContain('text-micro');
+    expect(cls).not.toContain('tracking-wide');
   });
 
   it('renders the trailing slot alongside the label', () => {

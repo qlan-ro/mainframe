@@ -23,7 +23,7 @@ export function InspectorPane({ port }: { port: number }) {
       {/* pt-2.5 carries the 10px top inset the deleted tab band used to give the body. */}
       <div className="min-h-0 flex-1 overflow-y-auto pt-2.5">
         {!projectId ? (
-          <div className="px-3 py-4 text-caption text-muted-foreground">Open a session to browse its files.</div>
+          <div className="px-3 py-4 text-xs text-muted-foreground">Open a session to browse its files.</div>
         ) : (
           <FileTree port={port} projectId={projectId} chatId={chatId} />
         )}

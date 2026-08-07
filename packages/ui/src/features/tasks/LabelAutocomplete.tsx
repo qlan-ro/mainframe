@@ -70,7 +70,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
           <span
             key={label}
             data-testid={`tasks-label-pill-${label}`}
-            className="flex items-center gap-0.5 bg-muted px-1.5 py-0.5 rounded text-caption text-muted-foreground"
+            className="flex items-center gap-0.5 bg-muted px-1.5 py-0.5 rounded text-xs text-muted-foreground"
           >
             {label}
             <button
@@ -99,11 +99,11 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
             }}
             onKeyDown={handleKeyDown}
             placeholder={value.length === 0 ? 'Add labels…' : ''}
-            className="w-full bg-transparent text-label text-foreground focus:outline-none"
+            className="w-full bg-transparent text-xs text-foreground focus:outline-none"
           />
           {ghostSuggestion && (
             <span
-              className="absolute inset-0 pointer-events-none text-label select-none whitespace-nowrap overflow-hidden flex items-center"
+              className="absolute inset-0 pointer-events-none text-xs select-none whitespace-nowrap overflow-hidden flex items-center"
               aria-hidden="true"
             >
               <span className="invisible">{inputValue}</span>

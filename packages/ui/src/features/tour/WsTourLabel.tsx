@@ -41,18 +41,18 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
           <span className="inline-flex w-[20px] h-[20px] rounded-[6px] bg-primary/12 text-primary items-center justify-center">
             <Sparkles size={12} />
           </span>
-          <span className="text-caption font-medium text-muted-foreground">
+          <span className="text-xs font-medium text-muted-foreground">
             Step {idx + 1} of {total}
           </span>
         </div>
 
         {/* Title */}
-        <div className="text-heading font-semibold text-foreground" style={{ letterSpacing: '-0.15px' }}>
+        <div className="text-base font-semibold text-foreground" style={{ letterSpacing: '-0.15px' }}>
           {step.title}
         </div>
 
         {/* Body */}
-        <div className="text-label text-muted-foreground mt-[5px] leading-normal">{step.body}</div>
+        <div className="text-xs text-muted-foreground mt-[5px] leading-normal">{step.body}</div>
 
         {/* Footer */}
         <div className="flex items-center gap-[8px] mt-[13px]">
@@ -74,7 +74,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
             <button
               data-testid="tour-back-btn"
               onClick={onBack}
-              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-label font-medium"
+              className="h-[28px] px-[12px] rounded-[8px] border-[0.5px] border-border bg-card text-muted-foreground text-xs font-medium"
             >
               Back
             </button>
@@ -84,7 +84,7 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
           <button
             data-testid="tour-next-btn"
             onClick={onNext}
-            className="h-[28px] px-[14px] rounded-[8px] bg-primary text-primary-foreground text-label font-semibold"
+            className="h-[28px] px-[14px] rounded-[8px] bg-primary text-primary-foreground text-xs font-semibold"
           >
             {isLast ? 'Done' : 'Next'}
           </button>

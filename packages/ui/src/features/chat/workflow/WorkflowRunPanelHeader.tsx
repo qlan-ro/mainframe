@@ -32,24 +32,21 @@ export function WorkflowRunPanelHeader({ run, now }: { run: ViewRun; now: number
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="min-w-0 truncate text-body font-semibold leading-tight text-foreground">
+          <span className="min-w-0 truncate text-sm font-semibold leading-tight text-foreground">
             {run.workflowName ?? 'Workflow'}
           </span>
           <span
-            className={cn(
-              'shrink-0 rounded-xs px-1 py-px text-caption font-medium leading-none',
-              STATUS_CHIP[run.status],
-            )}
+            className={cn('shrink-0 rounded-xs px-1 py-px text-xs font-medium leading-none', STATUS_CHIP[run.status])}
           >
             {statusChipLabel(run.status)}
           </span>
         </div>
         <div className="mt-1 flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {unavailable ? runKey(run) : summarizeRun(run, now)}
           </span>
           {!unavailable && (
-            <span className="shrink-0 text-caption tabular-nums text-muted-foreground">
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
               {formatRunTokens(run.totalTokens)} · {formatRunDuration(run.durationMs)}
             </span>
           )}

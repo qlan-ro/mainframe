@@ -95,7 +95,10 @@ export function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNe
 // left of each code line (padding-right: 12px = the `pe-5` compressed rung).
 
 const GUTTER_CLASS =
-  'inline-block w-[34px] shrink-0 pe-5 text-right font-mono text-micro text-muted-foreground/50 select-none';
+  // 42px, not 34: `pe-5` reserves 20px of it as the gutter/code gap, so the numerals
+  // get the remainder. 14px only ever fitted two digits — three overflowed the box
+  // even at the old 10px rung — and the 11px rung needs 20px for a 3-digit line.
+  'inline-block w-[42px] shrink-0 pe-5 text-right font-mono text-xs text-muted-foreground/50 select-none';
 
 function LineNumberGutter({ n }: { n: number }) {
   return (

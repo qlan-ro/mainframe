@@ -39,7 +39,7 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
       </p>
     );
   }
-  return <p className="mt-1 text-caption text-muted-foreground">{label}</p>;
+  return <p className="mt-1 text-xs text-muted-foreground">{label}</p>;
 }
 
 function PayloadPreview({ rec }: { rec: AutomationRecommendation }) {

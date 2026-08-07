@@ -10,8 +10,8 @@ export function WorkflowRunUnavailable() {
     <div className="flex items-start gap-2 px-1.5 py-2">
       <FileWarning size={13} className="mt-px shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0">
-        <p className="text-label text-foreground">Run details unavailable</p>
-        <p className="mt-1 text-caption leading-normal text-muted-foreground">
+        <p className="text-xs text-foreground">Run details unavailable</p>
+        <p className="mt-1 text-xs leading-normal text-muted-foreground">
           This run was interrupted before it finished, and both the CLI and the daemon have restarted since. No snapshot
           survives, and the CLI writes a run record only on completion.
         </p>

@@ -15,8 +15,8 @@ export interface SectionHeaderProps {
 
 /**
  * Shared section/eyebrow header: sentence-case caption in muted ink — the
- * Finder "Favorites" gray. Replaces the app-wide
- * `text-micro font-bold uppercase tracking-wide` eyebrow antipattern.
+ * Finder "Favorites" gray. Replaces the app-wide 10px
+ * `font-bold uppercase tracking-wide` eyebrow antipattern.
  */
 export function SectionHeader({ children, trailing, className, ...rest }: SectionHeaderProps) {
   return (

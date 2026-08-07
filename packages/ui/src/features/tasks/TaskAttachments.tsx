@@ -175,7 +175,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-label text-muted-foreground">Attachments</label>
+      <label className="text-xs text-muted-foreground">Attachments</label>
       {allItems.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {allItems.map((att) => {
@@ -202,7 +202,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
                   </div>
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 pointer-events-none">
-                  <span className="text-caption text-white truncate block">{att.filename}</span>
+                  <span className="text-xs text-white truncate block">{att.filename}</span>
                 </div>
                 <button
                   type="button"
@@ -229,7 +229,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          'flex items-center gap-1 w-fit px-2 py-1 rounded-md text-label',
+          'flex items-center gap-1 w-fit px-2 py-1 rounded-md text-xs',
           'text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
           'disabled:opacity-40',
         )}

@@ -149,7 +149,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
       {loading && todos.length === 0 ? (
         <div
           data-testid="tasks-board-loading"
-          className="flex-1 flex items-center justify-center text-caption text-muted-foreground"
+          className="flex-1 flex items-center justify-center text-xs text-muted-foreground"
         >
           Loading tasks…
         </div>

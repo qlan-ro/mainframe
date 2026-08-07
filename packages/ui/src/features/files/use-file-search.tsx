@@ -42,8 +42,8 @@ export function FileRow({
       className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-[12px] py-[8px] text-left outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground ${activeClasses}`}
     >
       <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="text-body font-medium truncate">{result.name}</span>
-      <span className="text-label text-muted-foreground truncate ml-auto">{dir}</span>
+      <span className="text-sm font-medium truncate">{result.name}</span>
+      <span className="text-xs text-muted-foreground truncate ml-auto">{dir}</span>
     </button>
   );
 }

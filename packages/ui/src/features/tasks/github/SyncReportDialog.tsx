@@ -66,7 +66,7 @@ export function SyncReportDialog() {
         className="flex max-h-[85vh] w-full max-w-2xl flex-col gap-0 p-0"
       >
         <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-10">
-          <DialogTitle className="text-heading font-bold">Last sync report</DialogTitle>
+          <DialogTitle className="text-base font-bold">Last sync report</DialogTitle>
           <DialogDescription className="text-xs">{report ? headline(report) : 'Loading the report…'}</DialogDescription>
         </DialogHeader>
 

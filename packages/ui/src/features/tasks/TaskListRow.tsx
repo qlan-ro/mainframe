@@ -102,7 +102,7 @@ function PriorityPill({ todo }: { todo: Todo }): React.ReactElement {
   return (
     <span
       className={cn(
-        'shrink-0 inline-flex items-center gap-1 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+        'shrink-0 inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4',
         priorityTint(todo.priority),
       )}
     >
@@ -158,12 +158,12 @@ export function TaskListRow({
         <StatusDot todo={todo} onCycle={onCycle} />
 
         {/* Number */}
-        <span className="shrink-0 font-mono text-label font-medium text-primary w-10 text-right">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-xs font-medium text-primary w-10 text-right">#{todo.number}</span>
 
         {/* Title */}
         <span
           className={cn(
-            'flex-1 min-w-0 text-body truncate',
+            'flex-1 min-w-0 text-sm truncate',
             isDone ? 'line-through text-muted-foreground' : 'text-foreground',
           )}
         >
@@ -173,10 +173,7 @@ export function TaskListRow({
         {/* Type badge */}
         <span
           data-testid={`tasks-list-row-type-${todo.number}`}
-          className={cn(
-            'shrink-0 rounded px-1.5 py-0.5 text-caption font-medium capitalize leading-4',
-            typeTint(todo.type),
-          )}
+          className={cn('shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize leading-4', typeTint(todo.type))}
         >
           {todo.type.replace('_', ' ')}
         </span>
@@ -193,10 +190,10 @@ export function TaskListRow({
 
       {/* Expanded detail panel */}
       {expanded && (
-        <div className="px-10 pb-3 flex flex-col gap-2 text-body text-muted-foreground bg-accent/50">
-          {todo.body && <p className="whitespace-pre-wrap text-foreground text-label leading-relaxed">{todo.body}</p>}
+        <div className="px-10 pb-3 flex flex-col gap-2 text-sm text-muted-foreground bg-accent/50">
+          {todo.body && <p className="whitespace-pre-wrap text-foreground text-xs leading-relaxed">{todo.body}</p>}
 
-          <div className="flex flex-wrap gap-4 text-label">
+          <div className="flex flex-wrap gap-4 text-xs">
             {todo.milestone && (
               <span>
                 <span className="font-medium text-foreground">Milestone:</span> {todo.milestone}
@@ -215,7 +212,7 @@ export function TaskListRow({
             )}
           </div>
 
-          <div className="flex gap-4 text-label text-muted-foreground">
+          <div className="flex gap-4 text-xs text-muted-foreground">
             <span>Created {formatDate(todo.created_at)}</span>
             <span>Updated {formatDate(todo.updated_at)}</span>
           </div>
@@ -224,7 +221,7 @@ export function TaskListRow({
           {todo.labels.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {todo.labels.map((l) => (
-                <span key={l} className="text-caption bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                <span key={l} className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
                   {l}
                 </span>
               ))}
