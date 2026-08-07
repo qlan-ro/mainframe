@@ -7,7 +7,7 @@
  * (`--mf-task-type-*` / `--mf-priority-*`, defined once in globals.css from
  * the design's TD_TYPE/TD_PRI palettes, 12-todos.jsx:12-27). `feature` and
  * chip-backed entries (documentation/wont_fix/invalid/low) reuse existing
- * tokens (`bg-primary`, `bg-mf-chip`). statusTint/statusDotColor have no
+ * tokens (`bg-primary`, `bg-accent`). statusTint/statusDotColor have no
  * design ground truth (not defined in 12-todos.jsx) and keep generic Tailwind
  * swatches.
  */
@@ -44,17 +44,17 @@ export function typeTint(type: TodoType): string {
     case 'enhancement':
       return 'bg-mf-task-type-enhancement/10 text-foreground';
     case 'documentation':
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
     case 'question':
       return 'bg-mf-task-type-question/[0.12] text-foreground';
     case 'wont_fix':
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
     case 'duplicate':
       return 'bg-mf-task-type-duplicate/10 text-foreground';
     case 'invalid':
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
     default:
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
   }
 }
 
@@ -72,9 +72,9 @@ export function priorityTint(priority: TodoPriority): string {
     case 'medium':
       return 'bg-mf-priority-medium/[0.12] text-foreground';
     case 'low':
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
     default:
-      return 'bg-mf-chip text-muted-foreground';
+      return 'bg-accent text-muted-foreground';
   }
 }
 

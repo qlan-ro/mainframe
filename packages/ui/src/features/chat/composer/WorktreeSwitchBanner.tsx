@@ -140,8 +140,8 @@ export function WorktreeSwitchBanner() {
   return (
     <div data-testid="worktree-switch-banner" className="flex flex-col gap-1.5 px-1 pb-1.5">
       {settled ? (
-        <div className="rounded-lg border border-mf-success/40 bg-mf-success-tint p-3">
-          <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-caption text-mf-success">
+        <div className="rounded-lg border border-success/40 bg-success/10 p-3">
+          <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-caption text-success">
             <Check className="size-3.5" aria-hidden />
             {`Session is now in ${settledPath} on ${branchLabel(settledPath, current.branchName)}.`}
           </div>

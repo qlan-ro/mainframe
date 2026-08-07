@@ -64,7 +64,7 @@ function PriorityStripe({ todo }: { todo: Todo }): React.ReactElement {
  * StatusDot — interactive cycle button with three distinct visual states:
  *  open       = empty ring (border only, no fill), border-primary on hover
  *  in_progress = primary-colored ring + inner pulsing dot
- *  done       = filled mf-success circle with a white checkmark
+ *  done       = filled success circle with a white checkmark
  */
 function StatusDot({ todo, onCycle }: { todo: Todo; onCycle: (id: string) => void }): React.ReactElement {
   const { status, id, number } = todo;
@@ -83,10 +83,10 @@ function StatusDot({ todo, onCycle }: { todo: Todo; onCycle: (id: string) => voi
       className={cn(
         'shrink-0 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full',
         status === 'done'
-          ? 'w-3.5 h-3.5 bg-mf-success'
+          ? 'w-3.5 h-3.5 bg-success'
           : status === 'in_progress'
             ? 'w-[15px] h-[15px] rounded-full border-2 border-primary'
-            : 'w-3.5 h-3.5 rounded-full border-[1.6px] border-mf-text-3 hover:border-primary',
+            : 'w-3.5 h-3.5 rounded-full border-[1.6px] border-muted-foreground hover:border-primary',
       )}
     >
       {status === 'done' && <Check size={10} className="text-white" strokeWidth={3} />}

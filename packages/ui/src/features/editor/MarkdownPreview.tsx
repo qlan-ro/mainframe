@@ -81,7 +81,7 @@ const components = {
     return (
       <code
         {...props}
-        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-label text-mf-code-cmt"
+        className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-label text-mf-code-cmt"
       >
         {children}
       </code>
@@ -97,11 +97,11 @@ const components = {
   th: (p: ElProps<'th'>) => (
     <th
       {...p}
-      className="border border-border bg-mf-content2 px-[12px] py-[7px] text-left font-semibold text-muted-foreground"
+      className="border border-border bg-muted px-[12px] py-[7px] text-left font-semibold text-muted-foreground"
     />
   ),
   td: (p: ElProps<'td'>) => (
-    <td {...p} className="border border-border px-[12px] py-[7px] even:bg-mf-content2 odd:bg-background" />
+    <td {...p} className="border border-border px-[12px] py-[7px] even:bg-muted odd:bg-background" />
   ),
   hr: (p: ElProps<'hr'>) => <hr {...p} className="my-4 border-border" />,
 };

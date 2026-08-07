@@ -120,10 +120,10 @@
   /* App-only elevation variants */
   --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
   --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
-  /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
+  /* Composer edit-mode amber glow — tracks --warning via color-mix */
   --mf-shadow-edit-ring:
-    0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
-    0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
+    0 0 0 0.5px color-mix(in srgb, var(--warning) 60%, transparent),
+    0 4px 16px color-mix(in srgb, var(--warning) 22%, transparent);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
 

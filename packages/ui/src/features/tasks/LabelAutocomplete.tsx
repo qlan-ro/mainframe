@@ -107,7 +107,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
               aria-hidden="true"
             >
               <span className="invisible">{inputValue}</span>
-              <span className="text-mf-text-3">{ghostSuggestion.slice(inputValue.length)}</span>
+              <span className="text-muted-foreground">{ghostSuggestion.slice(inputValue.length)}</span>
             </span>
           )}
         </span>

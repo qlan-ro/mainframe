@@ -94,7 +94,8 @@ export function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNe
 // Design: a 34px, right-aligned, mono 10px, `T.text4` gutter column to the
 // left of each code line (padding-right: 12px = the `pe-5` compressed rung).
 
-const GUTTER_CLASS = 'inline-block w-[34px] shrink-0 pe-5 text-right font-mono text-micro text-mf-text-4 select-none';
+const GUTTER_CLASS =
+  'inline-block w-[34px] shrink-0 pe-5 text-right font-mono text-micro text-muted-foreground/50 select-none';
 
 function LineNumberGutter({ n }: { n: number }) {
   return (

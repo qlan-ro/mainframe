@@ -60,7 +60,7 @@ export function TaskColumn({
       data-testid={`tasks-column-${status}`}
       className={cn(
         'flex flex-col min-h-0 rounded-md transition-colors',
-        dragOver ? 'bg-mf-selection ring-1 ring-inset ring-primary' : 'bg-mf-content2',
+        dragOver ? 'bg-mf-selection ring-1 ring-inset ring-primary' : 'bg-muted',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

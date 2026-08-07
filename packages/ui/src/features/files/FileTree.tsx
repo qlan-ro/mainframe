@@ -139,7 +139,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             .join(' ')}
         >
           <span className="w-[9px] flex-shrink-0" />
-          <File size={12} className="flex-shrink-0 text-mf-text-3" />
+          <File size={12} className="flex-shrink-0 text-muted-foreground" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}
@@ -164,7 +164,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
         >
           <ChevronRight
             size={12}
-            className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
+            className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
           <TruncatedWithTooltip

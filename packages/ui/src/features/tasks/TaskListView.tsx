@@ -161,7 +161,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
               <button
                 type="button"
                 data-testid={`tasks-list-group-${status}`}
-                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-mf-content2 px-3 py-1.5 text-caption font-medium text-muted-foreground"
+                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-muted px-3 py-1.5 text-caption font-medium text-muted-foreground"
                 onClick={() => toggleGroup(status)}
               >
                 {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -190,7 +190,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       )}
 
       {/* Footer hint */}
-      <div className="flex shrink-0 items-center gap-6 border-t border-border bg-mf-content2 px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-6 border-t border-border bg-muted px-3 py-1.5">
         {(
           [
             ['↑↓', 'Navigate'],

@@ -1,6 +1,6 @@
 /**
  * SuggestionRow — one repo-derived starting point. Icon tile tinted by kind
- * (accent = --primary; amber = --mf-warning) at ~8% fill, title + `source · detail`
+ * (accent = --primary; amber = --warning) at ~8% fill, title + `source · detail`
  * meta, and a trailing "⏎ insert" that fades in on hover. Click pre-fills the
  * composer (never auto-sends).
  */
@@ -26,7 +26,7 @@ export function SuggestionRow({
   onInsert: (prefill: string) => void;
 }) {
   const Icon = resolveIcon(suggestion.icon);
-  const tintVar = suggestion.tint === 'amber' ? 'var(--mf-warning)' : 'var(--primary)';
+  const tintVar = suggestion.tint === 'amber' ? 'var(--warning)' : 'var(--primary)';
   return (
     <button
       type="button"

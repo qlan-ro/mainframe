@@ -47,7 +47,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
         data-testid="error-state-root"
         className={[
           'w-[420px] max-w-full bg-background rounded-[13px]',
-          'border-[0.5px] border-mf-border-hover text-center',
+          'border-[0.5px] border-input text-center',
           'pt-[26px] px-[24px] pb-[22px]',
           'shadow-[var(--mf-shadow-modal)]',
         ].join(' ')}

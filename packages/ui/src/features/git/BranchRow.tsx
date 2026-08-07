@@ -32,7 +32,7 @@ function BranchDivergence({ ahead, behind }: { ahead?: number; behind?: number }
       {(behind ?? 0) > 0 && (
         <span className="inline-flex items-center gap-px">
           {/* Amber, not red: divergence is caution, not the v2 wrong-but-not-broken warning. */}
-          <ArrowDown className="size-3 text-mf-warning" />
+          <ArrowDown className="size-3 text-warning" />
           {behind}
         </span>
       )}

@@ -94,7 +94,7 @@ const CM6_THEME_SPEC = {
   },
   '.cm-gutters': {
     backgroundColor: 'var(--background)',
-    color: 'var(--mf-text-4)',
+    color: 'color-mix(in oklch, var(--muted-foreground) 50%, transparent)',
     border: 'none',
     paddingRight: '8px',
   },

@@ -62,14 +62,9 @@ export function WsTourLabel({ step, idx, total, onBack, onNext, style }: WsTourL
               <span
                 key={i}
                 data-testid={`tour-step-dot-${i}`}
-                className="transition-all duration-200"
-                style={{
-                  display: 'inline-block',
-                  width: i === idx ? 16 : 6,
-                  height: 6,
-                  borderRadius: 4,
-                  background: i === idx ? 'var(--primary)' : 'var(--mf-text-4)',
-                }}
+                className={`inline-block h-1.5 rounded-[4px] transition-all duration-200 ${
+                  i === idx ? 'w-4 bg-primary' : 'w-1.5 bg-muted-foreground/50'
+                }`}
               />
             ))}
           </div>

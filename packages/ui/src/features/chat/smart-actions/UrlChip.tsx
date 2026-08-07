@@ -34,7 +34,7 @@ function badgeFor(entry: PortTunnelEntry | undefined, busy: boolean): BadgeSpec 
   if (busy) return { label: 'tunnelling…', className: 'bg-muted text-muted-foreground' };
   switch (entry?.state) {
     case 'ready':
-      return { label: 'tunnelled', className: 'bg-mf-success-tint text-mf-success' };
+      return { label: 'tunnelled', className: 'bg-success/10 text-success' };
     case 'error':
       return { label: 'tunnel failed', className: 'bg-mf-destructive-tint text-destructive' };
     default:
