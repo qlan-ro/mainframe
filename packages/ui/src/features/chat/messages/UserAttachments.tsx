@@ -29,7 +29,7 @@ import {
 import { useMainframeMeta } from '../view-model/message-meta';
 import { extTint, fileExtMeta } from './file-ext-colors';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -72,17 +72,26 @@ function ImageAttachment({ name }: { name: string }) {
   // clickable thumb. A capture carries its selector/annotation alongside.
   const hasContext = !!capture?.selector || !!capture?.annotation;
 
-  // 40px thumb, not `sm`'s 32px. Re-declares the primitive's OWN group modifier —
-  // a bare `w-10` stacks behind it instead of replacing it.
+  // 40px thumb at either size. Re-declares the primitive's OWN group modifiers —
+  // a bare `w-10` stacks behind them instead of replacing them.
   const media = (
-    <AttachmentMedia variant="image" className="group-data-[size=sm]/attachment:w-10">
+    <AttachmentMedia
+      variant="image"
+      className="group-data-[size=sm]/attachment:w-10 group-data-[size=xs]/attachment:w-10"
+    >
       {src && <img src={src} alt="" />}
     </AttachmentMedia>
   );
 
   if (!hasContext) {
+    // v1 parity: a bare image is JUST the clickable thumb — no card chrome
+    // around a lone 40px thumbnail.
     return (
-      <Attachment data-testid={`chat-user-attachment-${name}`} size="sm" className="min-w-0">
+      <Attachment
+        data-testid={`chat-user-attachment-${name}`}
+        size="sm"
+        className="min-w-0 border-0 bg-transparent has-data-[slot=attachment-media]:p-0"
+      >
         <AttachmentPreviewDialog>
           <AttachmentTrigger aria-label="Open image" />
         </AttachmentPreviewDialog>
@@ -92,7 +101,13 @@ function ImageAttachment({ name }: { name: string }) {
   }
 
   return (
-    <Attachment data-testid={`chat-user-attachment-${name}`} size="sm" className="max-w-[250px]">
+    // v1 parity (design 7.13): a compact tinted chip, not a white card — tight
+    // xs paddings, muted wash, 250px cap.
+    <Attachment
+      data-testid={`chat-user-attachment-${name}`}
+      size="xs"
+      className="max-w-[250px] border-border/60 bg-muted/60"
+    >
       <AttachmentPreviewDialog>
         <AttachmentTrigger aria-label="Open image" />
       </AttachmentPreviewDialog>
@@ -126,7 +141,13 @@ function MessageAttachmentTile() {
 /** Right-aligned wrap row; renders nothing when the message has no attachments. */
 export function UserAttachments() {
   return (
-    <div data-testid="chat-user-attachments" className="flex max-w-[75%] flex-wrap justify-end gap-2 empty:hidden">
+    // `ml-auto` is load-bearing: MessageContent end-aligns only `data-slot`
+    // children, so without it this max-w-[75%] box sits LEFT and the chips
+    // right-align inside it — stranded at the 75% mark instead of the edge.
+    <div
+      data-testid="chat-user-attachments"
+      className="ml-auto flex max-w-[75%] flex-wrap justify-end gap-2 empty:hidden"
+    >
       <MessagePrimitive.Attachments>{() => <MessageAttachmentTile />}</MessagePrimitive.Attachments>
     </div>
   );
