@@ -29,6 +29,9 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SECTION_HEAD } from './PanelSection';
 import { deriveSummaryRows, type SummaryRow } from './summary-view';
 import { useContextPercent } from './use-context-percent';
+// PROTOTYPE — remove with features/workspace-proto
+import { useWsProtoVariant } from '@/features/workspace-proto/proto-store';
+import { ProtoSummaryBranchRow } from '@/features/workspace-proto/ProtoSummaryBranchRow';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 const ROW_LABEL = 'min-w-0 flex-1 truncate text-sm';
@@ -120,6 +123,9 @@ export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionP
   const usage = useChatExtras()?.state.contextUsage;
   const prs = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems))?.detectedPrs ?? [];
   const changes = useWorkingChanges({ port, projectId, chatId });
+  // PROTOTYPE — remove with features/workspace-proto. Variant C: the branch row
+  // becomes the branch manager (the toolbar chip is gone in that variant).
+  const protoBranchManagerRow = useWsProtoVariant() === 'C';
 
   const rows = deriveSummaryRows({
     branch: { name: branch ?? null, isWorktree },
@@ -158,19 +164,24 @@ export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionP
             No session details yet
           </div>
         ) : (
-          rows.map((row) => (
-            <SummaryRowView
-              key={rowTestId(row)}
-              row={row}
-              onActivate={
-                row.kind === 'pr'
-                  ? () => void host.shell.openExternal(row.url)
-                  : row.kind === 'changes'
-                    ? () => emitSurfaceIntent({ type: 'open-review' })
-                    : undefined
-              }
-            />
-          ))
+          rows.map((row) =>
+            /* PROTOTYPE — remove with features/workspace-proto */
+            protoBranchManagerRow && row.kind === 'branch' ? (
+              <ProtoSummaryBranchRow key={rowTestId(row)} />
+            ) : (
+              <SummaryRowView
+                key={rowTestId(row)}
+                row={row}
+                onActivate={
+                  row.kind === 'pr'
+                    ? () => void host.shell.openExternal(row.url)
+                    : row.kind === 'changes'
+                      ? () => emitSurfaceIntent({ type: 'open-review' })
+                      : undefined
+                }
+              />
+            ),
+          )
         )}
       </div>
     </section>

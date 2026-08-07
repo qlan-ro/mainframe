@@ -16,6 +16,7 @@ import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
 // PROTOTYPE — remove with features/workspace-proto
 import { isWorkspaceProtoEnabled, useWsProtoVariant } from '@/features/workspace-proto/proto-store';
 import { ProtoSessionTabs } from '@/features/workspace-proto/ProtoSessionTabs';
+import { ProtoBranchChip } from '@/features/workspace-proto/ProtoBranchChip';
 import { PrototypeSwitcher } from '@/features/workspace-proto/PrototypeSwitcher';
 
 interface MainToolbarProps {
@@ -111,8 +112,12 @@ export function MainToolbar({
     refetch: handleBranchChanged,
   } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
 
-  // PROTOTYPE — remove with features/workspace-proto
-  const protoTitlebarTabs = useWsProtoVariant() === 'B';
+  // PROTOTYPE — remove with features/workspace-proto. Tabs are settled (every
+  // variant but A); C/D drop the left identity section and relocate the branch
+  // manager (C → summary panel, D → compact chip in the right cluster).
+  const protoVariant = useWsProtoVariant();
+  const protoTitlebarTabs = protoVariant != null && protoVariant !== 'A';
+  const protoHideIdentity = protoVariant === 'C' || protoVariant === 'D';
 
   return (
     <div
@@ -141,72 +146,78 @@ export function MainToolbar({
             </Button>
           </Hint>
         )}
-        <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
-          <span className="truncate">{projectName}</span>
-          {displayBranch && (
-            <>
-              <Separator orientation="vertical" className="h-3.5" />
-              {displayBranch && projectId && !isDraftWorktree ? (
-                <BranchPopover
-                  port={port}
-                  projectId={projectId}
-                  chatId={chatId}
-                  open={branchOpen}
-                  onOpenChange={setBranchOpen}
-                  onBranchChanged={handleBranchChanged}
-                  triggerLabel={isWorktree ? 'Switch branch · worktree' : 'Switch branch · main repo'}
-                >
-                  {/* Bare trigger — BranchPopover wraps this in Hint itself (via
+        {/* PROTOTYPE gate — C/D drop the identity section; remove with features/workspace-proto */}
+        {!protoHideIdentity && (
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
+            <span className="truncate">{projectName}</span>
+            {displayBranch && (
+              <>
+                <Separator orientation="vertical" className="h-3.5" />
+                {displayBranch && projectId && !isDraftWorktree ? (
+                  <BranchPopover
+                    port={port}
+                    projectId={projectId}
+                    chatId={chatId}
+                    open={branchOpen}
+                    onOpenChange={setBranchOpen}
+                    onBranchChanged={handleBranchChanged}
+                    triggerLabel={isWorktree ? 'Switch branch · worktree' : 'Switch branch · main repo'}
+                  >
+                    {/* Bare trigger — BranchPopover wraps this in Hint itself (via
                       triggerLabel), around DropdownMenuTrigger. Wrapping Hint here
                       would interpose a non-forwarding component inside the asChild
                       clone, dropping the ref Radix needs to anchor the menu (see
                       BranchPopover.tsx's file header). */}
-                  <button
-                    data-testid="main-toolbar-branch"
-                    data-worktree={isWorktree ? 'true' : 'false'}
-                    type="button"
-                    onClick={() => setBranchOpen((o) => !o)}
-                    className={cn(CHIP, 'cursor-pointer', chipClass(branchOpen, isWorktree))}
+                    <button
+                      data-testid="main-toolbar-branch"
+                      data-worktree={isWorktree ? 'true' : 'false'}
+                      type="button"
+                      onClick={() => setBranchOpen((o) => !o)}
+                      className={cn(CHIP, 'cursor-pointer', chipClass(branchOpen, isWorktree))}
+                    >
+                      <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
+                    </button>
+                  </BranchPopover>
+                ) : (
+                  <Hint
+                    label={
+                      isDraftWorktree
+                        ? 'Branch actions unlock on first message'
+                        : 'Switch branch — coming with its surface'
+                    }
                   >
-                    <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
-                  </button>
-                </BranchPopover>
-              ) : (
-                <Hint
-                  label={
-                    isDraftWorktree
-                      ? 'Branch actions unlock on first message'
-                      : 'Switch branch — coming with its surface'
-                  }
-                >
-                  <button
-                    data-testid="main-toolbar-branch"
-                    data-worktree={isWorktree ? 'true' : 'false'}
-                    type="button"
-                    disabled
-                    className={cn(
-                      CHIP,
-                      'cursor-not-allowed opacity-80',
-                      isWorktree ? 'border-primary/25 bg-primary/8 text-foreground' : 'text-muted-foreground',
-                    )}
-                  >
-                    <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
-                  </button>
-                </Hint>
-              )}
-            </>
-          )}
-        </span>
+                    <button
+                      data-testid="main-toolbar-branch"
+                      data-worktree={isWorktree ? 'true' : 'false'}
+                      type="button"
+                      disabled
+                      className={cn(
+                        CHIP,
+                        'cursor-not-allowed opacity-80',
+                        isWorktree ? 'border-primary/25 bg-primary/8 text-foreground' : 'text-muted-foreground',
+                      )}
+                    >
+                      <BranchChipContent branch={displayBranch} isWorktree={isWorktree} />
+                    </button>
+                  </Hint>
+                )}
+              </>
+            )}
+          </span>
+        )}
       </div>
 
-      {/* PROTOTYPE — remove with features/workspace-proto. Variant C: chrome-style
-          session tabs take the toolbar's slack middle, Chrome-fashion. */}
+      {/* PROTOTYPE — remove with features/workspace-proto. Chrome-style session
+          tabs take the toolbar's slack middle, Chrome-fashion. */}
       {protoTitlebarTabs && <ProtoSessionTabs surface="titlebar" />}
       {isWorkspaceProtoEnabled() && <PrototypeSwitcher />}
 
       {/* Right: controls — the artboard's three groups: search │ project tools
           (Setup Advisor · launch · play) │ workspace (surfaces · theme · inspector). */}
       <div className="flex shrink-0 items-center gap-0.5">
+        {/* PROTOTYPE — remove with features/workspace-proto. Variant D: the
+            branch manager as a compact chip in the right cluster. */}
+        {protoVariant === 'D' && <ProtoBranchChip />}
         <Hint label="Search (⌘O)">
           <Button
             data-testid="main-toolbar-search"

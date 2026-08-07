@@ -76,7 +76,8 @@ function RuntimeBody({ port }: { port: number }) {
   const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
   // PROTOTYPE — remove with features/workspace-proto (hook must run unconditionally)
-  const protoFilesInWorkspace = useWsProtoVariant() === 'B';
+  const protoWsVariant = useWsProtoVariant();
+  const protoFilesInWorkspace = protoWsVariant != null && protoWsVariant !== 'A';
   const { projectName, branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)

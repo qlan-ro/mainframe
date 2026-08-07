@@ -158,7 +158,8 @@ export function WorkspaceSurface() {
   // the single pane's strip is hoisted above the [body | sidebar] row. A split
   // surface keeps per-pane strips and a full-height sidebar — each pane's strip
   // belongs to that pane, so there is no one header to extend.
-  const protoFilesSidebar = useWsProtoVariant() === 'B';
+  const protoWsVariant = useWsProtoVariant();
+  const protoFilesSidebar = protoWsVariant != null && protoWsVariant !== 'A';
   const hoistStrip = protoFilesSidebar && hasContent === true && run.panes.length === 1;
 
   return (

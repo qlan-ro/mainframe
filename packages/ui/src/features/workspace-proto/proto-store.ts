@@ -10,12 +10,16 @@
  */
 import { create } from 'zustand';
 
-// Verdict round: C + B picked (tabs in title bar, files in workspace but on
-// the RIGHT edge). The cycle is now baseline vs. the combined pick; the C/D
-// exploration variants live in this branch's first commit.
+// Verdict rounds: tabs in title bar + files right in workspace are SETTLED
+// (every variant but A shows them). The open question is where the branch
+// manager lives once the toolbar's left identity section goes — the project
+// name is dropped entirely (Summary panel already names the project's branch
+// context; the sidebar names the project).
 export const WS_PROTO_VARIANTS = [
   { id: 'A', label: 'A — Today' },
-  { id: 'B', label: 'B — Tabs + files right' },
+  { id: 'B', label: 'B — Branch in toolbar left (as now)' },
+  { id: 'C', label: 'C — Branch → summary panel' },
+  { id: 'D', label: 'D — Branch chip → toolbar right' },
 ] as const;
 
 export type WsProtoVariantId = (typeof WS_PROTO_VARIANTS)[number]['id'];
