@@ -6,8 +6,8 @@
  * composer (#214). We mock the assistant-ui primitives + heavy children down to
  * identifiable stubs so we can assert the DOM region the indicator lands in.
  */
-import { render, screen, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { act, render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ReactNode } from 'react';
 
 // ── assistant-ui primitives → identifiable stub wrappers ─────────────────────
@@ -68,5 +68,31 @@ describe('ChatThread — thinking indicator placement (#214)', () => {
     // Same parent (the messages column) and the indicator follows the messages.
     expect(running.parentElement).toBe(messages.parentElement);
     expect(messages.compareDocumentPosition(running) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('ChatThread — running indicator elapsed readout', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(0);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows no elapsed readout during the first second of a run', () => {
+    render(<ChatThread />);
+    expect(screen.queryByTestId('chat-thread-running-elapsed')).toBeNull();
+  });
+
+  it('reveals the elapsed readout once the run passes a second, and keeps it ticking', () => {
+    render(<ChatThread />);
+
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('1s');
+
+    act(() => void vi.advanceTimersByTime(64_000));
+    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('1m 05s');
   });
 });
