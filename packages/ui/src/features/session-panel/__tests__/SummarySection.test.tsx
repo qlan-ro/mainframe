@@ -12,6 +12,8 @@
  *    would read as "no changes"
  *  - a session with nothing to report shows one muted placeholder, not an
  *    empty card
+ *  - the panel's collapse control appears on the heading only when a collapse
+ *    handler is supplied, and calls it
  *
  * Mocked dependencies: the identity, branch, context-percent, chat-extras,
  * working-changes and thread-list data sources.
@@ -217,5 +219,21 @@ describe('SummarySection — nothing to report', () => {
     render(<SummarySection port={31415} />);
     expect(screen.getByTestId('session-panel-summary-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('session-panel-summary-changes')).toBeNull();
+  });
+});
+
+describe('SummarySection — collapse control', () => {
+  it('renders no collapse control when the panel cannot be collapsed', () => {
+    render(<SummarySection port={31415} />);
+    expect(screen.queryByTestId('session-panel-collapse')).toBeNull();
+  });
+
+  it('collapses the panel on click, and names itself for a screen reader', async () => {
+    const onCollapse = vi.fn();
+    render(<SummarySection port={31415} onCollapse={onCollapse} />);
+    const button = screen.getByTestId('session-panel-collapse');
+    expect(button).toHaveAttribute('aria-label', 'Collapse panel');
+    await userEvent.click(button);
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 });

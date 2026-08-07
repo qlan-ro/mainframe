@@ -24,6 +24,7 @@ beforeEach(() => {
     dontWarnOnTuningChange: false,
     collapsedSidebarSections: {},
     sessionPanelSections: {},
+    sessionPanelCollapsed: false,
   });
 });
 
@@ -37,6 +38,7 @@ describe('useUiPrefs defaults', () => {
     expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.collapsedSidebarSections).toEqual({});
     expect(s.sessionPanelSections).toEqual({});
+    expect(s.sessionPanelCollapsed).toBe(false);
   });
 });
 
@@ -85,6 +87,15 @@ describe('session-panel section actions', () => {
     useUiPrefs.getState().expandSessionPanelSection('plan');
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.sessionPanelSections).toEqual({ plan: true });
+  });
+
+  it('setSessionPanelCollapsed records the panel collapse, and persists it', () => {
+    useUiPrefs.getState().setSessionPanelCollapsed(true);
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(true);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state.sessionPanelCollapsed).toBe(true);
+
+    useUiPrefs.getState().setSessionPanelCollapsed(false);
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(false);
   });
 });
 
@@ -158,6 +169,7 @@ describe('useUiPrefs persistence', () => {
         'dontWarnOnTuningChange',
         'inspectorVisible',
         'rightClickHintDismissed',
+        'sessionPanelCollapsed',
         'sessionPanelSections',
         'sidebarVisible',
         'sidebarWidth',

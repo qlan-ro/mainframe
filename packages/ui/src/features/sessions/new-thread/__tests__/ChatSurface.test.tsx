@@ -164,12 +164,12 @@ describe('ChatSurface', () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
-  it('mounts the session panel beside the thread, handed the panel state', () => {
+  it('mounts the session panel over the thread, handed the panel state', () => {
     render(<ChatSurface />);
 
     const panel = screen.getByTestId('session-panel-root');
     expect(panel).toBeInTheDocument();
-    // jsdom reports a 0px host, which is below the inline threshold.
+    // jsdom reports a 0px host, whose gutter cannot hold the panel.
     expect(panel).toHaveAttribute('data-mode', 'rail');
   });
 
@@ -181,6 +181,11 @@ describe('ChatSurface', () => {
     expect(row.contains(screen.getByTestId('chat-thread'))).toBe(true);
     expect(row.contains(screen.getByTestId('session-panel-root'))).toBe(true);
     expect(row.contains(screen.getByTestId('chat-header'))).toBe(false);
+    // The measured row is the panel's containing block AND its full width: the
+    // thread column keeps all of it, and the panel floats in the gutter the
+    // centred transcript leaves inside it.
+    expect(row).toHaveClass('relative');
+    expect(row.querySelector('[data-testid="chat-thread"]')?.parentElement).toHaveClass('flex-1');
   });
 
   it('does not mount the session panel in the first-run branch', () => {

@@ -95,7 +95,7 @@ export function PanelAttachmentsGrid({ port, chatId, attachments, enabled }: Pan
                   // The ext accent is decorative file-type recognition and has no
                   // token — globals.css defines none per extension.
                   <AttachmentMedia style={{ background: extTint(meta.color) }}>
-                    <span className="font-mono text-xs font-bold" style={{ color: meta.color }}>
+                    <span className="font-mono text-2xs font-bold" style={{ color: meta.color }}>
                       .{meta.ext}
                     </span>
                   </AttachmentMedia>

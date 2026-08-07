@@ -6,8 +6,12 @@
  *  - rail mode renders neither card — the rail alone
  *  - overlay mode renders the floating card, named for a screen reader since it
  *    has no visible title
- *  - the rail renders in every mode
- *  - dismissing the overlay hands focus back to the rail button that opened it
+ *  - the rail renders in every mode EXCEPT inline, where the card replaces it
+ *  - only the inline card is handed a collapse control
+ *  - the root floats: it is absolutely positioned and click-through, so it takes
+ *    no width from the transcript and does not eat wheel events over its gutter
+ *  - a card going away — dismissed, collapsed, or squeezed out — hands focus to
+ *    the rail button that replaced it
  *  - dismissal does NOT steal focus when the user has already moved it (the
  *    outside-click path)
  *  - the body carries the five sections, in render order
@@ -50,7 +54,13 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
   useChatExtras: () => ({ state: { backgroundTasks: {} } }),
 }));
 
-vi.mock('../SummarySection', () => ({ SummarySection: () => <div data-testid="stub-summary" /> }));
+// The stub reports whether it was handed a collapse control — the real control
+// lives in SummarySection's own suite; this one only checks who gets offered it.
+vi.mock('../SummarySection', () => ({
+  SummarySection: ({ onCollapse }: { onCollapse?: () => void }) => (
+    <div data-testid="stub-summary" data-collapsible={onCollapse != null} />
+  ),
+}));
 vi.mock('../PlanSection', () => ({ PlanSection: () => <div data-testid="stub-plan" /> }));
 vi.mock('../ActivitySection', () => ({ ActivitySection: () => <div data-testid="stub-activity" /> }));
 vi.mock('../LaunchSection', () => ({ LaunchSection: () => <div data-testid="stub-launch" /> }));
@@ -72,12 +82,13 @@ function panelState(mode: PanelMode, focusId: SessionPanelState['focusRequest'] 
   return {
     hostRef: { current: null },
     rootRef: { current: null },
-    surfaceWidth: mode === 'inline' ? 1200 : 800,
+    surfaceWidth: mode === 'inline' ? 1600 : 800,
     mode,
     focusRequest: focusId,
     isSectionOpen: () => true,
     toggleSection: vi.fn(),
     selectSection: vi.fn(),
+    collapsePanel: vi.fn(),
     closeOverlay: vi.fn(),
     registerSection: () => () => {},
   } as unknown as SessionPanelState;
@@ -115,11 +126,38 @@ describe('SessionPanel — mode rendering', () => {
     expect(overlay).toHaveAttribute('aria-label', 'Session panel');
   });
 
-  it('keeps the rail in every mode', () => {
-    const { rerender } = render(<SessionPanel state={panelState('inline')} />);
+  it('hides the rail inline — the card is the only way in when it is showing', () => {
+    render(<SessionPanel state={panelState('inline')} />);
+    expect(screen.queryByTestId('session-panel-rail')).toBeNull();
+  });
+
+  it('keeps the rail beside the floating card, and alone in rail mode', () => {
+    const { rerender } = render(<SessionPanel state={panelState('rail')} />);
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
     rerender(<SessionPanel state={panelState('overlay', { id: 'activity', seq: 1 })} />);
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
+  });
+
+  it('floats over the surface instead of taking width from it', () => {
+    render(<SessionPanel state={panelState('inline')} />);
+    const root = screen.getByTestId('session-panel-root');
+    expect(root).toHaveClass('absolute', 'inset-y-0', 'right-0');
+    // Click-through, so the empty strip below a content-height card still
+    // scrolls the transcript underneath; each surface opts back in.
+    expect(root).toHaveClass('pointer-events-none');
+    expect(screen.getByTestId('session-panel')).toHaveClass('pointer-events-auto');
+  });
+});
+
+describe('SessionPanel — collapse control', () => {
+  it('offers the inline card a collapse control', () => {
+    render(<SessionPanel state={panelState('inline')} />);
+    expect(screen.getByTestId('stub-summary')).toHaveAttribute('data-collapsible', 'true');
+  });
+
+  it('offers the floating card none — its exit is the light dismiss', () => {
+    render(<SessionPanel state={panelState('overlay', { id: 'summary', seq: 1 })} />);
+    expect(screen.getByTestId('stub-summary')).toHaveAttribute('data-collapsible', 'false');
   });
 });
 
@@ -138,7 +176,15 @@ describe('SessionPanel — body', () => {
   });
 });
 
-describe('SessionPanel — focus return on dismiss', () => {
+describe('SessionPanel — focus return when a card goes away', () => {
+  it('hands focus to the rail when the inline card collapses into it', () => {
+    // The collapse control unmounts with the card, so focus lands nowhere —
+    // and the rail it collapsed into has only just appeared.
+    const { rerender } = render(<SessionPanel state={panelState('inline')} />);
+    rerender(<SessionPanel state={panelState('rail')} />);
+    expect(document.activeElement).toBe(screen.getByTestId('session-panel-rail-open'));
+  });
+
   it('returns focus to the rail button that opened the overlay', () => {
     const { rerender } = render(<SessionPanel state={panelState('overlay', { id: 'activity', seq: 1 })} />);
     // Escape closes the overlay from inside the panel, so focus lands nowhere.

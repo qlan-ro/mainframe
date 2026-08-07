@@ -25,10 +25,12 @@
  * - Everything else (a sent local thread, a pre-existing chat, or a new local
  *   thread with no project resolved yet) shows the plain ChatThread.
  *
- * The session panel is a flex sibling of the thread column in the last two
- * cases. Its state machine lives here because the row the two of them share is
- * the width the panel follows — it shrinks when the surface is split, which the
- * panel measuring itself would never see.
+ * The session panel floats over that row in the last two cases; the thread
+ * column keeps the full width and its own centred transcript. Its state machine
+ * lives here because the row is the width the panel follows — the panel sits in
+ * the gutter the centred transcript leaves, so it needs the row's TOTAL width,
+ * which shrinks when the surface is split and which the panel measuring its own
+ * box would never see.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -153,9 +155,9 @@ export function ChatSurface() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
-      {/* The row the panel shares with the thread column — what the panel's
-          ResizeObserver measures. */}
-      <div ref={setHostRef} className="flex min-h-0 flex-1 overflow-hidden">
+      {/* The row the panel floats over — what its ResizeObserver measures, and
+          the containing block its absolute root resolves against. */}
+      <div ref={setHostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
             height — otherwise the sticky composer footer collapses/clips. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

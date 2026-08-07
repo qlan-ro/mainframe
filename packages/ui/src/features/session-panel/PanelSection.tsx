@@ -14,8 +14,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/compone
 import { cn } from '@v2/lib/utils';
 import type { SessionPanelOpenSectionId } from '@/store/ui-prefs';
 
-/** The header rhythm the non-collapsible Summary heading shares. */
-export const SECTION_HEAD = 'flex h-10 items-center gap-2 px-3';
+/** The header rhythm the non-collapsible Summary heading shares — the app's
+ *  dense-list rhythm: a 32px header over 28px rows, not a comfortable card. */
+export const SECTION_HEAD = 'flex h-8 items-center gap-2 px-2';
 
 interface PanelSectionProps {
   id: SessionPanelOpenSectionId;
@@ -50,10 +51,10 @@ export function PanelSection({
           <button
             type="button"
             data-testid={`session-panel-section-toggle-${id}`}
-            className={cn(SECTION_HEAD, 'w-full text-left transition-colors hover:bg-muted')}
+            className={cn(SECTION_HEAD, 'w-full text-left transition-colors hover:bg-foreground/8')}
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+            <span className="min-w-0 truncate text-xs font-medium">{label}</span>
             {count != null && <Badge variant="secondary">{count}</Badge>}
             <span className="flex-1" />
             <ChevronDown
@@ -62,7 +63,7 @@ export function PanelSection({
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="flex flex-col gap-1.5 px-3 pb-3">{children}</div>
+          <div className="flex flex-col gap-0.5 px-2 pb-2">{children}</div>
         </CollapsibleContent>
       </section>
     </Collapsible>

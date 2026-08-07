@@ -26,8 +26,8 @@ import { runKey } from '@/features/chat/workflow/workflow-progress';
 import { runningCount } from './activity-view';
 import { PanelSection } from './PanelSection';
 
-const ROW = 'flex items-center gap-2 rounded-md bg-muted px-2 py-1.5';
-const ELAPSED = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
+const ROW = 'flex items-center gap-2 rounded-md px-2 py-1.5';
+const ELAPSED = 'shrink-0 font-mono text-2xs tabular-nums text-muted-foreground';
 
 /** bash and unknown kinds both read as tasks, matching `summarizeByKind`. */
 const KIND_LABEL: Record<BackgroundWorkKind, string> = {
@@ -42,8 +42,8 @@ function RowBody({ title, detail, startedAt, now }: { title: string; detail: str
     <>
       <LoaderCircle className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{title}</div>
-        <div className="truncate text-xs text-muted-foreground">{detail}</div>
+        <div className="truncate text-xs">{title}</div>
+        <div className="truncate text-2xs text-muted-foreground">{detail}</div>
       </div>
       <span className={ELAPSED}>{formatElapsed(startedAt, now)}</span>
     </>
@@ -82,7 +82,7 @@ function WorkflowRow({
       type="button"
       data-testid={`session-panel-workflow-${runKey(run)}`}
       onClick={() => onOpen(task.id)}
-      className={cn(ROW, 'w-full text-left transition-colors hover:bg-accent')}
+      className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
     >
       <RowBody
         title={run.workflowName ?? task.description ?? 'Workflow'}
@@ -103,7 +103,7 @@ function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () =
         type="button"
         data-testid={`session-panel-workflow-back-${runKey(run)}`}
         onClick={onBack}
-        className="flex items-center gap-1 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
+        className="flex items-center gap-1 self-start text-2xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3" aria-hidden />
         Background Activity
@@ -144,7 +144,7 @@ export function ActivitySection({ open, onToggle, sectionRef }: ActivitySectionP
       {drillRun ? (
         <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
       ) : tasks.length === 0 ? (
-        <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
+        <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-xs text-muted-foreground')}>
           Nothing running
         </div>
       ) : (

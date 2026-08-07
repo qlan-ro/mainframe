@@ -3,7 +3,9 @@
  * context fill) and what it has produced (detected PRs, working changes).
  *
  * Never collapsible, so its heading is a static row rather than a trigger —
- * same rhythm and ink as the section headers below it, minus the chevron.
+ * same rhythm and ink as the section headers below it, minus the chevron. It
+ * carries the panel's own collapse instead, on the trailing edge: the top row is
+ * the only fixed place to put it once the title bar went away.
  *
  * The four row kinds come out of `deriveSummaryRows`, which owns every
  * visibility rule (no branch, no PRs, unresolved usage), and one renderer draws
@@ -11,9 +13,10 @@
  * all the section says so rather than rendering an empty card.
  */
 import { useAuiState } from '@assistant-ui/react';
-import { Gauge, GitBranch, GitCompare, GitPullRequest, Info } from 'lucide-react';
+import { Gauge, GitBranch, GitCompare, GitPullRequest, Info, PanelRightClose } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Badge } from '@v2/components/ui/badge';
+import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { cn } from '@v2/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
@@ -27,9 +30,9 @@ import { SECTION_HEAD } from './PanelSection';
 import { deriveSummaryRows, type SummaryRow } from './summary-view';
 import { useContextPercent } from './use-context-percent';
 
-const ROW = 'flex items-center gap-2 rounded-md bg-muted px-2 py-1.5';
-const ROW_LABEL = 'min-w-0 flex-1 truncate text-sm';
-const ROW_TRAILING = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
+const ROW = 'flex items-center gap-2 rounded-md px-2 py-1.5';
+const ROW_LABEL = 'min-w-0 flex-1 truncate text-xs';
+const ROW_TRAILING = 'shrink-0 font-mono text-2xs tabular-nums text-muted-foreground';
 
 const ROW_ICON: Record<SummaryRow['kind'], ComponentType<{ className?: string }>> = {
   branch: GitBranch,
@@ -61,10 +64,10 @@ function RowTrailing({ row }: { row: SummaryRow }) {
         <span className={ROW_TRAILING}>{row.value}</span>
         {/* A clean tree has no diff to count — "+0 −0" would be noise. */}
         {row.fileCount > 0 && row.additions != null && (
-          <span className="shrink-0 font-mono text-xs tabular-nums text-success">+{row.additions}</span>
+          <span className="shrink-0 font-mono text-2xs tabular-nums text-success">+{row.additions}</span>
         )}
         {row.fileCount > 0 && row.deletions != null && (
-          <span className="shrink-0 font-mono text-xs tabular-nums text-destructive">−{row.deletions}</span>
+          <span className="shrink-0 font-mono text-2xs tabular-nums text-destructive">−{row.deletions}</span>
         )}
       </>
     );
@@ -89,7 +92,7 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
           type="button"
           data-testid={rowTestId(row)}
           onClick={onActivate}
-          className={cn(ROW, 'w-full text-left transition-colors hover:bg-accent')}
+          className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
         >
           {body}
         </button>
@@ -102,7 +105,14 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
   );
 }
 
-export function SummarySection({ port, sectionRef }: { port: number; sectionRef?: (el: HTMLElement | null) => void }) {
+interface SummarySectionProps {
+  port: number;
+  sectionRef?: (el: HTMLElement | null) => void;
+  /** Omitted where collapsing makes no sense — the floating card dismisses itself. */
+  onCollapse?: () => void;
+}
+
+export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionProps) {
   const host = useHost();
   const { projectId, chatId, branchName, isWorktree } = useActiveIdentity();
   const { branch } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
@@ -124,11 +134,28 @@ export function SummarySection({ port, sectionRef }: { port: number; sectionRef?
     <section ref={sectionRef} data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
       <div className={SECTION_HEAD}>
         <Info className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate text-sm font-medium">Summary</span>
+        <span className="min-w-0 truncate text-xs font-medium">Summary</span>
+        {onCollapse && (
+          <>
+            <span className="flex-1" />
+            <Hint label="Collapse panel">
+              <Button
+                data-testid="session-panel-collapse"
+                aria-label="Collapse panel"
+                variant="ghost"
+                size="icon-xs"
+                onClick={onCollapse}
+                className="text-muted-foreground"
+              >
+                <PanelRightClose className="size-3.5" />
+              </Button>
+            </Hint>
+          </>
+        )}
       </div>
-      <div className="flex flex-col gap-1.5 px-3 pb-3">
+      <div className="flex flex-col gap-0.5 px-2 pb-2">
         {rows.length === 0 ? (
-          <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
+          <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-xs text-muted-foreground')}>
             No session details yet
           </div>
         ) : (

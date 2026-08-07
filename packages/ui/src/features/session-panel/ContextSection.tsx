@@ -23,7 +23,7 @@ import { PanelAttachmentsGrid } from './PanelAttachmentsGrid';
 import { PanelSection } from './PanelSection';
 import { PanelSubGroup, SUB_GROUP_ROW } from './PanelSubGroup';
 
-const SUB_NOTE = 'px-1 py-1 text-xs text-muted-foreground';
+const SUB_NOTE = 'px-1 py-0.5 text-2xs text-muted-foreground';
 
 function MemoryFileRow({ row }: { row: ContextFileRow }) {
   return (
@@ -34,10 +34,10 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
         onClick={() => emitSurfaceIntent({ type: 'open-file', path: row.path })}
         className={SUB_GROUP_ROW}
       >
-        <span className="min-w-0 flex-1 truncate text-sm">{row.label}</span>
+        <span className="min-w-0 flex-1 truncate text-xs">{row.label}</span>
         <Badge variant="outline">{row.scope}</Badge>
         {/* A token count is one of the reserved mono cases; the tilde marks it an estimate. */}
-        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
           {formatTokens(row.tokens)}
         </span>
       </button>

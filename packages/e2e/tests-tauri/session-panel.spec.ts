@@ -19,14 +19,21 @@
  *
  * ── Viewport is explicit here, unlike every other spec ───────────────────────
  * `fixtures/app-tauri.ts` calls `browser.newContext()` with no `viewport`, so the
- * suite runs at Playwright's 1280×720 default. Minus the 256px sidebar and the
- * AppShell `p-2 gap-2` insets, the chat host lands within ~10px of
- * `INLINE_MIN_WIDTH = 1000` (panel-mode.ts) — inline vs rail would be decided by
- * rounding. Every describe therefore calls `page.setViewportSize()` explicitly:
- * WIDE (1600 → host ~1320) for the section tests, NARROW (900 → host ~620) for
- * the rail/overlay test. Both clear the threshold by a wide margin. Mode is
- * asserted by `session-panel` vs `session-panel-rail` VISIBILITY, never by
- * measuring boxes.
+ * suite runs at Playwright's 1280×720 default. The panel floats over the gutter
+ * beside the transcript instead of taking width from it, so inline needs the host
+ * row to clear `INLINE_MIN_WIDTH = 1532` (panel-mode.ts) — the centred `max-w-3xl`
+ * column (768px) plus a 382px panel block in EACH gutter. A 1280 viewport, minus
+ * the 256px sidebar and the AppShell `p-2 gap-2` insets, leaves a ~1000px host:
+ * rail, with no ambiguity. Every describe therefore calls `page.setViewportSize()`
+ * explicitly: WIDE (2100 → host ~1820, ~290px of headroom) for the section tests,
+ * NARROW (900 → host ~620) for the rail/overlay test. Mode is asserted by
+ * `session-panel` vs `session-panel-rail` VISIBILITY, never by measuring boxes.
+ *
+ * ── The card and the rail never show together ────────────────────────────────
+ * Inline renders the card ALONE. The rail appears only when the card is not
+ * inline — the gutter is too short, or the user collapsed it via
+ * `session-panel-collapse`. Any assertion that wants a rail control at WIDE has
+ * to collapse the panel first (and restore it, so later tests stay independent).
  *
  * ── Ground truth under mock-cli (read before adding assertions) ──────────────
  * Inherited verbatim from the deleted spec and re-verified against the Rust mock
@@ -62,8 +69,12 @@
  *   session-panel-root            — SessionPanel.tsx wrapper (rail + card); always mounted
  *   session-panel                 — the INLINE card (mounted only in inline mode)
  *   session-panel-overlay         — the FLOATING card (role=dialog, rail mode only)
- *   session-panel-rail            — SessionPanelRail root pill; visible in every mode
- *   session-panel-rail-open       — rail "Session panel" button (targets Summary)
+ *   session-panel-rail            — SessionPanelRail root pill; present only when the
+ *                                   inline card is not (narrow gutter, or collapsed)
+ *   session-panel-collapse        — the inline card's collapse control, on the Summary
+ *                                   heading; persisted, so a collapse survives a reload
+ *   session-panel-rail-open       — rail "Session panel" button (targets Summary; on a
+ *                                   wide surface it restores the card INLINE, not floating)
  *   session-panel-rail-activity   — rail Background Activity button
  *   session-panel-rail-activity-dot — live-work marker (only when running > 0)
  *   session-panel-rail-context    — rail context meter (only when percent != null)
@@ -111,8 +122,8 @@ import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
-/** Chat-host width comfortably above / below `INLINE_MIN_WIDTH` (1000). */
-const WIDE = { width: 1600, height: 900 };
+/** Chat-host width comfortably above / below `INLINE_MIN_WIDTH` (1532). */
+const WIDE = { width: 2100, height: 900 };
 const NARROW = { width: 900, height: 900 };
 
 // A 1x1 transparent PNG — small enough to round-trip instantly through the
@@ -196,15 +207,57 @@ async function selectChat(page: Page, chatId: string): Promise<void> {
 }
 
 /**
+ * Clear every Radix overlay before an Escape assertion, by taking hover AND
+ * focus somewhere inert.
+ *
+ * ANY open Radix layer consumes the first Escape — its DismissableLayer calls
+ * `preventDefault`, and the panel's own handler bails on `defaultPrevented` by
+ * design ("an open dialog owns Escape", use-session-panel-state.ts). A rail
+ * click leaves the pointer on a `Hint`-wrapped button and focus inside it, so
+ * both doors have to be shut:
+ *
+ * One real click on the floating card's own Summary heading shuts every door at
+ * once, which merely moving the pointer does not:
+ *
+ *   - a pointerdown closes an open Radix tooltip outright, instead of racing its
+ *     open/close delays — a `toHaveCount(0)` wait can otherwise pass in the
+ *     window BEFORE a scheduled layer opens.
+ *   - it takes hover off the rail without parking on something else that opens a
+ *     layer of its own. Parking over the sessions sidebar opens a row's
+ *     `SessionMetaCard` hover card, which swallows Escape exactly like a tooltip
+ *     would — and that hover card carries no `role`, so a tooltip-only or
+ *     dialog-only check reports all-clear while the layer is up (found live).
+ *   - the heading is a plain `div`: no `Hint`, no collapse trigger, nothing to
+ *     toggle. And it is inside the panel root, so light dismiss reads it as
+ *     "inside" and the card stays up.
+ *
+ * The wait is on `[data-radix-popper-content-wrapper]` — the one selector that
+ * covers tooltips, hover cards, popovers and menus alike.
+ */
+async function settleForEscape(page: Page): Promise<void> {
+  await page
+    .getByTestId('session-panel-overlay')
+    .getByTestId('session-panel-section-summary')
+    .click({ position: { x: 4, y: 4 } });
+  await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0, { timeout: 5_000 });
+}
+
+/**
  * Put the panel back inline before reading the inline card.
  *
  * Opening a file lights the WORKSPACE surface, which halves the chat host — at
- * WIDE that lands the host near ~660px, below `INLINE_MIN_WIDTH`, so the inline
+ * WIDE that lands the host near ~900px, below `INLINE_MIN_WIDTH`, so the inline
  * card unmounts and every section testid disappears. Found live: the Context
  * describe's file-opening tests silently broke the tests after them. ⌘2 toggles
  * the workspace back off; calling this first makes each test independent of what
  * the previous one opened, which also matters on a Playwright retry (hooks re-run,
  * but a mid-describe retry does not).
+ *
+ * A leftover collapse is undone the same way a user would — the rail's own
+ * button — but that click is best-effort and bounded on purpose: hiding the
+ * workspace re-widens the surface, so the rail can unmount between the check and
+ * the click. The `toBeVisible` below is the real assertion; a click that was
+ * genuinely needed and failed surfaces there, with the card named.
  */
 async function ensureInlinePanel(page: Page): Promise<void> {
   const workspaceSurface = page.getByTestId('workspace-surface');
@@ -212,7 +265,14 @@ async function ensureInlinePanel(page: Page): Promise<void> {
     await page.keyboard.press('ControlOrMeta+2');
     await expect(workspaceSurface).toHaveCount(0, { timeout: 5_000 });
   }
-  await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 10_000 });
+  const card = page.getByTestId('session-panel');
+  if ((await card.count()) === 0) {
+    await page
+      .getByTestId('session-panel-rail-open')
+      .click({ timeout: 5_000 })
+      .catch(() => undefined /* the widen already restored the card */);
+  }
+  await expect(card).toBeVisible({ timeout: 10_000 });
 }
 
 // ─── §session-panel — inline / rail / overlay ─────────────────────────────────
@@ -238,13 +298,28 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     await closeTauriApp(app);
   });
 
-  test('a wide surface renders the inline card beside the rail, with no overlay', async () => {
+  test('a wide surface renders the inline card alone — no rail, no overlay', async () => {
     const { page } = app;
     await page.setViewportSize(WIDE);
     await expect(page.getByTestId('session-panel-root')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 10_000 });
-    // The rail is not an alternative to the card — it is always present.
+    // The rail is the card's collapsed form, not its neighbour.
+    await expect(page.getByTestId('session-panel-rail')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
+  });
+
+  test('collapsing a wide panel leaves the rail; a rail click restores it inline, not floating', async () => {
+    const { page } = app;
+    await page.getByTestId('session-panel-collapse').click();
+    await expect(page.getByTestId('session-panel')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('session-panel-rail')).toBeVisible();
+    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
+
+    // Room decides where the card goes: this gutter holds it, so the click puts
+    // it back inline rather than floating it over the transcript.
+    await page.getByTestId('session-panel-rail-open').click();
+    await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('session-panel-rail')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
   });
 
@@ -258,11 +333,17 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     const { page } = app;
     // ui-prefs default: activity closed, so its body is not in the DOM yet.
     await expect(page.getByTestId('session-panel-activity-empty')).toHaveCount(0);
-    // Nothing is running, so the rail carries no live-work dot.
+
+    // The rail is behind the collapse at this width. Nothing is running, so it
+    // carries no live-work dot.
+    await page.getByTestId('session-panel-collapse').click();
+    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('session-panel-rail-activity-dot')).toHaveCount(0);
 
     await page.getByTestId('session-panel-rail-activity').click();
 
+    // One click both restored the card inline and expanded what it targeted.
+    await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 5_000 });
     const empty = page.getByTestId('session-panel-activity-empty');
     await expect(empty).toBeVisible({ timeout: 5_000 });
     await expect(empty).toHaveText('Nothing running');
@@ -311,6 +392,7 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     // Not a modal: the card floats over the thread but the inline card stays absent.
     await expect(page.getByTestId('session-panel')).toHaveCount(0);
 
+    await settleForEscape(page);
     await page.keyboard.press('Escape');
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
   });
@@ -342,15 +424,11 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
   });
 
-  // Dismissal here is a SECOND right-click, not Escape, and that is deliberate.
-  // Verified live with an in-page probe: a right-click leaves the rail button's
-  // Radix tooltip open (a left-click closes it), and the tooltip's DismissableLayer
-  // consumes the first Escape — `defaultPrevented` is already true by the time the
-  // panel's own document handler sees it, and that handler bails on
-  // `defaultPrevented` by design ("an open dialog owns Escape",
-  // use-session-panel-state.ts). Escape-to-dismiss is covered from the left-click
-  // route above; this asserts the re-click-to-close branch for a NON-summary
-  // section, which nothing else reaches.
+  // Dismissal here is a SECOND right-click, not Escape, and that is deliberate:
+  // a right-click leaves the rail button's tooltip open, and that tooltip owns
+  // the first Escape (see `settleForEscape`). Escape-to-dismiss is covered from the
+  // left-click route above; this asserts the re-click-to-close branch for a
+  // NON-summary section, which nothing else reaches.
   test('right-clicking the rail launch button floats the panel on the Launch section', async () => {
     const { page } = app;
     // The rail's launch button is a quick ACTION on left-click; the right-click is
@@ -365,10 +443,11 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('widening the surface restores the inline card', async () => {
+  test('widening the surface restores the inline card, and retires the rail', async () => {
     const { page } = app;
     await page.setViewportSize(WIDE);
     await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('session-panel-rail')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
   });
 });
@@ -420,7 +499,6 @@ test.describe('§session-panel — Summary rows', () => {
     const { page } = app;
     // No usage data yet — deriveSummaryRows drops the row rather than showing 0%.
     await expect(page.getByTestId('session-panel-summary-context')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-rail-context')).toHaveCount(0);
 
     await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
     await waitForIdle(page, 60_000);
@@ -434,8 +512,13 @@ test.describe('§session-panel — Summary rows', () => {
     expect(percent).toBeGreaterThan(0);
     expect(percent).toBeLessThanOrEqual(100);
 
-    // The rail's meter reads the same number through the same hook.
-    await expect(page.getByTestId('session-panel-rail-context')).toBeVisible();
+    // The rail's meter reads the same number through the same hook — reachable
+    // at this width only behind the collapse, which is undone again so the next
+    // test still finds the inline card.
+    await page.getByTestId('session-panel-collapse').click();
+    await expect(page.getByTestId('session-panel-rail-context')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('session-panel-rail-open').click();
+    await expect(page.getByTestId('session-panel')).toBeVisible({ timeout: 5_000 });
   });
 
   test('clicking the changes row opens the review modal', async () => {

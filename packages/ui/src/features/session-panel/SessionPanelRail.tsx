@@ -1,12 +1,14 @@
 /**
- * SessionPanelRail — the always-visible floating pill at the chat surface's
- * right edge. Top-down: open the panel · Background Activity · context usage ·
- * the launch quick action.
+ * SessionPanelRail — the floating pill at the chat surface's right edge, shown
+ * whenever the panel's card is not. Top-down: open the panel · Background
+ * Activity · context usage · the launch quick action.
  *
  * Every button routes through `selectSection`, which expands its target and
- * floats the panel when the surface is too narrow to hold it inline — so a
- * collapsed section is revealed by the same click that scrolls to it. A button
- * reads engaged only while the panel IT opened is floating.
+ * brings the card back — inline when the gutter beside the transcript holds it,
+ * floating over the thread when it doesn't — so a collapsed section is revealed
+ * by the same click that scrolls to it. A button reads engaged only while the
+ * panel IT floated is showing; a click that restored the card inline leaves the
+ * rail gone, with nothing to press.
  *
  * The launch button is a quick action, not a menu: one click runs or stops the
  * config `deriveLaunchRunControl` targets. Config *selection* lives in the
@@ -29,7 +31,7 @@ import { RailIconButton, RailMeterButton } from './SessionRailButton';
 import type { SessionPanelState } from './use-session-panel-state';
 
 const RAIL_CHROME =
-  'mt-2 mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-start rounded-full border border-border bg-card px-1 py-2 shadow-md';
+  'pointer-events-auto mt-2 mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-start rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
 
 interface SessionPanelRailProps {
   state: SessionPanelState;

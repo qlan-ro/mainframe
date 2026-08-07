@@ -56,6 +56,9 @@ interface UiPrefsState {
    *  owner — the panel keeps no set of its own. Absent keys read as the
    *  section's default; see isSessionPanelSectionOpen. */
   sessionPanelSections: SessionPanelSections;
+  /** The right session panel's own collapse. Only reachable on a surface wide
+   *  enough to hold the panel — a narrow one collapses it regardless. */
+  sessionPanelCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   toggleInspector: () => void;
@@ -67,6 +70,7 @@ interface UiPrefsState {
   /** Idempotent open — a rail click that navigates to an already-open section
    *  must scroll to it, never collapse it. */
   expandSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
+  setSessionPanelCollapsed: (collapsed: boolean) => void;
 }
 
 /** Selector helper: a section with no recorded state is expanded by default. */
@@ -87,6 +91,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
     collapsedSidebarSections: s.collapsedSidebarSections,
     sessionPanelSections: s.sessionPanelSections,
+    sessionPanelCollapsed: s.sessionPanelCollapsed,
   };
 }
 
@@ -102,6 +107,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       dontWarnOnTuningChange: false,
       collapsedSidebarSections: {},
       sessionPanelSections: {},
+      sessionPanelCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
@@ -124,6 +130,7 @@ export const useUiPrefs = create<UiPrefsState>()(
         })),
       expandSessionPanelSection: (id) =>
         set((s) => ({ sessionPanelSections: { ...s.sessionPanelSections, [id]: true } })),
+      setSessionPanelCollapsed: (collapsed) => set({ sessionPanelCollapsed: collapsed }),
     }),
     {
       name: 'mf:ui-prefs',

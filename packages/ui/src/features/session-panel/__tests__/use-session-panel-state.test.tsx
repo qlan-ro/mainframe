@@ -47,9 +47,9 @@ beforeEach(() => {
   host = document.createElement('div');
   root = document.createElement('div');
   document.body.append(host, root);
-  // The store is a module-level singleton: an expansion written by one case
-  // would otherwise leak into the next.
-  useUiPrefs.setState({ sessionPanelSections: {} });
+  // The store is a module-level singleton: an expansion or a collapse written by
+  // one case would otherwise leak into the next.
+  useUiPrefs.setState({ sessionPanelSections: {}, sessionPanelCollapsed: false });
 });
 
 afterEach(() => {
@@ -71,7 +71,7 @@ describe('useSessionPanelState — mode', () => {
 
   it('sits inline on a wide surface', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     expect(result.current.mode).toBe('inline');
   });
 
@@ -80,9 +80,58 @@ describe('useSessionPanelState — mode', () => {
     setWidth(800);
     act(() => result.current.selectSection('activity'));
     expect(result.current.mode).toBe('overlay');
-    setWidth(1200);
+    setWidth(1600);
     expect(result.current.mode).toBe('inline');
     // …and it does not come back when the surface narrows again.
+    setWidth(800);
+    expect(result.current.mode).toBe('rail');
+  });
+
+  it('collapses a wide surface to the rail, and records it', () => {
+    const { result } = renderPanelState();
+    setWidth(1600);
+    act(() => result.current.collapsePanel());
+    expect(result.current.mode).toBe('rail');
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(true);
+  });
+
+  it('honours a collapse persisted from a previous session', () => {
+    useUiPrefs.setState({ sessionPanelCollapsed: true });
+    const { result } = renderPanelState();
+    setWidth(1600);
+    expect(result.current.mode).toBe('rail');
+  });
+
+  it('a rail click on a wide surface returns to inline, never to the overlay', () => {
+    const { result } = renderPanelState();
+    setWidth(1600);
+    act(() => result.current.collapsePanel());
+    act(() => result.current.selectSection('launch'));
+    expect(result.current.mode).toBe('inline');
+    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(false);
+    // …and it still scrolled to what was clicked.
+    expect(result.current.focusRequest).toEqual({ id: 'launch', seq: 1 });
+  });
+
+  it('keeps the collapse when the surface narrows and widens again', () => {
+    const { result } = renderPanelState();
+    setWidth(1600);
+    act(() => result.current.collapsePanel());
+    setWidth(800);
+    expect(result.current.mode).toBe('rail');
+    setWidth(1600);
+    expect(result.current.mode).toBe('rail');
+  });
+
+  it('drops a floating panel when the gutter opens back up, even while collapsed', () => {
+    const { result } = renderPanelState();
+    setWidth(800);
+    act(() => result.current.selectSection('activity'));
+    expect(result.current.mode).toBe('overlay');
+    act(() => result.current.collapsePanel());
+    setWidth(1600);
+    expect(result.current.mode).toBe('rail');
+    // The stale overlay must not resurface when the surface narrows again.
     setWidth(800);
     expect(result.current.mode).toBe('rail');
   });
@@ -131,7 +180,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('does not float the panel when it is already inline', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     act(() => result.current.selectSection('plan'));
     expect(result.current.mode).toBe('inline');
     expect(result.current.isSectionOpen('plan')).toBe(true);
@@ -139,7 +188,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('is idempotent on an open section — a second inline click never collapses it', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     act(() => result.current.selectSection('activity'));
     act(() => result.current.selectSection('activity'));
     expect(result.current.isSectionOpen('activity')).toBe(true);
@@ -148,7 +197,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('bumps the focus sequence on every click so re-clicking scrolls again', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     act(() => result.current.selectSection('context'));
     expect(result.current.focusRequest).toEqual({ id: 'context', seq: 1 });
     act(() => result.current.selectSection('context'));
@@ -187,7 +236,7 @@ describe('useSessionPanelState — selectSection', () => {
 describe('useSessionPanelState — section scroll registry', () => {
   it('scrolls a registered section into view when it is selected', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     const section = document.createElement('div');
     const scrollIntoView = vi.fn();
     section.scrollIntoView = scrollIntoView;
@@ -198,7 +247,7 @@ describe('useSessionPanelState — section scroll registry', () => {
 
   it('does not scroll a section that unregistered itself', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     const section = document.createElement('div');
     const scrollIntoView = vi.fn();
     section.scrollIntoView = scrollIntoView;
@@ -311,7 +360,7 @@ describe('useSessionPanelState — light dismiss', () => {
 
   it('does not listen while the panel is inline', () => {
     const { result } = renderPanelState();
-    setWidth(1200);
+    setWidth(1600);
     const outside = document.createElement('div');
     document.body.append(outside);
     pointerDownOn(outside);

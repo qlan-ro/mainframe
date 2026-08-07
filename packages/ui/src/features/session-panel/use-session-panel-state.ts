@@ -15,7 +15,7 @@ import {
   type SessionPanelSectionId,
   type SessionPanelOpenSectionId,
 } from '@/store/ui-prefs';
-import { derivePanelMode, type PanelMode } from './panel-mode';
+import { derivePanelMode, gutterFitsPanel, type PanelMode } from './panel-mode';
 
 export interface FocusRequest {
   id: SessionPanelSectionId;
@@ -24,9 +24,10 @@ export interface FocusRequest {
 }
 
 export interface SessionPanelState {
-  /** Goes on the chat surface's horizontal row — the width the mode follows.
-   *  Explicit, rather than the panel root's `parentElement`, so a split surface
-   *  measures the row it actually shrinks. */
+  /** Goes on the chat surface's horizontal row — the FULL width, including the
+   *  part the panel floats over, since the mode follows the gutter that width
+   *  leaves beside the centred transcript. Explicit, rather than the panel
+   *  root's `parentElement`, so a split surface measures the row it shrinks. */
   hostRef: RefObject<HTMLElement | null>;
   /** Goes on the panel + rail root; light dismiss treats it as "inside". */
   rootRef: RefObject<HTMLDivElement | null>;
@@ -35,8 +36,11 @@ export interface SessionPanelState {
   focusRequest: FocusRequest | null;
   isSectionOpen: (id: SessionPanelSectionId) => boolean;
   toggleSection: (id: SessionPanelOpenSectionId) => void;
-  /** Rail icon click: expand + scroll to a section, floating the panel when rail-only. */
+  /** Rail icon click: expand + scroll to a section, and bring the card back —
+   *  inline when the gutter fits it, floating over the transcript when it doesn't. */
   selectSection: (id: SessionPanelSectionId) => void;
+  /** The inline card's own collapse control; persists, so it survives a reload. */
+  collapsePanel: () => void;
   closeOverlay: () => void;
   /** Callback ref each section hangs on its element so scroll-to works. */
   registerSection: (id: SessionPanelSectionId) => (el: HTMLElement | null) => void;
@@ -67,6 +71,8 @@ export function useSessionPanelState(): SessionPanelState {
   const sections = useUiPrefs((s) => s.sessionPanelSections);
   const toggleSessionPanelSection = useUiPrefs((s) => s.toggleSessionPanelSection);
   const expandSessionPanelSection = useUiPrefs((s) => s.expandSessionPanelSection);
+  const userCollapsed = useUiPrefs((s) => s.sessionPanelCollapsed);
+  const setUserCollapsed = useUiPrefs((s) => s.setSessionPanelCollapsed);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -80,12 +86,14 @@ export function useSessionPanelState(): SessionPanelState {
     return () => observer.disconnect();
   }, []);
 
-  const mode = derivePanelMode({ surfaceWidth, overlayOpen });
+  const gutterFits = gutterFitsPanel(surfaceWidth);
+  const mode = derivePanelMode({ surfaceWidth, userCollapsed, overlayOpen });
 
-  // A floated panel has no reason to survive the surface growing back to inline.
+  // A floated panel has no reason to survive the gutter opening back up: once
+  // there is room, the card belongs in it (or in the rail, if the user said so).
   useEffect(() => {
-    if (mode === 'inline' && overlayOpen) setOverlayOpen(false);
-  }, [mode, overlayOpen]);
+    if (gutterFits && overlayOpen) setOverlayOpen(false);
+  }, [gutterFits, overlayOpen]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
@@ -131,10 +139,18 @@ export function useSessionPanelState(): SessionPanelState {
       }
       if (id !== 'summary') expandSessionPanelSection(id);
       setFocusRequest((current) => ({ id, seq: (current?.seq ?? 0) + 1 }));
-      if (mode !== 'inline') setOverlayOpen(true);
+      if (mode === 'inline') return;
+      // A rail click always means "show me this". Where the card goes depends on
+      // room, not on how it got collapsed: a fitting gutter takes it back inline
+      // (clearing the persisted collapse, the same on-the-record intent an
+      // expanded section records), a short one floats it over the transcript.
+      if (gutterFits) setUserCollapsed(false);
+      else setOverlayOpen(true);
     },
-    [expandSessionPanelSection, focusRequest, mode],
+    [expandSessionPanelSection, focusRequest, gutterFits, mode, setUserCollapsed],
   );
+
+  const collapsePanel = useCallback(() => setUserCollapsed(true), [setUserCollapsed]);
 
   const closeOverlay = useCallback(() => setOverlayOpen(false), []);
 
@@ -156,6 +172,7 @@ export function useSessionPanelState(): SessionPanelState {
       isSectionOpen,
       toggleSection: toggleSessionPanelSection,
       selectSection,
+      collapsePanel,
       closeOverlay,
       registerSection,
     }),
@@ -166,6 +183,7 @@ export function useSessionPanelState(): SessionPanelState {
       isSectionOpen,
       toggleSessionPanelSection,
       selectSection,
+      collapsePanel,
       closeOverlay,
       registerSection,
     ],
