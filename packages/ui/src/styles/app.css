@@ -68,7 +68,7 @@ code {
     scrollbar-color: transparent transparent;
   }
   *:hover {
-    scrollbar-color: var(--mf-text-4) transparent;
+    scrollbar-color: var(--border) transparent;
   }
 }
 

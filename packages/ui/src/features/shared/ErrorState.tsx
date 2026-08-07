@@ -38,8 +38,8 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
   };
 
   const wrapperClass = embedded
-    ? 'relative w-full h-full flex items-center justify-center bg-mf-window p-[28px]'
-    : 'absolute inset-0 flex items-center justify-center bg-mf-window p-[28px]';
+    ? 'relative w-full h-full flex items-center justify-center bg-background p-[28px]'
+    : 'absolute inset-0 flex items-center justify-center bg-background p-[28px]';
 
   return (
     <div className={wrapperClass}>
@@ -53,15 +53,15 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
         ].join(' ')}
       >
         {/* Icon tile */}
-        <div className="w-[44px] h-[44px] mx-auto rounded-[13px] bg-mf-destructive-tint text-destructive flex items-center justify-center">
+        <div className="w-[44px] h-[44px] mx-auto rounded-[13px] bg-destructive/10 text-destructive flex items-center justify-center">
           <TriangleAlert size={22} />
         </div>
 
         {/* Heading */}
-        <p className="text-title font-semibold text-foreground mt-[14px] tracking-tight">Something went wrong</p>
+        <p className="text-lg font-semibold text-foreground mt-[14px] tracking-tight">Something went wrong</p>
 
         {/* Reassurance */}
-        <p className="text-label text-muted-foreground mt-[5px] leading-normal">
+        <p className="text-xs text-muted-foreground mt-[5px] leading-normal">
           This view hit an error and stopped rendering. Your session and files are unaffected.
         </p>
 
@@ -70,7 +70,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
           className={[
             'mt-[14px] py-[10px] px-[12px] rounded-[8px]',
             'bg-mf-code-bg border-[0.5px] border-border',
-            'font-mono text-caption text-muted-foreground text-left leading-normal',
+            'font-mono text-xs text-muted-foreground text-left leading-normal',
             'max-h-[96px] overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere]',
           ].join(' ')}
         >
@@ -85,7 +85,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
             className={[
               'h-[28px] px-[12px] rounded-[8px]',
               'border-[0.5px] border-border bg-background',
-              'text-muted-foreground text-label font-medium',
+              'text-muted-foreground text-xs font-medium',
               'cursor-pointer',
             ].join(' ')}
           >
@@ -98,7 +98,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
             className={[
               'h-[28px] px-[12px] rounded-[8px]',
               'border-[0.5px] border-border bg-background',
-              'text-muted-foreground text-label font-medium',
+              'text-muted-foreground text-xs font-medium',
               'cursor-pointer',
             ].join(' ')}
           >
@@ -111,7 +111,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
             className={[
               'h-[28px] px-[14px] rounded-[8px]',
               'bg-primary text-primary-foreground',
-              'text-label font-medium',
+              'text-xs font-medium',
               'cursor-pointer',
             ].join(' ')}
           >

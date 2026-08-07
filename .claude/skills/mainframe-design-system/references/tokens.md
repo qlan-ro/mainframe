@@ -24,14 +24,14 @@ Deliberately unmapped (use as arbitrary values, never as a color utility):
 
 | Class | Size | Leading | Use |
 |---|---|---|---|
-| `text-micro` | 10px | 1.3 | **ornament only — a deprecation target.** Nothing that must be read |
-| `text-caption` | 11px | 1.35 | secondary metadata, chips, footnotes |
-| `text-label` | 12px | 1.4 | form labels, chips, small buttons |
-| `text-body` | 13px | 1.5 | **baseline** — body copy, rows, menu items |
-| `text-heading` | 15px | 1.3 | dialog/section titles |
-| `text-title` | 17px | 1.25 | surface titles |
+| `text-xs` | 11px | 16px | secondary metadata, chips, footnotes, form labels, ornament |
+| `text-sm` | 13px | 18px | **baseline** — body copy, rows, menu items |
+| `text-base` | 16px | 24px | dialog and pane titles |
+| `text-lg` | 18px | 28px | surface titles |
 
-`body` itself is 13px — so an *unstyled* text node looks plausible and is still wrong.
+`text-sm` is the inherited baseline — so an *unstyled* text node looks plausible and is still wrong.
+**`text-xl` and above are phantoms**: nothing uses them, so Tailwind never generates them and the
+class silently does nothing. Add a real usage before reaching for one.
 
 ### Which rung for which role
 
@@ -39,16 +39,21 @@ Settled by the typography audit (`docs/architecture/2026-07-11-typography-legibi
 PR #452). The scale was being authored a rung low; the fix retuned `UI_SCALE_FACTORS` to
 `compact 0.92 / normal 1.0 / large 1.15`, so **normal is now true ×1.0 zoom and `body` really is 13px**.
 
+> **The v1 rungs were retired 2026-08-07.** The table below is the surviving role map on the stock
+> names. Mapping used: `caption`→`text-xs` and `body`→`text-sm` (lossless, same px), `label` 12→11,
+> `micro` 10→11, `heading` 15→`text-base` 16, `title` 17→`text-lg` 18.
+
 | Role | Rung |
 |---|---|
-| Primary content and anything the user acts on — session titles, menu items, picker values, button labels, inputs | `body` 13 |
-| Secondary supporting text — descriptions, tooltips, code/diff text, table cells, meta rows | `label` 12 |
-| Compact annotations — chips, badges, section headers, keycaps, timestamps | `caption` 11 |
-| Ornament | `micro` 10 |
+| Primary content and anything the user acts on — session titles, menu items, picker values, button labels, inputs | `text-sm` 13 |
+| Secondary supporting text — descriptions, tooltips, code/diff text, table cells, meta rows | `text-xs` 11 |
+| Compact annotations — chips, badges, section headers, keycaps, timestamps | `text-xs` 11 |
+| Dialog and pane titles | `text-base` 16 |
+| Surface titles | `text-lg` 18 |
 
 Tracking: `tracking-tight` (-0.02em) on headings. **`tracking-wide` is not a licence for uppercase
 eyebrows** — the `text-micro font-bold uppercase tracking-wide` muted-ink stack was an app-wide
-antipattern the audit removed. A section header is `text-caption font-medium text-muted-foreground` in
+antipattern the audit removed. A section header is `text-xs font-medium text-muted-foreground` in
 sentence case; if an uppercase eyebrow is genuinely wanted, the floor is 11px semibold in
 `muted-foreground`.
 
@@ -60,20 +65,20 @@ imported from the design prototype — the prototype specifies a stricter ladder
 
 | Rung | What ships | Take |
 |---|---|---|
-| `text-micro` | bold 10 · semibold 5 | residue of the removed eyebrow antipattern — don't copy it |
-| `text-caption` | medium 68 · semibold 60 | either; medium resting, semibold for emphasis |
-| `text-label` | semibold 58 · medium 46 | either; semibold slightly leads |
-| `text-body` | semibold 28 · medium 13 | **semibold** for row titles, medium for secondary |
-| `text-heading` | bold 17 · semibold 10 | **bold** — this is the dialog-title weight |
-| `text-title` | bold 9 · semibold 3 | bold |
+| `text-xs` | medium · semibold | either; medium resting, semibold for emphasis |
+| `text-sm` | semibold · medium | **semibold** for row titles, medium for secondary |
+| `text-base` | bold · semibold | **bold** — this is the dialog-title weight |
+| `text-lg` | bold | bold |
 
 Practical rules that do hold: **`font-normal` is effectively unused** (3 sites) — muted text gets a muted
 *color*, not a lighter weight; **`font-extrabold` appears once**, on the brand mark; and weight rises with
-the rung, so anything `text-heading` and above is `font-bold`. Below that, medium/semibold is a live
+the rung, so anything `text-base` and above is `font-bold`. Below that, medium/semibold is a live
 choice — copy the neighbouring component rather than deciding fresh.
 
-`cn()` is an `extendTailwindMerge` that registers these as a font-size group. Without it,
-`text-label text-muted-foreground` would collapse to just the color. Always compose classes through `cn()`.
+`cn()` used to be an `extendTailwindMerge` registering the v1 rungs as a font-size group — without it
+tailwind-merge read them as colours and dropped the size. Both the rungs and that config went on
+2026-08-07; every size is a stock name now. Still compose through `cn()`, and if you ever add a custom
+size, register it there again (`lib/__tests__/cn.test.ts` pins the behaviour).
 
 ## Spacing — compressed integers
 

@@ -52,7 +52,7 @@ describe('TaskColumn — drop-zone visual feedback', () => {
     expect(column.className).not.toContain('ring-primary');
 
     fireEvent.dragOver(column);
-    expect(column.className).toContain('bg-mf-selection');
+    expect(column.className).toContain('bg-sidebar-selection');
     expect(column.className).toContain('ring-primary');
 
     fireEvent.dragLeave(column);

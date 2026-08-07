@@ -78,11 +78,12 @@ already has.
 
 Full tables with every token name: `references/tokens.md`. The shape of them:
 
-- **Type — 6 rungs, 10→17px**, each with paired leading: `text-micro` 10 · `text-caption` 11 · `text-label` 12
-  · `text-body` 13 · `text-heading` 15 · `text-title` 17. Chrome density is deliberately tight;
-  `text-body` is the baseline, `text-heading` is a dialog title. (`text-display`/`text-hero` retired
-  with the v2 shell — welcome/empty-state moments are v2 surfaces now.)
-- **Weight rises with the rung.** `text-heading` and above is `font-bold`; below that, medium and
+- **Type — the v1 rungs are GONE (retired 2026-08-07).** Use the stock names, which v2 partly
+  re-values: `text-xs` **11px**/16 · `text-sm` **13px**/18 (the baseline — an unstyled node lands here)
+  · `text-base` 16/24 (dialog + pane titles) · `text-lg` 18/28 (surface titles). `text-xl` and up are
+  *phantoms* — nothing uses them, so Tailwind never generates them and the class silently does nothing.
+  `text-micro/caption/label/body/heading/title` no longer exist anywhere.
+- **Weight rises with the rung.** `text-base` and above is `font-bold`; below that, medium and
   semibold are both live (semibold for row titles and active state, medium for secondary). `font-normal`
   is effectively unused — muted text gets a muted *color*, not a lighter weight — and `font-extrabold`
   appears once, on the brand mark.

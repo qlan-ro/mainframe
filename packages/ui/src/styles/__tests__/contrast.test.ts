@@ -14,7 +14,7 @@
  * with the v2 merge, so `:root` and `:root`+`.dark` are the whole cascade. Both
  * sheets layer per theme (v2 first, then the bridge) exactly as `app.css` imports
  * them, and `.dark` lands on the same element as `:root` in the real app, so a
- * bridge alias like `--mf-selection: var(--sidebar-selection)` resolves to the DARK
+ * a `var()` alias resolves to the DARK
  * value there — which is why the resolver keeps var() lazy.
  *
  * Measured floors at the time of writing (contrast ratios, light / dark):
@@ -122,7 +122,7 @@ describe('token sources', () => {
     for (const token of ['--background', '--foreground', '--muted-foreground', '--primary', '--bubble-tinted']) {
       expect(sheets.v2.get(':root')![token], `${token} missing from ${V2_SHEET}`).toBeDefined();
     }
-    for (const token of ['--mf-window', '--mf-text-4', '--mf-selection']) {
+    for (const token of ['--mf-code-bg', '--mf-diff-add-bg', '--mf-scrim']) {
       expect(sheets.bridge.get(':root')![token], `${token} missing from ${BRIDGE_SHEET}`).toBeDefined();
     }
   });
@@ -195,18 +195,10 @@ describe('v2 contrast guardrail', () => {
   });
 });
 
-describe('bridge alias integrity', () => {
-  // The bridge header claims the duplicated semantics are ALIASES onto v2 tokens,
-  // so islands track the shell per mode. These pin that claim: a warm literal
-  // creeping back would drift the islands away from the shell silently.
-  const ALIASES: [string, string][] = [['--mf-selection', '--sidebar-selection']];
-
-  it.each(THEMES)('every aliased bridge token resolves to its v2 source — %s', (theme) => {
-    const t = resolve(theme);
-    for (const [alias, source] of ALIASES) {
-      expect(color(t, alias), `${alias} should track ${source} (${theme})`).toEqual(color(t, source));
-    }
-  });
+describe('v2 token integrity', () => {
+  // The bridge's aliases onto v2 tokens are all gone (2026-08-07) — every duplicated
+  // semantic was swept into its source at the call sites, so there is no alias left
+  // to drift. What remains is the v2 layer's own internal consistency.
 
   it.each(THEMES)('focus rings and selection are built from the accent — %s', (theme) => {
     const t = resolve(theme);

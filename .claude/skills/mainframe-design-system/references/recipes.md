@@ -41,7 +41,7 @@ the zoom/fade animation. Restating those classes is dead weight; replacing them 
 ```
 <DialogContent hideClose className="max-w-lg w-full max-h-[90vh] flex flex-col p-0 gap-0">
   <DialogHeader className="px-4 py-3 border-b border-border shrink-0">
-    <DialogTitle className="flex items-center gap-2 text-heading font-bold">
+    <DialogTitle className="flex items-center gap-2 text-base font-bold">
       <Icon size={14} className="text-primary shrink-0" aria-hidden />
       Title
     </DialogTitle>
@@ -58,7 +58,7 @@ region, `shrink-0` on header and footer. Header icon is `size={14}` and `text-pr
 ### Simple list — `features/sessions/sidebar/ArchivedSessionsDialog.tsx`
 
 Keep DialogContent's default `p-6 gap-4 grid`, a visible `DialogHeader`/`DialogTitle`, a `ScrollArea` with
-`max-h-[340px]`, a centered `py-8 text-body text-muted-foreground` empty state. `max-w-sm`.
+`max-h-[340px]`, a centered `py-8 text-sm text-muted-foreground` empty state. `max-w-sm`.
 
 ### Confirm — `components/ui/confirm-dialog.tsx`
 
@@ -76,16 +76,14 @@ close button in a custom header). A `hideClose` dialog with neither leaves Escap
 
 ## Menus and popovers
 
-`components/ui/menu-variants.ts` is the single source of geometry:
+**The v1 menu stack is gone** (2026-08-07): `menu-variants.ts`, `menu.tsx`, and the v1
+`dropdown-menu`/`popover` were all deleted. Use `@v2/components/ui/dropdown-menu` — a floating list of
+actions or choices is ALWAYS a DropdownMenu, never a hand-styled Popover.
 
-- `MENU_CONTENT_PADDING = 'p-[5px]'` on every popover/menu content surface.
-- `menuItemVariants` — `flex items-center gap-[9px] rounded-sm px-[8px] py-[7px] text-label`, icons forced
-  to `size-[13px]` and `text-muted-foreground` unless the call site sets its own. Tones:
-  `default` / `muted` / `destructive`.
-
-Compose it — both the Radix `DropdownMenu`/`ContextMenu` items and the Popover-side `MenuRow` do. See
-`components/ui/menu.tsx` (`MenuRow`, `MenuDivider`, `MenuEmpty`) and a full example in
-`features/run/ToolbarLaunchControls.tsx`.
+The v2 item supplies its own geometry and a `variant="destructive"`; do not restate either. The one
+house override is the icon size: menu-item icons take `size-3.5` at the call site (v2's own rule would
+make them `size-4`). See `features/git/BranchPopover.tsx` for the full pattern — Groups, Collapsible
+section headers, and a `DropdownMenuSub` per row.
 
 ⚠️ `Hint` self-wraps a `TooltipProvider` and must **wrap** a Popover/Dropdown trigger, never sit inside it —
 a non-forwarding component inside an `asChild` clone drops the ref Popper needs, and the trigger goes inert.
@@ -104,7 +102,7 @@ Separators mark *group boundaries* — one per boundary, not one per control.
 
 Variants `default` / `destructive` / `outline` / `secondary` / `ghost` / `link`; sizes `sm` (h-7) /
 `default` (h-8) / `lg` (h-9) / `icon` (7×7) / `icon-sm` (6×6) / `icon-lg` (8×8). Base is `rounded-md
-text-body font-medium`, SVGs auto-sized to `size-3.5`, disabled at `opacity-[0.45]`.
+text-sm font-medium`, SVGs auto-sized to `size-3.5`, disabled at `opacity-[0.45]`.
 
 Raw `<button>` with hand-written classes is common in dense list rows (see `ArchivedSessionRow`) — that's
 accepted for row-scale affordances. Anything that reads as a *button* (primary action, retry, footer
@@ -158,4 +156,4 @@ above the overlays.
 
 Look at how the neighbouring surface does all three before inventing one. Loading is usually
 `animate-pulse rounded-md bg-muted` blocks matching the real content's shape; empty is centred
-`text-body text-muted-foreground`; error states name what failed and offer one action.
+`text-sm text-muted-foreground`; error states name what failed and offer one action.

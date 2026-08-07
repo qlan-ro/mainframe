@@ -29,7 +29,7 @@ The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure 
 | | v1 (warm chrome) | v2 (stock) |
 |---|---|---|
 | Spacing | **compressed** — `p-2` is 4px | **standard** — `p-2` is 8px |
-| Type | 8 named rungs (`text-body` …) | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16px |
+| Type | 8 named rungs (`text-body` …) — **retired 2026-08-07** | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16/24, `text-lg` 18/28 |
 | Radius | `--radius` 8px base, `mf` names | `--radius` 0.625rem, stock `rounded-*` |
 | Color | ~90 `mf-*` extensions | shadcn contract only, **plus three additions below** |
 
@@ -679,6 +679,33 @@ The duplicated v1 primitives and every generic bridge colour are gone.
 - **Three bridge tokens survive:** `--mf-window` (ErrorState backdrop), `--mf-text-4`, `--mf-selection`,
   plus the pinned content palettes and the tasks/automations design-constant tables. Members of a pinned
   palette with no consumer of their own stay — they are pinned as a set.
-- **Type rungs still live in the bridge** and were not touched: the un-ported areas speak them. The four
-  app-owned primitives moved `text-caption`(11) → `text-xs`(11) — same size, line-height 14.85→16px.
-  `text-label`(12) has **no v2 equivalent** (v2 has 11 and 13), so `read-more` keeps it.
+- **Type rungs went too, in the same day's second pass** — see the section below.
+
+### 2026-08-07 (second pass) — the v1 type scale is retired
+
+126 usages across 39 files. The bridge's rung block is deleted, and so is `cn()`'s
+`extendTailwindMerge` font-size registration — its whole reason for existing was that
+tailwind-merge read the custom rung names as colours and dropped the size.
+
+| v1 rung | px / leading | → v2 | px / leading | delta |
+|---|---|---|---|---|
+| `text-micro` | 10 / 13 | `text-xs` | 11 / 16 | +1px (1 site: the code gutter) |
+| `text-caption` | 11 / 14.85 | `text-xs` | 11 / 16 | **size lossless**, +1.15 leading |
+| `text-label` | 12 / 16.8 | `text-xs` | 11 / 16 | −1px |
+| `text-body` | 13 / 19.5 | `text-sm` | 13 / 18 | **size lossless**, −1.5 leading |
+| `text-heading` | 15 / 19.5 | `text-base` | 16 / 24 | +1px — DialogTitle's own rung |
+| `text-title` | 17 / 21.25 | `text-lg` | 18 / 28 | +1px — kept a step above heading |
+
+`title`→`lg` rather than `base` on purpose: mapping both to `base` would collapse two rungs into one.
+
+**Measured, not assumed.** Dense-row hotspots were probed before and after: TaskListRow 42px→42px,
+TaskCard 100px→100px, the tool-card file path 15px→15px — all identical, because the shrunken leading
+absorbed into rows whose height is set by a taller sibling.
+
+**`text-xl` and up are phantoms.** A probe read `text-xl` as 13px/18px — it is never used, so Tailwind
+never generates it and the class does nothing while *looking* correct. This also means you cannot test a
+candidate class in a browser probe unless it already exists in the built CSS.
+
+One geometry fix rode along: the shiki line-number gutter was `w-[34px] pe-5`, and `pe-5` reserves 20px
+of that, leaving 14px — only ever enough for two digits (three overflowed even at the old 10px). It is
+`w-[42px]` now, so a 3-digit line number fits with the 20px gap unchanged.
