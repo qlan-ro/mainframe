@@ -91,6 +91,7 @@ function PanelBody({ state, port }: { state: SessionPanelState; port: number }) 
 export function SessionPanel({ state }: { state: SessionPanelState }) {
   const port = useDaemonPort();
   const { mode, focusRequest } = state;
+  const hidden = mode === 'hidden';
 
   const railButtons = useRef(new Map<SessionPanelSectionId, HTMLButtonElement>());
   const registerButton = useCallback((id: SessionPanelSectionId, el: HTMLButtonElement | null) => {
@@ -112,6 +113,10 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
     if (active != null && active !== document.body) return;
     railButtons.current.get(targetId ?? 'summary')?.focus();
   }, [mode, targetId]);
+
+  // After every hook: when the gutter can't even hold the rail, nothing may
+  // overlap the transcript — no card, no rail, no root.
+  if (hidden) return null;
 
   return (
     <div

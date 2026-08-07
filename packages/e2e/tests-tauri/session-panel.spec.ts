@@ -26,7 +26,9 @@
  * the 256px sidebar and the AppShell `p-2 gap-2` insets, leaves a ~1000px host:
  * rail, with no ambiguity. Every describe therefore calls `page.setViewportSize()`
  * explicitly: WIDE (2100 → host ~1820, ~290px of headroom) for the section tests,
- * NARROW (900 → host ~620) for the rail/overlay test. Mode is asserted by
+ * NARROW (1200 → host ~920, inside the rail band 876–1531) for the rail/overlay
+ * tests; TINY (900 → host ~620, under RAIL_MIN_WIDTH 876) proves the hidden
+ * regime — nothing may overlap the transcript. Mode is asserted by
  * `session-panel` vs `session-panel-rail` VISIBILITY, never by measuring boxes.
  *
  * ── The card and the rail never show together ────────────────────────────────
@@ -124,7 +126,8 @@ const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 /** Chat-host width comfortably above / below `INLINE_MIN_WIDTH` (1532). */
 const WIDE = { width: 2100, height: 900 };
-const NARROW = { width: 900, height: 900 };
+const NARROW = { width: 1200, height: 900 };
+const TINY = { width: 900, height: 900 };
 
 // A 1x1 transparent PNG — small enough to round-trip instantly through the
 // attachment store, real enough for the grid to render an <img>.
@@ -379,6 +382,16 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     await page.setViewportSize(NARROW);
     await expect(page.getByTestId('session-panel')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByTestId('session-panel-rail')).toBeVisible();
+    await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
+  });
+
+  test('a gutter under even the rail hides the panel entirely', async () => {
+    const { page } = app;
+    await page.setViewportSize(TINY);
+    // Nothing may overlap the transcript: no card, no rail, no root.
+    await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId('session-panel-rail')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
   });
 

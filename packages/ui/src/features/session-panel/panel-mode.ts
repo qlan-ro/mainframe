@@ -7,11 +7,12 @@
  * question about that gutter, not about the surface as a whole: the column is
  * centred, so each gutter is half of whatever the surface has left over.
  *
- * The four states:
- *   gutter fits, not collapsed → `inline`  — the card floats in the gutter, alone
- *   gutter fits, collapsed     → `rail`    — a rail click takes it back inline
- *   gutter short               → `rail`    — the rail floats at the surface edge
- *   gutter short, asked for it → `overlay` — the same card, over the transcript
+ * The five states:
+ *   gutter fits, not collapsed  → `inline`  — the card floats in the gutter, alone
+ *   gutter fits, collapsed      → `rail`    — a rail click takes it back inline
+ *   gutter short                → `rail`    — the rail floats at the surface edge
+ *   gutter short, asked for it  → `overlay` — the same card, over the transcript
+ *   gutter under even the rail  → `hidden`  — nothing overlaps the transcript
  */
 
 /** ChatThread's message column: `max-w-3xl`, border-box, so its `px-5` is inside. */
@@ -42,7 +43,14 @@ export const PANEL_BLOCK_WIDTH = PANEL_MARGIN + PANEL_WIDTH + RAIL_MARGINS + RAI
 /** Surface width at which BOTH gutters clear a panel block — 1532px. */
 export const INLINE_MIN_WIDTH = TRANSCRIPT_WIDTH + 2 * PANEL_BLOCK_WIDTH;
 
-export type PanelMode = 'inline' | 'rail' | 'overlay';
+/** What one gutter must hold for the rail alone. */
+export const RAIL_BLOCK_WIDTH = RAIL_MARGINS + RAIL_WIDTH;
+
+/** Surface width at which the gutters clear a rail block — 876px. Below it the
+ *  rail would sit on top of transcript text, so nothing renders at all. */
+export const RAIL_MIN_WIDTH = TRANSCRIPT_WIDTH + 2 * RAIL_BLOCK_WIDTH;
+
+export type PanelMode = 'inline' | 'rail' | 'overlay' | 'hidden';
 
 export interface PanelModeInput {
   /** Width of the host row the panel floats over. */
@@ -57,7 +65,15 @@ export function gutterFitsPanel(surfaceWidth: number): boolean {
   return surfaceWidth >= INLINE_MIN_WIDTH;
 }
 
+/** True when the gutter at least holds the rail without touching the column. */
+export function gutterFitsRail(surfaceWidth: number): boolean {
+  return surfaceWidth >= RAIL_MIN_WIDTH;
+}
+
 export function derivePanelMode({ surfaceWidth, userCollapsed, overlayOpen }: PanelModeInput): PanelMode {
+  // No room for even the rail → nothing overlaps the transcript. This also
+  // covers the pre-measurement width of 0, so the panel never flashes.
+  if (!gutterFitsRail(surfaceWidth)) return 'hidden';
   // Room wins: a gutter that fits shows the card outright, or the rail the user
   // asked for — never the overlay, which exists only to borrow the transcript.
   if (gutterFitsPanel(surfaceWidth)) return userCollapsed ? 'rail' : 'inline';

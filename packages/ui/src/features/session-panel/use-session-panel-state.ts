@@ -15,7 +15,7 @@ import {
   type SessionPanelSectionId,
   type SessionPanelOpenSectionId,
 } from '@/store/ui-prefs';
-import { derivePanelMode, gutterFitsPanel, type PanelMode } from './panel-mode';
+import { derivePanelMode, gutterFitsPanel, gutterFitsRail, type PanelMode } from './panel-mode';
 
 export interface FocusRequest {
   id: SessionPanelSectionId;
@@ -87,13 +87,16 @@ export function useSessionPanelState(): SessionPanelState {
   }, []);
 
   const gutterFits = gutterFitsPanel(surfaceWidth);
+  const railFits = gutterFitsRail(surfaceWidth);
   const mode = derivePanelMode({ surfaceWidth, userCollapsed, overlayOpen });
 
   // A floated panel has no reason to survive the gutter opening back up: once
   // there is room, the card belongs in it (or in the rail, if the user said so).
+  // And when the surface squeezes below even the rail, a stale overlay flag
+  // would pop the card back the moment the rail returns — drop it there too.
   useEffect(() => {
-    if (gutterFits && overlayOpen) setOverlayOpen(false);
-  }, [gutterFits, overlayOpen]);
+    if (overlayOpen && (gutterFits || !railFits)) setOverlayOpen(false);
+  }, [gutterFits, railFits, overlayOpen]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {

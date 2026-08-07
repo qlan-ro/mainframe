@@ -82,7 +82,7 @@ function panelState(mode: PanelMode, focusId: SessionPanelState['focusRequest'] 
   return {
     hostRef: { current: null },
     rootRef: { current: null },
-    surfaceWidth: mode === 'inline' ? 1600 : 800,
+    surfaceWidth: mode === 'inline' ? 1600 : 1000,
     mode,
     focusRequest: focusId,
     isSectionOpen: () => true,
@@ -111,6 +111,14 @@ describe('SessionPanel — mode rendering', () => {
     expect(screen.queryByTestId('session-panel')).toBeNull();
     expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
+  });
+
+  it('renders nothing at all when hidden — no card, no rail, no root', () => {
+    render(<SessionPanel state={panelState('hidden')} />);
+    expect(screen.queryByTestId('session-panel-root')).toBeNull();
+    expect(screen.queryByTestId('session-panel')).toBeNull();
+    expect(screen.queryByTestId('session-panel-rail')).toBeNull();
+    expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
   });
 
   it('renders the floating card in overlay mode, and not the inline one', () => {

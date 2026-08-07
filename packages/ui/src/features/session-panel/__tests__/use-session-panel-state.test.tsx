@@ -64,9 +64,9 @@ describe('useSessionPanelState — mode', () => {
 
   it('starts in rail mode on a narrow surface', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     expect(result.current.mode).toBe('rail');
-    expect(result.current.surfaceWidth).toBe(800);
+    expect(result.current.surfaceWidth).toBe(1000);
   });
 
   it('sits inline on a wide surface', () => {
@@ -75,15 +75,33 @@ describe('useSessionPanelState — mode', () => {
     expect(result.current.mode).toBe('inline');
   });
 
-  it('drops the overlay when the surface grows back to inline', () => {
+  it('hides everything when the gutter is under even the rail', () => {
     const { result } = renderPanelState();
     setWidth(800);
+    expect(result.current.mode).toBe('hidden');
+  });
+
+  it('drops a floated overlay when the surface squeezes below the rail band', () => {
+    const { result } = renderPanelState();
+    setWidth(1000);
+    act(() => result.current.selectSection('activity'));
+    expect(result.current.mode).toBe('overlay');
+    setWidth(800);
+    expect(result.current.mode).toBe('hidden');
+    // …and returning to the rail band shows the rail, not a resurrected overlay.
+    setWidth(1000);
+    expect(result.current.mode).toBe('rail');
+  });
+
+  it('drops the overlay when the surface grows back to inline', () => {
+    const { result } = renderPanelState();
+    setWidth(1000);
     act(() => result.current.selectSection('activity'));
     expect(result.current.mode).toBe('overlay');
     setWidth(1600);
     expect(result.current.mode).toBe('inline');
     // …and it does not come back when the surface narrows again.
-    setWidth(800);
+    setWidth(1000);
     expect(result.current.mode).toBe('rail');
   });
 
@@ -117,7 +135,7 @@ describe('useSessionPanelState — mode', () => {
     const { result } = renderPanelState();
     setWidth(1600);
     act(() => result.current.collapsePanel());
-    setWidth(800);
+    setWidth(1000);
     expect(result.current.mode).toBe('rail');
     setWidth(1600);
     expect(result.current.mode).toBe('rail');
@@ -125,14 +143,14 @@ describe('useSessionPanelState — mode', () => {
 
   it('drops a floating panel when the gutter opens back up, even while collapsed', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('activity'));
     expect(result.current.mode).toBe('overlay');
     act(() => result.current.collapsePanel());
     setWidth(1600);
     expect(result.current.mode).toBe('rail');
     // The stale overlay must not resurface when the surface narrows again.
-    setWidth(800);
+    setWidth(1000);
     expect(result.current.mode).toBe('rail');
   });
 });
@@ -164,7 +182,7 @@ describe('useSessionPanelState — section open state', () => {
 describe('useSessionPanelState — selectSection', () => {
   it('floats the panel and expands the target when rail-only', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('launch'));
     expect(result.current.mode).toBe('overlay');
     expect(result.current.isSectionOpen('launch')).toBe(true);
@@ -173,7 +191,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('persists the expansion — the section you navigate to stays open next session', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('launch'));
     expect(useUiPrefs.getState().sessionPanelSections.launch).toBe(true);
   });
@@ -206,7 +224,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('closes a floating panel that is already showing the clicked section', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('activity'));
     expect(result.current.mode).toBe('overlay');
     act(() => result.current.selectSection('activity'));
@@ -217,7 +235,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('re-points a floating panel at a different section without closing it', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('activity'));
     act(() => result.current.selectSection('context'));
     expect(result.current.mode).toBe('overlay');
@@ -226,7 +244,7 @@ describe('useSessionPanelState — selectSection', () => {
 
   it('accepts Summary, which floats the panel without writing a pref', () => {
     const { result } = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => result.current.selectSection('summary'));
     expect(result.current.mode).toBe('overlay');
     expect(useUiPrefs.getState().sessionPanelSections).toEqual({});
@@ -261,7 +279,7 @@ describe('useSessionPanelState — section scroll registry', () => {
 describe('useSessionPanelState — light dismiss', () => {
   function openOverlay() {
     const rendered = renderPanelState();
-    setWidth(800);
+    setWidth(1000);
     act(() => rendered.result.current.selectSection('activity'));
     return rendered;
   }
