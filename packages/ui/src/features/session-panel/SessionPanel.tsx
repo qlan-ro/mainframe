@@ -124,7 +124,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
       {mode === 'inline' && (
         <div
           data-testid="session-panel"
-          className={cn(PANEL_CHROME, 'my-2 mr-8 ml-2 max-h-[calc(100%-16px)] self-start shadow-lg')}
+          className={cn(PANEL_CHROME, 'mt-8 mr-8 mb-2 ml-2 max-h-[calc(100%-40px)] self-start shadow-lg')}
         >
           <PanelBody state={state} port={port} />
         </div>
