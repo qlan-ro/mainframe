@@ -508,13 +508,14 @@ test.describe('§session-panel — Summary rows', () => {
     await expect(page.getByTestId('session-panel-summary-branch-wt')).toHaveCount(0);
   });
 
-  test('the changes row counts the dirty files with their +/- totals', async () => {
+  test('the changes row shows the +/- totals, with the file count on the tooltip only', async () => {
     const { page } = app;
     const row = page.getByTestId('session-panel-summary-changes');
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // dirtyRepo(): two pure appends → 2 files, +2, −0. A clean tree suppresses the
-    // +/− pair entirely, so asserting them proves the non-zero branch.
-    await expect(row).toContainText('2 files');
+    // dirtyRepo(): two pure appends → +2, −0. A clean tree suppresses the +/− pair
+    // entirely, so asserting them proves the non-zero branch. The file count left
+    // the row (it widened it for nothing) and lives on the hover tooltip now.
+    await expect(row).not.toContainText('files');
     await expect(row).toContainText('+2');
     await expect(row).toContainText('−0'); // U+2212 minus sign
   });
