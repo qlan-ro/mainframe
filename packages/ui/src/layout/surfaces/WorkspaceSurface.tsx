@@ -156,8 +156,6 @@ export function WorkspaceSurface() {
 
   return (
     <div data-testid="workspace-surface" className="flex h-full flex-row">
-      {/* PROTOTYPE — remove with features/workspace-proto */}
-      {protoFilesSidebar && <WorkspaceFilesSidebar />}
       <div className="flex h-full min-w-0 flex-1 flex-col">
         {hasContent ? (
           <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
@@ -179,6 +177,8 @@ export function WorkspaceSurface() {
           </>
         )}
       </div>
+      {/* PROTOTYPE — remove with features/workspace-proto. Right edge by verdict. */}
+      {protoFilesSidebar && <WorkspaceFilesSidebar />}
     </div>
   );
 }

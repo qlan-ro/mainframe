@@ -10,11 +10,12 @@
  */
 import { create } from 'zustand';
 
+// Verdict round: C + B picked (tabs in title bar, files in workspace but on
+// the RIGHT edge). The cycle is now baseline vs. the combined pick; the C/D
+// exploration variants live in this branch's first commit.
 export const WS_PROTO_VARIANTS = [
-  { id: 'A', label: 'A — Today (files right)' },
-  { id: 'B', label: 'B — Files in workspace' },
-  { id: 'C', label: 'C — Tabs in title bar' },
-  { id: 'D', label: 'D — Tabs as chat header' },
+  { id: 'A', label: 'A — Today' },
+  { id: 'B', label: 'B — Tabs + files right' },
 ] as const;
 
 export type WsProtoVariantId = (typeof WS_PROTO_VARIANTS)[number]['id'];

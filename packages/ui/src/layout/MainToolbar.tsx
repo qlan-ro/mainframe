@@ -112,7 +112,7 @@ export function MainToolbar({
   } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
 
   // PROTOTYPE — remove with features/workspace-proto
-  const protoTitlebarTabs = useWsProtoVariant() === 'C';
+  const protoTitlebarTabs = useWsProtoVariant() === 'B';
 
   return (
     <div

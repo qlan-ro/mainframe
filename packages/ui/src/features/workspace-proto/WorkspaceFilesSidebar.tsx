@@ -1,17 +1,17 @@
 /**
  * PROTOTYPE — remove with features/workspace-proto.
  *
- * The Files tree as a LOCAL sidebar inside the workspace surface (left of the
- * pane row, inside the surface card), instead of today's app-level right
- * InspectorPane. Uses the real FileTree against the live daemon, so opening a
- * file from it exercises the real open-file intent path.
+ * The Files tree as a LOCAL sidebar inside the workspace surface — on the
+ * surface's RIGHT edge (verdict round: the user picked right over left),
+ * instead of today's app-level right InspectorPane. Uses the real FileTree
+ * against the live daemon, so opening a file exercises the real intent path.
  *
  * Collapse is session-local state (no ui-prefs write for a prototype). The
  * collapsed form is a thin rail with one re-open button — the same idiom the
  * session panel established on the chat side.
  */
 import { useState } from 'react';
-import { FolderTree, PanelLeftClose } from 'lucide-react';
+import { FolderTree, PanelRightClose } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -27,7 +27,7 @@ export function WorkspaceFilesSidebar() {
     return (
       <div
         data-testid="proto-files-rail"
-        className="flex w-9 shrink-0 flex-col items-center border-r border-border pt-1.5"
+        className="flex w-9 shrink-0 flex-col items-center border-l border-border pt-1.5"
       >
         <Hint label="Show files">
           <Button
@@ -45,7 +45,7 @@ export function WorkspaceFilesSidebar() {
   }
 
   return (
-    <div data-testid="proto-files-sidebar" className="flex w-60 shrink-0 flex-col border-r border-border">
+    <div data-testid="proto-files-sidebar" className="flex w-60 shrink-0 flex-col border-l border-border">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-border pr-1 pl-3">
         <span className="text-xs font-medium text-muted-foreground">Files</span>
         <Hint label="Collapse files">
@@ -56,7 +56,7 @@ export function WorkspaceFilesSidebar() {
             onClick={() => setCollapsed(true)}
             className="text-muted-foreground"
           >
-            <PanelLeftClose />
+            <PanelRightClose />
           </Button>
         </Hint>
       </div>
