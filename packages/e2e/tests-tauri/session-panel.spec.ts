@@ -382,10 +382,15 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
   });
 
+  // Each overlay test narrows for itself: a mid-describe Playwright retry (and a
+  // solo `-g` run) re-runs the test against a fresh WIDE app, where inline mode
+  // has no rail at all — depending on the previous test's viewport is a trap.
   test('a rail click floats the panel; Escape dismisses it', async () => {
     const { page } = app;
+    await page.setViewportSize(NARROW);
     const overlay = page.getByTestId('session-panel-overlay');
 
+    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('session-panel-rail-open').click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
     await expect(overlay).toHaveAttribute('role', 'dialog');
@@ -399,8 +404,10 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
 
   test('a pointer outside the panel dismisses the floating card', async () => {
     const { page } = app;
+    await page.setViewportSize(NARROW);
     const overlay = page.getByTestId('session-panel-overlay');
 
+    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('session-panel-rail-open').click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
 
@@ -415,9 +422,11 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
 
   test('re-clicking the rail button that opened the overlay closes it again', async () => {
     const { page } = app;
+    await page.setViewportSize(NARROW);
     const overlay = page.getByTestId('session-panel-overlay');
     const railOpen = page.getByTestId('session-panel-rail-open');
 
+    await expect(page.getByTestId('session-panel-rail')).toBeVisible({ timeout: 10_000 });
     await railOpen.click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
     await railOpen.click();
@@ -431,9 +440,11 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
   // NON-summary section, which nothing else reaches.
   test('right-clicking the rail launch button floats the panel on the Launch section', async () => {
     const { page } = app;
+    await page.setViewportSize(NARROW);
     // The rail's launch button is a quick ACTION on left-click; the right-click is
     // the documented route to config selection when the panel is rail-only.
     const railLaunch = page.getByTestId('session-panel-rail-launch');
+    await expect(railLaunch).toBeVisible({ timeout: 10_000 });
     await railLaunch.click({ button: 'right' });
     const overlay = page.getByTestId('session-panel-overlay');
     await expect(overlay).toBeVisible({ timeout: 5_000 });
