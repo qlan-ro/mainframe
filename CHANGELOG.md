@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.0-rc.20
+
+
+### Patch Changes
+
+- Updated dependencies [[`074f06c`](https://github.com/qlan-ro/mainframe/commit/074f06c33c941c7d8dcfa2ba71e939a6c466dc61)]:
+  - @qlan-ro/mainframe-ui@2.0.0-rc.20
+
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.20
+
+
+### Patch Changes
+
+- [#569](https://github.com/qlan-ro/mainframe/pull/569) [`074f06c`](https://github.com/qlan-ro/mainframe/commit/074f06c33c941c7d8dcfa2ba71e939a6c466dc61) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Retire the v1 layer from packages/ui. The duplicated tooltip, hint, popover, dropdown-menu and scroll-area primitives now render through their v2 counterparts; every generic `mf-*` colour and the whole v1 type scale are swept onto v2 semantics and deleted from the bridge sheet, which now holds only domain palettes and app chrome with no v2 equivalent.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.20
+
+
 ## 2.0.0-rc.16
 
 
