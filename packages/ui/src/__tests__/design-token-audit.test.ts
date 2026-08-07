@@ -74,6 +74,9 @@ describe('design token audit', () => {
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
     'features/settings/SettingsSidebar.tsx',
+    // Hash-pinned upstream transcription (assistant-ui agent-plan); its
+    // text-[13.5px]/text-[11px] rungs are the element's approved look.
+    'features/session-panel/AgentPlan.tsx',
   ]);
 
   // Stock text-xs/sm/base/… ARE the app's typography scale since the v2 body
