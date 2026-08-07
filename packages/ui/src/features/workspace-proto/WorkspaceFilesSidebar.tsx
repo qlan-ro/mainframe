@@ -1,9 +1,10 @@
 /**
  * PROTOTYPE — remove with features/workspace-proto.
  *
- * The Files tree as a LOCAL sidebar inside the workspace surface — on the
- * surface's RIGHT edge (verdict round: the user picked right over left),
- * instead of today's app-level right InspectorPane. Uses the real FileTree
+ * The Files tree as a LOCAL sidebar on the workspace surface's RIGHT edge
+ * (verdict rounds: right over left; no "Files" header row — the tree's own
+ * project-name/refresh row is the header, and the collapse control sits next
+ * to the refresh icon via FileTree's proto `headerExtra` slot). Real FileTree
  * against the live daemon, so opening a file exercises the real intent path.
  *
  * Collapse is session-local state (no ui-prefs write for a prototype). The
@@ -44,27 +45,28 @@ export function WorkspaceFilesSidebar() {
     );
   }
 
+  // Matches FileTree's own hand-rolled 20px refresh button, so the pair reads
+  // as one control cluster on the tree's header row.
+  const collapseButton = (
+    <Hint label="Collapse files">
+      <button
+        data-testid="proto-files-collapse"
+        type="button"
+        onClick={() => setCollapsed(true)}
+        className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
+      >
+        <PanelRightClose size={14} className="text-muted-foreground" />
+      </button>
+    </Hint>
+  );
+
   return (
     <div data-testid="proto-files-sidebar" className="flex w-60 shrink-0 flex-col border-l border-border">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-border pr-1 pl-3">
-        <span className="text-xs font-medium text-muted-foreground">Files</span>
-        <Hint label="Collapse files">
-          <Button
-            data-testid="proto-files-collapse"
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => setCollapsed(true)}
-            className="text-muted-foreground"
-          >
-            <PanelRightClose />
-          </Button>
-        </Hint>
-      </div>
       <div className="min-h-0 flex-1 overflow-y-auto py-1.5">
         {!projectId ? (
           <div className="px-3 py-4 text-xs text-muted-foreground">Open a session to browse its files.</div>
         ) : (
-          <FileTree port={port} projectId={projectId} chatId={chatId} />
+          <FileTree port={port} projectId={projectId} chatId={chatId} headerExtra={collapseButton} />
         )}
       </div>
     </div>

@@ -11,7 +11,7 @@
  * transiently highlights it. The target is consumed (cleared) on mount so a
  * subsequent remount does not re-trigger the reveal.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronRight, File, Folder, RotateCw } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -198,9 +198,11 @@ interface FileTreeProps {
   port: number;
   projectId: string;
   chatId?: string;
+  /** PROTOTYPE — extra control(s) after the refresh button; remove with features/workspace-proto. */
+  headerExtra?: ReactNode;
 }
 
-export function FileTree({ port, projectId, chatId }: FileTreeProps) {
+export function FileTree({ port, projectId, chatId, headerExtra }: FileTreeProps) {
   const [roots, setRoots] = useState<FileTreeEntry[] | null>(null);
   const [error, setError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -271,6 +273,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
             <RotateCw size={14} className="text-muted-foreground" />
           </button>
         </Hint>
+        {headerExtra}
       </div>
       <div className="py-[4px]">
         {sortEntries(roots).map((entry) => (
