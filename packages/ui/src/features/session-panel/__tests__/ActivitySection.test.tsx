@@ -9,7 +9,7 @@
  * Behaviors covered:
  *  - the empty state keeps the header and shows one muted placeholder row, with
  *    no count badge (D6)
- *  - one row per live task, with its description and elapsed time
+ *  - one row per live task, with its description, elapsed time and working dot
  *  - the count badge appears only while work is running
  *  - a live workflow row drills into its run panel; the breadcrumb comes back
  *  - agent/bash rows are inert
@@ -18,7 +18,7 @@
  * Mocked dependencies: `useChatExtras` (tasks + chat id) and `useWorkflowRun`.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import type { BackgroundActivityTask, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@v2/components/ui/tooltip';
 
@@ -119,6 +119,16 @@ describe('ActivitySection — task rows', () => {
     mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
     render(section());
     expect(screen.getByTestId('session-panel-section-toggle-activity')).toHaveTextContent('2');
+  });
+
+  it('marks every row as working with the pulse dot — the daemon ships no other status', () => {
+    mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
+    render(section());
+
+    expect(within(screen.getByTestId('session-panel-task-a-1')).getByTestId('session-panel-working-dot')).toHaveClass(
+      'animate-pulse',
+    );
+    expect(within(screen.getByTestId('session-panel-task-b-1')).getByTestId('session-panel-working-dot')).toBeVisible();
   });
 
   it('leaves agent and bash rows inert — there is nothing to drill into', () => {
