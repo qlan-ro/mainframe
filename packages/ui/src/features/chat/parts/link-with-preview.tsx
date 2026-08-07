@@ -8,7 +8,7 @@
  */
 import React, { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -101,7 +101,7 @@ export function LinkWithPreview({
           </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
-      <TooltipContent className="flex items-center gap-1.5 max-w-[400px]">
+      <TooltipContent className="max-w-sm">
         <span className="truncate min-w-0">{href}</span>
         <button
           data-testid="chat-link-copy-url"
