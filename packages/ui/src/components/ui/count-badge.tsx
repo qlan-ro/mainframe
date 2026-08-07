@@ -1,3 +1,8 @@
+/**
+ * App-owned primitive on v2 tokens. `components/ui/` is no longer a v1 mirror of
+ * the shadcn registry — that is `src/v2/components/ui/`, kept stock. What lives
+ * here has no registry counterpart and is ours to shape.
+ */
 import { cn } from '@/lib/utils';
 
 export interface CountBadgeProps {
@@ -32,7 +37,7 @@ export function CountBadge({
       <span
         className={cn(
           'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1',
-          'text-caption font-semibold tabular-nums',
+          'text-xs font-semibold tabular-nums',
           tone === 'destructive' ? 'bg-destructive' : 'bg-primary',
           'text-primary-foreground',
           className,
@@ -47,7 +52,7 @@ export function CountBadge({
   return (
     <span
       className={cn(
-        'text-caption font-semibold tabular-nums',
+        'text-xs font-semibold tabular-nums',
         variant === 'unread' ? 'text-primary' : 'text-muted-foreground',
         onAccent && 'text-primary-foreground',
         className,

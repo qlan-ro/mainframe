@@ -1,4 +1,8 @@
 /**
+ * App-owned primitive on v2 tokens. `components/ui/` is no longer a v1 mirror of
+ * the shadcn registry — that is `src/v2/components/ui/`, kept stock. What lives
+ * here has no registry counterpart and is ours to shape.
+ *
  * ReadMore — shared "Read more / Show less" clamp primitive.
  *
  * Clamping strategy: character-length heuristic against `measureText`

@@ -11,7 +11,7 @@ describe('SectionHeader', () => {
   it('uses the muted caption recipe, not the old bold/uppercase eyebrow', () => {
     render(<SectionHeader data-testid="sh">Favorites</SectionHeader>);
     const cls = screen.getByTestId('sh').className;
-    expect(cls).toContain('text-caption');
+    expect(cls).toContain('text-xs');
     expect(cls).toContain('font-medium');
     expect(cls).toContain('text-muted-foreground');
     expect(cls).not.toContain('uppercase');
