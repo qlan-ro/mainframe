@@ -22,6 +22,7 @@ import { CompactingPill } from '../messages/SystemMessage';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
+import { formatElapsedSeconds, useRunElapsed } from './use-run-elapsed';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
 import { FindBar } from '../find/FindBar';
 import { useFindHotkey } from '../find/use-find-hotkey';
@@ -54,12 +55,36 @@ function LoadErrorBanner() {
 const RUNNING_PHRASES = ['Thinking…', 'Working…', 'Reasoning…', 'Crunching…', 'Composing…'] as const;
 const PHRASE_INTERVAL_MS = 2600;
 
+/**
+ * Two treatments lifted from assistant-ui's `elements-thinking-indicator`
+ * (https://r.assistant-ui.com/elements-thinking-indicator.json, fetched
+ * 2026-08-07; sha256 of its `files[0].content`
+ * 974a60f431517c6c53273af3f8eef3f31dd37c00ca620b14b9297a91838f03d3 — the
+ * registry item carries no version, so re-pull and diff against that hash):
+ * the leading pulse dot and the trailing elapsed readout. An IDEA
+ * lift, not a fork — the component stays ours, so both are re-themed to house
+ * tokens: the dot is `primary`, not upstream's `blue-500` (v2's settled
+ * "working" signal — same call AssistantMessage's RunningIndicator took), and
+ * the readout takes `muted-foreground` rather than upstream's `text-foreground/30`
+ * ink tier, matching every other elapsed reading in the app.
+ *
+ * NOT taken: upstream's per-label entrance animation. It needs a second,
+ * absolutely-positioned copy of the label to carry the shimmer (`animate-in`
+ * and `shimmer` both write `animation`, so one element cannot do both), which
+ * would duplicate the phrase in the accessibility tree and in this row's
+ * textContent.
+ */
 function GeneratingIndicator() {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
   const phrase = useRotatingPhrase(isRunning, RUNNING_PHRASES, PHRASE_INTERVAL_MS);
+  const elapsed = useRunElapsed(isRunning);
   if (!isRunning) return null;
   return (
-    <div data-testid="chat-thread-running" className="px-1 pb-1.5">
+    <div data-testid="chat-thread-running" className="flex items-center gap-2 px-1 pb-1.5">
+      <span
+        aria-hidden
+        className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
+      />
       {/* Stock `shimmer` (from shadcn/tailwind.css, which the v2 sheet imports)
           replaces the bridge's hand-rolled `mf-text-shimmer`. It derives base and
           highlight from currentColor, so `text-muted-foreground` gives the same
@@ -69,6 +94,14 @@ function GeneratingIndicator() {
       <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground shimmer">
         {phrase}
       </span>
+      {elapsed !== undefined && (
+        <span
+          data-testid="chat-thread-running-elapsed"
+          className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+        >
+          {formatElapsedSeconds(elapsed)}
+        </span>
+      )}
     </div>
   );
 }

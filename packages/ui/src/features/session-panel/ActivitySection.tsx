@@ -3,9 +3,15 @@
  * background bash tasks, and workflow runs.
  *
  * The daemon ships only running work (there is no status field on
- * `BackgroundActivityTask`), so every row spins and the count IS the list
- * length. A workflow row drills in place into its run panel — the level swap
- * the composer's two-level popover used to do, minus the popover.
+ * `BackgroundActivityTask` — see background-task.ts), so every row reads as
+ * working and the count IS the list length. That is why `elements-agent-status`
+ * contributes only its working dot here: its `waiting` / `done` branches, and
+ * the `error` branch our workflow model would want, have no data to render, and
+ * its trailing pause/rerun button has no handler upstream. Its pill fill goes
+ * too — these rows are flat by design.
+ *
+ * A workflow row drills in place into its run panel — the level swap the
+ * composer's two-level popover used to do, minus the popover.
  *
  * The section stays mounted across a session switch, so the drill-in is reset
  * on `chatId` explicitly; the popover got that free from Radix unmounting.
@@ -15,7 +21,7 @@
  * worse than a placeholder.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { cn } from '@v2/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
@@ -37,10 +43,34 @@ const KIND_LABEL: Record<BackgroundWorkKind, string> = {
   other: 'Task',
 };
 
+/**
+ * Working dot, lifted from assistant-ui's `elements-agent-status`
+ * (https://r.assistant-ui.com/elements-agent-status.json, fetched 2026-08-07;
+ * sha256 of its `files[0].content`
+ * b2ab3bceee1da9fc28fb0243d38399ce67e08cb6e55c17d40efc72f8a1293227 — the
+ * registry item carries no version, so re-pull and diff against that hash),
+ * in place of the spinner. Re-themed to `primary` — upstream's `blue-500` is
+ * not a token here, and `primary` is the app's settled "working" signal
+ * (AssistantMessage's RunningIndicator, the thread's running indicator).
+ *
+ * The 6px dot sits in the 14px slot the spinner occupied so the title column
+ * does not shift.
+ */
+function WorkingDot() {
+  return (
+    <span aria-hidden className="flex size-3.5 shrink-0 items-center justify-center">
+      <span
+        data-testid="session-panel-working-dot"
+        className="size-1.5 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
+      />
+    </span>
+  );
+}
+
 function RowBody({ title, detail, startedAt, now }: { title: string; detail: string; startedAt: number; now: number }) {
   return (
     <>
-      <LoaderCircle className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+      <WorkingDot />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{title}</div>
         <div className="truncate text-xs text-muted-foreground">{detail}</div>
