@@ -85,8 +85,12 @@ function changesRow(changes: SummaryChangesInput | null): SummaryRow | null {
   return {
     kind: 'changes',
     label: 'Changes',
-    value: fileCount === 0 ? 'No changes' : `${fileCount} file${fileCount === 1 ? '' : 's'}`,
-    tooltip: 'Open the review panel',
+    // The +/− counts carry the row; a file count would just widen it.
+    value: fileCount === 0 ? 'No changes' : '',
+    tooltip:
+      fileCount === 0
+        ? 'Open the review panel'
+        : `${fileCount} file${fileCount === 1 ? '' : 's'} · open the review panel`,
     fileCount,
     additions,
     deletions,

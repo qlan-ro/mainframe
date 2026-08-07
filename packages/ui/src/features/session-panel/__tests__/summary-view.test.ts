@@ -115,22 +115,22 @@ describe('deriveSummaryRows — PRs', () => {
 });
 
 describe('deriveSummaryRows — changes', () => {
-  it('carries the file count and the +/− totals', () => {
+  it('carries the +/− totals, with the file count on the tooltip only', () => {
     const [row] = deriveSummaryRows(input({ changes: { fileCount: 3, additions: 12, deletions: 4 } }));
     expect(row).toEqual({
       kind: 'changes',
       label: 'Changes',
-      value: '3 files',
-      tooltip: 'Open the review panel',
+      value: '',
+      tooltip: '3 files · open the review panel',
       fileCount: 3,
       additions: 12,
       deletions: 4,
     });
   });
 
-  it('says "1 file" in the singular', () => {
+  it('keeps the singular on the tooltip', () => {
     const [row] = deriveSummaryRows(input({ changes: { fileCount: 1, additions: 1, deletions: 0 } }));
-    expect(row).toMatchObject({ value: '1 file' });
+    expect(row).toMatchObject({ value: '', tooltip: '1 file · open the review panel' });
   });
 
   it('renders a clean tree rather than hiding the row', () => {
@@ -143,8 +143,8 @@ describe('deriveSummaryRows — changes', () => {
     expect(row).toEqual({
       kind: 'changes',
       label: 'Changes',
-      value: '2 files',
-      tooltip: 'Open the review panel',
+      value: '',
+      tooltip: '2 files · open the review panel',
       fileCount: 2,
       additions: undefined,
       deletions: undefined,

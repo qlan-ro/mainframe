@@ -61,7 +61,7 @@ function RowTrailing({ row }: { row: SummaryRow }) {
   if (row.kind === 'changes') {
     return (
       <>
-        <span className={ROW_TRAILING}>{row.value}</span>
+        {row.value && <span className={ROW_TRAILING}>{row.value}</span>}
         {/* A clean tree has no diff to count — "+0 −0" would be noise. */}
         {row.fileCount > 0 && row.additions != null && (
           <span className="shrink-0 font-mono text-xs tabular-nums text-success">+{row.additions}</span>

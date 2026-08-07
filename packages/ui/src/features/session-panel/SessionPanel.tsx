@@ -43,7 +43,7 @@ import type { SessionPanelState } from './use-session-panel-state';
  * the panel still reads if a webview declines to composite it.
  */
 const PANEL_CHROME =
-  'pointer-events-auto flex w-80 flex-col overflow-hidden rounded-xl border border-border bg-background/85 backdrop-blur-xl';
+  'pointer-events-auto flex w-72 flex-col overflow-hidden rounded-xl border border-border bg-background/85 backdrop-blur-xl';
 
 /**
  * Where the sections scroll — the panel's only scroll region. Section order is

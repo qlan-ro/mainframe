@@ -17,8 +17,8 @@
 
 /** ChatThread's message column: `max-w-3xl`, border-box, so its `px-5` is inside. */
 const TRANSCRIPT_WIDTH = 768;
-/** SessionPanel's card — `w-80`. */
-const PANEL_WIDTH = 320;
+/** SessionPanel's card — `w-72`. */
+const PANEL_WIDTH = 288;
 /** The card's gap from the transcript — its `ml-2`. Its `mr-4` is separate. */
 const PANEL_MARGIN = 8;
 /** SessionPanelRail: a `w-8` control column, `px-1`, and a 1px border each side. */
@@ -34,7 +34,7 @@ const RAIL_MARGINS = 12;
  * admit the rail the card collapses into.
  *
  * Deliberately conservative — neither state needs all 382. The card occupies
- * 344 (`ml-2` + `w-80` + `mr-4`) and the rail 54. Budgeting for both keeps the
+ * 312 (`ml-2` + `w-72` + `mr-4`) and the rail 54. Budgeting for both keeps the
  * threshold put when either one's margins are tuned, which is why stepping the
  * card's right inset from 8 to 16 did not move it.
  */

@@ -177,10 +177,10 @@ describe('SummarySection — detected PRs', () => {
 });
 
 describe('SummarySection — changes', () => {
-  it('shows the file count and the +/− totals', () => {
+  it('shows the +/− totals without a file count', () => {
     render(<SummarySection port={31415} />);
     const row = screen.getByTestId('session-panel-summary-changes');
-    expect(row).toHaveTextContent('2 files');
+    expect(row).not.toHaveTextContent('files');
     expect(row).toHaveTextContent('+120');
     expect(row).toHaveTextContent('−34');
   });

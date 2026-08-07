@@ -21,12 +21,12 @@
  * `fixtures/app-tauri.ts` calls `browser.newContext()` with no `viewport`, so the
  * suite runs at Playwright's 1280×720 default. The panel floats over the gutter
  * beside the transcript instead of taking width from it, so inline needs the host
- * row to clear `INLINE_MIN_WIDTH = 1532` (panel-mode.ts) — the centred `max-w-3xl`
- * column (768px) plus a 382px panel block in EACH gutter. A 1280 viewport, minus
+ * row to clear `INLINE_MIN_WIDTH = 1468` (panel-mode.ts) — the centred `max-w-3xl`
+ * column (768px) plus a 350px panel block in EACH gutter. A 1280 viewport, minus
  * the 256px sidebar and the AppShell `p-2 gap-2` insets, leaves a ~1000px host:
  * rail, with no ambiguity. Every describe therefore calls `page.setViewportSize()`
  * explicitly: WIDE (2100 → host ~1820, ~290px of headroom) for the section tests,
- * NARROW (1200 → host ~920, inside the rail band 876–1531) for the rail/overlay
+ * NARROW (1200 → host ~920, inside the rail band 876–1467) for the rail/overlay
  * tests; TINY (900 → host ~620, under RAIL_MIN_WIDTH 876) proves the hidden
  * regime — nothing may overlap the transcript. Mode is asserted by
  * `session-panel` vs `session-panel-rail` VISIBILITY, never by measuring boxes.
