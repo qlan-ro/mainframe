@@ -169,8 +169,9 @@ describe('ChatSurface', () => {
 
     const panel = screen.getByTestId('session-panel-root');
     expect(panel).toBeInTheDocument();
-    // jsdom reports a 0px host, whose gutter cannot hold the panel.
-    expect(panel).toHaveAttribute('data-mode', 'rail');
+    // jsdom reports a 0px host, under even the rail band — the pre-measurement
+    // width derives `hidden` so nothing flashes before the first real measure.
+    expect(panel).toHaveAttribute('data-mode', 'hidden');
   });
 
   it('observes the row holding the thread, so a split surface measures what shrinks', () => {
