@@ -23,6 +23,9 @@ import { STRIP_ROW, WorkspaceStripActions, WorkspaceStripLead } from '../Workspa
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
 import { EditorTabBody } from './EditorTabBody';
 import type { RunPane, RunTab } from '@/store/run-pane';
+// PROTOTYPE — remove with features/workspace-proto
+import { useWsProtoVariant } from '@/features/workspace-proto/proto-store';
+import { WorkspaceFilesSidebar } from '@/features/workspace-proto/WorkspaceFilesSidebar';
 
 /**
  * Header shown when the workspace has no tabs — keeps the split/close controls
@@ -148,27 +151,34 @@ export function WorkspaceSurface() {
     activeScopeKey ??
     (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
+  // PROTOTYPE — remove with features/workspace-proto
+  const protoFilesSidebar = useWsProtoVariant() === 'B';
+
   return (
-    <div data-testid="workspace-surface" className="flex h-full flex-col">
-      {hasContent ? (
-        <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
-          {run.panes.map((pane, i) => (
-            <div
-              key={pane.id}
-              className={`flex min-h-0 min-w-0 flex-1 ${
-                i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
-              }`}
-            >
-              <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          <WorkspaceEmptyHeader />
-          <WorkspaceEmptyState />
-        </>
-      )}
+    <div data-testid="workspace-surface" className="flex h-full flex-row">
+      {/* PROTOTYPE — remove with features/workspace-proto */}
+      {protoFilesSidebar && <WorkspaceFilesSidebar />}
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        {hasContent ? (
+          <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
+            {run.panes.map((pane, i) => (
+              <div
+                key={pane.id}
+                className={`flex min-h-0 min-w-0 flex-1 ${
+                  i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
+                }`}
+              >
+                <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <WorkspaceEmptyHeader />
+            <WorkspaceEmptyState />
+          </>
+        )}
+      </div>
     </div>
   );
 }

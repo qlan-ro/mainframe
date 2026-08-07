@@ -41,6 +41,8 @@ import { SurfaceHost } from '../layout/SurfaceHost';
 import { setSessionNavigator } from '../lib/session-nav';
 import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
+// PROTOTYPE — remove with features/workspace-proto
+import { useWsProtoVariant } from '../features/workspace-proto/proto-store';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
  *  native traffic lights, so the MainToolbar's left group insets to clear them. */
@@ -73,6 +75,8 @@ function RuntimeBody({ port }: { port: number }) {
   const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
   const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
   const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
+  // PROTOTYPE — remove with features/workspace-proto (hook must run unconditionally)
+  const protoFilesInWorkspace = useWsProtoVariant() === 'B';
   const { projectName, branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)
@@ -120,8 +124,10 @@ function RuntimeBody({ port }: { port: number }) {
         <SurfaceHost />
       </SidebarInset>
 
-      {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar. */}
-      {inspectorVisible && <InspectorPane port={port} />}
+      {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar.
+          PROTOTYPE — variant B moves the tree into the workspace surface, so the
+          right pane is suppressed there; remove with features/workspace-proto. */}
+      {inspectorVisible && !protoFilesInWorkspace && <InspectorPane port={port} />}
 
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />

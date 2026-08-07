@@ -13,6 +13,10 @@ import { Toggle } from '@v2/components/ui/toggle';
 import { BranchPopover } from '../features/git/BranchPopover';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
+// PROTOTYPE — remove with features/workspace-proto
+import { isWorkspaceProtoEnabled, useWsProtoVariant } from '@/features/workspace-proto/proto-store';
+import { ProtoSessionTabs } from '@/features/workspace-proto/ProtoSessionTabs';
+import { PrototypeSwitcher } from '@/features/workspace-proto/PrototypeSwitcher';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -107,6 +111,9 @@ export function MainToolbar({
     refetch: handleBranchChanged,
   } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
 
+  // PROTOTYPE — remove with features/workspace-proto
+  const protoTitlebarTabs = useWsProtoVariant() === 'C';
+
   return (
     <div
       data-testid="main-toolbar"
@@ -191,6 +198,11 @@ export function MainToolbar({
           )}
         </span>
       </div>
+
+      {/* PROTOTYPE — remove with features/workspace-proto. Variant C: chrome-style
+          session tabs take the toolbar's slack middle, Chrome-fashion. */}
+      {protoTitlebarTabs && <ProtoSessionTabs surface="titlebar" />}
+      {isWorkspaceProtoEnabled() && <PrototypeSwitcher />}
 
       {/* Right: controls — the artboard's three groups: search │ project tools
           (Setup Advisor · launch · play) │ workspace (surfaces · theme · inspector). */}

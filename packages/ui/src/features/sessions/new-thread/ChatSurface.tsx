@@ -40,6 +40,9 @@ import { useSessionPanelState } from '@/features/session-panel/use-session-panel
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
+// PROTOTYPE — remove with features/workspace-proto
+import { useWsProtoVariant } from '@/features/workspace-proto/proto-store';
+import { ProtoChatTabsHeader } from '@/features/workspace-proto/ProtoChatTabsHeader';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
@@ -81,6 +84,8 @@ export function ChatSurface() {
   useNewThreadAutoConfig();
 
   const panelState = useSessionPanelState();
+  // PROTOTYPE — remove with features/workspace-proto
+  const protoChatTabs = useWsProtoVariant() === 'D';
   const { hostRef } = panelState;
   // A callback ref, because `hostRef` is typed to the generic HTMLElement the
   // panel measures — a div's own ref prop would not accept it.
@@ -154,7 +159,9 @@ export function ChatSurface() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ChatCardHeader />
+      {/* PROTOTYPE — remove with features/workspace-proto. Variant D: the chat
+          header becomes a chrome-style session tab bar. */}
+      {protoChatTabs ? <ProtoChatTabsHeader /> : <ChatCardHeader />}
       {/* The row the panel floats over — what its ResizeObserver measures, and
           the containing block its absolute root resolves against. */}
       <div ref={setHostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
