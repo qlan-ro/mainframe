@@ -48,6 +48,8 @@ interface WorkspacePaneViewProps {
   primary: boolean;
   scopeKey: string | null;
   projectId?: string;
+  /** PROTOTYPE — the strip is hoisted above the sidebar row; remove with features/workspace-proto. */
+  hideStrip?: boolean;
 }
 
 function WorkspaceTabBody({
@@ -114,10 +116,10 @@ function WorkspaceTabBody({
   );
 }
 
-function WorkspacePaneView({ pane, primary, scopeKey, projectId }: WorkspacePaneViewProps) {
+function WorkspacePaneView({ pane, primary, scopeKey, projectId, hideStrip }: WorkspacePaneViewProps) {
   return (
     <div data-testid={`workspace-pane-${pane.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <WorkspaceTabStrip pane={pane} primary={primary} />
+      {!hideStrip && <WorkspaceTabStrip pane={pane} primary={primary} />}
       <div className="relative min-h-0 flex-1">
         {pane.tabs.map((t) => (
           <WorkspaceTabBody
@@ -151,34 +153,49 @@ export function WorkspaceSurface() {
     activeScopeKey ??
     (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
-  // PROTOTYPE — remove with features/workspace-proto
+  // PROTOTYPE — remove with features/workspace-proto. The surface header spans
+  // the FULL width and the sidebar starts underneath it (verdict round 2), so
+  // the single pane's strip is hoisted above the [body | sidebar] row. A split
+  // surface keeps per-pane strips and a full-height sidebar — each pane's strip
+  // belongs to that pane, so there is no one header to extend.
   const protoFilesSidebar = useWsProtoVariant() === 'B';
+  const hoistStrip = protoFilesSidebar && hasContent === true && run.panes.length === 1;
 
   return (
-    <div data-testid="workspace-surface" className="flex h-full flex-row">
-      <div className="flex h-full min-w-0 flex-1 flex-col">
-        {hasContent ? (
-          <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
-            {run.panes.map((pane, i) => (
-              <div
-                key={pane.id}
-                className={`flex min-h-0 min-w-0 flex-1 ${
-                  i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
-                }`}
-              >
-                <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <>
-            <WorkspaceEmptyHeader />
-            <WorkspaceEmptyState />
-          </>
-        )}
+    <div data-testid="workspace-surface" className="flex h-full flex-col">
+      {hoistStrip && <WorkspaceTabStrip pane={run.panes[0]!} primary />}
+      {protoFilesSidebar && !hasContent && <WorkspaceEmptyHeader />}
+      <div className="flex min-h-0 flex-1 flex-row">
+        <div className="flex h-full min-w-0 flex-1 flex-col">
+          {hasContent ? (
+            <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
+              {run.panes.map((pane, i) => (
+                <div
+                  key={pane.id}
+                  className={`flex min-h-0 min-w-0 flex-1 ${
+                    i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
+                  }`}
+                >
+                  <WorkspacePaneView
+                    pane={pane}
+                    primary={i === 0}
+                    scopeKey={scopeKey}
+                    projectId={projectId}
+                    hideStrip={hoistStrip}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {!protoFilesSidebar && <WorkspaceEmptyHeader />}
+              <WorkspaceEmptyState />
+            </>
+          )}
+        </div>
+        {/* PROTOTYPE — remove with features/workspace-proto. Right edge by verdict. */}
+        {protoFilesSidebar && <WorkspaceFilesSidebar />}
       </div>
-      {/* PROTOTYPE — remove with features/workspace-proto. Right edge by verdict. */}
-      {protoFilesSidebar && <WorkspaceFilesSidebar />}
     </div>
   );
 }
