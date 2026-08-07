@@ -178,12 +178,10 @@ headers and nav. Decorative dots are exempt. `button.tsx` guards the default wit
 appearance blocks and asserts the WCAG floors. Changing a color token means keeping that test green.
 
 - `foreground` (≥13:1) and `muted-foreground` (4.8–7:1) are the two safe text inks.
-- **`mf-text-4` is ornament, not text.** Never on text, never on a meaning-bearing icon. It survives in
-  ~17 files, and the legitimate uses tell you the shape of the rule: input `placeholder:`, syntax-token
-  fallbacks, inactive tab-strip titles, path crumbs. Two *deliberate* non-text uses are load-bearing and
-  asserted by `components/ui/__tests__/choice-controls.test.tsx` — the unchecked `Checkbox` and
-  `RadioGroupItem` ring is `border-[1.5px] border-mf-text-4`, chosen over the fainter `border-border`
-  precisely so an empty control stays visible. A ring is not text; don't "fix" it.
+- **`mf-text-4` was ornament, not text — and as of 2026-08-07 it is not a utility at all.** The sweep
+  moved its last class consumers (gutter numerals, inactive tour dots) to `muted-foreground/50`, so the
+  `@theme` mapping went and only the bare `--mf-text-4` var survives, for `app.css`'s `scrollbar-color`.
+  Reach for `muted-foreground/50` when you want ornament ink.
 - **Never stack `opacity-*` on an ink token.** Pick the right tier instead; the stack was measured as low
   as 1.3:1.
 - **Semantic hues are not text colors.** `success` / task-type / priority / workflow hues

@@ -13,7 +13,8 @@
    - whole areas awaiting their own port: tasks, automations, review, settings
      panes, the files tree, sessions' v1 leftovers, tour
    - three surviving app tokens: --mf-window (the ErrorState backdrop),
-     --mf-text-4 (ornament ink) and --mf-selection
+     --mf-selection, and --mf-text-4 — the last is a bare var, NOT a utility:
+     its only consumer is app.css's scrollbar-color, so the @theme mapping went
 
    The generic colour tokens are GONE, swept onto their v2 semantics: mf-text-3
    and mf-chip and mf-success were already aliases (muted-foreground / accent /
@@ -216,7 +217,6 @@
 @theme inline {
   /* --mf-* extensions → utilities */
   --color-mf-window: var(--mf-window);
-  --color-mf-text-4: var(--mf-text-4);
   --color-mf-selection: var(--mf-selection);
   --color-mf-destructive-tint: var(--mf-destructive-tint);
   --color-mf-directive-skill: var(--mf-directive-skill);
