@@ -12,7 +12,7 @@
  * lib/git-status-kind.ts, packages/core/src/server/routes/types.ts (getEffectivePath),
  * packages/core/src/git/git-service.ts (workingStat/commitAll).
  *
- * Entry point + worktree note: the header's `chat-header-review` button IS
+ * Entry point + worktree note: the global Cmd/Ctrl+Shift+R hotkey IS (the header Review button moved into the session panel)
  * disabled without a worktree (that gating is already fully covered by
  * chat-header.spec.ts's "review button (worktree gate)" describe — not
  * duplicated here). The global `⌘⇧R` hotkey (`use-global-overlay-hotkeys.ts`)

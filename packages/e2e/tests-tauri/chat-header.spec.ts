@@ -19,12 +19,12 @@
  * Testid reference (all verified against source):
  *   chat-header                — header root (real chat)
  *   chat-header-model           — adapter dot + model label (ChatSessionInline part="model")
- *   chat-header-review          — Review button, disabled without a worktree
  *   chat-header-pr-<number>     — per-PR chip (needs PR detection — unseedable, see skip below)
  *   chat-header-split-right     — place the Workspace beside Chat in the top row
  *   chat-header-split-down      — dock the Workspace in the bottom strip
  *   chat-header-hide            — hide the Chat surface (disabled at the dynamic floor)
- *   review-modal                — the Review panel opened by chat-header-review
+ *   (review entry moved to the session panel's Changes row + Cmd/Ctrl+Shift+R —
+ *    modal coverage lives in review-panel.spec.ts)
  *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
  *                                  own testids, referenced here only to observe split/hide effects
  *   [data-drop-surface="chat|workspace"] — layout engine's per-surface panel wrapper
@@ -80,45 +80,6 @@ test.describe('§chat-header — model chip', () => {
 });
 
 // ─── Review button (worktree gate) ────────────────────────────────────────────
-
-test.describe('§chat-header — review button (worktree gate)', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-  let chatId: string;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp();
-    project = await createTauriProject(app.page);
-    chatId = await createTauriChat(app.page, project.projectId, 'default');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('review button is disabled without a worktree', async () => {
-    const { page } = app;
-    await expect(page.getByTestId('chat-header-review')).toBeDisabled();
-  });
-
-  test('enabling a worktree enables the review button; clicking it opens the review modal', async () => {
-    const { page } = app;
-    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseBranch: 'main', branchName: 'e2e-review-header' }),
-    });
-    expect(res.ok).toBe(true);
-
-    // `chat.updated` broadcasts live — no reload needed (see config-manager.ts applyWorktreeUpdate).
-    const reviewButton = page.getByTestId('chat-header-review');
-    await expect(reviewButton).toBeEnabled({ timeout: 15_000 });
-
-    await reviewButton.click();
-    await expect(page.getByTestId('review-modal')).toBeVisible({ timeout: 10_000 });
-  });
-});
 
 // ─── Hide-Chat control (dynamic floor) ────────────────────────────────────────
 
