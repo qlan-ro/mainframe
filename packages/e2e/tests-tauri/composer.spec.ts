@@ -48,10 +48,9 @@ test.describe('§composer config selects', () => {
   // jsdom (a unit test of the same gesture passes), which is why no unit test caught it.
   //
   // For a user this reads as "the permission chip ignored my click" right after they
-  // changed the mode. It is NOT a regression from the v2 port: PermissionSelect still
-  // renders the v1 `components/ui/dropdown-menu` and has not changed since #460 — the
-  // same swallow reproduces on any Tooltip-wrapped DropdownMenuTrigger in the composer
-  // toolbar. Fixing it belongs in the primitive (or its Tooltip composition), not here;
+  // changed the mode. It is NOT a regression from the v2 port — the same swallow
+  // reproduces on any Tooltip-wrapped DropdownMenuTrigger in the composer toolbar,
+  // on the v1 primitive before #460 and on the v2 one since. Fixing it belongs in the primitive (or its Tooltip composition), not here;
   // when it is fixed, the `closeMenus()` on the reset click becomes redundant.
   test('M7: permission-mode select switches to Unattended (yolo)', async () => {
     const { page } = app;

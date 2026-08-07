@@ -27,9 +27,9 @@
    an unpushed divergence. It shipped as `destructive` pulled most of the way to
    the resting ink, which meant every caution surface in the app read as a muted
    red; a warning is not a failure, and the two must not share a hue. It is a
-   real amber now (2026-08-06), matching the bridge's `--mf-warning` exactly so
-   the legacy islands and the shell say caution in one colour — `contrast.test.ts`
-   pins that. Declared per theme rather than once: the light value is dark amber
+   real amber now (2026-08-06), and since 2026-08-07 it is the app's only caution
+   hue — the bridge's `--mf-warning`, which held the same value in hex, is gone.
+   Declared per theme rather than once: the light value is dark amber
    on a white field, the dark value light amber on a near-black one, and neither
    is derivable from the other.
 

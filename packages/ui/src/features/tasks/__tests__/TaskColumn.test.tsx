@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { TaskColumn } from '../TaskColumn';
 import type { Todo } from '@/lib/api/todos';
 
@@ -52,7 +52,7 @@ describe('TaskColumn — drop-zone visual feedback', () => {
     expect(column.className).not.toContain('ring-primary');
 
     fireEvent.dragOver(column);
-    expect(column.className).toContain('bg-mf-selection');
+    expect(column.className).toContain('bg-sidebar-selection');
     expect(column.className).toContain('ring-primary');
 
     fireEvent.dragLeave(column);

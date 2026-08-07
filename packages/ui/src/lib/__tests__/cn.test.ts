@@ -2,24 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { cn } from '../utils';
 
 /**
- * Regression: the warm-chrome theme defines a custom font-size scale
- * (text-micro/caption/label/body/heading/title/display/hero). An unconfigured
- * tailwind-merge treats those `text-*` size utilities as the same conflict group
- * as `text-<color>` utilities and silently DROPS the size when a color follows —
- * so e.g. a chip styled `text-label text-muted-foreground` rendered at the
- * inherited 13px instead of 12px. `cn` must register the custom sizes so size and
- * colour survive together.
+ * `cn` used to carry an `extendTailwindMerge` config registering the v1 warm-chrome
+ * font sizes (text-micro/caption/label/body/heading/title), because tailwind-merge
+ * lumped unknown `text-*` names into the colour conflict group and silently dropped
+ * the size whenever a colour followed. That scale was retired on 2026-08-07 and the
+ * config with it — every size the app uses is a stock name tailwind-merge knows.
+ *
+ * These pin the behaviour that made the config necessary, so a future custom size
+ * added without registering it fails here rather than in a silently unstyled chip.
  */
-describe('cn — custom font-size utilities survive merge', () => {
-  it('keeps a custom text-size alongside a text-color', () => {
-    expect(cn('text-label', 'text-muted-foreground')).toBe('text-label text-muted-foreground');
-    expect(cn('text-micro', 'text-mf-text-3')).toBe('text-micro text-mf-text-3');
-    expect(cn('text-caption', 'text-foreground')).toBe('text-caption text-foreground');
+describe('cn — size and colour survive merge', () => {
+  it('keeps a font-size alongside a text-color', () => {
+    expect(cn('text-xs', 'text-muted-foreground')).toBe('text-xs text-muted-foreground');
+    expect(cn('text-sm', 'text-mf-code-cmt')).toBe('text-sm text-mf-code-cmt');
+    expect(cn('text-base', 'text-foreground')).toBe('text-base text-foreground');
   });
 
   it('still collapses two competing font-sizes (last wins)', () => {
-    expect(cn('text-label', 'text-body')).toBe('text-body');
-    expect(cn('text-micro text-heading')).toBe('text-heading');
+    expect(cn('text-xs', 'text-sm')).toBe('text-sm');
+    expect(cn('text-sm text-base')).toBe('text-base');
   });
 
   it('still collapses two competing text-colors (last wins)', () => {

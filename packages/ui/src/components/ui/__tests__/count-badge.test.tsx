@@ -20,7 +20,7 @@ describe('CountBadge', () => {
     [
       'info is capsule-less muted gray',
       { variant: 'info' },
-      ['text-muted-foreground', 'text-caption', 'tabular-nums'],
+      ['text-muted-foreground', 'text-xs', 'tabular-nums'],
       ['rounded-full', 'bg-primary'],
     ],
     ['unread uses the accent ink', { variant: 'unread' }, ['text-primary'], ['text-muted-foreground']],

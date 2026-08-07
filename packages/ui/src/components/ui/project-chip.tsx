@@ -1,4 +1,8 @@
 /**
+ * App-owned primitive on v2 tokens. `components/ui/` is no longer a v1 mirror of
+ * the shadcn registry — that is `src/v2/components/ui/`, kept stock. What lives
+ * here has no registry counterpart and is ours to shape.
+ *
  * ProjectChip — the per-project identity chip (dot + name) tinted by the
  * deterministic `projectColor(projectId)` oklch hue. Passthrough primitive:
  * forwards `data-testid`/className/style. Used by the chat header (draft variant),
@@ -19,12 +23,11 @@ export function ProjectChip({ projectId, name, size = 16, className, style, ...p
   const color = projectColor(projectId);
   return (
     <span
-      className={cn('inline-flex min-w-0 items-center gap-[5px] rounded-full px-[7px] font-medium', className)}
+      className={cn('inline-flex min-w-0 items-center gap-[5px] rounded-full px-[7px] text-xs font-medium', className)}
       style={{
         height: size,
         color,
         background: `color-mix(in srgb, ${color} 10%, transparent)`,
-        fontSize: 11,
         ...style,
       }}
       {...props}

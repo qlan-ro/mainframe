@@ -11,8 +11,8 @@
 import React from 'react';
 import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Hint } from '@/components/ui/hint';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { Hint } from '@v2/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
 import { PairGlyph } from './github/PairGlyph';
@@ -115,11 +115,11 @@ export const TaskCard = React.memo(function TaskCard({
     >
       {/* Row 1: #number + title + type badge */}
       <div className="flex items-start gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-label font-medium text-primary leading-5">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-xs font-medium text-primary leading-5">#{todo.number}</span>
         <span className="flex-1 min-w-0">
           <span
             className={cn(
-              'text-body font-semibold leading-snug line-clamp-2',
+              'text-sm font-semibold leading-snug line-clamp-2',
               todo.status === 'done' ? 'line-through text-muted-foreground' : 'text-foreground',
             )}
           >
@@ -127,10 +127,7 @@ export const TaskCard = React.memo(function TaskCard({
           </span>
         </span>
         <span
-          className={cn(
-            'shrink-0 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
-            typeTint(todo.type),
-          )}
+          className={cn('shrink-0 text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4', typeTint(todo.type))}
         >
           {todo.type.replace('_', ' ')}
         </span>
@@ -138,7 +135,7 @@ export const TaskCard = React.memo(function TaskCard({
 
       {/* Dependencies line */}
       {todo.dependencies.length > 0 && (
-        <div className="text-label text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           Depends on {todo.dependencies.map((n) => `#${n}`).join(', ')}
         </div>
       )}
@@ -147,7 +144,7 @@ export const TaskCard = React.memo(function TaskCard({
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            'inline-flex items-center gap-1 text-caption font-medium px-1.5 py-0.5 rounded capitalize leading-4',
+            'inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded capitalize leading-4',
             priorityTint(todo.priority),
           )}
         >
@@ -159,7 +156,7 @@ export const TaskCard = React.memo(function TaskCard({
         </span>
         <span className="flex-1" />
         <Hint label={`Updated ${new Date(todo.updated_at).toLocaleDateString()}`}>
-          <span className="inline-flex items-center gap-1 text-caption text-muted-foreground shrink-0 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0 whitespace-nowrap">
             <Clock size={12} aria-hidden />
             {relativeTime(todo.updated_at)}
           </span>
@@ -170,12 +167,12 @@ export const TaskCard = React.memo(function TaskCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1 min-w-0">
           {todo.labels.map((l) => (
-            <span key={l} className="text-caption bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+            <span key={l} className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
               {l}
             </span>
           ))}
           {attachmentCount != null && attachmentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-caption text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Paperclip size={12} />
               {attachmentCount}
             </span>

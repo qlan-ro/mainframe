@@ -58,7 +58,7 @@ export function SurfaceDragLayer() {
     <div data-testid="surface-drag-layer" className="pointer-events-none fixed inset-0 z-[100]">
       {/* Ghost chip following the pointer. */}
       <div
-        className="absolute rounded-md bg-mf-glass px-2 py-1 text-caption text-foreground shadow-lg backdrop-blur-[40px]"
+        className="absolute rounded-md bg-background/85 px-2 py-1 text-xs text-foreground shadow-lg backdrop-blur-xl"
         style={{ left: pointer.x + 12, top: pointer.y + 12 }}
       >
         {kind === 'surface' ? 'Move surface' : 'Move tab'}

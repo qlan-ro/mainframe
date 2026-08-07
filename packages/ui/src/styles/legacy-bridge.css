@@ -6,19 +6,31 @@
    port deletes its slice. When the last port lands, this file is empty and gets
    deleted.
 
-   The shell, the title bar, the dialogs, the workspace surface and the chat
-   surface have all ported. What still speaks mf-* and the v1 type rungs, as of
-   the 2026-08-06 chat pass:
-   - whole areas awaiting their own port: tasks, automations, review, settings
-     panes, the files tree, sessions' v1 leftovers, tour
-   - the surviving v1 primitives: components/ui/{tooltip,hint,dropdown-menu,
-     popover,menu-variants,count-badge,section-header,read-more,scroll-area}
+   THERE IS NO GENERIC v1 CODE LEFT (2026-08-07). The duplicated v1 primitives,
+   every generic colour token, and the whole v1 type scale are gone. What remains
+   is domain palette and app chrome that has no v2 equivalent — nothing here is
+   waiting on a "port" to delete it except MarkdownPreview's prose island.
 
-   Kept by design, not pending: the content palettes (mf-code-*, mf-cm-*,
-   mf-term-*, mf-diff-*, mf-viewer-*), the automations step-kind and
-   tasks/priority palettes, the composer's amber edit ring, and mf-scrim.
-   Some members of those palettes have no consumer of their own — they are
-   pinned as a set so a theme reads consistently; do not pick them off.
+   The full remaining inventory, and why each survives:
+   - CONTENT PALETTES, pinned as a set: mf-code-* (+ mf-code-inline-fg),
+     mf-cm-*, mf-term-*, mf-diff-*, mf-viewer-*, mf-find-tint/-active.
+     Some members have no consumer of their own — they are pinned so a theme
+     reads consistently; do NOT pick them off.
+   - DESIGN-CONSTANT TINT TABLES: mf-task-type-*, mf-priority-* (tasks),
+     mf-auto-* + mf-accent-violet/-amber (automations step kinds),
+     mf-directive-skill/-session, mf-provider-*-avatar.
+   - APP CHROME with no v2 token: mf-scrim, mf-focus-ring (+ the @layer base
+     ring rule — v1-island elements still rely on it as their ONLY focus
+     indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring, the easings,
+     --radius-xs, and the twPulse keyframe.
+
+   Retired here, do NOT reintroduce — reach for the v2 token instead:
+   mf-text-3 → muted-foreground · mf-chip → accent · mf-success → success ·
+   mf-warning → warning (they held the same value in two notations) ·
+   mf-content2/mf-raised → muted · mf-glass → bg-background/85 ·
+   mf-border-hover → border-input · mf-text-4 → muted-foreground/50 ·
+   mf-selection → sidebar-selection · mf-destructive-tint → bg-destructive/10 ·
+   mf-window → background · the type rungs → text-xs/sm/base/lg.
 
    Deliberately NOT carried from v1 globals.css:
    - the warm shadcn token values (--background, --border, …) — v2 wins
@@ -28,30 +40,22 @@
    - `antialiased` font smoothing — the app is native-smoothed now
    - the tracking/leading overrides — they redefined Tailwind's own names
      globally, so the v2 tree inherited v1 metrics; defaults win now
+   - the v1 type scale — retired 2026-08-07 (see below)
    - --font-mono — promoted to the v2 token layer (v2 markup uses font-mono)
 
-   Where a v1 token duplicated a v2 semantic, it is an ALIAS onto the v2
-   token (declared once — var() re-resolves per mode), so the islands'
-   resting ink, chips, selection and success hues track the shell instead
-   of keeping their warm values. --mf-warning stays amber on purpose: it
-   means "caution" (edit ring), not v2's wrong-but-not-broken red.
+   The v1 type scale is gone too: caption/body mapped losslessly onto v2's
+   text-xs/text-sm (11px and 13px), label 12→11, micro 10→11, heading 15→16
+   (text-base, DialogTitle's own rung) and title 17→18 (text-lg, kept a step
+   above heading so the two rungs stay distinct). `cn`'s extendTailwindMerge
+   font-size registration went with them — every size the app uses is a stock
+   name tailwind-merge already knows.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --mf-window: #e9e7e2;
-  --mf-glass: rgba(240, 237, 231, 0.84);
-  --mf-content2: #f8f6f2;
-  --mf-raised: #f3efe7;
-  --mf-text-3: var(--muted-foreground);
-  --mf-text-4: #bcbab5;
-  --mf-chip: var(--accent);
-  --mf-selection: var(--sidebar-selection);
   /* In-chat Find highlights — amber (matches the --mf-cm-match editor-search
      convention), defined once; the dark block does not override them. */
   --mf-find-tint: rgba(251, 191, 36, 0.32);
   --mf-find-active: rgba(251, 146, 60, 0.6);
-  --mf-warning: #a15804;
-  --mf-success: var(--success);
 
   /* Editor syntax — Xcode-ish on warm paper */
   --mf-code-bg: #fbfaf7;
@@ -87,10 +91,6 @@
   --ease-signature: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ── App-only tokens — LIGHT ── */
-  --mf-destructive-tint: rgba(220, 53, 69, 0.08);
-  --mf-warning-tint: rgba(217, 119, 6, 0.1);
-  --mf-success-tint: rgba(40, 167, 69, 0.1);
-  --mf-border-hover: rgba(0, 0, 0, 0.14);
   --mf-directive-skill: #7a4dd0;
   --mf-directive-session: #a84c08;
   --mf-code-inline-fg: #7a4d2a;
@@ -120,10 +120,10 @@
   /* App-only elevation variants */
   --mf-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
   --mf-shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.07);
-  /* Composer edit-mode amber glow — tracks --mf-warning via color-mix */
+  /* Composer edit-mode amber glow — tracks --warning via color-mix */
   --mf-shadow-edit-ring:
-    0 0 0 0.5px color-mix(in srgb, var(--mf-warning) 60%, transparent),
-    0 4px 16px color-mix(in srgb, var(--mf-warning) 22%, transparent);
+    0 0 0 0.5px color-mix(in srgb, var(--warning) 60%, transparent),
+    0 4px 16px color-mix(in srgb, var(--warning) 22%, transparent);
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
 
@@ -146,13 +146,6 @@
 }
 
 .dark {
-  --mf-window: #1b1c25;
-  --mf-glass: rgba(34, 36, 47, 0.85);
-  --mf-content2: #212330;
-  --mf-raised: #313447;
-  --mf-text-4: #555870;
-  --mf-warning: #f5a960;
-
   /* Editor syntax — playful slate pastels */
   --mf-code-bg: #21222c;
   --mf-code-fg: #eef0fa;
@@ -180,10 +173,6 @@
   --mf-scrim: rgba(0, 0, 0, 0.55);
 
   /* ── App-only tokens — DARK ── */
-  --mf-destructive-tint: rgba(255, 107, 107, 0.1);
-  --mf-warning-tint: rgba(245, 169, 96, 0.12);
-  --mf-success-tint: rgba(80, 217, 124, 0.12);
-  --mf-border-hover: rgba(255, 255, 255, 0.16);
   --mf-directive-skill: #b48cff;
   --mf-directive-session: #f0b429;
   --mf-code-inline-fg: #e0a878;
@@ -225,20 +214,6 @@
 
 @theme inline {
   /* --mf-* extensions → utilities */
-  --color-mf-window: var(--mf-window);
-  --color-mf-glass: var(--mf-glass);
-  --color-mf-content2: var(--mf-content2);
-  --color-mf-raised: var(--mf-raised);
-  --color-mf-text-3: var(--mf-text-3);
-  --color-mf-text-4: var(--mf-text-4);
-  --color-mf-chip: var(--mf-chip);
-  --color-mf-selection: var(--mf-selection);
-  --color-mf-warning: var(--mf-warning);
-  --color-mf-warning-tint: var(--mf-warning-tint);
-  --color-mf-success: var(--mf-success);
-  --color-mf-success-tint: var(--mf-success-tint);
-  --color-mf-destructive-tint: var(--mf-destructive-tint);
-  --color-mf-border-hover: var(--mf-border-hover);
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-session: var(--mf-directive-session);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);
@@ -291,19 +266,6 @@
      xs (2px) visibly shrinks the legacy chips that use it. */
   --radius-xs: calc(var(--radius) * 0.4);
 
-  /* v1 type scale (10–28px, 8 rungs) — the legacy tree speaks these names */
-  --text-micro: 0.625rem;
-  --text-caption: 0.6875rem;
-  --text-label: 0.75rem;
-  --text-body: 0.8125rem;
-  --text-heading: 0.9375rem;
-  --text-title: 1.0625rem;
-  --text-micro--line-height: 1.3;
-  --text-caption--line-height: 1.35;
-  --text-label--line-height: 1.4;
-  --text-body--line-height: 1.5;
-  --text-heading--line-height: 1.3;
-  --text-title--line-height: 1.25;
 
   /* Easings */
   --ease-default: var(--ease-default);

@@ -3,7 +3,7 @@
  * Provider shape identifies the adapter, colour carries attention, and lifecycle
  * adds motion.
  *
- * The shipped version tints across a 4-step ink ramp (`text-mf-text-3`); stock
+ * The shipped version tinted across a 4-step v1 ink ramp; stock
  * has two usable inks, so this reads `primary` for anything wanting attention
  * and `muted-foreground` for everything else, per the locked decision. An idle
  * row drops the provider's brand hue with it — a wall of brand marks made every

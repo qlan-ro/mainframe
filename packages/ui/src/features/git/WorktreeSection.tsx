@@ -21,7 +21,7 @@ export function WorktreeSection({ name, branches, currentBranch, actions }: Work
     <DropdownMenuGroup>
       <DropdownMenuLabel data-testid={`git-worktree-row-${name}`} className="flex items-center gap-1">
         {/* Amber, not red: a worktree marker is caution-coloured in the git family. */}
-        <FolderGit2 className="size-3 shrink-0 text-mf-warning" />
+        <FolderGit2 className="size-3 shrink-0 text-warning" />
         <span className="truncate">{name}</span>
       </DropdownMenuLabel>
       {branches.map((b) => (

@@ -27,7 +27,7 @@
  *  B5 — image attachment with matching capture row renders thumb + selector text.
  *  B6 — image attachment with no selector/annotation renders thumb only.
  *  B7 — image attachment with no matching capture renders thumb, no crash.
- *  B8 — capture selector uses the mf-code-fn token, not mf-success.
+ *  B8 — capture selector uses the mf-code-fn token, not success.
  *  B9 — capture selector span carries `block` alongside `truncate` (truncate
  *       is inert on an inline box, and AttachmentContent is a block
  *       container), is wired as a Radix tooltip trigger, and the thumb keeps
@@ -303,7 +303,7 @@ describe('UserAttachments — B6: image attachment without selector renders thum
 });
 
 // ---------------------------------------------------------------------------
-// Tests — B8: capture chip selector uses mf-code-fn color token (not mf-success)
+// Tests — B8: capture chip selector uses mf-code-fn color token (not success)
 // ---------------------------------------------------------------------------
 
 describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', () => {
@@ -313,7 +313,7 @@ describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', 
     __src = 'data:img';
   });
 
-  it('the selector element has text-mf-code-fn class and not text-mf-success', () => {
+  it('the selector element has text-mf-code-fn class and not text-success', () => {
     __attachmentName = 'element1.png';
     __meta = {
       captures: [{ label: 'element1', imageName: 'element1.png', selector: 'nav > .active' }],
@@ -325,7 +325,7 @@ describe('UserAttachments — B8: capture selector uses text-mf-code-fn class', 
     const selectorEl = screen.getByTestId('chat-capture-selector');
     expect(selectorEl).toHaveTextContent('nav > .active');
     expect(selectorEl.className).toContain('text-mf-code-fn');
-    expect(selectorEl.className).not.toContain('text-mf-success');
+    expect(selectorEl.className).not.toContain('text-success');
   });
 });
 

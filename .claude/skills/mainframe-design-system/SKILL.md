@@ -62,8 +62,8 @@ already has.
 1. **Every text node takes an explicit type rung.** There is no default. Unstyled text inherits the 13px
    body size and silently sits at the wrong rung next to its siblings.
 2. **Every color is a token, and the ink tier is load-bearing.** No raw hex, no `bg-slate-800`, no
-   `shadow-2xl`. `foreground` and `muted-foreground` are the safe text inks; `mf-text-3` is short metadata
-   only; **`mf-text-4` is ornament and never text**. Never stack `opacity-*` on an ink token, and keep
+   `shadow-2xl`. `foreground` and `muted-foreground` are the safe text inks;
+   **`mf-text-4` is ornament and never text**. Never stack `opacity-*` on an ink token, and keep
    semantic hues (success/warning/priority) on the icon or tint background rather than the text. A
    contrast test enforces this — see `references/tokens.md`.
 3. **`truncate` inside a flex row needs `min-w-0` on the shrinkable item.** `min-width: auto` is the flex
@@ -78,11 +78,12 @@ already has.
 
 Full tables with every token name: `references/tokens.md`. The shape of them:
 
-- **Type — 6 rungs, 10→17px**, each with paired leading: `text-micro` 10 · `text-caption` 11 · `text-label` 12
-  · `text-body` 13 · `text-heading` 15 · `text-title` 17. Chrome density is deliberately tight;
-  `text-body` is the baseline, `text-heading` is a dialog title. (`text-display`/`text-hero` retired
-  with the v2 shell — welcome/empty-state moments are v2 surfaces now.)
-- **Weight rises with the rung.** `text-heading` and above is `font-bold`; below that, medium and
+- **Type — the v1 rungs are GONE (retired 2026-08-07).** Use the stock names, which v2 partly
+  re-values: `text-xs` **11px**/16 · `text-sm` **13px**/18 (the baseline — an unstyled node lands here)
+  · `text-base` 16/24 (dialog + pane titles) · `text-lg` 18/28 (surface titles). `text-xl` and up are
+  *phantoms* — nothing uses them, so Tailwind never generates them and the class silently does nothing.
+  `text-micro/caption/label/body/heading/title` no longer exist anywhere.
+- **Weight rises with the rung.** `text-base` and above is `font-bold`; below that, medium and
   semibold are both live (semibold for row titles and active state, medium for secondary). `font-normal`
   is effectively unused — muted text gets a muted *color*, not a lighter weight — and `font-extrabold`
   appears once, on the brand mark.
@@ -110,7 +111,7 @@ Full tables with every token name: `references/tokens.md`. The shape of them:
 - **The `/opacity` modifier DOES work here.** 112 shipped uses (`bg-primary/10`, `border-destructive/30`).
   Tailwind v4 compiles it to `color-mix`, which handles the hex/rgba token values fine. Any "never use
   `/opacity` on CSS-var colors" guidance you meet is a carryover from the Tailwind-v3 `packages/app-electron`
-  and does not apply here. One real caveat: `accent`, `border`, `input`, and `mf-chip` are *already* alpha
+  and does not apply here. One real caveat: `accent`, `border`, and `input` are *already* alpha
   colors, so a modifier on those compounds toward invisible.
 
 ## Recipes
@@ -123,9 +124,9 @@ Copy the structure from the named file — do not re-derive it. Details in `refe
 | Large panel dialog | `features/tasks/TaskEditModal.tsx` — `hideClose` + `flex flex-col p-0 gap-0 max-h-[90vh]`, bordered `DialogHeader`, scrolling body, action footer |
 | Simple list dialog | `features/sessions/sidebar/ArchivedSessionsDialog.tsx` — default padding, visible `DialogTitle`, `ScrollArea` |
 | Confirm | `components/ui/confirm-dialog.tsx` |
-| Menu / popover | `components/ui/menu.tsx` + `features/run/ToolbarLaunchControls.tsx` |
+| Menu / popover | `@v2/components/ui/dropdown-menu` — a floating list of actions is ALWAYS a DropdownMenu; see `features/git/BranchPopover.tsx` |
 | Toolbar icon button | `layout/MainToolbar.tsx` `ICON_BTN` — 24×28, `rounded-[6px]`, `hover:bg-accent` |
-| Section header / eyebrow | `components/ui/section-header.tsx` — sentence-case `text-caption font-medium text-muted-foreground`. Never hand-roll `text-micro font-bold uppercase` |
+| Section header / eyebrow | `components/ui/section-header.tsx` — sentence-case `text-xs font-medium text-muted-foreground`. Never hand-roll `text-micro font-bold uppercase` |
 | Count / badge | `components/ui/count-badge.tsx` — capsule-less gray numeral by default; `alert` is the only filled variant |
 | Toast | `mfToast` from `@/lib/toast` — **not** sonner directly |
 

@@ -34,7 +34,7 @@ function branchLabel(worktreePath: string, branchName: string | null): string {
 
 function SwitchingLine({ label }: { label: string }) {
   return (
-    <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-caption text-primary">
+    <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-xs text-primary">
       <Loader2 className="size-3.5 animate-spin" aria-hidden />
       {`Switching — restarting the agent in ${label}…`}
     </div>
@@ -60,7 +60,7 @@ function OfferActions({
         data-path={worktreePath}
         disabled={disabled}
         onClick={onAccept}
-        className="rounded-md bg-primary px-2.5 py-1 text-caption font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Switch session
       </button>
@@ -69,7 +69,7 @@ function OfferActions({
         data-testid="worktree-switch-dismiss"
         data-path={worktreePath}
         onClick={onDismiss}
-        className="rounded-md border border-border px-2.5 py-1 text-caption text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       >
         Stay here
       </button>
@@ -98,8 +98,8 @@ function WorktreeOfferRow({
       className="flex items-center justify-between gap-2 rounded-md bg-card/60 px-2 py-1.5"
     >
       <div className="min-w-0">
-        <div className="text-caption font-medium">{label}</div>
-        <div className="truncate font-mono text-caption text-muted-foreground">{offer.worktreePath}</div>
+        <div className="text-xs font-medium">{label}</div>
+        <div className="truncate font-mono text-xs text-muted-foreground">{offer.worktreePath}</div>
       </div>
       {restartingPath === offer.worktreePath ? (
         <SwitchingLine label={label} />
@@ -140,8 +140,8 @@ export function WorktreeSwitchBanner() {
   return (
     <div data-testid="worktree-switch-banner" className="flex flex-col gap-1.5 px-1 pb-1.5">
       {settled ? (
-        <div className="rounded-lg border border-mf-success/40 bg-mf-success-tint p-3">
-          <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-caption text-mf-success">
+        <div className="rounded-lg border border-success/40 bg-success/10 p-3">
+          <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-xs text-success">
             <Check className="size-3.5" aria-hidden />
             {`Session is now in ${settledPath} on ${branchLabel(settledPath, current.branchName)}.`}
           </div>
@@ -167,11 +167,11 @@ export function WorktreeSwitchBanner() {
 
       {offers.length > 1 ? (
         <div className={`${PANEL_CLASS} flex flex-col gap-2`}>
-          <p className="flex items-center gap-1.5 text-body font-medium">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
             <GitBranch className="size-3.5 text-primary" aria-hidden />
             {`${offers.length} new worktrees — switch this session?`}
           </p>
-          <p className="text-caption text-muted-foreground">{busy ? BUSY_NOTE : LIST_WARNING}</p>
+          <p className="text-xs text-muted-foreground">{busy ? BUSY_NOTE : LIST_WARNING}</p>
           <div className="flex flex-col gap-1.5">
             {offers.map((offer) => (
               <WorktreeOfferRow
@@ -213,11 +213,11 @@ function SingleOfferPanel({
   }
   return (
     <div className={`${PANEL_CLASS} flex flex-col gap-2`}>
-      <p className="flex items-center gap-1.5 text-body font-medium">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
         <GitBranch className="size-3.5 text-primary" aria-hidden />
         {`New worktree: ${label}`}
       </p>
-      <p className="text-caption text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {busy
           ? `Created at ${offer.worktreePath}. ${BUSY_NOTE}`
           : `Created at ${offer.worktreePath}. Switch this session into it? The agent restarts in the new folder — ` +

@@ -9,7 +9,7 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ChevronRight, Workflow } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { resolveResultText } from '../tools/shared';
 import { neutralizedRun } from './workflow-agent-view';
@@ -67,8 +67,8 @@ function InertRow({
     <div data-testid={testId} className={ROW}>
       <LauncherTile />
       <LauncherDot {...dot} />
-      <span className="shrink-0 text-label font-medium text-foreground">{name}</span>
-      <span className={cn('min-w-0 flex-1 truncate text-caption text-muted-foreground', detailClass)}>{detail}</span>
+      <span className="shrink-0 text-xs font-medium text-foreground">{name}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-xs text-muted-foreground', detailClass)}>{detail}</span>
     </div>
   );
 }
@@ -116,12 +116,18 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
         >
           <LauncherTile />
           <LauncherDot {...outcomeDot(view, now)} />
-          <span className="min-w-0 flex-1 truncate text-label font-medium text-foreground">{name}</span>
-          <span className="shrink-0 text-caption tabular-nums text-muted-foreground">{runMetaString(view, now)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{name}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{runMetaString(view, now)}</span>
           <ChevronRight size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[380px] p-0" onOpenAutoFocus={(event) => event.preventDefault()}>
+      {/* `overflow-hidden`: the panel's header band runs edge to edge, and the v2
+          PopoverContent (unlike v1's) does not clip it to the rounded corner. */}
+      <PopoverContent
+        align="start"
+        className="w-[380px] overflow-hidden p-0"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <WorkflowRunPanel run={effective} />
       </PopoverContent>
     </Popover>

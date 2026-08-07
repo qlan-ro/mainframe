@@ -19,7 +19,6 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SessionContext } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@v2/components/ui/tooltip';
-import { TooltipProvider as LegacyTooltipProvider } from '@/components/ui/tooltip';
 
 let mockContext: SessionContext | null = null;
 vi.mock('@/features/sessions/use-session-context', () => ({
@@ -46,11 +45,7 @@ vi.mock('@/lib/api/attachments', () => ({ getAttachment: (...a: unknown[]) => ge
 const { ContextSection } = await import('../ContextSection');
 
 function Wrapper({ children }: { children: ReactNode }) {
-  return (
-    <LegacyTooltipProvider>
-      <TooltipProvider>{children}</TooltipProvider>
-    </LegacyTooltipProvider>
-  );
+  return <TooltipProvider>{children}</TooltipProvider>;
 }
 const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: Wrapper });
 

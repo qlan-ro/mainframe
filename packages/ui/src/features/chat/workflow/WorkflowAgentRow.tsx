@@ -67,21 +67,17 @@ export function WorkflowAgentRow({ agent, run }: { agent: ViewAgent; run: ViewRu
     >
       <div className="flex items-center gap-2">
         <AgentDot agent={agent} />
-        <span
-          className={cn('min-w-0 flex-1 truncate text-label', unknown ? 'text-muted-foreground' : 'text-foreground')}
-        >
+        <span className={cn('min-w-0 flex-1 truncate text-xs', unknown ? 'text-muted-foreground' : 'text-foreground')}>
           {agent.label}
         </span>
         {unknown && (
-          <span className="shrink-0 rounded-xs bg-muted px-1 text-caption leading-none text-muted-foreground">
-            unknown
-          </span>
+          <span className="shrink-0 rounded-xs bg-muted px-1 text-xs leading-none text-muted-foreground">unknown</span>
         )}
-        <span className="shrink-0 text-caption tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {formatAgentTokens(agent.tokens)} · {formatAgentDuration(agent.durationMs)}
         </span>
       </div>
-      {detail && kind && <p className={cn('mt-px truncate pl-4 text-caption', DETAIL_TONE[kind])}>{detail}</p>}
+      {detail && kind && <p className={cn('mt-px truncate pl-4 text-xs', DETAIL_TONE[kind])}>{detail}</p>}
     </div>
   );
 }

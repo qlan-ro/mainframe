@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@v2/components/ui/dropdown-menu';
 import { syncedAgo } from './sync-format';
 import { runOrToast } from './run-or-toast';
 import { UnlinkRepoConfirm } from './UnlinkRepoConfirm';
@@ -96,7 +96,7 @@ export function GitHubSyncControl(): React.ReactElement {
 
           <DropdownMenuItem
             data-testid="tasks-github-menu-unlink"
-            className="text-destructive [&_svg]:text-destructive"
+            variant="destructive"
             onSelect={() => setConfirmUnlink(true)}
           >
             <Unlink className="size-3.5 shrink-0" aria-hidden />

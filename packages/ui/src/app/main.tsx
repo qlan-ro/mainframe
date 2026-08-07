@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../styles/app.css';
 import { applyStoredTheme, applyStoredScale } from '../store/theme';
-import { TooltipProvider, TOOLTIP_DELAY_MS } from '../components/ui/tooltip';
+import { TooltipProvider } from '@v2/components/ui/tooltip';
 import { getHost, HostProvider } from '../lib/host';
 import { createHttpGateway } from '../features/automations/data/http-gateway';
 import { useAutomationsStore } from '../features/automations/data/use-automations-store';
@@ -30,7 +30,7 @@ if (!root) throw new Error('root element not found');
 createRoot(root).render(
   <StrictMode>
     <HostProvider host={host}>
-      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+      <TooltipProvider>
         <App />
       </TooltipProvider>
     </HostProvider>

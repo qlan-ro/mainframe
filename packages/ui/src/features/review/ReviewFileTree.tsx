@@ -18,9 +18,9 @@ import type { WorkingChangeFile } from './use-working-changes';
 /**
  * Square badge tint per semantic status (text + chip background).
  * Alpha matches the design's exact `${statusColor}1f` hex-alpha (~12.16%).
- * These are the app's ordinary status hues, not the diff engine's palette: the
- * bridge's `mf-warning` / `mf-diff-del-text` were only ever here because v2
- * `warning` used to be a destructive mix. Measured on the amber: the badge
+ * These are the app's ordinary status hues, not the diff engine's palette; the
+ * v1 caution/diff tokens were only ever here because `warning` used to be a
+ * destructive mix. Measured on the amber: the badge
  * letter reads at 10.2–12.0:1 on every tint in both themes, so no bespoke
  * add/del token is warranted.
  */

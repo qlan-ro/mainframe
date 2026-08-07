@@ -29,7 +29,7 @@ The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure 
 | | v1 (warm chrome) | v2 (stock) |
 |---|---|---|
 | Spacing | **compressed** — `p-2` is 4px | **standard** — `p-2` is 8px |
-| Type | 8 named rungs (`text-body` …) | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16px |
+| Type | 8 named rungs (`text-body` …) — **retired 2026-08-07** | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16/24, `text-lg` 18/28 |
 | Radius | `--radius` 8px base, `mf` names | `--radius` 0.625rem, stock `rounded-*` |
 | Color | ~90 `mf-*` extensions | shadcn contract only, **plus three additions below** |
 
@@ -54,10 +54,11 @@ Three, each because the preset had no way to say the thing:
 `--ring` is `var(--primary)`, so focus rings are the accent everywhere.
 
 `--font-mono` ("SF Mono", ui-monospace, …) is also first-class in the v2 sheet — v2 markup uses
-`font-mono`, so it cannot live in the bridge. Several bridge tokens are now **aliases** onto v2 tokens
-(`--mf-text-3` → `muted-foreground`, `--mf-chip` → `accent`, `--mf-selection` → `sidebar-selection`,
-`--mf-success` → `success`), so legacy islands track the shell; `--mf-warning` deliberately stays amber
-(caution ≠ v2's wrong-but-not-broken red).
+`font-mono`, so it cannot live in the bridge.
+
+The bridge's generic colour tokens were **retired on 2026-08-07** — the aliases
+(`--mf-text-3`, `--mf-chip`, `--mf-success`, `--mf-warning`) were swept into their v2 sources at the call
+sites. Only `--mf-selection` → `sidebar-selection` is left. See the 2026-08-07 section at the end.
 
 ## Ink
 
@@ -149,10 +150,11 @@ Tabs/Toggle/ToggleGroup/Badge/Alert/Hint/Button). New stock primitives added for
 - **Warning callouts are `Alert` + `border-warning/30 bg-warning/10`** (config conflicts,
   unviewed-files). Chromeless inline inputs stay raw by design: editor title/description,
   chip-draft inputs (OptionsEditor/ConditionRow), menu search fields.
-- **Domain palettes stay in the bridge deliberately**: `mf-diff-*` + amber `mf-warning`
-  (git/diff family, lives with CmDiffEditor) and `mf-auto-*`/`mf-accent-violet` (automation
-  step-kind colors). Generic tokens all map: success, warning, sidebar-selection,
-  muted-foreground; `mf-border-hover` → `input`; `mf-content2` → `card`.
+- **Domain palettes stay in the bridge deliberately**: `mf-diff-*` (git/diff family, lives with
+  CmDiffEditor) and `mf-auto-*`/`mf-accent-violet` (automation step-kind colors). Generic tokens
+  all map: success, warning, sidebar-selection, muted-foreground; `mf-border-hover` → `input`;
+  `mf-content2` → `muted`. (Amber `mf-warning` was on this list until 2026-08-07, when it turned
+  out to hold v2 `warning`'s exact value and was retired.)
 - **shadcn-skill sweep applied** (`.claude/skills/shadcn/rules/`): no `space-y-*` (flex+gap),
   `size-*` for equal dims, no size props on icons inside `Button` (the `[&_svg]` rule sizes
   them), semantic tokens only.
@@ -213,8 +215,8 @@ slices remain). Conventions from the pass:
   hashes, hosts, ports, numeric counts, and keycap hints.
 - Segmented surface toggles = `ToggleGroup type="multiple"` on a `bg-muted` pad, active item
   `bg-background shadow-sm`; toggled id = symmetric diff in `onValueChange`.
-- Git-family amber (`mf-warning` divergence arrows, worktree glyphs) stays bridge-owned by design;
-  the green side moved to v2 `success`.
+- Git-family amber (divergence arrows, worktree glyphs) is v2 `warning` since 2026-08-07; the
+  green side had already moved to v2 `success`.
 - Tests: any component rendering a v2 `Hint`/`Tooltip` bare needs the **v2** `TooltipProvider`
   wrapper (`render(ui, { wrapper: TooltipProvider })`) — the v1 provider satisfies nothing.
 - **Hint around a Toggle/ToggleGroupItem clobbers `data-state`**: `TooltipTrigger asChild` writes
@@ -581,13 +583,12 @@ just the file count.
 `truncated-with-tooltip`) rather than bridge debt — cheap to leave, cheap to kill with their
 surfaces. MarkdownPreview and InspectorPane remain the sanctioned v1 islands.
 
-**v1 `popover.tsx` was NOT converted, deliberately.** All three consumers are the
-workflow / background-activity cluster, which the chat port never reached: nine files still on
-`text-label`/`text-caption`/`mf-text-3`/`mf-success`/`mf-warning`/`mf-border-hover`. Swapping only
-the popover primitive would have moved that cluster's radius, padding and clip
-(v1 `rounded-lg` + `overflow-hidden` + `p-[5px]` → v2 `rounded-md` + `p-4` + `flex-col gap-4`)
-with no way to verify it, since the sweep runs no app. The cluster needs a port pass of its own;
-its chrome converts then, per the "bodies convert with their surface" rule.
+**v1 `popover.tsx` was NOT converted in this pass, deliberately** — it went on 2026-08-07 instead,
+once the sweep could be verified against the running app. The reasoning recorded here at the time
+still explains the shape of the risk: swapping only the popover primitive moves the consumer's
+radius, padding and clip (v1 `rounded-lg` + `overflow-hidden` + `p-[5px]` → v2 `rounded-md` + `p-4`
++ `flex-col gap-4`), and `overflow-hidden` in particular has to be re-declared at any call site whose
+content runs edge to edge.
 
 #### The contrast guardrail was broken, not inert
 
@@ -610,9 +611,8 @@ exactly the shape a full run skims past. Repointed at `src/v2/styles/globals.css
   there would measure **4.02:1** — recorded in the test header so nobody lowers a threshold to it.
 - Both failure modes are now named and proven: a missing sheet, and — the one that actually bit —
   a sheet that still exists while the tokens migrate out of it.
-- New: the bridge's alias claim is tested. `mf-text-3`→`muted-foreground`,
-  `mf-selection`→`sidebar-selection`, `mf-success`→`success`, `mf-chip`→`accent` must resolve
-  equal per mode, and `mf-warning` must **not** equal `warning`.
+- New: the bridge's alias claim is tested. As of 2026-08-07 only `mf-selection`→`sidebar-selection`
+  remains to pin; the other aliases were swept into their sources and their cases deleted.
 
 #### Bridge deletions
 
@@ -651,3 +651,61 @@ Recorded so nobody "fixes" them back:
   `onCloseAutoFocus={(e) => e.preventDefault()}` on its content — the default close-restore focuses the
   previously-focused element one macrotask later, blurring the just-mounted input (TagRegistryItemMenu;
   same family as TagPopover's `onFocusOutside` guard).
+
+
+## 2026-08-07 — the v1 layer is retired
+
+The duplicated v1 primitives and every generic bridge colour are gone.
+
+- **Primitives deleted:** `components/ui/{tooltip,hint,popover,dropdown-menu,scroll-area,menu-variants}`.
+  Every consumer is on the `@v2` counterpart. `menu-variants.ts` died with the two files composing it.
+  `components/ui/assistant-ui/` is untouched — that is the classic aui registry layer, not v1 debt.
+- **`components/ui/` means something new:** app-owned primitives with no registry counterpart
+  (`count-badge`, `project-chip`, `read-more`, `section-header`), on v2 tokens. Each carries a header
+  comment saying so. The stock registry lives in `src/v2/components/ui/` and stays undrifted.
+- **API deltas worth knowing.** v2 `TooltipContent` is an inverted pill (`bg-foreground text-background`,
+  `text-xs`, an arrow) where v1 was a bordered popover card — and v2 `Tooltip` self-provides at
+  `delayDuration=0`, so the root provider's 500ms only ever governed v1 stragglers. v2
+  `DropdownMenuItem` takes `variant="destructive"` instead of a hand-rolled `text-destructive` class.
+  v2 `PopoverContent` drops v1's `overflow-hidden` — re-declare it wherever content runs edge to edge.
+  Menu-item icons stay `size-3.5` at the call site by convention, overriding v2's `size-4` rule.
+- **Token sweep, all measured, not guessed.** `mf-text-3`≡`muted-foreground`, `mf-chip`≡`accent`,
+  `mf-success`≡`success` were already exact aliases. **`mf-warning`'s `#a15804`/`#f5a960` are v2
+  `warning`'s oklch values in another notation** — identical pixels in both modes, which is why the
+  edit-ring shadow could be repointed at `--warning` losslessly. Judged per site: `mf-content2`/
+  `mf-raised` → `muted` (dark columns lift ~5 luma and lose their blue cast), `mf-glass` →
+  `bg-background/85` + `backdrop-blur-xl`, `mf-border-hover` → `border-input`, `mf-text-4` →
+  `muted-foreground/50` for ornament (gutter numerals, inactive tour dots).
+- **Three bridge tokens survive:** `--mf-window` (ErrorState backdrop), `--mf-text-4`, `--mf-selection`,
+  plus the pinned content palettes and the tasks/automations design-constant tables. Members of a pinned
+  palette with no consumer of their own stay — they are pinned as a set.
+- **Type rungs went too, in the same day's second pass** — see the section below.
+
+### 2026-08-07 (second pass) — the v1 type scale is retired
+
+126 usages across 39 files. The bridge's rung block is deleted, and so is `cn()`'s
+`extendTailwindMerge` font-size registration — its whole reason for existing was that
+tailwind-merge read the custom rung names as colours and dropped the size.
+
+| v1 rung | px / leading | → v2 | px / leading | delta |
+|---|---|---|---|---|
+| `text-micro` | 10 / 13 | `text-xs` | 11 / 16 | +1px (1 site: the code gutter) |
+| `text-caption` | 11 / 14.85 | `text-xs` | 11 / 16 | **size lossless**, +1.15 leading |
+| `text-label` | 12 / 16.8 | `text-xs` | 11 / 16 | −1px |
+| `text-body` | 13 / 19.5 | `text-sm` | 13 / 18 | **size lossless**, −1.5 leading |
+| `text-heading` | 15 / 19.5 | `text-base` | 16 / 24 | +1px — DialogTitle's own rung |
+| `text-title` | 17 / 21.25 | `text-lg` | 18 / 28 | +1px — kept a step above heading |
+
+`title`→`lg` rather than `base` on purpose: mapping both to `base` would collapse two rungs into one.
+
+**Measured, not assumed.** Dense-row hotspots were probed before and after: TaskListRow 42px→42px,
+TaskCard 100px→100px, the tool-card file path 15px→15px — all identical, because the shrunken leading
+absorbed into rows whose height is set by a taller sibling.
+
+**`text-xl` and up are phantoms.** A probe read `text-xl` as 13px/18px — it is never used, so Tailwind
+never generates it and the class does nothing while *looking* correct. This also means you cannot test a
+candidate class in a browser probe unless it already exists in the built CSS.
+
+One geometry fix rode along: the shiki line-number gutter was `w-[34px] pe-5`, and `pe-5` reserves 20px
+of that, leaving 14px — only ever enough for two digits (three overflowed even at the old 10px). It is
+`w-[42px]` now, so a 3-digit line number fits with the 20px gap unchanged.

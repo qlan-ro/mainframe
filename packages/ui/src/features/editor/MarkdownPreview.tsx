@@ -46,7 +46,7 @@ interface CodeBlockProps {
 }
 
 const CODE_PRE_CLASS =
-  'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-label text-mf-code-fg';
+  'my-2 overflow-x-auto rounded-md border border-border bg-mf-code-bg p-3 font-mono text-xs text-mf-code-fg';
 
 /** Fenced code block with shiki highlighting. Renders plain until shiki resolves. */
 function CodeBlock({ className, children }: CodeBlockProps) {
@@ -63,15 +63,15 @@ function CodeBlock({ className, children }: CodeBlockProps) {
 
 const components = {
   a: Anchor,
-  h1: (p: ElProps<'h1'>) => <h1 {...p} className="mt-4 mb-2 text-heading font-semibold text-foreground" />,
-  h2: (p: ElProps<'h2'>) => <h2 {...p} className="mt-4 mb-2 text-heading font-semibold text-foreground" />,
-  h3: (p: ElProps<'h3'>) => <h3 {...p} className="mt-3 mb-1.5 text-body font-semibold text-foreground" />,
-  p: (p: ElProps<'p'>) => <p {...p} className="my-2 text-body leading-relaxed text-foreground" />,
-  ul: (p: ElProps<'ul'>) => <ul {...p} className="my-2 ml-5 list-disc text-body text-foreground" />,
-  ol: (p: ElProps<'ol'>) => <ol {...p} className="my-2 ml-5 list-decimal text-body text-foreground" />,
+  h1: (p: ElProps<'h1'>) => <h1 {...p} className="mt-4 mb-2 text-base font-semibold text-foreground" />,
+  h2: (p: ElProps<'h2'>) => <h2 {...p} className="mt-4 mb-2 text-base font-semibold text-foreground" />,
+  h3: (p: ElProps<'h3'>) => <h3 {...p} className="mt-3 mb-1.5 text-sm font-semibold text-foreground" />,
+  p: (p: ElProps<'p'>) => <p {...p} className="my-2 text-sm leading-relaxed text-foreground" />,
+  ul: (p: ElProps<'ul'>) => <ul {...p} className="my-2 ml-5 list-disc text-sm text-foreground" />,
+  ol: (p: ElProps<'ol'>) => <ol {...p} className="my-2 ml-5 list-decimal text-sm text-foreground" />,
   li: (p: ElProps<'li'>) => <li {...p} className="my-0.5" />,
   blockquote: (p: ElProps<'blockquote'>) => (
-    <blockquote {...p} className="my-2 border-l-[3px] border-primary/40 pl-3 text-body text-muted-foreground" />
+    <blockquote {...p} className="my-2 border-l-[3px] border-primary/40 pl-3 text-sm text-muted-foreground" />
   ),
   code: ({ className, children, ...props }: ElProps<'code'>) => {
     // Fenced code blocks carry a language-* class; inline code does not.
@@ -81,7 +81,7 @@ const components = {
     return (
       <code
         {...props}
-        className="rounded-sm border border-border bg-mf-raised px-1.5 py-0.5 font-mono text-label text-mf-code-cmt"
+        className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-mf-code-cmt"
       >
         {children}
       </code>
@@ -91,17 +91,17 @@ const components = {
   pre: ({ children }: ElProps<'pre'>) => <>{children}</>,
   table: (p: ElProps<'table'>) => (
     <div className="my-2 overflow-x-auto">
-      <table {...p} className="w-full border-collapse text-body" />
+      <table {...p} className="w-full border-collapse text-sm" />
     </div>
   ),
   th: (p: ElProps<'th'>) => (
     <th
       {...p}
-      className="border border-border bg-mf-content2 px-[12px] py-[7px] text-left font-semibold text-muted-foreground"
+      className="border border-border bg-muted px-[12px] py-[7px] text-left font-semibold text-muted-foreground"
     />
   ),
   td: (p: ElProps<'td'>) => (
-    <td {...p} className="border border-border px-[12px] py-[7px] even:bg-mf-content2 odd:bg-background" />
+    <td {...p} className="border border-border px-[12px] py-[7px] even:bg-muted odd:bg-background" />
   ),
   hr: (p: ElProps<'hr'>) => <hr {...p} className="my-4 border-border" />,
 };

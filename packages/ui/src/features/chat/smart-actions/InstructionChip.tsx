@@ -27,7 +27,7 @@ export function InstructionChip({ target, variant = 'inline' }: InstructionChipP
 
   const chip = (
     <span className={CHIP_CLASS} data-smart-action-token={target.token}>
-      <code className="font-mono text-caption">{target.insertText}</code>
+      <code className="font-mono text-xs">{target.insertText}</code>
       <button
         type="button"
         data-testid="smart-action-instruction-append"

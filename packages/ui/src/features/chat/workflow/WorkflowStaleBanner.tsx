@@ -23,7 +23,7 @@ export function WorkflowStaleBanner({ run, now }: { run: ViewRun; now: number })
       className="mx-0.5 mb-1.5 flex items-start gap-2 rounded-md bg-muted px-2 py-1.5"
     >
       <CircleSlash size={12} className="mt-px shrink-0 text-muted-foreground" aria-hidden />
-      <p className="text-caption leading-normal text-muted-foreground">
+      <p className="text-xs leading-normal text-muted-foreground">
         The CLI process ended. {stale.length} agent{stale.length === 1 ? ' was' : 's were'} still running in the last
         snapshot, {gap}s before it stopped — their outcome is unknown.
       </p>

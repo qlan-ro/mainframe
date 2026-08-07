@@ -21,7 +21,7 @@ import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
-import { Hint } from '@/components/ui/hint';
+import { Hint } from '@v2/components/ui/hint';
 
 /** Join an absolute base with a repo-relative path; falls back to the relative path when no base is known. */
 function toFullPath(base: string | undefined, relativePath: string): string {
@@ -131,7 +131,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
           onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
           style={{ paddingLeft: indent }}
           className={[
-            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-label text-muted-foreground hover:bg-accent hover:text-foreground',
+            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground',
             isSelected ? 'border-l-primary bg-accent font-semibold text-foreground' : 'border-l-transparent',
             isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent',
           ]
@@ -139,7 +139,7 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
             .join(' ')}
         >
           <span className="w-[9px] flex-shrink-0" />
-          <File size={12} className="flex-shrink-0 text-mf-text-3" />
+          <File size={12} className="flex-shrink-0 text-muted-foreground" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}
@@ -160,11 +160,11 @@ function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, act
           type="button"
           onClick={toggle}
           style={{ paddingLeft: indent }}
-          className="flex h-[22px] w-full items-center gap-[5px] border-none bg-transparent pr-[12px] text-left text-label font-medium text-foreground hover:bg-accent"
+          className="flex h-[22px] w-full items-center gap-[5px] border-none bg-transparent pr-[12px] text-left text-xs font-medium text-foreground hover:bg-accent"
         >
           <ChevronRight
             size={12}
-            className={`flex-shrink-0 text-mf-text-3 transition-transform ${open ? 'rotate-90' : ''}`}
+            className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
           <TruncatedWithTooltip
@@ -243,13 +243,13 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
   }, [port, projectId, chatId, refreshKey]);
 
   if (error) {
-    return <div className="px-3 py-4 text-caption text-muted-foreground">Couldn't load files.</div>;
+    return <div className="px-3 py-4 text-xs text-muted-foreground">Couldn't load files.</div>;
   }
   if (roots === null) {
-    return <div className="px-3 py-4 text-caption text-muted-foreground">Loading…</div>;
+    return <div className="px-3 py-4 text-xs text-muted-foreground">Loading…</div>;
   }
   if (roots.length === 0) {
-    return <div className="px-3 py-4 text-caption text-muted-foreground">No files.</div>;
+    return <div className="px-3 py-4 text-xs text-muted-foreground">No files.</div>;
   }
 
   return (
@@ -257,7 +257,7 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
       {/* Header row: workspace-root label (right-clickable) + refresh button */}
       <div className="flex h-[20px] items-center px-[12px] py-[4px]">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
-          <span className="flex-1 truncate font-mono text-caption font-medium text-muted-foreground">
+          <span className="flex-1 truncate font-mono text-xs font-medium text-muted-foreground">
             {lastSegment(base ?? projectId)}
           </span>
         </FileTreeRowMenu>

@@ -24,14 +24,14 @@ Deliberately unmapped (use as arbitrary values, never as a color utility):
 
 | Class | Size | Leading | Use |
 |---|---|---|---|
-| `text-micro` | 10px | 1.3 | **ornament only — a deprecation target.** Nothing that must be read |
-| `text-caption` | 11px | 1.35 | secondary metadata, chips, footnotes |
-| `text-label` | 12px | 1.4 | form labels, chips, small buttons |
-| `text-body` | 13px | 1.5 | **baseline** — body copy, rows, menu items |
-| `text-heading` | 15px | 1.3 | dialog/section titles |
-| `text-title` | 17px | 1.25 | surface titles |
+| `text-xs` | 11px | 16px | secondary metadata, chips, footnotes, form labels, ornament |
+| `text-sm` | 13px | 18px | **baseline** — body copy, rows, menu items |
+| `text-base` | 16px | 24px | dialog and pane titles |
+| `text-lg` | 18px | 28px | surface titles |
 
-`body` itself is 13px — so an *unstyled* text node looks plausible and is still wrong.
+`text-sm` is the inherited baseline — so an *unstyled* text node looks plausible and is still wrong.
+**`text-xl` and above are phantoms**: nothing uses them, so Tailwind never generates them and the
+class silently does nothing. Add a real usage before reaching for one.
 
 ### Which rung for which role
 
@@ -39,16 +39,21 @@ Settled by the typography audit (`docs/architecture/2026-07-11-typography-legibi
 PR #452). The scale was being authored a rung low; the fix retuned `UI_SCALE_FACTORS` to
 `compact 0.92 / normal 1.0 / large 1.15`, so **normal is now true ×1.0 zoom and `body` really is 13px**.
 
+> **The v1 rungs were retired 2026-08-07.** The table below is the surviving role map on the stock
+> names. Mapping used: `caption`→`text-xs` and `body`→`text-sm` (lossless, same px), `label` 12→11,
+> `micro` 10→11, `heading` 15→`text-base` 16, `title` 17→`text-lg` 18.
+
 | Role | Rung |
 |---|---|
-| Primary content and anything the user acts on — session titles, menu items, picker values, button labels, inputs | `body` 13 |
-| Secondary supporting text — descriptions, tooltips, code/diff text, table cells, meta rows | `label` 12 |
-| Compact annotations — chips, badges, section headers, keycaps, timestamps | `caption` 11 |
-| Ornament | `micro` 10 |
+| Primary content and anything the user acts on — session titles, menu items, picker values, button labels, inputs | `text-sm` 13 |
+| Secondary supporting text — descriptions, tooltips, code/diff text, table cells, meta rows | `text-xs` 11 |
+| Compact annotations — chips, badges, section headers, keycaps, timestamps | `text-xs` 11 |
+| Dialog and pane titles | `text-base` 16 |
+| Surface titles | `text-lg` 18 |
 
 Tracking: `tracking-tight` (-0.02em) on headings. **`tracking-wide` is not a licence for uppercase
-eyebrows** — the `text-micro font-bold uppercase tracking-wide text-mf-text-3` stack was an app-wide
-antipattern the audit removed. A section header is `text-caption font-medium text-muted-foreground` in
+eyebrows** — the `text-micro font-bold uppercase tracking-wide` muted-ink stack was an app-wide
+antipattern the audit removed. A section header is `text-xs font-medium text-muted-foreground` in
 sentence case; if an uppercase eyebrow is genuinely wanted, the floor is 11px semibold in
 `muted-foreground`.
 
@@ -60,20 +65,20 @@ imported from the design prototype — the prototype specifies a stricter ladder
 
 | Rung | What ships | Take |
 |---|---|---|
-| `text-micro` | bold 10 · semibold 5 | residue of the removed eyebrow antipattern — don't copy it |
-| `text-caption` | medium 68 · semibold 60 | either; medium resting, semibold for emphasis |
-| `text-label` | semibold 58 · medium 46 | either; semibold slightly leads |
-| `text-body` | semibold 28 · medium 13 | **semibold** for row titles, medium for secondary |
-| `text-heading` | bold 17 · semibold 10 | **bold** — this is the dialog-title weight |
-| `text-title` | bold 9 · semibold 3 | bold |
+| `text-xs` | medium · semibold | either; medium resting, semibold for emphasis |
+| `text-sm` | semibold · medium | **semibold** for row titles, medium for secondary |
+| `text-base` | bold · semibold | **bold** — this is the dialog-title weight |
+| `text-lg` | bold | bold |
 
 Practical rules that do hold: **`font-normal` is effectively unused** (3 sites) — muted text gets a muted
 *color*, not a lighter weight; **`font-extrabold` appears once**, on the brand mark; and weight rises with
-the rung, so anything `text-heading` and above is `font-bold`. Below that, medium/semibold is a live
+the rung, so anything `text-base` and above is `font-bold`. Below that, medium/semibold is a live
 choice — copy the neighbouring component rather than deciding fresh.
 
-`cn()` is an `extendTailwindMerge` that registers these as a font-size group. Without it,
-`text-label text-muted-foreground` would collapse to just the color. Always compose classes through `cn()`.
+`cn()` used to be an `extendTailwindMerge` registering the v1 rungs as a font-size group — without it
+tailwind-merge read them as colours and dropped the size. Both the rungs and that config went on
+2026-08-07; every size is a stock name now. Still compose through `cn()`, and if you ever add a custom
+size, register it there again (`lib/__tests__/cn.test.ts` pins the behaviour).
 
 ## Spacing — compressed integers
 
@@ -112,17 +117,19 @@ Panel-level rounding is **not yours to pick** — see the window-style axis belo
 | `destructive` | error / danger |
 | `border` / `input` / `ring` | hairlines · field borders · focus color |
 
-`accent`, `border`, `input`, and `mf-chip` are alpha colors (`rgba(0,0,0,0.04–0.08)`) — an `/opacity`
+`accent`, `border`, and `input` are alpha colors (`rgba(0,0,0,0.04–0.08)`) — an `/opacity`
 modifier on them compounds toward invisible.
 
 ## Color — `mf-*` extensions (all mapped to utilities)
 
-- **Surfaces:** `mf-window` (app backdrop), `mf-glass` (translucent panel, pair with `backdrop-blur-[40px]`),
-  `mf-content2`, `mf-raised`, `mf-tab-active`, `mf-chip`, `mf-selection`, `mf-scrim`
-  (`mf-tab-bar` died with the workspace tab-body port — the viewer/editor bands are `bg-muted` now)
-- **Text:** `mf-text-3` (tertiary), `mf-text-4` (quaternary/disabled)
-- **Semantic:** `mf-warning` + `mf-warning-tint`, `mf-success` + `mf-success-tint`, `mf-destructive-tint`,
-  `mf-border-hover`
+> **RETIRED 2026-08-07.** Every generic `mf-*` colour is gone from the bridge. Use the v2 semantic
+> instead: `muted-foreground` (was `mf-text-3`), `accent` (`mf-chip`), `success`, `warning`,
+> `muted` (`mf-content2`/`mf-raised`), `bg-background/85` (`mf-glass`), `border-input`
+> (`mf-border-hover`), `bg-success/10` / `bg-warning/10` for the tints.
+
+- **Surfaces:** `mf-window` (the ErrorState backdrop), `mf-selection`, `mf-scrim`
+- **Text:** `mf-text-4` (ornament only — never text)
+- **Semantic:** `mf-destructive-tint`
 - **Surface identity:** `mf-surface-files` (violet), `mf-surface-run` (green)
 - **Tool families:** `mf-tool-read` / `-search` / `-bash` / `-web`, each with a `-tint`
 - **Directives:** `mf-directive-skill` + `-tint`, `mf-directive-command-tint`
@@ -176,16 +183,13 @@ headers and nav. Decorative dots are exempt. `button.tsx` guards the default wit
 appearance blocks and asserts the WCAG floors. Changing a color token means keeping that test green.
 
 - `foreground` (≥13:1) and `muted-foreground` (4.8–7:1) are the two safe text inks.
-- `mf-text-3` was re-tinted to clear 4.5:1 — it is for **short metadata only**, not everyday secondary text.
-- **`mf-text-4` is ornament, not text.** Never on text, never on a meaning-bearing icon. It survives in
-  ~17 files, and the legitimate uses tell you the shape of the rule: input `placeholder:`, syntax-token
-  fallbacks, inactive tab-strip titles, path crumbs. Two *deliberate* non-text uses are load-bearing and
-  asserted by `components/ui/__tests__/choice-controls.test.tsx` — the unchecked `Checkbox` and
-  `RadioGroupItem` ring is `border-[1.5px] border-mf-text-4`, chosen over the fainter `border-border`
-  precisely so an empty control stays visible. A ring is not text; don't "fix" it.
+- **`mf-text-4` was ornament, not text — and as of 2026-08-07 it is not a utility at all.** The sweep
+  moved its last class consumers (gutter numerals, inactive tour dots) to `muted-foreground/50`, so the
+  `@theme` mapping went and only the bare `--mf-text-4` var survives, for `app.css`'s `scrollbar-color`.
+  Reach for `muted-foreground/50` when you want ornament ink.
 - **Never stack `opacity-*` on an ink token.** Pick the right tier instead; the stack was measured as low
   as 1.3:1.
-- **Semantic hues are not text colors.** `mf-success` / `mf-warning` / task-type / priority / workflow hues
+- **Semantic hues are not text colors.** `success` / task-type / priority / workflow hues
   belong on the icon, the dot, or a tint background — the text beside them stays
   `foreground` / `muted-foreground`.
 - **`text-white` only on true scrims.** On an accent fill use `text-primary-foreground`; two dark schemes

@@ -54,7 +54,7 @@ export function DismissibleHint({
   dismissLabel = "Don't show anymore",
   dismissTestId,
 }: DismissibleHintProps) {
-  if (dismissed) return children;
+  if (dismissed || label === null || label === undefined || label === '') return children;
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>

@@ -60,7 +60,7 @@ export function TaskColumn({
       data-testid={`tasks-column-${status}`}
       className={cn(
         'flex flex-col min-h-0 rounded-md transition-colors',
-        dragOver ? 'bg-mf-selection ring-1 ring-inset ring-primary' : 'bg-mf-content2',
+        dragOver ? 'bg-sidebar-selection ring-1 ring-inset ring-primary' : 'bg-muted',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -69,7 +69,7 @@ export function TaskColumn({
       {/* Column header — chip sits adjacent to the label at a 7px gap, not
           right-aligned (design: 12-todos.jsx:617, finding 9.15). */}
       <div className="flex shrink-0 items-center gap-[7px] px-3.5 pb-4 pt-2.5">
-        <span className="text-caption font-medium text-muted-foreground">{STATUS_LABEL[status]}</span>
+        <span className="text-xs font-medium text-muted-foreground">{STATUS_LABEL[status]}</span>
         <CountBadge count={todos.length} variant="info" />
       </div>
 
@@ -84,7 +84,7 @@ export function TaskColumn({
         {todos.length === 0 && (
           <div
             data-testid={`tasks-column-${status}-empty`}
-            className="flex-1 flex items-center justify-center text-caption text-muted-foreground py-6 border border-dashed border-border rounded-md min-h-[72px]"
+            className="flex-1 flex items-center justify-center text-xs text-muted-foreground py-6 border border-dashed border-border rounded-md min-h-[72px]"
           >
             {dragOver ? 'Drop here' : filtersActive ? 'No matches' : 'Nothing here'}
           </div>

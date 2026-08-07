@@ -35,7 +35,7 @@ interface SetupAdvisorSheetProps {
 function LoadingBody() {
   return (
     <div data-testid="automation-recommender-loading" className="p-4">
-      <p className="mb-3 text-body text-muted-foreground">Fingerprinting your project…</p>
+      <p className="mb-3 text-sm text-muted-foreground">Fingerprinting your project…</p>
       <div className="mb-3 h-8 animate-pulse rounded-md bg-muted" />
       <div className="h-16 animate-pulse rounded-md bg-muted" />
     </div>
@@ -45,8 +45,8 @@ function LoadingBody() {
 function ErrorBody({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="p-4">
-      <p className="text-body font-medium text-foreground">Couldn&apos;t analyze this project.</p>
-      <p className="mt-1 text-caption text-muted-foreground">{error}</p>
+      <p className="text-sm font-medium text-foreground">Couldn&apos;t analyze this project.</p>
+      <p className="mt-1 text-xs text-muted-foreground">{error}</p>
       <Button size="sm" className="mt-3" data-testid="automation-recommender-retry" onClick={onRetry}>
         Try again
       </Button>
@@ -96,11 +96,11 @@ export function SetupAdvisorSheet({
         <>
           <div className="shrink-0 px-4 py-3">
             <EvidenceDisclosure signals={report.fingerprint.signals} />
-            {isThin && <p className="mt-2 text-caption text-muted-foreground">{THIN_NOTE}</p>}
+            {isThin && <p className="mt-2 text-xs text-muted-foreground">{THIN_NOTE}</p>}
           </div>
 
           {isEmpty ? (
-            <p className="px-4 pb-4 text-body text-muted-foreground">No recommendations for this project yet.</p>
+            <p className="px-4 pb-4 text-sm text-muted-foreground">No recommendations for this project yet.</p>
           ) : (
             <>
               <CategoryTabs recommendations={recommendations} active={activeCategory} onSelect={setActiveCategory} />

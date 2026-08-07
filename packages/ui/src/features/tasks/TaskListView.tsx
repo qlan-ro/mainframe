@@ -148,7 +148,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       {totalVisible === 0 ? (
         <div
           data-testid="tasks-list-empty"
-          className="flex-1 flex flex-col items-center justify-center gap-2 text-caption text-muted-foreground py-12"
+          className="flex-1 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground py-12"
         >
           <ListChecks size={26} className="text-muted-foreground/40" aria-hidden />
           {filtersActive ? 'No tasks match these filters' : 'No tasks yet'}
@@ -161,7 +161,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
               <button
                 type="button"
                 data-testid={`tasks-list-group-${status}`}
-                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-mf-content2 px-3 py-1.5 text-caption font-medium text-muted-foreground"
+                className="sticky top-0 z-10 flex w-full items-center gap-1.5 border-b border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
                 onClick={() => toggleGroup(status)}
               >
                 {collapsedGroups.has(status) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -190,7 +190,7 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
       )}
 
       {/* Footer hint */}
-      <div className="flex shrink-0 items-center gap-6 border-t border-border bg-mf-content2 px-3 py-1.5">
+      <div className="flex shrink-0 items-center gap-6 border-t border-border bg-muted px-3 py-1.5">
         {(
           [
             ['↑↓', 'Navigate'],
@@ -200,10 +200,10 @@ export function TaskListView({ port, projectId, todos, filters, onEdit, onStartS
           ] as const
         ).map(([key, label]) => (
           <span key={label} className="inline-flex items-center gap-1.5">
-            <kbd className="rounded-sm border-[0.5px] border-border bg-card px-1.5 py-0.5 font-mono text-caption leading-none text-muted-foreground">
+            <kbd className="rounded-sm border-[0.5px] border-border bg-card px-1.5 py-0.5 font-mono text-xs leading-none text-muted-foreground">
               {key}
             </kbd>
-            <span className="text-caption text-muted-foreground">{label}</span>
+            <span className="text-xs text-muted-foreground">{label}</span>
           </span>
         ))}
       </div>

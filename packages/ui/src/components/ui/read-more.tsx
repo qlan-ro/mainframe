@@ -1,4 +1,8 @@
 /**
+ * App-owned primitive on v2 tokens. `components/ui/` is no longer a v1 mirror of
+ * the shadcn registry — that is `src/v2/components/ui/`, kept stock. What lives
+ * here has no registry counterpart and is ours to shape.
+ *
  * ReadMore — shared "Read more / Show less" clamp primitive.
  *
  * Clamping strategy: character-length heuristic against `measureText`
@@ -70,7 +74,7 @@ export function ReadMore({
           data-testid={testId}
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-2 text-label font-semibold text-primary hover:underline"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-primary hover:underline"
           aria-label={expanded ? 'Show less' : 'Read more'}
           aria-expanded={expanded}
         >

@@ -47,7 +47,7 @@ export function WelcomeState({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-2">
           <ProjectChip projectId={projectId} name={projectName} size={18} />
           {branch != null && (
-            <span className="inline-flex items-center gap-1 text-caption text-muted-foreground">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <GitBranch size={12} />
               <span className="font-mono">{branch}</span>
             </span>
@@ -55,13 +55,13 @@ export function WelcomeState({ projectId }: { projectId: string }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-title font-semibold text-foreground">What should we take on?</h1>
-          <p className="text-body text-muted-foreground">Describe a task, or pick a starting point below.</p>
+          <h1 className="text-lg font-semibold text-foreground">What should we take on?</h1>
+          <p className="text-sm text-muted-foreground">Describe a task, or pick a starting point below.</p>
         </div>
 
         {suggestions.length > 0 && (
           <div className="flex flex-col gap-2">
-            <div className="text-caption font-medium text-muted-foreground">From the repo</div>
+            <div className="text-xs font-medium text-muted-foreground">From the repo</div>
             {suggestions.map((s, i) => (
               <SuggestionRow key={`${s.icon}-${s.title}`} suggestion={s} index={i} onInsert={insert} />
             ))}

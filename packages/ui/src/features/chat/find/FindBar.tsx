@@ -119,7 +119,7 @@ export function FindBar(): React.ReactElement | null {
   return (
     <div
       data-testid="find-bar"
-      className="flex items-center gap-2 border-b border-border bg-card px-[12px] py-[6px] text-caption"
+      className="flex items-center gap-2 border-b border-border bg-card px-[12px] py-[6px] text-xs"
     >
       <input
         ref={inputRef}
@@ -131,7 +131,7 @@ export function FindBar(): React.ReactElement | null {
         placeholder="Find in chat…"
         aria-label="Find in chat"
         className={cn(
-          'flex-1 rounded border border-border bg-background px-2 py-1 text-body text-foreground',
+          'flex-1 rounded border border-border bg-background px-2 py-1 text-sm text-foreground',
           'placeholder:text-muted-foreground focus:border-ring focus:outline-none',
         )}
       />

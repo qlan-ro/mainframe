@@ -28,7 +28,7 @@ export function WorkflowRunPanel({ run, onBack }: { run: ClaudeWorkflowRun; onBa
           type="button"
           onClick={onBack}
           data-testid={`chat-workflow-back-${key}`}
-          className="flex shrink-0 cursor-pointer items-center gap-1 border-b border-border px-2.5 py-1.5 text-caption text-muted-foreground transition-colors hover:text-foreground"
+          className="flex shrink-0 cursor-pointer items-center gap-1 border-b border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft size={12} aria-hidden />
           Background activity

@@ -13,7 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@v2/components/ui/dropdown-menu';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useUrlTunnel } from './use-url-tunnel';
 import type { PortTunnelEntry } from '@/store/port-tunnels';
@@ -21,7 +21,7 @@ import type { PortTunnelEntry } from '@/store/port-tunnels';
 const CHIP_CLASS =
   'inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 pl-1.5 pr-1 py-0.5 align-baseline';
 const ICON_BUTTON_CLASS = 'rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground';
-const BADGE_CLASS = 'rounded px-1 text-caption';
+const BADGE_CLASS = 'rounded px-1 text-xs';
 
 interface BadgeSpec {
   label: string;
@@ -34,9 +34,9 @@ function badgeFor(entry: PortTunnelEntry | undefined, busy: boolean): BadgeSpec 
   if (busy) return { label: 'tunnelling…', className: 'bg-muted text-muted-foreground' };
   switch (entry?.state) {
     case 'ready':
-      return { label: 'tunnelled', className: 'bg-mf-success-tint text-mf-success' };
+      return { label: 'tunnelled', className: 'bg-success/10 text-success' };
     case 'error':
-      return { label: 'tunnel failed', className: 'bg-mf-destructive-tint text-destructive' };
+      return { label: 'tunnel failed', className: 'bg-destructive/10 text-destructive' };
     default:
       return null;
   }
@@ -59,7 +59,7 @@ export function UrlChip({ href, port }: UrlChipProps) {
 
   return (
     <span className={CHIP_CLASS} data-smart-action-port={port}>
-      <span className="font-mono text-caption text-primary">{href}</span>
+      <span className="font-mono text-xs text-primary">{href}</span>
       {badge && <span className={`${BADGE_CLASS} ${badge.className}`}>{badge.label}</span>}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

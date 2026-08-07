@@ -220,10 +220,10 @@ describe('ShikiCode line-number gutter', () => {
     expect(numbers[2]!.textContent).toBe('3');
   });
 
-  it('gutter cells use the mf-text-4 token and mono font', () => {
+  it('gutter cells use the muted ornament ink and mono font', () => {
     render(<ShikiCode code="a" lang="typescript" preClass="" showLineNumbers />);
     const cell = document.querySelector('[data-slot="code-line-number"]');
-    expect(cell!.className).toContain('text-mf-text-4');
+    expect(cell!.className).toContain('text-muted-foreground/50');
     expect(cell!.className).toContain('font-mono');
   });
 
