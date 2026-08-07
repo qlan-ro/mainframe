@@ -18,7 +18,7 @@
  * 12. Footer statusRight (viewer-shell-status-right) contains row/col counts.
  * 13. Filter input lives in the ViewerShell actions (header), not a separate sub-bar.
  * 14. Sort arrows use accent-colored ▲/▼ spans (not plain text ↑/↓).
- * 15. Sticky thead uses bg-mf-content2, not bg-background.
+ * 15. Sticky thead uses bg-card, not bg-background.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';

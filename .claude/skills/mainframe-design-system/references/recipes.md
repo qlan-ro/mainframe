@@ -23,8 +23,8 @@ worth knowing them as a set rather than rediscovering them one review comment at
    `-pop` for popovers and menus, `-modal` for dialogs, plus panel/card/rail/segment/keycap variants.
    Stock `shadow-sm` also has 23 legitimate uses on small raised elements. What to avoid is the heavy end:
    `shadow-lg` / `shadow-xl` appear 4 times total and are not the house style.
-5. **Frosted chrome.** Titlebar and sidebar are `mf-glass` + `backdrop-blur-[40px]`, not a solid fill —
-   and the shell applies that, not you.
+5. **Frosted chrome.** Translucent panels are `bg-background/85` + `backdrop-blur-xl`, not a solid fill —
+   and the shell applies that, not you. (`mf-glass` was retired 2026-08-07.)
 6. **Accent discipline.** `primary` is for primary actions, selection, and focus. shadcn's `accent` is the
    muted *hover* surface. This one is unambiguous in the code: 165 `hover:bg-accent` against 5
    `hover:bg-primary`.
@@ -115,8 +115,8 @@ action) should use the primitive.
 Two primitives exist because the hand-rolled versions were app-wide legibility bugs. Use them.
 
 - **`components/ui/section-header.tsx`** — `<SectionHeader trailing={…}>Favorites</SectionHeader>`. Sentence
-  case, `text-caption font-medium text-muted-foreground`. It replaced the
-  `text-micro font-bold uppercase tracking-wide text-mf-text-3` eyebrow, which was 10px, low-contrast, and
+  case, `text-xs font-medium text-muted-foreground`. It replaced the
+  `text-micro font-bold uppercase tracking-wide` muted-ink eyebrow, which was 10px, low-contrast, and
   letter-spaced. That stack has already crept back into newer surfaces (daemon picker, quota, automations
   step options, spotlight) — don't add to them.
 - **`components/ui/count-badge.tsx`** — `<CountBadge count={n} />`. The default is a capsule-*less* gray

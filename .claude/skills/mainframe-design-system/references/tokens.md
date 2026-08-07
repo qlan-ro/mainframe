@@ -47,7 +47,7 @@ PR #452). The scale was being authored a rung low; the fix retuned `UI_SCALE_FAC
 | Ornament | `micro` 10 |
 
 Tracking: `tracking-tight` (-0.02em) on headings. **`tracking-wide` is not a licence for uppercase
-eyebrows** — the `text-micro font-bold uppercase tracking-wide text-mf-text-3` stack was an app-wide
+eyebrows** — the `text-micro font-bold uppercase tracking-wide` muted-ink stack was an app-wide
 antipattern the audit removed. A section header is `text-caption font-medium text-muted-foreground` in
 sentence case; if an uppercase eyebrow is genuinely wanted, the floor is 11px semibold in
 `muted-foreground`.
@@ -112,17 +112,19 @@ Panel-level rounding is **not yours to pick** — see the window-style axis belo
 | `destructive` | error / danger |
 | `border` / `input` / `ring` | hairlines · field borders · focus color |
 
-`accent`, `border`, `input`, and `mf-chip` are alpha colors (`rgba(0,0,0,0.04–0.08)`) — an `/opacity`
+`accent`, `border`, and `input` are alpha colors (`rgba(0,0,0,0.04–0.08)`) — an `/opacity`
 modifier on them compounds toward invisible.
 
 ## Color — `mf-*` extensions (all mapped to utilities)
 
-- **Surfaces:** `mf-window` (app backdrop), `mf-glass` (translucent panel, pair with `backdrop-blur-[40px]`),
-  `mf-content2`, `mf-raised`, `mf-tab-active`, `mf-chip`, `mf-selection`, `mf-scrim`
-  (`mf-tab-bar` died with the workspace tab-body port — the viewer/editor bands are `bg-muted` now)
-- **Text:** `mf-text-3` (tertiary), `mf-text-4` (quaternary/disabled)
-- **Semantic:** `mf-warning` + `mf-warning-tint`, `mf-success` + `mf-success-tint`, `mf-destructive-tint`,
-  `mf-border-hover`
+> **RETIRED 2026-08-07.** Every generic `mf-*` colour is gone from the bridge. Use the v2 semantic
+> instead: `muted-foreground` (was `mf-text-3`), `accent` (`mf-chip`), `success`, `warning`,
+> `muted` (`mf-content2`/`mf-raised`), `bg-background/85` (`mf-glass`), `border-input`
+> (`mf-border-hover`), `bg-success/10` / `bg-warning/10` for the tints.
+
+- **Surfaces:** `mf-window` (the ErrorState backdrop), `mf-selection`, `mf-scrim`
+- **Text:** `mf-text-4` (ornament only — never text)
+- **Semantic:** `mf-destructive-tint`
 - **Surface identity:** `mf-surface-files` (violet), `mf-surface-run` (green)
 - **Tool families:** `mf-tool-read` / `-search` / `-bash` / `-web`, each with a `-tint`
 - **Directives:** `mf-directive-skill` + `-tint`, `mf-directive-command-tint`
@@ -176,7 +178,6 @@ headers and nav. Decorative dots are exempt. `button.tsx` guards the default wit
 appearance blocks and asserts the WCAG floors. Changing a color token means keeping that test green.
 
 - `foreground` (≥13:1) and `muted-foreground` (4.8–7:1) are the two safe text inks.
-- `mf-text-3` was re-tinted to clear 4.5:1 — it is for **short metadata only**, not everyday secondary text.
 - **`mf-text-4` is ornament, not text.** Never on text, never on a meaning-bearing icon. It survives in
   ~17 files, and the legitimate uses tell you the shape of the rule: input `placeholder:`, syntax-token
   fallbacks, inactive tab-strip titles, path crumbs. Two *deliberate* non-text uses are load-bearing and
@@ -185,7 +186,7 @@ appearance blocks and asserts the WCAG floors. Changing a color token means keep
   precisely so an empty control stays visible. A ring is not text; don't "fix" it.
 - **Never stack `opacity-*` on an ink token.** Pick the right tier instead; the stack was measured as low
   as 1.3:1.
-- **Semantic hues are not text colors.** `mf-success` / `mf-warning` / task-type / priority / workflow hues
+- **Semantic hues are not text colors.** `success` / task-type / priority / workflow hues
   belong on the icon, the dot, or a tint background — the text beside them stays
   `foreground` / `muted-foreground`.
 - **`text-white` only on true scrims.** On an accent fill use `text-primary-foreground`; two dark schemes

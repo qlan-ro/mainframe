@@ -14,23 +14,20 @@
  * with the v2 merge, so `:root` and `:root`+`.dark` are the whole cascade. Both
  * sheets layer per theme (v2 first, then the bridge) exactly as `app.css` imports
  * them, and `.dark` lands on the same element as `:root` in the real app, so a
- * bridge alias like `--mf-text-3: var(--muted-foreground)` resolves to the DARK
+ * bridge alias like `--mf-selection: var(--sidebar-selection)` resolves to the DARK
  * value there — which is why the resolver keeps var() lazy.
  *
  * Measured floors at the time of writing (contrast ratios, light / dark):
  *   foreground on background 12.63 / 15.57 · on card 12.63 / 14.10
  *   muted-foreground on background 4.74 / 7.66 · on card 4.74 / 6.94
- *   mf-warning as text on background 5.37 / 10.11
+ *   warning as text on background 5.37 / 10.11
  *   foreground on bubble-tinted 10.03 / 10.72  (matches the Phase-2 ledger)
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
  *   success on background 3.39 / 9.50          (a glyph/dot hue, never body text)
  *
- * `--mf-glass` is deliberately NOT in the muted-ink backdrop set any more. The v1
- * audit solved `mf-text-3` to exactly 4.5:1 on light glass because the warm glass
- * sidebar carried metadata; that panel is gone, and glass's one remaining consumer
- * (`layout/SurfaceDragLayer`) carries `text-foreground`. So glass is checked for
- * `foreground` only. Muted ink on glass would measure 4.02:1 — if anything ever
- * puts it back there, that is a re-tint decision, not a threshold to lower.
+ * `--mf-glass` is gone (2026-08-07): its one consumer, `layout/SurfaceDragLayer`,
+ * is on `bg-background/85` now, so the chip's worst case is `foreground` over
+ * `background` — already covered by the first guardrail below.
  *
  * The colour resolver in `./css-color` is verified against Chromium's own
  * `getComputedStyle` + canvas readback for every token here (33/34 exact, the
@@ -40,7 +37,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { composite, contrast, parseRules, resolveOklch, toRgba, type Decls, type RGBA } from './css-color';
 
-/** mf-text-3 was solved to *exactly* 4.5:1 worst-case, so absorb float noise. */
+/** muted-foreground sits at *exactly* 4.5:1 worst-case, so absorb float noise. */
 const WCAG_MIN = 4.49;
 
 /* SC 1.4.11 (non-text/UI) and the large-text bar are 3:1. #0a84ff on white is
@@ -125,7 +122,7 @@ describe('token sources', () => {
     for (const token of ['--background', '--foreground', '--muted-foreground', '--primary', '--bubble-tinted']) {
       expect(sheets.v2.get(':root')![token], `${token} missing from ${V2_SHEET}`).toBeDefined();
     }
-    for (const token of ['--mf-text-3', '--mf-warning', '--mf-glass', '--mf-window']) {
+    for (const token of ['--mf-window', '--mf-text-4', '--mf-selection']) {
       expect(sheets.bridge.get(':root')![token], `${token} missing from ${BRIDGE_SHEET}`).toBeDefined();
     }
   });
@@ -148,20 +145,6 @@ describe('v2 contrast guardrail', () => {
     }
   });
 
-  it.each(THEMES)('mf-text-3 — the islands metadata ink — clears 4.5:1 on every surface — %s', (theme) => {
-    const t = resolve(theme);
-    const ink = color(t, '--mf-text-3');
-    for (const [name, bg] of Object.entries(backdrops(t))) {
-      expect(inkOn(ink, bg), `mf-text-3 on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
-    }
-  });
-
-  it.each(THEMES)('foreground stays readable on the glass drag chip — %s', (theme) => {
-    const t = resolve(theme);
-    const glass = composite(color(t, '--mf-glass'), color(t, '--mf-window'));
-    expect(inkOn(color(t, '--foreground'), glass), `foreground on glass (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
-  });
-
   it.each(THEMES)('the user bubble fill carries body ink — %s', (theme) => {
     const t = resolve(theme);
     // The bubble sits on the thread background, and its own fill is opaque there.
@@ -180,11 +163,13 @@ describe('v2 contrast guardrail', () => {
     ).toBeGreaterThanOrEqual(WCAG_MIN);
   });
 
-  it.each(THEMES)('mf-warning — the bridge caution ink — clears 4.5:1 as TEXT — %s', (theme) => {
+  it.each(THEMES)('warning — the caution ink — clears 4.5:1 as TEXT — %s', (theme) => {
+    // Unlike success/destructive this one IS body text: the composer edit banner,
+    // git divergence and worktree rows all render `text-warning`.
     const t = resolve(theme);
-    const ink = color(t, '--mf-warning');
+    const ink = color(t, '--warning');
     for (const name of ['background', 'card'] as const) {
-      expect(inkOn(ink, backdrops(t)[name]!), `mf-warning on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(ink, backdrops(t)[name]!), `warning on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
     }
   });
 
@@ -214,30 +199,13 @@ describe('bridge alias integrity', () => {
   // The bridge header claims the duplicated semantics are ALIASES onto v2 tokens,
   // so islands track the shell per mode. These pin that claim: a warm literal
   // creeping back would drift the islands away from the shell silently.
-  const ALIASES: [string, string][] = [
-    ['--mf-text-3', '--muted-foreground'],
-    ['--mf-selection', '--sidebar-selection'],
-    ['--mf-success', '--success'],
-    ['--mf-chip', '--accent'],
-  ];
+  const ALIASES: [string, string][] = [['--mf-selection', '--sidebar-selection']];
 
   it.each(THEMES)('every aliased bridge token resolves to its v2 source — %s', (theme) => {
     const t = resolve(theme);
     for (const [alias, source] of ALIASES) {
       expect(color(t, alias), `${alias} should track ${source} (${theme})`).toEqual(color(t, source));
     }
-  });
-
-  it.each(THEMES)('mf-warning tracks v2 warning — %s', (theme) => {
-    // These were held apart while v2 `warning` was a destructive/muted mix: amber
-    // means "caution" (the composer edit ring, git divergence) and a red-ish mix
-    // said something else, so the islands kept their own hue. v2 `warning` is a
-    // real amber now (2026-08-06), so caution is one colour app-wide and the two
-    // tokens must resolve identically per mode. The bridge keeps its own literal
-    // rather than a var() alias — the git/diff palette stays bridge-owned — so
-    // this is the thing that stops them drifting apart again.
-    const t = resolve(theme);
-    expect(color(t, '--mf-warning'), `mf-warning should track warning (${theme})`).toEqual(color(t, '--warning'));
   });
 
   it.each(THEMES)('focus rings and selection are built from the accent — %s', (theme) => {

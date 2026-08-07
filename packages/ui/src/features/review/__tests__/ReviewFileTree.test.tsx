@@ -50,10 +50,10 @@ describe('ReviewFileTree', () => {
     expect(screen.getByText('R')).toBeTruthy();
   });
 
-  // The badges used to straddle two token trees (v2 `success` beside bridge
-  // `mf-warning` / `mf-diff-del-text`). They are v2-only now that `warning` is a
-  // real amber, so pin the hue per status kind — a silent slide back to a bridge
-  // token is exactly what this catches.
+  // The badges used to straddle two token trees, v2 `success` beside the v1
+  // caution/diff hues. They are v2-only now that `warning` is a real amber, so
+  // pin the hue per status kind — a silent slide back to a bridge token is
+  // exactly what this catches.
   it.each([
     ['added', 'A', 'bg-success/[12.16%]'],
     ['modified', 'M', 'bg-warning/[12.16%]'],

@@ -74,9 +74,9 @@ describe('ViewerShell', () => {
     );
     // Basename must be present.
     expect(screen.getByTestId('viewer-shell')).toHaveTextContent('file.png');
-    // No dir-level text-mf-text-3 spans containing path segments.
+    // No dir-level muted spans containing path segments.
     const dirSpans = Array.from(container.querySelectorAll('span')).filter(
-      (s) => s.className.includes('text-mf-text-3') && s.textContent === 'file.png',
+      (s) => s.className.includes('text-muted-foreground') && s.textContent === 'file.png',
     );
     // The dir-color span should not contain the basename text.
     expect(dirSpans).toHaveLength(0);

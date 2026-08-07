@@ -7,16 +7,24 @@
    deleted.
 
    The shell, the title bar, the dialogs, the workspace surface and the chat
-   surface have all ported. What still speaks mf-* and the v1 type rungs, as of
-   the 2026-08-06 chat pass:
+   surface have all ported, and the 2026-08-07 pass retired the duplicated v1
+   primitives along with every generic colour token. What still speaks mf-* and
+   the v1 type rungs:
    - whole areas awaiting their own port: tasks, automations, review, settings
      panes, the files tree, sessions' v1 leftovers, tour
-   - the surviving v1 primitives: components/ui/{tooltip,hint,dropdown-menu,
-     popover,menu-variants,count-badge,section-header,read-more,scroll-area}
+   - three surviving app tokens: --mf-window (the ErrorState backdrop),
+     --mf-text-4 (ornament ink) and --mf-selection
+
+   The generic colour tokens are GONE, swept onto their v2 semantics: mf-text-3
+   and mf-chip and mf-success were already aliases (muted-foreground / accent /
+   success); mf-warning turned out to be v2 warning's oklch in hex, so the edit
+   ring now color-mixes --warning directly; mf-content2 and mf-raised read as
+   muted, mf-glass as bg-background/85, mf-border-hover as border-input.
+   Do not reintroduce them — reach for the v2 token.
 
    Kept by design, not pending: the content palettes (mf-code-*, mf-cm-*,
    mf-term-*, mf-diff-*, mf-viewer-*), the automations step-kind and
-   tasks/priority palettes, the composer's amber edit ring, and mf-scrim.
+   tasks/priority palettes, and mf-scrim.
    Some members of those palettes have no consumer of their own — they are
    pinned as a set so a theme reads consistently; do not pick them off.
 
@@ -30,28 +38,20 @@
      globally, so the v2 tree inherited v1 metrics; defaults win now
    - --font-mono — promoted to the v2 token layer (v2 markup uses font-mono)
 
-   Where a v1 token duplicated a v2 semantic, it is an ALIAS onto the v2
-   token (declared once — var() re-resolves per mode), so the islands'
-   resting ink, chips, selection and success hues track the shell instead
-   of keeping their warm values. --mf-warning stays amber on purpose: it
-   means "caution" (edit ring), not v2's wrong-but-not-broken red.
+   Where a v1 token duplicated a v2 semantic it was an ALIAS onto the v2 token,
+   so the islands tracked the shell rather than keeping their warm values. The
+   aliases have now been swept into their sources at the call sites; only
+   --mf-selection is left, and it stays an alias for the same reason.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
   --mf-window: #e9e7e2;
-  --mf-glass: rgba(240, 237, 231, 0.84);
-  --mf-content2: #f8f6f2;
-  --mf-raised: #f3efe7;
-  --mf-text-3: var(--muted-foreground);
   --mf-text-4: #bcbab5;
-  --mf-chip: var(--accent);
   --mf-selection: var(--sidebar-selection);
   /* In-chat Find highlights — amber (matches the --mf-cm-match editor-search
      convention), defined once; the dark block does not override them. */
   --mf-find-tint: rgba(251, 191, 36, 0.32);
   --mf-find-active: rgba(251, 146, 60, 0.6);
-  --mf-warning: #a15804;
-  --mf-success: var(--success);
 
   /* Editor syntax — Xcode-ish on warm paper */
   --mf-code-bg: #fbfaf7;
@@ -88,9 +88,6 @@
 
   /* ── App-only tokens — LIGHT ── */
   --mf-destructive-tint: rgba(220, 53, 69, 0.08);
-  --mf-warning-tint: rgba(217, 119, 6, 0.1);
-  --mf-success-tint: rgba(40, 167, 69, 0.1);
-  --mf-border-hover: rgba(0, 0, 0, 0.14);
   --mf-directive-skill: #7a4dd0;
   --mf-directive-session: #a84c08;
   --mf-code-inline-fg: #7a4d2a;
@@ -147,11 +144,7 @@
 
 .dark {
   --mf-window: #1b1c25;
-  --mf-glass: rgba(34, 36, 47, 0.85);
-  --mf-content2: #212330;
-  --mf-raised: #313447;
   --mf-text-4: #555870;
-  --mf-warning: #f5a960;
 
   /* Editor syntax — playful slate pastels */
   --mf-code-bg: #21222c;
@@ -181,9 +174,6 @@
 
   /* ── App-only tokens — DARK ── */
   --mf-destructive-tint: rgba(255, 107, 107, 0.1);
-  --mf-warning-tint: rgba(245, 169, 96, 0.12);
-  --mf-success-tint: rgba(80, 217, 124, 0.12);
-  --mf-border-hover: rgba(255, 255, 255, 0.16);
   --mf-directive-skill: #b48cff;
   --mf-directive-session: #f0b429;
   --mf-code-inline-fg: #e0a878;
@@ -226,19 +216,9 @@
 @theme inline {
   /* --mf-* extensions → utilities */
   --color-mf-window: var(--mf-window);
-  --color-mf-glass: var(--mf-glass);
-  --color-mf-content2: var(--mf-content2);
-  --color-mf-raised: var(--mf-raised);
-  --color-mf-text-3: var(--mf-text-3);
   --color-mf-text-4: var(--mf-text-4);
-  --color-mf-chip: var(--mf-chip);
   --color-mf-selection: var(--mf-selection);
-  --color-mf-warning: var(--mf-warning);
-  --color-mf-warning-tint: var(--mf-warning-tint);
-  --color-mf-success: var(--mf-success);
-  --color-mf-success-tint: var(--mf-success-tint);
   --color-mf-destructive-tint: var(--mf-destructive-tint);
-  --color-mf-border-hover: var(--mf-border-hover);
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-session: var(--mf-directive-session);
   --color-mf-code-inline-fg: var(--mf-code-inline-fg);

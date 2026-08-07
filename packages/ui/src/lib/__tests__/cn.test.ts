@@ -13,7 +13,7 @@ import { cn } from '../utils';
 describe('cn — custom font-size utilities survive merge', () => {
   it('keeps a custom text-size alongside a text-color', () => {
     expect(cn('text-label', 'text-muted-foreground')).toBe('text-label text-muted-foreground');
-    expect(cn('text-micro', 'text-mf-text-3')).toBe('text-micro text-mf-text-3');
+    expect(cn('text-micro', 'text-mf-text-4')).toBe('text-micro text-mf-text-4');
     expect(cn('text-caption', 'text-foreground')).toBe('text-caption text-foreground');
   });
 
