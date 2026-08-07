@@ -14,8 +14,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/compone
 import { cn } from '@v2/lib/utils';
 import type { SessionPanelOpenSectionId } from '@/store/ui-prefs';
 
-/** The header rhythm the non-collapsible Summary heading shares — the app's
- *  dense-list rhythm: a 32px header over 28px rows, not a comfortable card. */
+/** The header rhythm the non-collapsible Summary heading shares. The panel is
+ *  dense by CHROME, not by type: rows keep the app's `text-sm`, and a 32px
+ *  header over 26px rows buys the density that shrinking the type would have. */
 export const SECTION_HEAD = 'flex h-8 items-center gap-2 px-2';
 
 interface PanelSectionProps {
@@ -54,7 +55,7 @@ export function PanelSection({
             className={cn(SECTION_HEAD, 'w-full text-left transition-colors hover:bg-foreground/8')}
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate text-xs font-medium">{label}</span>
+            <span className="min-w-0 truncate text-sm font-medium">{label}</span>
             {count != null && <Badge variant="secondary">{count}</Badge>}
             <span className="flex-1" />
             <ChevronDown

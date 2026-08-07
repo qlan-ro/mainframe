@@ -29,16 +29,14 @@ The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure 
 | | v1 (warm chrome) | v2 (stock) |
 |---|---|---|
 | Spacing | **compressed** — `p-2` is 4px | **standard** — `p-2` is 8px |
-| Type | 8 named rungs (`text-body` …) | Tailwind names, **desktop values**: `text-2xs` **10px/14**, `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16px |
+| Type | 8 named rungs (`text-body` …) | Tailwind names, **desktop values**: `text-xs` **11px/16**, `text-sm` **13px/18**, `text-base` 16px |
 | Radius | `--radius` 8px base, `mf` names | `--radius` 0.625rem, stock `rounded-*` |
 | Color | ~90 `mf-*` extensions | shadcn contract only, **plus three additions below** |
 
 `text-sm` is the UI size — a row name, a card title, a dialog's body. `text-xs` is metadata: timestamps,
-field labels, the session row's second line. `text-2xs` is the step below that, for a companion surface
-that steps its whole scale down — the session panel runs `text-xs` rows over `text-2xs` trailing values.
-It exists so such a surface lands on a token instead of an arbitrary `text-[10px]`; it is not a rung for
-general use. **`body` carries `text-sm`**, so unsized text lands on 13px rather than the browser's 16px;
-that rule exists because the hover card shipped at 16px without it.
+field labels, the session row's second line. There is no rung below `text-xs`: a surface that needs to
+read denser tightens its padding, not its type. **`body` carries `text-sm`**, so unsized text lands on
+13px rather than the browser's 16px; that rule exists because the hover card shipped at 16px without it.
 
 `mf-*` class names are **phantom** here — they compile to nothing, silently.
 

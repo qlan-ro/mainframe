@@ -13,7 +13,7 @@
  * all the section says so rather than rendering an empty card.
  */
 import { useAuiState } from '@assistant-ui/react';
-import { Gauge, GitBranch, GitCompare, GitPullRequest, Info, PanelRightClose } from 'lucide-react';
+import { Gauge, GitBranch, GitCompare, GitPullRequest, PanelRightClose } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Badge } from '@v2/components/ui/badge';
 import { Button } from '@v2/components/ui/button';
@@ -30,9 +30,9 @@ import { SECTION_HEAD } from './PanelSection';
 import { deriveSummaryRows, type SummaryRow } from './summary-view';
 import { useContextPercent } from './use-context-percent';
 
-const ROW = 'flex items-center gap-2 rounded-md px-2 py-1.5';
-const ROW_LABEL = 'min-w-0 flex-1 truncate text-xs';
-const ROW_TRAILING = 'shrink-0 font-mono text-2xs tabular-nums text-muted-foreground';
+const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
+const ROW_LABEL = 'min-w-0 flex-1 truncate text-sm';
+const ROW_TRAILING = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
 
 const ROW_ICON: Record<SummaryRow['kind'], ComponentType<{ className?: string }>> = {
   branch: GitBranch,
@@ -64,10 +64,10 @@ function RowTrailing({ row }: { row: SummaryRow }) {
         <span className={ROW_TRAILING}>{row.value}</span>
         {/* A clean tree has no diff to count — "+0 −0" would be noise. */}
         {row.fileCount > 0 && row.additions != null && (
-          <span className="shrink-0 font-mono text-2xs tabular-nums text-success">+{row.additions}</span>
+          <span className="shrink-0 font-mono text-xs tabular-nums text-success">+{row.additions}</span>
         )}
         {row.fileCount > 0 && row.deletions != null && (
-          <span className="shrink-0 font-mono text-2xs tabular-nums text-destructive">−{row.deletions}</span>
+          <span className="shrink-0 font-mono text-xs tabular-nums text-destructive">−{row.deletions}</span>
         )}
       </>
     );
@@ -133,8 +133,7 @@ export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionP
   return (
     <section ref={sectionRef} data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
       <div className={SECTION_HEAD}>
-        <Info className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate text-xs font-medium">Summary</span>
+        <span className="min-w-0 truncate text-sm font-medium">Summary</span>
         {onCollapse && (
           <>
             <span className="flex-1" />
@@ -153,9 +152,9 @@ export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionP
           </>
         )}
       </div>
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
+      <div className="flex flex-col gap-0.5 pb-2">
         {rows.length === 0 ? (
-          <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-xs text-muted-foreground')}>
+          <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
             No session details yet
           </div>
         ) : (

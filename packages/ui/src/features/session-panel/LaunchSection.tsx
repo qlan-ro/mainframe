@@ -20,7 +20,7 @@ import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRows, type LaunchRow } from './launch-view';
 import { PanelSection } from './PanelSection';
 
-const ROW = 'flex items-center gap-2 rounded-md px-2 py-1.5';
+const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 
 function LaunchConfigRow({
   row,
@@ -49,7 +49,7 @@ function LaunchConfigRow({
         )}
       >
         <TypeIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className={cn('min-w-0 flex-1 truncate text-xs', row.selected && 'font-semibold')}>{name}</span>
+        <span className={cn('min-w-0 flex-1 truncate text-sm', row.selected && 'font-semibold')}>{name}</span>
         {status === 'starting' && (
           <LoaderCircle
             data-testid={`session-panel-launch-spinner-${name}`}
@@ -106,7 +106,7 @@ export function LaunchSection({ port, open, onToggle, sectionRef }: LaunchSectio
       sectionRef={sectionRef}
     >
       {rows.length === 0 ? (
-        <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-xs text-muted-foreground')}>
+        <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
           {NO_CONFIGS_LABEL}
         </div>
       ) : (

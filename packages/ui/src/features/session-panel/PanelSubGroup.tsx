@@ -30,7 +30,7 @@ export function PanelSubGroup({ label, count, action, children }: PanelSubGroupP
   return (
     <div className="not-first:mt-0.5 not-first:border-t not-first:border-border not-first:pt-1">
       <div className="flex items-center gap-1.5 px-1 pb-0.5">
-        <span className="text-2xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <Badge variant="outline">{count}</Badge>
         <span className="flex-1" />
         {action}
