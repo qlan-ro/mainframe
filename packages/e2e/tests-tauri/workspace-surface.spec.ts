@@ -228,6 +228,12 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    // The session panel hides ENTIRELY (rail included) when the chat surface's
+    // gutter is under RAIL_MIN_WIDTH (876). With the workspace lit, the default
+    // 1280 viewport halves the chat host to ~500 and every rail/panel launch
+    // control this describe drives disappears. Wide keeps the halved host in
+    // the rail band.
+    await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
     await createTauriChat(app.page, project.projectId, 'default');
