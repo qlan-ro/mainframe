@@ -32,7 +32,7 @@
  * which shrinks when the surface is split and which the panel measuring its own
  * box would never see.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
@@ -81,15 +81,11 @@ export function ChatSurface() {
   useNewThreadAutoConfig();
 
   const panelState = useSessionPanelState();
-  const { hostRef } = panelState;
-  // A callback ref, because `hostRef` is typed to the generic HTMLElement the
-  // panel measures — a div's own ref prop would not accept it.
-  const setHostRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      hostRef.current = el;
-    },
-    [hostRef],
-  );
+  // `hostRef` is the hook's state-backed callback ref — passed straight through,
+  // so the hook re-measures whenever THIS row (re)mounts. On a cold boot the
+  // initializing branch renders first and the row arrives on a later commit;
+  // a RefObject here left the panel unmeasured (hidden) in the packaged app.
+  const setHostRef = panelState.hostRef;
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // s.threadListItem is the native active ThreadListItemState; its `status`
