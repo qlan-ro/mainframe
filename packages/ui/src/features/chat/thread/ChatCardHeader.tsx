@@ -1,5 +1,6 @@
 import { useAuiState } from '@assistant-ui/react';
 import { EyeOff, GitPullRequest, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
@@ -20,6 +21,28 @@ import { ChatModelChip } from './ChatModelChip';
 const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] border-b border-border pr-1.5 pl-2';
 
 /**
+ * The chat surface's reposition grip. Emits an intent rather than reaching into
+ * `layout/` (features never import it); SurfaceHost forwards it to the drag
+ * store. `data-no-drag` keeps the host's window-drag handler off the gesture —
+ * the row is a window drag region and the grip is not a <button>.
+ */
+function ChatSurfaceGrip() {
+  return (
+    <span
+      data-testid="chat-header-grip"
+      data-no-drag
+      className="shrink-0 cursor-grab"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        emitSurfaceIntent({ type: 'begin-surface-drag', surface: 'chat', clientX: e.clientX, clientY: e.clientY });
+      }}
+    >
+      <GripHorizontal size={13} className="text-muted-foreground" />
+    </span>
+  );
+}
+
+/**
  * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): grip,
  * chat icon, a fixed "New Session" title, and the draft's project chip. No
  * model chip / PR pills — that state doesn't exist
@@ -28,7 +51,7 @@ const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] border-b bor
 function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | null; projectName: string | null }) {
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
+      <ChatSurfaceGrip />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">New Session</span>
       {projectId != null && projectName != null && (
@@ -57,7 +80,7 @@ function ChatCardHeaderReal() {
 
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <GripHorizontal size={13} className="shrink-0 cursor-grab text-muted-foreground" />
+      <ChatSurfaceGrip />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatModelChip />

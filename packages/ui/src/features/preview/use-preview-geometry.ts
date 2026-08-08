@@ -36,14 +36,14 @@ export function usePreviewGeometry({ handle, anchorRef, containerRef, active, mo
   const topFlex = useLayoutStore((s) => s.layout.topFlex);
   const vFlex = useLayoutStore((s) => s.layout.vFlex);
   const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
-  const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
+  const filesCollapsed = useUiPrefs((s) => s.workspaceFilesCollapsed);
   // UI page-zoom changes the native-webview bounds multiplier but NOT the CSS
   // layout, so the ResizeObserver never fires — refit explicitly on scale change.
   const uiScale = useTheme((s) => s.uiScale);
 
   useEffect(() => {
     scheduleRefit();
-  }, [topFlex, vFlex, sidebarVisible, inspectorVisible, uiScale, handle]);
+  }, [topFlex, vFlex, sidebarVisible, filesCollapsed, uiScale, handle]);
 
   useEffect(() => {
     if (active) scheduleRefit();

@@ -103,8 +103,9 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'reveal-file') {
-      // Show the workspace so the user can see the tree.
+      // Show the workspace AND the Files sidebar so the user can see the tree.
       ensureWorkspaceActive();
+      useUiPrefs.getState().setWorkspaceFilesCollapsed(false);
       // Normalize the path (same logic as open-file) and stash it for the tree.
       const bases = useActiveBasesStore.getState().bases;
       const ref = toFileRef(intent.path, bases);
@@ -144,8 +145,12 @@ export function subscribeToFileIntents(): () => void {
       return;
     }
 
-    if (intent.type === 'toggle-inspector') {
-      useUiPrefs.getState().toggleInspector();
+    if (intent.type === 'toggle-workspace-files') {
+      const { workspaceFilesCollapsed, setWorkspaceFilesCollapsed } = useUiPrefs.getState();
+      const next = !workspaceFilesCollapsed;
+      setWorkspaceFilesCollapsed(next);
+      // Expanding a tree inside a hidden surface would show nothing.
+      if (!next) ensureWorkspaceActive();
       return;
     }
   });

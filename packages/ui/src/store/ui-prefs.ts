@@ -1,8 +1,8 @@
 /**
  * ui-prefs — the single persisted store for global UI chrome.
  *
- * Owns sidebar/inspector visibility, the committed sidebar width, and the
- * session panel's per-section open state. Persisted to localStorage under
+ * Owns sidebar visibility, the workspace Files sidebar's collapse, the
+ * committed sidebar width, and the session panel's per-section open state. Persisted to localStorage under
  * `mf:ui-prefs` via zustand's persist middleware (mirrors store/tutorial.ts).
  * Per-session surface layout is NOT here — it stays in-memory in
  * store/layout.ts (live PTY/preview refs make it unsafe to persist).
@@ -43,7 +43,8 @@ export function isSessionPanelSectionOpen(sections: SessionPanelSections, id: Se
 
 interface UiPrefsState {
   sidebarVisible: boolean;
-  inspectorVisible: boolean;
+  /** The workspace surface's local Files sidebar: false = expanded tree, true = thin rail. */
+  workspaceFilesCollapsed: boolean;
   sidebarWidth: number;
   /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
   rightClickHintDismissed: boolean;
@@ -61,7 +62,7 @@ interface UiPrefsState {
   sessionPanelCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
-  toggleInspector: () => void;
+  setWorkspaceFilesCollapsed: (collapsed: boolean) => void;
   setSidebarWidth: (width: number) => void;
   dismissRightClickHint: () => void;
   dismissTuningChangeWarning: () => void;
@@ -85,7 +86,7 @@ export function isSidebarSectionCollapsed(
 function partializeUiPrefs(s: UiPrefsState) {
   return {
     sidebarVisible: s.sidebarVisible,
-    inspectorVisible: s.inspectorVisible,
+    workspaceFilesCollapsed: s.workspaceFilesCollapsed,
     sidebarWidth: s.sidebarWidth,
     rightClickHintDismissed: s.rightClickHintDismissed,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
@@ -101,7 +102,7 @@ export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
       sidebarVisible: true,
-      inspectorVisible: false,
+      workspaceFilesCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
@@ -110,7 +111,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       sessionPanelCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
-      toggleInspector: () => set((s) => ({ inspectorVisible: !s.inspectorVisible })),
+      setWorkspaceFilesCollapsed: (collapsed) => set({ workspaceFilesCollapsed: collapsed }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
@@ -134,17 +135,22 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'mf:ui-prefs',
-      version: 2,
+      version: 3,
       partialize: partializeUiPrefs,
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 2 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 3 || persisted === null || typeof persisted !== 'object') {
           return persisted as PersistedUiPrefs;
         }
-        // v2 retired the bottom Context/Skills/Agents panel; its two keys are
-        // dropped so a stale tab/height can never rehydrate into the new panel.
         const next = { ...(persisted as Record<string, unknown>) };
-        delete next.bottomPanelTab;
-        delete next.bottomPanelHeight;
+        if (version < 2) {
+          // v2 retired the bottom Context/Skills/Agents panel; its two keys are
+          // dropped so a stale tab/height can never rehydrate into the new panel.
+          delete next.bottomPanelTab;
+          delete next.bottomPanelHeight;
+        }
+        // v3 retired the right InspectorPane — the Files tree lives inside the
+        // workspace surface now, with its own collapse flag (default expanded).
+        delete next.inspectorVisible;
         return next as PersistedUiPrefs;
       },
     },

@@ -21,6 +21,7 @@ function resolveDropZone(x: number, y: number): DropZone | null {
 
 export function SurfaceDragLayer() {
   const kind = useSurfaceDragStore((s) => s.kind);
+  const draggedSurface = useSurfaceDragStore((s) => s.surface);
   const pointer = useSurfaceDragStore((s) => s.pointer);
   const dropZone = useSurfaceDragStore((s) => s.dropZone);
   const setPointer = useSurfaceDragStore((s) => s.setPointer);
@@ -30,7 +31,11 @@ export function SurfaceDragLayer() {
   useEffect(() => {
     if (!kind) return;
     function onMove(e: PointerEvent) {
-      setPointer(e.clientX, e.clientY, resolveDropZone(e.clientX, e.clientY));
+      const zone = resolveDropZone(e.clientX, e.clientY);
+      // Chat never goes to the bottom strip (repositionInLayout would no-op the
+      // drop) — suppress the zone so the highlight doesn't promise otherwise.
+      const allowed = zone && draggedSurface === 'chat' && zone.edge === 'bottom' ? null : zone;
+      setPointer(e.clientX, e.clientY, allowed);
     }
     function onUp() {
       commit();
@@ -50,7 +55,7 @@ export function SurfaceDragLayer() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [kind, setPointer, commit, cancel]);
+  }, [kind, draggedSurface, setPointer, commit, cancel]);
 
   if (!kind) return null;
 

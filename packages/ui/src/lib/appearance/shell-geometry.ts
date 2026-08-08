@@ -15,6 +15,4 @@ export const SHELL_GEOMETRY = {
   workspaceInset: '',
   /** SurfDivider / single-column spacer gutter width in px. */
   gutter: 9,
-  /** Right-side InspectorPane outer panel. */
-  inspector: 'bg-background [border-left:0.5px_solid_var(--border)]',
 } as const;

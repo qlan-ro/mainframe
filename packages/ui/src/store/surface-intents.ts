@@ -3,6 +3,8 @@ export type SurfaceIntent =
   | { type: 'open-diff'; path: string; original?: string; modified?: string }
   | { type: 'reveal-file'; path: string }
   | { type: 'activate-surface'; surface: 'chat' | 'workspace' }
+  /** Begin a surface-reposition drag from a feature-owned header grip (handled by SurfaceHost). */
+  | { type: 'begin-surface-drag'; surface: 'chat' | 'workspace'; clientX: number; clientY: number }
   /** Trigger the file-open picker / command palette. */
   | { type: 'open-file-picker' }
   /** Spawn a new terminal in the workspace (optionally targeting a pane). */
@@ -19,8 +21,8 @@ export type SurfaceIntent =
   | { type: 'open-settings' }
   /** Toggle the left sidebar. */
   | { type: 'toggle-sidebar' }
-  /** Toggle the right inspector. */
-  | { type: 'toggle-inspector' };
+  /** Toggle the workspace surface's local Files sidebar (expands → also lights the workspace). */
+  | { type: 'toggle-workspace-files' };
 
 type Listener = (intent: SurfaceIntent) => void;
 

@@ -13,7 +13,7 @@ export function getPaletteCommands(): PaletteCommand[] {
     { id: 'review', label: 'Review changes…', hint: '⌘⇧R', run: () => emitSurfaceIntent({ type: 'open-review' }) },
     { id: 'settings', label: 'Open Settings…', hint: '⌘,', run: () => emitSurfaceIntent({ type: 'open-settings' }) },
     { id: 'sidebar', label: 'Toggle Sidebar', hint: '⌘\\', run: () => emitSurfaceIntent({ type: 'toggle-sidebar' }) },
-    { id: 'inspector', label: 'Toggle Inspector', run: () => emitSurfaceIntent({ type: 'toggle-inspector' }) },
+    { id: 'inspector', label: 'Toggle Files', run: () => emitSurfaceIntent({ type: 'toggle-workspace-files' }) },
     {
       id: 'workspace',
       label: 'Reveal Workspace surface',

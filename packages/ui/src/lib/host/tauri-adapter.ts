@@ -117,6 +117,9 @@ export class TauriAdapter implements HostBridge {
       if (e.button !== 0 || e.detail !== 1) return;
       const target = e.target as HTMLElement;
       if (target.closest('button, input, select, textarea, a, label')) return;
+      // Interactive non-button islands inside a drag region (the session tab
+      // strip's role="tab" pills) opt out explicitly.
+      if (target.closest('[data-no-drag]')) return;
       if (!target.closest('[data-drag-region]')) return;
       getCurrentWebviewWindow()
         .startDragging()
