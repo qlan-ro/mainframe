@@ -46,7 +46,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
-import { workspace } from '../helpers/tauri/page-objects.js';
+import { showFilesTree, workspace } from '../helpers/tauri/page-objects.js';
 import { closeMenus } from '../helpers/tauri/menus.js';
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
@@ -219,6 +219,8 @@ test.describe('§files-tree — workspace Files sidebar', () => {
 
   test('the refresh button re-fetches the tree and shows a newly created file', async () => {
     const { page } = app;
+    // The previous test opened a file, which auto-closes the picker panel.
+    await showFilesTree(page);
     await expect(page.getByTestId('file-tree-row-runtime-file.txt')).toHaveCount(0);
     writeFileSync(path.join(project.projectPath, 'runtime-file.txt'), 'created after mount\n');
     await page.getByTestId('file-tree-refresh').click();
