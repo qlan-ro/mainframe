@@ -72,8 +72,7 @@
  *
  * Selected/viewed file rows carry no ARIA state (ReviewFileTree renders plain
  * `<button>`s), so the selection tint is asserted by class — `bg-sidebar-selection`
- * since the v2 port (it was `bg-mf-selection` in the warm-chrome tree; the legacy
- * name now only survives as a bridge alias in styles/legacy-bridge.css).
+ * since the v2 port (it was `bg-mf-selection` in the warm-chrome tree; that alias is gone).
  */
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'child_process';

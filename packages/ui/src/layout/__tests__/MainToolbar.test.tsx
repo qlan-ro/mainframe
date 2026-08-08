@@ -1,7 +1,6 @@
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
-import { useLayoutStore } from '@/store/layout';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 
 const mockEmit = vi.fn();
@@ -95,44 +94,11 @@ describe('MainToolbar — theme toggle', () => {
   });
 });
 
-describe('MainToolbar — files toggle', () => {
-  // Pressed means "the tree is ON SCREEN": the floating panel open AND the
-  // workspace surface lit. An open panel with the surface unlit reads un-pressed.
-  it.each([
-    { open: true, workspaceLit: true, pressed: 'true' },
-    { open: false, workspaceLit: true, pressed: 'false' },
-    { open: true, workspaceLit: false, pressed: 'false' },
-  ])('open=$open lit=$workspaceLit → aria-pressed=$pressed', ({ open, workspaceLit, pressed }) => {
-    useWorkspaceFilesPanel.setState({ open });
-    useLayoutStore.setState({
-      layout: {
-        top: workspaceLit ? ['chat', 'workspace'] : ['chat'],
-        bottom: null,
-        topFlex: {},
-        vFlex: { top: 1, bottom: 0.4 },
-      },
-    });
-
+describe('MainToolbar — files toggle is GONE', () => {
+  it('renders no main-toolbar-files control — the workspace strip owns the Files button', () => {
     renderToolbar();
 
-    expect(screen.getByTestId('main-toolbar-files').getAttribute('aria-pressed')).toBe(pressed);
-  });
-
-  it('clicking main-toolbar-files emits toggle-workspace-files rather than writing the pref directly', () => {
-    // The intent carries the expand-also-lights-the-workspace rule; the toggle
-    // must not shortcut it (store/__tests__/intent-subscriber.commands owns the effect).
-    renderToolbar();
-
-    fireEvent.click(screen.getByTestId('main-toolbar-files'));
-
-    expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-workspace-files' });
-    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
-  });
-
-  it('is live, not disabled', () => {
-    renderToolbar();
-
-    expect(screen.getByTestId('main-toolbar-files')).not.toBeDisabled();
+    expect(screen.queryByTestId('main-toolbar-files')).toBeNull();
   });
 });
 

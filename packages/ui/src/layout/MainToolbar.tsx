@@ -1,18 +1,14 @@
 import { Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { useTheme } from '@/store/theme';
-import { useLayoutStore } from '@/store/layout';
-import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { Separator } from '@v2/components/ui/separator';
-import { Toggle } from '@v2/components/ui/toggle';
-import { cn } from '@/lib/utils';
 import { BranchChip } from '../features/git/BranchChip';
 import { SessionTabs } from '../features/session-tabs/SessionTabs';
 import { SurfaceRail } from './SurfaceRail';
-import { SidebarLeftGlyph, SidebarRightGlyph } from './surface-icons';
+import { SidebarLeftGlyph } from './surface-icons';
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -32,10 +28,11 @@ interface MainToolbarProps {
 /**
  * Shell-level surface-area toolbar (above SurfaceHost): chrome-style session
  * tabs across the middle (the active session is the focused tab), workspace
- * controls (branch chip · search · advisor · surfaces · theme · files) on the
- * right. The old left identity section (project name + branch chip) is gone —
- * the sidebar and the session panel carry project context, and the branch
- * manager moved into the right cluster
+ * controls (branch chip · search · advisor · surfaces · theme) on the right.
+ * The old left identity section (project name + branch chip) is gone — the
+ * sidebar and the session panel carry project context, and the branch manager
+ * moved into the right cluster. The Files control lives on the workspace
+ * strip itself (WorkspaceStripChrome), not here
  * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  */
 export function MainToolbar({
@@ -51,12 +48,6 @@ export function MainToolbar({
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
-  const filesOpen = useWorkspaceFilesPanel((s) => s.open);
-  // Pressed = the tree is ON SCREEN: the floating panel open AND its host
-  // surface lit. The intent handler applies the same rule, so the toggle never
-  // closes an invisible tree (see intent-subscriber's toggle-workspace-files).
-  const workspaceLit = useLayoutStore((s) => s.layout.top.includes('workspace') || s.layout.bottom === 'workspace');
-  const filesOnScreen = filesOpen && workspaceLit;
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
 
   return (
@@ -136,21 +127,6 @@ export function MainToolbar({
           >
             {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
-        </Hint>
-        <Hint label="Toggle files">
-          <Toggle
-            data-testid="main-toolbar-files"
-            size="sm"
-            pressed={filesOnScreen}
-            // Routed through the intent so showing also lights the workspace
-            // surface — an expanded tree inside a hidden surface shows nothing.
-            onPressedChange={() => emitSurfaceIntent({ type: 'toggle-workspace-files' })}
-            // Pressed chrome keys off the store flag, not data-[state=on] — the Hint's
-            // TooltipTrigger asChild overwrites data-state with the tooltip's open-state.
-            className={cn('size-8 min-w-8 p-0', filesOnScreen ? 'bg-accent text-foreground' : 'text-muted-foreground')}
-          >
-            <SidebarRightGlyph size={16} />
-          </Toggle>
         </Hint>
       </div>
     </div>

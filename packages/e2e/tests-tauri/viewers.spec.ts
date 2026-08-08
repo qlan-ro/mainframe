@@ -18,7 +18,6 @@
  * activates a trigger on mouse-DOWN, which a real-browser `.click()` delivers.
  *
  * Testid reference (verified against packages/ui/src/features/viewers/):
- *   main-toolbar-files           — opens the floating Files panel, whose body is the file
  *                                  tree since T5.3 (no `inspector-tab-files` any more)
  *   file-tree-row-${path}        — a tree row; opens the file on click
  *   WORKSPACE.strip              — a pane's tab-strip row (pane-id-keyed; see testids.ts)

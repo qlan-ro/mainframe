@@ -14,12 +14,10 @@
  * review-panel.spec.ts's "§review-panel — change scopes", not here.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-files       — toolbar toggle. Pressed = the tree is ON SCREEN
- *                              (panel open AND workspace lit); clicking an
- *                              un-pressed toggle opens + lights the workspace.
- *                              Radix Toggle puts pressed state on `aria-pressed`
- *                              (only `data-state` is unusable — the wrapping
- *                              `Hint`'s TooltipTrigger overwrites it).
+ *   surface-rail-workspace   — toolbar surface toggle (lights the workspace;
+ *                              the strip's Files button only exists while lit —
+ *                              the old toolbar Files toggle is deleted, and the
+ *                              palette's "Toggle Files" covers the hidden case)
  *   workspace-files-panel    — the floating panel (present only while OPEN)
  *   workspace-files-open     — the strip's Files button (primary pane +
  *                              empty-state header)
@@ -90,7 +88,8 @@ test.describe('§files-tree — no project', () => {
 
   test('files panel shows the no-project empty state before any chat is active', async () => {
     const { page } = app;
-    await page.getByTestId('main-toolbar-files').click();
+    await page.getByTestId('surface-rail-workspace').click();
+    await page.getByTestId('workspace-files-open').click();
     const pane = page.getByTestId('workspace-files-panel');
     await expect(pane).toBeVisible({ timeout: 10_000 });
     await expect(pane.getByText('Open a session to browse its files.')).toBeVisible();
@@ -142,31 +141,32 @@ test.describe('§files-tree — workspace Files sidebar', () => {
 
   // ── Panel chrome ──────────────────────────────────────────────────────────
 
-  test('the toolbar toggle floats the panel (lighting the workspace); the strip button and Escape drive it too', async () => {
+  test('the strip Files button floats the panel, toggles it closed, and Escape light-dismisses', async () => {
     const { page } = app;
-    const toggle = page.getByTestId('main-toolbar-files');
     const stripButton = page.getByTestId('workspace-files-open');
     const pane = page.getByTestId('workspace-files-panel');
 
-    // Boot: workspace unlit → the tree is not on screen, toggle un-pressed.
+    // Boot: workspace unlit → no strip, no panel. Light the surface first —
+    // the strip's Files button is the panel's one docked trigger now (the
+    // toolbar toggle is gone; the palette's "Toggle Files" covers the
+    // workspace-hidden case via the toggle-workspace-files intent).
     await expect(pane).toHaveCount(0);
-    await toggle.click();
-    await expect(pane).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('workspace-surface')).toBeVisible();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-
-    // Second click closes the panel; the strip's Files button stays docked.
-    await toggle.click();
-    await expect(pane).toHaveCount(0);
-    await expect(stripButton).toBeVisible();
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(stripButton).toBeVisible({ timeout: 10_000 });
     await expect(stripButton).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
-    // The strip button re-opens (no dismiss-then-reopen double toggle);
-    // Escape light-dismisses.
     await stripButton.click();
     await expect(pane).toBeVisible();
     await expect(stripButton).toHaveAttribute('aria-pressed', 'true');
+
+    // Second click closes (no dismiss-then-reopen double toggle).
+    await stripButton.click();
+    await expect(pane).toHaveCount(0);
+    await expect(stripButton).toHaveAttribute('aria-pressed', 'false');
+
+    // Reopen; Escape light-dismisses; leave it open for the tests below.
+    await stripButton.click();
+    await expect(pane).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(pane).toHaveCount(0);
     await stripButton.click();

@@ -167,7 +167,7 @@ function WsTourCore() {
               'top 0.28s cubic-bezier(0.22,1,0.36,1), left 0.28s cubic-bezier(0.22,1,0.36,1), width 0.28s, height 0.28s',
           }}
         >
-          {/* Inner halo — twPulse keyframe defined in legacy-bridge.css */}
+          {/* Inner halo — twPulse keyframe defined in domain-tokens.css */}
           <div
             className="absolute inset-[-2px] rounded-[8px] animate-[twPulse_1.8s_ease-in-out_infinite]"
             style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent)' }}

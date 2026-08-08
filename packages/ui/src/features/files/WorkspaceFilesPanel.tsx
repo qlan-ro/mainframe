@@ -47,8 +47,7 @@ export function WorkspaceFilesPanel() {
       if (!(node instanceof Node)) return;
       if (rootRef.current?.contains(node)) return;
       const element = node instanceof Element ? node : node.parentElement;
-      if (element?.closest(`${PORTAL_SELECTOR},[data-workspace-files-trigger],[data-testid="main-toolbar-files"]`))
-        return;
+      if (element?.closest(`${PORTAL_SELECTOR},[data-workspace-files-trigger]`)) return;
       setOpen(false);
     };
     document.addEventListener('keydown', onKeyDown);

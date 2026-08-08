@@ -129,7 +129,8 @@ beforeEach(async () => {
   vi.mocked(confirmPairing).mockResolvedValue({ token: NEW_TOKEN, deviceId: 'dev-123' });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 60));
   resetHostForTesting();
   vi.clearAllMocks();
   setActiveDaemon(LOCAL_TARGET);
