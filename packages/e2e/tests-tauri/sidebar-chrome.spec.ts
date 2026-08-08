@@ -34,7 +34,7 @@
  *   show-sidebar-button        — layout/MainToolbar.tsx (rendered only when `!sidebarVisible`)
  *   daemon-footer-trigger      — v2/features/daemon/DaemonSwitcher.tsx trigger; its ConnDot carries
  *                                aria-label="Connected" (v2/features/daemon/daemon-status.tsx)
- *   main-toolbar-inspector     — layout/MainToolbar.tsx (toggles ui-prefs.inspectorVisible)
+ *   main-toolbar-files         — layout/MainToolbar.tsx (toggle-workspace-files intent)
  *
  * The bottom Context/Skills/Agents panel and its drag-resize handle
  * (`sidebar-bottom-panel` / `sidebar-bottom-resize`) were deleted in the

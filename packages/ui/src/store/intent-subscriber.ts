@@ -28,6 +28,7 @@ import { toFileRef } from '@/lib/files/file-ref';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useUiPrefs } from './ui-prefs';
+import { useWorkspaceFilesPanel } from './workspace-files-panel';
 import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
 import { useOverlaysStore } from './overlays';
@@ -103,8 +104,9 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'reveal-file') {
-      // Show the workspace so the user can see the tree.
+      // Show the workspace AND float the Files panel so the user can see the tree.
       ensureWorkspaceActive();
+      useWorkspaceFilesPanel.getState().setOpen(true);
       // Normalize the path (same logic as open-file) and stash it for the tree.
       const bases = useActiveBasesStore.getState().bases;
       const ref = toFileRef(intent.path, bases);
@@ -144,8 +146,19 @@ export function subscribeToFileIntents(): () => void {
       return;
     }
 
-    if (intent.type === 'toggle-inspector') {
-      useUiPrefs.getState().toggleInspector();
+    if (intent.type === 'toggle-workspace-files') {
+      // The toggle means "is the tree ON SCREEN", not just the panel flag:
+      // with the panel open but the workspace surface unlit, the tree is
+      // invisible — the click must show it (open + light), never close it.
+      const { open, setOpen } = useWorkspaceFilesPanel.getState();
+      const { layout } = useLayoutStore.getState();
+      const workspaceLit = layout.top.includes('workspace') || layout.bottom === 'workspace';
+      if (open && workspaceLit) {
+        setOpen(false);
+      } else {
+        setOpen(true);
+        ensureWorkspaceActive();
+      }
       return;
     }
   });

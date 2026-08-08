@@ -15,7 +15,7 @@
  * exclusively.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector          — reveals the Inspector (file tree)
+ *   main-toolbar-files              — toolbar toggle: opens/closes the floating Files panel
  *   file-tree                       — tree root
  *   file-tree-row-${path}           — a tree row (file or folder)
  *   file-tree-find-in-file          — context-menu item on a file row
@@ -47,6 +47,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { showFilesTree } from '../helpers/tauri/page-objects.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 
@@ -87,9 +88,9 @@ test.describe('§find-in-path', () => {
     await createTauriChat(app.page, project.projectId, 'default');
 
     const { page } = app;
-    await page.getByTestId('main-toolbar-inspector').click();
-    await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+    await showFilesTree(page);
     // Expand src/ once — it stays expanded for every test below (same page, no reload).
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src').click();
     await page.getByTestId('file-tree-row-src/alpha.ts').waitFor({ timeout: 10_000 });
   });
@@ -101,6 +102,7 @@ test.describe('§find-in-path', () => {
 
   test('opens scoped to a single file from the "Find in file" context-menu item', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src/alpha.ts').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-file').click();
 
@@ -115,6 +117,7 @@ test.describe('§find-in-path', () => {
 
   test('opens scoped to a directory from the "Find in folder" context-menu item', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-folder').click();
 
@@ -128,6 +131,7 @@ test.describe('§find-in-path', () => {
 
   test('shows the idle hint when empty and the below-threshold hint at 1 character', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-folder').click();
     const input = page.getByTestId('find-in-path-input');
@@ -148,6 +152,7 @@ test.describe('§find-in-path', () => {
 
   test('directory scope: debounced results are grouped by file and include-ignored is offered', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-folder').click();
     const input = page.getByTestId('find-in-path-input');
@@ -170,6 +175,7 @@ test.describe('§find-in-path', () => {
 
   test('directory scope: shows the no-matches state for a non-matching query', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-folder').click();
     const input = page.getByTestId('find-in-path-input');
@@ -185,6 +191,7 @@ test.describe('§find-in-path', () => {
 
   test('file scope: results are limited to the scoped file and include-ignored is not offered', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src/alpha.ts').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-file').click();
     const input = page.getByTestId('find-in-path-input');
@@ -203,6 +210,7 @@ test.describe('§find-in-path', () => {
 
   test('clicking a result opens the matched file in the editor', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src/alpha.ts').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-file').click();
     const input = page.getByTestId('find-in-path-input');
@@ -223,6 +231,7 @@ test.describe('§find-in-path', () => {
 
   test('Enter opens the active result via the keyboard', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src/gamma.ts').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-file').click();
     const input = page.getByTestId('find-in-path-input');
@@ -243,6 +252,7 @@ test.describe('§find-in-path', () => {
 
   test('Escape closes the dialog', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-src/beta.ts').click({ button: 'right' });
     await page.getByTestId('file-tree-find-in-file').click();
     await expect(page.getByTestId('find-in-path-input')).toBeVisible({ timeout: 5_000 });

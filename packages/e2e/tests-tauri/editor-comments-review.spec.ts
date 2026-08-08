@@ -50,7 +50,7 @@
  * run.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector        — reveals the Inspector (file tree)
+ *   main-toolbar-files            — toolbar toggle: shows/collapses the Files sidebar
  *   file-tree / file-tree-row-<path> — tree root / row (opens the file)
  *   editor-tab / editor-code       — EditorTab root / CmEditor host
  *   editor-comment-widget          — InlineCommentWidget root. NOTE: the CM6 decoration
@@ -104,6 +104,7 @@ import { test, expect } from '@playwright/test';
 import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { showFilesTree } from '../helpers/tauri/page-objects.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 
 // ── Fixture content ─────────────────────────────────────────────────────────
@@ -135,17 +136,10 @@ function widgetLocator(page: TauriAppFixture['page']) {
 
 async function openInspectorAndFile(app: TauriAppFixture, fileName: string): Promise<void> {
   const { page } = app;
-  // `main-toolbar-inspector` is a TOGGLE (MainToolbar.tsx: `aria-pressed`,
-  // `onClick={toggleInspector}`), not an idempotent "open" action. This spec
-  // calls this helper more than once against the same long-lived page/app —
-  // by the second call the Inspector is already open (from the first call),
-  // so an unconditional click would CLOSE it instead. Only click when it's
-  // not already pressed.
-  const inspectorToggle = page.getByTestId('main-toolbar-inspector');
-  if ((await inspectorToggle.getAttribute('aria-pressed')) !== 'true') {
-    await inspectorToggle.click();
-  }
-  await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+  // showFilesTree is idempotent — this helper runs more than once against the
+  // same long-lived page, and an unconditional toggle click would COLLAPSE an
+  // already visible tree.
+  await showFilesTree(page);
   await page.getByTestId(`file-tree-row-${fileName}`).click();
   await page.getByTestId('editor-code').waitFor({ timeout: 10_000 });
 }
