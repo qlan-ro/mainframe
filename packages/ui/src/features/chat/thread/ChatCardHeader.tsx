@@ -1,11 +1,9 @@
 import { useAuiState } from '@assistant-ui/react';
-import { EyeOff, GitPullRequest, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
+import { EyeOff, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
-import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { useHost } from '@/lib/host';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
@@ -64,15 +62,13 @@ function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | n
 
 /**
  * The chat zone's surface header (the `SurfaceTabStrip` equivalent for chat):
- * drag-to-reposition grip (visual-only placeholder), chat icon, session title,
- * detected-PR links and the split controls (Review moved to the session panel). No
+ * drag-to-reposition grip, chat icon, session title and the split controls.
+ * Detected-PR links live in the session panel's Summary (the header pills were
+ * retired with the session-tabs rework); Review moved to the session panel. No
  * traffic-light inset — the shell `MainToolbar` above owns the collapsed clearance.
  */
 function ChatCardHeaderReal() {
-  const host = useHost();
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
-  const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
-  const prs = custom?.detectedPrs ?? [];
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const chatIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'chat'));
@@ -85,19 +81,6 @@ function ChatCardHeaderReal() {
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatModelChip />
       <span className="flex-1" />
-      {prs.map((pr) => (
-        <Hint key={`${pr.owner}/${pr.repo}/${pr.number}`} label={`${pr.owner}/${pr.repo} #${pr.number}`}>
-          <Button
-            data-testid={`chat-header-pr-${pr.number}`}
-            variant="ghost"
-            size="xs"
-            onClick={() => void host.shell.openExternal(pr.url)}
-            className="font-mono font-semibold"
-          >
-            <GitPullRequest data-icon="inline-start" className="text-success" />#{pr.number}
-          </Button>
-        </Hint>
-      ))}
       {splitAvailable && (
         <>
           <Hint label="Split right">

@@ -150,40 +150,14 @@ describe('ChatCardHeader — fallback title', () => {
   });
 });
 
-describe('ChatCardHeader — PRs + review', () => {
-  it('renders a PR link per detectedPr', () => {
-    fakeState.threadListItem.custom.detectedPrs = [
-      { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
-      { url: 'https://github.com/o/r/pull/250', owner: 'o', repo: 'r', number: 250, source: 'mentioned' },
-    ];
-
-    renderHeader();
-
-    const pr249 = screen.getByTestId('chat-header-pr-249');
-    const pr250 = screen.getByTestId('chat-header-pr-250');
-    expect(pr249).toBeDefined();
-    expect(pr250).toBeDefined();
-    expect(pr249.textContent).toContain('#249');
-    expect(pr250.textContent).toContain('#250');
-  });
-
-  it('clicking a PR link opens it externally', () => {
+describe('ChatCardHeader — PR pills are GONE', () => {
+  it('renders no PR link even when detectedPrs is populated — the session panel Summary owns PRs', () => {
     fakeState.threadListItem.custom.detectedPrs = [
       { url: 'https://github.com/o/r/pull/249', owner: 'o', repo: 'r', number: 249, source: 'created' },
     ];
 
     renderHeader();
-    fireEvent.click(screen.getByTestId('chat-header-pr-249'));
 
-    expect(fakeHost.shell.openExternal).toHaveBeenCalledOnce();
-    expect(fakeHost.shell.openExternal).toHaveBeenCalledWith('https://github.com/o/r/pull/249');
-  });
-
-  it('no PR links when detectedPrs is empty', () => {
-    // fakeState already has detectedPrs: [] from beforeEach reset
-    renderHeader();
-
-    expect(screen.queryByTestId('chat-header-pr-249')).toBeNull();
     expect(document.querySelector('[data-testid^="chat-header-pr-"]')).toBeNull();
   });
 });
