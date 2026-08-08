@@ -4,7 +4,7 @@
  * down into PreviewInstance render.
  */
 import { render as rtlRender } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockProjectId = 'proj-123';

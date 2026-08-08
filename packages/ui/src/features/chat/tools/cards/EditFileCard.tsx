@@ -13,8 +13,8 @@
 import React, { useCallback } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ExternalLinkIcon, FileDiffIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   isStructuredResult,
   resolveResultText,

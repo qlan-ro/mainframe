@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { MessageCircleQuestionIcon } from 'lucide-react';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import { Button } from '@v2/components/ui/button';
-import { Badge } from '@v2/components/ui/badge';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
 import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';

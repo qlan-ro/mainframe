@@ -8,11 +8,11 @@
  * `AutomationEditor`: reads/writes `use-automations-nav`/
  * `use-automations-store` directly.
  */
-import { Button } from '@v2/components/ui/button';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { ChevronLeft, Lightbulb, Sparkles, Wand2 } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';

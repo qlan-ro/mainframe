@@ -16,7 +16,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
 import { InlineCommentWidget } from '../InlineCommentWidget';
 

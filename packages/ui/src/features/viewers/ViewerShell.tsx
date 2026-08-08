@@ -21,9 +21,9 @@
  */
 import React from 'react';
 import { ChevronRight, Crosshair, Folder } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { Separator } from '@v2/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { Separator } from '@/components/ui/separator';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface ViewerShellProps {

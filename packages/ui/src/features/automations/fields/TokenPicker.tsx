@@ -20,7 +20,7 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import type { TokenRef } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import { sourceKindStyle, tokenIcon } from './TokenChip';

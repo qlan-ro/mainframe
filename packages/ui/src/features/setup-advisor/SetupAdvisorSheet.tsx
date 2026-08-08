@@ -8,7 +8,7 @@
  * feeds the result back down as `copiedIds` (per-row) and `copiedCount` (the
  * footer's report-scoped total).
  */
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { AutomationRecommendation, RecommendationCategory, SetupAdvisorReport } from '@qlan-ro/mainframe-types';

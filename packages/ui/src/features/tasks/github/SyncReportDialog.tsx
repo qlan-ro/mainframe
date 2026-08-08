@@ -10,7 +10,7 @@
  * only place a replaced value survives, so it always answers the question.
  */
 import { AlertTriangle } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { Report } from '@/lib/api/todos-github';
 import { useGitHubSyncStore } from './use-github-sync-store';
 import { SyncReportRow } from './SyncReportRow';

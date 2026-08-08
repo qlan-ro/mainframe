@@ -9,8 +9,8 @@
  * badge repeating the branch beside "feat/x ↔ main" would say it twice.
  */
 import { Check, GitBranch, GitCompare, X } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { ChangeScope } from './use-working-changes';
 import { scopeHeaderView } from './review-scope-view';
 import { ReviewScopeSwitcher } from './ReviewScopeSwitcher';

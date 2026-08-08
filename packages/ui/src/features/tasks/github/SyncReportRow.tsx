@@ -14,7 +14,7 @@
 import { useCallback, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import type { ReportRow } from '@/lib/api/todos-github';
 import type { TodoStatus } from '@/lib/api/todos';
 import { fieldLabel, nowLine, ruleLine, statusLabel, winnerLabel } from './sync-format';

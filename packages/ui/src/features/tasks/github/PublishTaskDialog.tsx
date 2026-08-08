@@ -6,8 +6,8 @@
  * the board.
  */
 import React from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
-import { Button } from '@v2/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { useGitHubSyncStore } from './use-github-sync-store';
 import { runOrToast } from './run-or-toast';
 import { partitionLabels, withheldLabelsSentence } from './workflow-labels';

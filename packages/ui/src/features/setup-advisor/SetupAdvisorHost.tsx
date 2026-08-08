@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { ScanSearch } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSetupAdvisor } from './use-setup-advisor';
 import { selectCopiedCount, useSetupAdvisorStore } from './use-setup-advisor-store';

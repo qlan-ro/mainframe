@@ -12,9 +12,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@v2/components/ui/dialog';
-import { Button } from '@v2/components/ui/button';
-import { Checkbox } from '@v2/components/ui/checkbox';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { RemoteIssue } from '@/lib/api/todos-github';
 import { runOrToast } from './run-or-toast';

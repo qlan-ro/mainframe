@@ -14,7 +14,7 @@
  *   - A tab with a non-matching scopeKey produces NO rendered element.
  */
 import { render as rtlRender } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Active scope the mock identity will resolve to.

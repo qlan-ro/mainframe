@@ -7,9 +7,9 @@
  * a sibling.
  */
 import { GripVertical, X } from 'lucide-react';
-import { Input } from '@v2/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
-import { Switch } from '@v2/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import type { AutomationFormField } from '../contract';
 import { OptionsEditor } from './OptionsEditor';
 

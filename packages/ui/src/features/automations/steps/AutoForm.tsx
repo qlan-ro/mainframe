@@ -14,8 +14,8 @@
  * virtual — never written to params (ts153's `WfActionForm` skipped writing
  * its `__columns` key the same way).
  */
-import { Input } from '@v2/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ChipText } from '../contract';
 import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';

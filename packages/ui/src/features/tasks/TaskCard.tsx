@@ -11,8 +11,8 @@
 import React from 'react';
 import { Play, Edit, Trash2, Paperclip, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
-import { Hint } from '@v2/components/ui/hint';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Hint } from '@/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import { typeTint, priorityTint, priorityDotClass } from './task-palettes';
 import { PairGlyph } from './github/PairGlyph';

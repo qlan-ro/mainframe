@@ -1,5 +1,5 @@
 import { useTheme, type ThemeMode, type UiScale } from '../../../../store/theme';
-import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 const MODES: { id: ThemeMode; label: string }[] = [
   { id: 'light', label: 'Light' },

@@ -1,8 +1,8 @@
 import { ArrowUp, Crosshair, Camera, Frame } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { Toggle } from '@v2/components/ui/toggle';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/utils';
 
 interface PreviewCaptureClusterProps {
   isRunning: boolean;

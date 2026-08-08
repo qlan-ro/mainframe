@@ -14,8 +14,8 @@
  */
 import { AlertTriangleIcon, LayersIcon, ZapIcon } from 'lucide-react';
 import { MessagePrimitive } from '@assistant-ui/react';
-import { cn } from '@v2/lib/utils';
-import { Marker, MarkerContent, MarkerIcon } from '@v2/components/ui/marker';
+import { cn } from '@/lib/utils';
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { SkillLoadedCard } from '../tools/cards/SkillLoadedCard';
 

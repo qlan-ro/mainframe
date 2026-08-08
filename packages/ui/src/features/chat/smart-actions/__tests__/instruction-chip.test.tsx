@@ -18,7 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Skill } from '@qlan-ro/mainframe-types';
 // ReviewCommentCard renders a v2 `Hint`, which the v1 provider does not satisfy.
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 function skill(name: string): Skill {
   return {

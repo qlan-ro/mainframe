@@ -3,7 +3,7 @@
  * merge/rebase operation. No in-app conflict editor (parity with desktop).
  */
 import { AlertTriangle, Loader2, X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 export interface ConflictFile {
   status: string;

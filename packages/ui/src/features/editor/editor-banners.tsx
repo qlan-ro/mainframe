@@ -7,7 +7,7 @@
  * `px-4 py-3` card is a block callout, and these sit in the editor's own column
  * between the header and the document.
  */
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 export function ReadOnlyBanner({ external }: { external: boolean }) {
   return (

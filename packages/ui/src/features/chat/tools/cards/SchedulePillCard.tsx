@@ -13,7 +13,7 @@
 import React from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { AlarmClockIcon, CalendarClockIcon, CalendarXIcon, CalendarDaysIcon, ActivityIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen, type MarkerState } from './marker-pill';
 import { isErrorResult, extractResultContent } from '../shared/result';
 

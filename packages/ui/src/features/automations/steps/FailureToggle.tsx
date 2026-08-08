@@ -5,7 +5,7 @@
  * every verb's "More options" body — surfaced in the run view as "Kept
  * going" when it actually fires (Phase 5).
  */
-import { Switch } from '@v2/components/ui/switch';
+import { Switch } from '@/components/ui/switch';
 import { FieldRow } from './FieldRow';
 
 export interface FailureToggleProps {

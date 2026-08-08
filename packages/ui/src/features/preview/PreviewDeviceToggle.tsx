@@ -1,5 +1,5 @@
 import { Frame, Smartphone } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface PreviewDeviceToggleProps {
   device: 'desktop' | 'mobile';

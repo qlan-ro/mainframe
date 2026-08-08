@@ -3,7 +3,7 @@
  * Reads the pending request from useConfirmBridge and renders a ConfirmDialog
  * that resolves the bridge promise on confirm or cancel.
  */
-import { ConfirmDialog } from '@v2/features/shared/ConfirmDialog';
+import { ConfirmDialog } from '@/features/shared/ConfirmDialog';
 import { useConfirmBridge } from '@/lib/confirm-bridge';
 
 export function ConfirmDialogHost() {

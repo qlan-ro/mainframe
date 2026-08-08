@@ -11,7 +11,7 @@
  */
 import { useCallback } from 'react';
 import { X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import type { LspLocation } from '@/lib/lsp';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 

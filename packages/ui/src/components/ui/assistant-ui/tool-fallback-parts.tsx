@@ -2,7 +2,7 @@
  * Sub-content slots for ToolFallback — split to keep parent file < 300 lines.
  * Args, Result, and Error are purely presentational; they only receive props.
  */
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import type { ToolCallMessagePartStatus } from '@assistant-ui/react';
 
 // ── Args ──────────────────────────────────────────────────────────────────────

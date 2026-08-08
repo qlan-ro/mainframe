@@ -6,8 +6,8 @@
  * ToolCallMessagePartStatus.type — different concern.
  */
 import React from 'react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
-import { cn } from '@v2/lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useOpenFile } from '../chat-tool-context';
 
 // ---------------------------------------------------------------------------

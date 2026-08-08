@@ -9,7 +9,7 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ChevronRight, Workflow } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { resolveResultText } from '../tools/shared';
 import { neutralizedRun } from './workflow-agent-view';

@@ -20,8 +20,8 @@
  */
 import { useState } from 'react';
 import { ZoomOut, ZoomIn, Maximize2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { ZoomableImage } from '@/features/chat/parts/ZoomableImage';
 import { ViewerShell } from './ViewerShell';
 import { Segmented } from './Segmented';

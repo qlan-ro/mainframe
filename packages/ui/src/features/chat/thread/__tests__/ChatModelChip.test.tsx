@@ -12,7 +12,7 @@
  */
 import { render as rtlRender, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // The v2 `Hint` carries no provider of its own (shadcn treats that as an
 // app-root concern), so every bare render needs one — the v1 provider is a

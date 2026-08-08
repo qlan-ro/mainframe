@@ -5,7 +5,7 @@
  * owns the Sub + SubTrigger).
  */
 import { ArrowDown, ArrowUp, Check, GitBranch, Pencil, Plus, Trash2 } from 'lucide-react';
-import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSubContent } from '@v2/components/ui/dropdown-menu';
+import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
 
 /** Branch-level actions drilled from BranchPopover down to every row's flyout. */
 export interface BranchRowActions {

@@ -1,6 +1,6 @@
 import { useId } from 'react';
-import { Checkbox } from '@v2/components/ui/checkbox';
-import { Label } from '@v2/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 export interface PlanClearContextCheckProps {
   checked: boolean;

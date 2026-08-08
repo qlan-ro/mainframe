@@ -5,8 +5,8 @@
  */
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface EvidenceDisclosureProps {
   signals: string[];

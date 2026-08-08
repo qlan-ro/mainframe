@@ -14,7 +14,7 @@
  * data-testid: workspace-files-panel (present only while open).
  */
 import { useEffect, useRef } from 'react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
@@ -33,6 +33,10 @@ export function WorkspaceFilesPanel() {
   const open = useWorkspaceFilesPanel((s) => s.open);
   const setOpen = useWorkspaceFilesPanel((s) => s.setOpen);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Picker semantics (open-file/open-diff close the panel) live in the intent
+  // subscriber with the rest of the panel-vs-intent policy; this component
+  // owns only the DOM concern below.
 
   // Light dismiss — Escape, or a pointer outside the panel, any portal, and
   // the toggle buttons (strip + toolbar) that manage the flag themselves.

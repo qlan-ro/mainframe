@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@v2/components/ui/dialog';
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -24,7 +24,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@v2/components/ui/select';
+} from '@/components/ui/select';
 
 export const BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
 

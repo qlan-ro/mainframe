@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 

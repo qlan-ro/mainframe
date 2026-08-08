@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 /**
  * Segmented — the one-of-N pill toggle reused across viewers (Preview/Source,

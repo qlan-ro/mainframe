@@ -9,8 +9,8 @@
  * revamp. Renders nothing until the chat config is loaded (drafts / blank
  * surface).
  */
-import { cn } from '@v2/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useAdapters } from '../composer/config-toolbar/use-composer-tuning';
 import { providerDot } from '../composer/config-toolbar/ProviderModelSelect';

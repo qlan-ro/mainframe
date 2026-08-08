@@ -37,17 +37,17 @@ import type {
   ProviderConfig,
   SessionTuning,
 } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
-import { Hint } from '@v2/components/ui/hint';
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
-import { ProviderLogo } from '@v2/features/shared/ProviderLogo';
+} from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { cn } from '@/lib/utils';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { RunningHint } from './RunningHint';

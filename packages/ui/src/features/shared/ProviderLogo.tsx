@@ -1,16 +1,29 @@
+/**
+ * The adapter's mark. Cloned rather than imported: the shipped one paints its
+ * avatar from `--mf-provider-*`, which the preset sheet does not define.
+ */
 import type { HTMLAttributes } from 'react';
 
 type ProviderLogoId = 'claude' | 'openai' | 'gemini' | 'opencode' | 'unknown';
 
 interface ProviderLogoProps extends HTMLAttributes<HTMLSpanElement> {
   adapterId: string;
+  /** Drops the brand hue for neutral ink — for rows that want no attention. */
+  muted?: boolean;
   /** Override the default `sessions-row-provider-logo` testid for other surfaces. */
   testId?: string;
 }
 
+/**
+ * Brand identity, not theme: these two hues belong to Anthropic and OpenAI, so
+ * they are literals rather than tokens — a preset swap must not re-tint them.
+ * The knockout is white in both themes for the same reason. `muted` is the one
+ * thing that overrides them, and it does so by dropping brand entirely rather
+ * than tinting it.
+ */
 const AVATAR_META: Partial<Record<ProviderLogoId, { background: string; color: string }>> = {
-  claude: { background: 'var(--mf-provider-claude-avatar)', color: 'var(--primary-foreground)' },
-  openai: { background: 'var(--mf-provider-openai-avatar)', color: 'var(--primary-foreground)' },
+  claude: { background: '#d97757', color: '#ffffff' },
+  openai: { background: '#19c37d', color: '#ffffff' },
 };
 
 function providerLogoId(adapterId: string): ProviderLogoId {
@@ -49,21 +62,32 @@ function ProviderPath({ id }: { id: ProviderLogoId }) {
   }
 }
 
-export function ProviderLogo({ adapterId, className, testId = 'sessions-row-provider-logo', ...props }: ProviderLogoProps) {
+export function ProviderLogo({
+  adapterId,
+  className,
+  muted = false,
+  testId = 'sessions-row-provider-logo',
+  ...props
+}: ProviderLogoProps) {
   const id = providerLogoId(adapterId);
   const avatar = AVATAR_META[id];
+  // Muted drops the avatar's paint but not its geometry: the mark keeps its
+  // 3/4 size so rows don't shift, and falls back to `currentColor` — the same
+  // way the providers that never had an avatar already behave.
+  const neutral = muted && avatar != null;
   return (
     <span
       {...props}
       data-provider-id={id}
+      data-muted={neutral || undefined}
       data-testid={testId}
       aria-hidden="true"
       className={className}
       style={{
         alignItems: 'center',
-        background: avatar?.background,
-        borderRadius: avatar ? '50%' : undefined,
-        color: avatar?.color,
+        background: neutral ? undefined : avatar?.background,
+        borderRadius: avatar && !neutral ? '50%' : undefined,
+        color: neutral ? undefined : avatar?.color,
         display: 'inline-flex',
         justifyContent: 'center',
         overflow: avatar ? 'hidden' : undefined,

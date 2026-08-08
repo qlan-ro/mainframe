@@ -20,7 +20,7 @@
 
 import { Clipboard } from 'lucide-react';
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 
 export interface PlanModeToggleProps {

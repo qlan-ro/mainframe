@@ -16,8 +16,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { SessionAttachment } from '@qlan-ro/mainframe-types';
-import { Attachment, AttachmentMedia, AttachmentTrigger } from '@v2/components/ui/attachment';
-import { Hint } from '@v2/components/ui/hint';
+import { Attachment, AttachmentMedia, AttachmentTrigger } from '@/components/ui/attachment';
+import { Hint } from '@/components/ui/hint';
 import { extTint, fileExtMeta } from '@/features/chat/messages/file-ext-colors';
 import { ImageLightbox, type LightboxImage } from '@/features/chat/parts/ImageLightbox';
 import { getAttachment, type LoadedAttachment } from '@/lib/api/attachments';

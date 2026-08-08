@@ -7,7 +7,7 @@
  */
 import { Check, Loader2 } from 'lucide-react';
 import type { SkillsCliProbe } from '@qlan-ro/mainframe-types';
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 interface SkillPickerProps {

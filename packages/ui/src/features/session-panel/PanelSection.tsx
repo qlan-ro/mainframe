@@ -9,9 +9,9 @@
  */
 import type { ComponentType, ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import type { SessionPanelOpenSectionId } from '@/store/ui-prefs';
 
 /** The header rhythm the non-collapsible Summary heading shares. The panel is

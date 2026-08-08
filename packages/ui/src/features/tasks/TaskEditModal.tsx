@@ -12,11 +12,11 @@
 import React, { useState, useCallback } from 'react';
 import { Trash2, Pencil, Plus, Play } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
-import { Button } from '@v2/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useTodosStore } from './use-todos-store';
 import { TaskAttachments, type PendingAttachment } from './TaskAttachments';
 import { TaskMetaFields } from './TaskMetaFields';

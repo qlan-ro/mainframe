@@ -10,7 +10,7 @@ import React, { Suspense, useEffect } from 'react';
 // Radix replaces the v1 hand-rolled overlay — focus trap, scroll lock and
 // layering come with it, and Escape now closes in production too (the old
 // manual handler was dev-only).
-import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useActiveIdentity } from '../sessions/use-active-identity';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore } from './data/use-automations-store';

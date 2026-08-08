@@ -27,7 +27,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import type { BackgroundActivityTask, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { SessionPanelState } from '../use-session-panel-state';
 import type { PanelMode } from '../panel-mode';
 

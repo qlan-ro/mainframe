@@ -9,7 +9,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { clampSidebarWidth } from '@v2/components/ui/sidebar';
+import { clampSidebarWidth } from '@/components/ui/sidebar';
 
 /** Matches the v2 sidebar's `SIDEBAR_WIDTH` (16rem) — the un-dragged default. */
 const SIDEBAR_DEFAULT_WIDTH = 256;

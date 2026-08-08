@@ -13,7 +13,7 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { PlugIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   MarkerWrap,
   MarkerPill,

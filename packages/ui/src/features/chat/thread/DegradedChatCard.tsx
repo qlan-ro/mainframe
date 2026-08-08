@@ -11,8 +11,8 @@
  */
 import { type ReactNode, useState } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@v2/components/ui/alert';
-import { Button } from '@v2/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';

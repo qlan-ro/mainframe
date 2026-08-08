@@ -20,9 +20,9 @@
  */
 import { Code2, Eye, FileText, GitCompare, Globe, Square, SquareTerminal, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
 import { useSurfaceDragStore } from './use-surface-drag';

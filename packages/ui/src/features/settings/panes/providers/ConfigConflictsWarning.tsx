@@ -1,5 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription } from '@v2/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ConfigConflictsWarningProps {
   conflicts: string[];

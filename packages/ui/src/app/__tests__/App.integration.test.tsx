@@ -124,7 +124,7 @@ vi.mock('../../features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectName: 'mainframe', branchName: undefined }),
 }));
 
-vi.mock('@v2/features/sessions/SessionSidebar', () => ({
+vi.mock('@/features/sessions/SessionSidebar', () => ({
   SessionSidebar: () => (
     <div data-testid="sessions-sidebar">
       <div data-testid="sidebar-footer" />
@@ -132,7 +132,7 @@ vi.mock('@v2/features/sessions/SessionSidebar', () => ({
   ),
 }));
 
-vi.mock('@v2/features/sessions/ArchiveWorktreeDialog', () => ({
+vi.mock('@/features/sessions/ArchiveWorktreeDialog', () => ({
   ArchiveWorktreeDialog: () => <div data-testid="sessions-archive-confirm-dialog" />,
 }));
 
@@ -144,7 +144,7 @@ vi.mock('../../components/overlays/FindInPathModal', () => ({
   FindInPathModal: () => null,
 }));
 
-vi.mock('@v2/features/files/DirectoryPickerModal', () => ({
+vi.mock('@/features/files/DirectoryPickerModal', () => ({
   DirectoryPickerModal: () => null,
 }));
 
@@ -152,7 +152,7 @@ vi.mock('../../features/review/ReviewPanel', () => ({
   ReviewPanel: () => null,
 }));
 
-vi.mock('@v2/features/sessions/TagPopoverHost', () => ({
+vi.mock('@/features/sessions/TagPopoverHost', () => ({
   TagPopoverHost: (p: { port: number }) => <div data-testid="tag-popover-host-stub" data-port={p.port} />,
 }));
 
@@ -160,7 +160,7 @@ vi.mock('../../features/sessions/new-thread/ChatSurface', () => ({
   ChatSurface: () => <div data-testid="chat-surface-stub" />,
 }));
 
-vi.mock('@v2/components/ui/sonner', () => ({
+vi.mock('@/components/ui/sonner', () => ({
   Toaster: () => null,
 }));
 

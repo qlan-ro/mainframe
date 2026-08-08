@@ -7,7 +7,7 @@
     }
   ],
   "commit": false,
-  "fixed": [["@qlan-ro/mainframe-types", "@qlan-ro/mainframe-core", "@qlan-ro/mainframe-ui"]],
+  "fixed": [["@qlan-ro/mainframe-types", "@qlan-ro/mainframe-ui"]],
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",

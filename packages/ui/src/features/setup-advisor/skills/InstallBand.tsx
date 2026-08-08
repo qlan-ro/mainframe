@@ -12,15 +12,15 @@
  */
 import { useState } from 'react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
-import { Input } from '@v2/components/ui/input';
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { SkillPicker } from './SkillPicker';
 import { SCOPE_LABEL } from './scope-label';
 import { useSkillsCliStore } from './use-skills-cli-store';

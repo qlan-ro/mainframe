@@ -17,7 +17,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ReactElement } from 'react';
 
 const emitSurfaceIntent = vi.fn();

@@ -14,8 +14,8 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@v2/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Comparator, ConditionRow as ConditionRowModel, TokenRef } from '../contract';
 import { comparatorNeedsValue, comparatorsFor, isMultiValue } from '../domain/comparators';
 import type { TokenDescriptor } from '../domain/tokens';

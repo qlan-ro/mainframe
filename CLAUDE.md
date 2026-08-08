@@ -40,7 +40,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet 
 - `pnpm --filter @qlan-ro/mainframe-types build` — Rebuild shared types after changing them
 - `pnpm --filter @qlan-ro/mainframe-ui test` — Test a specific package
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` — Single test file (preferred; large multi-suite runs hit cross-file `React.act` failures)
-- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Core/types have no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Types has no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-types exec tsc --noEmit`
 - `pnpm tauri:dev` (from `packages/app-tauri`) — Tauri dev app; run in background with output to a log file
 - `cargo check` (from `packages/app-tauri/src-tauri`) — Fast Rust validation
 - `pnpm test:e2e` — Playwright E2E suite
@@ -50,10 +50,9 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet 
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
-- **Monorepo Structure**: pnpm workspaces with six packages:
+- **Monorepo Structure**: pnpm workspaces with five packages (plus the mobile submodule):
     - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
-    - `@qlan-ro/mainframe-core`: Orphaned TS daemon implementation (superseded by the Rust daemon; kept only for its `package.json` version, read by the release pipeline).
-    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell.
+    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell. Its `package.json` version is what the release pipeline tags from (the old TS daemon package that used to carry it is deleted).
     - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the Rust daemon (`packages/core-rs`) as a bundled sidecar.
     - `@qlan-ro/mainframe-e2e`: Playwright end-to-end suite.
     - `@qlan-ro/mainframe-mobile`: Git submodule (separate repo — cross-cutting changes need their own PR there; don't bump the pointer in feature PRs).

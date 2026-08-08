@@ -12,10 +12,9 @@ function listSourceFiles(dir: string): string[] {
     const path = join(dir, entry);
     const stat = statSync(path);
     if (stat.isDirectory()) {
-      // v2 is the stock-shadcn tree: text-xs/text-sm ARE its named tokens and
-      // its own conventions are enforced there. This audit polices the legacy
-      // warm-chrome contract only.
-      if (entry === '__tests__' || path === join(SRC_ROOT, 'v2')) return [];
+      // One tree since the 2026-08-09 v2 fold — the audit scans everything;
+      // stock-primitive idioms live in the per-file allowlists below.
+      if (entry === '__tests__') return [];
       return listSourceFiles(path);
     }
     return SOURCE_EXTENSIONS.has(path.slice(path.lastIndexOf('.'))) ? [path] : [];
@@ -44,10 +43,17 @@ describe('design token audit', () => {
   // WfStepLibrary.tsx/glyphs.ts (pre-existing offenders below, left failing — see
   // the classification note at the end of this file). task-palettes.ts used to be
   // here too but now routes through --mf-task-type-*/--mf-priority-* tokens.
+  // ProviderLogo: brand identity, not theme — the Anthropic/OpenAI hues are
+  // literals BY DESIGN (its own docstring: a preset swap must not re-tint a
+  // brand). SidebarScrollRegion: #000 stops inside mask-image gradients, where
+  // only the alpha channel means anything — not colors in the styling sense.
+  // (Both scanned since the 2026-08-09 v2 fold removed the tree-level skip.)
   const COLOR_LITERAL_ALLOWLIST = new Set([
     'features/terminal/terminal-cache.ts',
     'lib/host/electron-preview.ts',
     'features/chat/gates/shared/GateShell.tsx',
+    'features/shared/ProviderLogo.tsx',
+    'features/shared/SidebarScrollRegion.tsx',
   ]);
 
   it('keeps production UI free of raw color literals outside the token contract', () => {
@@ -77,6 +83,14 @@ describe('design token audit', () => {
     // Hash-pinned upstream transcription (assistant-ui agent-plan); its
     // text-[13.5px]/text-[11px] rungs are the element's approved look.
     'features/session-panel/AgentPlan.tsx',
+    // Scanned since the 2026-08-09 v2 fold removed the tree-level skip:
+    // tracking-widest is the STOCK radix-vega shortcut-kbd treatment shipped
+    // by the registry primitives, and ProjectRow's text-[10px] is the
+    // tiny-avatar idiom already documented for SettingsSidebar above.
+    'components/ui/command.tsx',
+    'components/ui/context-menu.tsx',
+    'components/ui/dropdown-menu.tsx',
+    'features/sessions/ProjectRow.tsx',
   ]);
 
   // Stock text-xs/sm/base/… ARE the app's typography scale since the v2 body

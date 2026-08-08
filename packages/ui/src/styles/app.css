@@ -6,7 +6,7 @@
    else here is host-level: rules about running inside a desktop webview,
    not about either design system.
    ════════════════════════════════════════════════════════════════════════ */
-@import '../v2/styles/globals.css';
+@import './globals.css';
 @import './domain-tokens.css';
 
 /* Source detection roots at the entry sheet's directory (which would scan only

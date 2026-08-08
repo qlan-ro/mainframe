@@ -8,9 +8,9 @@
  * created by the coordinator right after the chat. Cancel un-stashes so the
  * session starts in the main repo instead.
  */
-import { Button } from '@v2/components/ui/button';
-import { Separator } from '@v2/components/ui/separator';
-import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 
 export interface WorktreeDraftPanelProps {

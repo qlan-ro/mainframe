@@ -1,6 +1,6 @@
 import { MODE_OPTIONS } from '../../settings-tabs';
-import { RadioGroup, RadioGroupItem } from '@v2/components/ui/radio-group';
-import { Label } from '@v2/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import type { ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 
 interface SessionModeRadioProps {

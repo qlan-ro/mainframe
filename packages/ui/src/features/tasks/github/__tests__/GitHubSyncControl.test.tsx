@@ -18,7 +18,7 @@
  *  7. Clicking an enabled `tasks-github-menu-sync` calls `sync()`; clicking
  *     `tasks-github-menu-import` calls `openDialog({ kind: 'import' })`.
  */
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

@@ -8,7 +8,7 @@
  * other workspace tab.
  */
 import { render as rtlRender } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const TAB_SCOPE = 'proj-A:/Users/me/.worktrees/feat-x';

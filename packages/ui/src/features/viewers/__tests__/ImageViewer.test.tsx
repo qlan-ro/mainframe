@@ -23,7 +23,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ImageViewer } from '../ImageViewer';
 
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */

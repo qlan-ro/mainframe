@@ -17,8 +17,8 @@
  */
 import { useCallback, useMemo } from 'react';
 import { Activity, Info, Play, Square } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
-import { Separator } from '@v2/components/ui/separator';
+import { Hint } from '@/components/ui/hint';
+import { Separator } from '@/components/ui/separator';
 import { severityOf } from '@/features/quota/quota-format';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';

@@ -22,7 +22,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { CsvViewer } from '../CsvViewer';
 
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */

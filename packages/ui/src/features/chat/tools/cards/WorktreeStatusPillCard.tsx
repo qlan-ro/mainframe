@@ -16,7 +16,7 @@
 import React from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { GitBranchIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, type MarkerState } from './marker-pill';
 import { isErrorResult, extractResultContent } from '../shared/result';
 

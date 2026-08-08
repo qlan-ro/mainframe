@@ -17,7 +17,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from '@v2/components/ui/context-menu';
+} from '@/components/ui/context-menu';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useHost } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';

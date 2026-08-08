@@ -3,7 +3,7 @@
  * the dialog header next to the title. Same v2 Tabs segmented recipe as the
  * Tasks board's List/Board switch (List/Trigger only — the host owns the body).
  */
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AdvisorSection } from './use-setup-advisor';
 
 const SECTIONS: readonly { id: AdvisorSection; label: string }[] = [

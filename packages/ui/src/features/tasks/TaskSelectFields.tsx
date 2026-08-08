@@ -3,8 +3,8 @@
  *
  * Extracted from TaskEditModal to keep that file under 300 lines.
  */
-import { Label } from '@v2/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { TodoStatus, TodoType, TodoPriority } from '@/lib/api/todos';
 
 const TYPES: TodoType[] = [

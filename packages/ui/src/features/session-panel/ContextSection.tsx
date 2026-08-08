@@ -9,9 +9,9 @@
  * is the only route to that sheet, so the sub-group renders even when empty.
  */
 import { Layers } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useSessionContext } from '@/features/sessions/use-session-context';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { emitSurfaceIntent } from '@/store/surface-intents';

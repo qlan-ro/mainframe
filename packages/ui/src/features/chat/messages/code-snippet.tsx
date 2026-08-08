@@ -1,7 +1,7 @@
 /** `L42–46` / `L42` — shared snippet helpers for review-comment cards. */
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 
 /** Numbered mono snippet rows (line numbers from `start`) — shared with
  *  ReviewCommentCard. select-text keeps the code copyable despite the

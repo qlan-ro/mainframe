@@ -17,7 +17,7 @@
  * portal on `document.body`, not the message.
  */
 import type { ReactNode } from 'react';
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger, ContextMenuGroup } from '@v2/components/ui/context-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger, ContextMenuGroup } from '@/components/ui/context-menu';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { canCopyImage } from '@/lib/clipboard/image-source';

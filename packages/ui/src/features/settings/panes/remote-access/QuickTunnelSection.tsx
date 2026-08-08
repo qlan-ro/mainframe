@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { RotateCw } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Label } from '@v2/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { TunnelStatusRow } from './TunnelStatusRow';
 import type { UseTunnelStatusResult } from './use-tunnel-status';
 

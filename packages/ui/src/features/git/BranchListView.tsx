@@ -4,10 +4,10 @@
  * inside BranchPopover's DropdownMenuContent.
  */
 import { ArrowUp, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut } from '@v2/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@v2/components/ui/input-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut } from '@/components/ui/dropdown-menu';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import type { BranchRowActions } from './BranchSubmenu';
 import { BranchList } from './BranchList';

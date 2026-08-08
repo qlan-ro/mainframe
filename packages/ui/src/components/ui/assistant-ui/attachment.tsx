@@ -13,8 +13,8 @@
 import { type PropsWithChildren, useEffect, useState, type FC } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useShallow } from 'zustand/react/shallow';
-import { Dialog, DialogTitle, DialogContent, DialogTrigger } from '@v2/components/ui/dialog';
-import { cn } from '@v2/lib/utils';
+import { Dialog, DialogTitle, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 // ── Object-URL lifecycle for local File objects ───────────────────────────────
 const useFileSrc = (file: File | undefined) => {

@@ -1,6 +1,6 @@
 import { it, expect } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { AutomationsView } from '../AutomationsView';
 
 // The header's Hint needs the v2 TooltipProvider; the app mounts one at the

@@ -16,7 +16,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Activity } from 'lucide-react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { RailIconButton, RailMeterButton } from '../SessionRailButton';
 
 describe('RailIconButton', () => {

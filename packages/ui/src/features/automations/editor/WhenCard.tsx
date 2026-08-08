@@ -9,13 +9,13 @@
  */
 import { Calendar, Globe, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import type { AutomationTrigger } from '../contract';
 import { TriggerRow } from './TriggerRow';
 

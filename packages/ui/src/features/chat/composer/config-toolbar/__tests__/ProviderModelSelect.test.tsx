@@ -29,7 +29,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ProviderModelSelect, type ProviderModelSelectProps } from '../ProviderModelSelect';
 import type { AdapterInfo, AdapterModel, Chat, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
 

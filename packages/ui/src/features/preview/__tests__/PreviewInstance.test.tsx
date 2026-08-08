@@ -9,7 +9,7 @@
  *   - local daemon → byte-for-byte unchanged (localhost mount, no new states)
  */
 import { render as rtlRender, screen, waitFor } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';

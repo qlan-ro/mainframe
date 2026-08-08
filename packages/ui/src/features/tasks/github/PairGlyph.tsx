@@ -11,7 +11,7 @@
 import React from 'react';
 import { CircleDotDashed, TriangleAlert, Unlink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import type { Todo } from '@/lib/api/todos';
 import type { Pair } from '@/lib/api/todos-github';
 import { useGitHubSyncStore } from './use-github-sync-store';

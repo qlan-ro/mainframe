@@ -9,8 +9,8 @@
  */
 import React from 'react';
 import { Search, X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Input } from '@v2/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { Todo, TodoType, TodoPriority } from '@/lib/api/todos';
 import type { TodoFilters, TodoSort } from './todos-filters';
 import { FilterMenu, type FilterOption } from './FilterMenu';

@@ -22,9 +22,9 @@ import { useMemo } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Check } from 'lucide-react';
 import { extractTaskId } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import type { TaskProgressItem } from '@/features/chat/view-model/message-meta';
 
 // ── Internal types ────────────────────────────────────────────────────────────

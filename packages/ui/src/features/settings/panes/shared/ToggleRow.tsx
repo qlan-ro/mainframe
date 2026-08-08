@@ -1,6 +1,6 @@
 import { useId } from 'react';
-import { Switch } from '@v2/components/ui/switch';
-import { Label } from '@v2/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface ToggleRowProps {
   label: string;

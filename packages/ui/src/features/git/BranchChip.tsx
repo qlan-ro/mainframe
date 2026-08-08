@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { ChevronDown, FolderGit2, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';
 import { BranchPopover } from './BranchPopover';
 

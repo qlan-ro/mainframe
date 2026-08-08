@@ -20,10 +20,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderGit2, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
-import { Separator } from '@v2/components/ui/separator';
-import { Hint } from '@v2/components/ui/hint';
-import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
+import { Hint } from '@/components/ui/hint';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';

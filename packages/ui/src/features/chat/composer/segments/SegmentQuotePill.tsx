@@ -7,7 +7,7 @@
  * `composer-quote-dismiss` testids since it fills the same visual role.
  */
 import { QuoteIcon, XIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 export function SegmentQuotePill({
   segmentId,

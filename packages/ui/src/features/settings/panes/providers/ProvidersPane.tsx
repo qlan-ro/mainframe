@@ -5,7 +5,7 @@ import { useAdapters } from '../../../../store/adapters';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { providerDot } from '../../../chat/composer/config-toolbar/ProviderModelSelect';
 import { ProviderConfigForm } from './ProviderConfigForm';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ProvidersPaneProps {
   port: number;

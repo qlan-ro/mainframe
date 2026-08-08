@@ -10,8 +10,8 @@ import { useCallback, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { SparklesIcon, ChevronDownIcon } from 'lucide-react';
 import { useScrollLock } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 const ANIMATION_DURATION = 200;
 

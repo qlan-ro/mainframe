@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAssistantRuntime } from '@assistant-ui/react';
 // Fixed-width columns as in v1 — resizable panels land with the review
 // surface port.
-import { Dialog, DialogContent } from '@v2/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useOverlaysStore } from '@/store/overlays';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { gitCommit } from '@/lib/api/git';

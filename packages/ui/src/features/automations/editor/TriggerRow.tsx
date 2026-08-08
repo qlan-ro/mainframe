@@ -21,8 +21,8 @@
  */
 import { Calendar, Globe, X, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Hint } from '@/components/ui/hint';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AutomationEventName, AutomationTrigger, EventTrigger } from '../contract';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { SchedulePicker } from './SchedulePicker';

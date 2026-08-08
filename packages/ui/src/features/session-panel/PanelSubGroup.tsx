@@ -12,7 +12,7 @@
  * copies of the same three divs.
  */
 import type { ReactNode } from 'react';
-import { Badge } from '@v2/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 /** The row shape every sub-group renders: memory files, session items, skills. */
 export const SUB_GROUP_ROW =

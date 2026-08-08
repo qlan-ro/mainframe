@@ -1,6 +1,6 @@
 import type { AdapterModel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { cn } from '../../../../lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const CLIPROXY_GROUP = 'CLIProxyAPI';
 const AUTO = '__auto__';

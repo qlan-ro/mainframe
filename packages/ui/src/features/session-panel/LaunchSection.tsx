@@ -12,8 +12,8 @@
  * stop issued without one looks up a different manager and finds no process.
  */
 import { Eye, LoaderCircle, Play, Rocket, Square, Terminal } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
-import { cn } from '@v2/lib/utils';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { NO_CONFIGS_LABEL } from '@/features/run/derive-launch-control';
 import { useLaunchActions } from '@/features/run/use-launch-actions';

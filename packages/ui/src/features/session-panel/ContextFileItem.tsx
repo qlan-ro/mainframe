@@ -9,8 +9,8 @@
  * and the outline nesting it used to indent for died with that panel.
  */
 import { FileText } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Hint } from '@v2/components/ui/hint';
+import { Badge } from '@/components/ui/badge';
+import { Hint } from '@/components/ui/hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { SUB_GROUP_ROW } from './PanelSubGroup';
 

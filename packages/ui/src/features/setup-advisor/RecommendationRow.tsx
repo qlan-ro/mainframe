@@ -13,8 +13,8 @@
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { AutomationRecommendation } from '@qlan-ro/mainframe-types';
 import { copyCommand } from './copy-command';
 

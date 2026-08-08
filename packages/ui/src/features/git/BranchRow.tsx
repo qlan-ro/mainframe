@@ -6,7 +6,7 @@
 import { ArrowDown, ArrowUp, Check } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
-import { DropdownMenuSub, DropdownMenuSubTrigger } from '@v2/components/ui/dropdown-menu';
+import { DropdownMenuSub, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu';
 import { BranchSubmenu, type BranchRowActions } from './BranchSubmenu';
 
 export interface BranchRowProps {

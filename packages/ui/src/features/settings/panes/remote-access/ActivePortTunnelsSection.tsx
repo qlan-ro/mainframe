@@ -9,9 +9,9 @@
  */
 import { useCallback } from 'react';
 import { Unplug } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { Label } from '@v2/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { Label } from '@/components/ui/label';
 import { mfToast } from '@/lib/toast';
 import { stopPortTunnel } from '@/lib/api/tunnel-ports';
 import { usePortTunnelList, type PortTunnelListEntry } from '@/store/port-tunnels';

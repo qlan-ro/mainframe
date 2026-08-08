@@ -9,7 +9,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import type { FakeHostBridge } from '@/lib/host/fake-adapter';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider, resetHostForTesting } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { usePortTunnelsStore } from '@/store/port-tunnels';

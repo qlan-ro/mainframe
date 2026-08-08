@@ -9,14 +9,14 @@
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 
 export interface FilterOption {
   value: string;

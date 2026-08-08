@@ -11,7 +11,7 @@
  * `LightboxSurface`.
  */
 import { useState } from 'react';
-import { Dialog, DialogTrigger } from '@v2/components/ui/dialog';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { LightboxSurface } from './LightboxSurface';
 
 interface ZoomableImageProps {

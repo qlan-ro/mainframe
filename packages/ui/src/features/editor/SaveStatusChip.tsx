@@ -1,4 +1,4 @@
-import { Badge } from '@v2/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * Save-status chip shown in the ViewerShell header actions slot.

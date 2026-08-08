@@ -8,7 +8,7 @@ import type { ReactElement } from 'react';
 import { describe, it, expect } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { MarkerPill, MarkerWrap, MarkerBody, MarkerCapsLabel, MarkerPre } from '../marker-pill';
 import { nestedVerticalScrollers } from './_part-fixture';
 

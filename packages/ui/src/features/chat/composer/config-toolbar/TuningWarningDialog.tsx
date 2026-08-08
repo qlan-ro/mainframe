@@ -8,7 +8,7 @@
  * serves all three control kinds, so there is one testid family to assert on.
  */
 
-import { ConfirmDialog } from '@v2/features/shared/ConfirmDialog';
+import { ConfirmDialog } from '@/features/shared/ConfirmDialog';
 import { describeTuningChange } from './tuning-warning-copy';
 import type { TuningChange } from './tuning-warning';
 

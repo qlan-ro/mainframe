@@ -9,8 +9,8 @@
  */
 import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
 import { DescribeFlow } from './describe/DescribeFlow';

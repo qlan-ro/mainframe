@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { MessageSquare } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { addCommentEffect, buildCommentGutter, commentField, type CommentBlockWidget } from './comment-gutter';
 import { useInlineComments } from './use-inline-comments';
 import { InlineCommentWidget } from './InlineCommentWidget';

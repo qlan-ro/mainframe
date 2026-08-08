@@ -9,7 +9,7 @@
  *   - data-testid="chat-skill-loaded-pill".
  */
 import { ZapIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkerWrap, MarkerPill, MarkerBody, MarkerPre, useMarkerOpen } from './marker-pill';
 
 export interface SkillLoadedCardProps {

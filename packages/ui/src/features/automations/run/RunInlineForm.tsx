@@ -9,9 +9,9 @@
  * owns its own gateway call and store patch rather than taking callbacks for
  * them.
  */
-import { Button } from '@v2/components/ui/button';
-import { Input } from '@v2/components/ui/input';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';

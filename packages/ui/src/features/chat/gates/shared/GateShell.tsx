@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 
 type GateAccent = 'primary' | 'warning';
 

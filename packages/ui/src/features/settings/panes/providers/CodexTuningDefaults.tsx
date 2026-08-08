@@ -1,5 +1,5 @@
 import type { AdapterModel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const SUMMARY_OPTIONS = ['auto', 'concise', 'detailed', 'none'] as const;
 const PERSONALITY_OPTIONS = ['none', 'friendly', 'pragmatic'] as const;

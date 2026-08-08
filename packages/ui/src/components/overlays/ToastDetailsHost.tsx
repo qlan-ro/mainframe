@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@v2/components/ui/dialog';
+} from '@/components/ui/dialog';
 import { useToastDetails } from '@/store/toast-details';
 
 export function ToastDetailsHost() {

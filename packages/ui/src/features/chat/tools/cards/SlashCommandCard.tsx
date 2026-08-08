@@ -11,7 +11,7 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ZapIcon } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const SlashCommandCard: ToolCallMessagePartComponent = ({ args }) => {
   const skill = typeof args['skill'] === 'string' ? args['skill'] : '';

@@ -1,7 +1,7 @@
 import { Play, Square, RefreshCw } from 'lucide-react';
 import type { LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 
 interface PreviewRunControlProps {
   status: LaunchProcessStatus | null;

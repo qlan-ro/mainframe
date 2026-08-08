@@ -9,7 +9,7 @@
  */
 
 import type { ReactElement } from 'react';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 
 export const RUNNING_HINT = 'Unavailable while the assistant is working';
 

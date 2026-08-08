@@ -1,5 +1,5 @@
 import { RotateCw } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { CopyButton } from './CopyButton';
 import type { TunnelUiState } from './use-tunnel-status';
 

@@ -23,7 +23,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { formatElapsed, useNow } from './background-activity-view';
 import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';

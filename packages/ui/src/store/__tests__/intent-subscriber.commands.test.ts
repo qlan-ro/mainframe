@@ -64,6 +64,25 @@ describe('intent-subscriber — command intents', () => {
     expect(isWorkspaceActive()).toBe(true);
   });
 
+  it('open-file CLOSES the Files panel — a completed pick gets out of the way', () => {
+    // Without this the glass card sits over the just-opened tab's own header
+    // controls, and a press on the card counts as "inside" so light dismiss
+    // never fires (the e2e-batch occlusion bug).
+    useWorkspaceFilesPanel.setState({ open: true });
+
+    emitSurfaceIntent({ type: 'open-file', path: 'src/main.ts' });
+
+    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+  });
+
+  it('open-diff closes the Files panel the same way', () => {
+    useWorkspaceFilesPanel.setState({ open: true });
+
+    emitSurfaceIntent({ type: 'open-diff', path: 'src/main.ts' });
+
+    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+  });
+
   it('toggle-workspace-files opens the panel AND lights the workspace surface', () => {
     // An open panel inside a hidden surface would show nothing.
     useWorkspaceFilesPanel.setState({ open: false });

@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCw } from 'lucide-react';
 import { generatePairingCode } from '../../../../lib/api/remote-access';
 import { CopyButton } from './CopyButton';
-import { Button } from '@v2/components/ui/button';
-import { Label } from '@v2/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 const PAIRING_EXPIRY_MS = 5 * 60 * 1000;
 

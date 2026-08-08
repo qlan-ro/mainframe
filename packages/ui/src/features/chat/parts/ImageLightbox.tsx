@@ -13,7 +13,7 @@
  */
 import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Dialog } from '@v2/components/ui/dialog';
+import { Dialog } from '@/components/ui/dialog';
 import { LightboxSurface } from './LightboxSurface';
 
 export interface LightboxImage {

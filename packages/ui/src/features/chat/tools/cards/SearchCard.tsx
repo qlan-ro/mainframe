@@ -10,8 +10,8 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { SearchIcon } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
-import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { StatusDot, CollapsibleCardShell, ErrorBody, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';

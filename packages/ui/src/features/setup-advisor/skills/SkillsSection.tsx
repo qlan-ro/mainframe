@@ -21,7 +21,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useSkillsNonce } from '@/features/skills/use-skills-revalidation';
 import { CliUnavailable } from './CliUnavailable';

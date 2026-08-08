@@ -14,7 +14,7 @@
  */
 import { useState } from 'react';
 import { Plug, X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsStore } from '../data/use-automations-store';
 

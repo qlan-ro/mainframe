@@ -25,7 +25,7 @@
  * port comes from context, since `ChatSurface` has no port to give.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import type { SessionPanelSectionId } from '@/store/ui-prefs';
 import { ActivitySection } from './ActivitySection';

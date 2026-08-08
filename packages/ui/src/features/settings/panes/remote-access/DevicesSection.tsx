@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RotateCw, Trash2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { Label } from '@v2/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { Label } from '@/components/ui/label';
 import { getDevices, removeDevice } from '../../../../lib/api/remote-access';
 import type { Device } from '@qlan-ro/mainframe-types';
 

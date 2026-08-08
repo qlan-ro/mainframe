@@ -7,7 +7,7 @@
  * Port of packages/app-electron/src/renderer/components/todos/TodoCard.tsx (list
  * variant), rebuilt on app-tauri shadcn/ui + warm-chrome theme tokens.
  */
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import React from 'react';
 import { ChevronDown, ChevronRight, Play, Edit, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
