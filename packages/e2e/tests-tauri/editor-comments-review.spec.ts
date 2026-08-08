@@ -50,7 +50,6 @@
  * run.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-files            — toolbar toggle: shows/collapses the Files sidebar
  *   file-tree / file-tree-row-<path> — tree root / row (opens the file)
  *   editor-tab / editor-code       — EditorTab root / CmEditor host
  *   editor-comment-widget          — InlineCommentWidget root. NOTE: the CM6 decoration

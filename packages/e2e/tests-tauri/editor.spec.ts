@@ -12,7 +12,6 @@
  * separate `surface-rail-workspace` toggle is needed.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-files       — toolbar toggle: opens/closes the floating Files panel
  *   file-tree                — tree root
  *   file-tree-row-${path}    — a tree row (file or folder), path is repo-relative
  *   WORKSPACE.strip            — a pane's tab-strip row (pane-id-keyed; see testids.ts)

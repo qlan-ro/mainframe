@@ -96,7 +96,7 @@ describe('design token audit', () => {
   });
 
   it('maps mf-* tokens in @theme (no phantom-token regressions)', () => {
-    const css = readFileSync(join(SRC_ROOT, 'styles/legacy-bridge.css'), 'utf8');
+    const css = readFileSync(join(SRC_ROOT, 'styles/domain-tokens.css'), 'utf8');
     // The v1 letter-spacing scale is retired — tracking-* resolves to Tailwind
     // defaults now (2026-08 shell integration).
     // @theme inline must MAP these mf-* tokens to --color-*; an unmapped token makes the

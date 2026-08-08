@@ -62,7 +62,7 @@ The per-area pointers below are where to look in step 1:
 ## Component layer & theme
 - **shadcn/ui**, not raw Radix. Build the `components/ui/` primitives once; features compose them.
 - Theme via the tokens in `src/styles/globals.css`. **Read the `mainframe-design-system` skill before writing markup or class names** — it carries the scales, the recipes, and the traps.
-- **Token trap:** use only `mf-*` names that `@theme inline` actually maps; a typo renders as nothing, with no error. The same holds for stock names Tailwind never generated — `text-xl` is a live example. As of 2026-08-07 the bridge holds only domain palettes and app chrome; every generic `mf-*` colour and the whole v1 type scale are gone (use `text-xs/sm/base/lg`). The `/opacity` modifier *does* work here (Tailwind v4 compiles it to `color-mix`) — the old blanket prohibition was a v3 carryover from `packages/app-electron`. It only misleads on `accent`/`border`/`input`, which are already alpha.
+- **Token trap:** use only `mf-*` names that `@theme inline` actually maps; a typo renders as nothing, with no error. The same holds for stock names Tailwind never generated — `text-xl` is a live example. As of 2026-08-08 the bridge is RETIRED: `styles/domain-tokens.css` (né `legacy-bridge.css`) holds only first-class domain palettes and app chrome; every generic `mf-*` colour and the whole v1 type scale are gone (use `text-xs/sm/base/lg`). The `/opacity` modifier *does* work here (Tailwind v4 compiles it to `color-mix`) — the old blanket prohibition was a v3 carryover from `packages/app-electron`. It only misleads on `accent`/`border`/`input`, which are already alpha.
 
 ## Conventions
 - **No file > 300 lines**, no function > 50. Decompose god-files on port (don't carry them).

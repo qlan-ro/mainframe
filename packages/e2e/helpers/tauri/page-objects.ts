@@ -62,14 +62,19 @@ export function chatThread(page: Page) {
  * the old always-present `files-tab-strip-add` needs both branches.
  */
 /**
- * Idempotent "show the Files tree". `main-toolbar-files` is a toggle over
- * ON-SCREEN visibility (the floating panel open AND the workspace surface
- * lit) — an unconditional click against a long-lived page would close an
- * already visible panel. Only clicks when the panel isn't showing.
+ * Idempotent "show the Files tree". The trigger is the workspace strip's own
+ * Files button (`workspace-files-open` — the toolbar toggle is gone), which
+ * only exists while the workspace surface is lit; light it first if needed.
+ * Only clicks when the panel isn't showing — an unconditional click against a
+ * long-lived page would close an already visible panel.
  */
 export async function showFilesTree(page: Page): Promise<void> {
   if ((await page.getByTestId('workspace-files-panel').count()) === 0) {
-    await page.getByTestId('main-toolbar-files').click();
+    if ((await page.getByTestId('workspace-files-open').count()) === 0) {
+      await page.getByTestId('surface-rail-workspace').click();
+      await page.getByTestId('workspace-files-open').waitFor({ timeout: 10_000 });
+    }
+    await page.getByTestId('workspace-files-open').click();
   }
   await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
 }

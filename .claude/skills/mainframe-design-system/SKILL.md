@@ -16,14 +16,16 @@ and the fastest way to violate it is to write generic shadcn from memory.
 
 `packages/ui` holds **two** render trees with different design systems — and since the 2026-08 shell
 integration, **the main app runs on the v2 token layer**. The v2 sidebar/shell is the chrome; the
-un-ported v1 areas render inside it as *legacy islands* kept alive by `src/styles/legacy-bridge.css`.
+the v1 render tree is fully retired (2026-08-08): the old `legacy-bridge.css` graduated into
+`src/styles/domain-tokens.css`, which carries only first-class domain palettes (code/term/diff/…)
+and app chrome — no compat aliases, no v1 type scale.
 
 - **`src/v2/…` and new work** — the stock shadcn **radix-vega** preset. Standard Tailwind spacing, its own
   11/13px type scale (`text-sm` = 13px), and dialog/scroll recipes that are the **opposite** of v1's.
   **Read `references/v2-stock.md` first** — the Recipes table below will actively mislead you.
 - **`src/…` legacy islands (v1, warm chrome)** — the sections below describe these. They still speak
-  `mf-*` and the 8-rung type scale, resolved by the bridge, but sit on standard spacing and the v2 palette
-  now. When you port one, delete its slice of the bridge; don't add new `mf-*` usage anywhere.
+  domain `mf-*` tokens (resolved by `domain-tokens.css`), but sit on standard spacing and the v2
+  palette now. The v1 type rungs and generic `mf-*` aliases are DEAD — don't reintroduce either.
 
 Check the path before you write a class name.
 

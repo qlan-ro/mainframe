@@ -45,7 +45,7 @@ const WCAG_MIN = 4.49;
 const UI_COMPONENT_MIN = 3.0;
 
 const V2_SHEET = 'v2/styles/globals.css';
-const BRIDGE_SHEET = 'styles/legacy-bridge.css';
+const BRIDGE_SHEET = 'styles/domain-tokens.css';
 
 function readSheet(relative: string): string {
   const url = new URL(`../../${relative}`, import.meta.url);
