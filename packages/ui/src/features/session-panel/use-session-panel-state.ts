@@ -27,8 +27,15 @@ export interface SessionPanelState {
   /** Goes on the chat surface's horizontal row — the FULL width, including the
    *  part the panel floats over, since the mode follows the gutter that width
    *  leaves beside the centred transcript. Explicit, rather than the panel
-   *  root's `parentElement`, so a split surface measures the row it shrinks. */
-  hostRef: RefObject<HTMLElement | null>;
+   *  root's `parentElement`, so a split surface measures the row it shrinks.
+   *
+   *  A CALLBACK ref backed by state, not a RefObject, and that is load-bearing:
+   *  on a cold boot the chat surface shows its initializing branch first, so the
+   *  row does not exist when this hook's effects first run. A `[]`-deps effect
+   *  reading a RefObject box measured `null` once and never retried — the panel
+   *  stayed `hidden` forever in the packaged app, where the daemon spawn always
+   *  loses that race (dev servers boot fast enough to always win it). */
+  hostRef: (el: HTMLElement | null) => void;
   /** Goes on the panel + rail root; light dismiss treats it as "inside". */
   rootRef: RefObject<HTMLDivElement | null>;
   surfaceWidth: number;
@@ -61,7 +68,7 @@ function hasOpenDialogOutside(root: HTMLElement | null): boolean {
 }
 
 export function useSessionPanelState(): SessionPanelState {
-  const hostRef = useRef<HTMLElement | null>(null);
+  const [hostEl, setHostEl] = useState<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const sectionEls = useRef(new Map<SessionPanelSectionId, HTMLElement>());
   const [surfaceWidth, setSurfaceWidth] = useState(0);
@@ -74,17 +81,19 @@ export function useSessionPanelState(): SessionPanelState {
   const userCollapsed = useUiPrefs((s) => s.sessionPanelCollapsed);
   const setUserCollapsed = useUiPrefs((s) => s.setSessionPanelCollapsed);
 
+  // Keyed on the host ELEMENT, so the observer attaches whenever the row
+  // (re)mounts — including the cold-boot case where the initializing branch
+  // rendered first and the row only exists on a later commit.
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    setSurfaceWidth(host.clientWidth);
+    if (!hostEl) return;
+    setSurfaceWidth(hostEl.clientWidth);
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) setSurfaceWidth(entry.contentRect.width);
     });
-    observer.observe(host);
+    observer.observe(hostEl);
     return () => observer.disconnect();
-  }, []);
+  }, [hostEl]);
 
   const gutterFits = gutterFitsPanel(surfaceWidth);
   const railFits = gutterFitsRail(surfaceWidth);
@@ -167,7 +176,7 @@ export function useSessionPanelState(): SessionPanelState {
 
   return useMemo(
     () => ({
-      hostRef,
+      hostRef: setHostEl,
       rootRef,
       surfaceWidth,
       mode,
