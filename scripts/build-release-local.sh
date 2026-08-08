@@ -112,7 +112,7 @@ echo "==> version $VERSION · sha $SHA · arch $ARCH · out $OUT_DIR"
 if [ "$SKIP_DEPS" -eq 0 ]; then
   echo "==> building workspace dependencies (types → core → ui)"
   NODE_OPTIONS=--max-old-space-size=4096 \
-    pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
+    pnpm --filter "@qlan-ro/mainframe-ui..." build
 fi
 
 # `version` here is what gets baked into the bundle and its Info.plist —

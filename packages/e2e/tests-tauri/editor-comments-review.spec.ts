@@ -80,10 +80,11 @@
  *   chat-user-review-comment       — the parsed review-comment message card
  *   chat-user-review-comment-L<n>  — one comment section within that card
  *
- * LSP availability in this e2e environment (traced, not assumed): `typescript`
- * and `typescript-language-server` ARE real resolvable deps of packages/core
- * (lsp-registry.ts's `resolveBundledBinPath` / package.json), so the daemon
- * CAN spawn a real LSP server process — "unavailable" would be the wrong
+ * LSP availability in this e2e environment (traced, not assumed): the Rust
+ * daemon ships no bundled servers — `core-rs/crates/mainframe-lsp/lsp_registry`
+ * resolves `typescript-language-server` from the ANALYZED PROJECT's
+ * `node_modules/.bin`, a venv, or PATH — so a machine with it on PATH CAN
+ * spawn a real server; "unavailable" would still be the wrong blanket
  * conclusion. But `EditorContextMenu`'s `lspAvailable` gate needs BOTH a
  * `providers` object AND `lspConfig.lspReady`, and `useLspDocument` only flips
  * `lspReady` true after a real child-process spawn + WebSocket handshake +

@@ -160,7 +160,7 @@ jobs:
       # tauri-action's beforeBuildCommand re-runs the ui build and provisions the
       # Rust daemon binary before `cargo tauri build`.
       - name: Build workspace dependencies
-        run: pnpm --filter "@qlan-ro/mainframe-core..." --filter "@qlan-ro/mainframe-ui..." build
+        run: pnpm --filter "@qlan-ro/mainframe-ui..." build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 

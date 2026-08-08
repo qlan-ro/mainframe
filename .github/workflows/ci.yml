@@ -38,15 +38,13 @@ jobs:
           node --test "${tests[@]}"
           node .claude/skills/changelog-watch/scripts/check-surface.mjs
 
-      # types/dist and core/dist are import targets for the other packages;
-      # both are plain tsc emits — no Vite/electron-vite bundling.
+      # types/dist is an import target for the other packages — a plain tsc
+      # emit, no bundling.
       - name: Build workspace dependencies
-        run: pnpm build:types && pnpm build:core
+        run: pnpm build:types
 
       - name: Type check
-        run: |
-          pnpm --filter @qlan-ro/mainframe-ui typecheck
-          pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit
+        run: pnpm --filter @qlan-ro/mainframe-ui typecheck
 
       - name: Security audit
         run: pnpm audit --audit-level=high
@@ -59,8 +57,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: core
-            command: pnpm --filter @qlan-ro/mainframe-core exec vitest run --maxWorkers=4
           - name: ui
             command: pnpm --filter @qlan-ro/mainframe-ui exec vitest run --maxWorkers=4
           - name: types
@@ -74,7 +70,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build workspace dependencies
-        run: pnpm build:types && pnpm build:core
+        run: pnpm build:types
 
       - name: Test
         run: ${{ matrix.command }}

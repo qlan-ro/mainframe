@@ -13,10 +13,8 @@
     "url": "https://github.com/qlan-ro/mainframe/issues"
   },
   "scripts": {
-    "dev:core": "pnpm --filter @qlan-ro/mainframe-core run dev",
     "build": "pnpm -r run build",
     "build:types": "pnpm --filter @qlan-ro/mainframe-types run build",
-    "build:core": "pnpm --filter @qlan-ro/mainframe-core run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r run lint",
