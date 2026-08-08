@@ -18,6 +18,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { activeLaunchScope } from '@/lib/launch-scope';
 import { filterRunByScope } from '@/store/run-scope-filter';
+import { WorkspaceFilesPanel } from '@/features/files/WorkspaceFilesPanel';
 import { WorkspaceEmptyState } from '../WorkspaceEmptyState';
 import { STRIP_ROW, WorkspaceStripActions, WorkspaceStripLead } from '../WorkspaceStripChrome';
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
@@ -149,7 +150,7 @@ export function WorkspaceSurface() {
     (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
   return (
-    <div data-testid="workspace-surface" className="flex h-full flex-col">
+    <div data-testid="workspace-surface" className="relative flex h-full flex-col">
       {hasContent ? (
         <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
           {run.panes.map((pane, i) => (
@@ -169,6 +170,8 @@ export function WorkspaceSurface() {
           <WorkspaceEmptyState />
         </>
       )}
+      {/* Floating Files rail + panel — the session panel's pattern on this surface. */}
+      <WorkspaceFilesPanel />
     </div>
   );
 }

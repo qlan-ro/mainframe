@@ -10,7 +10,7 @@ const { getPaletteCommands, filterCommands } = await import('../palette-commands
 describe('palette-commands', () => {
   it('exposes one command per surface plus the four overlay commands', () => {
     const ids = getPaletteCommands().map((c) => c.id);
-    expect(ids).toEqual(['review', 'settings', 'sidebar', 'inspector', 'workspace']);
+    expect(ids).toEqual(['review', 'settings', 'sidebar', 'files', 'workspace']);
   });
 
   it('each command emits the right intent on run()', () => {
@@ -22,8 +22,8 @@ describe('palette-commands', () => {
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-settings' });
     byId.sidebar!.run();
     expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-sidebar' });
-    byId.inspector!.run();
-    expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-inspector' });
+    byId.files!.run();
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-workspace-files' });
     byId.workspace!.run();
     expect(mockEmit).toHaveBeenCalledWith({ type: 'activate-surface', surface: 'workspace' });
   });

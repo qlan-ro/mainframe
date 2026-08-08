@@ -61,6 +61,19 @@ export function chatThread(page: Page) {
  * workspace with tabs offers it inside the pane's `+` menu. Every spec that used
  * the old always-present `files-tab-strip-add` needs both branches.
  */
+/**
+ * Idempotent "show the Files tree". `main-toolbar-files` is a toggle over
+ * ON-SCREEN visibility (the floating panel open AND the workspace surface
+ * lit) — an unconditional click against a long-lived page would close an
+ * already visible panel. Only clicks when the panel isn't showing.
+ */
+export async function showFilesTree(page: Page): Promise<void> {
+  if ((await page.getByTestId('workspace-files-panel').count()) === 0) {
+    await page.getByTestId('main-toolbar-files').click();
+  }
+  await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+}
+
 export function workspace(page: Page) {
   return {
     root: () => page.getByTestId('workspace-surface'),

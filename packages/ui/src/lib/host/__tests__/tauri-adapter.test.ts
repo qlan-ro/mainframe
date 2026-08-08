@@ -127,6 +127,29 @@ describe('TauriAdapter — init installs the drag listener', () => {
     expect(startDragging).toHaveBeenCalled();
     region.remove();
   });
+
+  it('mousedown inside a [data-no-drag] island within a drag region does NOT drag the window', async () => {
+    // The session tab strip's pills are `div role="tab"`, not <button>, so the
+    // interactive-element guard misses them — the explicit opt-out is what keeps
+    // a click on a tab from dragging the whole window instead of switching tabs.
+    const { TauriAdapter } = await import('../tauri-adapter');
+    new TauriAdapter().init();
+
+    const region = document.createElement('div');
+    region.setAttribute('data-drag-region', '');
+    const island = document.createElement('div');
+    island.setAttribute('data-no-drag', '');
+    const pill = document.createElement('div');
+    pill.setAttribute('role', 'tab');
+    island.appendChild(pill);
+    region.appendChild(island);
+    document.body.appendChild(region);
+
+    pill.dispatchEvent(new MouseEvent('mousedown', { button: 0, detail: 1, bubbles: true }));
+
+    expect(startDragging).not.toHaveBeenCalled();
+    region.remove();
+  });
 });
 
 describe('TauriAdapter — updates + presence', () => {

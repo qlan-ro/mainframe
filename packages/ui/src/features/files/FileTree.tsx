@@ -12,7 +12,7 @@
  * subsequent remount does not re-trigger the reveal.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, File, Folder, RotateCw } from 'lucide-react';
+import { ChevronRight, File, Folder, PanelRightClose, RotateCw } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
@@ -198,9 +198,12 @@ interface FileTreeProps {
   port: number;
   projectId: string;
   chatId?: string;
+  /** Renders the panel-close control next to Refresh — the tree's
+   *  project-name row IS the floating Files panel's header (no separate row). */
+  onCollapse?: () => void;
 }
 
-export function FileTree({ port, projectId, chatId }: FileTreeProps) {
+export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps) {
   const [roots, setRoots] = useState<FileTreeEntry[] | null>(null);
   const [error, setError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -271,6 +274,18 @@ export function FileTree({ port, projectId, chatId }: FileTreeProps) {
             <RotateCw size={14} className="text-muted-foreground" />
           </button>
         </Hint>
+        {onCollapse && (
+          <Hint label="Collapse files">
+            <button
+              data-testid="workspace-files-collapse"
+              type="button"
+              onClick={onCollapse}
+              className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
+            >
+              <PanelRightClose size={14} className="text-muted-foreground" />
+            </button>
+          </Hint>
+        )}
       </div>
       <div className="py-[4px]">
         {sortEntries(roots).map((entry) => (

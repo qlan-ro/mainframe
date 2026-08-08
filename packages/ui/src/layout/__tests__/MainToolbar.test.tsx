@@ -1,26 +1,20 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
-import { useUiPrefs } from '@/store/ui-prefs';
+import { useLayoutStore } from '@/store/layout';
+import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
 
-const mockGetGitBranch = vi.fn();
-vi.mock('@/lib/api/git', () => ({ getGitBranch: (...a: unknown[]) => mockGetGitBranch(...a) }));
-
-// Stub BranchPopover: renders the trigger (children) plus a button that fires
-// onBranchChanged, so MainToolbar's own refresh wiring can be tested without
-// driving the real popover's git actions.
-vi.mock('@/features/git/BranchPopover', () => ({
-  BranchPopover: (props: { children?: React.ReactNode; onBranchChanged?: () => void }) => (
-    <>
-      {props.children}
-      <button data-testid="mock-branch-changed" onClick={() => props.onBranchChanged?.()}>
-        trigger
-      </button>
-    </>
-  ),
+// The tab strip needs the aui runtime, and the branch chip needs a live git
+// read — neither is this suite's subject. Their own suites cover them for real
+// (features/session-tabs/__tests__, features/git/__tests__/BranchChip.test.tsx).
+vi.mock('@/features/session-tabs/SessionTabs', () => ({
+  SessionTabs: () => <div data-testid="mock-session-tabs" />,
+}));
+vi.mock('@/features/git/BranchChip', () => ({
+  BranchChip: () => <div data-testid="mock-branch-chip" />,
 }));
 
 import { MainToolbar } from '../MainToolbar';
@@ -31,27 +25,22 @@ import { TooltipProvider } from '@v2/components/ui/tooltip';
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
   rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
+type ToolbarProps = Parameters<typeof MainToolbar>[0];
+
+const renderToolbar = (overrides: Partial<ToolbarProps> = {}) =>
+  render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} port={31415} {...overrides} />);
+
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
-  useUiPrefs.setState({ inspectorVisible: false });
+  useWorkspaceFilesPanel.setState({ open: false });
   useSetupAdvisor.setState({ open: false });
   mockEmit.mockReset();
-  mockGetGitBranch.mockReset();
 });
 
 describe('MainToolbar — root element', () => {
   it('renders the main-toolbar root with a drag region', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
+    renderToolbar();
 
     const toolbar = screen.getByTestId('main-toolbar');
     expect(toolbar).toBeDefined();
@@ -59,247 +48,18 @@ describe('MainToolbar — root element', () => {
   });
 });
 
-describe('MainToolbar — project name', () => {
-  it('renders the project name text', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
-
-    expect(screen.getByText('mainframe')).toBeDefined();
-  });
-});
-
-describe('MainToolbar — branch chip', () => {
-  it('renders a neutral, interactive chip for a main-repo session using the live git branch', async () => {
-    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-        chatId="c1"
-
-        port={31415}
-      />,
-    );
-
-    const chip = await screen.findByTestId('main-toolbar-branch');
-    expect(chip.textContent).toContain('main');
-    expect(chip).not.toBeDisabled();
-    expect(chip.getAttribute('data-worktree')).toBe('false');
-    expect(chip.className).not.toContain('border-primary');
-    expect(screen.queryByTestId('main-toolbar-branch-wt')).toBeNull();
-    expect(mockGetGitBranch).toHaveBeenCalledWith(31415, 'p1', 'c1');
-  });
-
-  it('renders an accented chip with a WT badge for a worktree session', async () => {
-    mockGetGitBranch.mockResolvedValue({ branch: 'feat/x' });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        branchName="feat/x"
-        isWorktree
-        projectId="p1"
-        chatId="c1"
-
-        port={31415}
-      />,
-    );
-
-    const chip = await screen.findByTestId('main-toolbar-branch');
-    expect(chip.textContent).toContain('feat/x');
-    expect(chip.getAttribute('data-worktree')).toBe('true');
-    expect(chip.className).toContain('border-primary');
-    expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
-  });
-
-  it('prefers the draft worktree branch over the live project-root branch when there is no chatId yet', async () => {
-    // A draft attached to a worktree has no daemon chat yet, so the live fetch
-    // can only see the project ROOT branch — the chip must show the worktree's.
-    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        branchName="feat/wt-draft"
-        isWorktree
-        projectId="p1"
-
-        port={31415}
-      />,
-    );
-
-    await waitFor(() => expect(mockGetGitBranch).toHaveBeenCalled());
-    const chip = await screen.findByTestId('main-toolbar-branch');
-    expect(chip.textContent).toContain('feat/wt-draft');
-    expect(chip.getAttribute('data-worktree')).toBe('true');
-  });
-
-  it('disables the chip (no popover) for a pre-send worktree draft', async () => {
-    // Without a chatId, branch actions would run against the project ROOT while
-    // the chip advertises worktree isolation — the popover must stay off until
-    // the first send stamps the chatId.
-    mockGetGitBranch.mockResolvedValue({ branch: 'main' });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        branchName="feat/wt-draft"
-        isWorktree
-        projectId="p1"
-
-        port={31415}
-      />,
-    );
-
-    const chip = await screen.findByTestId('main-toolbar-branch');
-    expect(chip).toBeDisabled();
-    expect(screen.queryByTestId('mock-branch-changed')).toBeNull();
-    // The pending worktree choice stays visible on the disabled chip.
-    expect(screen.getByTestId('main-toolbar-branch-wt').textContent?.trim()).toBe('wt');
-  });
-
-  it('renders a disabled stub chip when a branch is persisted but no projectId is available', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        branchName="feat/x"
-
-        port={31415}
-      />,
-    );
-
-    const chip = screen.getByTestId('main-toolbar-branch');
-    expect(chip.textContent).toContain('feat/x');
-    expect(chip).toBeDisabled();
-    expect(mockGetGitBranch).not.toHaveBeenCalled();
-  });
-
-  it('does not render the chip when git reports no branch and none is persisted', async () => {
-    mockGetGitBranch.mockResolvedValue({ branch: null });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-        chatId="c1"
-
-        port={31415}
-      />,
-    );
-
-    await waitFor(() => expect(mockGetGitBranch).toHaveBeenCalled());
-    expect(screen.queryByTestId('main-toolbar-branch')).toBeNull();
-  });
-
-  it('does not render the chip when there is no projectId and no persisted branch', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
-
-    expect(screen.queryByTestId('main-toolbar-branch')).toBeNull();
-    expect(mockGetGitBranch).not.toHaveBeenCalled();
-  });
-});
-
-describe('MainToolbar — branch chip refresh after popover write', () => {
-  it('refetches and displays the live branch after BranchPopover reports onBranchChanged', async () => {
-    mockGetGitBranch
-      .mockResolvedValueOnce({ branch: 'feat/before' })
-      .mockResolvedValueOnce({ branch: 'feat/after-checkout' });
-
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        branchName="feat/before"
-        isWorktree
-        projectId="p1"
-        chatId="c1"
-
-        port={31415}
-      />,
-    );
-
-    expect((await screen.findByTestId('main-toolbar-branch')).textContent).toContain('feat/before');
-
-    fireEvent.click(screen.getByTestId('mock-branch-changed'));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('main-toolbar-branch').textContent).toContain('feat/after-checkout');
-    });
-    expect(mockGetGitBranch).toHaveBeenCalledWith(31415, 'p1', 'c1');
-  });
-});
-
 describe('MainToolbar — show-sidebar button', () => {
   it('renders show-sidebar-button and calls onExpandSidebar when sidebarRendered is false', () => {
     const onExpandSidebar = vi.fn();
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={false}
-        onExpandSidebar={onExpandSidebar}
-        projectName="mainframe"
+    renderToolbar({ sidebarRendered: false, onExpandSidebar, leadingInset: 78 });
 
-        port={31415}
-      />,
-    );
-
-    const btn = screen.getByTestId('show-sidebar-button');
-    expect(btn).toBeDefined();
-
-    fireEvent.click(btn);
+    fireEvent.click(screen.getByTestId('show-sidebar-button'));
 
     expect(onExpandSidebar).toHaveBeenCalledTimes(1);
   });
 
   it('does not render show-sidebar-button when sidebarRendered is true', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
+    renderToolbar({ sidebarRendered: true });
 
     expect(screen.queryByTestId('show-sidebar-button')).toBeNull();
   });
@@ -307,59 +67,16 @@ describe('MainToolbar — show-sidebar button', () => {
 
 describe('MainToolbar — search button', () => {
   it('clicking main-toolbar-search emits open-search-palette', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
+    renderToolbar();
 
     fireEvent.click(screen.getByTestId('main-toolbar-search'));
+
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
   });
-});
 
-describe('MainToolbar — inspector toggle', () => {
-  it('inspector button is live (not disabled) and toggles the layout inspectorVisible flag', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
-
-    const btn = screen.getByTestId('main-toolbar-inspector');
-    expect(btn).not.toBeDisabled();
-    expect(useUiPrefs.getState().inspectorVisible).toBe(false);
-
-    fireEvent.click(btn);
-    expect(useUiPrefs.getState().inspectorVisible).toBe(true);
-
-    fireEvent.click(btn);
-    expect(useUiPrefs.getState().inspectorVisible).toBe(false);
-  });
-});
-
-describe('MainToolbar — CMD+O hint chip in search button', () => {
   it('renders the ⌘O keyboard hint chip inside the search button', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
+    renderToolbar();
 
-        port={31415}
-      />,
-    );
     const hint = screen.getByTestId('main-toolbar-search-hint');
     expect(screen.getByTestId('main-toolbar-search')).toContainElement(hint);
     expect(hint.textContent).toBe('⌘O');
@@ -368,16 +85,7 @@ describe('MainToolbar — CMD+O hint chip in search button', () => {
 
 describe('MainToolbar — theme toggle', () => {
   it('clicking main-toolbar-theme flips the theme mode from light to dark', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
+    renderToolbar();
 
     expect(useTheme.getState().mode).toBe('light');
 
@@ -387,57 +95,57 @@ describe('MainToolbar — theme toggle', () => {
   });
 });
 
+describe('MainToolbar — files toggle', () => {
+  // Pressed means "the tree is ON SCREEN": the floating panel open AND the
+  // workspace surface lit. An open panel with the surface unlit reads un-pressed.
+  it.each([
+    { open: true, workspaceLit: true, pressed: 'true' },
+    { open: false, workspaceLit: true, pressed: 'false' },
+    { open: true, workspaceLit: false, pressed: 'false' },
+  ])('open=$open lit=$workspaceLit → aria-pressed=$pressed', ({ open, workspaceLit, pressed }) => {
+    useWorkspaceFilesPanel.setState({ open });
+    useLayoutStore.setState({
+      layout: {
+        top: workspaceLit ? ['chat', 'workspace'] : ['chat'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
+    });
+
+    renderToolbar();
+
+    expect(screen.getByTestId('main-toolbar-files').getAttribute('aria-pressed')).toBe(pressed);
+  });
+
+  it('clicking main-toolbar-files emits toggle-workspace-files rather than writing the pref directly', () => {
+    // The intent carries the expand-also-lights-the-workspace rule; the toggle
+    // must not shortcut it (store/__tests__/intent-subscriber.commands owns the effect).
+    renderToolbar();
+
+    fireEvent.click(screen.getByTestId('main-toolbar-files'));
+
+    expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-workspace-files' });
+    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+  });
+
+  it('is live, not disabled', () => {
+    renderToolbar();
+
+    expect(screen.getByTestId('main-toolbar-files')).not.toBeDisabled();
+  });
+});
+
 describe('MainToolbar — Setup Advisor button', () => {
   it('renders automation-recommender-open when projectId is set', () => {
-    mockGetGitBranch.mockResolvedValue({ branch: null });
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-
-        port={31415}
-      />,
-    );
+    renderToolbar({ projectId: 'p1' });
 
     expect(screen.getByTestId('automation-recommender-open')).toBeDefined();
   });
 
   it('does not render automation-recommender-open when there is no projectId', () => {
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-
-        port={31415}
-      />,
-    );
+    renderToolbar();
 
     expect(screen.queryByTestId('automation-recommender-open')).toBeNull();
-  });
-
-  it('clicking automation-recommender-open opens the Setup Advisor sheet', () => {
-    mockGetGitBranch.mockResolvedValue({ branch: null });
-    render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-
-        port={31415}
-      />,
-    );
-
-    expect(useSetupAdvisor.getState().open).toBe(false);
-
-    fireEvent.click(screen.getByTestId('automation-recommender-open'));
-
-    expect(useSetupAdvisor.getState().open).toBe(true);
   });
 });

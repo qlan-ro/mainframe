@@ -18,7 +18,6 @@ import { ArchiveWorktreeDialog } from '@v2/features/sessions/ArchiveWorktreeDial
 import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
 import { TagPopoverHost } from '@v2/features/sessions/TagPopoverHost';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
-import { InspectorPane } from '../features/files/InspectorPane';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';
 import { SetupAdvisorHost } from '../features/setup-advisor/SetupAdvisorHost';
@@ -72,8 +71,7 @@ function RuntimeBody({ port }: { port: number }) {
   const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
   const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
   const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
-  const inspectorVisible = useUiPrefs((s) => s.inspectorVisible);
-  const { projectName, branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
+  const { branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)
   // can normalize open-file path flavors to a canonical relative key (F1 fix).
@@ -110,7 +108,6 @@ function RuntimeBody({ port }: { port: number }) {
           leadingInset={sidebarVisible ? 0 : TRAFFIC_LIGHTS_SPACER_WIDTH}
           sidebarRendered={sidebarVisible}
           onExpandSidebar={() => setSidebarVisible(true)}
-          projectName={projectName}
           branchName={branchName}
           isWorktree={isWorktree}
           port={port}
@@ -119,9 +116,6 @@ function RuntimeBody({ port }: { port: number }) {
         />
         <SurfaceHost />
       </SidebarInset>
-
-      {/* Right Inspector pane (Files tree / Changes), toggled from the toolbar. */}
-      {inspectorVisible && <InspectorPane port={port} />}
 
       {/* Single app-wide outlets driven by their bridges/stores */}
       <ArchiveWorktreeDialog />

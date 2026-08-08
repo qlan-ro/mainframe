@@ -18,7 +18,6 @@ beforeEach(() => {
   // Reset store to declared defaults between tests.
   useUiPrefs.setState({
     sidebarVisible: true,
-    inspectorVisible: false,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
@@ -32,7 +31,6 @@ describe('useUiPrefs defaults', () => {
   it('has the documented defaults', () => {
     const s = useUiPrefs.getState();
     expect(s.sidebarVisible).toBe(true);
-    expect(s.inspectorVisible).toBe(false);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
     expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
@@ -107,11 +105,6 @@ describe('useUiPrefs actions', () => {
     expect(useUiPrefs.getState().sidebarVisible).toBe(true);
   });
 
-  it('toggleInspector flips inspectorVisible', () => {
-    useUiPrefs.getState().toggleInspector();
-    expect(useUiPrefs.getState().inspectorVisible).toBe(true);
-  });
-
   it('setSidebarWidth stores a clamped width', () => {
     useUiPrefs.getState().setSidebarWidth(99999);
     // clampSidebarWidth caps at the v2 sidebar's SIDEBAR_MAX_WIDTH (480).
@@ -167,7 +160,6 @@ describe('useUiPrefs persistence', () => {
       [
         'collapsedSidebarSections',
         'dontWarnOnTuningChange',
-        'inspectorVisible',
         'rightClickHintDismissed',
         'sessionPanelCollapsed',
         'sessionPanelSections',
@@ -177,6 +169,31 @@ describe('useUiPrefs persistence', () => {
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
+  });
+});
+
+describe('useUiPrefs v2 → v4 migration', () => {
+  it('strips the retired inspector/files keys from an old payload', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { sidebarWidth: 300, inspectorVisible: true, workspaceFilesCollapsed: true },
+        version: 2,
+      }),
+    );
+    const fresh = await reloadStore();
+    // Proves hydration actually ran, so the next assertions aren't vacuous.
+    expect(fresh.getState().sidebarWidth).toBe(300);
+    // v3 retired the right InspectorPane; v4 retired the docked Files sidebar —
+    // the tree is a transient floating panel now, so neither flag survives.
+    const state = fresh.getState() as unknown as Record<string, unknown>;
+    expect(state.inspectorVisible).toBeUndefined();
+    expect(state.workspaceFilesCollapsed).toBeUndefined();
+    // ...and neither gets written back out on the next persist.
+    fresh.getState().setSidebarWidth(320);
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.inspectorVisible).toBeUndefined();
+    expect(parsed.state.workspaceFilesCollapsed).toBeUndefined();
   });
 });
 

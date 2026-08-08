@@ -85,6 +85,8 @@ vi.mock('@assistant-ui/react', async () => {
         }),
       },
     }),
+    useAuiState: (selector: (state: unknown) => unknown) =>
+      selector({ threads: { threadItems: [], mainThreadId: null } }),
     useAui: () => ({ composer: () => ({ setText: vi.fn() }) }),
   };
 });
