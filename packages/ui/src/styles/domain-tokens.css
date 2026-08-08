@@ -54,15 +54,18 @@
   --mf-find-tint: rgba(251, 191, 36, 0.32);
   --mf-find-active: rgba(251, 146, 60, 0.6);
 
-  /* Editor syntax — Xcode-ish on warm paper */
-  --mf-code-bg: #fbfaf7;
-  --mf-code-fg: #1f1f24;
+  /* Editor syntax. The SURFFACE inks derive from the v2 tokens so code blocks
+     sit on the app's own neutral chrome (the old warm-paper values clashed
+     with the cool stock sheet); only the ACCENT inks (kw/str/fn/type/num) are
+     pinned — they are a syntax theme, not chrome. */
+  --mf-code-bg: var(--muted);
+  --mf-code-fg: var(--foreground);
   --mf-code-kw: #9b2393;
   --mf-code-str: #c41a16;
   --mf-code-fn: #326d74;
   --mf-code-type: #5b269a;
   --mf-code-num: #1c00cf;
-  --mf-code-cmt: #707f8c;
+  --mf-code-cmt: var(--muted-foreground);
 
   --mf-term-bg: #1d1d20;
   --mf-term-fg: #e7e6e3;
@@ -71,15 +74,17 @@
   --mf-term-cyan: #5ac8fa;
   --mf-term-amber: #ff9f0a;
 
-  --mf-viewer-matte: #e6e2da;
-  --mf-viewer-check-a: #efece6;
-  --mf-viewer-check-b: #dcd8d0;
+  /* Viewer matte + checkerboard — neutral mixes of the app's own inks (the
+     warm grays clashed); the a/b delta stays ~8% for the transparency grid. */
+  --mf-viewer-matte: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --mf-viewer-check-a: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  --mf-viewer-check-b: color-mix(in srgb, var(--foreground) 13%, var(--background));
 
-  /* Theme file shadows + focus ring */
+  /* Theme file shadows + focus ring (ring tracks v2's --ring = primary) */
   --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
   --mf-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.18);
-  --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.35);
-  --mf-scrim: rgba(22, 19, 15, 0.4);
+  --mf-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+  --mf-scrim: rgba(0, 0, 0, 0.4);
 
   /* Motion (fonts come from the v2 layer) */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -90,7 +95,9 @@
   /* ── App-only tokens — LIGHT ── */
   --mf-directive-skill: #7a4dd0;
   --mf-directive-session: #a84c08;
-  --mf-code-inline-fg: #7a4d2a;
+  /* Inline-code ink — the old warm browns are within a hair of v2's warning
+     hue in BOTH modes, so it derives instead of pinning a second amber. */
+  --mf-code-inline-fg: var(--warning);
   --mf-provider-claude-avatar: #d97757;
   --mf-provider-openai-avatar: #19c37d;
 
@@ -124,34 +131,36 @@
   --mf-accent-amber: #ff9500;
   --mf-accent-violet: #5b269a;
 
-  /* Diff tint tokens — LIGHT */
-  --mf-diff-add-bg: #e6f2e5;
-  --mf-diff-add-border: #bce1c2;
-  --mf-diff-add-text: #28a745;
-  --mf-diff-del-bg: #f8e9e7;
-  --mf-diff-del-border: #f2bfc2;
-  --mf-diff-del-text: #dc3545;
+  /* Diff tints — derived from the v2 success/destructive semantics, so the
+     triad is the SAME green/red the rest of the app speaks (the long-standing
+     "v2 diff triad" note). Mix ratios reproduce the old tint strengths and
+     track both modes automatically. */
+  --mf-diff-add-bg: color-mix(in srgb, var(--success) 11%, var(--background));
+  --mf-diff-add-border: color-mix(in srgb, var(--success) 32%, var(--background));
+  --mf-diff-add-text: var(--success);
+  --mf-diff-del-bg: color-mix(in srgb, var(--destructive) 9%, var(--background));
+  --mf-diff-del-border: color-mix(in srgb, var(--destructive) 26%, var(--background));
+  --mf-diff-del-text: var(--destructive);
 
-  /* CM6 editor UI states — LIGHT */
+  /* CM6 editor UI states — selection tracks the primary; match ambers align
+     with the Find tints above. */
   --mf-cm-active-line: rgba(0, 0, 0, 0.04);
-  --mf-cm-selection: rgba(59, 130, 246, 0.3);
-  --mf-cm-selection-focused: rgba(59, 130, 246, 0.4);
+  --mf-cm-selection: color-mix(in srgb, var(--primary) 30%, transparent);
+  --mf-cm-selection-focused: color-mix(in srgb, var(--primary) 40%, transparent);
   --mf-cm-match: rgba(251, 191, 36, 0.2);
   --mf-cm-match-border: rgba(251, 191, 36, 0.4);
   --mf-cm-match-selected: rgba(251, 191, 36, 0.4);
-  --mf-cm-sel-match: rgba(59, 130, 246, 0.15);
+  --mf-cm-sel-match: color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .dark {
-  /* Editor syntax — playful slate pastels */
-  --mf-code-bg: #21222c;
-  --mf-code-fg: #eef0fa;
+  /* Editor syntax accents — playful slate pastels (bg/fg/cmt derive above and
+     track the mode on their own) */
   --mf-code-kw: #f47fc4;
   --mf-code-str: #eef0a0;
   --mf-code-fn: #6df295;
   --mf-code-type: #bd9bf5;
   --mf-code-num: #86c9f5;
-  --mf-code-cmt: #6b7494;
 
   --mf-term-bg: #15161e;
   --mf-term-fg: #f0f1f7;
@@ -160,19 +169,18 @@
   --mf-term-cyan: #84e8f5;
   --mf-term-amber: #ffb86c;
 
-  --mf-viewer-matte: #181922;
-  --mf-viewer-check-a: #1e2029;
-  --mf-viewer-check-b: #292b38;
+  /* The matte sits DARKER than the page in dark mode (a light-direction
+     foreground mix would invert that); the checkerboard mixes track fine. */
+  --mf-viewer-matte: color-mix(in srgb, black 35%, var(--background));
 
   --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --mf-shadow-modal: 0 28px 64px rgba(0, 0, 0, 0.66), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-  --mf-focus-ring: 0 0 0 3px rgba(10, 132, 255, 0.5);
+  --mf-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   --mf-scrim: rgba(0, 0, 0, 0.55);
 
   /* ── App-only tokens — DARK ── */
   --mf-directive-skill: #b48cff;
   --mf-directive-session: #f0b429;
-  --mf-code-inline-fg: #e0a878;
 
   /* Dark-surface lightness overrides for the semantic glyph/tint hues */
   --mf-task-type-bug: #e17a76;
@@ -193,20 +201,8 @@
   --mf-accent-amber: #ff9f0a;
   --mf-accent-violet: #bd9bf5;
 
-  --mf-diff-add-bg: #1e2b1d;
-  --mf-diff-add-border: #244f2e;
-  --mf-diff-add-text: #50d97c;
-  --mf-diff-del-bg: #30201c;
-  --mf-diff-del-border: #60312e;
-  --mf-diff-del-text: #ff6272;
-
+  /* Diff + CM selection derive above; only the neutral active-line flips. */
   --mf-cm-active-line: rgba(255, 255, 255, 0.04);
-  --mf-cm-selection: rgba(10, 132, 255, 0.3);
-  --mf-cm-selection-focused: rgba(10, 132, 255, 0.4);
-  --mf-cm-match: rgba(251, 191, 36, 0.2);
-  --mf-cm-match-border: rgba(251, 191, 36, 0.4);
-  --mf-cm-match-selected: rgba(251, 191, 36, 0.4);
-  --mf-cm-sel-match: rgba(59, 130, 246, 0.15);
 }
 
 @theme inline {
