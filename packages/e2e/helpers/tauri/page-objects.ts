@@ -63,12 +63,12 @@ export function chatThread(page: Page) {
  */
 /**
  * Idempotent "show the Files tree". `main-toolbar-files` is a toggle over
- * ON-SCREEN visibility (tree expanded AND workspace surface lit) — an
- * unconditional click against a long-lived page would collapse an already
- * visible tree. Only clicks when the sidebar isn't showing.
+ * ON-SCREEN visibility (the floating panel open AND the workspace surface
+ * lit) — an unconditional click against a long-lived page would close an
+ * already visible panel. Only clicks when the panel isn't showing.
  */
 export async function showFilesTree(page: Page): Promise<void> {
-  if ((await page.getByTestId('workspace-files-sidebar').count()) === 0) {
+  if ((await page.getByTestId('workspace-files-panel').count()) === 0) {
     await page.getByTestId('main-toolbar-files').click();
   }
   await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });

@@ -1,7 +1,7 @@
 import { Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { useTheme } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
-import { useUiPrefs } from '@/store/ui-prefs';
+import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@v2/components/ui/button';
@@ -51,12 +51,12 @@ export function MainToolbar({
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
-  const filesCollapsed = useUiPrefs((s) => s.workspaceFilesCollapsed);
-  // Pressed = the tree is ON SCREEN: expanded AND its host surface lit. The
-  // intent handler applies the same rule, so the toggle never collapses an
-  // invisible tree (see intent-subscriber's toggle-workspace-files).
+  const filesOpen = useWorkspaceFilesPanel((s) => s.open);
+  // Pressed = the tree is ON SCREEN: the floating panel open AND its host
+  // surface lit. The intent handler applies the same rule, so the toggle never
+  // closes an invisible tree (see intent-subscriber's toggle-workspace-files).
   const workspaceLit = useLayoutStore((s) => s.layout.top.includes('workspace') || s.layout.bottom === 'workspace');
-  const filesOnScreen = !filesCollapsed && workspaceLit;
+  const filesOnScreen = filesOpen && workspaceLit;
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
 
   return (

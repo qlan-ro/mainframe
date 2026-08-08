@@ -134,6 +134,7 @@ test.describe('§viewers', () => {
 
   test('image opens in Fit mode by default with zoom controls disabled', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-image.png').click();
     await expect(tabByTitle(page, 'image.png')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-image')).toBeVisible({ timeout: 10_000 });
@@ -171,6 +172,7 @@ test.describe('§viewers', () => {
 
   test('svg opens in Preview mode by default; Code toggle shows the raw source', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-shape.svg').click();
     await expect(tabByTitle(page, 'shape.svg')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-svg')).toBeVisible({ timeout: 10_000 });
@@ -198,6 +200,7 @@ test.describe('§viewers', () => {
 
   test('csv renders a sortable table with the seeded headers and rows in file order', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-data.csv').click();
     await expect(tabByTitle(page, 'data.csv')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-csv')).toBeVisible({ timeout: 10_000 });
@@ -271,6 +274,7 @@ test.describe('§viewers', () => {
 
   test('pdf embed mounts and the open-externally button reflects the local-daemon reality', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-doc.pdf').click();
     await expect(tabByTitle(page, 'doc.pdf')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-pdf')).toBeVisible({ timeout: 10_000 });
@@ -316,6 +320,7 @@ test.describe('§viewers', () => {
 
   test('markdown file opens in Preview mode by default', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-notes.md').click();
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
 
@@ -329,6 +334,7 @@ test.describe('§viewers', () => {
 
   test('the viewer shell reveal button highlights the open file in the file tree', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-image.png').click();
     await expect(tabByTitle(page, 'image.png')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('viewer-shell')).toBeVisible({ timeout: 10_000 });

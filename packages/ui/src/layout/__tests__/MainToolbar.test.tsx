@@ -2,7 +2,7 @@ import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
 import { useLayoutStore } from '@/store/layout';
-import { useUiPrefs } from '@/store/ui-prefs';
+import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
@@ -33,7 +33,7 @@ const renderToolbar = (overrides: Partial<ToolbarProps> = {}) =>
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
-  useUiPrefs.setState({ workspaceFilesCollapsed: false });
+  useWorkspaceFilesPanel.setState({ open: false });
   useSetupAdvisor.setState({ open: false });
   mockEmit.mockReset();
 });
@@ -96,14 +96,14 @@ describe('MainToolbar — theme toggle', () => {
 });
 
 describe('MainToolbar — files toggle', () => {
-  // Pressed means "the tree is ON SCREEN": expanded AND the workspace surface
-  // lit. An expanded pref with the surface unlit still reads un-pressed.
+  // Pressed means "the tree is ON SCREEN": the floating panel open AND the
+  // workspace surface lit. An open panel with the surface unlit reads un-pressed.
   it.each([
-    { collapsed: false, workspaceLit: true, pressed: 'true' },
-    { collapsed: true, workspaceLit: true, pressed: 'false' },
-    { collapsed: false, workspaceLit: false, pressed: 'false' },
-  ])('collapsed=$collapsed lit=$workspaceLit → aria-pressed=$pressed', ({ collapsed, workspaceLit, pressed }) => {
-    useUiPrefs.setState({ workspaceFilesCollapsed: collapsed });
+    { open: true, workspaceLit: true, pressed: 'true' },
+    { open: false, workspaceLit: true, pressed: 'false' },
+    { open: true, workspaceLit: false, pressed: 'false' },
+  ])('open=$open lit=$workspaceLit → aria-pressed=$pressed', ({ open, workspaceLit, pressed }) => {
+    useWorkspaceFilesPanel.setState({ open });
     useLayoutStore.setState({
       layout: {
         top: workspaceLit ? ['chat', 'workspace'] : ['chat'],
@@ -126,7 +126,7 @@ describe('MainToolbar — files toggle', () => {
     fireEvent.click(screen.getByTestId('main-toolbar-files'));
 
     expect(mockEmit).toHaveBeenCalledWith({ type: 'toggle-workspace-files' });
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
+    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
   });
 
   it('is live, not disabled', () => {

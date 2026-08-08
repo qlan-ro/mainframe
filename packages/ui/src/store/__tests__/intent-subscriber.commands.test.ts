@@ -4,6 +4,7 @@ import { subscribeToFileIntents } from '../intent-subscriber';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useSettingsStore } from '../settings';
 import { useUiPrefs } from '../ui-prefs';
+import { useWorkspaceFilesPanel } from '../workspace-files-panel';
 import { useLayoutStore } from '../layout';
 
 function isWorkspaceActive() {
@@ -36,41 +37,41 @@ describe('intent-subscriber — command intents', () => {
     expect(useUiPrefs.getState().sidebarVisible).toBe(!before);
   });
 
-  it('toggle-workspace-files collapses a tree that is ON SCREEN, touching nothing else', () => {
+  it('toggle-workspace-files closes a panel that is ON SCREEN, touching nothing else', () => {
     useLayoutStore.setState({
       layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     });
-    useUiPrefs.setState({ workspaceFilesCollapsed: false });
+    useWorkspaceFilesPanel.setState({ open: true });
     const layoutBefore = useLayoutStore.getState().layout;
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(true);
-    // Collapsing must not rewrite the layout (nor hide the workspace).
+    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+    // Closing must not rewrite the layout (nor hide the workspace).
     expect(useLayoutStore.getState().layout).toBe(layoutBefore);
   });
 
-  it('an expanded-but-invisible tree is SHOWN, never collapsed', () => {
-    // Pref says expanded, but the workspace surface is unlit — the tree is not
-    // on screen. The toggle means "show me the files": light the surface and
-    // keep the pref expanded, instead of collapsing a tree nobody can see.
-    useUiPrefs.setState({ workspaceFilesCollapsed: false });
+  it('an open-but-invisible panel is SHOWN, never closed', () => {
+    // The panel flag is on, but the workspace surface is unlit — the tree is
+    // not on screen. The toggle means "show me the files": light the surface
+    // and keep the panel open, instead of closing a tree nobody can see.
+    useWorkspaceFilesPanel.setState({ open: true });
     expect(isWorkspaceActive()).toBe(false);
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
+    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
     expect(isWorkspaceActive()).toBe(true);
   });
 
-  it('toggle-workspace-files expands the tree AND lights the workspace surface', () => {
-    // An expanded tree inside a hidden surface would show nothing.
-    useUiPrefs.setState({ workspaceFilesCollapsed: true });
+  it('toggle-workspace-files opens the panel AND lights the workspace surface', () => {
+    // An open panel inside a hidden surface would show nothing.
+    useWorkspaceFilesPanel.setState({ open: false });
     expect(isWorkspaceActive()).toBe(false);
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
+    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
     expect(isWorkspaceActive()).toBe(true);
   });
 });

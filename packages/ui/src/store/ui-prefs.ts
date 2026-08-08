@@ -43,8 +43,6 @@ export function isSessionPanelSectionOpen(sections: SessionPanelSections, id: Se
 
 interface UiPrefsState {
   sidebarVisible: boolean;
-  /** The workspace surface's local Files sidebar: false = expanded tree, true = thin rail. */
-  workspaceFilesCollapsed: boolean;
   sidebarWidth: number;
   /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
   rightClickHintDismissed: boolean;
@@ -62,7 +60,6 @@ interface UiPrefsState {
   sessionPanelCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
-  setWorkspaceFilesCollapsed: (collapsed: boolean) => void;
   setSidebarWidth: (width: number) => void;
   dismissRightClickHint: () => void;
   dismissTuningChangeWarning: () => void;
@@ -86,7 +83,6 @@ export function isSidebarSectionCollapsed(
 function partializeUiPrefs(s: UiPrefsState) {
   return {
     sidebarVisible: s.sidebarVisible,
-    workspaceFilesCollapsed: s.workspaceFilesCollapsed,
     sidebarWidth: s.sidebarWidth,
     rightClickHintDismissed: s.rightClickHintDismissed,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
@@ -102,7 +98,6 @@ export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
       sidebarVisible: true,
-      workspaceFilesCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
@@ -111,7 +106,6 @@ export const useUiPrefs = create<UiPrefsState>()(
       sessionPanelCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
-      setWorkspaceFilesCollapsed: (collapsed) => set({ workspaceFilesCollapsed: collapsed }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
@@ -135,10 +129,10 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'mf:ui-prefs',
-      version: 3,
+      version: 4,
       partialize: partializeUiPrefs,
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 3 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 4 || persisted === null || typeof persisted !== 'object') {
           return persisted as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
@@ -148,9 +142,11 @@ export const useUiPrefs = create<UiPrefsState>()(
           delete next.bottomPanelTab;
           delete next.bottomPanelHeight;
         }
-        // v3 retired the right InspectorPane — the Files tree lives inside the
-        // workspace surface now, with its own collapse flag (default expanded).
+        // v3 retired the right InspectorPane; v4 retired its short-lived docked
+        // successor — the Files tree is a transient floating panel now
+        // (store/workspace-files-panel), so neither flag persists.
         delete next.inspectorVisible;
+        delete next.workspaceFilesCollapsed;
         return next as PersistedUiPrefs;
       },
     },

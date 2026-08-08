@@ -18,7 +18,7 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { activeLaunchScope } from '@/lib/launch-scope';
 import { filterRunByScope } from '@/store/run-scope-filter';
-import { WorkspaceFilesSidebar } from '@/features/files/WorkspaceFilesSidebar';
+import { WorkspaceFilesPanel } from '@/features/files/WorkspaceFilesPanel';
 import { WorkspaceEmptyState } from '../WorkspaceEmptyState';
 import { STRIP_ROW, WorkspaceStripActions, WorkspaceStripLead } from '../WorkspaceStripChrome';
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
@@ -46,9 +46,6 @@ interface WorkspacePaneViewProps {
   primary: boolean;
   scopeKey: string | null;
   projectId?: string;
-  /** True when the single pane's strip is hoisted to the surface level so it
-   *  spans the full width above the Files sidebar. */
-  hideStrip?: boolean;
 }
 
 function WorkspaceTabBody({
@@ -115,10 +112,10 @@ function WorkspaceTabBody({
   );
 }
 
-function WorkspacePaneView({ pane, primary, scopeKey, projectId, hideStrip }: WorkspacePaneViewProps) {
+function WorkspacePaneView({ pane, primary, scopeKey, projectId }: WorkspacePaneViewProps) {
   return (
     <div data-testid={`workspace-pane-${pane.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {!hideStrip && <WorkspaceTabStrip pane={pane} primary={primary} />}
+      <WorkspaceTabStrip pane={pane} primary={primary} />
       <div className="relative min-h-0 flex-1">
         {pane.tabs.map((t) => (
           <WorkspaceTabBody
@@ -152,43 +149,29 @@ export function WorkspaceSurface() {
     activeScopeKey ??
     (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
-  // The surface header spans the FULL width and the Files sidebar starts
-  // underneath it. With one pane that means hoisting its strip to the surface
-  // level; a split keeps per-pane strips and a full-height sidebar — each
-  // pane's strip belongs to that pane, so there is no one header to extend.
-  const hoistedPane = hasContent && run.panes.length === 1 ? run.panes[0] : null;
-
   return (
-    <div data-testid="workspace-surface" className="flex h-full flex-col">
-      {hoistedPane && <WorkspaceTabStrip pane={hoistedPane} primary />}
-      {!hasContent && <WorkspaceEmptyHeader />}
-      <div className="flex min-h-0 flex-1 flex-row">
-        <div className="flex h-full min-w-0 flex-1 flex-col">
-          {hasContent ? (
-            <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
-              {run.panes.map((pane, i) => (
-                <div
-                  key={pane.id}
-                  className={`flex min-h-0 min-w-0 flex-1 ${
-                    i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
-                  }`}
-                >
-                  <WorkspacePaneView
-                    pane={pane}
-                    primary={i === 0}
-                    scopeKey={scopeKey}
-                    projectId={projectId}
-                    hideStrip={hoistedPane !== null}
-                  />
-                </div>
-              ))}
+    <div data-testid="workspace-surface" className="relative flex h-full flex-col">
+      {hasContent ? (
+        <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
+          {run.panes.map((pane, i) => (
+            <div
+              key={pane.id}
+              className={`flex min-h-0 min-w-0 flex-1 ${
+                i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
+              }`}
+            >
+              <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
             </div>
-          ) : (
-            <WorkspaceEmptyState />
-          )}
+          ))}
         </div>
-        <WorkspaceFilesSidebar />
-      </div>
+      ) : (
+        <>
+          <WorkspaceEmptyHeader />
+          <WorkspaceEmptyState />
+        </>
+      )}
+      {/* Floating Files rail + panel — the session panel's pattern on this surface. */}
+      <WorkspaceFilesPanel />
     </div>
   );
 }

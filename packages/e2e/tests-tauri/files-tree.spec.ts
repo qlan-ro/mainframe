@@ -6,21 +6,24 @@
  * execFileSync, no shell interpolation).
  *
  * The tree lives INSIDE the workspace surface since the session-tabs rework
- * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md): a local sidebar
- * on the surface's right edge, expanded by default, collapsing to a thin rail.
- * The app-level InspectorPane is deleted. Change-scope coverage lives in
+ * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md): a FLOATING
+ * glass panel hanging from the strip's Files button — the session panel's
+ * overlay pattern — light-dismissed by Escape or an outside pointer. It stays
+ * MOUNTED (hidden) while closed, so tree expansion survives a dismiss. The
+ * app-level InspectorPane is deleted. Change-scope coverage lives in
  * review-panel.spec.ts's "§review-panel — change scopes", not here.
  *
  * Testid reference (verified against packages/ui/src):
  *   main-toolbar-files       — toolbar toggle. Pressed = the tree is ON SCREEN
- *                              (expanded AND workspace lit); clicking an
- *                              un-pressed toggle expands + lights the workspace.
+ *                              (panel open AND workspace lit); clicking an
+ *                              un-pressed toggle opens + lights the workspace.
  *                              Radix Toggle puts pressed state on `aria-pressed`
  *                              (only `data-state` is unusable — the wrapping
  *                              `Hint`'s TooltipTrigger overwrites it).
- *   workspace-files-sidebar  — the expanded sidebar (inside workspace-surface)
- *   workspace-files-rail     — the collapsed thin rail; workspace-files-expand re-opens
- *   workspace-files-collapse — collapse control on the tree's header row
+ *   workspace-files-panel    — the floating panel (present only while OPEN)
+ *   workspace-files-open     — the strip's Files button (primary pane +
+ *                              empty-state header)
+ *   workspace-files-collapse — close control on the tree's header row
  *   file-tree                — FileTree root
  *   file-tree-row-<path>     — a file or folder row (folders toggle expand/collapse)
  *   file-tree-refresh        — refetch the tree
@@ -85,10 +88,10 @@ test.describe('§files-tree — no project', () => {
     await closeTauriApp(app);
   });
 
-  test('files sidebar shows the no-project empty state before any chat is active', async () => {
+  test('files panel shows the no-project empty state before any chat is active', async () => {
     const { page } = app;
     await page.getByTestId('main-toolbar-files').click();
-    const pane = page.getByTestId('workspace-files-sidebar');
+    const pane = page.getByTestId('workspace-files-panel');
     await expect(pane).toBeVisible({ timeout: 10_000 });
     await expect(pane.getByText('Open a session to browse its files.')).toBeVisible();
   });
@@ -137,12 +140,13 @@ test.describe('§files-tree — workspace Files sidebar', () => {
     await closeTauriApp(app);
   });
 
-  // ── Sidebar chrome ────────────────────────────────────────────────────────
+  // ── Panel chrome ──────────────────────────────────────────────────────────
 
-  test('the toolbar toggle shows the sidebar (lighting the workspace), collapses it to a rail, and the rail re-expands', async () => {
+  test('the toolbar toggle floats the panel (lighting the workspace); the strip button and Escape drive it too', async () => {
     const { page } = app;
     const toggle = page.getByTestId('main-toolbar-files');
-    const pane = page.getByTestId('workspace-files-sidebar');
+    const stripButton = page.getByTestId('workspace-files-open');
+    const pane = page.getByTestId('workspace-files-panel');
 
     // Boot: workspace unlit → the tree is not on screen, toggle un-pressed.
     await expect(pane).toHaveCount(0);
@@ -151,22 +155,28 @@ test.describe('§files-tree — workspace Files sidebar', () => {
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
-    // Second click collapses to the thin rail (the workspace stays lit).
+    // Second click closes the panel; the strip's Files button stays docked.
     await toggle.click();
     await expect(pane).toHaveCount(0);
-    await expect(page.getByTestId('workspace-files-rail')).toBeVisible();
+    await expect(stripButton).toBeVisible();
+    await expect(stripButton).toHaveAttribute('aria-pressed', 'false');
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
-    // The rail's own button re-expands.
-    await page.getByTestId('workspace-files-expand').click();
+    // The strip button re-opens (no dismiss-then-reopen double toggle);
+    // Escape light-dismisses.
+    await stripButton.click();
     await expect(pane).toBeVisible();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(stripButton).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(pane).toHaveCount(0);
+    await stripButton.click();
+    await expect(pane).toBeVisible();
   });
 
-  test('the sidebar body is the file tree, with no header row above it', async () => {
+  test('the panel body is the file tree, with no header row above it', async () => {
     const { page } = app;
     await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 10_000 });
-    // The tree's own project-name row is the header — collapse sits next to refresh.
+    // The tree's own project-name row is the header — close sits next to refresh.
     await expect(page.getByTestId('workspace-files-collapse')).toBeVisible();
     await expect(page.getByTestId('inspector-tab-files')).toHaveCount(0);
     await expect(page.getByTestId('inspector-tab-changes')).toHaveCount(0);

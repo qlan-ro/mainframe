@@ -8,10 +8,12 @@
  *   workspace-surface-close       — hide the workspace (primary pane)
  *   workspace-pane-close-<paneId> — un-split (secondary pane)
  */
-import { GripVertical, LayoutPanelLeft, X } from 'lucide-react';
+import { FolderTree, GripVertical, LayoutPanelLeft, X } from 'lucide-react';
 import { Button } from '@v2/components/ui/button';
 import { Hint } from '@v2/components/ui/hint';
+import { cn } from '@v2/lib/utils';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
+import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { EditorGlyph } from './surface-icons';
 import { useSurfaceDragStore } from './use-surface-drag';
 
@@ -56,8 +58,28 @@ export function WorkspaceStripActions({ paneId, primary }: { paneId?: string; pr
   const isFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'workspace'));
   const closePane = useLayoutStore((s) => s.closePane);
 
+  const filesOpen = useWorkspaceFilesPanel((s) => s.open);
+  const setFilesOpen = useWorkspaceFilesPanel((s) => s.setOpen);
+
   return (
     <div className="flex shrink-0 items-center gap-px pr-1.5 pl-0.5">
+      {primary && (
+        <Hint label={filesOpen ? 'Hide files' : 'Show files'}>
+          <Button
+            data-testid="workspace-files-open"
+            // The panel's light-dismiss ignores this trigger — otherwise the
+            // pointerdown would close the open panel and the click reopen it.
+            data-workspace-files-trigger
+            aria-pressed={filesOpen}
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setFilesOpen(!filesOpen)}
+            className={cn(filesOpen ? 'bg-accent text-foreground' : 'text-muted-foreground')}
+          >
+            <FolderTree />
+          </Button>
+        </Hint>
+      )}
       {primary ? (
         <Hint label={isFloor ? 'The workspace is the only surface left' : 'Hide workspace'}>
           <Button

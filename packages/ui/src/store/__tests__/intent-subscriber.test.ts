@@ -19,7 +19,7 @@ import { useFilesStore } from '../files';
 import { useActiveBasesStore } from '../active-bases-store';
 import { subscribeToFileIntents } from '../intent-subscriber';
 import { useOverlaysStore } from '../overlays';
-import { useUiPrefs } from '../ui-prefs';
+import { useWorkspaceFilesPanel } from '../workspace-files-panel';
 
 const WORKTREE = '/Users/dev/myapp/.worktrees/feat-wt';
 const PROJECT = '/Users/dev/myapp';
@@ -159,15 +159,15 @@ describe('open-file intent subscriber', () => {
 });
 
 describe('reveal-file intent subscriber', () => {
-  it('reveal-file lights the workspace surface AND expands the Files tree', () => {
-    // A file revealed into a collapsed rail is a file the user cannot see.
+  it('reveal-file lights the workspace surface AND opens the Files panel', () => {
+    // A file revealed into a closed panel is a file the user cannot see.
     const unsub = subscribeToFileIntents();
-    useUiPrefs.setState({ workspaceFilesCollapsed: true });
+    useWorkspaceFilesPanel.setState({ open: false });
 
     expect(isWorkspaceActive()).toBe(false);
     emitSurfaceIntent({ type: 'reveal-file', path: '/src/main.ts' });
     expect(isWorkspaceActive()).toBe(true);
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
+    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
 
     unsub();
   });

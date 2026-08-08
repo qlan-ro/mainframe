@@ -102,6 +102,7 @@ test.describe('§editor', () => {
 
   test('opening a file from the tree adds an italic preview tab', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-index.ts').click();
 
     const tab = tabByTitle(page, 'index.ts');
@@ -113,6 +114,7 @@ test.describe('§editor', () => {
 
   test('opening a second file replaces the existing preview tab', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-utils.ts').click();
 
     await expect(tabByTitle(page, 'utils.ts')).toBeVisible({ timeout: 10_000 });
@@ -126,6 +128,7 @@ test.describe('§editor', () => {
     await utilsTab.dblclick();
     await expect(utilsTab.locator('span.truncate')).toHaveCSS('font-style', 'normal');
 
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-notes.md').click();
     await expect(page.locator(`${WORKSPACE.strip} [role="tab"]`)).toHaveCount(2);
 
@@ -163,6 +166,7 @@ test.describe('§editor', () => {
 
   test('save error is shown when the file is not writable', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-readonly.ts').click();
     await expect(tabByTitle(page, 'readonly.ts')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('editor-code')).toBeVisible();
@@ -193,6 +197,7 @@ test.describe('§editor', () => {
 
   test('disk-conflict banner: Reload takes the disk content when the buffer is dirty', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-conflict-reload.ts').click();
     await expect(tabByTitle(page, 'conflict-reload.ts')).toBeVisible({ timeout: 10_000 });
 
@@ -223,6 +228,7 @@ test.describe('§editor', () => {
 
   test('disk-conflict banner: Keep mine dismisses the banner and preserves local edits', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-conflict-keep.ts').click();
     await expect(tabByTitle(page, 'conflict-keep.ts')).toBeVisible({ timeout: 10_000 });
 
@@ -252,6 +258,7 @@ test.describe('§editor', () => {
 
   test('Cmd+F opens the CM6 search panel and highlights matches', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-search.ts').click();
     await expect(tabByTitle(page, 'search.ts')).toBeVisible({ timeout: 10_000 });
 
@@ -277,6 +284,7 @@ test.describe('§editor', () => {
     // it active — Playwright restarts the worker after any failure, so an earlier
     // failure would otherwise leave this tab closed. Clicking the tree row is
     // idempotent: it activates the tab whether or not it is already open.
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-search.ts').click();
     await expect(tabByTitle(page, 'search.ts')).toHaveAttribute('aria-selected', 'true', { timeout: 10_000 });
 
@@ -294,6 +302,7 @@ test.describe('§editor', () => {
 
   test('markdown file opens in Preview mode; Source toggles to CM6', async () => {
     const { page } = app;
+    await showFilesTree(page);
     await page.getByTestId('file-tree-row-notes.md').click();
     await expect(tabByTitle(page, 'notes.md')).toBeVisible({ timeout: 10_000 });
 
