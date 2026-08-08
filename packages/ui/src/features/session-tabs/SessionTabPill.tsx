@@ -29,6 +29,29 @@ interface SessionTabPillProps {
   onClose: (id: string) => void;
 }
 
+/**
+ * The active tab's outward-rounded bottom corner (Chrome's tab flare). One
+ * quarter-arc joins the tab's side border to the toolbar hairline; the filled
+ * path also erases the straight border segment and the hairline inside the
+ * flare, so the stroke reads as ONE continuous curve. Mirrored for the right
+ * side via scale-x.
+ */
+function TabFlare({ side }: { side: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 7 6"
+      className={cn(
+        'pointer-events-none absolute bottom-0 h-1.5 w-[7px]',
+        side === 'left' ? 'left-[-6px]' : 'right-[-6px] -scale-x-100',
+      )}
+    >
+      <path d="M7 0 H6 A6 6 0 0 1 0 6 H7 Z" className="fill-background" />
+      <path d="M6.5 0 A6 6 0 0 1 0 5.5" className="fill-none stroke-border" strokeWidth="1" />
+    </svg>
+  );
+}
+
 export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps) {
   return (
     <div
@@ -42,12 +65,18 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
           ? // Chrome-style joint: the active tab is a bordered, top-rounded box
             // anchored to the toolbar's bottom edge. Its opaque background sits
             // on top of the toolbar's inset bottom hairline, so the title/content
-            // divider visually OPENS into the tab; the side borders meet the
-            // hairline left and right of it.
-            'h-8 self-end rounded-t-md border border-b-0 border-border bg-background font-semibold text-foreground'
+            // divider visually OPENS into the tab; TabFlare curves the side
+            // borders outward into the hairline at both bottom corners.
+            'relative h-8 self-end rounded-t-md border border-b-0 border-border bg-background font-semibold text-foreground'
           : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
+      {tab.active && (
+        <>
+          <TabFlare side="left" />
+          <TabFlare side="right" />
+        </>
+      )}
       <span
         className={cn('size-1.5 shrink-0 rounded-full', !tab.projectId && 'bg-muted-foreground/40')}
         style={tab.projectId ? { background: projectColor(tab.projectId) } : undefined}
