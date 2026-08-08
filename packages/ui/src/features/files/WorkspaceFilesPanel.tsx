@@ -15,7 +15,6 @@
  */
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { onSurfaceIntent } from '@/store/surface-intents';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
@@ -35,17 +34,9 @@ export function WorkspaceFilesPanel() {
   const setOpen = useWorkspaceFilesPanel((s) => s.setOpen);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // The panel is a PICKER: opening a file (or a diff) means the pick is done,
-  // so it gets out of the way. Without this, the glass card sits over the
-  // just-opened tab's own header controls — and since a press on the panel
-  // body counts as "inside", light dismiss never fires and everything under
-  // the card is unreachable until Escape (caught by the e2e batch).
-  useEffect(() => {
-    if (!open) return;
-    return onSurfaceIntent((intent) => {
-      if (intent.type === 'open-file' || intent.type === 'open-diff') setOpen(false);
-    });
-  }, [open, setOpen]);
+  // Picker semantics (open-file/open-diff close the panel) live in the intent
+  // subscriber with the rest of the panel-vs-intent policy; this component
+  // owns only the DOM concern below.
 
   // Light dismiss — Escape, or a pointer outside the panel, any portal, and
   // the toggle buttons (strip + toolbar) that manage the flag themselves.

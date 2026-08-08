@@ -81,6 +81,12 @@ export function subscribeToFileIntents(): () => void {
       if (typeof line === 'number' && typeof character === 'number') {
         useEditorStore.getState().setRevealTarget(path, { line, character });
       }
+
+      // The floating Files panel is a PICKER — a completed pick closes it, or
+      // its glass card would sit over the just-opened tab's own header
+      // controls (a press on the card counts as "inside", so light dismiss
+      // can't save you; caught by the e2e batch).
+      useWorkspaceFilesPanel.getState().setOpen(false);
       return;
     }
 
@@ -100,6 +106,8 @@ export function subscribeToFileIntents(): () => void {
       useLayoutStore
         .getState()
         .openFileTab({ kind: 'diff', path, title, original, modified, scopeKey: activeScopeKey() }, 'preview');
+      // Same picker rule as open-file above.
+      useWorkspaceFilesPanel.getState().setOpen(false);
       return;
     }
 
