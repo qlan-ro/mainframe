@@ -18,7 +18,7 @@ import { ChatModelChip } from './ChatModelChip';
  * surface DRAG, while `data-drag-region` here hands the row to the OS as a
  * window drag region, so nothing is shared but the vocabulary.
  */
-const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] border-b border-border pr-1.5 pl-2';
+const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] pr-1.5 pl-2';
 
 /**
  * The chat surface's reposition grip. Emits an intent rather than reaching into

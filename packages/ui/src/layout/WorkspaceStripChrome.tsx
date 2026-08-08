@@ -15,8 +15,9 @@ import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { EditorGlyph } from './surface-icons';
 import { useSurfaceDragStore } from './use-surface-drag';
 
-/** Strip height, shared with the empty-state header so the two never drift. */
-export const STRIP_ROW = 'flex h-9 shrink-0 items-center border-b border-border';
+/** Strip height, shared with the empty-state header so the two never drift.
+ *  No bottom hairline — surface headers sit flush on their content. */
+export const STRIP_ROW = 'flex h-9 shrink-0 items-center';
 
 /**
  * Leading grip + surface glyph. Only the primary pane carries the grip: the
