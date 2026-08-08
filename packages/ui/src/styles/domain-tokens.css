@@ -1,17 +1,14 @@
 /* ════════════════════════════════════════════════════════════════════════
-   Legacy bridge — the v1 warm-chrome tokens the un-ported areas still need.
+   Domain tokens — Mainframe's app-specific palette and chrome, layered on top
+   of the v2 (radix-vega) token sheet.
 
-   The main entry renders the v2 shell on the v2 token layer. This sheet keeps
-   the un-ported areas usable — right colours, legible states — while each area
-   port deletes its slice. When the last port lands, this file is empty and gets
-   deleted.
+   This file was `legacy-bridge.css` until 2026-08-08. The bridge is DONE: the
+   v1 compat layer (duplicated primitives, generic colour aliases, the v1 type
+   scale) is fully deleted, MarkdownPreview — the last prose island — is on v2
+   rungs, and nothing here shims old code. What lives here now are first-class
+   design constants the shadcn contract has no names for.
 
-   THERE IS NO GENERIC v1 CODE LEFT (2026-08-07). The duplicated v1 primitives,
-   every generic colour token, and the whole v1 type scale are gone. What remains
-   is domain palette and app chrome that has no v2 equivalent — nothing here is
-   waiting on a "port" to delete it except MarkdownPreview's prose island.
-
-   The full remaining inventory, and why each survives:
+   The inventory, and why each family exists:
    - CONTENT PALETTES, pinned as a set: mf-code-* (+ mf-code-inline-fg),
      mf-cm-*, mf-term-*, mf-diff-*, mf-viewer-*, mf-find-tint/-active.
      Some members have no consumer of their own — they are pinned so a theme
@@ -20,9 +17,9 @@
      mf-auto-* + mf-accent-violet/-amber (automations step kinds),
      mf-directive-skill/-session, mf-provider-*-avatar.
    - APP CHROME with no v2 token: mf-scrim, mf-focus-ring (+ the @layer base
-     ring rule — v1-island elements still rely on it as their ONLY focus
-     indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring, the easings,
-     --radius-xs, and the twPulse keyframe.
+     ring rule — bare non-`data-slot` interactive elements rely on it as their
+     ONLY focus indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring,
+     the easings, --radius-xs, and the twPulse keyframe.
 
    Retired here, do NOT reintroduce — reach for the v2 token instead:
    mf-text-3 → muted-foreground · mf-chip → accent · mf-success → success ·
@@ -272,15 +269,15 @@
   --ease-signature: var(--ease-signature);
 }
 
-/* Keyboard focus ring — v1 islands ONLY. The v1 primitives all set
-   `focus-visible:outline-none` and rely on this rule for their ONLY focus
-   indicator, so it cannot be dropped. Every v2 element carries `data-slot`
-   and owns its focus treatment (ring utilities, or none by design — Radix
-   menu items are hover-FOCUSED divs with tabindex, and this rule was
-   painting the v1 blue ring on them whenever WebKit's focus-visible
-   heuristic leaned keyboard). [data-noring] opts out v1-island elements
-   with a focus treatment of their own. In @layer base (v1 had it unlayered)
-   so ring/shadow utilities keep winning. */
+/* Keyboard focus ring for BARE interactive elements (no `data-slot`): the
+   app-owned hand-rolled buttons/inputs (FileTree rows, tree header controls,
+   deep dialog bodies) rely on this rule as their ONLY focus indicator, so it
+   cannot be dropped. Every v2 primitive carries `data-slot` and owns its
+   focus treatment (ring utilities, or none by design — Radix menu items are
+   hover-FOCUSED divs with tabindex, and this rule was painting the blue ring
+   on them whenever WebKit's focus-visible heuristic leaned keyboard).
+   [data-noring] opts out elements with a focus treatment of their own. In
+   @layer base so ring/shadow utilities keep winning. */
 @layer base {
   [data-noring]:focus-visible {
     outline: none;

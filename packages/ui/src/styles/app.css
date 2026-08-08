@@ -7,7 +7,7 @@
    not about either design system.
    ════════════════════════════════════════════════════════════════════════ */
 @import '../v2/styles/globals.css';
-@import './legacy-bridge.css';
+@import './domain-tokens.css';
 
 /* Source detection roots at the entry sheet's directory (which would scan only
    styles/); the v2 sheet points at its own tree, this points at the rest. */
