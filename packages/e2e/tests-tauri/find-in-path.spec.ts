@@ -15,7 +15,7 @@
  * exclusively.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector          — reveals the Inspector (file tree)
+ *   main-toolbar-files              — toolbar toggle: shows/collapses the Files sidebar
  *   file-tree                       — tree root
  *   file-tree-row-${path}           — a tree row (file or folder)
  *   file-tree-find-in-file          — context-menu item on a file row
@@ -47,6 +47,7 @@ import { test, expect } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { showFilesTree } from '../helpers/tauri/page-objects.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 
@@ -87,8 +88,7 @@ test.describe('§find-in-path', () => {
     await createTauriChat(app.page, project.projectId, 'default');
 
     const { page } = app;
-    await page.getByTestId('main-toolbar-inspector').click();
-    await page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+    await showFilesTree(page);
     // Expand src/ once — it stays expanded for every test below (same page, no reload).
     await page.getByTestId('file-tree-row-src').click();
     await page.getByTestId('file-tree-row-src/alpha.ts').waitFor({ timeout: 10_000 });

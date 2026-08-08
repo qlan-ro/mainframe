@@ -1,6 +1,7 @@
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
+import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 
 const mockEmit = vi.fn();
@@ -95,12 +96,22 @@ describe('MainToolbar — theme toggle', () => {
 });
 
 describe('MainToolbar — files toggle', () => {
-  // Pressed means "the tree is showing", i.e. the inverse of the collapse flag.
+  // Pressed means "the tree is ON SCREEN": expanded AND the workspace surface
+  // lit. An expanded pref with the surface unlit still reads un-pressed.
   it.each([
-    { collapsed: false, pressed: 'true' },
-    { collapsed: true, pressed: 'false' },
-  ])('reflects workspaceFilesCollapsed=$collapsed as aria-pressed=$pressed', ({ collapsed, pressed }) => {
+    { collapsed: false, workspaceLit: true, pressed: 'true' },
+    { collapsed: true, workspaceLit: true, pressed: 'false' },
+    { collapsed: false, workspaceLit: false, pressed: 'false' },
+  ])('collapsed=$collapsed lit=$workspaceLit → aria-pressed=$pressed', ({ collapsed, workspaceLit, pressed }) => {
     useUiPrefs.setState({ workspaceFilesCollapsed: collapsed });
+    useLayoutStore.setState({
+      layout: {
+        top: workspaceLit ? ['chat', 'workspace'] : ['chat'],
+        bottom: null,
+        topFlex: {},
+        vFlex: { top: 1, bottom: 0.4 },
+      },
+    });
 
     renderToolbar();
 

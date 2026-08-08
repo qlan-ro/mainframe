@@ -6,7 +6,7 @@
  * the project's temp dir BEFORE the file tree first mounts, so the daemon's
  * initial GET /tree picks them up with no extra reload. Files are opened via
  * the file tree (`file-tree-row-${path}`) after revealing the Inspector
- * (`main-toolbar-inspector` — hidden by default), same as editor.spec.ts.
+ * (`showFilesTree`), same as editor.spec.ts.
  *
  * SEGMENTED TOGGLES ARE RADIX TABS NOW (2026-08-05 tab-body chrome pass). All three
  * viewer toggles share `features/viewers/Segmented.tsx`, which renders a Radix
@@ -18,7 +18,7 @@
  * activates a trigger on mouse-DOWN, which a real-browser `.click()` delivers.
  *
  * Testid reference (verified against packages/ui/src/features/viewers/):
- *   main-toolbar-inspector       — reveals the Inspector, whose only body is the file
+ *   main-toolbar-files           — shows the Files sidebar, whose body is the file
  *                                  tree since T5.3 (no `inspector-tab-files` any more)
  *   file-tree-row-${path}        — a tree row; opens the file on click
  *   WORKSPACE.strip              — a pane's tab-strip row (pane-id-keyed; see testids.ts)
@@ -60,6 +60,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { showFilesTree } from '../helpers/tauri/page-objects.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 
@@ -120,9 +121,8 @@ test.describe('§viewers', () => {
 
     await createTauriChat(app.page, project.projectId, 'default');
 
-    // Inspector (file tree) is hidden by default — reveal it once for the suite.
-    await app.page.getByTestId('main-toolbar-inspector').click();
-    await app.page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+    // The Files tree lives inside the workspace surface — show it once for the suite.
+    await showFilesTree(app.page);
   });
 
   test.afterAll(async () => {

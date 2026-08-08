@@ -36,24 +36,31 @@ describe('intent-subscriber — command intents', () => {
     expect(useUiPrefs.getState().sidebarVisible).toBe(!before);
   });
 
-  it('toggle-workspace-files collapses an expanded Files tree', () => {
-    useUiPrefs.setState({ workspaceFilesCollapsed: false });
-
-    emitSurfaceIntent({ type: 'toggle-workspace-files' });
-
-    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(true);
-  });
-
-  it('collapsing does NOT touch the layout store', () => {
-    // Only EXPANDING needs the surface; collapsing must not drag a hidden
-    // workspace into view (nor rewrite the layout at all).
+  it('toggle-workspace-files collapses a tree that is ON SCREEN, touching nothing else', () => {
+    useLayoutStore.setState({
+      layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    });
     useUiPrefs.setState({ workspaceFilesCollapsed: false });
     const layoutBefore = useLayoutStore.getState().layout;
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
+    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(true);
+    // Collapsing must not rewrite the layout (nor hide the workspace).
     expect(useLayoutStore.getState().layout).toBe(layoutBefore);
+  });
+
+  it('an expanded-but-invisible tree is SHOWN, never collapsed', () => {
+    // Pref says expanded, but the workspace surface is unlit — the tree is not
+    // on screen. The toggle means "show me the files": light the surface and
+    // keep the pref expanded, instead of collapsing a tree nobody can see.
+    useUiPrefs.setState({ workspaceFilesCollapsed: false });
     expect(isWorkspaceActive()).toBe(false);
+
+    emitSurfaceIntent({ type: 'toggle-workspace-files' });
+
+    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
+    expect(isWorkspaceActive()).toBe(true);
   });
 
   it('toggle-workspace-files expands the tree AND lights the workspace surface', () => {

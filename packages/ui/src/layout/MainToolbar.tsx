@@ -1,5 +1,6 @@
 import { Moon, ScanSearch, Search, Sun } from 'lucide-react';
 import { useTheme } from '@/store/theme';
+import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
@@ -51,6 +52,11 @@ export function MainToolbar({
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
   const filesCollapsed = useUiPrefs((s) => s.workspaceFilesCollapsed);
+  // Pressed = the tree is ON SCREEN: expanded AND its host surface lit. The
+  // intent handler applies the same rule, so the toggle never collapses an
+  // invisible tree (see intent-subscriber's toggle-workspace-files).
+  const workspaceLit = useLayoutStore((s) => s.layout.top.includes('workspace') || s.layout.bottom === 'workspace');
+  const filesOnScreen = !filesCollapsed && workspaceLit;
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
 
   return (
@@ -135,16 +141,13 @@ export function MainToolbar({
           <Toggle
             data-testid="main-toolbar-files"
             size="sm"
-            pressed={!filesCollapsed}
-            // Routed through the intent so expanding also lights the workspace
+            pressed={filesOnScreen}
+            // Routed through the intent so showing also lights the workspace
             // surface — an expanded tree inside a hidden surface shows nothing.
             onPressedChange={() => emitSurfaceIntent({ type: 'toggle-workspace-files' })}
             // Pressed chrome keys off the store flag, not data-[state=on] — the Hint's
             // TooltipTrigger asChild overwrites data-state with the tooltip's open-state.
-            className={cn(
-              'size-8 min-w-8 p-0',
-              !filesCollapsed ? 'bg-accent text-foreground' : 'text-muted-foreground',
-            )}
+            className={cn('size-8 min-w-8 p-0', filesOnScreen ? 'bg-accent text-foreground' : 'text-muted-foreground')}
           >
             <SidebarRightGlyph size={16} />
           </Toggle>

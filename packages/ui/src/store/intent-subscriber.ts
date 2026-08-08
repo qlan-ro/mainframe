@@ -146,11 +146,18 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'toggle-workspace-files') {
+      // The toggle means "is the tree ON SCREEN", not just the collapse pref:
+      // with the pref expanded but the workspace surface unlit, the tree is
+      // invisible — the click must show it (expand + light), never collapse it.
       const { workspaceFilesCollapsed, setWorkspaceFilesCollapsed } = useUiPrefs.getState();
-      const next = !workspaceFilesCollapsed;
-      setWorkspaceFilesCollapsed(next);
-      // Expanding a tree inside a hidden surface would show nothing.
-      if (!next) ensureWorkspaceActive();
+      const { layout } = useLayoutStore.getState();
+      const workspaceLit = layout.top.includes('workspace') || layout.bottom === 'workspace';
+      if (!workspaceFilesCollapsed && workspaceLit) {
+        setWorkspaceFilesCollapsed(true);
+      } else {
+        setWorkspaceFilesCollapsed(false);
+        ensureWorkspaceActive();
+      }
       return;
     }
   });

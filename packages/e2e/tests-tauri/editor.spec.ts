@@ -7,12 +7,12 @@
  * picks them up without a reload.
  *
  * Files are opened via the file tree (`file-tree-row-${path}`) after revealing
- * the Inspector (`main-toolbar-inspector` — hidden by default). Opening a file
+ * the Files sidebar (`showFilesTree` — the workspace surface's right-edge tree). Opening a file
  * lights the workspace surface itself (`layout.openFileTab` places it), so no
  * separate `surface-rail-workspace` toggle is needed.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector   — reveals the Inspector (file tree)
+ *   main-toolbar-files       — toolbar toggle: shows/collapses the Files sidebar
  *   file-tree                — tree root
  *   file-tree-row-${path}    — a tree row (file or folder), path is repo-relative
  *   WORKSPACE.strip            — a pane's tab-strip row (pane-id-keyed; see testids.ts)
@@ -48,6 +48,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { chmodSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { showFilesTree } from '../helpers/tauri/page-objects.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 
@@ -90,9 +91,8 @@ test.describe('§editor', () => {
 
     await createTauriChat(app.page, project.projectId, 'default');
 
-    // Inspector (file tree) is hidden by default — reveal it once for the suite.
-    await app.page.getByTestId('main-toolbar-inspector').click();
-    await app.page.getByTestId('file-tree').waitFor({ timeout: 10_000 });
+    // The Files tree lives inside the workspace surface — show it once for the suite.
+    await showFilesTree(app.page);
   });
 
   test.afterAll(async () => {

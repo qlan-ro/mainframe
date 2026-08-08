@@ -1,25 +1,26 @@
 /**
- * §files-tree — Inspector pane (Files tree) + FilePickerDialog specs.
+ * §files-tree — workspace Files sidebar (Files tree) + FilePickerDialog specs.
  *
  * UI-only, no AI turns — no recording needed. All tests run against a REST-seeded
  * git repo the test process itself mutates with plain `git` calls (array-arg
  * execFileSync, no shell interpolation).
  *
- * The Inspector is FILES-ONLY since the right-sidebar revamp (T5.3): the Changes
- * tab, the Files/Changes tab bar and `ChangesPanel` are deleted. The three change
- * scopes moved into the review modal's scope switcher — their coverage lives in
- * review-panel.spec.ts's "§review-panel — change scopes", not here. The
- * HEAD-vs-working diff those rows used to open is reached through the spotlight
- * `#` palette now (editor-diff.spec.ts).
+ * The tree lives INSIDE the workspace surface since the session-tabs rework
+ * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md): a local sidebar
+ * on the surface's right edge, expanded by default, collapsing to a thin rail.
+ * The app-level InspectorPane is deleted. Change-scope coverage lives in
+ * review-panel.spec.ts's "§review-panel — change scopes", not here.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-inspector   — toolbar toggle for the Inspector pane. A v2 `Toggle`
- *                              since the title-bar port; Radix Toggle still puts the
- *                              pressed state on `aria-pressed` (only `data-state` is
- *                              unusable — the wrapping `Hint`'s TooltipTrigger
- *                              overwrites it with the tooltip's open-state).
- *   inspector-pane           — Inspector root (mounted only when visible); its body is
- *                              the FileTree with no tab bar above it
+ *   main-toolbar-files       — toolbar toggle. Pressed = the tree is ON SCREEN
+ *                              (expanded AND workspace lit); clicking an
+ *                              un-pressed toggle expands + lights the workspace.
+ *                              Radix Toggle puts pressed state on `aria-pressed`
+ *                              (only `data-state` is unusable — the wrapping
+ *                              `Hint`'s TooltipTrigger overwrites it).
+ *   workspace-files-sidebar  — the expanded sidebar (inside workspace-surface)
+ *   workspace-files-rail     — the collapsed thin rail; workspace-files-expand re-opens
+ *   workspace-files-collapse — collapse control on the tree's header row
  *   file-tree                — FileTree root
  *   file-tree-row-<path>     — a file or folder row (folders toggle expand/collapse)
  *   file-tree-refresh        — refetch the tree
@@ -84,10 +85,10 @@ test.describe('§files-tree — no project', () => {
     await closeTauriApp(app);
   });
 
-  test('inspector shows the no-project empty state before any chat is active', async () => {
+  test('files sidebar shows the no-project empty state before any chat is active', async () => {
     const { page } = app;
-    await page.getByTestId('main-toolbar-inspector').click();
-    const pane = page.getByTestId('inspector-pane');
+    await page.getByTestId('main-toolbar-files').click();
+    const pane = page.getByTestId('workspace-files-sidebar');
     await expect(pane).toBeVisible({ timeout: 10_000 });
     await expect(pane.getByText('Open a session to browse its files.')).toBeVisible();
   });
@@ -105,9 +106,9 @@ test.describe('§files-tree — no project', () => {
   });
 });
 
-// ─── §files-tree — Inspector pane ───────────────────────────────────────────────
+// ─── §files-tree — workspace Files sidebar ──────────────────────────────────────
 
-test.describe('§files-tree — Inspector pane', () => {
+test.describe('§files-tree — workspace Files sidebar', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -136,23 +137,37 @@ test.describe('§files-tree — Inspector pane', () => {
     await closeTauriApp(app);
   });
 
-  // ── Inspector chrome ──────────────────────────────────────────────────────
+  // ── Sidebar chrome ────────────────────────────────────────────────────────
 
-  test('toggling the inspector from the toolbar shows and hides the pane', async () => {
+  test('the toolbar toggle shows the sidebar (lighting the workspace), collapses it to a rail, and the rail re-expands', async () => {
     const { page } = app;
-    const toggle = page.getByTestId('main-toolbar-inspector');
-    const pane = page.getByTestId('inspector-pane');
+    const toggle = page.getByTestId('main-toolbar-files');
+    const pane = page.getByTestId('workspace-files-sidebar');
 
+    // Boot: workspace unlit → the tree is not on screen, toggle un-pressed.
     await expect(pane).toHaveCount(0);
     await toggle.click();
     await expect(pane).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('workspace-surface')).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+    // Second click collapses to the thin rail (the workspace stays lit).
+    await toggle.click();
+    await expect(pane).toHaveCount(0);
+    await expect(page.getByTestId('workspace-files-rail')).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    // The rail's own button re-expands.
+    await page.getByTestId('workspace-files-expand').click();
+    await expect(pane).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the inspector body is the file tree, with no tab bar above it', async () => {
+  test('the sidebar body is the file tree, with no header row above it', async () => {
     const { page } = app;
     await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 10_000 });
-    // T5.3 left one surface with one job — the Files/Changes switch is gone.
+    // The tree's own project-name row is the header — collapse sits next to refresh.
+    await expect(page.getByTestId('workspace-files-collapse')).toBeVisible();
     await expect(page.getByTestId('inspector-tab-files')).toHaveCount(0);
     await expect(page.getByTestId('inspector-tab-changes')).toHaveCount(0);
     await expect(page.getByTestId('changes-panel')).toHaveCount(0);
