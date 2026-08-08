@@ -37,10 +37,15 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
       aria-selected={tab.active}
       onClick={() => onActivate(tab.id)}
       className={cn(
-        'group flex h-7 w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 rounded-md pr-1 pl-2 text-xs select-none',
+        'group flex w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 pr-1 pl-2 text-xs select-none',
         tab.active
-          ? 'bg-muted font-semibold text-foreground'
-          : 'font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+          ? // Chrome-style joint: the active tab is a bordered, top-rounded box
+            // anchored to the toolbar's bottom edge. Its opaque background sits
+            // on top of the toolbar's inset bottom hairline, so the title/content
+            // divider visually OPENS into the tab; the side borders meet the
+            // hairline left and right of it.
+            'h-8 self-end rounded-t-md border border-b-0 border-border bg-background font-semibold text-foreground'
+          : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
       <span
