@@ -77,7 +77,10 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
             // on top of the toolbar's inset bottom hairline, so the title/content
             // divider visually OPENS into the tab; TabFlare curves the side
             // borders outward into the hairline at both bottom corners.
-            'relative h-8 self-end rounded-t-lg border border-b-0 border-border bg-background font-semibold text-foreground'
+            // h-10 + pb-2 keep the CONTENT on the toolbar's 24px midline: the
+            // box spans y 8→48, the padded content area centers at 24 — the
+            // same line the centered inactive pills sit on.
+            'relative h-10 self-end rounded-t-lg border border-b-0 border-border bg-background pb-2 font-semibold text-foreground'
           : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
