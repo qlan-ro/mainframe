@@ -30,34 +30,25 @@ interface SessionTabPillProps {
 }
 
 /**
- * The active tab's outward-rounded bottom corner (Chrome's tab flare). One
- * quarter-arc joins the tab's side border to the toolbar hairline; the filled
- * path also erases the straight border segment and the hairline inside the
- * flare, so the stroke reads as ONE continuous curve. Mirrored for the right
- * side via scale-x.
- *
- * The geometry is EXACT-tangent, which is what makes the joint seamless: the
- * tab's border-left center sits at x=10.5 (svg is offset -10px, the border is
- * the 1px column at the tab's edge), the hairline center at y=9.5 (the
- * toolbar's bottom 1px row). A circle tangent to both lines has its center at
- * (1, 0) with r=9.5 — so the arc leaves the border VERTICALLY at (10.5, 0) and
- * lands HORIZONTALLY at (1, 9.5). Endpoints derived any other way make the
- * renderer bend the circle to fit and the lines visibly kink.
+ * The active tab's outward-rounded bottom corner (Chrome's tab flare): a
+ * FILLED quarter-arc pocket continuing the tab's solid shape into the
+ * title/content divider. Like Chrome's own tabs the shape has no outline —
+ * it reads purely by fill contrast against the tinted strip — so the flare
+ * is one path: everything right of the arc, down to the toolbar's bottom
+ * edge (covering the hairline row inside its footprint). Mirrored for the
+ * right side via scale-x.
  */
 function TabFlare({ side }: { side: 'left' | 'right' }) {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 11 10"
+      viewBox="0 0 10 10"
       className={cn(
-        'pointer-events-none absolute bottom-0 h-2.5 w-[11px]',
+        'pointer-events-none absolute bottom-0 size-2.5',
         side === 'left' ? 'left-[-10px]' : 'right-[-10px] -scale-x-100',
       )}
     >
-      {/* Erase the tab's straight border and the hairline inside the flare. */}
-      <path d="M11 0 H10.5 A9.5 9.5 0 0 1 1 9.5 H0 V10 H11 Z" className="fill-background" />
-      {/* The flare stroke: down the border line, around, out along the hairline. */}
-      <path d="M10.5 0 A9.5 9.5 0 0 1 1 9.5 L0 9.5" className="fill-none stroke-border" strokeWidth="1" />
+      <path d="M10 0 A10 10 0 0 1 0 10 H10 Z" className="fill-background" />
     </svg>
   );
 }
@@ -72,16 +63,15 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
       className={cn(
         'group flex w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 pr-1 pl-2 text-xs select-none',
         tab.active
-          ? // Chrome-style joint: the active tab is a bordered, top-rounded box
-            // anchored to the toolbar's bottom edge. Its opaque background sits
-            // on top of the toolbar's inset bottom hairline, so the title/content
-            // divider visually OPENS into the tab; TabFlare curves the side
-            // borders outward into the hairline at both bottom corners.
-            // h-10 + pb-2 keep the CONTENT on the toolbar's 24px midline: the
-            // box spans y 8→48, the padded content area centers at 24 — the
-            // same line the centered inactive pills sit on.
-            'relative h-10 self-end rounded-t-xl border border-b-0 border-border bg-background pb-2 font-semibold text-foreground'
-          : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+          ? // Chrome-style tab: a solid bg-background shape (no outline)
+            // anchored to the toolbar's bottom edge, sitting on the tinted
+            // strip and covering the hairline so it merges into the content
+            // below; TabFlare rounds the bottom corners outward. h-9 + pb-3
+            // keep the CONTENT on the toolbar's 24px midline: the box spans
+            // y 12→48, the 12px-bottom-padded content area centers at 24 —
+            // the same line the centered inactive pills sit on.
+            'relative h-9 self-end rounded-t-xl bg-background pb-3 font-semibold text-foreground'
+          : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground',
       )}
     >
       {tab.active && (

@@ -66,7 +66,10 @@ export function MainToolbar({
       // The hairline is an inset shadow, not border-b: a border eats 1px of the
       // content box and shifts the centered row to a 23.5px midline, off the
       // sidebar header's 24px.
-      className="flex h-12 shrink-0 items-center gap-2 bg-background pr-3 [box-shadow:inset_0_-1px_var(--border)]"
+      // bg-sidebar (not bg-background): the title bar is a tinted strip so the
+      // active session tab — a FILLED bg-background shape, Chrome-fashion —
+      // reads by contrast against it and merges into the content below.
+      className="flex h-12 shrink-0 items-center gap-2 bg-sidebar pr-3 [box-shadow:inset_0_-1px_var(--border)]"
     >
       {/* Left: sidebar affordance only (identity left the chrome). */}
       <div
