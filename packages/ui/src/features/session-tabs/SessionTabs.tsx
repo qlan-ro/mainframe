@@ -59,11 +59,11 @@ export function SessionTabs() {
 
   return (
     <div data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
-      {/* px-2 leaves room for the active tab's 6px corner flares at the strip's
-          edges — the scroll container would clip them under the old px-1. */}
+      {/* px-2.5 leaves room for the active tab's 10px corner flares at the
+          strip's edges — the scroll container would clip them otherwise. */}
       <div
         data-no-drag
-        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-2 [scrollbar-width:none]"
+        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-2.5 [scrollbar-width:none]"
       >
         {tabs.map((tab) => (
           <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} />

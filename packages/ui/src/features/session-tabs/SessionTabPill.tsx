@@ -37,27 +37,27 @@ interface SessionTabPillProps {
  * side via scale-x.
  *
  * The geometry is EXACT-tangent, which is what makes the joint seamless: the
- * tab's border-left center sits at x=8.5 (svg is offset -8px, the border is
- * the 1px column at the tab's edge), the hairline center at y=7.5 (the
+ * tab's border-left center sits at x=10.5 (svg is offset -10px, the border is
+ * the 1px column at the tab's edge), the hairline center at y=9.5 (the
  * toolbar's bottom 1px row). A circle tangent to both lines has its center at
- * (1, 0) with r=7.5 — so the arc leaves the border VERTICALLY at (8.5, 0) and
- * lands HORIZONTALLY at (1, 7.5). Endpoints derived any other way make the
+ * (1, 0) with r=9.5 — so the arc leaves the border VERTICALLY at (10.5, 0) and
+ * lands HORIZONTALLY at (1, 9.5). Endpoints derived any other way make the
  * renderer bend the circle to fit and the lines visibly kink.
  */
 function TabFlare({ side }: { side: 'left' | 'right' }) {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 9 8"
+      viewBox="0 0 11 10"
       className={cn(
-        'pointer-events-none absolute bottom-0 h-2 w-[9px]',
-        side === 'left' ? 'left-[-8px]' : 'right-[-8px] -scale-x-100',
+        'pointer-events-none absolute bottom-0 h-2.5 w-[11px]',
+        side === 'left' ? 'left-[-10px]' : 'right-[-10px] -scale-x-100',
       )}
     >
       {/* Erase the tab's straight border and the hairline inside the flare. */}
-      <path d="M9 0 H8.5 A7.5 7.5 0 0 1 1 7.5 H0 V8 H9 Z" className="fill-background" />
+      <path d="M11 0 H10.5 A9.5 9.5 0 0 1 1 9.5 H0 V10 H11 Z" className="fill-background" />
       {/* The flare stroke: down the border line, around, out along the hairline. */}
-      <path d="M8.5 0 A7.5 7.5 0 0 1 1 7.5 L0 7.5" className="fill-none stroke-border" strokeWidth="1" />
+      <path d="M10.5 0 A9.5 9.5 0 0 1 1 9.5 L0 9.5" className="fill-none stroke-border" strokeWidth="1" />
     </svg>
   );
 }
@@ -80,7 +80,7 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
             // h-10 + pb-2 keep the CONTENT on the toolbar's 24px midline: the
             // box spans y 8→48, the padded content area centers at 24 — the
             // same line the centered inactive pills sit on.
-            'relative h-10 self-end rounded-t-lg border border-b-0 border-border bg-background pb-2 font-semibold text-foreground'
+            'relative h-10 self-end rounded-t-xl border border-b-0 border-border bg-background pb-2 font-semibold text-foreground'
           : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
