@@ -11,9 +11,13 @@ import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
-vi.mock('@/lib/api/git', () => ({ getGitBranch: vi.fn().mockResolvedValue({ branch: null }) }));
-vi.mock('@/features/git/BranchPopover', () => ({
-  BranchPopover: (props: { children?: React.ReactNode }) => <>{props.children}</>,
+// Neither the tab strip (aui runtime) nor the branch chip (live git read) is
+// this suite's subject; both have their own suites.
+vi.mock('@/features/session-tabs/SessionTabs', () => ({
+  SessionTabs: () => <div data-testid="mock-session-tabs" />,
+}));
+vi.mock('@/features/git/BranchChip', () => ({
+  BranchChip: () => <div data-testid="mock-branch-chip" />,
 }));
 
 import { MainToolbar } from '../MainToolbar';
@@ -34,14 +38,7 @@ beforeEach(() => {
 describe('MainToolbar — Setup Advisor open action arity', () => {
   it('clicking automation-recommender-open lands the section on recommendations, not the click event', () => {
     render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-        port={31415}
-      />,
+      <MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" port={31415} />,
     );
 
     const button = screen.getByTestId('automation-recommender-open');
@@ -55,14 +52,7 @@ describe('MainToolbar — Setup Advisor open action arity', () => {
 
   it('keeps the automation-recommender-open testid on the toolbar button', () => {
     render(
-      <MainToolbar
-        leadingInset={0}
-        sidebarRendered={true}
-        onExpandSidebar={vi.fn()}
-        projectName="mainframe"
-        projectId="p1"
-        port={31415}
-      />,
+      <MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" port={31415} />,
     );
 
     expect(screen.getByTestId('automation-recommender-open').tagName).toBe('BUTTON');

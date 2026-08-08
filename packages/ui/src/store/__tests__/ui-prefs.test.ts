@@ -18,7 +18,7 @@ beforeEach(() => {
   // Reset store to declared defaults between tests.
   useUiPrefs.setState({
     sidebarVisible: true,
-    inspectorVisible: false,
+    workspaceFilesCollapsed: false,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
@@ -32,7 +32,8 @@ describe('useUiPrefs defaults', () => {
   it('has the documented defaults', () => {
     const s = useUiPrefs.getState();
     expect(s.sidebarVisible).toBe(true);
-    expect(s.inspectorVisible).toBe(false);
+    // The workspace Files tree ships expanded.
+    expect(s.workspaceFilesCollapsed).toBe(false);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
     expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
@@ -107,9 +108,11 @@ describe('useUiPrefs actions', () => {
     expect(useUiPrefs.getState().sidebarVisible).toBe(true);
   });
 
-  it('toggleInspector flips inspectorVisible', () => {
-    useUiPrefs.getState().toggleInspector();
-    expect(useUiPrefs.getState().inspectorVisible).toBe(true);
+  it('setWorkspaceFilesCollapsed records the Files-tree collapse both ways', () => {
+    useUiPrefs.getState().setWorkspaceFilesCollapsed(true);
+    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(true);
+    useUiPrefs.getState().setWorkspaceFilesCollapsed(false);
+    expect(useUiPrefs.getState().workspaceFilesCollapsed).toBe(false);
   });
 
   it('setSidebarWidth stores a clamped width', () => {
@@ -167,16 +170,40 @@ describe('useUiPrefs persistence', () => {
       [
         'collapsedSidebarSections',
         'dontWarnOnTuningChange',
-        'inspectorVisible',
         'rightClickHintDismissed',
         'sessionPanelCollapsed',
         'sessionPanelSections',
         'sidebarVisible',
         'sidebarWidth',
+        'workspaceFilesCollapsed',
       ].sort(),
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
+  });
+});
+
+describe('useUiPrefs v2 → v3 migration', () => {
+  it('strips the retired inspectorVisible key from a v2 payload', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { sidebarWidth: 300, inspectorVisible: true },
+        version: 2,
+      }),
+    );
+    const fresh = await reloadStore();
+    // Proves hydration actually ran, so the next assertions aren't vacuous.
+    expect(fresh.getState().sidebarWidth).toBe(300);
+    // v3 retired the right InspectorPane; the Files tree has its own flag now.
+    const state = fresh.getState() as unknown as Record<string, unknown>;
+    expect(state.inspectorVisible).toBeUndefined();
+    expect(fresh.getState().workspaceFilesCollapsed).toBe(false);
+    // ...and it never gets written back out on the next persist.
+    fresh.getState().setSidebarWidth(320);
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.inspectorVisible).toBeUndefined();
+    expect(parsed.state.workspaceFilesCollapsed).toBe(false);
   });
 });
 
