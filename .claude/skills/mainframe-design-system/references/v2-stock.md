@@ -166,7 +166,7 @@ Tabs/Toggle/ToggleGroup/Badge/Alert/Hint/Button). New stock primitives added for
 ## Title bar (2026-08-05 port)
 
 MainToolbar + SurfaceRail + UpdatePill + ToolbarLaunchControls + the whole `features/git` branch
-popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (SurfaceHost/InspectorPane
+popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (SurfaceHost
 slices remain). Conventions from the pass:
 
 - **Menu-shaped = native `DropdownMenu`, no exceptions** (user decision 2026-08-05). A floating
@@ -568,7 +568,7 @@ just the file count.
 |---|---|
 | `tooltip` | `hint`, `truncated-with-tooltip`, context-panel (2), tasks (2), chat's `link-with-preview` |
 | `truncated-with-tooltip` | chat's `UserAttachments`, context-panel, files (2), settings/About |
-| `count-badge` | context-panel (2), files `InspectorPane`, tasks (2) |
+| `count-badge` | tasks (2) — context-panel and `InspectorPane` consumers died with their surfaces |
 | `hint` | files (2), tasks `TaskCard` |
 | `popover` | **chat only** — `BackgroundActivityBar`, `WorkflowActivityPopover`, `WorkflowLauncherRow` |
 | `dropdown-menu` | chat's `UrlChip`, tasks' `GitHubSyncControl` |
@@ -581,7 +581,9 @@ just the file count.
 `menu-variants.ts` outlives `menu.tsx` exactly as predicted. `project-chip` and
 `truncated-with-tooltip` emit **no** bridge tokens, so they are duplication (v2 has its own
 `truncated-with-tooltip`) rather than bridge debt — cheap to leave, cheap to kill with their
-surfaces. MarkdownPreview and InspectorPane remain the sanctioned v1 islands.
+surfaces. MarkdownPreview remains the sanctioned v1 island (InspectorPane was
+deleted by the 2026-08-08 session-tabs/workspace-files rework — the tree lives
+inside the workspace surface now).
 
 **v1 `popover.tsx` was NOT converted in this pass, deliberately** — it went on 2026-08-07 instead,
 once the sweep could be verified against the running app. The reasoning recorded here at the time

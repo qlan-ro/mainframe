@@ -10,7 +10,7 @@
  * the boot-stable id set back on every change. Zero-session boots never
  * hydrate — with nothing in the list there is nothing to restore or persist.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionTabsStore } from './store';
 import { SESSION_TABS_STORAGE_KEY, persistTabIds, restoreTabIds, validTabIds } from './tabs-model';
@@ -52,10 +52,18 @@ export function useSessionTabsSync(): void {
     pruneTo(validTabIds(items, mainThreadId));
   }, [hydrated, items, mainThreadId, pruneTo]);
 
+  // `items` changes identity on every stream tick (title/status updates), so
+  // this effect runs hot while a chat is running — skip the write unless the
+  // MAPPED id set actually changed.
+  const lastWrittenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated) return;
+    const ids = persistTabIds(tabIds, items);
+    const key = ids.join('\0');
+    if (key === lastWrittenRef.current) return;
     try {
-      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids: persistTabIds(tabIds, items) }));
+      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids }));
+      lastWrittenRef.current = key;
     } catch {
       /* expected — storage may be unavailable; tabs simply don't survive the boot */
     }
