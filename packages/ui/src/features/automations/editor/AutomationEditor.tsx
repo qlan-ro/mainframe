@@ -17,11 +17,11 @@
  * matches, rather than falling back to an arbitrary "first project in the
  * DB".
  */
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, TriangleAlert, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import type { AutomationCreateInput } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';

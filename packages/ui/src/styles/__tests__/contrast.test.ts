@@ -44,7 +44,7 @@ const WCAG_MIN = 4.49;
    3.65:1 — macOS system blue cannot reach AA-normal-text with white ink. */
 const UI_COMPONENT_MIN = 3.0;
 
-const V2_SHEET = 'v2/styles/globals.css';
+const V2_SHEET = 'styles/globals.css';
 const BRIDGE_SHEET = 'styles/domain-tokens.css';
 
 function readSheet(relative: string): string {

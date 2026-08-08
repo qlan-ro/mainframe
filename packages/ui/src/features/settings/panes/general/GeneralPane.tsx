@@ -3,8 +3,8 @@ import type { UpdateChannel } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { AppearanceControls, PickerRow } from './AppearanceControls';
-import { Input } from '@v2/components/ui/input';
-import { Button } from '@v2/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 const UPDATE_CHANNEL_OPTIONS: { id: UpdateChannel; label: string }[] = [
   { id: 'stable', label: 'Stable' },

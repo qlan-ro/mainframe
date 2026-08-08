@@ -10,13 +10,13 @@
  */
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
-import { SidebarInset, SidebarProvider } from '@v2/components/ui/sidebar';
-import { DirectoryPickerModal } from '@v2/features/files/DirectoryPickerModal';
-import { FindInPathModal } from '@v2/features/files/FindInPathModal';
-import { SpotlightPalette } from '@v2/features/palette/SpotlightPalette';
-import { ArchiveWorktreeDialog } from '@v2/features/sessions/ArchiveWorktreeDialog';
-import { SessionSidebar } from '@v2/features/sessions/SessionSidebar';
-import { TagPopoverHost } from '@v2/features/sessions/TagPopoverHost';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { DirectoryPickerModal } from '@/features/files/DirectoryPickerModal';
+import { FindInPathModal } from '@/features/files/FindInPathModal';
+import { SpotlightPalette } from '@/features/palette/SpotlightPalette';
+import { ArchiveWorktreeDialog } from '@/features/sessions/ArchiveWorktreeDialog';
+import { SessionSidebar } from '@/features/sessions/SessionSidebar';
+import { TagPopoverHost } from '@/features/sessions/TagPopoverHost';
 import { FilePickerDialog } from '../features/files/FilePickerDialog';
 import { TasksModalHost } from '../features/tasks/TasksModalHost';
 import { AutomationsHost } from '../features/automations/AutomationsHost';

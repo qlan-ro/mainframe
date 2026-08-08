@@ -16,8 +16,8 @@
  * ErrorBody — the destructive-tinted pre shared by ReadFileCard and SearchCard.
  */
 import React from 'react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { cardStyle } from './chrome';
 
 // ---------------------------------------------------------------------------

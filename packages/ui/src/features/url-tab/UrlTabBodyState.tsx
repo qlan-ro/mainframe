@@ -5,7 +5,7 @@
  */
 import type { ReactNode, RefObject } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import type { UrlTabTarget } from './resolve-url-target';
 
 interface UrlTabBodyStateProps {

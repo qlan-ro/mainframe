@@ -20,7 +20,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import type { BackgroundActivityTask, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 let mockTasks: Record<string, BackgroundActivityTask> = {};
 let mockChatId = 'chat-1';

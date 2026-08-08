@@ -1,7 +1,7 @@
 import type { SurfaceId } from '@/store/layout';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
-import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
-import { Hint } from '@v2/components/ui/hint';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { ChatGlyph, EditorGlyph } from './surface-icons';
 

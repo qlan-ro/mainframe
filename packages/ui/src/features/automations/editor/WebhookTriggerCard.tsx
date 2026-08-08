@@ -27,7 +27,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Copy, Globe, KeyRound } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import type { WebhookRegistration, WebhookTrigger } from '../contract';

@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import { Globe } from 'lucide-react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import { normalizePreviewUrl } from '@/features/preview/normalize-url';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 

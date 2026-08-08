@@ -13,9 +13,9 @@
  * one-off field without first destroying the recurring pattern in the draft.
  */
 import { useState } from 'react';
-import { Input } from '@v2/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
-import { Switch } from '@v2/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type { SchedulePattern, ScheduleTrigger } from '../contract';
 import { summarizeTrigger } from '../domain/trigger-summary';

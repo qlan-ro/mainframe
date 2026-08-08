@@ -18,9 +18,9 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { MessageCircleQuestion, Check } from 'lucide-react';
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
-import { Badge } from '@v2/components/ui/badge';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { StatusDot } from '../shared';
 import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 

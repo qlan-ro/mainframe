@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const openExternal = vi.fn(() => Promise.resolve());
 vi.mock('@/lib/host', () => ({ useHost: () => ({ shell: { openExternal } }) }));

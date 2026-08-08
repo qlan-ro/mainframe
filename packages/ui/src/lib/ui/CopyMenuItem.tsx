@@ -8,7 +8,7 @@
  * image menu would otherwise carry three copies of this markup.
  */
 import { AlertTriangle, Check, Copy } from 'lucide-react';
-import { ContextMenuItem } from '@v2/components/ui/context-menu';
+import { ContextMenuItem } from '@/components/ui/context-menu';
 import type { CopyStatus } from '@/lib/ui/use-menu-copy-feedback';
 
 export interface CopyMenuItemProps {

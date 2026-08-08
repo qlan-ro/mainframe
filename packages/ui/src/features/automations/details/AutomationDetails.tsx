@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, Pencil, Play, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';

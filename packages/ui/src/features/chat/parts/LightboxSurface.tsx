@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, type MouseEvent, type ReactNode } from 'react';
-import { DialogContent, DialogTitle } from '@v2/components/ui/dialog';
+import { DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ImageContextMenu } from './ImageContextMenu';
 
 interface LightboxSurfaceProps {

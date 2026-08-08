@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ComponentProps } from 'react';
 import { MarkdownEditorTab } from '../MarkdownEditorTab';
 import { MarkdownPreview } from '../MarkdownPreview';

@@ -19,7 +19,7 @@
  */
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { variableNamesInScope } from '@qlan-ro/mainframe-types';
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import type { SetVariableStep } from '../contract';
 import { textToChipText } from '../domain/chip-text-convert';
 import type { TokenDescriptor } from '../domain/tokens';

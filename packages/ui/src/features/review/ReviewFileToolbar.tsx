@@ -4,8 +4,8 @@
  * filename · dir/ · +X −Y · spacer · "Open in workspace" · "Viewed" toggle.
  */
 import { Check, ExternalLink } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Toggle } from '@v2/components/ui/toggle';
+import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
 
 interface ReviewFileToolbarProps {
   file: string;

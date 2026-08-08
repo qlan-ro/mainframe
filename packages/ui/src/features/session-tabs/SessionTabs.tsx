@@ -15,8 +15,8 @@
  */
 import { Plus } from 'lucide-react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';

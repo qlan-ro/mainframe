@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Byte formatter (shared with the collapse state)

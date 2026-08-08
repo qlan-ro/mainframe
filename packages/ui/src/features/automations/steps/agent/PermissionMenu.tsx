@@ -16,7 +16,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import type { AskAgentStep } from '../../contract';
 import { EXECUTION_MODES } from '../../contract';
 import { ChipButton } from './ChipButton';

@@ -11,7 +11,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider, setHostForTesting, resetHostForTesting } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { useLayoutStore } from '@/store/layout';

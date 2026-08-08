@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, ShieldIcon, TerminalIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
 import { buildPermissionResponse } from './build-control-response';

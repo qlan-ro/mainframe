@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@v2/components/ui/dialog';
-import { Input } from '@v2/components/ui/input';
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 export interface RenameBranchDialogProps {
   open: boolean;

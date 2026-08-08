@@ -1,8 +1,8 @@
 import type { AdapterModel, EffortLevel, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES } from '@qlan-ro/mainframe-types';
 import { effortOptions, visibleFeatures } from '../../../../lib/model-tuning';
-import { Switch } from '@v2/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const INHERIT = '__inherit__';
 

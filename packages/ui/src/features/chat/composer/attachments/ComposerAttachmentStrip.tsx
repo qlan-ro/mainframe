@@ -26,9 +26,9 @@ import {
   AttachmentMedia,
   AttachmentTitle,
   AttachmentTrigger,
-} from '@v2/components/ui/attachment';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+} from '@/components/ui/attachment';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
 import { extTint, fileExtMeta } from '../../messages/file-ext-colors';
 

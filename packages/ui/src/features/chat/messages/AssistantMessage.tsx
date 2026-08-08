@@ -12,7 +12,7 @@
  */
 import { useMemo } from 'react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
-import { Message, MessageContent, MessageFooter } from '@v2/components/ui/message';
+import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';

@@ -4,7 +4,7 @@
  * their own transiently-editable `key`, so — like `ConditionRow` —
  * `FormFieldRow`s are index-keyed via `testId`.
  */
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-react';
 import type { AskMeStep, AutomationFormField } from '../contract';
 import { FailureToggle } from './FailureToggle';

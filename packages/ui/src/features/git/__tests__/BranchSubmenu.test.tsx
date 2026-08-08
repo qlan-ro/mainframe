@@ -29,7 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import { BranchSubmenu, type BranchRowActions, type BranchSubmenuProps } from '../BranchSubmenu';
 
 function makeActions(overrides: Partial<BranchRowActions> = {}): BranchRowActions {

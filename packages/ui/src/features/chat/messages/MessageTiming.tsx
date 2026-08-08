@@ -10,8 +10,8 @@
  */
 import type { FC } from 'react';
 import { useMessageTiming } from '@assistant-ui/react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
-import { cn } from '@v2/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useMainframeMeta } from '../view-model/message-meta';
 
 function formatMs(ms: number): string {

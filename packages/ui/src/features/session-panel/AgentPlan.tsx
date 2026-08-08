@@ -9,7 +9,7 @@
  * against this file.
  *
  * FETCHED, NOT CLI-INSTALLED. `shadcn@4.16.1 add` cannot run against
- * `src/v2/components.json`: the CLI now opens with an interactive "select a
+ * `packages/ui/components.json`: the CLI now opens with an interactive "select a
  * component library" prompt this config predates, and answering it rewrites the
  * config and pulls a base-library dependency set. Same trap, same fallback the
  * chat-kit port took. The `@assistant-ui` registry entry in `components.json`
@@ -24,7 +24,7 @@
  *
  * Three deviations from upstream, all mechanical:
  *   1. `"use client"` dropped — no file in the v2 tree carries it (`rsc: false`).
- *   2. `cn` comes from `@v2/lib/utils`, this tree's alias for `@/lib/utils`.
+ *   2. `cn` comes from `@/lib/utils`, this tree's alias for `@/lib/utils`.
  *   3. `mono` is inlined instead of imported from `./surfaces`, verbatim.
  *
  * One behavioral fork, the reason this file exists: a `Collapsible` wraps the
@@ -43,8 +43,8 @@
  * Those are the render the design approved — do not "correct" them to the scale.
  */
 import { CheckIcon, ChevronDown, Loader2Icon } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 /** Upstream's `mono` recipe from `elements-surfaces`, inlined. */
 const mono = 'font-mono text-[11px] tracking-tight';

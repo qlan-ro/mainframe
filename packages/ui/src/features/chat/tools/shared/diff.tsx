@@ -9,7 +9,7 @@
 import React from 'react';
 import { structuredPatch } from 'diff';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Pure math helpers (no React)

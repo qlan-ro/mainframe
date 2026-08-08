@@ -27,7 +27,7 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
-} from '@v2/components/ui/context-menu';
+} from '@/components/ui/context-menu';
 import type { LspProviders, LspLocation } from '@/lib/lsp';
 import { buildReferenceForCm, writeToClipboard } from '@/lib/editor/copy-reference';
 import { emitSurfaceIntent } from '@/store/surface-intents';

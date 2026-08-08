@@ -33,7 +33,7 @@ import type { Todo } from '@/lib/api/todos';
 // Imports after any mocks
 // ---------------------------------------------------------------------------
 import { TaskListRow } from '../TaskListRow';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Fixtures

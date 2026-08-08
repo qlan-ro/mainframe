@@ -26,7 +26,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AdapterInfo, Chat } from '@qlan-ro/mainframe-types';
 import { useAdaptersStore } from '@/store/adapters';
 import { useUiPrefs } from '@/store/ui-prefs';

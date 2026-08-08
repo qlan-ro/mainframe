@@ -13,7 +13,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SessionAttachment } from '@qlan-ro/mainframe-types';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const getAttachment = vi.fn();
 vi.mock('@/lib/api/attachments', () => ({ getAttachment: (...a: unknown[]) => getAttachment(...a) }));

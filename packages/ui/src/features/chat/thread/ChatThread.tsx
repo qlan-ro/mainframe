@@ -10,8 +10,8 @@
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { AlertTriangleIcon, ArrowDownIcon } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@v2/components/ui/alert';
-import { Button } from '@v2/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { boundedMessageComponents } from '../messages/bounded-messages';
 import { Composer } from '../composer/Composer';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';

@@ -1,14 +1,15 @@
-# The v2 tree — stock shadcn, not warm chrome
+# The component-tree conventions — stock shadcn (radix-vega), not warm chrome
 
-`packages/ui/src/v2` started as a **parallel clone** of the sidebar/shell rebuilt on the shadcn
-**radix-vega** preset. Since the 2026-08 shell integration it is **the main app's design system**: the
-`index.html` entry styles itself with `src/styles/app.css`, which imports the v2 token layer plus
-`legacy-bridge.css` (the `--mf-*` vars, `mf-*` mappings, v1 type rungs and keyframes the un-ported v1
-areas still speak). Everything in `SKILL.md` about `mf-*` tokens, window styles and the 8-rung type scale
-describes those **legacy islands only**; the compressed spacing scale is gone entirely.
+> **2026-08-09: the v2 tree IS the tree.** `src/v2/` folded into `src/` and the `@v2` alias is
+> deleted — read every `src/v2/...` / `@v2/...` path below as `src/...` / `@/...`. The bridge is
+> gone too: `legacy-bridge.css` graduated to `styles/domain-tokens.css` (first-class domain
+> palettes and app chrome only; no aliases, no v1 type scale). The history below is kept because
+> the verdicts and traps in it are still the live conventions.
 
-The v2 tokens live in `packages/ui/src/v2/styles/globals.css` (kept preset-pure — app/host concerns go in
-`app.css`, legacy compat in `legacy-bridge.css`).
+"v2" started as a **parallel clone** of the sidebar/shell rebuilt on the shadcn **radix-vega**
+preset, and since the 2026-08 shell integration it is **the app's design system**: the `index.html`
+entry styles itself with `src/styles/app.css`, which imports the token layer
+(`src/styles/globals.css`, kept preset-pure) plus `domain-tokens.css`.
 
 ## Boundaries
 

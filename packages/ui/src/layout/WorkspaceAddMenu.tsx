@@ -14,7 +14,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Eye, FileCode, Globe, Plus, Terminal } from 'lucide-react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,8 +22,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
-import { Hint } from '@v2/components/ui/hint';
+} from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 /** A row's trailing kind hint ("zsh" / "preview" / "process") — not a keyboard

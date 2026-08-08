@@ -25,11 +25,11 @@ import {
   AttachmentMedia,
   AttachmentTitle,
   AttachmentTrigger,
-} from '@v2/components/ui/attachment';
+} from '@/components/ui/attachment';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { extTint, fileExtMeta } from './file-ext-colors';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
-import { TruncatedWithTooltip } from '@v2/components/ui/truncated-with-tooltip';
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

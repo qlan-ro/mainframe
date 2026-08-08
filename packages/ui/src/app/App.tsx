@@ -27,7 +27,7 @@ import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatu
 import { ConnectionOverlay } from './ConnectionOverlay';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
-import { Toaster } from '@v2/components/ui/sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { ToastDetailsHost } from '@/components/overlays/ToastDetailsHost';
 
 /**

@@ -1,13 +1,13 @@
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
-import { Label } from '@v2/components/ui/label';
+} from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
 
 type ModelOption = { id: string; label: string; description?: string };
 

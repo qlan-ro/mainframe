@@ -16,9 +16,9 @@
  * data-testid: session-tab-<id> / session-tab-close-<id>.
  */
 import { X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 
 export interface SessionTabEntry {

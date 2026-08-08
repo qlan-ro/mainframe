@@ -7,9 +7,9 @@
  * the kit's state model is a `<form>` whose only value surface is FormData, and
  * its Skip is per-question while this gate's Skip answers the whole request once.
  */
-import { Input } from '@v2/components/ui/input';
-import { Checkbox } from '@v2/components/ui/checkbox';
-import { cn } from '@v2/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 import { OTHER } from './answers';
 import type { AskQuestion } from './answers';
 

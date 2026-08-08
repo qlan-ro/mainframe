@@ -9,9 +9,9 @@
  *   workspace-pane-close-<paneId> — un-split (secondary pane)
  */
 import { FolderTree, GripVertical, LayoutPanelLeft, X } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { EditorGlyph } from './surface-icons';

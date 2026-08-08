@@ -24,7 +24,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
   useChatExtras: () => ({ state: { chatConfig: { permissionMode: 'acceptEdits' } } }),

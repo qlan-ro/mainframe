@@ -12,12 +12,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Zap } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
-import { Button } from '@v2/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@v2/components/ui/dialog';
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
-import { Textarea } from '@v2/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@v2/components/ui/toggle-group';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useTodosStore } from './use-todos-store';
 import type { TodoType, TodoPriority } from '@/lib/api/todos';
 

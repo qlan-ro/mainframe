@@ -10,7 +10,7 @@
  * "still fetching," "the fetch failed," and "genuinely no automations yet."
  * BlankState only renders once loading has finished without an error.
  */
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import React from 'react';
 import { Loader2, Plus, TriangleAlert } from 'lucide-react';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';

@@ -8,9 +8,9 @@
  * onMessageChange / onCommit / onCancel.
  */
 import { Check, TriangleAlert } from 'lucide-react';
-import { Alert, AlertDescription } from '@v2/components/ui/alert';
-import { Button } from '@v2/components/ui/button';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 const SUGGESTIONS = ['feat: ', 'fix: ', 'refactor: ', 'chore: ', 'docs: '];
 

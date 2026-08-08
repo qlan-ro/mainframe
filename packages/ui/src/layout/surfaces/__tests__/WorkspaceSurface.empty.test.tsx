@@ -3,7 +3,7 @@
  * tabs, a header (with a close button) renders above the empty-state card.
  */
 import { render as rtlRender, screen } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/features/terminal/TerminalInstance', () => ({

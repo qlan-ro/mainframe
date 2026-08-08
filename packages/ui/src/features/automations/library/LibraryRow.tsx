@@ -20,8 +20,8 @@
 import React, { useState } from 'react';
 import { Pencil, Play, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
-import { Switch } from '@v2/components/ui/switch';
+import { Hint } from '@/components/ui/hint';
+import { Switch } from '@/components/ui/switch';
 import { mfToast } from '@/lib/toast';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';

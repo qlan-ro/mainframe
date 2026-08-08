@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ScheduleWakeupCard, CronCreateCard, CronDeleteCard, CronListCard, MonitorCard } from '../SchedulePillCard';
 import { nestedVerticalScrollers } from './_part-fixture';
 import type { ToolCallMessagePartProps, ToolCallMessagePartStatus } from '@assistant-ui/react';

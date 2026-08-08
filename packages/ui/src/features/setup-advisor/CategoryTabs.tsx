@@ -3,8 +3,8 @@
  * always in canonical order (mcp, skills, hooks, subagents, plugins)
  * regardless of the input array's order, each carrying a count badge.
  */
-import { Badge } from '@v2/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AutomationRecommendation, RecommendationCategory } from '@qlan-ro/mainframe-types';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER } from './categories';
 

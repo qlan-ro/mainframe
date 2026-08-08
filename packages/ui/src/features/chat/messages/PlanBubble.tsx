@@ -16,7 +16,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { SquareCheck, Check } from 'lucide-react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
-import { Badge } from '@v2/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { GateCardShell, GateHead } from '../gates/shared/GateShell';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';

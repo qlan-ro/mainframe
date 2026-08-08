@@ -12,7 +12,7 @@
  * message. See `suppressRadixTrigger` for how that fall-through is kept.
  */
 import { useState, type ReactNode } from 'react';
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuGroup } from '@v2/components/ui/context-menu';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuGroup } from '@/components/ui/context-menu';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';

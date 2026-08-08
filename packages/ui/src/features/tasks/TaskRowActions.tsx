@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Play, Edit, Trash2 } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import type { Todo } from '@/lib/api/todos';
 import { UnlinkPairButton } from './github/UnlinkPairButton';
 

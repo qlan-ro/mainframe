@@ -12,22 +12,23 @@ what the shipped app already does.
 **Before writing any markup: find the closest existing component and read it.** This app has a house style,
 and the fastest way to violate it is to write generic shadcn from memory.
 
-## First: which tree are you in?
+## One tree (the v1/v2 split is history)
 
-`packages/ui` holds **two** render trees with different design systems — and since the 2026-08 shell
-integration, **the main app runs on the v2 token layer**. The v2 sidebar/shell is the chrome; the
-the v1 render tree is fully retired (2026-08-08): the old `legacy-bridge.css` graduated into
-`src/styles/domain-tokens.css`, which carries only first-class domain palettes (code/term/diff/…)
-and app chrome — no compat aliases, no v1 type scale.
+Since 2026-08-09 `packages/ui` holds **one** render tree: the former `src/v2/` folded into `src/`
+and the `@v2` alias is gone. The design system is the stock shadcn **radix-vega** preset
+(`src/styles/globals.css`, imported by `app.css`) plus **`src/styles/domain-tokens.css`** — the
+first-class domain palettes (code/term/diff/…), semantic tint tables, and app chrome. There is no
+compat layer: the old `legacy-bridge.css`, every generic `mf-*` alias, and the whole v1 type scale
+are deleted (2026-08-08) — don't reintroduce any of them.
 
-- **`src/v2/…` and new work** — the stock shadcn **radix-vega** preset. Standard Tailwind spacing, its own
-  11/13px type scale (`text-sm` = 13px), and dialog/scroll recipes that are the **opposite** of v1's.
-  **Read `references/v2-stock.md` first** — the Recipes table below will actively mislead you.
-- **`src/…` legacy islands (v1, warm chrome)** — the sections below describe these. They still speak
-  domain `mf-*` tokens (resolved by `domain-tokens.css`), but sit on standard spacing and the v2
-  palette now. The v1 type rungs and generic `mf-*` aliases are DEAD — don't reintroduce either.
+**Read `references/v2-stock.md` first** — it carries the live conventions (scales, recipes, dialog
+ledger, per-pass verdicts). Historical `src/v2/...` paths in it now mean `src/...`. Domain `mf-*`
+utilities remain legitimate where they name domain color (diff tints, syntax, terminals, task/
+priority/automation hues) — they resolve via `domain-tokens.css` and most now DERIVE from the v2
+tokens.
 
-Check the path before you write a class name.
+The v1 sections further down this file (the 8-rung type scale, compressed spacing, warm-chrome
+recipes) are retained as HISTORY — useful for reading old commits, wrong for new markup.
 
 ## Reach for the component before you write the markup
 
@@ -213,8 +214,9 @@ measured basis for the type roles, ink tiers, icon grid, and count-badge treatme
 PR #452 (token re-tints, `UI_SCALE_FACTORS` 0.92/1.0/1.15, the contrast test, the primitive repairs), so
 read it as *what the app decided*, not as a proposal. Its remaining open items are the P2 tail.
 
-`references/v2-stock.md` — the `src/v2` tree: its scales, its three extra tokens, and the recipes that
-invert v1's. Required reading before any work under `src/v2`.
+`references/v2-stock.md` — the live component-tree conventions: the scales, the three extra tokens,
+the dialog ledger, and every per-pass verdict. Required reading before any `packages/ui` markup
+(historical `src/v2/...` paths in it read as `src/...` since the 2026-08-09 fold).
 
 `packages/ui/CLAUDE.md` (assistant-ui golden rule, surface model, architecture), the `shadcn` and
 `radix-ui-design-system` skills for primitive-level questions, `ui-ux-pro-max` for general visual judgment

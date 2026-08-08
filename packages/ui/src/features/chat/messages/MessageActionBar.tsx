@@ -17,9 +17,9 @@
 import type { FC } from 'react';
 import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@v2/components/ui/tooltip';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 // ── Shared ghost icon button with tooltip ────────────────────────────────────
 

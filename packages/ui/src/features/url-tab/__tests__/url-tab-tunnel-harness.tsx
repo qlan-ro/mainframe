@@ -14,7 +14,7 @@ import { vi } from 'vitest';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { HostProvider, setHostForTesting } from '@/lib/host';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLayoutStore } from '@/store/layout';
 import { usePortTunnelsStore, type PortTunnelEntry } from '@/store/port-tunnels';
 import { useSandboxStore } from '@/store/sandbox';

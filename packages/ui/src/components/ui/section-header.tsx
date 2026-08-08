@@ -1,6 +1,7 @@
 /**
  * App-owned primitive on v2 tokens. `components/ui/` is no longer a v1 mirror of
- * the shadcn registry — that is `src/v2/components/ui/`, kept stock. What lives
+ * the shadcn registry (the stock primitives live beside it in this same dir
+ * since the 2026-08-09 v2 fold). What lives
  * here has no registry counterpart and is ours to shape.
  */
 import * as React from 'react';

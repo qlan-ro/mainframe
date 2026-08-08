@@ -8,7 +8,7 @@
  * assistant prose.
  */
 import { AlertTriangleIcon } from 'lucide-react';
-import { Alert, AlertDescription } from '@v2/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function AssistantErrorBlock({ text }: { text: string }) {
   return (

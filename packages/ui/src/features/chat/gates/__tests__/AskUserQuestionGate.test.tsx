@@ -18,7 +18,7 @@
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { ReplyFn } from '../gate-types';
 import { AskUserQuestionGate } from '../AskUserQuestionGate';

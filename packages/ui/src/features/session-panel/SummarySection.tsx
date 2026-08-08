@@ -15,10 +15,10 @@
 import { useAuiState } from '@assistant-ui/react';
 import { Gauge, GitBranch, GitCompare, GitPullRequest, PanelRightClose } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { cn } from '@v2/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';

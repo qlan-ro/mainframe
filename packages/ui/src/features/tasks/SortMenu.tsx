@@ -9,14 +9,14 @@
  */
 import React from 'react';
 import { ArrowUpDown } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import type { TodoSort, TodoSortKey } from './todos-filters';
 
 interface Props {

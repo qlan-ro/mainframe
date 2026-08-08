@@ -4,8 +4,8 @@
  * Extracted sub-component to keep TaskEditModal under 300 lines.
  * Consumed only by TaskEditModal.
  */
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { LabelAutocomplete } from './LabelAutocomplete';
 import { DependencyPicker } from './DependencyPicker';
 import type { Todo } from '@/lib/api/todos';

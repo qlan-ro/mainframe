@@ -17,8 +17,8 @@
 
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { FileText } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
 import { PlanBubble } from '../../messages/PlanBubble';
 import { parseApprovedPlanResult } from '../../messages/plan-message';

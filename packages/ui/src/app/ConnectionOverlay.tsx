@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { Progress } from '@v2/components/ui/progress';
+import { Progress } from '@/components/ui/progress';
 
 const DEFAULT_TITLE = 'Reconnecting to daemon…';
 const DEFAULT_SUBTITLE = 'Your sessions are safe. Work resumes automatically the moment the connection is back.';

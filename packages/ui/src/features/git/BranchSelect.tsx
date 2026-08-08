@@ -7,7 +7,7 @@
  * step's worktree `baseBranch`, todo #234 bullet 4) rather than typed
  * free-text. `WorktreeNewForm` now imports this instead of a private copy.
  */
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export interface BranchSelectProps {
   value: string;

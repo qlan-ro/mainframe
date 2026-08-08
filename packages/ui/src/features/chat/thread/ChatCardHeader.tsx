@@ -1,8 +1,8 @@
 import { useAuiState } from '@assistant-ui/react';
 import { EyeOff, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';

@@ -19,8 +19,8 @@
  */
 import { useEffect, useState } from 'react';
 import { useHost } from '@/lib/host';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';

@@ -28,9 +28,9 @@
 import { useEffect, useRef } from 'react';
 import { Send, Sparkles, X } from 'lucide-react';
 import { SnippetLines, rangeLabel } from '@/features/chat/messages/code-snippet';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { Textarea } from '@/components/ui/textarea';
 
 export interface InlineCommentWidgetProps {
   text: string;

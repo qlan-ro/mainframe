@@ -8,14 +8,14 @@
  */
 import React, { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuGroup,
-} from '@v2/components/ui/context-menu';
+} from '@/components/ui/context-menu';
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';

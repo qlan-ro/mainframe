@@ -5,7 +5,7 @@
  */
 import { FolderGit2 } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
-import { DropdownMenuGroup, DropdownMenuLabel } from '@v2/components/ui/dropdown-menu';
+import { DropdownMenuGroup, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { BranchRow } from './BranchRow';
 import type { BranchRowActions } from './BranchSubmenu';
 

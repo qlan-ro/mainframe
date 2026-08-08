@@ -1,7 +1,7 @@
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { AUTOMATION_FIXTURES } from '../fixtures/fixtures';

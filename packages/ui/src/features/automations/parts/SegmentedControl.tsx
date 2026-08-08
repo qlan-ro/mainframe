@@ -8,7 +8,7 @@
  * means "the value changed" and callers can seed state from it without
  * guarding re-entry.
  */
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 export interface SegmentedControlOption<T extends string> {

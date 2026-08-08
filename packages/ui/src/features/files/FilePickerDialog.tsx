@@ -11,8 +11,8 @@
  * closes. Mounted once at the app root (AppShell).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Command, CommandInput, CommandItem, CommandList } from '@v2/components/ui/command';
-import { Dialog, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
+import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';

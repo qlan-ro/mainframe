@@ -25,9 +25,9 @@
  */
 import { File } from 'lucide-react';
 import { useHost } from '@/lib/host';
-import { Button } from '@v2/components/ui/button';
-import { Card } from '@v2/components/ui/card';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { emitSurfaceIntent } from '@/store/surface-intents';

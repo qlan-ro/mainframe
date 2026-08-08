@@ -12,8 +12,8 @@
 import { useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
-import { Switch } from '@v2/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { BranchSelect } from '@/features/git/BranchSelect';
 import type { AskAgentStep } from '../../contract';
 import { textToChipText } from '../../domain/chip-text-convert';

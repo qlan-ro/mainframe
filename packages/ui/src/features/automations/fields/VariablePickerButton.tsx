@@ -14,8 +14,8 @@
  */
 import { useState, type RefObject } from 'react';
 import { formatVariableRef, type TokenDescriptor } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@v2/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { buildVariablesTriggerAdapter } from './variables-trigger-adapter';
 
 export interface VariablePickerButtonProps {

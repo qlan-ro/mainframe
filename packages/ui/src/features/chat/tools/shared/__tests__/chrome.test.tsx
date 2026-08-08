@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatusDot, ClickableFilePath } from '../chrome';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 describe('StatusDot — data-testid + data-status', () => {
   it('renders data-status="pending" while the tool call is still in flight (result undefined)', () => {

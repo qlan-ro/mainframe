@@ -14,7 +14,7 @@
  *   diff-reveal       — reveal file in tree
  */
 import { ChevronDown, ChevronUp, Crosshair, GitBranch } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 interface DiffHeaderProps {

@@ -8,15 +8,15 @@
  */
 import React from 'react';
 import { ChevronDown, CircleDot, Download, FileText, RefreshCw, Unlink } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Hint } from '@v2/components/ui/hint';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import { syncedAgo } from './sync-format';
 import { runOrToast } from './run-or-toast';
 import { UnlinkRepoConfirm } from './UnlinkRepoConfirm';

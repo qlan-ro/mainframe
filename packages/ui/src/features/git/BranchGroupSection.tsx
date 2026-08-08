@@ -8,8 +8,8 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { DropdownMenuGroup, DropdownMenuLabel } from '@v2/components/ui/dropdown-menu';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DropdownMenuGroup, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { BranchRow } from './BranchRow';
 import type { BranchRowActions } from './BranchSubmenu';
 import { groupBranches } from './branch-grouping';

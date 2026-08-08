@@ -14,9 +14,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@v2/components/ui/dialog';
-import { Button } from '@v2/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@v2/components/ui/radio-group';
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { listGitHubRemotes, type GitHubRemote } from '@/lib/api/git';
 import { CredentialConnect } from '@/features/automations/steps/CredentialConnect';
 import { useAutomationsStore } from '@/features/automations/data/use-automations-store';

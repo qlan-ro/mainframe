@@ -14,8 +14,8 @@
 import type { ComponentProps } from 'react';
 import { SelectionToolbarPrimitive } from '@assistant-ui/react';
 import type { LucideIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 function SelectionToolbarRoot({ className, ...props }: ComponentProps<typeof SelectionToolbarPrimitive.Root>) {
   return (

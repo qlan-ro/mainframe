@@ -17,9 +17,9 @@
  * trigger DOM node (the Hint-inside-asChild-trigger trap).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@v2/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@v2/components/ui/dropdown-menu';
-import { Hint } from '@v2/components/ui/hint';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { useBranchActions } from './use-branch-actions';
 import { useNewSessionAction } from './use-new-session-action';
 import { BranchListView } from './BranchListView';

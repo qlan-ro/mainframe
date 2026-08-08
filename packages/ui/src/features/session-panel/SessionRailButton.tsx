@@ -16,10 +16,10 @@
  * `<button>`. `label` is the accessible name; an icon-only control has no other.
  */
 import type { ComponentProps, ComponentType } from 'react';
-import { Button } from '@v2/components/ui/button';
-import { QuotaRing } from '@v2/features/quota/QuotaRing';
+import { Button } from '@/components/ui/button';
+import { QuotaRing } from '@/features/quota/QuotaRing';
 import type { QuotaSeverity } from '@/features/quota/quota-format';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 
 /** Resting chrome shared by both shapes; engaged is added by the caller's `pressed`. */
 const RAIL_INK = 'text-muted-foreground';

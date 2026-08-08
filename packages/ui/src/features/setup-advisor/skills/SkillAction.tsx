@@ -13,14 +13,14 @@
  */
 import { Check, Loader2, Trash2 } from 'lucide-react';
 import type { SkillsCliScope } from '@qlan-ro/mainframe-types';
-import { Button } from '@v2/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { SCOPE_LABEL } from './scope-label';
 import type { SkillRow } from './skill-rows';

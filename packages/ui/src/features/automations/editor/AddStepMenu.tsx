@@ -15,8 +15,8 @@
 import { useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
-import { Popover, PopoverContent, PopoverTrigger } from '@v2/components/ui/popover';
+import { Hint } from '@/components/ui/hint';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ActionCatalogEntry, AutomationStep } from '../contract';
 import { ADD_STEP_GROUPS, VERB_META } from './verb-meta';
 

@@ -17,9 +17,9 @@
  */
 import { useCallback, type ReactNode } from 'react';
 import { PencilIcon, XIcon } from 'lucide-react';
-import { cn } from '@v2/lib/utils';
-import { Bubble, BubbleContent } from '@v2/components/ui/bubble';
-import { Button } from '@v2/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
+import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useComposerEdit } from '../composer/edit/composer-edit-context';
 

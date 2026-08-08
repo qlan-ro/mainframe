@@ -35,7 +35,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from '@v2/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { displayEffort, effectiveFeature, effortOptions, visibleFeatures } from '@/lib/model-tuning';
 

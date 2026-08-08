@@ -3,8 +3,8 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import { ChevronDownIcon } from 'lucide-react';
 import { useScrollLock, type ToolCallMessagePartStatus, type ToolCallMessagePartComponent } from '@assistant-ui/react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@v2/components/ui/collapsible';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { STATUS_ICON, STATUS_DOT_CLASS } from './tool-status';
 import { ToolFallbackArgs, ToolFallbackResult, ToolFallbackError } from './tool-fallback-parts';
 

@@ -17,7 +17,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { GateCardShell, GateHead } from '../shared/GateShell';
 
 // ---------------------------------------------------------------------------

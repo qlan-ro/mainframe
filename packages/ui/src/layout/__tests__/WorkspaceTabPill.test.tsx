@@ -4,7 +4,7 @@
  * handle. (The type glyphs and the launch Stop are covered by the strip's test.)
  */
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
 import { useSurfaceDragStore } from '../use-surface-drag';

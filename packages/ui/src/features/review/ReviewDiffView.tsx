@@ -20,8 +20,8 @@
  *
  * The `onAppend` prop is wired by ReviewPanel to the runtime's append call.
  */
-import { Button } from '@v2/components/ui/button';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useEffect, useState, useCallback } from 'react';
 import { CmDiffEditor, type LineSelection } from '@/features/editor/CmDiffEditor';
 import { getWorkingDiff, type WorkingDiff } from '@/lib/api/git';

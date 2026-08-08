@@ -1,6 +1,6 @@
 import { ShieldIcon, PencilIcon, ZapIcon } from 'lucide-react';
-import { cn } from '@v2/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import type { ComponentType } from 'react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 

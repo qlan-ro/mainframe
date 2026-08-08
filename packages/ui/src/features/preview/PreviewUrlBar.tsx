@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
-import { Hint } from '@v2/components/ui/hint';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@v2/components/ui/input-group';
+import { Hint } from '@/components/ui/hint';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { usePreviewAddress } from './use-preview-address';
 import { normalizePreviewUrl } from './normalize-url';
 import { useHost } from '@/lib/host';

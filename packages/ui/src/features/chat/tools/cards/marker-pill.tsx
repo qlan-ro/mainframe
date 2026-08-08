@@ -14,9 +14,9 @@
  */
 import React, { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { cn } from '@v2/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
-import { Marker, MarkerContent, MarkerIcon } from '@v2/components/ui/marker';
+import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 
 // ── MarkerWrap ────────────────────────────────────────────────────────────────
 

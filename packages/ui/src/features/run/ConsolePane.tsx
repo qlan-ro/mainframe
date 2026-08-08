@@ -15,8 +15,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { useSandboxStore, type LogEntry } from '@/store/sandbox';
 import { selectLogs } from './select-logs';
-import { Button } from '@v2/components/ui/button';
-import { Badge } from '@v2/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const DRAWER_DEFAULT_H = 150;
 const DRAWER_MIN_H = 60;

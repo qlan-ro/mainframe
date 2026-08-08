@@ -19,7 +19,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, createEvent, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useComposerSegments } from '../segments/segment-store';
 
 const THREAD_ID = 'thread-1';

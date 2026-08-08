@@ -10,7 +10,7 @@
  * automatic activation also fires on focus, which would fetch a scope the user
  * only arrowed past.
  */
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ChangeScope } from './use-working-changes';
 import { SCOPE_OPTIONS } from './review-scope-view';
 

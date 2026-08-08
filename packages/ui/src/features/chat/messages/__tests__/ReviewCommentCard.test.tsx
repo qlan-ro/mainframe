@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import type { ReactElement } from 'react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewCommentCard } from '../ReviewCommentCard';
 import type { ReviewComment } from '../../view-model/parse-review-comment';
 

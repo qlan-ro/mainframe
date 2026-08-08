@@ -9,7 +9,7 @@
  * **Timeout, not a free-text budget cap.** ts153's "$4.00 or 20m" text field
  * is replaced by the real `timeoutMinutes: number` field.
  */
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAgentStep } from '../../contract';

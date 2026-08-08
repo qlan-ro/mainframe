@@ -9,7 +9,7 @@
  * SEPARATE control between the label and the close (×), not in the glyph slot.
  */
 import { fireEvent, render as rtlRender } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import type { RunPane } from '@/store/run-pane';

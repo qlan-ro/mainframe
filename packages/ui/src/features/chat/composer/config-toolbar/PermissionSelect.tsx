@@ -21,8 +21,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@v2/components/ui/dropdown-menu';
-import { Hint } from '@v2/components/ui/hint';
+} from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 
 export interface PermissionSelectProps {

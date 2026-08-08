@@ -4,7 +4,7 @@
  */
 import { useMemo } from 'react';
 import type { BranchInfo } from '@qlan-ro/mainframe-types';
-import { DropdownMenuSeparator } from '@v2/components/ui/dropdown-menu';
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { filterBranches, filterRemote } from './branch-grouping';
 import { BranchGroupSection } from './BranchGroupSection';
 import type { BranchRowActions } from './BranchSubmenu';

@@ -8,9 +8,9 @@ import { ModelDropdown } from './ModelDropdown';
 import { ProviderTuningDefaults } from './ProviderTuningDefaults';
 import { CodexTuningDefaults } from './CodexTuningDefaults';
 import { CliProxyStatus } from './CliProxyStatus';
-import { Checkbox } from '@v2/components/ui/checkbox';
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const EMPTY_CONFIG: ProviderConfig = {};
 

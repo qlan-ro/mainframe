@@ -50,7 +50,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet 
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
-- **Monorepo Structure**: pnpm workspaces with six packages:
+- **Monorepo Structure**: pnpm workspaces with five packages (plus the mobile submodule):
     - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
     - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell. Its `package.json` version is what the release pipeline tags from (the old TS daemon package that used to carry it is deleted).
     - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the Rust daemon (`packages/core-rs`) as a bundled sidecar.

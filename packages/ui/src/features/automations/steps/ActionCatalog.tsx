@@ -13,7 +13,7 @@
  * wire signal at all, so it's a small curated set here — flag for design
  * review if a second advanced action ever ships.
  */
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState } from 'react';
 import {
   ClipboardList,
@@ -29,7 +29,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Badge } from '@v2/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import type { ActionCatalogEntry } from '../contract';
 
 const ACTION_ICONS: Record<string, LucideIcon> = {

@@ -10,9 +10,9 @@
  * itself, so — same documented exception as `ConditionRow` — the caller's
  * `testId` is index-keyed.
  */
-import { Input } from '@v2/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Plus, X } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@v2/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AutomationExpectedOutput } from '../contract';
 import { OptionsEditor } from './OptionsEditor';
 

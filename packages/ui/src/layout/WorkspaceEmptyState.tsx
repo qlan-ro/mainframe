@@ -17,9 +17,9 @@
  */
 import { useState } from 'react';
 import { ChevronRight, Code2, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Card } from '@v2/components/ui/card';
-import { Separator } from '@v2/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { XIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@v2/components/ui/dialog';
-import { ScrollArea } from '@v2/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { getProviderSettings, getGeneralSettings } from '@/lib/api/settings';
 import { refreshAdapters } from '@/store/adapters-seed';
 import { useSettingsStore } from '../../store/settings';

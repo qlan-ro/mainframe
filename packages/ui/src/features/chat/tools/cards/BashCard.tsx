@@ -16,9 +16,9 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { Terminal } from 'lucide-react';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@v2/components/ui/collapsible';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@v2/components/ui/tooltip';
-import { cn } from '@v2/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { StatusDot, cardStyle, isTruncatedResult, resolveResultText } from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';

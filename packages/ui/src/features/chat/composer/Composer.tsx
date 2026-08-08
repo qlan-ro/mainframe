@@ -13,9 +13,9 @@
 import { useCallback, useRef } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Separator } from '@v2/components/ui/separator';
-import { cn } from '@v2/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
 import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';

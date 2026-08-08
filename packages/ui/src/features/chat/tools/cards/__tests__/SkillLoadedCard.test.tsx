@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { SkillLoadedCard } from '../SkillLoadedCard';
 import { nestedVerticalScrollers } from './_part-fixture';
 

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ban, Check, ChevronLeft, Clock, Play, Square, TriangleAlert, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Hint } from '@v2/components/ui/hint';
+import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
 import { openSessionById } from '@/lib/session-nav';
 import type { AutomationRunSummary, AutomationTimelineEntry } from '../contract';

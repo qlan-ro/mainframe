@@ -61,7 +61,7 @@ import React from 'react';
 import { confirmPairing } from '../pair-daemon';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider } from '../active-daemon-context';
-import { AddRemoteDialog } from '@v2/features/daemon/AddRemoteDialog';
+import { AddRemoteDialog } from '@/features/daemon/AddRemoteDialog';
 
 // input-otp polls document.elementFromPoint from a timer; jsdom doesn't
 // implement it.

@@ -14,7 +14,7 @@
  * data-testid: workspace-files-panel (present only while open).
  */
 import { useEffect, useRef } from 'react';
-import { cn } from '@v2/lib/utils';
+import { cn } from '@/lib/utils';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';

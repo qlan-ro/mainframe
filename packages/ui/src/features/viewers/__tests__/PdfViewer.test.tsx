@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 import { PdfViewer } from '../PdfViewer';

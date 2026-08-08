@@ -10,7 +10,7 @@ import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
 import { parseRemoteUrl } from './pair-daemon';
 import type { UseDaemonRegistryResult } from './use-daemon-registry';
-import type { DialogMode } from '@v2/features/daemon/pairing-shared';
+import type { DialogMode } from '@/features/daemon/pairing-shared';
 
 export interface ApplyPairingArgs {
   mode: DialogMode;

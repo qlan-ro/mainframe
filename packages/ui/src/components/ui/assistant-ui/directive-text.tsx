@@ -10,7 +10,7 @@
  */
 import { type FC } from 'react';
 import type { TextMessagePartComponent, Unstable_DirectiveFormatter } from '@assistant-ui/react';
-import { Badge } from '@v2/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 type IconComponent = FC<{ className?: string }>;
 

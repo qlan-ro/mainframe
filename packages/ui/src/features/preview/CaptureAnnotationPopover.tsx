@@ -1,6 +1,6 @@
 import type { Capture } from '@/store/sandbox';
-import { Button } from '@v2/components/ui/button';
-import { Textarea } from '@v2/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CaptureAnnotationPopoverProps {
   captures: Capture[];

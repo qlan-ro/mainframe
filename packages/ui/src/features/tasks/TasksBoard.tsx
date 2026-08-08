@@ -12,9 +12,9 @@
  */
 import React, { useState } from 'react';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
-import { Badge } from '@v2/components/ui/badge';
-import { Button } from '@v2/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@v2/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTodosStore } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';

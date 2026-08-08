@@ -23,7 +23,7 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { ContextUsage, DetectedPr } from '@qlan-ro/mainframe-types';
-import { TooltipProvider } from '@v2/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 

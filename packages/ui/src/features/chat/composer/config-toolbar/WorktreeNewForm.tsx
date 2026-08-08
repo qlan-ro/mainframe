@@ -15,9 +15,9 @@
 
 import { useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { Button } from '@v2/components/ui/button';
-import { Input } from '@v2/components/ui/input';
-import { Label } from '@v2/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { BranchSelect } from '@/features/git/BranchSelect';
 
 // ---------------------------------------------------------------------------
