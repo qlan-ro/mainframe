@@ -7,12 +7,12 @@
  * picks them up without a reload.
  *
  * Files are opened via the file tree (`file-tree-row-${path}`) after revealing
- * the Files sidebar (`showFilesTree` — the workspace surface's right-edge tree). Opening a file
+ * the floating Files panel (`showFilesTree`). Opening a file
  * lights the workspace surface itself (`layout.openFileTab` places it), so no
  * separate `surface-rail-workspace` toggle is needed.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-files       — toolbar toggle: shows/collapses the Files sidebar
+ *   main-toolbar-files       — toolbar toggle: opens/closes the floating Files panel
  *   file-tree                — tree root
  *   file-tree-row-${path}    — a tree row (file or folder), path is repo-relative
  *   WORKSPACE.strip            — a pane's tab-strip row (pane-id-keyed; see testids.ts)

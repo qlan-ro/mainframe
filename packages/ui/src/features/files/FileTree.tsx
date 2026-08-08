@@ -198,8 +198,8 @@ interface FileTreeProps {
   port: number;
   projectId: string;
   chatId?: string;
-  /** Renders the sidebar-collapse control next to Refresh — the tree's
-   *  project-name row IS the Files sidebar's header (no separate header row). */
+  /** Renders the panel-close control next to Refresh — the tree's
+   *  project-name row IS the floating Files panel's header (no separate row). */
   onCollapse?: () => void;
 }
 

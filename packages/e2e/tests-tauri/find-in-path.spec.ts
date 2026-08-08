@@ -15,7 +15,7 @@
  * exclusively.
  *
  * Testid reference (verified against packages/ui/src):
- *   main-toolbar-files              — toolbar toggle: shows/collapses the Files sidebar
+ *   main-toolbar-files              — toolbar toggle: opens/closes the floating Files panel
  *   file-tree                       — tree root
  *   file-tree-row-${path}           — a tree row (file or folder)
  *   file-tree-find-in-file          — context-menu item on a file row
