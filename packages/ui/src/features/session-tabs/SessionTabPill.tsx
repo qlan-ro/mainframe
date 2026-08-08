@@ -1,8 +1,13 @@
 /**
  * SessionTabPill — one session tab in the title-bar strip: a project-colored
- * dot, the session title, and a hover close (×). Follows the workspace strip's
- * pill recipe (`div role="tab"` carrying a v2 Button — a closeable tab is never
- * Radix Tabs, and a real <button> pill would nest buttons).
+ * dot, the session title, and a hover close (×).
+ *
+ * Styled as the v2 Tabs primitive's `line` variant (verdict after trying the
+ * boxed and Chrome-filled treatments): transparent pills, the active tab
+ * marked by a 2px `bg-foreground` underline sitting ON the toolbar's bottom
+ * hairline. The vocabulary is borrowed rather than the primitive used — a
+ * closeable tab is never Radix Tabs, because `TabsTrigger` renders a <button>
+ * and the close control would nest buttons (the workspace strip's rule).
  *
  * The pill lives inside the toolbar's window-drag region; the strip container
  * opts out via `data-no-drag` (see host `init()`), so pointer-downs here reach
@@ -29,30 +34,6 @@ interface SessionTabPillProps {
   onClose: (id: string) => void;
 }
 
-/**
- * The active tab's outward-rounded bottom corner (Chrome's tab flare): a
- * FILLED quarter-arc pocket continuing the tab's solid shape into the
- * title/content divider. Like Chrome's own tabs the shape has no outline —
- * it reads purely by fill contrast against the tinted strip — so the flare
- * is one path: everything right of the arc, down to the toolbar's bottom
- * edge (covering the hairline row inside its footprint). Mirrored for the
- * right side via scale-x.
- */
-function TabFlare({ side }: { side: 'left' | 'right' }) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 10 10"
-      className={cn(
-        'pointer-events-none absolute bottom-0 size-2.5',
-        side === 'left' ? 'left-[-10px]' : 'right-[-10px] -scale-x-100',
-      )}
-    >
-      <path d="M10 0 A10 10 0 0 1 0 10 H10 Z" className="fill-background" />
-    </svg>
-  );
-}
-
 export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps) {
   return (
     <div
@@ -61,25 +42,15 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
       aria-selected={tab.active}
       onClick={() => onActivate(tab.id)}
       className={cn(
-        'group flex w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 pr-1 pl-2 text-xs select-none',
+        // h-full puts the underline on the toolbar's bottom hairline and the
+        // label on the toolbar midline — one alignment for every tab state.
+        'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
+        'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
         tab.active
-          ? // Chrome-style tab: a solid bg-background shape (no outline)
-            // anchored to the toolbar's bottom edge, sitting on the tinted
-            // strip and covering the hairline so it merges into the content
-            // below; TabFlare rounds the bottom corners outward. h-9 + pb-3
-            // keep the CONTENT on the toolbar's 24px midline: the box spans
-            // y 12→48, the 12px-bottom-padded content area centers at 24 —
-            // the same line the centered inactive pills sit on.
-            'relative h-9 self-end rounded-t-xl bg-background pb-3 font-semibold text-foreground'
-          : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-background/60 hover:text-foreground',
+          ? 'font-semibold text-foreground after:opacity-100'
+          : 'font-medium text-muted-foreground hover:text-foreground',
       )}
     >
-      {tab.active && (
-        <>
-          <TabFlare side="left" />
-          <TabFlare side="right" />
-        </>
-      )}
       <span
         className={cn('size-1.5 shrink-0 rounded-full', !tab.projectId && 'bg-muted-foreground/40')}
         style={tab.projectId ? { background: projectColor(tab.projectId) } : undefined}

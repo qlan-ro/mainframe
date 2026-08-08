@@ -13,7 +13,6 @@
  * horizontally (no scrollbar — the app's opt-out idiom). The trailing spacer
  * stays outside `data-no-drag`, so the empty middle remains a window-drag area.
  */
-import { Fragment } from 'react';
 import { Plus } from 'lucide-react';
 import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
 import { Button } from '@v2/components/ui/button';
@@ -60,21 +59,12 @@ export function SessionTabs() {
 
   return (
     <div data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
-      {/* px-2.5 leaves room for the active tab's 10px corner flares at the
-          strip's edges — the scroll container would clip them otherwise. */}
       <div
         data-no-drag
-        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-2.5 [scrollbar-width:none]"
+        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
       >
-        {tabs.map((tab, i) => (
-          <Fragment key={tab.id}>
-            {/* Chrome's inter-tab separator: only between two INACTIVE pills —
-                the active tab's flares own its edges. */}
-            {i > 0 && !tab.active && !tabs[i - 1]!.active && (
-              <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
-            )}
-            <SessionTabPill tab={tab} onActivate={handleActivate} onClose={handleClose} />
-          </Fragment>
+        {tabs.map((tab) => (
+          <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} />
         ))}
       </div>
       <Hint label="New session">
