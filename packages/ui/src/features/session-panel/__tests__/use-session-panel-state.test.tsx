@@ -24,17 +24,19 @@ let host: HTMLDivElement;
 let root: HTMLDivElement;
 
 /**
- * The hook measures `hostRef` and light-dismisses against `rootRef`. renderHook
- * renders no elements, so both refs are seeded during render — a ref is just a
- * box, and this is exactly what React would have put there before the effects run.
+ * The hook measures the host through its state-backed callback ref and
+ * light-dismisses against `rootRef`. The host is attached AFTER mount — the
+ * same order a cold boot produces (initializing branch first, row later), which
+ * the old RefObject-seeded harness could not express and therefore never caught.
  */
 function renderPanelState() {
-  return renderHook(() => {
+  const rendered = renderHook(() => {
     const state = useSessionPanelState();
-    state.hostRef.current = host;
     state.rootRef.current = root;
     return state;
   });
+  act(() => rendered.result.current.hostRef(host));
+  return rendered;
 }
 
 function setWidth(width: number) {
@@ -60,6 +62,29 @@ describe('useSessionPanelState — mode', () => {
   it('observes the host row, not the panel root', () => {
     renderPanelState();
     expect(observed).toEqual([host]);
+  });
+
+  // Regression: the packaged app's cold boot renders the initializing branch
+  // first, so the host row mounts on a LATER commit than the hook. The old
+  // []-deps effect read a null RefObject once and never retried — the panel
+  // stayed permanently hidden in every release build.
+  it('attaches the observer when the host mounts after the hook (cold-boot race)', () => {
+    const rendered = renderHook(() => useSessionPanelState());
+    expect(observed).toEqual([]);
+    expect(rendered.result.current.mode).toBe('hidden');
+
+    act(() => rendered.result.current.hostRef(host));
+    expect(observed).toEqual([host]);
+    setWidth(1000);
+    expect(rendered.result.current.mode).toBe('rail');
+  });
+
+  it('re-attaches to a replacement host and disconnects from the old one', () => {
+    const rendered = renderPanelState();
+    const nextHost = document.createElement('div');
+    document.body.append(nextHost);
+    act(() => rendered.result.current.hostRef(nextHost));
+    expect(observed).toEqual([host, nextHost]);
   });
 
   it('starts in rail mode on a narrow surface', () => {
