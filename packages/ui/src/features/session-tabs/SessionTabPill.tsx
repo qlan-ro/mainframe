@@ -35,19 +35,29 @@ interface SessionTabPillProps {
  * path also erases the straight border segment and the hairline inside the
  * flare, so the stroke reads as ONE continuous curve. Mirrored for the right
  * side via scale-x.
+ *
+ * The geometry is EXACT-tangent, which is what makes the joint seamless: the
+ * tab's border-left center sits at x=8.5 (svg is offset -8px, the border is
+ * the 1px column at the tab's edge), the hairline center at y=7.5 (the
+ * toolbar's bottom 1px row). A circle tangent to both lines has its center at
+ * (1, 0) with r=7.5 — so the arc leaves the border VERTICALLY at (8.5, 0) and
+ * lands HORIZONTALLY at (1, 7.5). Endpoints derived any other way make the
+ * renderer bend the circle to fit and the lines visibly kink.
  */
 function TabFlare({ side }: { side: 'left' | 'right' }) {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 7 6"
+      viewBox="0 0 9 8"
       className={cn(
-        'pointer-events-none absolute bottom-0 h-1.5 w-[7px]',
-        side === 'left' ? 'left-[-6px]' : 'right-[-6px] -scale-x-100',
+        'pointer-events-none absolute bottom-0 h-2 w-[9px]',
+        side === 'left' ? 'left-[-8px]' : 'right-[-8px] -scale-x-100',
       )}
     >
-      <path d="M7 0 H6 A6 6 0 0 1 0 6 H7 Z" className="fill-background" />
-      <path d="M6.5 0 A6 6 0 0 1 0 5.5" className="fill-none stroke-border" strokeWidth="1" />
+      {/* Erase the tab's straight border and the hairline inside the flare. */}
+      <path d="M9 0 H8.5 A7.5 7.5 0 0 1 1 7.5 H0 V8 H9 Z" className="fill-background" />
+      {/* The flare stroke: down the border line, around, out along the hairline. */}
+      <path d="M8.5 0 A7.5 7.5 0 0 1 1 7.5 L0 7.5" className="fill-none stroke-border" strokeWidth="1" />
     </svg>
   );
 }
@@ -67,7 +77,7 @@ export function SessionTabPill({ tab, onActivate, onClose }: SessionTabPillProps
             // on top of the toolbar's inset bottom hairline, so the title/content
             // divider visually OPENS into the tab; TabFlare curves the side
             // borders outward into the hairline at both bottom corners.
-            'relative h-8 self-end rounded-t-md border border-b-0 border-border bg-background font-semibold text-foreground'
+            'relative h-8 self-end rounded-t-lg border border-b-0 border-border bg-background font-semibold text-foreground'
           : 'h-7 self-center rounded-md font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
