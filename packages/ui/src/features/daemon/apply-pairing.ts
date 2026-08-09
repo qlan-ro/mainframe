@@ -9,6 +9,7 @@
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
 import { parseRemoteUrl } from './pair-daemon';
+import { loopbackCanonicalHost } from './endpoint-policy';
 import type { UseDaemonRegistryResult } from './use-daemon-registry';
 import type { DialogMode } from '@/features/daemon/pairing-shared';
 
@@ -30,13 +31,15 @@ export async function applyPairing({
   registry,
 }: ApplyPairingArgs): Promise<{ addedId?: string }> {
   if (mode === 'add') {
-    const host = parseRemoteUrl(targetUrl).host;
+    const parts = parseRemoteUrl(targetUrl);
+    const host = loopbackCanonicalHost(parts);
     const label = host.split('.')[0] ?? 'New server';
     const meta: DaemonMeta = {
       id: crypto.randomUUID(),
       kind: 'remote',
       label,
       host,
+      scheme: parts.scheme,
       device,
       paired: 'Just now',
     };

@@ -20,6 +20,9 @@ pub struct DaemonMeta {
     pub host: String,
     pub device: Option<String>,
     pub paired: Option<String>,
+    /// Paired scheme; `None` = https. Serde drops unknown fields, so a struct lagging the UI would erase this on every upsert.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheme: Option<String>,
 }
 
 // ── Path resolution ───────────────────────────────────────────────────────────
@@ -188,6 +191,7 @@ mod tests {
             host: "studio.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         }];
         write_registry(&p, &metas).unwrap();
         let back = read_registry(&p);
@@ -210,12 +214,82 @@ mod tests {
             host: "vault.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         }];
         write_registry(&p, &metas).unwrap();
         let raw = std::fs::read_to_string(&p).unwrap();
         assert!(
             !raw.contains("token"),
             "registry JSON must not contain any 'token' field; got: {raw}"
+        );
+    }
+
+    #[test]
+    fn read_registry_reads_pre_change_entries_with_no_scheme_key() {
+        let dir = std::env::temp_dir().join(format!(
+            "mf-test-prechange-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("remote-daemons.json");
+        let json = r#"[
+            {"id":"a","kind":"remote","label":"A","host":"a.example.com"},
+            {"id":"b","kind":"remote","label":"B","host":"b.example.com"}
+        ]"#;
+        std::fs::write(&p, json).unwrap();
+        let back = read_registry(&p);
+        assert_eq!(back.len(), 2);
+        assert_eq!(back[0].scheme, None);
+        assert_eq!(back[1].scheme, None);
+    }
+
+    #[test]
+    fn upsert_survives_a_scheme_of_http() {
+        let dir = std::env::temp_dir().join(format!(
+            "mf-test-upsert-scheme-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let data_dir = dir.to_str().unwrap().to_string();
+
+        let meta = DaemonMeta {
+            id: "loopback".into(),
+            kind: "remote".into(),
+            label: "Loopback".into(),
+            host: "127.0.0.1:31500".into(),
+            device: None,
+            paired: None,
+            scheme: Some("http".into()),
+        };
+        daemons_upsert(Some(data_dir.clone()), meta);
+
+        let list = daemons_list(Some(data_dir));
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].scheme, Some("http".to_string()));
+    }
+
+    #[test]
+    fn a_none_scheme_leaves_no_scheme_key_in_the_written_json() {
+        let dir = std::env::temp_dir().join(format!(
+            "mf-test-noschemekey-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("remote-daemons.json");
+        let metas = vec![DaemonMeta {
+            id: "tunnel".into(),
+            kind: "remote".into(),
+            label: "Tunnel".into(),
+            host: "tunnel.example.com".into(),
+            device: None,
+            paired: None,
+            scheme: None,
+        }];
+        write_registry(&p, &metas).unwrap();
+        let raw = std::fs::read_to_string(&p).unwrap();
+        assert!(
+            !raw.contains("scheme"),
+            "registry JSON must omit 'scheme' when absent; got: {raw}"
         );
     }
 
@@ -258,6 +332,7 @@ mod tests {
             host: "old.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         };
         // First upsert: inserts a new entry.
         daemons_upsert(Some(data_dir.clone()), v1);
@@ -269,6 +344,7 @@ mod tests {
             host: "new.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         };
         // Second upsert: same id → must replace, not append.
         daemons_upsert(Some(data_dir.clone()), v2);
