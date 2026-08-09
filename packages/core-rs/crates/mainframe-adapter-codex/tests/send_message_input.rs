@@ -31,14 +31,9 @@ printf '{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}\n'
 cat >/dev/null
 "#;
 
-/// Write the fake `codex` script into `dir`, spawn a `CodexSession` against it,
-/// send one message, and return the parsed `turn/start` `params` plus the
-/// recorder that observed `on_cli_message`.
-async fn send_and_capture(
-    dir: &TempDir,
-    message: &str,
-    images: Vec<ImageInput>,
-) -> (Value, Recorder) {
+/// Write the fake `codex` script into `dir` and return its path alongside the
+/// path it will capture the `turn/start` line to.
+fn write_fake_codex(dir: &TempDir) -> (std::path::PathBuf, std::path::PathBuf) {
     let fake = dir.path().join("codex");
     let capture = dir.path().join("turn-start.json");
     fs::write(
@@ -49,6 +44,18 @@ async fn send_and_capture(
     let mut perms = fs::metadata(&fake).unwrap().permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&fake, perms).unwrap();
+    (fake, capture)
+}
+
+/// Spawn a `CodexSession` against the fake `codex` at `fake`, send one message,
+/// and return the parsed `turn/start` `params` plus the recorder that observed
+/// `on_cli_message`.
+async fn send_and_capture(
+    dir: &TempDir,
+    message: &str,
+    images: Vec<ImageInput>,
+) -> (Value, Recorder) {
+    let (fake, capture) = write_fake_codex(dir);
 
     let session = CodexSession::new(
         SessionOptions {
