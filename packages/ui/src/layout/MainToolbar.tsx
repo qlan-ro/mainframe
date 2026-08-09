@@ -102,7 +102,7 @@ export function MainToolbar({
             </kbd>
           </Button>
         </Hint>
-        <Separator orientation="vertical" className="mx-1 h-4" />
+        <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
         {projectId && (
           <Hint label="Setup Advisor">
             <Button

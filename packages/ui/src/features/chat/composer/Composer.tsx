@@ -183,7 +183,7 @@ export function Composer() {
               <ComposerAddAttachment />
               <ComposerAddMention textareaRef={textareaRef} />
               {/* Hairline separating the attachment actions from the config chips. */}
-              <Separator orientation="vertical" className="mx-1 h-3 self-auto" />
+              <Separator orientation="vertical" className="mx-1 h-3 data-vertical:self-center" />
               <ComposerToolbar />
             </div>
             <SendOrCancelButton />
