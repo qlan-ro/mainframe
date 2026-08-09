@@ -88,8 +88,29 @@ fn parse_attribute_line(
 /// has no insertion order, so the port takes an ordered slice; the sole caller
 /// (`createSkill`) passes `[("name", …), ("description", …)]`.
 pub fn build_frontmatter(attrs: &[(&str, &str)], body: &str) -> String {
-    let lines: Vec<String> = attrs.iter().map(|(k, v)| format!("{k}: {v}")).collect();
+    let lines: Vec<String> = attrs
+        .iter()
+        .map(|(k, v)| build_attribute_line(k, v))
+        .collect();
     format!("---\n{}\n---\n\n{}", lines.join("\n"), body)
+}
+
+/// A single-line value is emitted inline; a colon inside it needs no quoting
+/// because the reader splits at the first colon only. A multi-line value is
+/// emitted as a `|-`/`|+` literal block scalar (`-` when it has no trailing
+/// newline, `+` when it does) so `parse_frontmatter` reads it back unchanged.
+fn build_attribute_line(key: &str, value: &str) -> String {
+    if !value.contains('\n') {
+        return format!("{key}: {value}");
+    }
+
+    let header = if value.ends_with('\n') { "|+" } else { "|-" };
+    let mut line = format!("{key}: {header}");
+    for content_line in value.split('\n') {
+        line.push_str("\n  ");
+        line.push_str(content_line);
+    }
+    line
 }
 
 #[cfg(test)]
