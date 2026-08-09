@@ -18,7 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { confirmPairing, PairingError, verifyDaemon } from '@/features/daemon/pair-daemon';
+import {
+  confirmPairing,
+  daemonOrigin,
+  PairingError,
+  verifyDaemon,
+  type PairingErrorKind,
+} from '@/features/daemon/pair-daemon';
 import { useDaemonRegistry } from '@/features/daemon/use-daemon-registry';
 import { applyPairing } from '@/features/daemon/apply-pairing';
 import { StepRail, type DialogMode, type UrlPhase } from './pairing-shared';
@@ -74,7 +80,7 @@ export function AddRemoteBody({
 }: AddRemoteBodyProps) {
   const title = mode === 'repair' && target != null ? `Re-pair ${target.label}` : 'Add remote daemon';
   const codeReady = code.length === 6;
-  const lockedUrl = mode === 'repair' && target != null ? `https://${target.host}` : url;
+  const lockedUrl = mode === 'repair' && target != null ? daemonOrigin(target) : url;
 
   return (
     <>
@@ -119,6 +125,12 @@ export function AddRemoteBody({
   );
 }
 
+const STEP1_PHASE_BY_ERROR: Record<PairingErrorKind, Step1Phase> = {
+  invalid: 'invalid',
+  insecure: 'insecure',
+  network: 'unreachable',
+};
+
 export interface AddRemoteDialogProps {
   open: boolean;
   mode?: DialogMode;
@@ -132,7 +144,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initialStep: 0 | 1 = mode === 'repair' ? 1 : 0;
-  const initialUrl = mode === 'repair' && target != null ? `https://${target.host}` : '';
+  const initialUrl = mode === 'repair' && target != null ? daemonOrigin(target) : '';
 
   const [step, setStep] = useState<0 | 1>(initialStep);
   const [urlPhase, setUrlPhase] = useState<UrlPhase>('idle');
@@ -164,7 +176,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
       setUrlPhase('reachable');
       setUrlVersion(result.version);
     } else {
-      setUrlPhase('unreachable');
+      setUrlPhase(result.reason === 'refused-insecure' ? 'refused' : 'unreachable');
     }
   }, [url]);
 
@@ -182,7 +194,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
     const trimmedCode = code.replace(/ /g, '');
     if (trimmedCode.length !== 6) return;
 
-    const targetUrl = mode === 'repair' && target != null ? `https://${target.host}` : url.trim();
+    const targetUrl = mode === 'repair' && target != null ? daemonOrigin(target) : url.trim();
     setStep1Phase('confirming');
 
     try {
@@ -207,11 +219,7 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
         if (addedId != null) void registry.switchTo(addedId);
       }, 800);
     } catch (err) {
-      if (err instanceof PairingError) {
-        setStep1Phase(err.kind === 'invalid' ? 'invalid' : 'unreachable');
-      } else {
-        setStep1Phase('unreachable');
-      }
+      setStep1Phase(err instanceof PairingError ? STEP1_PHASE_BY_ERROR[err.kind] : 'unreachable');
     }
   }, [code, mode, target, url, device, registry, onDone, onClose]);
 
