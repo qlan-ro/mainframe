@@ -50,10 +50,8 @@ describe('model-tuning helpers', () => {
     const opts = effortOptions({
       id: 'gpt',
       label: 'GPT',
-      // @ts-expect-error until 'ultra' joins EffortLevel
       supportedEfforts: ['high', 'xhigh', 'ultra'],
     });
-    // @ts-expect-error until 'ultra' joins EffortLevel
     const ultra = opts.find((o) => o.id === 'ultra')!;
     expect(ultra.label).toBe('Ultra');
     expect(ultra.description).toBeTruthy();
@@ -61,7 +59,6 @@ describe('model-tuning helpers', () => {
 
   it('effortOptions omits ultra when the model does not advertise it (pin, green today)', () => {
     const opts = effortOptions({ id: 'm', label: 'M', supportedEfforts: ['low', 'high', 'max'] });
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(opts.find((o) => o.id === 'ultra')).toBeUndefined();
   });
 
@@ -69,10 +66,8 @@ describe('model-tuning helpers', () => {
     const model = {
       id: 'gpt',
       label: 'GPT',
-      // @ts-expect-error until 'ultra' joins EffortLevel
       supportedEfforts: ['high', 'ultra'],
     } satisfies AdapterModel;
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(displayEffort({ effort: 'ultra' }, model)).toEqual({ value: 'ultra', locked: false });
   });
 
@@ -82,7 +77,6 @@ describe('model-tuning helpers', () => {
       label: 'Claude',
       supportedEfforts: ['low', 'medium', 'high', 'max'],
     } satisfies AdapterModel;
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(displayEffort({ effort: 'ultra' }, claudeLike)).toEqual({ value: 'max', locked: false });
   });
 });

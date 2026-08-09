@@ -45,29 +45,24 @@ describe('clampEffortToSupported — supported: [] guard (pin, green today)', ()
   });
 
   it('ultra against an empty set → null', () => {
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(clampEffortToSupported('ultra', [])).toBeNull();
   });
 });
 
 describe('clampEffortToSupported — ultra', () => {
   it('requested against a set that includes it → itself (pin, green today)', () => {
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(clampEffortToSupported('ultra', ['high', 'ultra'])).toBe('ultra');
   });
 
   it('requested against a Claude-like set with no defaultEffort → max (red: outranks max)', () => {
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(clampEffortToSupported('ultra', CLAUDE_LIKE)).toBe('max');
   });
 
   it('requested against a Codex-like set with no defaultEffort → xhigh (red: outranks xhigh)', () => {
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(clampEffortToSupported('ultra', CODEX_LIKE)).toBe('xhigh');
   });
 
   it('requested against ["low","high"] with defaultEffort:high → high (pin, green today: default wins over ranking)', () => {
-    // @ts-expect-error until 'ultra' joins EffortLevel
     expect(clampEffortToSupported('ultra', ['low', 'high'], 'high')).toBe('high');
   });
 });

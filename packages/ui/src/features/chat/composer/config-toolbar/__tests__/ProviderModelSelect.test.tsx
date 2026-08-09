@@ -897,7 +897,6 @@ const ULTRA_MODEL: AdapterModel = {
   id: 'gpt-5.6',
   label: 'GPT-5.6',
   defaultEffort: 'high',
-  // @ts-expect-error until 'ultra' joins EffortLevel
   supportedEfforts: ['high', 'xhigh', 'ultra'],
 };
 
