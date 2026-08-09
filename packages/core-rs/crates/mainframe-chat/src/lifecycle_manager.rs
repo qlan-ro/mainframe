@@ -914,6 +914,23 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.deps.scan_loaded_history(chat_id).await;
     }
 
+    /// The provider/catalog default model for a spawn's `default_model` hint — the
+    /// same two-step tier the tuning resolver and `create_chat_with_defaults` already
+    /// use: the saved default normalized against the live catalog, then the catalog
+    /// entry flagged as the adapter's default.
+    fn default_model_for(&self, adapter_id: &str) -> Option<String> {
+        let models = self.deps.adapter_snapshot_models(adapter_id);
+        let saved = self
+            .deps
+            .settings_get("provider", &format!("{adapter_id}.defaultModel"));
+        normalize_saved_default_model(saved.as_deref(), &models).or_else(|| {
+            models
+                .iter()
+                .find(|m| m.is_default == Some(true))
+                .map(|m| m.id.clone())
+        })
+    }
+
     async fn do_start_chat(&self, chat_id: &str) -> Result<(), LifecycleError> {
         self.load_chat(chat_id).await;
 
@@ -991,6 +1008,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             &format!("{}.cliproxySmallFastModel", chat.adapter_id),
         );
         let tuning = self.deps.resolve_tuning(chat_id).await;
+        let default_model = self.default_model_for(&chat.adapter_id);
         let process = session
             .spawn(
                 Some(SessionSpawnOptions {
@@ -1001,6 +1019,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     system_prompt,
                     tuning,
                     small_fast_model,
+                    default_model,
                 }),
                 Some(sink),
             )
@@ -1102,6 +1121,11 @@ mod tests {
         /// When `true`, `settings_get("general", "titleGeneration.disabled")`
         /// answers `Some("true")`.
         disabled: bool,
+        /// `settings_get("provider", "<adapter>.defaultModel")` answer, for
+        /// `default_model_for` coverage.
+        saved_default_model: Mutex<Option<String>>,
+        /// `adapter_snapshot_models` answer, for `default_model_for` coverage.
+        snapshot_models: Mutex<Vec<AdapterModel>>,
     }
 
     impl FakeDeps {
@@ -1134,12 +1158,22 @@ mod tests {
                 has_launches,
                 title_updates: Mutex::new(Vec::new()),
                 disabled,
+                saved_default_model: Mutex::new(None),
+                snapshot_models: Mutex::new(Vec::new()),
             })
         }
 
         fn set_present_paths(&self, paths: &[&str]) {
             let paths = paths.iter().map(|path| (*path).to_string()).collect();
             *self.present_paths.lock().unwrap() = Some(paths);
+        }
+
+        pub(super) fn set_saved_default_model(&self, model: Option<&str>) {
+            *self.saved_default_model.lock().unwrap() = model.map(str::to_string);
+        }
+
+        pub(super) fn set_snapshot_models(&self, models: Vec<AdapterModel>) {
+            *self.snapshot_models.lock().unwrap() = models;
         }
     }
 
@@ -1173,12 +1207,14 @@ mod tests {
         fn settings_get(&self, ns: &str, key: &str) -> Option<String> {
             if self.disabled && ns == "general" && key == "titleGeneration.disabled" {
                 Some("true".to_string())
+            } else if ns == "provider" && key.ends_with(".defaultModel") {
+                self.saved_default_model.lock().unwrap().clone()
             } else {
                 None
             }
         }
         fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
-            Vec::new()
+            self.snapshot_models.lock().unwrap().clone()
         }
         fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             None
@@ -1514,6 +1550,57 @@ mod tests {
             .await
             .expect("waiter never woke after owner completed")
             .unwrap();
+    }
+
+    // ── default_model_for (todo #303, spawn-time Codex fallback hint) ────────
+    fn adapter_model(id: &str, is_default: bool) -> AdapterModel {
+        AdapterModel {
+            id: id.to_string(),
+            label: id.to_string(),
+            description: None,
+            resolved_model: None,
+            context_window: None,
+            is_default: is_default.then_some(true),
+            is_older: None,
+            group: None,
+            supported_efforts: None,
+            default_effort: None,
+            supports_fast: None,
+            supports_ultracode: None,
+            supports_adaptive_thinking: None,
+            supports_personality: None,
+        }
+    }
+
+    #[test]
+    fn default_model_for_prefers_the_saved_default_present_in_the_catalog() {
+        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+        deps.set_snapshot_models(vec![
+            adapter_model("gpt-5.5", false),
+            adapter_model("gpt-4", true),
+        ]);
+        deps.set_saved_default_model(Some("gpt-5.5"));
+        let mgr = manager(deps);
+        assert_eq!(mgr.default_model_for("codex"), Some("gpt-5.5".to_string()));
+    }
+
+    #[test]
+    fn default_model_for_falls_through_to_the_is_default_entry_when_the_saved_id_is_stale() {
+        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+        deps.set_snapshot_models(vec![
+            adapter_model("gpt-4", true),
+            adapter_model("gpt-5.5", false),
+        ]);
+        deps.set_saved_default_model(Some("retired-model"));
+        let mgr = manager(deps);
+        assert_eq!(mgr.default_model_for("codex"), Some("gpt-4".to_string()));
+    }
+
+    #[test]
+    fn default_model_for_is_none_with_no_saved_default_and_no_catalog() {
+        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+        let mgr = manager(deps);
+        assert_eq!(mgr.default_model_for("codex"), None);
     }
 }
 
