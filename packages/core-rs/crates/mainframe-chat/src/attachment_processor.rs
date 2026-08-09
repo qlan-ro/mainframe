@@ -23,7 +23,7 @@ pub fn process_attachments(attachments: &[StoredAttachment]) -> ProcessedAttachm
                 out.images.push(ImageInput {
                     media_type: attachment.media_type.clone(),
                     data: attachment.data.clone(),
-                    path: None,
+                    path: attachment.materialized_path.clone(),
                 });
                 out.message_content
                     .push(MessageContent::Leaf(LeafContent::Image {
@@ -68,11 +68,15 @@ fn build_preview(attachment: &StoredAttachment) -> serde_json::Value {
             serde_json::Value::String(path.clone()),
         );
     }
-    if let Some(path) = &attachment.materialized_path {
-        preview.insert(
-            "materializedPath".into(),
-            serde_json::Value::String(path.clone()),
-        );
+    // The materialized image path is a daemon-local delivery detail for the
+    // Codex adapter, not part of the client preview contract; file-kind keeps it.
+    if attachment.kind == AttachmentKind::File {
+        if let Some(path) = &attachment.materialized_path {
+            preview.insert(
+                "materializedPath".into(),
+                serde_json::Value::String(path.clone()),
+            );
+        }
     }
     serde_json::Value::Object(preview)
 }
@@ -94,6 +98,13 @@ mod tests {
         }
     }
 
+    fn image_with_path(name: &str, media_type: &str, data: &str, path: &str) -> StoredAttachment {
+        StoredAttachment {
+            materialized_path: Some(path.to_string()),
+            ..image(name, media_type, data)
+        }
+    }
+
     fn file(name: &str) -> StoredAttachment {
         StoredAttachment {
             name: name.to_string(),
@@ -103,6 +114,13 @@ mod tests {
             data: String::new(),
             original_path: Some("/tmp/notes.txt".to_string()),
             materialized_path: None,
+        }
+    }
+
+    fn file_with_path(name: &str, path: &str) -> StoredAttachment {
+        StoredAttachment {
+            materialized_path: Some(path.to_string()),
+            ..file(name)
         }
     }
 
@@ -193,5 +211,63 @@ mod tests {
         assert!(out.message_content.is_empty());
         assert!(out.text_prefix.is_empty());
         assert!(out.attachment_previews.is_empty());
+    }
+
+    #[test]
+    fn image_input_carries_the_materialized_path() {
+        let out = process_attachments(&[image_with_path(
+            "shot.png",
+            "image/png",
+            "BASE64DATA",
+            "/tmp/chat/files/abc-shot.png",
+        )]);
+        assert_eq!(
+            out.images[0].path,
+            Some("/tmp/chat/files/abc-shot.png".to_string())
+        );
+        assert_eq!(out.images[0].media_type, "image/png");
+        assert_eq!(out.images[0].data, "BASE64DATA");
+    }
+
+    #[test]
+    fn image_input_path_is_none_without_materialization() {
+        let out = process_attachments(&[image("shot.png", "image/png", "BASE64DATA")]);
+        assert_eq!(out.images[0].path, None);
+    }
+
+    #[test]
+    fn image_preview_omits_materialized_path() {
+        let out = process_attachments(&[image_with_path(
+            "shot.png",
+            "image/png",
+            "X",
+            "/tmp/chat/files/abc-shot.png",
+        )]);
+        assert_eq!(
+            out.attachment_previews[0],
+            json!({
+                "name": "shot.png",
+                "mediaType": "image/png",
+                "sizeBytes": 128,
+                "kind": "image",
+            })
+        );
+    }
+
+    #[test]
+    fn file_preview_still_includes_materialized_path() {
+        let out =
+            process_attachments(&[file_with_path("notes.txt", "/tmp/chat/files/xyz-notes.txt")]);
+        assert_eq!(
+            out.attachment_previews[0],
+            json!({
+                "name": "notes.txt",
+                "mediaType": "text/plain",
+                "sizeBytes": 10,
+                "kind": "file",
+                "originalPath": "/tmp/notes.txt",
+                "materializedPath": "/tmp/chat/files/xyz-notes.txt",
+            })
+        );
     }
 }
