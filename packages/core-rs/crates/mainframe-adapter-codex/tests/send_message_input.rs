@@ -71,13 +71,17 @@ async fn send_and_capture(
     session
         .spawn(
             Some(SessionSpawnOptions {
-                model: None,
+                // These cases are about what the input entries look like, not
+                // about model resolution — and since todo #303 a turn with no
+                // model anywhere fails before it builds any entries.
+                model: Some("gpt-5-codex".to_string()),
                 permission_mode: None,
                 plan_mode: None,
                 executable_path: Some(fake.to_string_lossy().into_owned()),
                 system_prompt: None,
                 tuning: None,
                 small_fast_model: None,
+                default_model: None,
             }),
             Some(recorder.sink()),
         )
