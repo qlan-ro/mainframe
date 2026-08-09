@@ -41,6 +41,7 @@ import {
 import { useTriggerField, type TriggerField } from '@/components/trigger-engine/use-trigger-field';
 import { TriggerFieldPopover } from '@/components/trigger-engine/TriggerFieldPopover';
 import type { TriggerConfig } from '@/components/trigger-engine/types';
+import { TriggerFieldAriaProvider } from './trigger-field-aria-context';
 
 /**
  * Builds the `/` skills and `@` mention trigger configs for the active chat,
@@ -167,9 +168,14 @@ export function ComposerTriggers({
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <ComposerInputPluginBridge field={field} />
-      <TriggerFieldPopover field={field} testId="composer-trigger-popover">
-        {children}
-      </TriggerFieldPopover>
+      {/* Outside TriggerFieldPopover's PopoverAnchor slot on purpose — that slot
+          clones props onto its single child for Radix's anchor measurement, and
+          a context provider isn't a forwardable DOM element. */}
+      <TriggerFieldAriaProvider value={field.ariaProps}>
+        <TriggerFieldPopover field={field} testId="composer-trigger-popover">
+          {children}
+        </TriggerFieldPopover>
+      </TriggerFieldAriaProvider>
     </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   );
 }

@@ -155,6 +155,19 @@ describe('Composer — healthy shell', () => {
 
     expect(screen.getByTestId('chat-composer-input')).not.toBeDisabled();
   });
+
+  // S8: field.ariaProps must reach ComposerPrimitive.Input, not just the
+  // automations field. ComposerTriggers is mocked to a passthrough here, so
+  // this exercises the real (unmocked) trigger-field-aria-context default —
+  // proof that Composer.tsx itself spreads the hook's result onto the input.
+  it('input carries the collapsed-combobox ARIA from useTriggerFieldAria()', () => {
+    renderComposer();
+
+    const input = screen.getByTestId('chat-composer-input');
+    expect(input).toHaveAttribute('role', 'combobox');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).toHaveAttribute('aria-haspopup', 'listbox');
+  });
 });
 
 // ---------------------------------------------------------------------------
