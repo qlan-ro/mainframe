@@ -398,11 +398,13 @@ Then confirm the acceptance criteria by hand:
 | A — attachment pipeline | 1, 2, 3, 4, 12 | core | — | no |
 | B — codex delivery | 5, 6, 7 | core | A (reads `ImageInput.path`) | no |
 | C — claude regression guard | 8, 9 | core | A (asserts the `path` field is ignored) | no |
-| D — integration and close-out | 10, 11, 13 | test | A, B | no |
+| D — integration and close-out | 10, 11, 13 | test | A, B, C | no |
 
 Rust's compile-unit coupling means a red-phase test in group B or C that references `ImageInput.path` cannot
-even build until group A lands, so B and C depend on A rather than racing it. Within each group the tests are
-written and observed failing before the implementation task that satisfies them.
+even build until group A lands, so B and C depend on A rather than racing it. Group D depends on C as well as
+on A and B: its close-out task runs the Claude suite that group C creates, and would otherwise pass without the
+regression guard existing. Within each group the tests are written and observed failing before the
+implementation task that satisfies them.
 
 ## Risks
 
