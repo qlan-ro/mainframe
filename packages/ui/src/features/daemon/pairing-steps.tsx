@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from '@/components/ui/input-otp';
 import { Label } from '@/components/ui/label';
+import { INSECURE_ENDPOINT_MESSAGE } from './endpoint-policy';
 import { NoticeCard, UrlAdornment, UrlChip, type UrlPhase } from './pairing-shared';
 
 export interface Step0BodyProps {
@@ -73,11 +74,17 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
           Couldn&apos;t reach this URL
         </NoticeCard>
       )}
+      {phase === 'refused' && (
+        // No Retry action: the same URL can never pass the policy.
+        <NoticeCard kind="error" testId="daemon-add-insecure">
+          {INSECURE_ENDPOINT_MESSAGE}
+        </NoticeCard>
+      )}
     </div>
   );
 }
 
-export type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable' | 'storage';
+export type Step1Phase = 'idle' | 'confirming' | 'invalid' | 'done' | 'unreachable' | 'storage' | 'insecure';
 
 export interface Step1BodyProps {
   lockedUrl: string;
@@ -141,6 +148,12 @@ export function Step1Body({
       {isInvalid && (
         <NoticeCard kind="error" testId="daemon-add-error">
           That code didn&apos;t work
+        </NoticeCard>
+      )}
+
+      {phase === 'insecure' && (
+        <NoticeCard kind="error" testId="daemon-pair-insecure">
+          {INSECURE_ENDPOINT_MESSAGE}
         </NoticeCard>
       )}
 
