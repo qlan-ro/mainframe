@@ -51,8 +51,10 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(true);
-    expect(result.version).toBe('1.2.3');
-    expect(typeof result.ms).toBe('number');
+    if (result.ok) {
+      expect(result.version).toBe('1.2.3');
+      expect(typeof result.ms).toBe('number');
+    }
   });
 
   it('returns ok:true even when the body has no version field', async () => {
@@ -61,7 +63,9 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(true);
-    expect(result.version).toBeUndefined();
+    if (result.ok) {
+      expect(result.version).toBeUndefined();
+    }
   });
 
   it('returns ok:false on a network error without throwing', async () => {
@@ -70,8 +74,6 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(false);
-    expect(result.version).toBeUndefined();
-    expect(result.ms).toBeUndefined();
   });
 
   it('trims a trailing slash before hitting /health', async () => {
@@ -80,6 +82,31 @@ describe('verifyDaemon', () => {
     await verifyDaemon('https://daemon.example.com/');
 
     expect(spy).toHaveBeenCalledWith('https://daemon.example.com/health', expect.any(Object));
+  });
+
+  it('refuses a non-loopback http host without calling fetch', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+
+    const result = await verifyDaemon('http://192.168.1.10:31415');
+
+    expect(result).toMatchObject({ ok: false, reason: 'refused-insecure' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('still fetches a loopback http host', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse({}, 200));
+
+    await verifyDaemon('http://127.0.0.1:31500');
+
+    expect(spy).toHaveBeenCalledWith('http://127.0.0.1:31500/health', expect.any(Object));
+  });
+
+  it('returns reason:unreachable on an unreachable https URL', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network failure'));
+
+    const result = await verifyDaemon('https://daemon.example.com');
+
+    expect(result).toMatchObject({ ok: false, reason: 'unreachable' });
   });
 });
 
@@ -148,6 +175,15 @@ describe('confirmPairing', () => {
     await confirmPairing('https://daemon.example.com/', 'ABCDEF', 'Test Device');
 
     expect(spy).toHaveBeenCalledWith('https://daemon.example.com/api/auth/confirm', expect.any(Object));
+  });
+
+  it('rejects a non-loopback http host with PairingError("insecure") without calling fetch', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+
+    await expect(confirmPairing('http://box.example.com', 'ABCDEF', 'Test Device')).rejects.toMatchObject({
+      kind: 'insecure',
+    });
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
