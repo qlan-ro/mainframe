@@ -95,22 +95,19 @@ impl AttachmentStore {
         let mut results = Vec::with_capacity(attachments.len());
         for attachment in attachments {
             let id = nanoid::nanoid!();
-            let mut materialized_path = attachment.materialized_path.clone();
-            if attachment.kind == AttachmentKind::File {
-                match self.materialize_file(&files_dir, &id, &attachment).await {
-                    Ok(path) => materialized_path = Some(path),
-                    Err(err) => {
-                        tracing::warn!(
-                            module = "attachment-store",
-                            ?err,
-                            chat_id,
-                            name = %attachment.name,
-                            "failed to materialize attachment file"
-                        );
-                        materialized_path = None;
-                    }
+            let materialized_path = match self.materialize(&files_dir, &id, &attachment).await {
+                Ok(path) => Some(path),
+                Err(err) => {
+                    tracing::warn!(
+                        module = "attachment-store",
+                        ?err,
+                        chat_id,
+                        name = %attachment.name,
+                        "failed to materialize attachment file"
+                    );
+                    None
                 }
-            }
+            };
 
             let stored = StoredAttachment {
                 materialized_path: materialized_path.clone(),
@@ -131,7 +128,7 @@ impl AttachmentStore {
         Ok(results)
     }
 
-    async fn materialize_file(
+    async fn materialize(
         &self,
         files_dir: &Path,
         id: &str,
@@ -661,4 +658,6 @@ mod tests {
 // (serde camelCase + skip_serializing_if None mirrors JSON.stringify omitting
 // undefined). delete_chat ignores NotFound to mirror `rm {force:true}`; other
 // errors log the same warn. base64 decode is hand-rolled (no base64 crate in the
-// §8 allowlist) and lenient like Buffer.from. size_bytes is i64.
+// §8 allowlist) and lenient like Buffer.from. size_bytes is i64. Materialization
+// is kind-agnostic (todo #300): every attachment, image or file, is written to
+// the chat's files/ dir and its path recorded on the stored metadata.
