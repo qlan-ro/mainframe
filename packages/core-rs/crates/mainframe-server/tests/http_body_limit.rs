@@ -68,3 +68,34 @@ async fn a_three_megabyte_body_reaches_the_attachments_handler() {
     assert_eq!(attachment["sizeBytes"], 2_359_296);
     assert!(attachment["id"].as_str().is_some_and(|id| !id.is_empty()));
 }
+
+#[tokio::test]
+async fn a_body_over_the_configured_limit_is_rejected_with_413() {
+    // `data` alone already exceeds the limit by 1 MB; the ~110 bytes of JSON
+    // scaffolding around it only pushes the serialized body further over.
+    let data = "A".repeat(mainframe_server::BODY_LIMIT_BYTES + 1024 * 1024);
+    let payload = serde_json::json!({
+        "attachments": [{
+            "name": "over-limit.bin",
+            "mediaType": "application/octet-stream",
+            "data": data,
+        }]
+    });
+    let body = serde_json::to_vec(&payload).unwrap();
+
+    assert!(body.len() > mainframe_server::BODY_LIMIT_BYTES);
+
+    let server = spawn_test_server(None).await;
+    let res = support::raw_http::post_raw(server.addr, "/api/chats/c1/attachments", body).await;
+
+    assert_eq!(res.status, 413);
+    // The daemon's envelope helpers never emit a 413, so a JSON envelope here
+    // would mean the rejection came from the route, not the limit layer.
+    let is_envelope = serde_json::from_slice::<Value>(&res.body)
+        .ok()
+        .is_some_and(|v| v.get("success").is_some());
+    assert!(
+        !is_envelope,
+        "a 413 with a success envelope means the route answered, not the limit layer"
+    );
+}
