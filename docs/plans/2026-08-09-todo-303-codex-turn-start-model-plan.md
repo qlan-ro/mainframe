@@ -384,8 +384,27 @@ From `packages/core-rs`:
    send one message, and confirm: the turn starts, no `-32600` appears in the daemon log, and the
    `turn/start` payload logged by the app-server carries a non-empty `collaborationMode.settings.model`.
    Repeat once with plan mode on to confirm `mode: "plan"` still travels.
-5. Confirm the no-model error path end to end: temporarily point the chat at a provider with no default
-   and no catalog, send, and confirm the composer surfaces the sentence from T5 rather than a protocol code.
+5. **No-model error path end to end (acceptance criterion 5).** Against the real CLI this path cannot
+   fire — `ThreadStartResponse.model` is a required string in 0.144.3, so tier 2 always resolves and the
+   send succeeds. Drive it through a fake app-server instead. The resolver's own failure is covered by
+   T2 case 5; this step exists to confirm the sentence reaches the composer.
+
+   - Write a standalone `#!/bin/sh` script shaped like the T1 harness (no capture file): a
+     `while IFS= read -r line` loop that dispatches on the method name and **echoes back each request's
+     own id** — one script serves two processes, the catalog probe and the chat session, whose request
+     sequences diverge after `initialize`, so the fixed-id sequence in `tests/list_models.rs` will not do.
+     Answer `initialize`, answer `model/list` with `{"data":[],"nextCursor":null}`, and answer
+     `thread/start` with a result that **omits** `model`.
+   - In the isolated dev instance from step 4, set `provider.codex.executablePath` to that script and
+     leave `provider.codex.defaultModel` **unset**. Both matter: `probe_models` reads the same
+     `executablePath`, so the empty `model/list` reply is what empties the catalog and kills the
+     `is_default` half of tier 3; and `normalize_saved_default_model` returns a saved default verbatim
+     when the catalog is empty (`crates/mainframe-services/src/settings/model_default.rs` L16–17), so a
+     leftover saved default would still satisfy tier 3.
+   - Precondition to observe before sending: the Codex model picker shows an empty catalog.
+   - Create a Codex chat with no model, send one message, and confirm the composer shows the T5 sentence
+     rather than a protocol code, the daemon log carries the T8 `tracing::error!` line, and no
+     `turn/start` request was sent.
 
 **Verification:** all four commands green; the two manual checks recorded in the PR description.
 
@@ -399,7 +418,9 @@ From `packages/core-rs`:
   dispatches on the method name over a fixed sequence of reads, and give each `cargo test` a timeout.
 - **Tier 3 is defensive, not load-bearing.** `thread/start` or `thread/resume` always runs before the first
   turn of a session, so tier 2 covers production. Tier 3 exists for an app-server build that omits the
-  field. Do not delete it as dead code — it is the reason tier 2 can stay lenient.
+  field. Do not delete it as dead code — it is the reason tier 2 can stay lenient. The same fact is why
+  T13 step 5 drives the failure through a fake app-server: against 0.144.3 no live configuration can
+  reach the error.
 - **`apply_codex_provider_tuning` is still a no-op.** `ChatLifecycleDeps::apply_codex_provider_tuning`
   (`crates/mainframe-server/src/chat_deps.rs` L593) is an unported stub, so `set_codex_provider_tuning` never
   runs in production and Codex personality/summary never reach a turn. That is a separate bug, out of scope
