@@ -395,13 +395,22 @@ From `packages/core-rs`:
      sequences diverge after `initialize`, so the fixed-id sequence in `tests/list_models.rs` will not do.
      Answer `initialize`, answer `model/list` with `{"data":[],"nextCursor":null}`, and answer
      `thread/start` with a result that **omits** `model`.
-   - In the isolated dev instance from step 4, set `provider.codex.executablePath` to that script and
-     leave `provider.codex.defaultModel` **unset**. Both matter: `probe_models` reads the same
-     `executablePath`, so the empty `model/list` reply is what empties the catalog and kills the
-     `is_default` half of tier 3; and `normalize_saved_default_model` returns a saved default verbatim
-     when the catalog is empty (`crates/mainframe-services/src/settings/model_default.rs` L16–17), so a
-     leftover saved default would still satisfy tier 3.
-   - Precondition to observe before sending: the Codex model picker shows an empty catalog.
+   - Run this step in a daemon process that has **never** probed the real Codex binary: point
+     `provider.codex.executablePath` at the script, confirm `provider.codex.defaultModel` is unset, and
+     only **then** start — or restart — the isolated daemon (a second isolated data dir works too). Do not
+     reuse the instance from step 4; that process cannot reach the error path, because
+     `CodexAdapter.cached_models` (`crates/mainframe-adapter-codex/src/adapter.rs` L108–115) returns the
+     real catalog it already probed for the life of the process and nothing invalidates it, and even a cold
+     empty probe is discarded — `crates/mainframe-adapter-api/src/lib.rs` L349 passes `models: None` when
+     the live probe came back empty, and `apply_refresh` (L382) then keeps the previous catalog.
+   - Both settings matter. `probe_models` reads the same `executablePath` (`adapter.rs` L217–225), so the
+     fake's empty `model/list` is what leaves the catalog empty and kills the `is_default` half of tier 3;
+     and `normalize_saved_default_model` returns a saved default verbatim when the catalog is empty
+     (`crates/mainframe-services/src/settings/model_default.rs` L16–17), so a leftover saved default would
+     still satisfy tier 3.
+   - Precondition to observe before sending: the Codex model picker shows an empty catalog. On a fresh
+     process it will — Codex's `get_fallback_models()` (`adapter.rs` L203–205) seeds the snapshot with
+     `Some(Vec::new())`, so the empty probe leaves nothing to fall back to.
    - Create a Codex chat with no model, send one message, and confirm the composer shows the T5 sentence
      rather than a protocol code, the daemon log carries the T8 `tracing::error!` line, and no
      `turn/start` request was sent.
