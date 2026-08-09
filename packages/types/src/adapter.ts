@@ -242,10 +242,11 @@ export interface AdapterInfo {
 }
 
 /**
- * Full union across both CLIs. Codex ReasoningEffort = none/minimal/low/medium/high/xhigh;
- * Claude adds 'max'. The per-model `supportedEfforts` array is the runtime gate.
+ * Full union across both CLIs. Codex ReasoningEffort = none/minimal/low/medium/high/xhigh,
+ * plus 'ultra' on some models; Claude adds 'max'. The per-model `supportedEfforts` array is
+ * the runtime gate.
  */
-export type EffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type EffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
 export interface AdapterModel {
   id: string;
@@ -298,6 +299,7 @@ const EFFORT_RANK: Record<EffortLevel, number> = {
   high: 4,
   xhigh: 5,
   max: 6,
+  ultra: 7,
 };
 
 /**

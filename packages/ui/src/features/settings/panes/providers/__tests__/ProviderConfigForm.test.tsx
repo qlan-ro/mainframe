@@ -102,4 +102,25 @@ describe('ProviderConfigForm', () => {
     fireEvent.click(screen.getByTestId('settings-claude-model-option-sonnet'));
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultModel: 'sonnet' });
   });
+
+  it("the default-effort select offers a labelled 'Ultra' option when the default model advertises it (red today: empty label)", async () => {
+    const adapterWithUltra = {
+      ...adapter,
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          isDefault: true,
+          supportedEfforts: ['low', 'high', 'ultra'],
+          defaultEffort: 'medium',
+        },
+      ],
+    } as unknown as AdapterInfo;
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapterWithUltra} />);
+
+    fireEvent.click(screen.getByTestId('settings-claude-default-effort'));
+
+    const option = await screen.findByTestId('settings-claude-default-effort-option-ultra');
+    expect(option).toHaveTextContent('Ultra');
+  });
 });
