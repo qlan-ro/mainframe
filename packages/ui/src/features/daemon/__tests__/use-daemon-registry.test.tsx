@@ -5,6 +5,7 @@
  *  1. daemons list includes a synthetic local entry prepended before persisted remotes.
  *  2. add persists meta + token and the daemon appears in the list.
  *  3. switchTo('studio') resolves a DaemonTarget with the stored token and flips activeId.
+ *  4. the resolved target honors the scheme the daemon was paired with (absent means https).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -58,6 +59,15 @@ const REMOTE_STUDIO: DaemonMeta = {
   kind: 'remote',
   label: 'Studio Mac',
   host: 'studio.example.com:443',
+};
+
+// Paired over plain http on loopback — the scheme is persisted on the entry.
+const REMOTE_LOOPBACK: DaemonMeta = {
+  id: 'loopback',
+  kind: 'remote',
+  label: 'QA daemon',
+  host: '127.0.0.1:31500',
+  scheme: 'http',
 };
 
 const REMOTE_TOKEN = 'jwt-secret-token';
@@ -281,7 +291,59 @@ describe('useDaemonRegistry — switchTo', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Behavior 4 — switchTo('local') restores the TRUE local port even when
+// Behavior 4 — the resolved target composes its base URL from the stored
+// scheme. An entry written before the scheme was persisted carries none and
+// must keep resolving to https (the REMOTE_STUDIO assertions above pin that);
+// an http-paired entry must resolve to http, or the daemon it was paired with
+// is unreachable for the life of the entry (todo #305).
+// ---------------------------------------------------------------------------
+
+describe('useDaemonRegistry — paired scheme', () => {
+  async function renderWithLoopback() {
+    await fakeHost.daemons.upsert(REMOTE_LOOPBACK);
+    await fakeHost.daemons.setToken(REMOTE_LOOPBACK.id, 'loopback-token');
+
+    const rendered = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+    await act(async () => {});
+    await act(async () => {
+      await rendered.result.current.registry.switchTo(REMOTE_LOOPBACK.id);
+    });
+    return rendered;
+  }
+
+  it('resolves an http-paired daemon to its http origin', async () => {
+    const { result } = await renderWithLoopback();
+
+    expect(result.current.daemon.target.baseUrl).toBe('http://127.0.0.1:31500');
+  });
+
+  it('derives a ws:// socket URL for an http-paired daemon', async () => {
+    const { result } = await renderWithLoopback();
+
+    // The rule ws-client.ts and lsp-client.ts both apply to the active target.
+    const wsBase = result.current.daemon.target.baseUrl.replace(/^http/, 'ws');
+    expect(wsBase).toBe('ws://127.0.0.1:31500');
+  });
+
+  it('resolves an entry with no stored scheme to https (pre-change registry shape)', async () => {
+    const { result } = renderHook(() => ({ registry: useDaemonRegistry(), daemon: useActiveDaemon() }), {
+      wrapper: makeWrapper(fakeHost),
+    });
+    await act(async () => {});
+    await act(async () => {
+      await result.current.registry.switchTo('studio');
+    });
+
+    expect(REMOTE_STUDIO.scheme).toBeUndefined();
+    expect(result.current.daemon.target.baseUrl).toBe('https://studio.example.com');
+    expect(result.current.daemon.target.baseUrl.replace(/^http/, 'ws')).toBe('wss://studio.example.com');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 5 — switchTo('local') restores the TRUE local port even when
 // `useDaemonPort()` tracks the currently-ACTIVE daemon's port (App.tsx's real
 // wiring: DaemonGatedShell derives its `port` prop from `target.baseUrl`, so
 // it changes to the remote's port while a remote is active — see App.tsx's
@@ -317,7 +379,7 @@ const REMOTE_DEVBOX: DaemonMeta = {
 };
 
 // ---------------------------------------------------------------------------
-// Behavior 5 — retoken() swaps the active target's token in place after a
+// Behavior 6 — retoken() swaps the active target's token in place after a
 // re-pair, without the teardown/reconnect switchTo performs (todo #219).
 // ---------------------------------------------------------------------------
 

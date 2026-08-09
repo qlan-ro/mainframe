@@ -33,7 +33,7 @@ pub use chat_seams::{
 };
 pub use ctx::{AppCtx, GitFactory, Services};
 pub use db::Db;
-pub use http::build_app;
+pub use http::{BODY_LIMIT_BYTES, build_app};
 pub use websocket::{WsClients, spawn_broadcast_pump};
 
 use std::net::SocketAddr;

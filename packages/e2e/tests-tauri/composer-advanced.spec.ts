@@ -64,6 +64,31 @@ test.describe('§composer mention trigger (@)', () => {
     await expect(item).toContainText('index.ts');
   });
 
+  // S8: the combobox ARIA relationship must reach the composer's real DOM node,
+  // and aria-controls must resolve across the portal to the actual listbox.
+  test('the composer input carries the combobox ARIA and aria-controls resolves to the portalled listbox', async () => {
+    const { page } = app;
+    const input = page.getByTestId('chat-composer-input');
+
+    await clearComposer(page);
+    await expect(input).toHaveAttribute('aria-expanded', 'false');
+
+    await input.fill('@index');
+    const item = page.getByTestId('composer-file-item-index.ts');
+    await expect(item).toBeVisible({ timeout: 8_000 });
+
+    await expect(input).toHaveAttribute('role', 'combobox');
+    await expect(input).toHaveAttribute('aria-expanded', 'true');
+    const controlsId = await input.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+    // React's useId() ids (e.g. `:r0:`) aren't valid unescaped CSS id selectors —
+    // resolve by role instead of `#${controlsId}`.
+    const listbox = page.getByRole('listbox');
+    await expect(listbox).toHaveAttribute('id', controlsId!);
+    const activedescendant = await input.getAttribute('aria-activedescendant');
+    expect(activedescendant).toBe(await item.getAttribute('id'));
+  });
+
   // Previously: `mentionDirectiveFormatter`'s non-directory branch appended its
   // own trailing space on top of the native trigger's auto-appended closing
   // space, producing a double space (`"@index.ts  "`). Fixed by the

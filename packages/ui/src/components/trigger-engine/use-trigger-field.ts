@@ -44,6 +44,8 @@ export interface TriggerField {
   optionId(entryId: string): string;
   /** Returns true when the key was consumed and the caller must not act on it. */
   handleKeyDown(e: TriggerKeyEvent): boolean;
+  /** Dismisses the list and stops matching the current token. */
+  close(): void;
   setCursorPosition(position: number): void;
   selectEntry(entry: TriggerEntry): void;
   highlightIndex(index: number): void;
@@ -187,6 +189,7 @@ export function useTriggerField({ value, onChange, triggers, textareaRef }: UseT
     highlightedIndex,
     optionId,
     handleKeyDown,
+    close,
     setCursorPosition: setCursor,
     selectEntry,
     highlightIndex,

@@ -89,46 +89,45 @@ export function TriggerTextField({
   }
 
   return (
-    <div
-      data-testid={`${testId}-container`}
-      className={cn('relative', !bare && 'rounded-md border-[0.5px] border-input bg-card')}
-      style={{ minHeight }}
-    >
-      <TextareaAutosize
-        ref={textareaRef}
-        data-testid={testId}
-        value={value}
-        placeholder={placeholder}
-        minRows={1}
-        onChange={(e) => {
-          onChange(e.target.value);
-          field.setCursorPosition(e.target.selectionStart ?? e.target.value.length);
-        }}
-        onKeyDown={handleKeyDown}
-        onClick={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
-        onKeyUp={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
-        className={cn(
-          'w-full resize-none bg-transparent px-[14px] pr-9 text-sm leading-relaxed',
-          bare ? 'pt-[10px] pb-[4px]' : 'py-[10px]',
-          mono ? 'font-mono' : 'font-sans',
-          'text-foreground outline-none placeholder:text-muted-foreground',
-        )}
-        {...field.ariaProps}
-      />
-      <div className="absolute right-1.5 top-1.5">
-        <VariablePickerButton
-          scope={scope}
-          testId={testId}
+    // `w-80` is the list's width today; the composer's anchor-width default would
+    // widen it to the whole form column.
+    <TriggerFieldPopover field={field} testId={`${testId}-trigger-popover`} side="bottom" className="w-80">
+      <div
+        data-testid={`${testId}-container`}
+        className={cn('relative', !bare && 'rounded-md border-[0.5px] border-input bg-card')}
+        style={{ minHeight }}
+      >
+        <TextareaAutosize
+          ref={textareaRef}
+          data-testid={testId}
           value={value}
-          onChange={onChange}
-          textareaRef={textareaRef}
+          placeholder={placeholder}
+          minRows={1}
+          onChange={(e) => {
+            onChange(e.target.value);
+            field.setCursorPosition(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
+          onKeyUp={(e) => field.setCursorPosition(e.currentTarget.selectionStart ?? 0)}
+          className={cn(
+            'w-full resize-none bg-transparent px-[14px] pr-9 text-sm leading-relaxed',
+            bare ? 'pt-[10px] pb-[4px]' : 'py-[10px]',
+            mono ? 'font-mono' : 'font-sans',
+            'text-foreground outline-none placeholder:text-muted-foreground',
+          )}
+          {...field.ariaProps}
         />
+        <div className="absolute right-1.5 top-1.5">
+          <VariablePickerButton
+            scope={scope}
+            testId={testId}
+            value={value}
+            onChange={onChange}
+            textareaRef={textareaRef}
+          />
+        </div>
       </div>
-      <TriggerFieldPopover
-        field={field}
-        testId={`${testId}-trigger-popover`}
-        className="absolute left-0 top-full mt-1"
-      />
-    </div>
+    </TriggerFieldPopover>
   );
 }

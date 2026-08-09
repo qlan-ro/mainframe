@@ -10,7 +10,7 @@
  * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
  * so its height registers as scroll inset — the last message never hides behind it.)
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, type RefObject, type KeyboardEvent } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, SquareIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from './attachments/ComposerAttachmentStrip';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
+import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
@@ -62,6 +63,42 @@ function SendOrCancelButton() {
     <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-xs" disabled={!canSubmit}>
       <ArrowUpIcon />
     </Button>
+  );
+}
+
+/**
+ * The textarea, split out so `useTriggerFieldAria()` resolves correctly:
+ * `ComposerTriggers`'s provider is this element's ANCESTOR once mounted, but
+ * only because THIS component's own render — not `Composer`'s — is what ends
+ * up nested under it. Calling the hook in `Composer` directly reads it one
+ * render too early, from `Composer`'s own tree position, above
+ * `ComposerTriggers` entirely (`Composer` renders `ComposerTriggers`, not the
+ * other way around) — props are baked at element-creation time and don't
+ * recompute once the element mounts somewhere else.
+ */
+function ComposerInputField({
+  textareaRef,
+  onKeyDown,
+  placeholder,
+}: {
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  placeholder: string;
+}) {
+  const triggerAria = useTriggerFieldAria();
+  return (
+    <ComposerPrimitive.Input
+      ref={textareaRef}
+      data-testid="chat-composer-input"
+      data-mf-composer-input
+      data-noring
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      rows={1}
+      autoFocus
+      className="relative w-full resize-none overflow-hidden bg-transparent px-3.5 pt-2.5 pb-1 font-sans text-sm leading-relaxed text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      {...triggerAria}
+    />
   );
 }
 
@@ -130,16 +167,10 @@ export function Composer() {
           {/* Scroll-wrapper owns max-h + overflow so overlay and textarea wrap/scroll together. */}
           <div className="relative max-h-48 overflow-y-auto">
             <ComposerHighlight />
-            <ComposerPrimitive.Input
-              ref={textareaRef}
-              data-testid="chat-composer-input"
-              data-mf-composer-input
-              data-noring
+            <ComposerInputField
+              textareaRef={textareaRef}
               onKeyDown={handleInputKeyDown}
               placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to Mainframe…'}
-              rows={1}
-              autoFocus
-              className="relative w-full resize-none overflow-hidden bg-transparent px-3.5 pt-2.5 pb-1 font-sans text-sm leading-relaxed text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
