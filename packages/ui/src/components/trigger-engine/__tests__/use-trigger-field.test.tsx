@@ -65,23 +65,25 @@ function Field({ onHandled }: { onHandled?: (handled: boolean) => void } = {}) {
   });
 
   return (
-    <>
-      <textarea
-        ref={textareaRef}
-        data-testid="field-input"
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          field.setCursorPosition(e.target.selectionStart ?? e.target.value.length);
-        }}
-        onKeyDown={(e) => {
-          const handled = field.handleKeyDown(e);
-          onHandled?.(handled);
-        }}
-        {...field.ariaProps}
-      />
-      <TriggerFieldPopover field={field} testId="composer-trigger-popover" />
-    </>
+    // The popover anchors to one element, so the textarea needs its own wrapper.
+    <TriggerFieldPopover field={field} testId="composer-trigger-popover">
+      <div>
+        <textarea
+          ref={textareaRef}
+          data-testid="field-input"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            field.setCursorPosition(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onKeyDown={(e) => {
+            const handled = field.handleKeyDown(e);
+            onHandled?.(handled);
+          }}
+          {...field.ariaProps}
+        />
+      </div>
+    </TriggerFieldPopover>
   );
 }
 
@@ -142,6 +144,17 @@ describe('useTriggerField — Escape', () => {
     // Closed: a second Escape is no longer ours to consume.
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(handled[handled.length - 1]).toBe(false);
+  });
+
+  it('survives a pointer press inside the field it anchors to', () => {
+    // The overlay's dismiss layer treats the field as "outside" — without the
+    // anchor guard, clicking to move the caret mid-token would close the list.
+    render(<Field />);
+    const input = type('/qu');
+
+    fireEvent.pointerDown(input);
+
+    expect(screen.getByTestId('composer-trigger-popover')).toBeInTheDocument();
   });
 
   it('re-opens once the token is extended after an Escape', () => {

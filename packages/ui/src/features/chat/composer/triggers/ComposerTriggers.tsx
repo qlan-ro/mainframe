@@ -8,6 +8,10 @@
  *         `@dir/` project-tree + `@/`,`@~` filesystem drill-down) via an
  *         async-over-sync cache.
  *
+ * The suggestion list itself is a portalled popover anchored to the composer
+ * (`TriggerFieldPopover`), not a composer sibling — in flow it would grow the
+ * thread's sticky viewport footer and push thread content up.
+ *
  * `Unstable_TriggerPopoverRoot` is kept mounted with NO `<TP>` children —
  * purely so assistant-ui's `ComposerInputPluginProvider` exists (it's the
  * only public mounter of that registry). Our own field's
@@ -163,8 +167,9 @@ export function ComposerTriggers({
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <ComposerInputPluginBridge field={field} />
-      <TriggerFieldPopover field={field} testId="composer-trigger-popover" />
-      {children}
+      <TriggerFieldPopover field={field} testId="composer-trigger-popover">
+        {children}
+      </TriggerFieldPopover>
     </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   );
 }

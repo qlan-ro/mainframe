@@ -50,7 +50,11 @@ function makeField(entries: readonly TriggerEntry[], trigger: TriggerConfig | nu
 
 describe('TriggerFieldPopover row test ids', () => {
   it('falls back to `<prefix>-<id>` when the trigger declares no itemTestId', () => {
-    render(<TriggerFieldPopover field={makeField(ITEMS, makeTrigger())} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, makeTrigger())}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.getByTestId('composer-file-item-chat-1')).toBeTruthy();
     expect(screen.getByTestId('composer-file-item-src/a.ts')).toBeTruthy();
@@ -59,7 +63,11 @@ describe('TriggerFieldPopover row test ids', () => {
   it('uses itemTestId when it returns a string and falls back when it returns undefined', () => {
     const itemTestId = (item: TriggerItem) =>
       item.type === 'session' ? `composer-mention-session-${item.id}` : undefined;
-    render(<TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemTestId }))} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemTestId }))}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.getByTestId('composer-mention-session-chat-1')).toBeTruthy();
     expect(screen.queryByTestId('composer-file-item-chat-1')).toBeNull();
@@ -68,13 +76,21 @@ describe('TriggerFieldPopover row test ids', () => {
 
   it('keeps the category test id prefix-derived even when itemTestId is declared', () => {
     const entries: TriggerEntry[] = [{ id: 'agents', label: 'Agents' }, ...ITEMS];
-    render(<TriggerFieldPopover field={makeField(entries, makeTrigger({ itemTestId: () => 'custom' }))} />);
+    render(
+      <TriggerFieldPopover field={makeField(entries, makeTrigger({ itemTestId: () => 'custom' }))}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.getByTestId('composer-file-item-category-agents')).toBeTruthy();
   });
 
   it('falls back to the default prefix when the field has no active trigger', () => {
-    render(<TriggerFieldPopover field={makeField(ITEMS, null)} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, null)}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.getByTestId('trigger-item-chat-1')).toBeTruthy();
   });
@@ -85,7 +101,11 @@ describe('TriggerFieldPopover row glyphs', () => {
     item.type === 'session' ? <span data-testid="session-glyph">#</span> : null;
 
   it('renders the glyph node for the items it matches', () => {
-    render(<TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemGlyph }))} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemGlyph }))}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     const sessionRow = screen.getByTestId('composer-file-item-chat-1');
     expect(sessionRow.querySelectorAll('[data-testid="session-glyph"]')).toHaveLength(1);
@@ -93,7 +113,11 @@ describe('TriggerFieldPopover row glyphs', () => {
   });
 
   it('emits no glyph node for items the hook returns null for', () => {
-    render(<TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemGlyph }))} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, makeTrigger({ itemGlyph }))}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     const fileRow = screen.getByTestId('composer-file-item-src/a.ts');
     expect(fileRow.querySelector('[data-testid="session-glyph"]')).toBeNull();
@@ -101,7 +125,11 @@ describe('TriggerFieldPopover row glyphs', () => {
   });
 
   it('renders no glyph for any row when the trigger declares no itemGlyph', () => {
-    render(<TriggerFieldPopover field={makeField(ITEMS, makeTrigger())} />);
+    render(
+      <TriggerFieldPopover field={makeField(ITEMS, makeTrigger())}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.queryByTestId('session-glyph')).toBeNull();
     expect(screen.getByTestId('composer-file-item-chat-1').textContent).toBe('Fix the parser');
@@ -109,7 +137,11 @@ describe('TriggerFieldPopover row glyphs', () => {
 
   it('renders no glyph on category rows', () => {
     const entries: TriggerEntry[] = [{ id: 'agents', label: 'Agents' }];
-    render(<TriggerFieldPopover field={makeField(entries, makeTrigger({ itemGlyph: () => <span>x</span> }))} />);
+    render(
+      <TriggerFieldPopover field={makeField(entries, makeTrigger({ itemGlyph: () => <span>x</span> }))}>
+        <div />
+      </TriggerFieldPopover>,
+    );
 
     expect(screen.getByTestId('composer-file-item-category-agents').textContent).toBe('Agents');
   });

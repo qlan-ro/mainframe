@@ -121,6 +121,31 @@ describe('ComposerTriggers — popover closes after picking a skill', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The list is an overlay now, so the composer counts as "outside" to Radix's
+// dismiss layer. The anchor guard is what keeps a caret click from closing it.
+// ---------------------------------------------------------------------------
+
+describe('ComposerTriggers — a caret press in the composer does not dismiss the list', () => {
+  beforeEach(() => {
+    __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+  });
+
+  it('keeps the popover open when the composer input is pressed', async () => {
+    render(<Harness />);
+    const input = screen.getByTestId('composer-input');
+
+    typeInto(input, '/');
+    expect(await screen.findByTestId('composer-trigger-popover')).toBeInTheDocument();
+    expect(input.closest('[data-slot="popover-anchor"]')).not.toBeNull();
+
+    fireEvent.pointerDown(input);
+
+    expect(screen.getByTestId('composer-trigger-popover')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bug 2 — directory pick must keep the token open with NO trailing space.
 // ---------------------------------------------------------------------------
 
