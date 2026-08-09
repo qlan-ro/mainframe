@@ -5,6 +5,7 @@
  * All calls hit the remote URL directly with `fetch` (the daemon target is not
  * yet active, so the normal apiBase/http.ts wrappers must not be used).
  */
+import type { DaemonMeta } from '@qlan-ro/mainframe-types';
 
 const STORAGE_KEY = 'mf:client-device-id';
 const HEALTH_TIMEOUT_MS = 5_000;
@@ -18,10 +19,12 @@ export interface RemoteUrlParts {
   host: string;
   /** `scheme://host[:port]` with no trailing slash or path — ready for use as a fetch base URL. */
   baseUrl: string;
+  /** The scheme the URL was parsed with — `http` only when the input said so explicitly. */
+  scheme: 'http' | 'https';
 }
 
 /**
- * Normalizes any user-typed daemon URL into a canonical `{ host, baseUrl }` pair.
+ * Normalizes any user-typed daemon URL into a canonical `{ host, baseUrl, scheme }` triple.
  *
  * - If the input has no `http://` or `https://` scheme, `https://` is prepended.
  * - `baseUrl` is always the *origin* only (`scheme://host[:port]`), with no path or trailing slash.
@@ -39,7 +42,17 @@ export function parseRemoteUrl(input: string): RemoteUrlParts {
     throw new Error(`Invalid daemon URL: "${input}"`);
   }
 
-  return { host: u.host, baseUrl: u.origin };
+  const scheme = u.protocol.slice(0, -1) as 'http' | 'https';
+  return { host: u.host, baseUrl: u.origin, scheme };
+}
+
+/**
+ * Reconstructs the origin a stored `DaemonMeta` was paired with. An absent
+ * `scheme` means https — the one place that "pre-change registry entry" fact
+ * is encoded, so every reconstruction site reads it from here.
+ */
+export function daemonOrigin(meta: Pick<DaemonMeta, 'host' | 'scheme'>): string {
+  return `${meta.scheme ?? 'https'}://${meta.host}`;
 }
 
 // ---------------------------------------------------------------------------
