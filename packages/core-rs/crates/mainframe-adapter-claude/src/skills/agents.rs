@@ -41,14 +41,15 @@ pub async fn list_agents(project_path: &str) -> Vec<AgentConfig> {
                 Err(_) => continue, /* expected: unreadable file */
             };
             let name = entry.strip_suffix(".md").unwrap_or(&entry).to_string();
-            let description = derive_agent_description(&raw).summary;
+            let derived = derive_agent_description(&raw);
             let id = format!("{ADAPTER_ID}:{}:agent:{name}", agent_scope_str(scope));
 
             agents.push(AgentConfig {
                 id,
                 adapter_id: ADAPTER_ID.to_string(),
                 name,
-                description,
+                description: derived.summary,
+                full_description: derived.full,
                 scope,
                 file_path: file_path.to_string_lossy().into_owned(),
                 content: raw,
@@ -83,6 +84,9 @@ pub async fn create_agent(
         adapter_id: ADAPTER_ID.to_string(),
         name: input.name.clone(),
         description: input.description.clone(),
+        // No frontmatter is written for a freshly created agent (Decision D5),
+        // so there is nothing declared to carry as the complete value.
+        full_description: None,
         scope: input.scope,
         file_path: file_path.to_string_lossy().into_owned(),
         content,
@@ -102,10 +106,11 @@ pub async fn update_agent(
 
     fs::write(&agent.file_path, content).await?;
 
-    let description = derive_agent_description(content).summary;
+    let derived = derive_agent_description(content);
     Ok(AgentConfig {
         content: content.to_string(),
-        description,
+        description: derived.summary,
+        full_description: derived.full,
         ..agent
     })
 }
@@ -125,6 +130,8 @@ pub async fn delete_agent(agent_id: &str, project_path: &str) -> Result<(), Skil
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    const BLOCK_SCALAR_AGENT: &str = include_str!("../__fixtures__/agent-block-scalar.md");
 
     #[tokio::test]
     async fn create_and_list_agent_derives_description_from_heading() {
@@ -148,5 +155,32 @@ mod tests {
             .expect("planner");
         // First non-blank line "# planner" → heading prefix stripped.
         assert_eq!(planner.description, "planner");
+    }
+
+    #[tokio::test]
+    async fn list_agents_carries_full_description_alongside_the_summary() {
+        let tmp = tempdir().unwrap();
+        let agents_dir = tmp.path().join(".claude").join("agents");
+        fs::create_dir_all(&agents_dir).await.unwrap();
+        fs::write(agents_dir.join("todo317-planner.md"), BLOCK_SCALAR_AGENT)
+            .await
+            .unwrap();
+
+        let agents = list_agents(tmp.path().to_str().unwrap()).await;
+        let planner = agents
+            .iter()
+            .find(|a| a.scope == AgentScope::Project && a.name == "todo317-planner")
+            .expect("todo317-planner agent");
+
+        assert_eq!(
+            planner.description,
+            "Use this agent to write a spec or an implementation plan from an approved brainstorm/design."
+        );
+        let full = planner
+            .full_description
+            .as_deref()
+            .expect("full description");
+        assert!(full.contains("<example>"));
+        assert!(full.contains("Examples:"));
     }
 }
