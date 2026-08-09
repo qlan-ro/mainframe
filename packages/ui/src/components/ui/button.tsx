@@ -48,12 +48,16 @@ function Button({
   variant = 'default',
   size = 'default',
   asChild = false,
+  type,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
   }) {
   const Comp = asChild ? Slot.Root : 'button';
+  // A bare <button> defaults to type="submit", so any Button inside a form submits it by accident.
+  // asChild is exempt: the slotted child owns its tag, which may not accept a type attribute.
+  const typeProps = asChild ? (type ? { type } : {}) : { type: type ?? 'button' };
 
   return (
     <Comp
@@ -61,6 +65,7 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      {...typeProps}
       {...props}
     />
   );

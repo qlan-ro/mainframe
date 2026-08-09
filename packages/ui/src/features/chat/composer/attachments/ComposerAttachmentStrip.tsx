@@ -14,6 +14,7 @@
  * the aui-state adapters it needs (`useAttachmentSrc`, `AttachmentPreviewDialog`)
  * stay in the vendored `components/ui/assistant-ui/attachment.tsx`.
  */
+import type { RefObject } from 'react';
 import { AtSignIcon, Paperclip, XIcon } from 'lucide-react';
 import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import {
@@ -31,6 +32,8 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
 import { extTint, fileExtMeta } from '../../messages/file-ext-colors';
+import { readLiveComposerState } from '../read-live-composer-state';
+import { mentionDraft, writeComposerDraft } from '../triggers/open-mention-trigger';
 
 /**
  * One pending attachment. The tile is labelled (name + kind), so it carries no
@@ -107,21 +110,32 @@ export function ComposerAddAttachment() {
 }
 
 /**
- * Appends "@" to the draft, which opens the same mention trigger popover typing
- * "@" does (ComposerTriggers) — the design's second left-slot affordance.
+ * Opens the same mention trigger popover typing "@" does (ComposerTriggers) —
+ * the design's second left-slot affordance.
+ *
+ * The "@" is written into the textarea through its real change path, not
+ * through `composer.setText`: a programmatic write fires no DOM event, so the
+ * trigger engine's tracked cursor never moves and detection finds nothing.
  */
-export function ComposerAddMention() {
+export function ComposerAddMention({ textareaRef }: { textareaRef?: RefObject<HTMLTextAreaElement | null> }) {
   const aui = useAui();
   const handleClick = () => {
     const composer = aui.composer();
-    const text = composer.getState().text;
-    composer.setText(text.length > 0 && !text.endsWith(' ') ? `${text} @` : `${text}@`);
+    const next = mentionDraft(readLiveComposerState(composer).text);
+    const el = textareaRef?.current;
+    if (!el) {
+      console.warn('[composer] add-mention: no textarea ref — picker cannot open');
+      composer.setText(next);
+      return;
+    }
+    writeComposerDraft(el, next);
   };
 
   return (
     <Hint label="Mention a file or agent">
       <Button
         data-testid="composer-add-mention"
+        type="button"
         variant="ghost"
         size="icon-xs"
         aria-label="Mention a file or agent"

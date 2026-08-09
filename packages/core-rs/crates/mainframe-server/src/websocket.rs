@@ -489,7 +489,16 @@ async fn handle_client_event(
             attachment_ids,
             metadata,
         } => {
-            handle_message_send(ctx, out_tx, chat_id, content, attachment_ids, metadata).await;
+            handle_message_send(
+                ctx,
+                out_tx,
+                subscriptions,
+                chat_id,
+                content,
+                attachment_ids,
+                metadata,
+            )
+            .await;
         }
         ClientEvent::PermissionRespond { chat_id, response } => {
             handle_permission_respond(ctx, out_tx, chat_id, response).await;
@@ -498,17 +507,24 @@ async fn handle_client_event(
 }
 
 /// `message.send` → `ChatManager.sendMessage(chatId, content, attachmentIds,
-/// metadata)`. A rejection logs `ws message handler error` and emits a
+/// metadata)`. Registers the sending connection as a subscriber of `chat_id`
+/// first, so events emitted before the client's own `subscribe` frame arrives
+/// still reach it. A rejection logs `ws message handler error` and emits a
 /// chat-scoped error with the underlying reason. Until `ctx.chat_manager` is wired
 /// the seam warns once and drops the send.
 async fn handle_message_send(
     ctx: &Arc<AppCtx>,
     out_tx: &mpsc::UnboundedSender<String>,
+    subscriptions: &Arc<Mutex<HashSet<String>>>,
     chat_id: String,
     content: String,
     attachment_ids: Option<Vec<String>>,
     metadata: Option<mainframe_types::events::MessageSendMetadata>,
 ) {
+    // The sender is the one connection guaranteed to care about this chat, and
+    // send_message emits the user message before this task ever reads the client's
+    // `subscribe` frame — without membership here the fan-out drops those events.
+    lock(subscriptions).insert(chat_id.clone());
     let Some(cm) = ctx.chat_manager.as_ref() else {
         warn_message_send_seam();
         return;
@@ -830,3 +846,6 @@ mod tests {
 // replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
 // consumes the child's stdout/stderr on first attach, so a reconnect after the
 // first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.
+// message.send also registers the sending connection as a subscriber of its
+// target chat before the seam check, so events emitted in the send-before-
+// subscribe window are no longer dropped (#275).

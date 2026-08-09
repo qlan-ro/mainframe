@@ -4,6 +4,8 @@
 //! allowlist).
 #![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
 
+pub mod raw_http;
+
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;

@@ -13,7 +13,7 @@ import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { getHost } from '@/lib/host';
 import { updateActiveDaemonToken } from '@/lib/daemon/active-daemon';
 import { clearAuthFailure } from '@/lib/daemon/auth-failure-store';
-import { parseRemoteUrl } from './pair-daemon';
+import { daemonOrigin, parseRemoteUrl } from './pair-daemon';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveDaemon } from './active-daemon-context';
 
@@ -38,7 +38,7 @@ function buildLocalTarget(port: number): DaemonTarget {
 
 async function buildRemoteTarget(meta: DaemonMeta): Promise<DaemonTarget> {
   const token = await getHost().daemons.getToken(meta.id);
-  const { baseUrl } = parseRemoteUrl(`https://${meta.host}`);
+  const { baseUrl } = parseRemoteUrl(daemonOrigin(meta));
   return { id: meta.id, kind: 'remote', label: meta.label, baseUrl, token };
 }
 

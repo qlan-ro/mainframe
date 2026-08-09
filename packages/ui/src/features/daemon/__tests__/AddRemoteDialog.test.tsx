@@ -8,6 +8,8 @@
  *     → host.daemons.setToken called with correct id+token, onDone fired.
  *  3. failing code (PairingError 'invalid') → error notice rendered, no add.
  *  4. network error (PairingError 'network') → error UI shown, no crash, no add.
+ *  5. every URL the dialog shows or posts to comes from the paired scheme, and
+ *     a refused endpoint gets its own notice in both steps (todo #305).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -80,6 +82,16 @@ const REMOTE_META: DaemonMeta = {
   label: 'my-server',
   host: 'my-server.example.com',
 };
+
+const HTTP_META: DaemonMeta = {
+  id: 'qa-daemon',
+  kind: 'remote',
+  label: 'QA daemon',
+  host: '127.0.0.1:31500',
+  scheme: 'http',
+};
+
+const INSECURE_URL = 'http://192.168.1.10:31415';
 
 // ---------------------------------------------------------------------------
 // Setup / teardown
@@ -345,5 +357,108 @@ describe('AddRemoteDialog — network error', () => {
     expect(mockAdd).not.toHaveBeenCalled();
     expect(setTokenSpy).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 5 — re-pair reads the scheme the daemon was paired with. Both the
+// chip the user reads and the URL the code is posted to were https literals,
+// so an http-paired daemon could not be re-paired at all (todo #305).
+// `confirmPairing` is module-mocked here, so its first argument IS the posted
+// origin — the /api/auth/confirm suffix is pinned in pair-daemon.test.ts.
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — repair-mode honors the paired scheme', () => {
+  it('shows and posts to the http origin for an http-paired daemon', async () => {
+    const user = userEvent.setup();
+
+    render(<AddRemoteDialog open mode="repair" target={HTTP_META} onClose={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.getByText('http://127.0.0.1:31500')).toBeInTheDocument();
+
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => {
+      expect(confirmPairing).toHaveBeenCalledWith('http://127.0.0.1:31500', VALID_CODE, expect.any(String));
+    });
+  });
+
+  it('shows and posts to https for an entry with no stored scheme', async () => {
+    const user = userEvent.setup();
+
+    render(<AddRemoteDialog open mode="repair" target={REMOTE_META} onClose={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.getByText(`https://${REMOTE_META.host}`)).toBeInTheDocument();
+
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => {
+      expect(confirmPairing).toHaveBeenCalledWith(`https://${REMOTE_META.host}`, VALID_CODE, expect.any(String));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 7 — DaemonSwitcher mounts one AddRemoteDialog instance for the
+// dialog's whole lifetime and only toggles `open`/`mode`/`target` as props
+// (see DaemonSwitcher.tsx). `step`/`url` must reseed from those props on
+// every re-open, not just at the component's first mount (todo #305 QA S4).
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — re-opens on a persistently-mounted instance', () => {
+  it('reseeds step 1 with the locked http chip on re-pair after an add-mode close', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AddRemoteDialog open={false} mode="add" onClose={vi.fn()} onDone={vi.fn()} />);
+
+    // Re-pair opens the SAME mounted instance with new props — no unmount.
+    rerender(<AddRemoteDialog open mode="repair" target={HTTP_META} onClose={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.queryByTestId('daemon-add-url')).not.toBeInTheDocument();
+    expect(screen.getByText('http://127.0.0.1:31500')).toBeInTheDocument();
+
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => {
+      expect(confirmPairing).toHaveBeenCalledWith('http://127.0.0.1:31500', VALID_CODE, expect.any(String));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavior 6 — a refused endpoint reads as refused, not as unreachable, and
+// never reaches the pairing-code step.
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — refused endpoint', () => {
+  it('shows the refusal notice and stays on step 0 when verify refuses', async () => {
+    const user = userEvent.setup();
+    vi.mocked(verifyDaemon).mockResolvedValue({ ok: false, reason: 'refused-insecure' });
+
+    render(<AddRemoteDialog open mode="add" onClose={vi.fn()} onDone={vi.fn()} />);
+
+    const urlInput = screen.getByTestId('daemon-add-url');
+    await user.type(urlInput, INSECURE_URL);
+    await user.click(screen.getByTestId('daemon-add-verify'));
+
+    await waitFor(() => expect(screen.getByTestId('daemon-add-insecure')).toBeInTheDocument());
+    expect(screen.queryByTestId('daemon-add-unreachable')).toBeNull();
+    expect(screen.queryByTestId('daemon-add-continue')).toBeNull();
+  });
+
+  it('shows the refusal notice on step 1 when confirm refuses', async () => {
+    const user = userEvent.setup();
+    vi.mocked(confirmPairing).mockRejectedValue(new PairingError('insecure'));
+
+    render(<AddRemoteDialog open mode="add" onClose={vi.fn()} onDone={vi.fn()} />);
+
+    await advanceToStep1(user);
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => expect(screen.getByTestId('daemon-pair-insecure')).toBeInTheDocument());
+    expect(mockAdd).not.toHaveBeenCalled();
   });
 });

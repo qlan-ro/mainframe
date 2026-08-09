@@ -14,7 +14,9 @@ export function sessionItemTestId(item: TriggerItem): string | undefined {
 }
 
 export function sessionItemGlyph(item: TriggerItem): ReactNode {
-  return item.type === 'session' ? <MessageSquare size={12} className="shrink-0 text-muted-foreground" /> : null;
+  // Sized by class, not by prop: the CommandItem recipe forces `size-4` on any
+  // svg that carries no size class of its own.
+  return item.type === 'session' ? <MessageSquare className="size-3 shrink-0 text-muted-foreground" /> : null;
 }
 
 /**
