@@ -65,8 +65,15 @@ Red-phase asymmetry between the two sides, and it matters:
   `data-testid={…-effort-ultra}` unconditionally with `{level.label}` inside; with `EFFORT_META['ultra']`
   undefined the option renders with the testid and an *empty label* — that is the bug. Red assertions must
   check the visible text `Ultra`.
-- The seven-level clamp regression table is **expected green at red phase**. It pins current behaviour so the
-  rank-table edit cannot move it. Only the `ultra` cases are red.
+- **Most `ultra` cases are also born green, and that is not a mistake.** `clampEffortToSupported` returns
+  before it ever reads `EFFORT_RANK` in three of its four branches: `supported.length === 0` → `null`,
+  `supported.includes(requested)` → `requested`, and the supported-`defaultEffort` branch. Vitest erases types,
+  so an `ultra` case that lands in one of those branches passes today. Only the branch that ranks levels — the
+  highest-supported-below fallback with no usable `defaultEffort` — is red. Tasks 1 and 2 name their red cases
+  exactly; every other `ultra` case there is a pin in the sense of task 10, and must be commented as one. Do
+  not bend a born-green case to force a failure.
+- The seven-level clamp regression table is likewise **expected green at red phase**. It pins current behaviour
+  so the rank-table edit cannot move it.
 
 ---
 
@@ -83,34 +90,48 @@ Cover `clampEffortToSupported` from `../adapter.js`:
 - A regression table over the seven pre-existing levels (`none`…`max`) against at least three supported sets —
   a full set, a Claude-like `['low','medium','high','max']` (no `xhigh`), and a single-element set — with and
   without a `defaultEffort`. Assert the exact values returned today. These are green now and must stay green.
-- `supported: []` → `null`, for a pre-existing level and for `ultra`.
-- `ultra` requested against a set that includes it → `'ultra'`.
-- `ultra` requested against `['low','medium','high','max']` with no `defaultEffort` → `'max'`. This is the
-  behavioural proof that `ultra` outranks `max`: without the new rank entry the filter comparison is `NaN` and
-  the result is not `'max'`.
+- `supported: []` → `null`, for a pre-existing level and for `ultra`. **Pin, green today** — the empty-set
+  guard is the function's first line and never reaches the rank table.
+- `ultra` requested against a set that includes it → `'ultra'`. **Pin, green today** —
+  `supported.includes(requested)` short-circuits.
+- `ultra` requested against `['low','medium','high','max']` with no `defaultEffort` → `'max'`. **Red** —
+  returns `'low'` today, because the missing rank entry makes every filter comparison `NaN` and the function
+  falls through to the lowest supported level. This is the behavioural proof that `ultra` outranks `max`.
 - `ultra` requested against a Codex-like `['medium','high','xhigh']` with no `defaultEffort` → `'xhigh'`.
+  **Red** — returns `'medium'` today, same `NaN` fallthrough.
 - `ultra` requested against `['low','high']` with `defaultEffort: 'high'` → `'high'` (supported default wins
-  over the highest-below rule).
+  over the highest-below rule). **Pin, green today** — the `defaultEffort` branch returns before the ranking.
+
+Comment each pin as a pin in the test file, next to the case.
 
 `EFFORT_RANK` stays unexported — the ordering is asserted through behaviour, not through the private table.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-types exec vitest run src/__tests__/effort-clamp.test.ts` —
-the seven-level regression cases pass; every `ultra` case fails.
+exactly two cases fail, both `ultra` with no usable `defaultEffort`: `['low','medium','high','max']` (returns
+`'low'`) and `['medium','high','xhigh']` (returns `'medium'`). Everything else passes, including the other
+three `ultra` cases and the whole seven-level regression table. A green pin is the expected result, not a
+broken test — do not weaken one to make it fail.
 
 #### Task 2 — `effortOptions` / `displayEffort` red tests
 
 **File:** `packages/ui/src/lib/__tests__/model-tuning.test.ts` (extend; do not restructure the existing cases)
 
 - `effortOptions({ id:'gpt', label:'GPT', supportedEfforts:['high','xhigh','ultra'] })` returns an `ultra`
-  entry whose `label` is `'Ultra'` and whose `description` is non-empty.
-- `effortOptions` on a model without `ultra` returns no `ultra` entry (guard; green today).
+  entry whose `label` is `'Ultra'` and whose `description` is non-empty. **Red** — `effortOptions` spreads
+  `EFFORT_META[id]`, which is `undefined` for `ultra`, so the entry today is `{ id:'ultra' }` with no label.
+- `effortOptions` on a model without `ultra` returns no `ultra` entry. **Pin, green today.**
 - `displayEffort({ effort:'ultra' }, model)` where the model advertises `ultra` → `{ value:'ultra',
-  locked:false }`.
+  locked:false }`. **Pin, green today** — `displayEffort` delegates to `clampEffortToSupported`, which
+  short-circuits on `supported.includes(requested)` without touching the rank table.
 - `displayEffort({ effort:'ultra' }, claudeLike)` where `claudeLike.supportedEfforts` is
-  `['low','medium','high','max']` and there is no `defaultEffort` → `{ value:'max', locked:false }`.
+  `['low','medium','high','max']` and there is no `defaultEffort` → `{ value:'max', locked:false }`. **Red** —
+  the clamp falls through to `'low'` today.
+
+Comment both pins as pins, same as task 1.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/lib/__tests__/model-tuning.test.ts` —
-the four new assertions fail; the pre-existing ones pass.
+exactly two of the four new assertions fail: the `effortOptions` label (undefined today) and the claude-like
+`displayEffort` downgrade (`'low'` today). The two pins and every pre-existing assertion pass.
 
 #### Task 3 — Composer flyout red test
 
