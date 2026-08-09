@@ -97,6 +97,14 @@ covered by Task 3 plus the TaskEditModal run in Task 4.
 
 TDD order: tasks 1, 2 and 3 are written and observed failing before tasks 4–6 exist.
 
+**Typecheck is red between tasks 1 and 6 — expected, do not "fix" it.** `packages/ui/tsconfig.json` sets
+`"include": ["src"]`, so `pnpm --filter @qlan-ro/mainframe-ui typecheck` covers the test files. Tasks 1 and 2
+render `<ComposerAddMention textareaRef={ref} />`, and the component takes no props until task 6, so the
+package typecheck reports TS2322 (`Property 'textareaRef' does not exist on type 'IntrinsicAttributes'`) in
+those two test files for the whole red window. Do not suppress it: an `@ts-expect-error` turns into an
+unused-directive error the moment task 6 lands. The red tasks gate on their own single-file vitest runs; the
+package typecheck is task 7's gate, after task 6 adds the prop.
+
 ### Task 1 — (test, red) Rewrite `ComposerAttachmentStrip.test.tsx` for the submit defect
 
 File: `packages/ui/src/features/chat/composer/attachments/__tests__/ComposerAttachmentStrip.test.tsx`
@@ -184,8 +192,9 @@ Two exports, no React:
   A one-line comment states the why: assistant-ui's `ComposerPrimitive.Input` derives both `setText` and the
   trigger engine's `setCursorPosition` from that event, and a programmatic `setText` fires neither.
 
-Verify: typecheck only at this point (`pnpm --filter @qlan-ro/mainframe-ui typecheck`); behavior is asserted by
-tasks 1 and 2 after task 6.
+Verify: no gate of its own. The two exports are pure and unreferenced until task 6, and the package typecheck
+cannot pass here — see "Typecheck is red between tasks 1 and 6" above. Behavior is asserted by tasks 1 and 2
+once task 6 wires the helper in; the package typecheck runs in task 7.
 
 ### Task 6 — (ui) Rewrite `ComposerAddMention` and wire the ref
 
