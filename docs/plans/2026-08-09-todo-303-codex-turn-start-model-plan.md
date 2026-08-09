@@ -449,9 +449,11 @@ All four commands from `packages/core-rs`:
    `DAEMON_PORT=31502`, never :31415). Created a Codex chat with no model, sent a message over the WS API
    directly (`{"type":"message.send",...}`): the turn started and completed with a real assistant reply
    ("Hello!"), zero `-32600` occurrences in the trace log, and the app-server's own
-   `thread/settings/updated` echo confirmed `collaborationMode.settings.model == "gpt-5.6-sol"` (tier 3,
-   the catalog default — this account's Codex has no saved default, so tier 3 is what resolved, which is
-   still full coverage of "a model is always sent"). Repeated with `PATCH .../config {"planMode":true}`:
+   `thread/settings/updated` echo confirmed `collaborationMode.settings.model == "gpt-5.6-sol"` (tier 2,
+   the model the app-server itself reported on `thread/start` — tier 2 and tier 3 are indistinguishable
+   here, since both would yield `gpt-5.6-sol`, but per the Risks section `ThreadStartResponse.model` is a
+   required string in 0.144.3, so tier 2 always resolves first in production). Repeated with
+   `PATCH .../config {"planMode":true}`:
    the same echo showed `collaborationMode.mode == "plan"` with the same non-empty model, confirming plan
    mode still travels on a model-less chat.
 5. **No-model error path**, driven through a fake app-server (`while read` dispatch-by-method, per-request
