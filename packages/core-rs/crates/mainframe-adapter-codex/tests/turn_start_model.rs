@@ -1,9 +1,17 @@
-//! Todo #303 — harness for the Codex turn-start model resolution tests.
-//! Drives a real `CodexSession` (spawn + `send_message`) against a fake
-//! `codex app-server` that tees every request line it receives to a capture
-//! file, so assertions read the exact serialized `turn/start` payload rather
-//! than adapter-side structs. Written against **today's** API: no reference
-//! to `turn_model`, `default_model`, or any other symbol the fix introduces.
+//! Todo #303 — red-phase integration tests for the Codex turn-start model
+//! resolution. Written against **today's** API: no reference to `turn_model`,
+//! `default_model`, or any other symbol the fix introduces. Drives a real
+//! `CodexSession` (spawn + `send_message`) against a fake `codex app-server`
+//! that tees every request line it receives to a capture file, so assertions
+//! read the exact serialized `turn/start` payload rather than adapter-side
+//! structs.
+//!
+//! `configured_model_is_sent_verbatim_in_collaboration_mode_settings` passes
+//! today and is the regression guard for acceptance criterion 1. The other
+//! four cases fail today — `CollaborationModeSettings.model` is
+//! `Option<String>` with `skip_serializing_if`, so a model-less chat omits the
+//! key instead of falling back through the reported/default tiers, and
+//! nothing stops a `turn/start` from being sent when no model can be found.
 #![cfg(unix)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -160,11 +168,8 @@ fn turn_start_params(capture_path: &Path) -> Option<Value> {
         .map(|v| v["params"].clone())
 }
 
-/// Smoke test for the harness itself: a turn on a chat with a configured
-/// model reaches the fake app-server and is captured. Group 2's model-tier
-/// resolution tests build on this same helper.
 #[tokio::test]
-async fn a_turn_on_a_configured_model_chat_reaches_the_fake_app_server() {
+async fn configured_model_is_sent_verbatim_in_collaboration_mode_settings() {
     let (session, _rec, capture_path, _bin_dir, _project_dir) =
         spawn_test_session(Some("gpt-5.5"), None, r#","model":"gpt-5.6-sol""#).await;
 
@@ -173,9 +178,135 @@ async fn a_turn_on_a_configured_model_chat_reaches_the_fake_app_server() {
         .await
         .expect("send_message succeeds when the chat has a configured model");
 
-    let params = turn_start_params(&capture_path).expect("turn/start was captured");
+    let params = turn_start_params(&capture_path).expect("turn/start was sent");
     assert_eq!(
         params["collaborationMode"]["settings"]["model"],
         Value::String("gpt-5.5".to_string())
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["reasoning_effort"],
+        Value::Null
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["developer_instructions"],
+        Value::Null
+    );
+    assert_eq!(params["model"], Value::String("gpt-5.5".to_string()));
+}
+
+#[tokio::test]
+async fn model_less_chat_falls_back_to_the_thread_reported_model() {
+    let (session, _rec, capture_path, _bin_dir, _project_dir) =
+        spawn_test_session(None, None, r#","model":"gpt-5.6-sol""#).await;
+
+    session
+        .send_message("hello".to_string(), Vec::new(), None)
+        .await
+        .expect("send_message succeeds by falling back to the thread-reported model");
+
+    let params = turn_start_params(&capture_path).expect("turn/start was sent");
+    assert_eq!(
+        params["collaborationMode"]["settings"]["model"],
+        Value::String("gpt-5.6-sol".to_string())
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["reasoning_effort"],
+        Value::Null
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["developer_instructions"],
+        Value::Null
+    );
+    assert!(
+        params.get("model").is_none(),
+        "top-level turn/start model key must stay omitted when the chat has none, got {params:?}"
+    );
+}
+
+#[tokio::test]
+async fn empty_model_is_treated_as_absent() {
+    let (session, _rec, capture_path, _bin_dir, _project_dir) =
+        spawn_test_session(Some(""), None, r#","model":"gpt-5.6-sol""#).await;
+
+    session
+        .send_message("hello".to_string(), Vec::new(), None)
+        .await
+        .expect("send_message succeeds by treating an empty model id as absent");
+
+    let params = turn_start_params(&capture_path).expect("turn/start was sent");
+    assert_eq!(
+        params["collaborationMode"]["settings"]["model"],
+        Value::String("gpt-5.6-sol".to_string())
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["reasoning_effort"],
+        Value::Null
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["developer_instructions"],
+        Value::Null
+    );
+}
+
+#[tokio::test]
+async fn plan_mode_survives_on_a_model_less_chat() {
+    let (session, _rec, capture_path, _bin_dir, _project_dir) =
+        spawn_test_session(None, Some(true), r#","model":"gpt-5.6-sol""#).await;
+
+    session
+        .send_message("hello".to_string(), Vec::new(), None)
+        .await
+        .expect("send_message succeeds on a model-less plan-mode chat");
+
+    let params = turn_start_params(&capture_path).expect("turn/start was sent");
+    assert_eq!(
+        params["collaborationMode"]["mode"],
+        Value::String("plan".to_string())
+    );
+    let model = params["collaborationMode"]["settings"]["model"]
+        .as_str()
+        .expect("collaborationMode.settings.model is a non-empty string");
+    assert!(!model.is_empty());
+    assert_eq!(
+        params["collaborationMode"]["settings"]["reasoning_effort"],
+        Value::Null
+    );
+    assert_eq!(
+        params["collaborationMode"]["settings"]["developer_instructions"],
+        Value::Null
+    );
+    assert!(
+        params.get("model").is_none(),
+        "top-level turn/start model key must stay omitted when the chat has none, got {params:?}"
+    );
+}
+
+#[tokio::test]
+async fn no_resolvable_model_fails_the_send_without_starting_a_turn() {
+    // thread/start reply omits `model` entirely — no reported-model fallback,
+    // and no default hint exists on today's API.
+    let (session, _rec, capture_path, _bin_dir, _project_dir) =
+        spawn_test_session(None, None, "").await;
+
+    let result = session
+        .send_message("hello".to_string(), Vec::new(), None)
+        .await;
+
+    let err = result.expect_err("send_message must fail when no tier resolves a model");
+    let message = err.to_string();
+    assert!(
+        message.to_lowercase().contains("model"),
+        "error message should name the missing model, got: {message}"
+    );
+
+    // Load-bearing: today's raw `-32600 ... missing field 'model'` also
+    // contains the word "model", so the error-text assertion alone would pass
+    // spuriously. The capture file must show no turn/start request at all.
+    let sent_turn_start = captured_requests(&capture_path)
+        .iter()
+        .any(|v| v["method"] == "turn/start");
+    assert!(
+        !sent_turn_start,
+        "a turn/start request must never be sent when no model resolves"
     );
 }
