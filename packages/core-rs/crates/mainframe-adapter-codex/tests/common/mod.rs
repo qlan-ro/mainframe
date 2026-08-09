@@ -30,6 +30,7 @@ pub struct Recorded {
     /// Every block from every `on_message`/`on_tool_result` call, flattened and
     /// in emission order — `nested_blocks`/`top_level_blocks` read this.
     pub ordered_blocks: Vec<MessageContent>,
+    pub cli_messages: Vec<String>,
 }
 
 #[derive(Clone, Default)]
@@ -65,6 +66,9 @@ impl Recorder {
     }
     pub fn compact_starts(&self) -> usize {
         self.0.lock().unwrap().compact_starts
+    }
+    pub fn cli_messages(&self) -> Vec<String> {
+        self.0.lock().unwrap().cli_messages.clone()
     }
     /// Every recorded message/tool-result block whose `parentToolUseId` equals
     /// `card_id`, in emission order.
@@ -129,7 +133,9 @@ impl SessionSink for RecordingSink {
         self.0.lock().unwrap().todos.push(todos);
     }
     fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
+    fn on_cli_message(&self, text: &str) {
+        self.0.lock().unwrap().cli_messages.push(text.to_string());
+    }
     fn on_skill_loaded(&self, _entry: LoadedSkill) {}
     fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
