@@ -57,6 +57,7 @@ vi.mock('../../sessions/use-session-mention-source', () => ({
 
 import { ComposerTriggers } from '../ComposerTriggers';
 import { useSessionReferences } from '../../sessions/session-reference-store';
+import { useTriggerFieldAria } from '../trigger-field-aria-context';
 
 // ---------------------------------------------------------------------------
 // Harness — a real external-store runtime + real trigger popovers.
@@ -81,6 +82,34 @@ function Harness() {
 
 function typeInto(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value, selectionStart: value.length, selectionEnd: value.length } });
+}
+
+/**
+ * Mirrors Composer.tsx's own wiring: read the field's combobox ARIA off
+ * `useTriggerFieldAria()` and spread it onto `ComposerPrimitive.Input`, the
+ * same context consumption Composer.tsx does deep inside the `children` tree
+ * `ComposerTriggers` wraps.
+ */
+function AriaInput() {
+  const aria = useTriggerFieldAria();
+  return <ComposerPrimitive.Input data-testid="composer-input" {...aria} />;
+}
+
+function HarnessWithAria() {
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
+    isRunning: false,
+    messages: [],
+    onNew: async () => {},
+  });
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ComposerPrimitive.Root>
+        <ComposerTriggers>
+          <AriaInput />
+        </ComposerTriggers>
+      </ComposerPrimitive.Root>
+    </AssistantRuntimeProvider>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +146,31 @@ describe('ComposerTriggers — popover closes after picking a skill', () => {
     await waitFor(() => {
       expect(input.value).toBe('/my-skill ');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The list is an overlay now, so the composer counts as "outside" to Radix's
+// dismiss layer. The anchor guard is what keeps a caret click from closing it.
+// ---------------------------------------------------------------------------
+
+describe('ComposerTriggers — a caret press in the composer does not dismiss the list', () => {
+  beforeEach(() => {
+    __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+  });
+
+  it('keeps the popover open when the composer input is pressed', async () => {
+    render(<Harness />);
+    const input = screen.getByTestId('composer-input');
+
+    typeInto(input, '/');
+    expect(await screen.findByTestId('composer-trigger-popover')).toBeInTheDocument();
+    expect(input.closest('[data-slot="popover-anchor"]')).not.toBeNull();
+
+    fireEvent.pointerDown(input);
+
+    expect(screen.getByTestId('composer-trigger-popover')).toBeInTheDocument();
   });
 });
 
@@ -180,5 +234,44 @@ describe('ComposerTriggers — session mention rows', () => {
     });
     const recorded = Object.values(useSessionReferences.getState().byThread);
     expect(recorded).toContainEqual({ 'Foo refactor': '/tmp/transcripts/chat-2.jsonl' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The combobox ARIA relationship (S8) — the input carries role/aria-expanded/
+// aria-controls/aria-activedescendant, and aria-controls resolves to the
+// portalled listbox even though it's outside the input's own DOM subtree.
+// ---------------------------------------------------------------------------
+
+describe('ComposerTriggers — combobox ARIA reaches the composer input', () => {
+  beforeEach(() => {
+    __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+  });
+
+  it('is a collapsed combobox before any trigger is typed', () => {
+    render(<HarnessWithAria />);
+    const input = screen.getByTestId('composer-input');
+
+    expect(input).toHaveAttribute('role', 'combobox');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).not.toHaveAttribute('aria-controls');
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+  });
+
+  it('points aria-controls at the portalled listbox and aria-activedescendant at the highlighted row', async () => {
+    render(<HarnessWithAria />);
+    const input = screen.getByTestId('composer-input');
+
+    typeInto(input, '/');
+    const item = await screen.findByTestId('composer-skill-item-my-skill');
+
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    const controlsId = input.getAttribute('aria-controls');
+    expect(controlsId).toBeTruthy();
+
+    const listbox = screen.getByRole('listbox');
+    expect(listbox.id).toBe(controlsId);
+    expect(input.getAttribute('aria-activedescendant')).toBe(item.id);
   });
 });

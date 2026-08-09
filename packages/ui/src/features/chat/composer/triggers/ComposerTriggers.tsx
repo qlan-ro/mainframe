@@ -8,6 +8,10 @@
  *         `@dir/` project-tree + `@/`,`@~` filesystem drill-down) via an
  *         async-over-sync cache.
  *
+ * The suggestion list itself is a portalled popover anchored to the composer
+ * (`TriggerFieldPopover`), not a composer sibling — in flow it would grow the
+ * thread's sticky viewport footer and push thread content up.
+ *
  * `Unstable_TriggerPopoverRoot` is kept mounted with NO `<TP>` children —
  * purely so assistant-ui's `ComposerInputPluginProvider` exists (it's the
  * only public mounter of that registry). Our own field's
@@ -37,6 +41,7 @@ import {
 import { useTriggerField, type TriggerField } from '@/components/trigger-engine/use-trigger-field';
 import { TriggerFieldPopover } from '@/components/trigger-engine/TriggerFieldPopover';
 import type { TriggerConfig } from '@/components/trigger-engine/types';
+import { TriggerFieldAriaProvider } from './trigger-field-aria-context';
 
 /**
  * Builds the `/` skills and `@` mention trigger configs for the active chat,
@@ -163,8 +168,14 @@ export function ComposerTriggers({
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <ComposerInputPluginBridge field={field} />
-      <TriggerFieldPopover field={field} testId="composer-trigger-popover" />
-      {children}
+      {/* Outside TriggerFieldPopover's PopoverAnchor slot on purpose — that slot
+          clones props onto its single child for Radix's anchor measurement, and
+          a context provider isn't a forwardable DOM element. */}
+      <TriggerFieldAriaProvider value={field.ariaProps}>
+        <TriggerFieldPopover field={field} testId="composer-trigger-popover">
+          {children}
+        </TriggerFieldPopover>
+      </TriggerFieldAriaProvider>
     </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   );
 }
