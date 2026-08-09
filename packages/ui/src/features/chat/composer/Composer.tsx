@@ -181,7 +181,7 @@ export function Composer() {
               className="flex min-h-8 min-w-0 items-center gap-1 text-muted-foreground"
             >
               <ComposerAddAttachment />
-              <ComposerAddMention />
+              <ComposerAddMention textareaRef={textareaRef} />
               {/* Hairline separating the attachment actions from the config chips. */}
               <Separator orientation="vertical" className="mx-1 h-3 self-auto" />
               <ComposerToolbar />

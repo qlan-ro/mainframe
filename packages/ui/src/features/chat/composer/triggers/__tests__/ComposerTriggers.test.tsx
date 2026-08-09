@@ -11,10 +11,12 @@
  * Only our own hooks are mocked: useChatExtras, useDraftConfig, useChatSkills/
  * useChatAgents, and the `@/lib/api/files` REST wrappers.
  */
+import { useRef } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AssistantRuntimeProvider, ComposerPrimitive, useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessage } from '@assistant-ui/react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -56,6 +58,7 @@ vi.mock('../../sessions/use-session-mention-source', () => ({
 }));
 
 import { ComposerTriggers } from '../ComposerTriggers';
+import { ComposerAddMention } from '../../attachments/ComposerAttachmentStrip';
 import { useSessionReferences } from '../../sessions/session-reference-store';
 import { useTriggerFieldAria } from '../trigger-field-aria-context';
 
@@ -82,6 +85,38 @@ function Harness() {
 
 function typeInto(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value, selectionStart: value.length, selectionEnd: value.length } });
+}
+
+/**
+ * Harness for the add-mention BUTTON (todo #316), not typed input: the same
+ * `ComposerPrimitive.Root` form and trigger wiring as `Harness`, plus a real
+ * `textareaRef` shared between `ComposerPrimitive.Input` and
+ * `ComposerAddMention` — the seam the button's click handler must drive — and
+ * an `onNew` spy to prove a click never reaches the runtime as a submit.
+ *
+ * `Root` nests INSIDE `ComposerTriggers` the way Composer.tsx nests it: the
+ * popover anchors onto its single child, so the input and the button have to
+ * reach it as one element.
+ */
+function ButtonHarness({ onNew }: { onNew: () => Promise<void> }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
+    isRunning: false,
+    messages: [],
+    onNew,
+  });
+  return (
+    <TooltipProvider>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <ComposerTriggers textareaRef={textareaRef}>
+          <ComposerPrimitive.Root>
+            <ComposerPrimitive.Input ref={textareaRef} data-testid="composer-input" />
+            <ComposerAddMention textareaRef={textareaRef} />
+          </ComposerPrimitive.Root>
+        </ComposerTriggers>
+      </AssistantRuntimeProvider>
+    </TooltipProvider>
+  );
 }
 
 /**
@@ -234,6 +269,70 @@ describe('ComposerTriggers — session mention rows', () => {
     });
     const recorded = Object.values(useSessionReferences.getState().byThread);
     expect(recorded).toContainEqual({ 'Foo refactor': '/tmp/transcripts/chat-2.jsonl' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Add-mention BUTTON (todo #316) — clicking it must open the same picker
+// typing "@" does, and must never submit the composer. Every describe block
+// above (typing "@" by hand) is left untouched and must keep passing: it is
+// the "typing still works" guard for this fix.
+// ---------------------------------------------------------------------------
+
+describe('ComposerAddMention — click opens the picker without submitting (todo #316)', () => {
+  beforeEach(() => {
+    __skills = [];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+    refreshSessionsMock.mockReset();
+    __sessionItems = [{ id: 'chat-2', type: 'session', label: 'Foo refactor' }];
+    __sessionPaths = new Map([['chat-2', '/tmp/transcripts/chat-2.jsonl']]);
+    useSessionReferences.setState({ byThread: {} });
+  });
+
+  it('opens the picker with entries, focuses the textarea, and never submits, on an empty draft', async () => {
+    const onNew = vi.fn(async () => {});
+    render(<ButtonHarness onNew={onNew} />);
+
+    fireEvent.click(screen.getByTestId('composer-add-mention'));
+
+    expect(await screen.findByTestId('composer-trigger-popover')).toBeInTheDocument();
+    expect(await screen.findByTestId('composer-mention-session-chat-2')).toBeInTheDocument();
+    expect(onNew).not.toHaveBeenCalled();
+
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+    expect(input.value).toBe('@');
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(1);
+  });
+
+  it('appends "@" with a leading space on a pre-typed draft and still opens the picker', async () => {
+    const onNew = vi.fn(async () => {});
+    render(<ButtonHarness onNew={onNew} />);
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+    typeInto(input, 'hello');
+
+    fireEvent.click(screen.getByTestId('composer-add-mention'));
+
+    await waitFor(() => expect(input.value).toBe('hello @'));
+    expect(screen.getByTestId('composer-trigger-popover')).toBeInTheDocument();
+    expect(input.selectionStart).toBe(7);
+    expect(onNew).not.toHaveBeenCalled();
+  });
+
+  it('Escape closes the popover, leaves the draft and caret intact, and still never submits', async () => {
+    const onNew = vi.fn(async () => {});
+    render(<ButtonHarness onNew={onNew} />);
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+
+    fireEvent.click(screen.getByTestId('composer-add-mention'));
+    await screen.findByTestId('composer-trigger-popover');
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByTestId('composer-trigger-popover')).not.toBeInTheDocument());
+    expect(input.value).toBe('@');
+    expect(input.selectionStart).toBe(1);
+    expect(onNew).not.toHaveBeenCalled();
   });
 });
 
