@@ -348,12 +348,46 @@ Add `pub cli_messages: Vec<String>` to `Recorded`, record it in `RecordingSink::
 
 Model it on `tests/list_models.rs`: `#![cfg(unix)]`, a `tempdir`, a `0o755` shell script named `codex`, and a
 `CodexSession` spawned with `SessionSpawnOptions { executable_path: Some(<fake>), .. }` and the recorder's sink.
-The script reads `initialize`, `initialized`, `thread/start` and `turn/start` line by line, appends the
-`turn/start` line to a capture file passed through the environment, and replies:
+The script reads `initialize`, `initialized`, `thread/start` and `turn/start` line by line, writes the
+`turn/start` line to a capture file, and replies:
 
 - `{"id":1,"result":{"userAgent":"codex/0.144.3","codexHome":"/tmp/.codex"}}`
 - `{"id":2,"result":{"thread":{"id":"thread-1"}}}`
 - `{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}`
+
+**The capture path is inlined into each case's own script, never passed through the environment.** Two reasons.
+`build_app_server_command` (`codex/src/session.rs:194-212`) hard-codes its env overrides and offers no seam for
+a test-supplied variable, so the environment would mean the process env — and the workspace is `edition =
+"2024"` (`packages/core-rs/Cargo.toml:6`), under which `std::env::set_var` is `unsafe`; the repo routes around
+it everywhere (`mainframe-runtime/src/spawn_env.rs:11-15`, `mainframe-runtime/src/config.rs:241`,
+`mainframe-lsp/src/lsp_registry/tests.rs:123-124`, `mainframe-daemon/src/main.rs:880`). And a process-global
+variable would race: the three cases share one test binary, the repo sets no `test-threads` limit, so libtest
+runs them concurrently and each fake `codex` would read whichever value won.
+
+So each case builds its own script text before `fs::write`. Keep the const a template with a `__CAPTURE__`
+placeholder and substitute with `str::replace` rather than `format!` — the script body is full of JSON braces,
+which `format!` would require doubling:
+
+```rust
+const FAKE_APP_SERVER: &str = r#"#!/bin/sh
+IFS= read -r _initialize
+printf '{"id":1,"result":{"userAgent":"codex/0.144.3","codexHome":"/tmp/.codex"}}\n'
+IFS= read -r _initialized
+IFS= read -r _thread_start
+printf '{"id":2,"result":{"thread":{"id":"thread-1"}}}\n'
+IFS= read -r turn_start
+printf '%s\n' "$turn_start" > '__CAPTURE__'
+printf '{"id":3,"result":{"turn":{"id":"turn-1","status":"inProgress"}}}\n'
+cat >/dev/null
+"#;
+
+let capture = dir.path().join("turn-start.json");
+fs::write(&fake, FAKE_APP_SERVER.replace("__CAPTURE__", capture.to_str().unwrap())).unwrap();
+```
+
+Each case gets its own `tempdir`, so its `capture` path — and its fake `codex` — belong to that case alone and
+concurrent execution cannot cross them. Factor the script write and the session spawn into one helper in the
+test file to keep all three cases under the file's line budget.
 
 Three cases:
 
