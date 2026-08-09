@@ -10,6 +10,15 @@ use std::os::unix::fs::PermissionsExt;
 
 use mainframe_adapter_claude::title_generator::generate_claude_title;
 use tempfile::tempdir;
+use tokio::sync::Mutex;
+
+/// Serializes writing a stub and running it, across every test in this binary.
+///
+/// These tests run on separate threads. A spawn forks the whole process, so the
+/// child inherits any write fd another test happens to have open on its own
+/// stub — and that test's exec then fails with ETXTBSY ("Text file busy").
+/// Holding this for the whole write-then-run keeps the two from overlapping.
+static STUB_EXEC: Mutex<()> = Mutex::const_new(());
 
 fn write_stub(dir: &std::path::Path, name: &str, script: &str) -> String {
     let path = dir.join(name);
@@ -22,6 +31,7 @@ fn write_stub(dir: &std::path::Path, name: &str, script: &str) -> String {
 
 #[tokio::test]
 async fn nonzero_exit_surfaces_the_status_and_the_cli_stderr() {
+    let _guard = STUB_EXEC.lock().await;
     let dir = tempdir().unwrap();
     let binary = write_stub(
         dir.path(),
@@ -43,6 +53,7 @@ async fn nonzero_exit_surfaces_the_status_and_the_cli_stderr() {
 
 #[tokio::test]
 async fn chatty_stderr_is_truncated_at_the_character_cap() {
+    let _guard = STUB_EXEC.lock().await;
     let dir = tempdir().unwrap();
     let noisy = "é".repeat(64 * 1024 / "é".len());
     let script = format!(
@@ -74,6 +85,7 @@ async fn chatty_stderr_is_truncated_at_the_character_cap() {
 
 #[tokio::test]
 async fn zero_exit_with_unusable_stdout_is_still_ok_none() {
+    let _guard = STUB_EXEC.lock().await;
     let dir = tempdir().unwrap();
     let binary = write_stub(dir.path(), "claude", "#!/bin/sh\nprintf 'a\\n'\n");
 
@@ -84,6 +96,7 @@ async fn zero_exit_with_unusable_stdout_is_still_ok_none() {
 
 #[tokio::test]
 async fn spawn_failure_names_the_binary() {
+    let _guard = STUB_EXEC.lock().await;
     let dir = tempdir().unwrap();
     let missing = dir
         .path()
