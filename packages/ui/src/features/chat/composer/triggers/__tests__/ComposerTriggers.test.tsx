@@ -275,6 +275,7 @@ describe('ComposerAddMention — click opens the picker without submitting (todo
 
     await waitFor(() => expect(screen.queryByTestId('composer-trigger-popover')).not.toBeInTheDocument());
     expect(input.value).toBe('@');
+    expect(input.selectionStart).toBe(1);
     expect(onNew).not.toHaveBeenCalled();
   });
 });
