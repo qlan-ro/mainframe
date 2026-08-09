@@ -162,6 +162,25 @@ export function AddRemoteDialog({ open, mode = 'add', target, onClose, onDone }:
     };
   }, []);
 
+  // DaemonSwitcher mounts one instance for the dialog's whole lifetime and
+  // only toggles `open`/`mode`/`target` as props — the useState initializers
+  // above only run once, so a re-open must reseed from the current props or
+  // it shows whatever step/url the PREVIOUS open left behind.
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setStep(mode === 'repair' ? 1 : 0);
+      setUrl(mode === 'repair' && target != null ? daemonOrigin(target) : '');
+      setUrlPhase('idle');
+      setUrlVersion(undefined);
+      setStep1Phase('idle');
+      setCode('');
+      setDevice('This Mac');
+      setPairedLabel(undefined);
+    }
+    wasOpenRef.current = open;
+  }, [open, mode, target]);
+
   const handleUrlChange = useCallback((v: string) => {
     setUrl(v);
     setUrlPhase('idle');

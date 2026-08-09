@@ -401,6 +401,33 @@ describe('AddRemoteDialog — repair-mode honors the paired scheme', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Behavior 7 — DaemonSwitcher mounts one AddRemoteDialog instance for the
+// dialog's whole lifetime and only toggles `open`/`mode`/`target` as props
+// (see DaemonSwitcher.tsx). `step`/`url` must reseed from those props on
+// every re-open, not just at the component's first mount (todo #305 QA S4).
+// ---------------------------------------------------------------------------
+
+describe('AddRemoteDialog — re-opens on a persistently-mounted instance', () => {
+  it('reseeds step 1 with the locked http chip on re-pair after an add-mode close', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AddRemoteDialog open={false} mode="add" onClose={vi.fn()} onDone={vi.fn()} />);
+
+    // Re-pair opens the SAME mounted instance with new props — no unmount.
+    rerender(<AddRemoteDialog open mode="repair" target={HTTP_META} onClose={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.queryByTestId('daemon-add-url')).not.toBeInTheDocument();
+    expect(screen.getByText('http://127.0.0.1:31500')).toBeInTheDocument();
+
+    await typeCode(user, VALID_CODE);
+    await user.click(screen.getByTestId('daemon-add-confirm'));
+
+    await waitFor(() => {
+      expect(confirmPairing).toHaveBeenCalledWith('http://127.0.0.1:31500', VALID_CODE, expect.any(String));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Behavior 6 — a refused endpoint reads as refused, not as unreachable, and
 // never reaches the pairing-code step.
 // ---------------------------------------------------------------------------
