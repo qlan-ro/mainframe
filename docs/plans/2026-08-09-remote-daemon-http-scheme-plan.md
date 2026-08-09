@@ -17,7 +17,7 @@ policy admits. The payoff beyond the bug: a loopback http remote becomes possibl
 blocked QA scenarios needed. They are not equally free: the 413 attachment-too-large scenario runs directly on
 the loopback http remote, while the 401 auth-failure scenario additionally needs the daemon to classify the app
 as a remote caller — loopback callers are never rejected — which QA arranges with a local `X-Forwarded-For`
-proxy (task 25).
+proxy (task 26).
 
 ## Decisions made while planning
 
