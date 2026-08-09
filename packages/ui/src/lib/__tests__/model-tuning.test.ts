@@ -45,4 +45,44 @@ describe('model-tuning helpers', () => {
     const sonnet = { id: 'm', label: 'M', supportedEfforts: ['low', 'medium', 'high', 'max'] } satisfies AdapterModel;
     expect(displayEffort({}, sonnet, { defaultEffort: 'xhigh' }).value).toBe('high');
   });
+
+  it('effortOptions labels ultra when the model advertises it (red: EFFORT_META has no ultra entry yet)', () => {
+    const opts = effortOptions({
+      id: 'gpt',
+      label: 'GPT',
+      // @ts-expect-error until 'ultra' joins EffortLevel
+      supportedEfforts: ['high', 'xhigh', 'ultra'],
+    });
+    // @ts-expect-error until 'ultra' joins EffortLevel
+    const ultra = opts.find((o) => o.id === 'ultra')!;
+    expect(ultra.label).toBe('Ultra');
+    expect(ultra.description).toBeTruthy();
+  });
+
+  it('effortOptions omits ultra when the model does not advertise it (pin, green today)', () => {
+    const opts = effortOptions({ id: 'm', label: 'M', supportedEfforts: ['low', 'high', 'max'] });
+    // @ts-expect-error until 'ultra' joins EffortLevel
+    expect(opts.find((o) => o.id === 'ultra')).toBeUndefined();
+  });
+
+  it('displayEffort passes ultra through when the model supports it (pin, green today)', () => {
+    const model = {
+      id: 'gpt',
+      label: 'GPT',
+      // @ts-expect-error until 'ultra' joins EffortLevel
+      supportedEfforts: ['high', 'ultra'],
+    } satisfies AdapterModel;
+    // @ts-expect-error until 'ultra' joins EffortLevel
+    expect(displayEffort({ effort: 'ultra' }, model)).toEqual({ value: 'ultra', locked: false });
+  });
+
+  it('displayEffort downgrades ultra to the highest supported level (red: falls through to low today)', () => {
+    const claudeLike = {
+      id: 'claude',
+      label: 'Claude',
+      supportedEfforts: ['low', 'medium', 'high', 'max'],
+    } satisfies AdapterModel;
+    // @ts-expect-error until 'ultra' joins EffortLevel
+    expect(displayEffort({ effort: 'ultra' }, claudeLike)).toEqual({ value: 'max', locked: false });
+  });
 });
