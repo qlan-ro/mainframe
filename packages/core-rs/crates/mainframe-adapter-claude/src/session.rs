@@ -899,25 +899,8 @@ impl ClaudeSession {
             )));
         }
         let chat_id = self.state().chat_id.clone();
-        let mut content: Vec<Value> = Vec::new();
-        for img in &images {
-            content.push(json!({
-                "type": "image",
-                "source": { "type": "base64", "media_type": img.media_type, "data": img.data },
-            }));
-        }
-        if !message.is_empty() || content.is_empty() {
-            content.push(json!({ "type": "text", "text": message }));
-        }
-        let mut payload = json!({
-            "type": "user",
-            "session_id": chat_id,
-            "message": { "role": "user", "content": content },
-            "parent_tool_use_id": null,
-        });
-        if let Some(u) = uuid {
-            payload["uuid"] = Value::String(u);
-        }
+        let payload =
+            crate::user_payload::build_user_payload(&chat_id, &message, &images, uuid.as_deref());
         self.write_stdin(payload.to_string());
         Ok(())
     }

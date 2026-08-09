@@ -4,6 +4,37 @@
 //! (todo #300 group C): a regression guard proving the new `ImageInput.path`
 //! field — added for Codex — never reaches Claude's stdin.
 
+use mainframe_adapter_api::ImageInput;
+use serde_json::{Value, json};
+
+pub fn build_user_payload(
+    chat_id: &str,
+    message: &str,
+    images: &[ImageInput],
+    uuid: Option<&str>,
+) -> Value {
+    let mut content: Vec<Value> = Vec::new();
+    for img in images {
+        content.push(json!({
+            "type": "image",
+            "source": { "type": "base64", "media_type": img.media_type, "data": img.data },
+        }));
+    }
+    if !message.is_empty() || content.is_empty() {
+        content.push(json!({ "type": "text", "text": message }));
+    }
+    let mut payload = json!({
+        "type": "user",
+        "session_id": chat_id,
+        "message": { "role": "user", "content": content },
+        "parent_tool_use_id": null,
+    });
+    if let Some(u) = uuid {
+        payload["uuid"] = Value::String(u.to_string());
+    }
+    payload
+}
+
 #[cfg(test)]
 mod tests {
     use mainframe_adapter_api::ImageInput;
