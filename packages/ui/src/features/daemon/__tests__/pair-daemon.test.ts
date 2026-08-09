@@ -9,10 +9,14 @@
  *  5. confirmPairing body carries a stable clientDeviceId (same UUID across two calls).
  *  6. getOrCreateClientDeviceId returns a valid UUID and persists it in localStorage.
  *  7. Trailing slash on the URL is trimmed before appending paths.
- *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl }
+ *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl, scheme }
  *     (table-driven across the 6 equality cases; the throw case stays its
  *     own it — folding it into the table would need a conditional assert).
  *  9. verifyDaemon with a no-scheme input fetches the correct absolute URL.
+ *  10. verifyDaemon and confirmPairing gate on the endpoint policy: a
+ *      non-loopback http host is refused without ever calling fetch, a
+ *      loopback http host still fetches, and an unreachable https host
+ *      resolves/rejects with the right reason/kind.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { verifyDaemon, confirmPairing, getOrCreateClientDeviceId, PairingError, parseRemoteUrl } from '../pair-daemon';
