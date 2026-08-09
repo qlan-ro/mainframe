@@ -61,11 +61,18 @@ pub struct ThreadRef {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThreadStartResult {
     pub thread: ThreadRef,
+    /// Required in the app-server schema, but read leniently: an older build that
+    /// omits it must not fail the whole `thread/start` deserialization — the
+    /// turn-start model resolver (`turn_model.rs`) has a further fallback tier.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThreadResumeResult {
     pub thread: ThreadRef,
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -277,13 +284,14 @@ pub struct SandboxPolicy {
 
 /// Codex `collaborationMode.settings` — fields are snake_case as Codex emits them
 /// (`reasoning_effort`, `developer_instructions`), so NO camelCase rename here.
-/// `model` is optional (omitted when no model is selected, so Codex uses the
-/// account default); `reasoning_effort`/`developer_instructions` serialize as
-/// explicit `null` when absent (the TS shape is `string | null`, always present).
+/// `model` is required and non-nullable in the app-server's `Settings.ts` (codex-cli
+/// 0.144.3) — omitting or nulling it fails the request with `-32600`, so callers must
+/// resolve a concrete id before building this struct. `reasoning_effort` and
+/// `developer_instructions` are required-but-nullable and serialize as explicit
+/// `null` when absent (the TS shape is `string | null`, always present).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CollaborationModeSettings {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
+    pub model: String,
     pub reasoning_effort: Option<EffortLevel>,
     pub developer_instructions: Option<String>,
 }
