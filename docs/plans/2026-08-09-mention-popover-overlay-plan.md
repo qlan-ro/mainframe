@@ -466,8 +466,10 @@ The acceptance criterion is a measurement, not an impression. Do not settle it b
 - [ ] **Step 4: Walk the interaction matrix.** Arrow Up/Down wrap; Enter and Tab insert; Shift+Enter still inserts a
   newline; Escape dismisses and leaves the draft text and caret untouched; Backspace on an empty query leaves a
   category; hover highlights; click inserts with the caret at the right offset; the composer keeps focus throughout
-  (`document.activeElement` is the textarea while the list is open); clicking outside dismisses; the `@` toolbar
-  button opens the same list (its current behavior, unchanged by this work — todo #316 owns its remaining defect).
+  (`document.activeElement` is the textarea while the list is open); clicking outside dismisses. Expect the known
+  #316 failure on the `@` toolbar button: clicking `composer-add-mention` appends `@` **and submits the composer**,
+  because the shared `Button` sets no `type` and a bare `<button>` inside `ComposerPrimitive.Root`'s `<form>` defaults
+  to `type="submit"`. That is out of scope here (D8) and is not a regression of this work — record it and move on.
 - [ ] **Step 5: Check the automations consumer for regressions** — open an automation step's prompt field, type `$`,
   `/`, and `@`, and confirm the list still opens downward at its current width with the same rows.
 - [ ] **Step 6: Dispatch `design-conformance`** against the composer artboards rather than eyeballing the chrome.
