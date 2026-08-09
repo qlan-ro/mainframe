@@ -1,5 +1,5 @@
 ---
-'@qlan-ro/mainframe-core': patch
+'@qlan-ro/mainframe-ui': patch
 ---
 
 The daemon now compresses HTTP responses when the client asks for it. Requests

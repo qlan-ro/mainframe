@@ -1,7 +1,6 @@
 ---
 '@qlan-ro/mainframe-ui': minor
 '@qlan-ro/mainframe-types': minor
-'@qlan-ro/mainframe-core': patch
 ---
 
 Reference another session from the composer with `@`.

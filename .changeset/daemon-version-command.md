@@ -1,5 +1,5 @@
 ---
-"@qlan-ro/mainframe-core": minor
+"@qlan-ro/mainframe-ui": minor
 ---
 
 Surface the daemon version. `mainframe --version` (also `-v` / `version`) prints

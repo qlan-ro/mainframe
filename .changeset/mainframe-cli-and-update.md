@@ -1,5 +1,5 @@
 ---
-"@qlan-ro/mainframe-core": minor
+"@qlan-ro/mainframe-ui": minor
 ---
 
 Rename the daemon CLI to `mainframe` and add a `mainframe update` command.

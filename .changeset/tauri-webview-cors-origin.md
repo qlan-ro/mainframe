@@ -1,5 +1,5 @@
 ---
-"@qlan-ro/mainframe-core": patch
+"@qlan-ro/mainframe-ui": patch
 ---
 
 Fix the packaged Tauri app hanging on "waiting for daemon". The daemon's CORS
