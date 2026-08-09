@@ -62,7 +62,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
 
         {actions}
 
-        <Separator orientation="vertical" className="mx-0.5 h-3 self-center" />
+        <Separator orientation="vertical" className="mx-0.5 h-3 data-vertical:self-center" />
 
         <Hint label="Reveal in file tree">
           <Button data-testid="viewer-shell-reveal" variant="ghost" size="icon-xs" onClick={handleReveal}>

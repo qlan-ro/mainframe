@@ -15,6 +15,10 @@ function Separator({
       decorative={decorative}
       orientation={orientation}
       className={cn(
+        // A vertical separator given an explicit height must ALSO pass
+        // `data-vertical:self-center` — that is the only override tailwind-merge
+        // dedupes against `self-stretch` below, and stretch on a definite height
+        // degrades to flex-start, pinning the hairline to the top of the row.
         'shrink-0 bg-border data-horizontal:h-px data-horizontal:w-full data-vertical:w-px data-vertical:self-stretch',
         className,
       )}
