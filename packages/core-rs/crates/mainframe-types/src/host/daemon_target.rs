@@ -9,6 +9,14 @@ pub enum DaemonKind {
     Remote,
 }
 
+/// The scheme a daemon was paired with. Absent on a `DaemonMeta` means https.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DaemonScheme {
+    Http,
+    Https,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DaemonTarget {
@@ -34,6 +42,8 @@ pub struct DaemonMeta {
     pub device: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paired: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheme: Option<DaemonScheme>,
 }
 
 impl DaemonMeta {
@@ -83,8 +93,26 @@ mod tests {
             host: String::new(),
             device: None,
             paired: None,
+            scheme: None,
         };
         assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn daemon_meta_pre_change_shape_omits_scheme() {
+        let json =
+            r#"{"id":"remote-1","kind":"remote","label":"Server","host":"box.example:31415"}"#;
+        let m: DaemonMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(m.scheme, None);
+        assert_eq!(serde_json::to_string(&m).unwrap(), json);
+    }
+
+    #[test]
+    fn daemon_meta_round_trips_http_scheme() {
+        let json = r#"{"id":"remote-1","kind":"remote","label":"Server","host":"127.0.0.1:31415","scheme":"http"}"#;
+        let m: DaemonMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(m.scheme, Some(DaemonScheme::Http));
+        assert_eq!(serde_json::to_string(&m).unwrap(), json);
     }
 }
 
@@ -95,3 +123,5 @@ mod tests {
 // `kind` literal-union → DaemonKind enum, shared by DaemonTarget and DaemonMeta.
 // `token: string | null` is required-nullable → Option WITHOUT skip. DaemonMeta
 // mirrors DaemonMetaSchema (zod); the `.min(1)` refinements become validate().
+// `scheme` is optional (absent = https) so old registry files without the key
+// keep loading unchanged.

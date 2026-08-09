@@ -89,12 +89,14 @@ export function UrlChip({ url }: { url: string }) {
   );
 }
 
-export type UrlPhase = 'idle' | 'verifying' | 'reachable' | 'unreachable';
+/** `refused` is the endpoint policy rejecting the URL; no request was made. */
+export type UrlPhase = 'idle' | 'verifying' | 'reachable' | 'unreachable' | 'refused';
 
 /** Right-side status icon for the URL input. */
 export function UrlAdornment({ phase }: { phase: UrlPhase }) {
   if (phase === 'verifying') return <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />;
   if (phase === 'reachable') return <CheckIcon className="size-3.5 shrink-0 text-success" />;
-  if (phase === 'unreachable') return <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />;
+  if (phase === 'unreachable' || phase === 'refused')
+    return <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />;
   return <GlobeIcon className="size-3.5 shrink-0 text-muted-foreground" />;
 }

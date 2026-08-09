@@ -26,8 +26,10 @@ use crate::middleware::compression::compression_layer;
 use crate::routes;
 use crate::websocket::{lsp_ws_handler, ws_handler};
 
-/// 30mb JSON body limit — matches `express.json({ limit: '30mb' })`.
-const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
+/// 30mb JSON body limit — matches `express.json({ limit: '30mb' })`. Public so
+/// integration tests can assert both edges of the limit against this value
+/// instead of hardcoding it.
+pub const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
 
 /// Builds the axum app. Mirrors `createHttpServer()`: the HTTP routes (health +
 /// the Phase-3 route modules) sit behind the auth middleware; the WS upgrade at

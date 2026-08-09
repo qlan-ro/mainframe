@@ -43,6 +43,19 @@ const Ctx = createContext<ChatSkills>(DEFAULT);
 // Provider
 // ---------------------------------------------------------------------------
 
+/**
+ * Runs one list fetch to completion without ever rejecting, so a failing skills
+ * fetch cannot empty the agents picker (or the reverse).
+ */
+async function loadList<T>(label: string, fetch: () => Promise<T[]>, apply: (items: T[]) => void): Promise<void> {
+  try {
+    apply(await fetch());
+  } catch (err) {
+    console.warn(`[skills] failed to load ${label}`, err);
+    apply([]);
+  }
+}
+
 export function SkillsProvider({ children }: { children: ReactNode }) {
   const extras = useChatExtras();
   const port = extras?.port ?? null;
@@ -80,16 +93,24 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-        const [list, agentList] = await Promise.all([
-          getSkills(port, adapterId, path),
-          getAgents(port, adapterId, path),
+        await Promise.allSettled([
+          loadList(
+            'skills',
+            () => getSkills(port, adapterId, path),
+            (items) => {
+              if (!cancelled) setSkills(items);
+            },
+          ),
+          loadList(
+            'agents',
+            () => getAgents(port, adapterId, path),
+            (items) => {
+              if (!cancelled) setAgents(items);
+            },
+          ),
         ]);
-        if (!cancelled) {
-          setSkills(list);
-          setAgents(agentList);
-        }
       } catch (err) {
-        console.warn('[skills] failed to load skills', err);
+        console.warn('[skills] failed to resolve the project path', err);
         if (!cancelled) {
           setSkills([]);
           setAgents([]);

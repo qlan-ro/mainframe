@@ -44,6 +44,10 @@ pub struct AgentConfig {
     pub scope: AgentScope,
     pub file_path: String,
     pub content: String,
+    /// The complete declared frontmatter `description`, when the file has one
+    /// (todo #317) — `description` carries the one-line picker caption.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
