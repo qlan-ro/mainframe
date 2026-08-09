@@ -13,8 +13,11 @@ locked URL chip, prefilled URL field, and confirm POST target. It also replaces 
 with an explicit endpoint policy: plain http is accepted only for loopback (`127.0.0.1`, `localhost`) and
 refused everywhere else, checked at the reachability step *before* a pairing code is spent and re-checked at
 confirm so a prefilled or pasted URL cannot bypass it. The shell's CSP grows the `localhost` loopback forms the
-policy admits. The payoff beyond the bug: a loopback http remote becomes possible, which unblocks the two QA
-scenarios (401 auth-failure reaction, 413 attachment-too-large copy) that todo #219 could not exercise.
+policy admits. The payoff beyond the bug: a loopback http remote becomes possible, which is what todo #219's two
+blocked QA scenarios needed. They are not equally free: the 413 attachment-too-large scenario runs directly on
+the loopback http remote, while the 401 auth-failure scenario additionally needs the daemon to classify the app
+as a remote caller — loopback callers are never rejected — which QA arranges with a local `X-Forwarded-For`
+proxy (task 25).
 
 ## Decisions made while planning
 
@@ -53,6 +56,16 @@ These were not spelled out in the brief. Each is a judgment call; flag any you d
   it out of the file when absent.
 - **The CSP only applies to the packaged webview.** `tauri:dev`, vitest and the Playwright harness do not
   enforce it, so the http path must be confirmed in a packaged or preview build.
+- **A loopback caller is never rejected, so an http remote on loopback cannot produce a 401 by itself.**
+  `auth_middleware` (`packages/core-rs/crates/mainframe-server/src/middleware/auth.rs`, ~L106-115) derives the
+  client IP and short-circuits — "Loopback: never rejected" — and the WS upgrade skips auth entirely
+  (`websocket.rs:74-79`: `is_ws_auth_required` is false for a loopback IP). The UI reaction todo #219 wants to
+  see is driven only by an HTTP 401 (`packages/ui/src/lib/api/http.ts:94` —
+  `if (res.status === 401) markAuthFailure(id);`). Daemon auth is out of scope, so QA reaches that state through
+  the escape hatch the daemon already honors: `trust_proxy_client_ip` in
+  `packages/core-rs/crates/mainframe-server/src/net.rs` accepts `x-forwarded-for` when the raw peer is loopback,
+  so a proxy that appends a non-loopback hop makes the daemon treat the app as remote. The 413 needs none of
+  this — `RequestBodyLimitLayer` (`http.rs:112-114`, 30 MB) fires before auth for every peer.
 - **Repo rules:** max 300 lines per file / 50 per function; `data-testid` on every interactive element as
   `<surface>-<element>` kebab-case; no `@ts-ignore`; a changeset is required before commit.
 - **Out of scope** (per the brief): `packages/mobile` (its own todo and PR — do not bump the submodule
@@ -204,7 +217,16 @@ loopback remote on an explicit port passes unchanged.
   `fetch` was never called; `verifyDaemon('http://127.0.0.1:31500')` still fetches
   `http://127.0.0.1:31500/health`; an unreachable https URL resolves `{ ok: false, reason: 'unreachable' }`;
   `confirmPairing('http://box.example.com', …)` rejects with `PairingError` `kind: 'insecure'` and no `fetch`.
-- Verify: the four new cases fail.
+- **Migrate the existing `verifyDaemon` assertions in the same edit**, or task 12 leaves the group red on
+  typecheck: lines 53-55 and 63-64 read `result.version` / `result.ms` off a bare `result`, which stops
+  compiling once `VerifyResult` becomes a union (TS2339 on the `{ ok: false }` arm), and
+  `pnpm --filter @qlan-ro/mainframe-ui typecheck` includes tests. Rewrite them to narrow first — keep
+  `expect(result.ok).toBe(true)`, then assert `version`/`ms` inside `if (result.ok) { … }`. Delete the two
+  `toBeUndefined()` lines at 73-74 outright; the new `reason: 'unreachable'` case above owns that coverage.
+  Both rewrites compile against the current implementation, so the red set stays exactly the four new cases.
+  Nothing else in the suite needs touching: line 232 asserts only `result.ok`, and the `vi.fn()` mocks in
+  `AddRemoteDialog-retoken.test.tsx` and `DaemonSwitcher.needs-repair.test.tsx` are untyped.
+- Verify: the four new cases fail; the five migrated assertions still pass.
 
 ### Task 12 — Implement the gates in `verifyDaemon` and `confirmPairing`
 
@@ -212,11 +234,15 @@ loopback remote on an explicit port passes unchanged.
 - `VerifyResult` becomes a discriminated union:
   `{ ok: true; version?: string; ms?: number } | { ok: false; reason: 'refused-insecure' | 'unreachable' }`.
   Both functions call `checkEndpointPolicy` first and use its returned `parts` instead of re-parsing.
+  `checkEndpointPolicy`'s `'invalid-url'` maps to `reason: 'unreachable'` — the union has no arm for it, and
+  that preserves today's behavior, where an unparseable URL returns `{ ok: false }` and the dialog shows the
+  unreachable notice.
 - `PairingErrorKind` gains `'insecure'`, with `INSECURE_ENDPOINT_MESSAGE` as the error message.
 - Keep each function under 50 lines; if `verifyDaemon` grows past it, split the fetch into a private helper.
 - Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/daemon/__tests__/pair-daemon.test.ts`
-  and `.../endpoint-policy.test.ts` green; `pnpm --filter @qlan-ro/mainframe-ui typecheck` (it will flag the
-  `VerifyResult` consumer in `AddRemoteDialog.tsx` — that is group D's task 18).
+  and `.../endpoint-policy.test.ts` green; `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean — the union's
+  only production consumer, `AddRemoteDialog.tsx:162-168`, already branches on `if (result.ok)` and narrows
+  cleanly, and task 11 carried the test-assertion migration. Group C ends green on its own.
 
 ---
 
@@ -343,7 +369,7 @@ loopback remote on an explicit port passes unchanged.
   `@qlan-ro/mainframe-app-tauri` (bugfix: remote daemons paired over http now connect over http). Commit it
   with the implementation.
 
-### Task 25 — Packaged-build QA: the two scenarios todo #219 could not run
+### Task 25 — Packaged-build QA: the http remote, the refusal, and the 413 scenario
 
 The webview CSP is not enforced by `tauri:dev`, vitest or the Playwright harness, so this runs against a
 packaged or preview build.
@@ -355,10 +381,35 @@ packaged or preview build.
   restart.
 - Confirm the refusal: verifying `http://<LAN-ip>:<port>` shows the `daemon-add-insecure` notice and does not
   advance to the code step.
-- Re-run todo #219's two blocked scenarios against the http remote: (a) the 401 auth-failure reaction —
-  composer restore, error copy, needs-repair footer; (b) the 413 attachment-too-large copy.
-- Report the outcome on todo #305 and file anything the scenarios uncover as separate todos (fixing them is out
-  of scope).
+- Run todo #219's scenario (b), the 413 attachment-too-large copy, against this remote. It needs nothing
+  special: the 30 MB `RequestBodyLimitLayer` (`http.rs:112-114`) sits outside auth and answers every peer.
+- Report the outcome on todo #305; file anything it uncovers as a separate todo (fixing it is out of scope).
+
+### Task 26 — Packaged-build QA: the 401 auth-failure scenario behind an `X-Forwarded-For` proxy
+
+Scenario (a) cannot be produced by a plain loopback remote — see the loopback-bypass constraint above. The
+daemon does treat the app as remote when a trusted loopback peer forwards a non-loopback hop, so QA inserts one.
+**This is a manual QA rig, not a durable harness**: it rides the `x-forwarded-for` trust that the open security
+audit already tracks (`docs/security/2026-07-11-security-audit.md`), so it is written ad hoc, used once, and not
+committed.
+
+- Put a small local forward proxy on `127.0.0.1:<proxyPort>` in front of the task-25 QA daemon. It must append a
+  non-loopback `X-Forwarded-For` (e.g. `203.0.113.7`) to HTTP requests **and** to the WebSocket upgrade — the
+  upgrade path reads the header separately (`websocket.rs`, `client_ip`). Verify the classification with
+  `curl -H 'X-Forwarded-For: 203.0.113.7' http://127.0.0.1:<proxyPort>/api/projects` before involving the app:
+  no bearer token must now yield a 401, where the same call straight to the daemon port returns 200.
+- Pair the app at `http://127.0.0.1:<proxyPort>` (a second registry entry — expected). Pairing itself still
+  works through the proxy: `/api/auth/confirm`, `/api/auth/status` and `/api/auth/pair-status` are in
+  `UNAUTHENTICATED_PATHS`, so they never reach the IP check.
+- With the app connected through the proxy, revoke the paired device on the QA daemon (use its isolated data
+  dir — whatever revocation surface exists, or delete the device record). The next request 401s through the
+  app's real http path, which is exactly what `markAuthFailure` keys on.
+- Observe and record the reaction: composer restore, the error copy, and the needs-repair footer.
+- If the proxy route does not come up (upgrade not forwarded, revocation surface missing, or the app never
+  reaches a 401), stop rather than improvising a daemon-side change — auth is out of scope. Report the specific
+  blocker on todo #305 and file a follow-up to cover the 401 reaction another way.
+- Either branch closes this task: the 401 reaction is observed and reported, or the blocker is reported and the
+  follow-up filed.
 
 ---
 
@@ -375,5 +426,5 @@ packaged or preview build.
 | Unit tests: scheme round-trip + policy table; normalizer test still passes | 7, 9, 13, 15 |
 | Rust tests: optional field round-trip, no-token assertion intact | 3, 4, 5, 6 |
 | CSP permits every admitted loopback form; config test extended | 21, 22 |
-| Todo #219's two scenarios run for real | 25 |
+| Todo #219's two scenarios run for real | 25 (413, directly), 26 (401, via the `X-Forwarded-For` proxy) |
 | Typecheck, touched suites, `cargo check`, changeset | 23, 24 |
