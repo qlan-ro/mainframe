@@ -131,6 +131,26 @@ describe('DaemonMetaSchema (host/daemon-target.ts)', () => {
       false,
     ],
     ['rejects a payload missing required fields', { id: 'studio' }, false],
+    [
+      'accepts scheme: http',
+      { id: 'studio', kind: 'remote', label: 'Studio', host: '127.0.0.1:31500', scheme: 'http' },
+      true,
+    ],
+    [
+      'accepts scheme: https',
+      { id: 'studio', kind: 'remote', label: 'Studio', host: 'studio.example.com', scheme: 'https' },
+      true,
+    ],
+    [
+      'accepts a payload with no scheme at all (the pre-change shape)',
+      { id: 'studio', kind: 'remote', label: 'Studio', host: 'studio.example.com' },
+      true,
+    ],
+    [
+      'rejects an unknown scheme',
+      { id: 'studio', kind: 'remote', label: 'Studio', host: 'studio.example.com', scheme: 'ftp' },
+      false,
+    ],
   ])('%s', (_name, payload, shouldSucceed) => {
     expect(DaemonMetaSchema.safeParse(payload).success).toBe(shouldSucceed);
   });
