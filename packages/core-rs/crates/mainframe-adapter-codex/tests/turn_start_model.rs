@@ -100,6 +100,7 @@ fn spawn_options(
         system_prompt: None,
         tuning: None,
         small_fast_model: None,
+        default_model: None,
     }
 }
 
