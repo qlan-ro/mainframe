@@ -39,7 +39,12 @@ actually fails when its half of the layer pair is broken.
 
 ## Constraints from CLAUDE.md
 
-- Max 300 lines/file, 50 lines/function. The new test file lands well under both.
+- Max 300 lines/file, 50 lines/function. Both new files land well under both limits. The pre-existing
+  `tests/support/mod.rs` is already 397 lines and stays that way — this plan adds one `pub mod` line to it
+  and puts the new helper in a sibling file rather than growing it.
+- Every integration test file is its own crate and must carry
+  `#![allow(clippy::unwrap_used, clippy::expect_used)]`; the workspace denies both lints and the `lib.rs`
+  test exemption does not reach `tests/`.
 - No `@ts-ignore` equivalents; no silent catches. The one deliberate exception is the raw-TCP writer task,
   which ignores write errors *by design* (the server closes the connection early) — it carries a one-line
   `why` comment.
@@ -63,6 +68,7 @@ All paths relative to the worktree root
 | `packages/core-rs/crates/mainframe-server/tests/support/mod.rs` | 397 lines. `spawn_test_server`, `TestServer { addr, ctx }`, `http_url(path)`, and hand-rolled raw-TCP WS client (the precedent for raw sockets in this harness) |
 | `packages/core-rs/crates/mainframe-server/tests/http_compression.rs` | The layer-contract precedent: proves a router-level layer through a real spawned app |
 | `packages/core-rs/crates/mainframe-server/tests/routes_attachments.rs` | Holds `returns_400_when_base64_payload_exceeds_5mb` (the 8 MB test, line 95) and `saves_a_valid_attachment_and_returns_metadata` (line 111) — **both stay untouched** |
+| `packages/core-rs/crates/mainframe-server/tests/support/raw_http.rs` | **New file** — the raw-TCP request helper (see B1: `mod.rs` is already over the 300-line limit, so the helper cannot live there) |
 | `packages/core-rs/crates/mainframe-server/tests/http_body_limit.rs` | **New file** |
 
 Sizing arithmetic, from `validate`: a `data` string of `3 * 1024 * 1024` base64 chars (a multiple of 4, so
@@ -111,7 +117,8 @@ Change line 33 from `pub use http::build_app;` to `pub use http::{BODY_LIMIT_BYT
 
 ### Task B1 — add a raw-TCP over-limit request helper to the shared harness
 
-**File:** `packages/core-rs/crates/mainframe-server/tests/support/mod.rs`
+**Files:** `packages/core-rs/crates/mainframe-server/tests/support/raw_http.rs` (new) and
+`packages/core-rs/crates/mainframe-server/tests/support/mod.rs` (one added line).
 
 Add one public async helper, e.g.
 
@@ -133,15 +140,20 @@ in this same module). Requirements, all load-bearing:
   error**. The server closing early is the expected behavior, not a failure. One `why` comment; no
   `unwrap` on writes.
 - Read concurrently on the calling task: parse the status line and headers, then read exactly
-  `Content-Length` body bytes (0 for the `413`). **Never read to EOF** — after the server's early close
+  `Content-Length` body bytes (21 for the `413` — `tower-http` answers with a short `text/plain` string,
+  not an empty body). **Never read to EOF** — after the server's early close
   the socket delivers an RST, and a read past the buffered response returns `ECONNRESET`. Parsing and
   stopping at the declared length is what makes the assertion deterministic. Treat a missing
   `Content-Length` on the response as an empty body.
 - Wrap the whole read in `tokio::time::timeout(Duration::from_secs(10), …)` and `expect` a clear message
   on elapse ("no response before the body finished sending" — the signature of a removed limit layer).
-- Keep the helper under 50 lines; split header parsing into a small private fn if needed. The file must
-  stay within the 300-line limit — if it would exceed it, put the helper in a sibling
-  `tests/support/raw_http.rs` and `pub mod raw_http;` from `mod.rs` instead, and say so in the PR.
+- Keep the helper under 50 lines; split header parsing into a small private fn if needed.
+- Put the helper in a **new sibling file** `packages/core-rs/crates/mainframe-server/tests/support/raw_http.rs`
+  and add the single line `pub mod raw_http;` to `mod.rs`. This is unconditional, not a fallback:
+  `mod.rs` is already 397 lines, so growing it is not an option, and decomposing a shared harness that ten
+  other test binaries include is out of scope for this plan. The new file needs no clippy header of its
+  own — `mod.rs:5`'s `#![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]` is an inner attribute
+  and covers child modules. Callers reach it as `support::raw_http::post_raw(…)`.
 
 **Verify:** `cargo check -p mainframe-server --tests` from `packages/core-rs` succeeds; `cargo fmt --check`
 clean. (The helper has no test of its own yet — B3 exercises it.)
@@ -149,6 +161,15 @@ clean. (The helper has no test of its own yet — B3 exercises it.)
 ### Task B2 — accept-path test: a dead-zone body reaches the handler
 
 **File:** `packages/core-rs/crates/mainframe-server/tests/http_body_limit.rs` (new)
+
+File header, in this order — an integration test is its own crate, so the `lib.rs`
+`cfg_attr(test, …)` exemption does not reach it and the workspace's `unwrap_used = "deny"` /
+`expect_used = "deny"` would fail B3's clippy gate without this line. Every sibling integration test
+carries the same header (`tests/routes_attachments.rs:8`, `tests/http_compression.rs:12`):
+
+1. the module doc comment described below;
+2. `#![allow(clippy::unwrap_used, clippy::expect_used)]`;
+3. `mod support;`.
 
 Module doc comment: this file pins the *ordering* of `DefaultBodyLimit::disable()` above
 `RequestBodyLimitLayer` in `build_app`; it asserts against the assembled router so a limit relocated into
@@ -177,8 +198,8 @@ Test `a_three_megabyte_body_reaches_the_attachments_handler`:
   `success == true`, `data.attachments[0].name == "dead-zone.bin"`,
   `data.attachments[0].mediaType == "application/octet-stream"`, `data.attachments[0].sizeBytes ==
   2_359_296`, and that `data.attachments[0].id` is a non-empty string — mirroring
-  `saves_a_valid_attachment_and_returns_metadata`. A bare `413` with an empty body fails both the status
-  assertion and the parse.
+  `saves_a_valid_attachment_and_returns_metadata`. A bare `413` fails both the status assertion and the
+  parse — its short `text/plain` body is not JSON.
 
 **Verify:** `cargo test -p mainframe-server --test http_body_limit
 a_three_megabyte_body_reaches_the_attachments_handler` passes from `packages/core-rs`.
@@ -196,11 +217,16 @@ Test `a_body_over_the_configured_limit_is_rejected_with_413`:
   sabotage), a shape-valid body makes the server answer with the route's own 400 "Attachment exceeds 5MB
   limit" envelope — a legible failure — instead of a malformed-body 400.
 - Assert `body.len() > mainframe_server::BODY_LIMIT_BYTES` before sending.
-- Send with `support::post_raw(server.addr, "/api/chats/c1/attachments", body)`.
-- Assert `status == 413`; assert the response body is empty (`resp.body.is_empty()`), i.e. no envelope —
-  and specifically that it does not parse into JSON carrying a `success` key. Add a comment: the daemon's
-  envelope helpers never emit a `413`, so an envelope here would mean the rejection came from a route
-  rather than the layer.
+- Send with `support::raw_http::post_raw(server.addr, "/api/chats/c1/attachments", body)`.
+- Assert `status == 413`, and assert the response body is **not** a JSON envelope: parsing it with
+  `serde_json::from_slice::<Value>` either fails, or succeeds without a `success` key. Add a comment: the
+  daemon's envelope helpers never emit a `413`, so an envelope here would mean the rejection came from a
+  route rather than the layer.
+- Do **not** assert the body is empty, and do not assert its exact text. `tower-http` 0.6.11 answers a
+  short-circuited `413` with the 21-byte `text/plain` string `length limit exceeded`
+  (`tower-http-0.6.11/src/limit/body.rs:96`), so an emptiness assertion fails on every run, and pinning
+  the literal would break on any upgrade that reworded it. The no-envelope check is the durable form and
+  is what the todo's acceptance criterion asks for.
 
 **Verify:**
 1. `cargo test -p mainframe-server --test http_body_limit` — both tests pass.
@@ -208,7 +234,10 @@ Test `a_body_over_the_configured_limit_is_rejected_with_413`:
 3. `cargo test -p mainframe-server --test routes_attachments` — unchanged and green, including
    `returns_400_when_base64_payload_exceeds_5mb`.
 4. `cargo fmt --check` clean; `cargo clippy -p mainframe-server --all-targets -- -D warnings` clean.
-5. `wc -l` on both touched test files: each under 300.
+5. `wc -l` on the two files this plan *creates* — `tests/http_body_limit.rs` and
+   `tests/support/raw_http.rs` — each under 300. `tests/support/mod.rs` is exempt: it is a pre-existing
+   397-line shared harness that ten other test binaries include, and this plan adds one line to it.
+   Splitting it is separate work, not part of todo #299.
 
 ---
 
