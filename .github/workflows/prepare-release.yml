@@ -26,7 +26,9 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=$(node -p "require('./packages/core/package.json').version")
+          # packages/ui carries the released version — packages/core, which used
+          # to, was deleted in #576 and its versioning duty moved here.
+          VERSION=$(node -p "require('./packages/ui/package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VERSION"
