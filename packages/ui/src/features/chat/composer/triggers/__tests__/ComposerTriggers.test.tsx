@@ -106,8 +106,6 @@ function ButtonHarness({ onNew }: { onNew: () => Promise<void> }) {
         <ComposerPrimitive.Root>
           <ComposerTriggers textareaRef={textareaRef}>
             <ComposerPrimitive.Input ref={textareaRef} data-testid="composer-input" />
-            {/* Red until todo #316 task 6 adds textareaRef to ComposerAddMention's props — expected
-                TS2322 for the whole red window (see the plan's "Typecheck is red" note); don't suppress it. */}
             <ComposerAddMention textareaRef={textareaRef} />
           </ComposerTriggers>
         </ComposerPrimitive.Root>
