@@ -9,6 +9,11 @@ overrides:
   '@qlan-ro/mainframe-types': workspace:*
   '@radix-ui/react-dismissable-layer': 1.1.19
 
+patchedDependencies:
+  input-otp@1.4.2:
+    hash: 4381802016973fe6d707484eb0bf242828b23ba4f7da501d4a95a67767d60b40
+    path: patches/input-otp@1.4.2.patch
+
 importers:
 
   .:
@@ -339,7 +344,7 @@ importers:
         version: 9.0.0
       input-otp:
         specifier: ^1.4.2
-        version: 1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 1.4.2(patch_hash=4381802016973fe6d707484eb0bf242828b23ba4f7da501d4a95a67767d60b40)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       lucide-react:
         specifier: ^1.25.0
         version: 1.25.0(react@19.2.8)
@@ -13808,7 +13813,7 @@ snapshots:
 
   inline-style-parser@0.2.7: {}
 
-  input-otp@1.4.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  input-otp@1.4.2(patch_hash=4381802016973fe6d707484eb0bf242828b23ba4f7da501d4a95a67767d60b40)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)

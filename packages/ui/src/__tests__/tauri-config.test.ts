@@ -38,11 +38,16 @@ describe('tauri config release safety', () => {
     expect(overlay.app?.withGlobalTauri).toBe(true);
   });
 
+  // Keep this list in sync with LOOPBACK_HOSTS in features/daemon/endpoint-policy.ts —
+  // that predicate decides which http/ws hosts the app will pair with, and a CSP entry
+  // missing here would let the policy admit a host the webview then silently blocks.
   it('allows loopback daemon ports configured at runtime', () => {
     const raw = readFileSync(BASE_CONFIG_PATH, 'utf8');
     const config = JSON.parse(raw) as { app?: { security?: { csp?: string } } };
     expect(config.app?.security?.csp).toContain('http://127.0.0.1:*');
     expect(config.app?.security?.csp).toContain('ws://127.0.0.1:*');
+    expect(config.app?.security?.csp).toContain('http://localhost:*');
+    expect(config.app?.security?.csp).toContain('ws://localhost:*');
   });
 
   it('uses relative asset paths so packaged desktop shells can load the renderer', () => {

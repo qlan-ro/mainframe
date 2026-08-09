@@ -72,15 +72,8 @@ pub struct ChatUpdate {
     pub transcript_missing: Option<bool>,
 }
 
-const VALID_EFFORTS: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
-
 fn parse_effort(value: Option<String>) -> Option<EffortLevel> {
-    let value = value?;
-    if VALID_EFFORTS.contains(&value.as_str()) {
-        serde_json::from_value(Value::String(value)).ok()
-    } else {
-        None
-    }
+    serde_json::from_value(Value::String(value?)).ok()
 }
 
 /// `v == null ? null : Boolean(v)` — the tri-state stays present (never absent).

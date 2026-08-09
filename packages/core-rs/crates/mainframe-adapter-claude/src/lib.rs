@@ -14,6 +14,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod adapter;
+pub mod agent_description;
 pub mod assistant_event;
 pub mod cliproxy;
 pub mod constants;

@@ -24,6 +24,7 @@ export const EFFORT_META: Record<EffortLevel, { label: string; description: stri
   high: { label: 'High', description: 'Thorough reasoning' },
   xhigh: { label: 'Extra-high', description: 'Extra reasoning for hard tasks' },
   max: { label: 'Maximum', description: 'Maximum reasoning depth' },
+  ultra: { label: 'Ultra', description: 'Maximum reasoning; delegates to sub-agents proactively.' },
 };
 
 export const FEATURE_LABELS: Record<FeatureKey, { label: string; desc: string }> = {

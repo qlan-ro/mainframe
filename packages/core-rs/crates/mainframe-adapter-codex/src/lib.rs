@@ -48,6 +48,7 @@ pub mod title_generator;
 pub mod transcript;
 pub mod turn_config;
 pub(crate) mod turn_lifecycle;
+pub(crate) mod turn_model;
 pub mod types;
 pub(crate) mod unified_diff;
 pub(crate) mod user_input;

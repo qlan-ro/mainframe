@@ -119,4 +119,23 @@ describe('useChatSkills — revalidation nonce', () => {
     await waitFor(() => expect(vi.mocked(getSkills)).toHaveBeenCalledTimes(2));
     expect(vi.mocked(getSkills)).toHaveBeenLastCalledWith(PORT, ADAPTER_ID, PROJECT_PATH);
   });
+
+  it('renders skills after a bumped nonce refetch that follows a failed skills fetch', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(getSkills).mockRejectedValueOnce(new Error('skills fetch failed')).mockResolvedValue([SKILL_FIXTURE]);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([AGENT_FIXTURE]);
+
+    act(() => {
+      bumpSkillsRevalidation();
+    });
+
+    await waitFor(() => expect(result.current.skills).toEqual([SKILL_FIXTURE]));
+
+    warnSpy.mockRestore();
+  });
 });

@@ -1127,6 +1127,7 @@ impl AdapterSession for ClaudeSession {
             system_prompt: None,
             tuning: None,
             small_fast_model: None,
+            default_model: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }
@@ -1307,6 +1308,7 @@ mod tests {
             system_prompt: None,
             tuning: None,
             small_fast_model: None,
+            default_model: None,
         }
     }
 

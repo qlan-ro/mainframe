@@ -7,6 +7,7 @@ use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
 use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::{ChatStatus, TodoItem, TodoStatus};
 
 fn setup_with_conn() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
@@ -247,4 +248,83 @@ fn dismissed_worktrees_are_scoped_per_chat() {
         chats.get_dismissed_worktrees(&two.id).unwrap(),
         Vec::<String>::new()
     );
+}
+
+// ── effort round-trip (todo #302) ──────────────────────────────────────────
+
+#[test]
+fn chat_effort_round_trips_ultra() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/effort-ultra", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    chats
+        .update(
+            &chat.id,
+            &ChatUpdate {
+                effort: Some(Some(EffortLevel::Ultra)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+    let fetched = chats.get(&chat.id).unwrap().unwrap();
+    assert_eq!(fetched.effort, Some(Some(EffortLevel::Ultra)));
+}
+
+#[test]
+fn chat_effort_round_trips_for_pre_existing_levels() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/effort-regression", None).unwrap();
+    for level in [
+        EffortLevel::None,
+        EffortLevel::Minimal,
+        EffortLevel::Low,
+        EffortLevel::Medium,
+        EffortLevel::High,
+        EffortLevel::Xhigh,
+        EffortLevel::Max,
+    ] {
+        let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+        chats
+            .update(
+                &chat.id,
+                &ChatUpdate {
+                    effort: Some(Some(level)),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let fetched = chats.get(&chat.id).unwrap().unwrap();
+        assert_eq!(
+            fetched.effort,
+            Some(Some(level)),
+            "level {level:?} did not round-trip"
+        );
+    }
+}
+
+#[test]
+fn chat_effort_defaults_to_none_when_never_set() {
+    let (chats, projects) = setup();
+    let p = projects.create("/project/effort-unset", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+
+    let fetched = chats.get(&chat.id).unwrap().unwrap();
+    assert_eq!(fetched.effort, None);
+}
+
+#[test]
+fn chat_effort_reads_back_none_for_a_bogus_stored_value() {
+    let (chats, projects, conn) = setup_with_conn();
+    let p = projects.create("/project/effort-bogus", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    conn.execute(
+        "UPDATE chats SET effort = 'turbo' WHERE id = ?",
+        rusqlite::params![chat.id],
+    )
+    .unwrap();
+
+    let fetched = chats.get(&chat.id).unwrap().unwrap();
+    assert_eq!(fetched.effort, None);
 }

@@ -9,10 +9,14 @@
  *  5. confirmPairing body carries a stable clientDeviceId (same UUID across two calls).
  *  6. getOrCreateClientDeviceId returns a valid UUID and persists it in localStorage.
  *  7. Trailing slash on the URL is trimmed before appending paths.
- *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl }
+ *  8. parseRemoteUrl normalizes any user-typed URL into { host, baseUrl, scheme }
  *     (table-driven across the 6 equality cases; the throw case stays its
  *     own it — folding it into the table would need a conditional assert).
  *  9. verifyDaemon with a no-scheme input fetches the correct absolute URL.
+ *  10. verifyDaemon and confirmPairing gate on the endpoint policy: a
+ *      non-loopback http host is refused without ever calling fetch, a
+ *      loopback http host still fetches, and an unreachable https host
+ *      resolves/rejects with the right reason/kind.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { verifyDaemon, confirmPairing, getOrCreateClientDeviceId, PairingError, parseRemoteUrl } from '../pair-daemon';
@@ -51,8 +55,10 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(true);
-    expect(result.version).toBe('1.2.3');
-    expect(typeof result.ms).toBe('number');
+    if (result.ok) {
+      expect(result.version).toBe('1.2.3');
+      expect(typeof result.ms).toBe('number');
+    }
   });
 
   it('returns ok:true even when the body has no version field', async () => {
@@ -61,7 +67,9 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(true);
-    expect(result.version).toBeUndefined();
+    if (result.ok) {
+      expect(result.version).toBeUndefined();
+    }
   });
 
   it('returns ok:false on a network error without throwing', async () => {
@@ -70,8 +78,6 @@ describe('verifyDaemon', () => {
     const result = await verifyDaemon('https://daemon.example.com');
 
     expect(result.ok).toBe(false);
-    expect(result.version).toBeUndefined();
-    expect(result.ms).toBeUndefined();
   });
 
   it('trims a trailing slash before hitting /health', async () => {
@@ -80,6 +86,31 @@ describe('verifyDaemon', () => {
     await verifyDaemon('https://daemon.example.com/');
 
     expect(spy).toHaveBeenCalledWith('https://daemon.example.com/health', expect.any(Object));
+  });
+
+  it('refuses a non-loopback http host without calling fetch', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+
+    const result = await verifyDaemon('http://192.168.1.10:31415');
+
+    expect(result).toMatchObject({ ok: false, reason: 'refused-insecure' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('still fetches a loopback http host', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse({}, 200));
+
+    await verifyDaemon('http://127.0.0.1:31500');
+
+    expect(spy).toHaveBeenCalledWith('http://127.0.0.1:31500/health', expect.any(Object));
+  });
+
+  it('returns reason:unreachable on an unreachable https URL', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network failure'));
+
+    const result = await verifyDaemon('https://daemon.example.com');
+
+    expect(result).toMatchObject({ ok: false, reason: 'unreachable' });
   });
 });
 
@@ -149,6 +180,15 @@ describe('confirmPairing', () => {
 
     expect(spy).toHaveBeenCalledWith('https://daemon.example.com/api/auth/confirm', expect.any(Object));
   });
+
+  it('rejects a non-loopback http host with PairingError("insecure") without calling fetch', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+
+    await expect(confirmPairing('http://box.example.com', 'ABCDEF', 'Test Device')).rejects.toMatchObject({
+      kind: 'insecure',
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -190,25 +230,29 @@ describe('parseRemoteUrl', () => {
     [
       'no scheme → prepends https:// and returns bare host',
       'tunnel.example.com',
-      { host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com' },
+      { host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com', scheme: 'https' },
     ],
     [
       'preserves an explicit http:// scheme (no forced upgrade to https)',
       'http://h:31600',
-      { host: 'h:31600', baseUrl: 'http://h:31600' },
+      { host: 'h:31600', baseUrl: 'http://h:31600', scheme: 'http' },
     ],
-    ['strips a trailing slash from https://h/', 'https://h/', { host: 'h', baseUrl: 'https://h' }],
+    ['strips a trailing slash from https://h/', 'https://h/', { host: 'h', baseUrl: 'https://h', scheme: 'https' }],
     [
       'strips a path suffix from https://h/path — baseUrl carries only origin',
       'https://h/path',
-      { host: 'h', baseUrl: 'https://h' },
+      { host: 'h', baseUrl: 'https://h', scheme: 'https' },
     ],
-    ['handles a bare host:port with no scheme', 'h:8443', { host: 'h:8443', baseUrl: 'https://h:8443' }],
+    [
+      'handles a bare host:port with no scheme',
+      'h:8443',
+      { host: 'h:8443', baseUrl: 'https://h:8443', scheme: 'https' },
+    ],
     // The URL API considers 443 the default for https and omits it from host/origin.
     [
       'normalizes a full https URL, stripping the default https port 443',
       'https://studio.example.com:443',
-      { host: 'studio.example.com', baseUrl: 'https://studio.example.com' },
+      { host: 'studio.example.com', baseUrl: 'https://studio.example.com', scheme: 'https' },
     ],
   ] as const)('%s', (_label, input, expected) => {
     expect(parseRemoteUrl(input)).toEqual(expected);

@@ -32,6 +32,7 @@ use crate::event_mapper::{CodexSessionState, handle_notification};
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
+use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
@@ -78,6 +79,10 @@ type OnExitCallback = Box<dyn FnOnce() + Send>;
 
 struct PendingConfig {
     model: Option<String>,
+    /// Provider/catalog default model, computed once per spawn by the chat lifecycle —
+    /// the last turn-start fallback tier when the chat has no model and the app-server
+    /// reported none.
+    default_model: Option<String>,
     permission_mode: ExecutionMode,
     plan_mode: bool,
     tuning: Option<ResolvedTuning>,
@@ -88,6 +93,7 @@ impl Default for PendingConfig {
     fn default() -> Self {
         Self {
             model: None,
+            default_model: None,
             permission_mode: ExecutionMode::Default,
             plan_mode: false,
             tuning: None,
@@ -169,6 +175,74 @@ impl CodexSession {
             _ => "workspaceWrite",
         };
         json!({ "type": kind })
+    }
+
+    /// `cwd` + the two persist-history flags + the optional model override, shared by
+    /// the `thread/start` and `thread/resume` param builders below.
+    fn thread_params_base(&self, model: Option<&str>) -> Map<String, Value> {
+        let mut p = Map::new();
+        if let Some(m) = model {
+            p.insert("model".into(), json!(m));
+        }
+        p.insert("cwd".into(), json!(self.project_path));
+        p.insert("persistExtendedHistory".into(), json!(true));
+        p.insert("persistFullHistory".into(), json!(true));
+        p
+    }
+
+    /// Starts or resumes the thread on the first message of a session, capturing the
+    /// app-server's reported model into `state.reported_model` — the turn-start
+    /// fallback tier for a chat with no configured model. No-ops once a thread id is
+    /// already recorded.
+    async fn ensure_thread(
+        &self,
+        client: &Arc<JsonRpcClient>,
+        model: Option<&str>,
+        permission_mode: ExecutionMode,
+    ) -> Result<(), AdapterError> {
+        if self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .thread_id
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let (new_thread_id, reported_model) = if let Some(resume) = &self.resume_thread_id {
+            let mut p = self.thread_params_base(model);
+            p.insert("threadId".into(), json!(resume));
+            let res: ThreadResumeResult = de(client
+                .request("thread/resume", Some(Value::Object(p)))
+                .await
+                .map_err(|e| AdapterError::Message(e.0))?)?;
+            (res.thread.id, res.model)
+        } else {
+            let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
+            let mut p = self.thread_params_base(model);
+            p.insert("approvalPolicy".into(), json!(approval_policy));
+            p.insert("sandbox".into(), json!(sandbox));
+            p.insert("experimentalRawEvents".into(), json!(true));
+            let res: ThreadStartResult = de(client
+                .request("thread/start", Some(Value::Object(p)))
+                .await
+                .map_err(|e| AdapterError::Message(e.0))?)?;
+            (res.thread.id, res.model)
+        };
+
+        {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            state.thread_id = Some(new_thread_id.clone());
+            state.reported_model = non_empty(reported_model.as_deref()).map(str::to_string);
+        }
+        // Persist the real Codex thread ID immediately.
+        self.sink
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .on_init(&new_thread_id);
+        Ok(())
     }
 }
 
@@ -305,12 +379,14 @@ impl AdapterSession for CodexSession {
                 system_prompt: None,
                 tuning: None,
                 small_fast_model: None,
+                default_model: None,
             });
             let sink = sink.unwrap_or_else(null_sink);
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
             {
                 let mut cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
                 cfg.model = options.model.clone();
+                cfg.default_model = options.default_model.clone();
                 cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
                 cfg.plan_mode = options.plan_mode.unwrap_or(false);
                 cfg.tuning = options.tuning.clone();
@@ -412,16 +488,11 @@ impl AdapterSession for CodexSession {
             let input =
                 serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
 
-            let thread_id = self
-                .state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .thread_id
-                .clone();
-            let (model, permission_mode, plan_mode, tuning, codex_tuning) = {
+            let (model, default_model, permission_mode, plan_mode, tuning, codex_tuning) = {
                 let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
                 (
                     cfg.model.clone(),
+                    cfg.default_model.clone(),
                     cfg.permission_mode,
                     cfg.plan_mode,
                     cfg.tuning.clone(),
@@ -429,59 +500,30 @@ impl AdapterSession for CodexSession {
                 )
             };
 
-            // First message: start or resume thread.
-            if thread_id.is_none() {
-                let new_thread_id = if let Some(resume) = &self.resume_thread_id {
-                    let mut p = Map::new();
-                    p.insert("threadId".into(), json!(resume));
-                    if let Some(m) = &model {
-                        p.insert("model".into(), json!(m));
-                    }
-                    p.insert("cwd".into(), json!(self.project_path));
-                    p.insert("persistExtendedHistory".into(), json!(true));
-                    p.insert("persistFullHistory".into(), json!(true));
-                    let res: ThreadResumeResult = de(client
-                        .request("thread/resume", Some(Value::Object(p)))
-                        .await
-                        .map_err(|e| AdapterError::Message(e.0))?)?;
-                    res.thread.id
-                } else {
-                    let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
-                    let mut p = Map::new();
-                    if let Some(m) = &model {
-                        p.insert("model".into(), json!(m));
-                    }
-                    p.insert("cwd".into(), json!(self.project_path));
-                    p.insert("approvalPolicy".into(), json!(approval_policy));
-                    p.insert("sandbox".into(), json!(sandbox));
-                    p.insert("experimentalRawEvents".into(), json!(true));
-                    p.insert("persistExtendedHistory".into(), json!(true));
-                    p.insert("persistFullHistory".into(), json!(true));
-                    let res: ThreadStartResult = de(client
-                        .request("thread/start", Some(Value::Object(p)))
-                        .await
-                        .map_err(|e| AdapterError::Message(e.0))?)?;
-                    res.thread.id
-                };
-                self.state
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .thread_id = Some(new_thread_id.clone());
-                // Persist the real Codex thread ID immediately.
-                self.sink
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone()
-                    .on_init(&new_thread_id);
-            }
+            self.ensure_thread(&client, model.as_deref(), permission_mode)
+                .await?;
 
-            let thread_id = self
-                .state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .thread_id
-                .clone()
-                .unwrap_or_default();
+            let (thread_id, reported_model) = {
+                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                (
+                    state.thread_id.clone().unwrap_or_default(),
+                    state.reported_model.clone(),
+                )
+            };
+            let resolved_model = resolve_turn_model(
+                model.as_deref(),
+                reported_model.as_deref(),
+                default_model.as_deref(),
+            )
+            .inspect_err(|err| {
+                tracing::error!(
+                    module = "codex:session",
+                    session_id = %self.id,
+                    err = %err,
+                    "codex: cannot start turn without a model"
+                );
+            })?;
+
             let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
             let default_resolved = ResolvedTuning {
                 effort: None,
@@ -492,7 +534,7 @@ impl AdapterSession for CodexSession {
             let turn_cfg = build_turn_config(
                 tuning.as_ref().unwrap_or(&default_resolved),
                 &codex_tuning,
-                model.as_deref(),
+                &resolved_model,
                 if plan_mode { "plan" } else { "default" },
             );
 

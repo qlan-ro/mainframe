@@ -700,6 +700,22 @@ mod tests {
         assert_eq!(body["error"], "effort must be a valid level or null");
     }
 
+    /// Pin, not a red test: `parse_effort_field` is pure serde and already
+    /// accepts `"ultra"`. The chat doesn't exist in `test_ctx`, so the request
+    /// fails later in `apply_and_return` — this only proves validation cleared.
+    #[tokio::test]
+    async fn set_effort_accepts_ultra_past_validation() {
+        let ctx = AppCtx::test_ctx();
+        let resp = set_effort(
+            State(ctx.clone()),
+            Path("c".into()),
+            axum::body::Bytes::from(r#"{"effort":"ultra"}"#),
+        )
+        .await;
+        let (_, body) = read(resp).await;
+        assert_ne!(body["error"], "effort must be a valid level or null");
+    }
+
     #[tokio::test]
     async fn tool_result_rejects_bad_tool_use_id_400() {
         let ctx = AppCtx::test_ctx();
