@@ -119,7 +119,9 @@ export function TriggerFieldPopover({
         <Command shouldFilter={false} disablePointerSelection loop={false} value={String(field.highlightedIndex)}>
           {/* asChild keeps the field's own listbox id and active-descendant on the
               element carrying role="listbox", so the input's aria-controls resolves
-              across the portal — cmdk would otherwise substitute its own. */}
+              across the portal — cmdk would otherwise substitute its own. The
+              max-height is CommandList's own `max-h-72` (18rem) and the viewport
+              clamp in one expression, because both have to hold at once. */}
           <CommandList asChild className="max-h-[min(18rem,var(--radix-popover-content-available-height))]">
             <ListboxSlot
               id={field.listboxId}
