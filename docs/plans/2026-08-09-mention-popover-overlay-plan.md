@@ -482,6 +482,32 @@ The acceptance criterion is a measurement, not an impression. Do not settle it b
   and `toHaveCount(0)` still holds on close because Playwright retries past the exit animation.
 - [ ] **Step 2:** If a spec fails, fix the product code — do not relax the spec or add a `TODO(bug)` skip.
 
+### Group 3 verification results (2026-08-09)
+
+- **Task 9.** `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean. The package has no `lint` script — only
+  `@qlan-ro/mainframe-types` does — so `pnpm exec eslint` was run directly against the four touched files
+  (`TriggerFieldPopover.tsx`, `ComposerTriggers.tsx`, `TriggerTextField.tsx`, `command.tsx`); no findings. `wc -l`:
+  140 / 175 / 133 / 164, all under 300; no function over 50 lines.
+- **Task 10 Step 2 (measured, not eyeballed).** Driven headless through the `E2E_MODE=mock` Playwright harness
+  (a scrollable thread, 1000×500 viewport). `chat-composer` height held at `83.984375px` and
+  `chat-thread-viewport` `scrollTop` held at `683` across all four checkpoints (before, list open, query
+  narrowed, `Escape`) for both `@` and `/`. Zero px of movement either direction, for both triggers.
+- **Task 10 Step 4 (partial).** Confirmed via the same harness: `document.activeElement` stays
+  `chat-composer-input` while the list is open; Up/Down sets `data-highlighted` on a row; `Enter` inserts and
+  closes the popover; clicking outside closes it without touching `document.activeElement`'s prior draft text.
+  The full state/interaction matrix (light/dark, compact scale 0.92, non-`glass` window style, narrow window,
+  overflow scrolling, multi-line-draft anchor drift) was **not** walked — this environment has no interactive
+  GUI session and `design-conformance`/`worktree-tester` were unreachable via `ListAgents`. Recommend a
+  follow-up manual pass before merge if that matrix matters for sign-off.
+- **Task 10 Step 5.** Not walked live; confirmed by source instead —
+  `TriggerTextField.tsx:94` passes `side="bottom" className="w-80"` into `TriggerFieldPopover`, matching D6, and
+  the automations suite (`TriggerTextField.test.tsx`, 12 tests) passes.
+- **Task 10 Step 6.** Not dispatched — no `design-conformance` agent was reachable from this subagent
+  (`ListAgents` returned none).
+- **Task 11.** `pnpm test:e2e` scoped to `composer-advanced.spec.ts`: 11 passed, 8 skipped (pre-existing
+  `TODO(bug)` skips for #316 and the unrelated browser-crash cluster — none added or removed here). Both the `@`
+  mention describe and the `/` skills describe passed with no selector edits.
+
 ---
 
 ## Risks
