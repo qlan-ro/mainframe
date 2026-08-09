@@ -9,6 +9,14 @@ pub enum DaemonKind {
     Remote,
 }
 
+/// The scheme a daemon was paired with. Absent on a `DaemonMeta` means https.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DaemonScheme {
+    Http,
+    Https,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DaemonTarget {
@@ -34,6 +42,8 @@ pub struct DaemonMeta {
     pub device: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paired: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheme: Option<DaemonScheme>,
 }
 
 impl DaemonMeta {
@@ -113,3 +123,5 @@ mod tests {
 // `kind` literal-union → DaemonKind enum, shared by DaemonTarget and DaemonMeta.
 // `token: string | null` is required-nullable → Option WITHOUT skip. DaemonMeta
 // mirrors DaemonMetaSchema (zod); the `.min(1)` refinements become validate().
+// `scheme` is optional (absent = https) so old registry files without the key
+// keep loading unchanged.
