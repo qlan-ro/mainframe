@@ -1,5 +1,5 @@
 ---
-'@qlan-ro/mainframe-core': patch
+'@qlan-ro/mainframe-ui': patch
 '@qlan-ro/mainframe-app-tauri': patch
 ---
 

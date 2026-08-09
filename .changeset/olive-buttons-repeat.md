@@ -1,5 +1,5 @@
 ---
-'@qlan-ro/mainframe-core': patch
+'@qlan-ro/mainframe-ui': patch
 ---
 
 Fix Codex sessions failing to start when a configured MCP server needs authentication.
