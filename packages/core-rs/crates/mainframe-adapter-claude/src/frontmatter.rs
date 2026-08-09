@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+mod block_scalar;
+
 /// Parsed frontmatter: a flat `key: value` attribute map plus the body below the
 /// closing fence. `attributes` mirrors the TS `Record<string, string>`.
 pub struct Frontmatter {
