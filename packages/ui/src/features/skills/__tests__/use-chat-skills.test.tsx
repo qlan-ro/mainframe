@@ -252,7 +252,7 @@ describe('useChatSkills — projectId not in getProjects result', () => {
 // ---------------------------------------------------------------------------
 
 describe('useChatSkills — getSkills rejects', () => {
-  it('returns { skills:[], agents:[], loading:false } and logs a warning', async () => {
+  it('keeps the fetched agents when the skills fetch rejects, and logs a warning', async () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockRejectedValue(new Error('skills fetch failed'));
@@ -266,7 +266,7 @@ describe('useChatSkills — getSkills rejects', () => {
     });
 
     expect(result.current.skills).toEqual([]);
-    expect(result.current.agents).toEqual([]);
+    expect(result.current.agents).toEqual([AGENT_FIXTURE]);
     expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load skills', expect.any(Error));
     warnSpy.mockRestore();
   });
@@ -392,24 +392,22 @@ describe('useChatAgents', () => {
     expect(result.current).toEqual([]);
   });
 
-  it('returns [] when getAgents rejects (covered by shared catch)', async () => {
+  it('empties only agents when getAgents rejects, leaving skills rendered', async () => {
     vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
     vi.mocked(getAgents).mockRejectedValue(new Error('agents fetch failed'));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    const { result } = renderHook(() => useChatAgents(), { wrapper });
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
 
     await waitFor(() => {
-      // loading settles to false in the finally block
-      expect(vi.mocked(getProjects)).toHaveBeenCalled();
+      expect(result.current.loading).toBe(false);
     });
 
-    // The Promise.all rejects → catch resets both
-    await waitFor(() => {
-      expect(result.current).toEqual([]);
-    });
+    expect(result.current.agents).toEqual([]);
+    expect(result.current.skills).toEqual([SKILL_FIXTURE]);
+    expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load agents', expect.any(Error));
 
     warnSpy.mockRestore();
   });
