@@ -272,6 +272,28 @@ describe('useChatSkills — getSkills rejects', () => {
   });
 });
 
+describe('useChatSkills — both fetches reject', () => {
+  it('empties both lists when both fetches reject', async () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
+    vi.mocked(getSkills).mockRejectedValue(new Error('skills fetch failed'));
+    vi.mocked(getAgents).mockRejectedValue(new Error('agents fetch failed'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useChatSkills(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.skills).toEqual([]);
+    expect(result.current.agents).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load skills', expect.any(Error));
+    expect(warnSpy).toHaveBeenCalledWith('[skills] failed to load agents', expect.any(Error));
+    warnSpy.mockRestore();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 6. Stale-clear on dependency change — old skills + agents are not retained
 // ---------------------------------------------------------------------------
