@@ -47,6 +47,7 @@ pub mod transcript;
 pub mod trust_store;
 pub mod tuning;
 pub mod user_event;
+pub(crate) mod user_payload;
 pub mod workflow_events;
 
 // PORT STATUS: src/plugins/builtin/claude/* + messages/* (claude slice) — skeleton only (Task 4.1)
