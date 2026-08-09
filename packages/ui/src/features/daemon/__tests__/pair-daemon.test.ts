@@ -190,25 +190,29 @@ describe('parseRemoteUrl', () => {
     [
       'no scheme → prepends https:// and returns bare host',
       'tunnel.example.com',
-      { host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com' },
+      { host: 'tunnel.example.com', baseUrl: 'https://tunnel.example.com', scheme: 'https' },
     ],
     [
       'preserves an explicit http:// scheme (no forced upgrade to https)',
       'http://h:31600',
-      { host: 'h:31600', baseUrl: 'http://h:31600' },
+      { host: 'h:31600', baseUrl: 'http://h:31600', scheme: 'http' },
     ],
-    ['strips a trailing slash from https://h/', 'https://h/', { host: 'h', baseUrl: 'https://h' }],
+    ['strips a trailing slash from https://h/', 'https://h/', { host: 'h', baseUrl: 'https://h', scheme: 'https' }],
     [
       'strips a path suffix from https://h/path — baseUrl carries only origin',
       'https://h/path',
-      { host: 'h', baseUrl: 'https://h' },
+      { host: 'h', baseUrl: 'https://h', scheme: 'https' },
     ],
-    ['handles a bare host:port with no scheme', 'h:8443', { host: 'h:8443', baseUrl: 'https://h:8443' }],
+    [
+      'handles a bare host:port with no scheme',
+      'h:8443',
+      { host: 'h:8443', baseUrl: 'https://h:8443', scheme: 'https' },
+    ],
     // The URL API considers 443 the default for https and omits it from host/origin.
     [
       'normalizes a full https URL, stripping the default https port 443',
       'https://studio.example.com:443',
-      { host: 'studio.example.com', baseUrl: 'https://studio.example.com' },
+      { host: 'studio.example.com', baseUrl: 'https://studio.example.com', scheme: 'https' },
     ],
   ] as const)('%s', (_label, input, expected) => {
     expect(parseRemoteUrl(input)).toEqual(expected);
