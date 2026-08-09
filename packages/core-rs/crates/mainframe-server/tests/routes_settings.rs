@@ -330,11 +330,29 @@ async fn provider_put_rejects_invalid_default_mode() {
 }
 
 #[tokio::test]
-async fn provider_put_rejects_invalid_default_effort() {
+async fn provider_put_accepts_ultra_default_effort() {
     let server = spawn_test_server(None).await;
     let resp = client()
         .put(server.http_url("/api/settings/providers/claude"))
         .json(&json!({ "defaultEffort": "ultra" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        get_setting(&server, "provider", "claude.defaultEffort")
+            .await
+            .as_deref(),
+        Some("ultra")
+    );
+}
+
+#[tokio::test]
+async fn provider_put_rejects_bogus_default_effort() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/providers/claude"))
+        .json(&json!({ "defaultEffort": "turbo" }))
         .send()
         .await
         .unwrap();
