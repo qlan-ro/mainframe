@@ -890,6 +890,55 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
   });
 });
 
+/** A model advertising 'ultra'. Chat.effort stays unset so the trigger label
+ * resolves to the model's 'high' defaultEffort and can't throw on the
+ * missing EFFORT_META['ultra'] entry before the impl lands. */
+const ULTRA_MODEL: AdapterModel = {
+  id: 'gpt-5.6',
+  label: 'GPT-5.6',
+  defaultEffort: 'high',
+  // @ts-expect-error until 'ultra' joins EffortLevel
+  supportedEfforts: ['high', 'xhigh', 'ultra'],
+};
+
+const ADAPTER_ULTRA: AdapterInfo = {
+  ...ADAPTER_CLAUDE,
+  models: [ULTRA_MODEL, HAIKU],
+};
+
+describe('ProviderModelSelect — per-model tuning flyout offers ultra when advertised', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("shows a labelled 'Ultra' option for a model advertising it (red today: empty label)", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_ULTRA],
+      adapter: ADAPTER_ULTRA,
+      model: ULTRA_MODEL,
+      chat: makeChat({ adapterId: 'claude', model: 'gpt-5.6' }),
+    });
+
+    await openFlyout(user, 'gpt-5.6');
+
+    const option = screen.getByTestId('composer-model-gpt-5.6-effort-ultra');
+    expect(option).toHaveTextContent('Ultra');
+  });
+
+  it('has no ultra option for a model that does not advertise it (guard, green today)', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderSelect({
+      adapters: [ADAPTER_TUNABLE],
+      adapter: ADAPTER_TUNABLE,
+      model: TUNABLE,
+      chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
+    });
+
+    await openFlyout(user, 'tunable');
+
+    expect(screen.queryByTestId('composer-model-tunable-effort-ultra')).toBeNull();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 11. Trigger label carries the resolved effort
 // ---------------------------------------------------------------------------
