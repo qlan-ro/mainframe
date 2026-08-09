@@ -188,9 +188,16 @@ Test `a_three_megabyte_body_reaches_the_attachments_handler`:
   - `assert!(body.len() > DEFAULT_EXTRACTOR_LIMIT_BYTES)` — the request is inside the old dead zone.
   - `assert!(body.len() < mainframe_server::BODY_LIMIT_BYTES)` — this is how the accept test *references
     the constant*; if `BODY_LIMIT_BYTES` ever drops below 3 MB the test fails rather than drifting.
-  - `assert!(3 * 1024 * 1024 * 3 / 4 < 5 * 1024 * 1024)` (or an equivalent named `DECODED_BYTES` local) —
-    the payload clears the route's own 5 MB per-item rule, so a 400 here means the limit layer, not the
-    route.
+  - `assert!(data.len() * 3 / 4 < 5 * 1024 * 1024)` — the payload clears the route's own 5 MB per-item
+    rule (mirroring `validate`'s own arithmetic), so a 400 here means the limit layer, not the route.
+    Write it against `data.len()`, exactly as spelled here. An all-literal form such as
+    `assert!(3 * 1024 * 1024 * 3 / 4 < 5 * 1024 * 1024)`, and the same expression hoisted into a named
+    `const`, both trip `clippy::assertions_on_constants` — warn-by-default, promoted to an error by the
+    `-D warnings` gate in B3 verify 4 and C3 verify 3, and not covered by this file's
+    `#![allow(clippy::unwrap_used, clippy::expect_used)]` header. Verified against the pinned toolchain
+    (clippy 0.1.97): the literal form fails with "this assertion is always true", the const form with
+    "this assertion has a constant value". The other three guards compare a runtime `len()` and are
+    lint-clean as written.
 - POST it to `/api/chats/c1/attachments` on `spawn_test_server(None)` via `reqwest` with `.body(bytes)` +
   `Content-Type: application/json` (`.json()` would re-serialize a second 3 MB copy).
 - Capture status and raw bytes *before* parsing. Assert `status == 200` with a message naming the likely
