@@ -87,6 +87,11 @@ pub struct SessionSpawnOptions {
     /// runs against CLIProxyAPI, whose catalog has no Haiku to fall back on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub small_fast_model: Option<String>,
+    /// Provider/catalog default model, resolved once per spawn by the chat lifecycle.
+    /// Codex uses it as the last turn-start fallback when the chat has no model and the
+    /// app-server reported none; other adapters ignore it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
