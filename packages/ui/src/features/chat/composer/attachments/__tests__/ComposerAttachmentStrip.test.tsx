@@ -69,7 +69,8 @@ function MentionButtonWithTextarea({ initialText }: { initialText: string }) {
   return (
     <>
       <textarea ref={textareaRef} defaultValue={initialText} data-testid="host-textarea" />
-      {/* @ts-expect-error todo #316 task 6 adds textareaRef to ComposerAddMention's props */}
+      {/* Red until todo #316 task 6 adds textareaRef to ComposerAddMention's props — expected
+          TS2322 for the whole red window (see the plan's "Typecheck is red" note); don't suppress it. */}
       <ComposerAddMention textareaRef={textareaRef} />
     </>
   );
