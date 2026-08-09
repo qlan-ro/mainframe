@@ -1,8 +1,15 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/frontmatter.ts`.
+//! Ported from `packages/core/src/plugins/builtin/claude/frontmatter.ts`, then
+//! rebuilt for todo #317 into a single-pass, line-anchored reader.
 //!
 //! Minimal SKILL.md / command YAML-frontmatter reader/writer. Not a full YAML
-//! parser: it only splits `key: value` lines between the first two `---`
-//! fences, exactly like the TS source.
+//! parser. Supported: inline `key: value` scalars split at the first colon;
+//! `|`/`>` block scalars with `-`/`+` chomping (clip, YAML's unmarked
+//! default, is treated as strip — see `block_scalar`'s module doc); CRLF line
+//! endings. Not supported: explicit indentation indicators (`|2`), quoting,
+//! nested maps, and lists — none of these appear in agent or skill files
+//! (todo #317 Decision D8). The closing fence is a line that is exactly
+//! `---`, so a `---` inside the body or an indented block-scalar line never
+//! truncates the frontmatter early.
 
 use std::collections::HashMap;
 
@@ -16,42 +23,62 @@ pub struct Frontmatter {
 }
 
 pub fn parse_frontmatter(content: &str) -> Frontmatter {
-    let mut attributes: HashMap<String, String> = HashMap::new();
+    let lines: Vec<&str> = content
+        .split('\n')
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+        .collect();
 
-    if !content.starts_with("---") {
-        return Frontmatter {
-            attributes,
-            body: content.to_string(),
-        };
-    }
-
-    // `content.indexOf('---', 3)` — search for the closing fence after the open.
-    let end_index = match content[3..].find("---") {
-        Some(i) => i + 3,
-        None => {
-            return Frontmatter {
-                attributes,
-                body: content.to_string(),
-            };
-        }
+    let unfenced = || Frontmatter {
+        attributes: HashMap::new(),
+        body: content.to_string(),
     };
 
-    let frontmatter_block = content[3..end_index].trim();
-    let body = content[end_index + 3..].trim().to_string();
+    if lines.first() != Some(&"---") {
+        return unfenced();
+    }
+    let Some(fence_end) = lines
+        .iter()
+        .skip(1)
+        .position(|line| *line == "---")
+        .map(|i| i + 1)
+    else {
+        return unfenced();
+    };
 
-    for line in frontmatter_block.split('\n') {
-        let colon_index = match line.find(':') {
-            Some(i) => i,
-            None => continue,
-        };
-        let key = line[..colon_index].trim();
-        let value = line[colon_index + 1..].trim();
-        if !key.is_empty() {
-            attributes.insert(key.to_string(), value.to_string());
-        }
+    let mut attributes = HashMap::new();
+    let mut i = 1;
+    while i < fence_end {
+        i = parse_attribute_line(&lines, i, &mut attributes);
     }
 
+    let body = lines[fence_end + 1..].join("\n").trim().to_string();
     Frontmatter { attributes, body }
+}
+
+/// Parses the attribute at `lines[i]` — an inline scalar or a block-scalar
+/// header — and returns the index of the next unconsumed line.
+fn parse_attribute_line(
+    lines: &[&str],
+    i: usize,
+    attributes: &mut HashMap<String, String>,
+) -> usize {
+    let Some(colon_index) = lines[i].find(':') else {
+        return i + 1;
+    };
+    let key = lines[i][..colon_index].trim();
+    let value = lines[i][colon_index + 1..].trim();
+    if key.is_empty() {
+        return i + 1;
+    }
+
+    if let Some(header) = block_scalar::parse_header(value) {
+        let (block_value, next) = block_scalar::read_block(lines, i + 1, &header);
+        attributes.insert(key.to_string(), block_value);
+        return next;
+    }
+
+    attributes.insert(key.to_string(), value.to_string());
+    i + 1
 }
 
 /// Serialize ordered `key: value` attributes with the body below the fence.
