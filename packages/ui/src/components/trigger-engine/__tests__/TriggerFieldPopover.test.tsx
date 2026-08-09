@@ -35,6 +35,7 @@ function makeField(entries: readonly TriggerEntry[], trigger: TriggerConfig | nu
     highlightedIndex: 0,
     optionId: (entryId) => `listbox-option-${entryId}`,
     handleKeyDown: () => false,
+    close: () => undefined,
     setCursorPosition: () => undefined,
     selectEntry: () => undefined,
     highlightIndex: () => undefined,
