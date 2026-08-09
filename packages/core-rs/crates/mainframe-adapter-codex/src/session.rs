@@ -481,15 +481,12 @@ impl AdapterSession for CodexSession {
                 )));
             };
 
-            if !images.is_empty() {
-                tracing::warn!(
-                    module = "codex:session",
-                    session_id = %self.id,
-                    count = images.len(),
-                    "codex: image attachments not supported yet, skipping"
-                );
-            }
-            let input = json!([{ "type": "text", "text": message, "text_elements": [] }]);
+            let crate::user_input::TurnInput {
+                input,
+                undeliverable,
+            } = crate::user_input::build_turn_input(&message, &images);
+            let input =
+                serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
 
             let (model, default_model, permission_mode, plan_mode, tuning, codex_tuning) = {
                 let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
@@ -567,6 +564,20 @@ impl AdapterSession for CodexSession {
                 .request("turn/start", Some(Value::Object(p)))
                 .await
                 .map_err(|e| AdapterError::Message(e.0))?)?;
+
+            if let Some(notice) = crate::user_input::undeliverable_notice(&undeliverable) {
+                tracing::warn!(
+                    module = "codex:session",
+                    session_id = %self.id,
+                    count = undeliverable.len(),
+                    "codex: images not delivered"
+                );
+                self.sink
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                    .on_cli_message(&notice);
+            }
 
             *self.status.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Running;
             Ok(())

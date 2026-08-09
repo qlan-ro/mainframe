@@ -36,6 +36,12 @@ use crate::{AdapterError, BoxFuture};
 pub struct ImageInput {
     pub media_type: String,
     pub data: String,
+    /// Daemon-local file holding the decoded bytes, when the attachment store
+    /// materialized one. Adapters that deliver images inline (Claude) ignore it;
+    /// adapters whose CLI takes a filesystem path (Codex) need it. `None` for any
+    /// call site with no materialized file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 /// The `{ global, project }` context-file pair returned by

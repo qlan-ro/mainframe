@@ -51,6 +51,7 @@ pub(crate) mod turn_lifecycle;
 pub(crate) mod turn_model;
 pub mod types;
 pub(crate) mod unified_diff;
+pub(crate) mod user_input;
 pub(crate) mod web_search_history;
 pub(crate) mod web_search_render;
 
