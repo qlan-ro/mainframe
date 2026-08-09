@@ -20,7 +20,7 @@ use mainframe_adapter_api::resolve_executable::{
 };
 use mainframe_db::DbError;
 use mainframe_services::settings::normalize_saved_default_model;
-use mainframe_types::adapter::{AdapterInfo, AdapterModel};
+use mainframe_types::adapter::{AdapterInfo, AdapterModel, EffortLevel};
 use mainframe_types::settings::{
     GeneralConfig, NotificationChatConfig, NotificationConfig, NotificationOtherConfig,
     NotificationPermissionConfig,
@@ -477,15 +477,21 @@ fn in_enum(value: &Option<String>, allowed: &[&str]) -> bool {
     }
 }
 
+/// `""` is the clear sentinel (`set_or_delete` deletes on empty); anything else
+/// must deserialize as an `EffortLevel`, so the allow-list can't desync from
+/// the enum the way the old hardcoded list did.
+fn is_effort_or_clear(value: &Option<String>) -> bool {
+    match value {
+        None => true,
+        Some(v) if v.is_empty() => true,
+        Some(v) => serde_json::from_value::<EffortLevel>(Value::String(v.clone())).is_ok(),
+    }
+}
+
 fn validate_provider_patch(p: &ProviderPatch) -> bool {
     in_enum(&p.default_mode, &["default", "acceptEdits", "yolo"])
         && in_enum(&p.default_plan_mode, &["true", "false"])
-        && in_enum(
-            &p.default_effort,
-            &[
-                "none", "minimal", "low", "medium", "high", "xhigh", "max", "",
-            ],
-        )
+        && is_effort_or_clear(&p.default_effort)
         && in_enum(&p.default_fast, &["true", "false", ""])
         && in_enum(&p.default_ultracode, &["true", "false", ""])
         && in_enum(&p.default_adaptive_thinking, &["true", "false", ""])
