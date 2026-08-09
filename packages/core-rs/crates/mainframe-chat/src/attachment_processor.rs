@@ -70,13 +70,13 @@ fn build_preview(attachment: &StoredAttachment) -> serde_json::Value {
     }
     // The materialized image path is a daemon-local delivery detail for the
     // Codex adapter, not part of the client preview contract; file-kind keeps it.
-    if attachment.kind == AttachmentKind::File {
-        if let Some(path) = &attachment.materialized_path {
-            preview.insert(
-                "materializedPath".into(),
-                serde_json::Value::String(path.clone()),
-            );
-        }
+    if attachment.kind == AttachmentKind::File
+        && let Some(path) = &attachment.materialized_path
+    {
+        preview.insert(
+            "materializedPath".into(),
+            serde_json::Value::String(path.clone()),
+        );
     }
     serde_json::Value::Object(preview)
 }
