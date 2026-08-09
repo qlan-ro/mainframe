@@ -6,6 +6,7 @@
  * yet active, so the normal apiBase/http.ts wrappers must not be used).
  */
 import type { DaemonMeta } from '@qlan-ro/mainframe-types';
+import { checkEndpointPolicy, INSECURE_ENDPOINT_MESSAGE } from './endpoint-policy';
 
 const STORAGE_KEY = 'mf:client-device-id';
 const HEALTH_TIMEOUT_MS = 5_000;
@@ -59,13 +60,19 @@ export function daemonOrigin(meta: Pick<DaemonMeta, 'host' | 'scheme'>): string 
 // PairingError
 // ---------------------------------------------------------------------------
 
-export type PairingErrorKind = 'invalid' | 'network';
+export type PairingErrorKind = 'invalid' | 'network' | 'insecure';
+
+const PAIRING_ERROR_MESSAGES: Record<PairingErrorKind, string> = {
+  invalid: 'Pairing code is invalid or expired',
+  network: 'Network error during pairing',
+  insecure: INSECURE_ENDPOINT_MESSAGE,
+};
 
 export class PairingError extends Error {
   readonly kind: PairingErrorKind;
 
   constructor(kind: PairingErrorKind) {
-    super(kind === 'invalid' ? 'Pairing code is invalid or expired' : 'Network error during pairing');
+    super(PAIRING_ERROR_MESSAGES[kind]);
     this.name = 'PairingError';
     this.kind = kind;
     Error.captureStackTrace?.(this, PairingError);
@@ -94,27 +101,10 @@ export function getOrCreateClientDeviceId(): string {
 // verifyDaemon
 // ---------------------------------------------------------------------------
 
-export interface VerifyResult {
-  ok: boolean;
-  version?: string;
-  ms?: number;
-}
+export type VerifyResult =
+  { ok: true; version?: string; ms?: number } | { ok: false; reason: 'refused-insecure' | 'unreachable' };
 
-/**
- * Probes `GET <baseUrl>/health` with a 5-second timeout.
- * Accepts any user-typed URL (with or without a scheme) — normalizes via
- * `parseRemoteUrl` before fetching so the request is always absolute.
- * Returns `{ ok: true, version?, ms }` on any 2xx; `{ ok: false }` on
- * timeout, parse error, or network error — never throws.
- */
-export async function verifyDaemon(url: string): Promise<VerifyResult> {
-  let base: string;
-  try {
-    base = parseRemoteUrl(url).baseUrl;
-  } catch {
-    return { ok: false };
-  }
-
+async function fetchHealth(base: string): Promise<VerifyResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
   const start = Date.now();
@@ -123,18 +113,35 @@ export async function verifyDaemon(url: string): Promise<VerifyResult> {
     const res = await fetch(`${base}/health`, { signal: controller.signal });
     const ms = Date.now() - start;
 
-    if (!res.ok) return { ok: false };
+    if (!res.ok) return { ok: false, reason: 'unreachable' };
 
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     const version = typeof body['version'] === 'string' ? body['version'] : undefined;
 
     return { ok: true, version, ms };
   } catch {
-    // Intentional: AbortError (timeout) and network failures both map to ok:false.
-    return { ok: false };
+    // Intentional: AbortError (timeout) and network failures both map to unreachable.
+    return { ok: false, reason: 'unreachable' };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Probes `GET <baseUrl>/health` with a 5-second timeout.
+ * Accepts any user-typed URL (with or without a scheme) — gated through
+ * `checkEndpointPolicy` before fetching, so a non-loopback http host never
+ * spends the request. Returns `{ ok: true, version?, ms }` on any 2xx;
+ * `{ ok: false, reason }` on refusal, timeout, parse error, or network
+ * error — never throws.
+ */
+export async function verifyDaemon(url: string): Promise<VerifyResult> {
+  const policy = checkEndpointPolicy(url);
+  if (!policy.allowed) {
+    return { ok: false, reason: policy.reason === 'insecure-host' ? 'refused-insecure' : 'unreachable' };
+  }
+
+  return fetchHealth(policy.parts.baseUrl);
 }
 
 // ---------------------------------------------------------------------------
@@ -155,18 +162,19 @@ interface ConfirmEnvelope {
  * Exchanges a pairing code for a session token.
  *
  * POSTs `{ pairingCode, clientDeviceId, deviceName }` to `<baseUrl>/api/auth/confirm`.
- * Normalizes the URL via `parseRemoteUrl` — any scheme/path oddities are fixed.
+ * Gated through `checkEndpointPolicy` — any scheme/path oddities are fixed and a
+ * non-loopback http host never spends the request.
  * On success returns `{ token, deviceId }` from the envelope's `data` field.
  * Throws `PairingError('invalid')` on a 401 or an envelope with `success:false`.
- * Throws `PairingError('network')` on a network/timeout failure.
+ * Throws `PairingError('insecure')` when the endpoint policy refuses the host.
+ * Throws `PairingError('network')` on an unparseable URL or a network/timeout failure.
  */
 export async function confirmPairing(url: string, code: string, deviceName: string): Promise<PairResult> {
-  let base: string;
-  try {
-    base = parseRemoteUrl(url).baseUrl;
-  } catch {
-    throw new PairingError('network');
+  const policy = checkEndpointPolicy(url);
+  if (!policy.allowed) {
+    throw new PairingError(policy.reason === 'insecure-host' ? 'insecure' : 'network');
   }
+  const base = policy.parts.baseUrl;
   const clientDeviceId = getOrCreateClientDeviceId();
 
   let res: Response;
