@@ -223,7 +223,9 @@ cd packages/core-rs && cargo test -p mainframe-adapter-claude --test frontmatter
 cd packages/core-rs && cargo test -p mainframe-adapter-claude frontmatter
 ```
 
-Expected: every Task 1 case except 10-12 (build) passes.
+Expected: every Task 1 case passes except 10 and 11, the two multi-line `build_frontmatter` cases Task 4
+fixes. Case 12 is green today and stays green throughout — `build_frontmatter` already emits an inline value
+and both the old and new parsers split at the first colon.
 
 ## Task 4 — `build_frontmatter` round-trips block scalars
 
