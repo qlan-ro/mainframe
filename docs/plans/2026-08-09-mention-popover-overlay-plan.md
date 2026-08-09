@@ -492,13 +492,22 @@ The acceptance criterion is a measurement, not an impression. Do not settle it b
   (a scrollable thread, 1000×500 viewport). `chat-composer` height held at `83.984375px` and
   `chat-thread-viewport` `scrollTop` held at `683` across all four checkpoints (before, list open, query
   narrowed, `Escape`) for both `@` and `/`. Zero px of movement either direction, for both triggers.
-- **Task 10 Step 4 (partial).** Confirmed via the same harness: `document.activeElement` stays
+- **Task 10 Step 4 (functional items only).** Confirmed via the same harness: `document.activeElement` stays
   `chat-composer-input` while the list is open; Up/Down sets `data-highlighted` on a row; `Enter` inserts and
   closes the popover; clicking outside closes it without touching `document.activeElement`'s prior draft text.
-  The full state/interaction matrix (light/dark, compact scale 0.92, non-`glass` window style, narrow window,
-  overflow scrolling, multi-line-draft anchor drift) was **not** walked — this environment has no interactive
-  GUI session and `design-conformance`/`worktree-tester` were unreachable via `ListAgents`. Recommend a
-  follow-up manual pass before merge if that matrix matters for sign-off.
+- **Task 10 Step 3 (functional subset).** Also confirmed headless: **overflow** — a 30-entry `@` query scrolls
+  inside the panel (`max-h-[min(18rem, available-height)]`), the panel's own box never exceeds the viewport, and
+  a row past the fold is reachable by scroll. **Multi-line draft moving the anchor** — a 3-newline draft plus
+  `@index` still opens the list (`data-side="top"`), and once Radix's own position settles (one retry needed —
+  the very first paint measured the panel ~1.8px into the composer's top edge, mid-transition; the settled state
+  had zero overlap) the panel's bottom edge sits flush above the composer, `sideOffset={6}` intact. **Little room
+  above** (320px-tall viewport) — Radix reports `data-side="top"` still and the panel and its rows stay fully
+  inside the viewport rather than clipping.
+  The remaining, genuinely visual parts of Step 3/4 (light/dark, compact scale 0.92, non-`glass` window style,
+  the `@` toolbar button's known #316 submit, hover-vs-keyboard highlight parity, truncation appearance) were
+  **not** walked — this environment has no interactive GUI session and `design-conformance`/`worktree-tester`
+  were unreachable via `ListAgents`. Recommend a follow-up manual pass before merge if that remainder matters for
+  sign-off.
 - **Task 10 Step 5.** Not walked live; confirmed by source instead —
   `TriggerTextField.tsx:94` passes `side="bottom" className="w-80"` into `TriggerFieldPopover`, matching D6, and
   the automations suite (`TriggerTextField.test.tsx`, 12 tests) passes.
