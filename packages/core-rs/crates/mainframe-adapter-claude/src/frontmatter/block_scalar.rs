@@ -79,7 +79,10 @@ fn strip_indent(line: &str, indent: usize) -> String {
     if line.trim().is_empty() {
         return String::new();
     }
-    line[indent.min(line.len())..].to_string()
+    // Cut within this line's own spaces, not `indent`: an under-indented
+    // continuation must never be sliced mid-char or lose text (todo #317).
+    let cut = leading_spaces(line).min(indent);
+    line[cut..].to_string()
 }
 
 fn fold(lines: &[String], header: &Header) -> String {
@@ -188,5 +191,18 @@ mod tests {
         let (value, end) = read_block(&lines, 0, &header);
         assert_eq!(value, "outer\n  nested\nouter2");
         assert_eq!(end, 3);
+    }
+
+    #[test]
+    fn read_block_handles_under_indented_multibyte_continuation() {
+        // Byte 4 falls inside '✅' — the old indent-anchored slice panicked here.
+        let lines = ["    outer", "  ✅ done", "next"];
+        let header = Header {
+            style: Style::Literal,
+            chomp: Chomp::Strip,
+        };
+        let (value, end) = read_block(&lines, 0, &header);
+        assert_eq!(value, "outer\n✅ done");
+        assert_eq!(end, 2);
     }
 }
