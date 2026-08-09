@@ -435,3 +435,33 @@ From `packages/core-rs`:
   runs in production and Codex personality/summary never reach a turn. That is a separate bug, out of scope
   here, and it is why this plan does not route `default_model` through that seam.
 - **Image attachments on Codex turns** remain unsupported (`session.rs` L408) and stay out of scope.
+
+## T13 verification results (Group 3, 2026-08-09)
+
+All four commands from `packages/core-rs`:
+
+1. `cargo test -p mainframe-adapter-codex` — 100 lib unit tests + all integration files green,
+   including the 5 `turn_start_model.rs` cases and `turn_config::tests::serializes_the_model_key_for_every_turn`.
+2. `cargo test -p mainframe-chat -p mainframe-types` — green, including
+   `lifecycle_manager::tests::default_model_for_*` (3 cases) and the 164-test `mainframe_types` suite.
+3. `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --check` — both clean, no output.
+4. **Real app-server check**, `codex-cli 0.144.3` on PATH, isolated daemon (`MAINFRAME_DATA_DIR=/tmp/mf_dev_303a`,
+   `DAEMON_PORT=31502`, never :31415). Created a Codex chat with no model, sent a message over the WS API
+   directly (`{"type":"message.send",...}`): the turn started and completed with a real assistant reply
+   ("Hello!"), zero `-32600` occurrences in the trace log, and the app-server's own
+   `thread/settings/updated` echo confirmed `collaborationMode.settings.model == "gpt-5.6-sol"` (tier 3,
+   the catalog default — this account's Codex has no saved default, so tier 3 is what resolved, which is
+   still full coverage of "a model is always sent"). Repeated with `PATCH .../config {"planMode":true}`:
+   the same echo showed `collaborationMode.mode == "plan"` with the same non-empty model, confirming plan
+   mode still travels on a model-less chat.
+5. **No-model error path**, driven through a fake app-server (`while read` dispatch-by-method, per-request
+   `id` echo, `model/list` → empty catalog, `thread/start` → no `model` key) on a second, never-probed
+   isolated daemon (`/tmp/mf_dev_303b`, port 31503): set `provider.codex.executablePath` to the fake script,
+   confirmed `provider.codex.defaultModel` unset, restarted the daemon, confirmed `GET /api/adapters` showed
+   an empty Codex catalog (`catalogSource: "fallback"`, `models: []`). Created a model-less chat and sent a
+   message: the WS `error` event carried the exact T5 sentence ("Codex could not determine which model to
+   use: this chat has no model selected, the Codex app-server reported none, and no default model is
+   configured. Pick a model in the composer or set a Codex default in Settings."), the daemon log had the
+   `tracing::error!` line (`codex: cannot start turn without a model`, `module="codex:session"`), zero
+   `-32600` occurrences, and the fake script's own received-methods capture recorded only
+   `initialize`, `initialized`, `thread/start` — no `turn/start` was ever sent.
