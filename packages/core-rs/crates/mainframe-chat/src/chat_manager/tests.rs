@@ -1262,6 +1262,7 @@ async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata(
         images: vec![ImageInput {
             media_type: "image/png".to_string(),
             data: "AAA".to_string(),
+            path: None,
         }],
         message_content: vec![MessageContent::Leaf(LeafContent::Text {
             text: "[Image: shot.png]".to_string(),

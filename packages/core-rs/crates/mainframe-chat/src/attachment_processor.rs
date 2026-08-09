@@ -23,6 +23,7 @@ pub fn process_attachments(attachments: &[StoredAttachment]) -> ProcessedAttachm
                 out.images.push(ImageInput {
                     media_type: attachment.media_type.clone(),
                     data: attachment.data.clone(),
+                    path: None,
                 });
                 out.message_content
                     .push(MessageContent::Leaf(LeafContent::Image {
