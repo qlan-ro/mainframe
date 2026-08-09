@@ -6,8 +6,6 @@
 
 mod support;
 
-use std::time::Duration;
-
 use mainframe_types::chat::{ChatMessage, ChatMessageType};
 use mainframe_types::events::{ChatNotificationKind, ChatNotificationLevel, DaemonEvent};
 use serde_json::json;
@@ -34,6 +32,15 @@ fn display_messages_set(chat_id: &str) -> DaemonEvent {
     DaemonEvent::DisplayMessagesSet {
         chat_id: chat_id.into(),
         messages: vec![],
+    }
+}
+
+/// A chatId-less event, so the fan-out always delivers it. Broadcast last, the
+/// single ordered pump makes its arrival proof that nothing published before it
+/// was delivered — a negative assertion with no timing window to lose.
+fn sentinel() -> DaemonEvent {
+    DaemonEvent::ProcessStopped {
+        process_id: "sentinel".into(),
     }
 }
 
@@ -113,6 +120,7 @@ async fn subscribe_then_send_delivers_each_event_exactly_once() {
 
     let _ = server.ctx.broadcast.send(user_message_added(CHAT));
     let _ = server.ctx.broadcast.send(display_messages_set(CHAT));
+    let _ = server.ctx.broadcast.send(sentinel());
 
     let added = ws.read_event().await;
     assert_eq!(added["type"], "message.added");
@@ -122,10 +130,9 @@ async fn subscribe_then_send_delivers_each_event_exactly_once() {
     assert_eq!(set["type"], "display.messages.set");
     assert_eq!(set["chatId"], CHAT);
 
-    // A duplicate `display.messages.set` is the only duplicate the two reads
-    // above cannot catch on their own.
-    ws.assert_absent("display.messages.set", Duration::from_millis(400))
-        .await;
+    // A duplicate of either event would arrive ahead of the sentinel.
+    let tail = ws.read_event().await;
+    assert_eq!(tail["type"], "process.stopped");
 }
 
 #[tokio::test]
@@ -147,8 +154,10 @@ async fn unsubscribe_releases_membership_gained_by_sending() {
     barrier(&mut ws, "barrier-3b").await;
 
     let _ = server.ctx.broadcast.send(user_message_added(CHAT));
-    ws.assert_absent("message.added", Duration::from_millis(400))
-        .await;
+    let _ = server.ctx.broadcast.send(sentinel());
+
+    let next = ws.read_event().await;
+    assert_eq!(next["type"], "process.stopped");
 }
 
 #[tokio::test]
@@ -163,9 +172,7 @@ async fn sending_to_one_chat_leaks_nothing_from_another() {
     // Broadcast in this order, so the single ordered pump makes a leak
     // observable as an out-of-order first frame.
     let _ = server.ctx.broadcast.send(user_message_added(OTHER));
-    let _ = server.ctx.broadcast.send(DaemonEvent::ProcessStopped {
-        process_id: "p1".into(),
-    });
+    let _ = server.ctx.broadcast.send(sentinel());
     let _ = server.ctx.broadcast.send(DaemonEvent::ChatNotification {
         chat_id: OTHER.into(),
         title: "Task Complete".into(),
@@ -180,7 +187,4 @@ async fn sending_to_one_chat_leaks_nothing_from_another() {
     let second = ws.read_event().await;
     assert_eq!(second["type"], "chat.notification");
     assert_eq!(second["chatId"], OTHER);
-
-    ws.assert_absent("message.added", Duration::from_millis(300))
-        .await;
 }
