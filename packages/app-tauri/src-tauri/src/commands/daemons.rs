@@ -20,6 +20,11 @@ pub struct DaemonMeta {
     pub host: String,
     pub device: Option<String>,
     pub paired: Option<String>,
+    /// The scheme this daemon was paired with; `None` means https. Serde
+    /// drops unknown fields silently, so a struct that lagged the UI's
+    /// payload would erase the paired scheme on every upsert.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheme: Option<String>,
 }
 
 // ── Path resolution ───────────────────────────────────────────────────────────
@@ -188,6 +193,7 @@ mod tests {
             host: "studio.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         }];
         write_registry(&p, &metas).unwrap();
         let back = read_registry(&p);
@@ -210,6 +216,7 @@ mod tests {
             host: "vault.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         }];
         write_registry(&p, &metas).unwrap();
         let raw = std::fs::read_to_string(&p).unwrap();
@@ -327,6 +334,7 @@ mod tests {
             host: "old.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         };
         // First upsert: inserts a new entry.
         daemons_upsert(Some(data_dir.clone()), v1);
@@ -338,6 +346,7 @@ mod tests {
             host: "new.example.com".into(),
             device: None,
             paired: None,
+            scheme: None,
         };
         // Second upsert: same id → must replace, not append.
         daemons_upsert(Some(data_dir.clone()), v2);
