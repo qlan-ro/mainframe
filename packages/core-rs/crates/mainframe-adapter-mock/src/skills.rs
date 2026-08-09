@@ -58,6 +58,7 @@ pub async fn list_agents(project_path: &str) -> Vec<AgentConfig> {
             scope: AgentScope::Project,
             file_path: file_path.to_string_lossy().to_string(),
             content,
+            full_description: None,
         });
     }
     agents
