@@ -122,8 +122,10 @@ red phase — while sharing no file with the implementation task.
      keeps it as content and a `tools:` key *after* the block still parses.
   6. `body_triple_dash_is_not_the_closing_fence` — `---\nname: X\n---\n\nintro\n\n---\n\nmore` → attribute `X`,
      body starts at `intro` and still contains the horizontal rule.
-  7. `unfenced_leading_dashes_are_not_frontmatter` — content starting `----- banner` returns no attributes and
-     the untouched body (the fence must be a line that is exactly `---`).
+  7. `unfenced_leading_dashes_are_not_frontmatter` — the fixture is exactly `----- banner\n\nbody` (pin it;
+     with a trailing `\n\n---\n\ntail` the case fails today instead): no attributes and the untouched body. It
+     passes today through the missing-closing-fence branch and passes under the new line-anchored rule for the
+     right reason — a permanent-green regression guard, not a red test.
   8. `crlf_frontmatter_parses` — the same file with `\r\n` line endings parses identically.
   9. `inline_scalar_unchanged` — `name: PDF` / `description: Work with PDFs` still trim to the same values, and
      `description: Handles a: b` keeps `Handles a: b` (split at the first colon only).
@@ -141,8 +143,11 @@ red phase — while sharing no file with the implementation task.
 cd packages/core-rs && cargo test -p mainframe-adapter-claude --test frontmatter_parsing
 ```
 
-Expected: the file compiles and cases 1-8 and 10-11 FAIL; 9 and 12 pass. Record the failing list in the commit
-message.
+Expected: the file compiles and cases 1, 2, 3, 4, 5, 10 and 11 FAIL. Cases 6, 7, 8, 9 and 12 already pass
+against today's parser and are green regression guards — case 6 because `content[3..].find("---")` happens to
+land on the real closing fence, case 8 because the existing `.trim()` on key and value removes the `\r`, case 7
+because `----- banner` has no closing fence at all. They must stay green through Tasks 3-4. Record the failing
+list in the commit message.
 
 ## Task 2 — Block-scalar reader
 
@@ -290,7 +295,11 @@ mention `full_description`, which does not exist yet.
 cd packages/core-rs && cargo test -p mainframe-adapter-claude --test agent_listing
 ```
 
-Expected: cases 1, 2, 6 and the skill case FAIL; 3, 4, 5 pass (3 and 4 are the preserved heuristic).
+Expected: cases 1, 2, 4, 5, 6 and the skill case FAIL; only case 3 passes. Today's `agent_description`
+(`skills.rs:486-493`) never reads frontmatter, so every fenced fixture — case 4 and case 5 included — returns
+the opening `---` fence verbatim; case 3 is the only file without a fence. Case 4 goes green only once Task 6
+runs the fallback heuristic over `parse_frontmatter(raw).body` rather than the raw file, which is what Task 8's
+"every Task 5 case passes" gate depends on.
 
 ## Task 6 — `agent_description` module
 
@@ -319,8 +328,13 @@ pub fn derive_agent_description(raw: &str) -> AgentDescription;
       before implementing.
 - [ ] `full` = `parse_frontmatter(raw).attributes["description"]` when present and non-empty after trim, else
       `None` (mirrors the `nonempty_attr` semantics `scan_skills_dir` uses).
-- [ ] `full` present → `summary = summarize(full)`. `full` absent → `summary = heading_heuristic(raw)`, which is
-      today's `agent_description` body moved verbatim: first non-blank line, leading `#`s stripped.
+- [ ] `full` present → `summary = summarize(full)`. `full` absent → `summary = heading_heuristic(fm.body)` —
+      today's `agent_description` body moved verbatim (first non-blank line, leading `#`s stripped) but fed the
+      **parsed body**, never the raw file. Feeding it `raw` would caption every fenced-but-descriptionless agent
+      `---`, which is the bug this todo fixes. Behaviour on a file with no frontmatter is unchanged, because
+      Task 3 keeps `body == content` on the no-fence branch — so the preserved
+      `create_and_list_agent_derives_description_from_heading` test (`# planner\n\nBody text`) still yields
+      `planner`.
 - [ ] `summarize(value)`:
   1. first non-empty trimmed line that does not start with `<` (skips `<example>`/`<commentary>` markup); none
      → `""`;
@@ -332,7 +346,8 @@ pub fn derive_agent_description(raw: &str) -> AgentDescription;
 - [ ] In-file `#[cfg(test)]` unit tests, all against string literals (no filesystem):
       block-scalar description → first sentence; `Examples:` tail dropped; `<example>` first line skipped;
       abbreviation guard (`Runs e.g. codex or claude. Second sentence.` → cuts after `claude.`);
-      no-frontmatter heading → heuristic; frontmatter present but `description` empty → heuristic;
+      no-frontmatter heading → heuristic; frontmatter present but `description` empty → the body's heading
+      (`---\nname: x\ndescription:\n---\n\n# todo317-empty\n\nbody` → `todo317-empty`, never `---`);
       description with no sentence terminator → whole first line; a 400-character single sentence → capped at
       ≤201 characters ending in `…`; `full` carries the complete multi-paragraph value including the
       `<example>` block.
