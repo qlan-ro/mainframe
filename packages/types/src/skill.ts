@@ -16,6 +16,7 @@ export interface AgentConfig {
   adapterId: string;
   name: string;
   description: string;
+  fullDescription?: string;
   scope: 'project' | 'global';
   filePath: string;
   content: string;
