@@ -20,9 +20,7 @@ pub struct DaemonMeta {
     pub host: String,
     pub device: Option<String>,
     pub paired: Option<String>,
-    /// The scheme this daemon was paired with; `None` means https. Serde
-    /// drops unknown fields silently, so a struct that lagged the UI's
-    /// payload would erase the paired scheme on every upsert.
+    /// Paired scheme; `None` = https. Serde drops unknown fields, so a struct lagging the UI would erase this on every upsert.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheme: Option<String>,
 }
