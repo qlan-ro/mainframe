@@ -73,7 +73,8 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { closeMenus } from '../helpers/tauri/menus.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-import { sendMessage, waitConnected } from '../helpers/tauri/wait.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
+import { openBackgroundClient } from '../helpers/tauri/background-client.js';
 
 const TAG_NAME = 'e2e-filter';
 
@@ -364,38 +365,37 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     );
   });
 
-  // KNOWN LOAD-SENSITIVE FLAKE (measured 2026-08-06): under full-suite
-  // parallel load the session hover card can wedge open and eat the row
-  // click (fails both attempts); isolated it passes 5/5 in ~3s. Not a UI
-  // regression — no sidebar/hover-card code changed in the failing range.
-  // Root-cause investigation (why the switch stalls mid-stream under load)
-  // is tracked separately; do not delete this test to silence it.
-  //
   // Attention badges are driven by useUnreadStore.markUnread, which is only
   // called by the session-list-router on a `chat.notification` /
   // `permission.requested{notify:true}` WS event. Previously that event never
   // reached the client for a BACKGROUND chat (see the sessions-rows.spec.ts
   // unread-dot test for the root cause); now that chat.notification is
   // connection-global, project A's badge lights up while B stays active.
+  //
+  // A was backgrounded by sending from it and switching away before the reply
+  // landed, which is a race the test lost whenever the machine was busy (rc.20,
+  // rc.22, and locally under full-suite load — previously annotated here as a
+  // hover-card flake). `openBackgroundClient` sends from a second daemon
+  // connection instead, so A is never the active chat and there is nothing to
+  // outrun.
   test('attention badges appear on non-filtered project rows', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
+    await selectRow(page, sidebar.row(chatIdB));
 
-    const rowA = sidebar.row(chatIdA);
-    const rowB = sidebar.row(chatIdB);
-    await selectRow(page, rowA);
-
-    await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
-    // Switch to B immediately — A is now the BACKGROUND chat while its
-    // response streams in.
-    await selectRow(page, rowB);
-
+    const background = await openBackgroundClient();
     const badgeA = page.getByTestId(`sidebar-project-badge-${projectA.projectId}`);
-    await expect(badgeA).toBeVisible({ timeout: 45_000 });
-    await expect(badgeA).toHaveText('1');
+    try {
+      background.send(chatIdA, 'What is 2 + 2? Reply with just the number.');
 
-    // Reselecting A's chat clears the unread flag, and with it the row badge.
-    await selectRow(page, rowA);
+      await expect(badgeA).toBeVisible({ timeout: 45_000 });
+      await expect(badgeA).toHaveText('1');
+    } finally {
+      background.close();
+    }
+
+    // Selecting A's chat clears the unread flag, and with it the row badge.
+    await selectRow(page, sidebar.row(chatIdA));
     await expect(badgeA).toHaveCount(0, { timeout: 10_000 });
   });
 
