@@ -79,18 +79,31 @@ TDD order: tasks 1 and 2 are red-phase and must be **observed failing** before t
 **File:** `packages/ui/src/features/session-tabs/__tests__/tabs-model.test.ts` (append one
 `describe('canRestoreTabs')` block; import the not-yet-existing `canRestoreTabs` from `../tabs-model`).
 
+**Fixture rider — read before writing the cases.** The file's existing `entry()` helper
+(`tabs-model.test.ts:15-17`) builds `{ id, status: 'regular', ...over }`: no `custom`, no
+`remoteId`. Task 3's predicate is `custom != null || remoteId != null`, so a bare `entry('chat-a')`
+is **not** a real session and `canRestoreTabs` returns `false` for it. Every case below that expects
+`true` must therefore hand the entry a `custom` — `entry('chat-a', { custom: {} })` — which is what
+production does: `chatToThreadCustom` stamps a `SessionCustom` onto every listed chat
+(`packages/ui/src/features/sessions/view-model/chat-to-thread-custom.ts:56-81`). `custom` is typed
+`Record<string, unknown> | undefined` on `ThreadListEntry`, so `{}` typechecks. Do **not** instead
+default `custom: {}` inside the helper: the `validTabIds` describe builds its synthetic drafts with
+the same helper (`tabs-model.test.ts:99,107`), and a default would give those drafts a `custom` that
+the real draft never has.
+
 Cases, each a separate `it`:
 
 - returns `false` while the list is still loading, even with real sessions present
-  (`canRestoreTabs([entry('chat-a')], true) === false`).
+  (`canRestoreTabs([entry('chat-a', { custom: {} })], true) === false`).
 - returns `false` for a settled list holding only the synthetic draft
   (`[{ id: '__LOCALID_1', status: 'new' }]`, `isLoading: false`) — the defect, stated as a test.
 - returns `false` for a settled empty list (`[]`) — a failed load or a session-less install is
   "nothing restored yet", not "no tabs".
-- returns `true` for a settled list with a real session (`entry('chat-a')`).
+- returns `true` for a settled list with a real session (`entry('chat-a', { custom: {} })`).
 - returns `true` when the only real entry is a just-sent draft carrying `remoteId` but no `custom`
-  (`{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }`).
-- returns `true` for a settled list of only archived entries — the sessions existed; restoring
+  (the object literal `{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }`, not the helper).
+- returns `true` for a settled list of only archived entries
+  (`[entry('chat-a', { status: 'archived', custom: {} })]`) — the sessions existed; restoring
   nothing and persisting `[]` is the correct outcome there.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-tabs/__tests__/tabs-model.test.ts`
@@ -121,18 +134,33 @@ Cases:
    `isLoading: false`, `mainThreadId: 'chat-b'`, rerender. Assert `hydrated === true` and
    `tabIds` starts with `['__LOCALID_9', 'chat-b']` — persisted order (`chat-a` then `chat-b`)
    preserved and the persisted `chat-a` mapped onto this boot's runtime id.
-3. **Settled-empty does not clobber.** Seed the same payload; render with `isLoading: false`,
-   `items: []`, `mainThreadId: null`. Assert `hydrated === false` and the stored payload is
-   unchanged. Then set a real list and rerender; assert the tabs restore — a later successful boot
-   still gets them.
+3. **Settled draft-only list does not clobber.** Seed the same payload; render with
+   `isLoading: false`, `items: [{ id: '__LOCALID_1', status: 'new' }]`,
+   `mainThreadId: '__LOCALID_1'`. Assert `hydrated === false` and that the stored payload still
+   holds `['chat-a', 'chat-b']`. Then set
+   `items: [{ id: 'chat-a', status: 'regular', custom: {} }, { id: 'chat-b', status: 'regular', custom: {} }]`,
+   `mainThreadId: 'chat-a'`, and rerender; assert `hydrated === true` and
+   `tabIds === ['chat-a', 'chat-b']` — the boot draft pruned away, both tabs back.
+
+   This item list, not `items: []`, is what makes the case red. With `items: []` the current effect
+   early-returns on `items.length === 0` (`use-session-tabs-sync.ts:42`), never latches, and never
+   persists — both assertions already pass on `main`, so that shape tests nothing here. It stays a
+   `canRestoreTabs` unit case in task 1 instead. A settled one-entry draft list is the real
+   clobber path: it has length 1, so today it hydrates `[]`, latches, and the persist effect
+   overwrites `mf:session-tabs` with `{ v: 1, ids: [] }`.
 4. **Session-less install stays clean.** Empty `localStorage`; `isLoading: false`,
    `items: [{ id: '__LOCALID_1', status: 'new' }]`, `mainThreadId: '__LOCALID_1'`. Assert
    `tabIds === ['__LOCALID_1']` (the membership seam still opens the draft tab), `hydrated === false`,
    and `localStorage.getItem('mf:session-tabs') === null`.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-tabs/__tests__/use-session-tabs-sync.test.tsx`
-— cases 1 and 3 fail against current `main` (today it latches immediately and overwrites the
-payload). Record the failure output; that is the red phase for the whole change.
+— **all four cases** fail against current `main`. Each of the four renders a list of length ≥ 1, so
+today's `items.length === 0` gate lets the hydrate effect through on the first render: it restores
+nothing, latches `hydrated`, and the persist effect writes `{ v: 1, ids: [] }`. That breaks case 1's
+and case 3's `hydrated === false`, case 4's `hydrated === false` **and** its
+`localStorage.getItem(...) === null`, and case 2's restored `tabIds` order (the latched flag makes
+the real list arrive too late to restore). Record the failure output; that is the red phase for the
+whole change.
 
 ### Task 3 — `canRestoreTabs` in the pure model
 
