@@ -473,6 +473,15 @@ Adopting would mean implementing `unstable_isThreadRunning` ourselves off `Sessi
 
 **Verify:** the report states adopt or defer with the concrete reason; follow-up todo number if deferred.
 
+**Outcome: DEFER — follow-up todo #322. No code change.**
+
+Two independent disqualifiers:
+
+- **Wrong mechanism as wired today.** `RemoteThreadListThreadListRuntimeCore.reloadMainThread()` calls `runtimeCore.unstable_refetchThread()` only when the thread runtime exposes it, and the external-store core exposes it only when the adapter supplies the new `onRefetchThread`. `use-chat-thread-runtime.ts` supplies none, so the call falls through to `__internal_restartThreadRuntime(threadId)` — a full runtime restart, not the in-place re-seed `controller.refresh()` performs. That changes the timing the optimistic-send reconcile (`reconcilePendingAgainstHistory`) depends on, which this task forbids.
+- **No caller.** The re-seed is triggered inside the controller — an unknown message id in `handle-daemon-event` (`kind: 'refresh'`), reconnect/reattach via `chat-ws-subscription`'s `onSubscribeRefresh`, and the transcript-error retry. aui has no gap detection and nothing outside the controller wants to force a re-seed, so `reloadMainThread()` would be an entry point with no caller.
+
+Adoption reduces to passing `onRefetchThread: () => controller.refresh()` — additive plumbing worth landing when something needs it, not part of this migration. Controller untouched.
+
 ---
 
 ### Task 25 — Update `packages/ui/CLAUDE.md`
