@@ -14,7 +14,7 @@
  * stays outside `data-no-drag`, so the empty middle remains a window-drag area.
  */
 import { Plus } from 'lucide-react';
-import { useAssistantRuntime, useAui, useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
@@ -38,14 +38,11 @@ function toTabEntry(id: string, items: readonly ThreadListEntry[], activeId: str
 export function SessionTabs() {
   useSessionTabsSync();
   const aui = useAui();
-  // useNewChatHotkeyHandler still takes the legacy runtime object; both callers
-  // hand it over in the same change that flips its signature to the aui client.
-  const runtime = useAssistantRuntime();
   const items = useAuiState((s) => s.threads.threadItems);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
-  const newSession = useNewChatHotkeyHandler(runtime);
+  const newSession = useNewChatHotkeyHandler(aui);
 
   const tabs = tabIds.map((id) => toTabEntry(id, items, mainThreadId));
 
