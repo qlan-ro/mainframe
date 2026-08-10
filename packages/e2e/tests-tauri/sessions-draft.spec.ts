@@ -84,6 +84,42 @@ async function pickProjectFromPicker(page: Page, projectId: string): Promise<voi
   await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0, { timeout: 10_000 });
 }
 
+/**
+ * Close an open composer config menu and wait for its layer to retire.
+ *
+ * One blind `Escape` is not enough, for the same reason `pickProjectFromPicker`
+ * asserts on the menu's absence: while a Radix menu lives it owns `<html>`'s
+ * pointer events, so the NEXT trigger's click is swallowed and retried until the
+ * test budget runs out — which is how this read in CI, as `<html> intercepts
+ * pointer events` against a still-open model menu. Retry the Escape until the
+ * options are gone, so a menu that cannot be dismissed fails as itself.
+ */
+async function closeConfigMenu(page: Page, options: Locator): Promise<void> {
+  await expect(async () => {
+    await page.keyboard.press('Escape');
+    await expect(options).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 15_000, intervals: [250, 500, 1_000] });
+}
+
+/**
+ * Make sure a draft row is active, creating one if this test did not inherit it.
+ *
+ * The draft tests below document that they continue from the previous test's
+ * draft. That holds on a clean pass and breaks on a RETRY: Playwright re-runs the
+ * failed test alone in a fresh worker, so `beforeAll` reseeds the app but the test
+ * that opened the draft never runs — turning any first failure in this describe
+ * into two.
+ */
+async function ensureDraftRow(page: Page, projectId: string): Promise<void> {
+  const draftRow = page.getByTestId('sessions-draft-row');
+  if ((await draftRow.count()) === 0) {
+    await sessionsSidebar(page).newButton().click();
+    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
+    await pickProjectFromPicker(page, projectId);
+  }
+  await expect(draftRow).toBeVisible({ timeout: 10_000 });
+}
+
 interface SuggestionDto {
   title: string;
   meta: string;
@@ -208,37 +244,36 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
   });
 
-  // Depends on the previous test's draft-row surviving — see the fix note
-  // documented on the test above.
+  // Continues from the previous test's draft-row — see the fix note documented on
+  // the test above; `ensureDraftRow` re-opens one when this runs as a lone retry.
   test('composer config selectors are usable on the unsent draft', async () => {
     const { page } = app;
-    // Continues from the previous test's active draft.
-    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+    await ensureDraftRow(page, project.projectId);
     await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
 
+    const modelOptions = page.locator('[data-testid^="composer-model-select-option-"]');
     const modelTrigger = page.getByTestId('composer-model-select');
     await expect(modelTrigger).toBeVisible({ timeout: 10_000 });
     await expect(modelTrigger).toBeEnabled();
     await modelTrigger.click();
-    await expect(page.locator('[data-testid^="composer-model-select-option-"]').first()).toBeVisible({
-      timeout: 5_000,
-    });
-    await page.keyboard.press('Escape');
+    await expect(modelOptions.first()).toBeVisible({ timeout: 5_000 });
+    await closeConfigMenu(page, modelOptions);
 
+    const permOption = page.getByTestId('composer-permission-mode-select-option-default');
     const permTrigger = page.getByTestId('composer-permission-mode-select');
     await expect(permTrigger).toBeVisible();
     await expect(permTrigger).toBeEnabled();
     await permTrigger.click();
-    await expect(page.getByTestId('composer-permission-mode-select-option-default')).toBeVisible({ timeout: 5_000 });
-    await page.keyboard.press('Escape');
+    await expect(permOption).toBeVisible({ timeout: 5_000 });
+    await closeConfigMenu(page, permOption);
   });
 
-  // Depends on a draft-row existing to discard — see the fix note documented
-  // on the first test in this describe block.
+  // Needs a draft-row to discard — see the fix note documented on the first test
+  // in this describe block.
   test('discarding the draft (✕) clears the row and returns to the previously active session', async () => {
     const { page } = app;
+    await ensureDraftRow(page, project.projectId);
     const draftRow = page.getByTestId('sessions-draft-row');
-    await expect(draftRow).toBeVisible({ timeout: 10_000 });
 
     await draftRow.hover();
     // The ✕ is a SidebarMenuAction — a sibling of the row button, so it is

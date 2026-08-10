@@ -47,11 +47,13 @@
  *      pairing flow, with `page.route()` mocking only the `/health` and
  *      `/api/auth/confirm` calls to the fake remote origin (network-level fault
  *      injection, not fabricated React/store state).
- *   2. The unreachable overlay then comes for free: `useConnectionState` polls the
+ *   2. The unreachable overlay is forced deliberately: `useConnectionState` polls the
  *      ACTIVE daemon's `/health` (`getActiveDaemon().baseUrl`, not a fixed local port),
- *      and a paired remote is stored as `https://<host>` — which no route in this file
- *      mocks — so the poll fails and `showUnreachableOverlay` raises through the app's
- *      real loop. Aborting the LOCAL health route reproduces it while local is active.
+ *      so the overlay test aborts the REMOTE origin's health route while that remote is
+ *      active. It used to come for free — a paired remote was stored as `https://<host>`,
+ *      which no route here mocks, so its poll could only fail. Todo #305 (the paired
+ *      scheme is persisted and honored) fixed exactly that: an http loopback remote now
+ *      answers the 200 `/health` mock this file installs, and reads Connected.
  * Every daemon switch in this suite is undone before the describe ends (CAUTION
  * in the dispatch); the final test re-asserts the app is back on the local daemon.
  *
@@ -78,13 +80,15 @@
  * post-dialog assertion below reopens the picker.)
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
 
-const LOCAL_HEALTH_URL = `http://127.0.0.1:${DAEMON_PORT}/health`;
+/** The fake remote this file pairs once and keeps for the rest of the describe.
+ *  Its label is derived from the host — "127.0.0.1:58202".split('.')[0] === "127". */
+const REMOTE_ORIGIN = 'http://127.0.0.1:58202';
+const REMOTE_HEALTH_URL = `${REMOTE_ORIGIN}/health`;
 
 /** Suffix-scoped locators — safe because at most one remote daemon exists at a
  *  time by the point these are used (the auto-switch test below adds and then
@@ -165,12 +169,21 @@ async function closePicker(page: Page): Promise<void> {
   await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
 }
 
-async function recoverToLocal(page: Page): Promise<void> {
-  await expect(page.getByTestId('daemon-unreachable')).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId('daemon-unreachable-switchlocal').click();
-  await expect(page.getByTestId('daemon-unreachable')).toHaveCount(0, { timeout: 5_000 });
+/**
+ * Put the app back on the local daemon through the picker.
+ *
+ * This used to go through the unreachable overlay, which a paired remote raised on
+ * its own. Since todo #305 it cannot: the remotes paired here are loopback origins
+ * whose `/health` this file mocks 200, so they read Connected. The overlay is now
+ * something one test forces, not the way back from every pairing.
+ */
+async function switchToLocal(page: Page): Promise<void> {
+  await openPicker(page);
+  await page.getByTestId('daemon-row-local').click();
+  await expect(footerLabel(page)).toHaveText('This Mac', { timeout: 10_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
   await waitConnected(page, 30_000);
-  await expect(footerLabel(page)).toHaveText('This Mac');
 }
 
 test.describe('§daemon-picker', () => {
@@ -277,11 +290,10 @@ test.describe('§daemon-picker', () => {
 
   test('completing pairing adds a remote daemon row', async () => {
     const { page } = app;
-    const origin = 'http://127.0.0.1:58202';
-    await page.route(`${origin}/health`, async (route) => {
+    await page.route(REMOTE_HEALTH_URL, async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '9.9.9' }) });
     });
-    await page.route(`${origin}/api/auth/confirm`, async (route) => {
+    await page.route(`${REMOTE_ORIGIN}/api/auth/confirm`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -293,7 +305,7 @@ test.describe('§daemon-picker', () => {
     await page.getByTestId('daemon-picker-add').click();
     await expect(page.getByTestId('daemon-add-url')).toBeVisible();
 
-    await page.getByTestId('daemon-add-url').fill(origin);
+    await page.getByTestId('daemon-add-url').fill(REMOTE_ORIGIN);
     await page.getByTestId('daemon-add-verify').click();
     await expect(page.getByTestId('daemon-add-continue')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('daemon-add-continue').click();
@@ -315,10 +327,9 @@ test.describe('§daemon-picker', () => {
     await expect(page.getByTestId('daemon-pair-code')).toHaveCount(0, { timeout: 5_000 });
 
     await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
-    await recoverToLocal(page);
+    await switchToLocal(page);
 
-    // The row is added — label is derived from the host
-    // ("127.0.0.1:58202".split('.')[0] === "127").
+    // The row is added — label is derived from the host.
     await openPicker(page);
     await expect(remoteRow(page)).toBeVisible({ timeout: 10_000 });
     await expect(remoteRow(page)).toContainText('127');
@@ -339,11 +350,7 @@ test.describe('§daemon-picker', () => {
 
     // Establish a known starting state so this test's auto-switch assertion is
     // meaningful, not inherited ambient state.
-    await openPicker(page);
-    await page.getByTestId('daemon-row-local').click();
-    await expect(footerLabel(page)).toHaveText('This Mac', { timeout: 10_000 });
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('daemon-picker')).toHaveCount(0, { timeout: 5_000 });
+    await switchToLocal(page);
 
     const origin = 'http://127.0.0.1:58203';
     await page.route(`${origin}/health`, async (route) => {
@@ -388,7 +395,7 @@ test.describe('§daemon-picker', () => {
     await expect(footerLabel(page)).not.toHaveText('This Mac', { timeout: 10_000 });
     await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
 
-    await recoverToLocal(page);
+    await switchToLocal(page);
 
     // Clean up this test's own second remote so the "exactly one remote"
     // invariant the rest of this suite relies on holds after.
@@ -416,11 +423,14 @@ test.describe('§daemon-picker', () => {
     await remoteRow(page).click();
     await expect(footerLabel(page)).toHaveText('127', { timeout: 10_000 });
 
-    // Force connState to 'disconnected' by failing the LOCAL daemon's health poll —
-    // the real signal DaemonFooterStatus/DaemonGatedShell react to (see file header).
-    await page.route(LOCAL_HEALTH_URL, async (route) => {
-      await route.abort();
-    });
+    // Force connState to 'disconnected' by failing the health poll — the real signal
+    // DaemonFooterStatus/DaemonGatedShell react to (see file header). `useConnectionState`
+    // polls the ACTIVE daemon, so with the remote active it is the REMOTE origin's health
+    // that has to fail; aborting the local one would poll nothing. The abort is registered
+    // after this file's 200 mock for the same URL and Playwright matches handlers
+    // most-recent-first, so it wins until the `finally` removes it by reference.
+    const killRemoteHealth = (route: Route) => route.abort();
+    await page.route(REMOTE_HEALTH_URL, killRemoteHealth);
 
     try {
       await expect(page.getByTestId('daemon-unreachable')).toBeVisible({ timeout: 30_000 });
@@ -431,7 +441,7 @@ test.describe('§daemon-picker', () => {
       // Active kind flips to local immediately on click, independent of the poll.
       await expect(page.getByTestId('daemon-unreachable')).toHaveCount(0, { timeout: 5_000 });
     } finally {
-      await page.unroute(LOCAL_HEALTH_URL);
+      await page.unroute(REMOTE_HEALTH_URL, killRemoteHealth);
     }
 
     await waitConnected(page, 30_000);
