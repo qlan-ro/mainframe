@@ -34,6 +34,14 @@ From the root `CLAUDE.md` and the todo brief:
   e2e-only changes).
 - No leftovers: stale references (e.g. the comment naming `settleForEscape`) get fixed in the same
   pass.
+- **`packages/e2e` is not typecheck-clean at HEAD, and never has been.** `tsc --noEmit` reports 90
+  errors on branch HEAD (`b5b11f58`) and on a clean `main` checkout: 87 × TS2591 ("Cannot find name
+  'fs' / 'path' / 'os' / 'child_process' / 'Buffer'") plus 3 × TS7006 in `fixtures/daemon.ts` and
+  `fixtures/global-setup.ts`. `@types/node@26.1.1` is installed and its symlink resolves, but
+  `packages/e2e/tsconfig.json` declares no `types` and no `typeRoots`, and the package has no
+  `typecheck` script — so nothing in CI has ever run this. Fixing the tsconfig is **out of scope**:
+  it would touch every file in the package. This plan therefore gates on a scoped typecheck (below),
+  not on a clean `tsc`. An implementer who sees 90 errors has not broken anything.
 
 ## Ground rules for this fix
 
@@ -86,13 +94,32 @@ E2E_MODE=mock MF_E2E_SKIP_BUILD=1 pnpm --filter @qlan-ro/mainframe-e2e exec \
 (swap in `tests-tauri/session-panel.spec.ts`, or pass both paths, as each task says). Rebuild without
 `MF_E2E_SKIP_BUILD=1` only if `packages/ui` changes.
 
-Static gates, run from the repo root:
+Static gates, run from the repo root. Prettier and eslint are clean at HEAD and are plain pass/fail:
 
 ```
-pnpm --filter @qlan-ro/mainframe-e2e exec tsc --noEmit
 npx prettier --check packages/e2e/tests-tauri/git-branch.spec.ts packages/e2e/tests-tauri/session-panel.spec.ts
 npx eslint packages/e2e/tests-tauri/git-branch.spec.ts packages/e2e/tests-tauri/session-panel.spec.ts
 ```
+
+**The scoped typecheck gate.** Every task below that says "the scoped typecheck gate passes" means this
+command, run from the repo root:
+
+```
+pnpm --filter @qlan-ro/mainframe-e2e exec tsc --noEmit 2>&1 \
+  | grep -E 'tests-tauri/(git-branch|session-panel)\.spec\.ts' \
+  | grep -v 'TS2591'
+```
+
+**The gate passes when this command prints nothing.** Judge it by its output, never by its exit code:
+`tsc` exits 2 on the pre-existing errors and a `grep` that matches nothing exits 1, so a passing gate
+still reports a non-zero status.
+
+Why this shape is safe: TS2591 fires only on the known node-global names the package never types. A
+typo'd identifier is TS2304 and a real type error is TS2322/TS2345 — none of them can hide behind the
+allowlist. Baseline at HEAD (`b5b11f58`), for comparison: `git-branch.spec.ts` has exactly 4 errors
+(lines 76–79) and `session-panel.spec.ts` exactly 4 (lines 115–117, 637), all TS2591. Record the
+post-change counts as an observation; the plan adds no node-global usage, so a count above 4 + 4 means
+the change introduced one and deserves a second look before it ships.
 
 **Do not change `playwright.config.ts`.** `retries: 1` is what makes a first-attempt failure report as
 "flaky"; that reporting is the acceptance signal, and retry-count changes are out of scope.
@@ -120,6 +147,11 @@ if the mechanism matches.
      vs *element is not visible*;
    - which locator it was retrying (`git-submenu-*` item, or the `git-branch-row-*` sub-trigger);
    - the elapsed time of the failing test from the `list` reporter.
+4. Confirm the typecheck baseline before touching anything, so later runs have something to compare
+   against: `pnpm --filter @qlan-ro/mainframe-e2e exec tsc --noEmit 2>&1 | grep -c 'error TS'` should
+   print 90, and the scoped typecheck gate command from
+   [Verification commands](#verification-commands) should print nothing. If either differs, say so in
+   the report rather than adjusting the numbers.
 
 **Verification:** at least one of the three cases reproduces with a recorded signature, and the
 signature is written into the implementation commit message. If **zero** cases reproduce in two runs,
@@ -143,7 +175,7 @@ Edit `openBranchPopover` in `git-branch.spec.ts` (currently lines 139–143):
   `BranchPopover`'s `open`-gated `useEffect`, which leaves the search field visible before any row
   exists).
 
-**Verification:** `tsc --noEmit` clean; the "toolbar branch trigger opens the menu; branches lazy-load"
+**Verification:** the scoped typecheck gate passes; the "toolbar branch trigger opens the menu; branches lazy-load"
 and "search filters the branch list" tests still pass in a scoped run of the spec.
 
 ### A3 · `openSubmenu` opens the flyout on settled geometry, and retries only the open
@@ -163,7 +195,7 @@ Rewrite `openSubmenu` (currently lines 163–166):
   position is only final once the branch data has landed, and a re-render can close an already-open
   Sub, which is why the open — and only the open — is retried.
 
-**Verification:** `tsc --noEmit` clean, then a scoped run of `git-branch.spec.ts`: the three flyout
+**Verification:** the scoped typecheck gate passes, then a scoped run of `git-branch.spec.ts`: the three flyout
 cases pass on the first attempt and each completes in single-digit seconds per the `list` reporter.
 
 ### A4 · Bound the flyout item clicks
@@ -175,7 +207,7 @@ through it: checkout (×2 sites), new-branch-from, merge, rename, delete, pull, 
 new-session. One click, no retry (rule 2). Leave the non-flyout quick actions (`git-fetch`,
 `git-update-all`, `git-push-current`, dialog buttons) alone — they are not the class this todo names.
 
-**Verification:** `tsc --noEmit` clean; grep shows no bare `.click()` left on a `git-submenu-` testid;
+**Verification:** the scoped typecheck gate passes; grep shows no bare `.click()` left on a `git-submenu-` testid;
 scoped run of the spec still green.
 
 ### A5 · Comment hygiene in the touched header
@@ -256,7 +288,7 @@ Rewrite `settleForEscape` (lines 212–246) into a helper that asserts the **out
 Update the call site at line 413 accordingly. The test's assertions are otherwise unchanged — same
 overlay, same `role=dialog`, same "inline card stays absent" check.
 
-**Verification:** `tsc --noEmit` clean; the rail-Escape case passes both solo (`-g`) and in a full
+**Verification:** the scoped typecheck gate passes; the rail-Escape case passes both solo (`-g`) and in a full
 scoped run of the spec.
 
 ### B3 · Fix the stale cross-reference
@@ -305,12 +337,14 @@ timeout. Paste the three summaries into the report.
 
 ### C3 · Static gates
 
-`pnpm --filter @qlan-ro/mainframe-e2e exec tsc --noEmit`, prettier `--check` and eslint on both spec
-files. Confirm by inspection that neither spec gained a `waitForTimeout`, that no test was deleted,
-weakened, skipped, or had an assertion removed, and that `playwright.config.ts` is untouched.
+Run prettier `--check` and eslint on both spec files, plus the scoped typecheck gate. Confirm by
+inspection that neither spec gained a `waitForTimeout`, that no test was deleted, weakened, skipped,
+or had an assertion removed, and that `playwright.config.ts` is untouched.
 
-**Verification:** all three commands exit 0; `git diff --stat origin/main` lists exactly the two spec
-files plus the changeset (plus this plan).
+**Verification:** prettier and eslint exit 0; the scoped typecheck gate prints nothing (do not check
+its exit code — see [Verification commands](#verification-commands)); `git diff --stat origin/main`
+lists exactly the two spec files plus the changeset (plus this plan). The whole-package
+`tsc --noEmit` error count is unchanged at 90 — report it, do not fix it.
 
 ---
 
