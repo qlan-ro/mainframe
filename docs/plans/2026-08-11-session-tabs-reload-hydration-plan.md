@@ -33,8 +33,12 @@ Read before planning; cite these instead of re-deriving them.
   `hydrated` (grepped). Moving when the flag latches cannot affect another surface.
 - The freshly-created draft entry gets `remoteId` stamped by `adapter.initialize` **without**
   `custom` (custom only arrives on the next list reload, under a remoteId-keyed entry — see the
-  `activeSessionCustom` docblock in `chat-to-thread-custom.ts`). A "real session" test must
-  therefore accept `custom != null` **or** `remoteId != null`.
+  `activeSessionCustom` docblock in `chat-to-thread-custom.ts`). `custom` is written **only** by
+  the `list()` projection, which makes it the one available proof that a load succeeded: a
+  "real session" test is `custom != null`, and a `remoteId` alone must NOT qualify.
+- `use-session-list-router.ts` reloads the thread list on `chat.created` / `chat.updated`, so the
+  first send on a session-less install (and any recovery after a failed load) brings a
+  `custom`-carrying list in on its own — hydration needs no retry of its own.
 
 ## Files touched
 
@@ -57,11 +61,14 @@ far under), no `@ts-ignore`, comments state *why*, changeset required, single-fi
    boot auto-select passes it to `pickInitialSession`, which prefers it over the most-recent
    session. The acceptance criterion is met by existing machinery, so the persisted payload keeps
    its `{ v: 1, ids }` shape and boot auto-select stays out of scope as the brief requires.
-2. **`isSessionEntry` accepts a `remoteId`-only entry.** Consequence: on a genuinely session-less
-   install, the user's first send stamps `remoteId` on the draft, which then satisfies the
-   predicate and latches hydration, rewriting a stale payload. That is correct — a payload whose
-   sessions no longer exist is dead — and it matches the brief's "at least one entry that is not
-   the synthetic draft" wording.
+2. **`isSessionEntry` requires `custom`; a `remoteId`-only entry does not qualify.** The brief's
+   "at least one entry that is not the synthetic draft" reads as `custom != null || remoteId != null`,
+   but that admits the one path where the guard matters most: after a failed initial load,
+   `adapter.initialize` stamps `remoteId` on the still-draft-only list at the user's first send,
+   hydration would restore nothing, latch, and the persist effect would overwrite the live payload
+   with the one new chat. Requiring `custom` means only a list the daemon actually returned can
+   open the gate. Cost: on a session-less install hydration waits for the `chat.created` reload
+   instead of latching at the send — a few hundred ms, then persistence behaves as before.
 3. **No extra "never persist an empty set" guard.** With the new latch, any hydration that happens
    consumed a settled list holding a real session, so a persisted `[]` is a true state (e.g. every
    persisted session has since been archived). Adding a second guard would make that legitimate
@@ -100,8 +107,9 @@ Cases, each a separate `it`:
 - returns `false` for a settled empty list (`[]`) — a failed load or a session-less install is
   "nothing restored yet", not "no tabs".
 - returns `true` for a settled list with a real session (`entry('chat-a', { custom: {} })`).
-- returns `true` when the only real entry is a just-sent draft carrying `remoteId` but no `custom`
-  (the object literal `{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }`, not the helper).
+- returns `false` for a just-sent draft carrying `remoteId` but no `custom`
+  (the object literal `{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }`, not the helper)
+  — after a failed load that is the whole list, and restoring against it would drop every tab.
 - returns `true` for a settled list of only archived entries
   (`[entry('chat-a', { status: 'archived', custom: {} })]`) — the sessions existed; restoring
   nothing and persisting `[]` is the correct outcome there.
@@ -130,7 +138,7 @@ Cases:
    `mainThreadId: '__LOCALID_1'`. Assert `hydrated === false` and that the stored payload still
    holds `['chat-a', 'chat-b']` (the persist effect must not have run).
 2. **Restore on settle, in persisted order.** From case 1's state, set
-   `items: [{ id: 'chat-b', status: 'regular' }, { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-a' }]`,
+   `items: [{ id: 'chat-b', status: 'regular', custom: {} }, { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-a', custom: {} }]`,
    `isLoading: false`, `mainThreadId: 'chat-b'`, rerender. Assert `hydrated === true` and
    `tabIds` starts with `['__LOCALID_9', 'chat-b']` — persisted order (`chat-a` then `chat-b`)
    preserved and the persisted `chat-a` mapped onto this boot's runtime id.
@@ -148,19 +156,23 @@ Cases:
    `canRestoreTabs` unit case in task 1 instead. A settled one-entry draft list is the real
    clobber path: it has length 1, so today it hydrates `[]`, latches, and the persist effect
    overwrites `mf:session-tabs` with `{ v: 1, ids: [] }`.
-4. **Session-less install stays clean.** Empty `localStorage`; `isLoading: false`,
+4. **Failed load, then a first send.** Seed the same payload; settle draft-only, then stamp the
+   draft with a `remoteId` (`adapter.initialize`) while the list is still the failed one. Assert
+   `hydrated === false` and the payload intact. Then let the `chat.created` reload land the real
+   sessions and assert both tabs restore ahead of the draft tab.
+5. **Session-less install stays clean.** Empty `localStorage`; `isLoading: false`,
    `items: [{ id: '__LOCALID_1', status: 'new' }]`, `mainThreadId: '__LOCALID_1'`. Assert
    `tabIds === ['__LOCALID_1']` (the membership seam still opens the draft tab), `hydrated === false`,
    and `localStorage.getItem('mf:session-tabs') === null`.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-tabs/__tests__/use-session-tabs-sync.test.tsx`
-— **all four cases** fail against current `main`. Each of the four renders a list of length ≥ 1, so
-today's `items.length === 0` gate lets the hydrate effect through on the first render: it restores
-nothing, latches `hydrated`, and the persist effect writes `{ v: 1, ids: [] }`. That breaks case 1's
-and case 3's `hydrated === false`, case 4's `hydrated === false` **and** its
-`localStorage.getItem(...) === null`, and case 2's restored `tabIds` order (the latched flag makes
-the real list arrive too late to restore). Record the failure output; that is the red phase for the
-whole change.
+— **every case** fails against current `main`. Each one renders a list of length ≥ 1, so today's
+`items.length === 0` gate lets the hydrate effect through on the first render: it restores
+nothing, latches `hydrated`, and the persist effect writes `{ v: 1, ids: [] }`. That breaks cases
+1, 3, 4 and 5 on `hydrated === false` (plus case 5's `localStorage.getItem(...) === null` and
+cases 3–4's intact payload), and case 2's restored `tabIds` order (the latched flag makes the real
+list arrive too late to restore). Record the failure output; that is the red phase for the whole
+change.
 
 ### Task 3 — `canRestoreTabs` in the pure model
 
@@ -168,9 +180,9 @@ whole change.
 
 Add, below `findEntry`:
 
-- private `isSessionEntry(entry: ThreadListEntry): boolean` → `entry.custom != null || entry.remoteId != null`,
-  with a one-line comment explaining that the transient draft carries neither and that a
-  just-sent draft is remoteId-stamped before `custom` catches up.
+- private `isSessionEntry(entry: ThreadListEntry): boolean` → `entry.custom != null`, with a
+  one-line comment explaining that `custom` is written only by the `list()` projection, so it is
+  the one proof a load actually succeeded.
 - exported `canRestoreTabs(items: readonly ThreadListEntry[], isListLoading: boolean): boolean` →
   `!isListLoading && items.some(isSessionEntry)`, with a docblock stating why both halves are
   needed: the runtime seeds `threadItems` with the draft before `list()` resolves, and `isLoading`

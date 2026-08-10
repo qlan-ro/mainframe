@@ -6,7 +6,8 @@
  * archived-active fallback — without touching any of those call sites.
  *
  * Also owns persistence: restore once the thread list has SETTLED carrying at
- * least one real session (merging with tabs the boot already opened), prune
+ * least one session the daemon actually listed (merging with tabs the boot
+ * already opened), prune
  * tabs whose thread vanished, and write the boot-stable id set back on every
  * change. A list that is still loading, holds only the transient boot draft, or
  * failed to load leaves `hydrated` false: the persisted payload survives

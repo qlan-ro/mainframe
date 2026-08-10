@@ -72,8 +72,8 @@ it('restores in persisted order once the list settles with real sessions', () =>
   const { rerender } = renderHook(() => useSessionTabsSync());
 
   itemsValue = [
-    { id: 'chat-b', status: 'regular' },
-    { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-a' },
+    { id: 'chat-b', status: 'regular', custom: {} },
+    { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-a', custom: {} },
   ];
   isLoadingValue = false;
   mainThreadIdValue = 'chat-b';
@@ -104,6 +104,33 @@ it('does not clobber a persisted payload with a settled draft-only list, and res
   const state = useSessionTabsStore.getState();
   expect(state.hydrated).toBe(true);
   expect(state.tabIds).toEqual(['chat-a', 'chat-b']);
+});
+
+it('keeps the payload when the first send stamps a remoteId after a failed load', () => {
+  localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids: ['chat-a', 'chat-b'] }));
+  isLoadingValue = false;
+  itemsValue = [{ id: '__LOCALID_1', status: 'new' }];
+  mainThreadIdValue = '__LOCALID_1';
+  const { rerender } = renderHook(() => useSessionTabsSync());
+
+  // adapter.initialize() stamps the draft; the list itself is still the failed one.
+  itemsValue = [{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-new' }];
+  rerender();
+
+  expect(useSessionTabsStore.getState().hydrated).toBe(false);
+  expect(readPersistedIds()).toEqual(['chat-a', 'chat-b']);
+
+  // The chat.created reload succeeds and the real sessions arrive.
+  itemsValue = [
+    { id: '__LOCALID_1', status: 'regular', remoteId: 'chat-new' },
+    { id: 'chat-a', status: 'regular', custom: {} },
+    { id: 'chat-b', status: 'regular', custom: {} },
+  ];
+  rerender();
+
+  const state = useSessionTabsStore.getState();
+  expect(state.hydrated).toBe(true);
+  expect(state.tabIds).toEqual(['chat-a', 'chat-b', '__LOCALID_1']);
 });
 
 it('boots clean on a genuinely session-less install', () => {

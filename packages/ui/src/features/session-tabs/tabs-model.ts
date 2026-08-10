@@ -19,9 +19,9 @@ function findEntry(items: readonly ThreadListEntry[], id: string): ThreadListEnt
   return items.find((t) => t.id === id || t.remoteId === id);
 }
 
-/** The transient boot draft carries neither field; a just-sent draft is remoteId-stamped before `custom` catches up. */
+/** `custom` is written only by the adapter's `list()` projection, so it is the one proof a load actually succeeded. */
 function isSessionEntry(entry: ThreadListEntry): boolean {
-  return entry.custom != null || entry.remoteId != null;
+  return entry.custom != null;
 }
 
 /**
@@ -29,7 +29,9 @@ function isSessionEntry(entry: ThreadListEntry): boolean {
  * against. Both halves are load-bearing: the runtime seeds `threadItems` with
  * the new-thread draft before `list()` resolves, so a non-empty list is not a
  * loaded one; and `isLoading` also goes false when the load FAILS, where
- * restoring would commit an empty set over a live payload.
+ * restoring would commit an empty set over a live payload. A remoteId alone
+ * does NOT qualify: `initialize()` stamps one on the draft after a failed load
+ * too, and hydrating there would drop every persisted tab.
  */
 export function canRestoreTabs(items: readonly ThreadListEntry[], isListLoading: boolean): boolean {
   return !isListLoading && items.some(isSessionEntry);
