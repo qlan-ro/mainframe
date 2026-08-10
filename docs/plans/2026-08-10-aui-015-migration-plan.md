@@ -525,6 +525,19 @@ Run and report every one:
 
 **Verify:** every item above reported with its actual result. Any red that is not in the pre-existing known-red set blocks the PR.
 
+**Outcome: GREEN. No leftovers found.**
+
+1. **Legacy-hook grep** — zero hits.
+2. **Call-form grep** — zero hits.
+3. **`grep -n "assistant-ui" packages/ui/package.json`** — three entries, all exact: `"@assistant-ui/react": "0.15.13"`, `"@assistant-ui/react-markdown": "0.14.10"`, `"@assistant-ui/store": "0.3.8"`. No `^`, no `~`.
+4. **Lockfile family check** — exactly one resolved version each: `@assistant-ui/react@0.15.13`, `@assistant-ui/store@0.3.8`, `@assistant-ui/core@0.3.12`, `@assistant-ui/tap@0.9.11`, `@assistant-ui/react-markdown@0.14.10`. No duplicate trees.
+5. **Typecheck** — `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean, zero diagnostics.
+6. **Unit suite** — `pnpm --filter @qlan-ro/mainframe-ui test`: 626 passed / 1 failed / 627 files, 6048 passed / 1 failed / 6049 tests. The one failure (`AutomationsView.test.tsx`) is the documented cross-file `React.act` batch artifact (task-1/18 risk); re-run alone it is 6/6 green — confirmed, not aui fallout. The composer trigger test (`ComposerTriggers.test.tsx`) and the session-list router test (`use-session-list-router.test.tsx`) both pass in isolation (46/46 combined). No `convertMessage` / project-messages source or test file appears in `git diff --stat origin/main...HEAD` — their expectations are untouched by this migration.
+7. **E2E full batch** — `pnpm test:e2e` from the repo root, exit code 0: 425 tests, 383 passed, 37 skipped, 5 flaky (passed on Playwright's built-in retry), 9.0m. The 37 skips include the `§transcript — no fixture / not deterministically reachable` block (4 tests) — this is the known CI-only-red transcript pair from prior memory, deliberately unreachable locally by design, not a failure. The 5 flaky tests (3× `git-branch.spec.ts`, 1× `session-panel.spec.ts`, 1× `sessions-draft.spec.ts`) are outside this group's changed files and outside the sessions/runtime surfaces this migration touches at the call-site level exercised by those specs; all five passed on retry, so the run is green with no blocking red.
+8. **Diff read-through** (`git diff origin/main...HEAD`, 54 files, +1370/-425, plus the plan doc and changeset): no `@ts-ignore` added; no dead imports found; no comment naming a removed hook remains (`useAssistantRuntime`/`useThreadListItemRuntime` grep over added lines is empty); no `data-testid` renamed or removed — the two new `data-testid` occurrences in the diff are inside new test files (`SessionRow.test.tsx`, `SessionRowItemScope.test.tsx`), not production markup. Six touched files exceed 300 lines (`use-session-list-router.test.tsx` 696, `BranchPopover.test.tsx` 534, `ReviewPanel.test.tsx` 409, `App.integration.test.tsx` 373, `use-submit-composition.test.tsx` 344, `instruction-actions.test.ts` 302) — all six were already over the limit on `origin/main` before this migration touched them (e.g. `use-session-list-router.test.tsx` was 693 lines, now 696), so none of them crossed the line "as a result of the migration," per the task's own framing. `packages/ui/CLAUDE.md` (task 25) already names the full pinned set and carries no stale hook reference.
+
+No red outside the pre-existing known-red set. Nothing blocks the PR.
+
 ---
 
 ## Risks
