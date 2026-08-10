@@ -161,8 +161,8 @@ test.describe('§transcript — thread turn', () => {
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     const timingPill = lastAssistant.getByTestId('chat-message-timing');
     await expect(timingPill).toBeVisible({ timeout: 10_000 });
-    // MessageTiming.formatMs: "<N>ms" under 1s, else "<N.NN>s".
-    await expect(timingPill).toHaveText(/^\d+(\.\d+)?(ms|s)$/);
+    // formatDurationMs: "412ms" / "8.94s" / "1m 15s" / "2h 15m".
+    await expect(timingPill).toHaveText(/^(\d+ms|\d+\.\d{2}s|\d+m \d{2}s|\d+h \d{2}m)$/);
 
     // Hovering reveals the tooltip's "Total" breakdown row. Radix Tooltip
     // portals content twice (an aria-live announcer copy plus the visible

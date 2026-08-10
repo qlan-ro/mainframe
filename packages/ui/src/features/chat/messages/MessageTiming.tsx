@@ -13,10 +13,7 @@ import { useMessageTiming } from '@assistant-ui/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useMainframeMeta } from '../view-model/message-meta';
-
-function formatMs(ms: number): string {
-  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
-}
+import { formatDurationMs } from '../format-duration';
 
 function formatCostUsd(usd: number): string {
   if (usd < 0.0001) return '<$0.0001';
@@ -59,14 +56,14 @@ export const MessageTiming: FC<MessageTimingProps> = ({ className, side = 'top' 
             className,
           )}
         >
-          {formatMs(totalMs)}
+          {formatDurationMs(totalMs)}
         </button>
       </TooltipTrigger>
       {/* The tooltip's own chrome (fill, radius, ink, padding) comes from the
           primitive; only the detail grid is this component's business. */}
       <TooltipContent side={side} sideOffset={6}>
         <div className="grid min-w-32 gap-1.5">
-          <DetailRow label="Total" value={formatMs(totalMs)} />
+          <DetailRow label="Total" value={formatDurationMs(totalMs)} />
           {cost !== undefined && <DetailRow label="Cost" value={formatCostUsd(cost)} />}
         </div>
       </TooltipContent>
