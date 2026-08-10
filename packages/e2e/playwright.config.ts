@@ -5,7 +5,13 @@ export default defineConfig({
   // Builds the UI bundle once and starts the shared vite preview (a stateless static server) for
   // the whole run; returns a teardown that kills it. See fixtures/global-setup.ts.
   globalSetup: './fixtures/global-setup.ts',
-  timeout: 120_000, // 2 min per test — AI calls are slow
+  // 2 min per test for the real-adapter runs, where a live AI call sets the pace. Mock mode
+  // replays recorded NDJSON with every inter-event delay capped at 120ms, so its slowest
+  // PASSING test on CI is under 5s — a 2-min budget there only decides how long a hung test
+  // takes to be declared dead, and rc.22 spent 12 of its 27 test-minutes doing exactly that.
+  // 45s keeps ~9x headroom over the slowest observed test. A spec that genuinely needs more
+  // (stress-matrix) overrides per-test with `test.setTimeout`.
+  timeout: process.env['E2E_MODE'] === 'mock' ? 45_000 : 120_000,
   // 40 min total by default — the full AI suite (serial) exceeds 10 min end-to-end. Override via
   // MF_E2E_GLOBAL_TIMEOUT (ms) for targeted multi-file invocations where 40 min would starve later
   // files sharing this one process budget (e.g. running a handful of specs back-to-back).

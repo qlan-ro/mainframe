@@ -173,6 +173,15 @@ async function recoverToLocal(page: Page): Promise<void> {
   await expect(footerLabel(page)).toHaveText('This Mac');
 }
 
+// Serial in fact, so declared serial: every test here inherits the daemon the
+// previous one left active, the pairing tests hand a remote row to the manage
+// tests, and the last test asserts the suite ended back on local. Undeclared,
+// one broken test ran the remaining four against a wedged app for the full
+// per-test budget each — 14m31s in rc.22 for a file that takes 12s green. The
+// trade is real: a failure here now skips its followers instead of reporting
+// them, so a single red run says less than it used to.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('§daemon-picker', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
