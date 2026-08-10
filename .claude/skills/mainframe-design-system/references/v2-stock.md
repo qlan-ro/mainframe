@@ -167,8 +167,9 @@ Tabs/Toggle/ToggleGroup/Badge/Alert/Hint/Button). New stock primitives added for
 ## Title bar (2026-08-05 port)
 
 MainToolbar + SurfaceRail + UpdatePill + ToolbarLaunchControls + the whole `features/git` branch
-popover family run on v2 primitives; `SHELL_GEOMETRY.toolbar` is deleted (SurfaceHost
-slices remain). Conventions from the pass:
+popover family run on v2 primitives; the toolbar's slice of the shared geometry constant died with
+them, and the rest followed — `SurfaceHost` now carries its background, border and gutter values
+inline. Conventions from the pass:
 
 - **Menu-shaped = native `DropdownMenu`, no exceptions** (user decision 2026-08-05). A floating
   list of actions/choices is a DropdownMenu; a searchable pick-list is Popover+Command (the
