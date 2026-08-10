@@ -10,13 +10,13 @@
  * single seam that decides which branch runs.
  */
 import { useCallback } from 'react';
-import type { AssistantRuntime } from '@assistant-ui/react';
+import type { AssistantClient } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { resetNewThreadDraft } from './reset-new-thread-draft';
 import { resolveNewChatHotkeyAction } from './new-chat-hotkey-action';
 import { useNewSessionPickerTarget } from '../sidebar/use-new-session-picker-target';
 
-export function useNewChatHotkeyHandler(runtime: AssistantRuntime): () => void {
+export function useNewChatHotkeyHandler(aui: AssistantClient): () => void {
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
 
   return useCallback(() => {
@@ -24,7 +24,7 @@ export function useNewChatHotkeyHandler(runtime: AssistantRuntime): () => void {
       useNewSessionPickerTarget.getState().setOpen(true);
       return;
     }
-    resetNewThreadDraft(runtime.threads.getState().newThreadId);
-    void runtime.threads.switchToNewThread();
-  }, [filterProjectId, runtime]);
+    resetNewThreadDraft(aui.threads().getState().newThreadId);
+    void aui.threads().switchToNewThread();
+  }, [filterProjectId, aui]);
 }
