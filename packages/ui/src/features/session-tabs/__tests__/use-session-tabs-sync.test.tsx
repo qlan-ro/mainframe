@@ -1,5 +1,6 @@
 /**
- * useSessionTabsSync — boot-race regression tests (TDD red phase, #312).
+ * useSessionTabsSync — boot-race regression tests (TDD red phase, #312), plus
+ * a first-send identity-handoff describe (TDD red phase, #319).
  *
  * The runtime seeds `threadItems` synchronously with the transient new-thread
  * draft before `adapter.list()` resolves. Hydration must wait for a list that
@@ -8,7 +9,7 @@
  * boot's runtime ids — otherwise it restores an empty set, latches, and the
  * persist effect overwrites `mf:session-tabs` with the survivors.
  */
-import { it, expect, vi, beforeEach } from 'vitest';
+import { it, expect, vi, beforeEach, describe } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { SESSION_TABS_STORAGE_KEY } from '../tabs-model';
 import { useSessionTabsStore } from '../store';
@@ -18,7 +19,7 @@ import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-s
 // Mutable module-scope state the mocked @assistant-ui/react selector reads.
 // ---------------------------------------------------------------------------
 
-let itemsValue: Array<{ id: string; status?: string; custom?: unknown; remoteId?: string }>;
+let itemsValue: Array<{ id: string; status?: string; custom?: unknown; remoteId?: string; title?: string }>;
 let isLoadingValue: boolean;
 let mainThreadIdValue: string | null;
 
@@ -167,4 +168,85 @@ it('boots clean on a genuinely session-less install', () => {
   expect(state.tabIds).toEqual(['__LOCALID_1']);
   expect(state.hydrated).toBe(false);
   expect(localStorage.getItem(SESSION_TABS_STORAGE_KEY)).toBeNull();
+});
+
+/**
+ * first-send identity handoff — TDD red phase, #319.
+ *
+ * The seam opens a tab for whatever thread becomes active. On first send the
+ * local entry is remoteId-stamped and a SECOND, canonical entry appears; the
+ * router later hands the active thread to that canonical entry, so the seam
+ * would open a tab for it too unless something collapses the two identities
+ * into the slot the draft tab already held. These cases pin the collapse and
+ * are expected to fail until task 7 (the sync hook) reconciles instead of
+ * pruning — the pre-existing #312 cases above must stay green throughout.
+ */
+describe('first-send identity handoff', () => {
+  it('collapses the orphaned draft onto the canonical session, in place, across repeated sessions', () => {
+    useSessionTabsStore.setState({ tabIds: ['chat-a'] });
+    itemsValue = [
+      { id: 'chat-a', status: 'regular', custom: {} },
+      { id: '__LOCALID_9', status: 'new' },
+    ];
+    isLoadingValue = false;
+    mainThreadIdValue = '__LOCALID_9';
+    listSucceeded();
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', '__LOCALID_9']);
+
+    // First send + chat.created reload: the local entry is remoteId-stamped and
+    // a second, canonical entry lands — but the router has not handed the
+    // active thread over yet.
+    itemsValue = [
+      { id: 'chat-a', status: 'regular', custom: {} },
+      { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-new' },
+      { id: 'chat-new', status: 'regular', custom: {}, title: 'Fix the parser' },
+    ];
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new']);
+
+    // The router's handover lands; nothing changes — the seam appends the
+    // canonical id, and reconciliation collapses it in the same flush.
+    mainThreadIdValue = 'chat-new';
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new']);
+
+    // A second session runs the same dance: N sessions leaves N tabs, not 2N.
+    itemsValue = [...itemsValue, { id: '__LOCALID_10', status: 'new' }];
+    mainThreadIdValue = '__LOCALID_10';
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new', '__LOCALID_10']);
+
+    itemsValue = [
+      { id: 'chat-a', status: 'regular', custom: {} },
+      { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-new' },
+      { id: 'chat-new', status: 'regular', custom: {}, title: 'Fix the parser' },
+      { id: '__LOCALID_10', status: 'regular', remoteId: 'chat-two' },
+      { id: 'chat-two', status: 'regular', custom: {}, title: 'Second session' },
+    ];
+    mainThreadIdValue = 'chat-two';
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new', 'chat-two']);
+    expect(readPersistedIds()).toEqual(['chat-a', 'chat-new', 'chat-two']);
+  });
+
+  it('collapses an already-open ghost without waiting for hydration', () => {
+    // Pins decision 3: a failed list load must not strand a ghost forever.
+    itemsValue = [
+      { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-new' },
+      { id: 'chat-new', status: 'regular', custom: {}, title: 'Fix the parser' },
+    ];
+    mainThreadIdValue = '__LOCALID_9';
+    useSessionTabsStore.setState({ tabIds: ['__LOCALID_9'] });
+
+    renderHook(() => useSessionTabsSync());
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-new']);
+    expect(useSessionTabsStore.getState().hydrated).toBe(false);
+  });
 });
