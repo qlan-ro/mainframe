@@ -12,9 +12,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@assistant-ui/react": "0.14.27",
-    "@assistant-ui/react-markdown": "^0.14.6",
-    "@assistant-ui/store": "0.2.20",
+    "@assistant-ui/react": "0.15.13",
+    "@assistant-ui/react-markdown": "0.14.10",
+    "@assistant-ui/store": "0.3.8",
     "@codemirror/commands": "6.10.4",
     "@codemirror/lang-css": "6.3.1",
     "@codemirror/lang-html": "6.4.11",
