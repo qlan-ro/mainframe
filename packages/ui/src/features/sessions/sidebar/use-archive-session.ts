@@ -9,11 +9,11 @@
  * user on an empty draft instead of the session they chose to keep.
  */
 import { useCallback } from 'react';
-import { useThreadListItemRuntime } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { requestWorktreeArchiveChoice, stageArchiveChoice } from '../runtime/archive-confirm-bridge';
 
 export function useArchiveSession(remoteId: string, hasWorktree: boolean): () => void {
-  const itemRuntime = useThreadListItemRuntime();
+  const aui = useAui();
 
   return useCallback(() => {
     void (async () => {
@@ -24,7 +24,7 @@ export function useArchiveSession(remoteId: string, hasWorktree: boolean): () =>
         choice = answer;
       }
       stageArchiveChoice(remoteId, choice);
-      await itemRuntime.archive();
+      await aui.threadListItem().archive();
     })();
-  }, [remoteId, hasWorktree, itemRuntime]);
+  }, [remoteId, hasWorktree, aui]);
 }
