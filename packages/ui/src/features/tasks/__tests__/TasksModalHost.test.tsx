@@ -106,7 +106,7 @@ describe('TasksModalHost — refetch on modal open (todo #225)', () => {
 
     render(<TasksModalHost port={PORT} />);
 
-    // Boot load fires once so the inspector drawer has data.
+    // Boot load fires once so the first open has data.
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(1));
 
     act(() => {

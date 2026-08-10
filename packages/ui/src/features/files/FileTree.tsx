@@ -1,5 +1,6 @@
 /**
- * FileTree — a lazy, expandable project file tree for the Inspector.
+ * FileTree — a lazy, expandable project file tree for the workspace's
+ * floating Files panel.
  *
  * Directories fetch their children on first expand via `getFileTree(dir)`
  * (the daemon returns a single level per call). Clicking a file emits the

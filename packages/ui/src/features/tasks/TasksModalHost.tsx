@@ -4,7 +4,7 @@
  *
  * Resolves projectId from useActiveIdentity(). Registers ⌘⇧T → openQuick().
  * Listens for `mf:open-tasks` custom event (dispatched by SidebarHeader TasksBtn).
- * Loads on mount (so the inspector drawer has data) and refetches on the
+ * Loads on mount (so the first open has data) and refetches on the
  * open/quick-add rising edge (so externally-made changes are reflected — the
  * todos store has no WS event).
  * Mounted once in AppShell's outlet block.
@@ -31,8 +31,8 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
   const prevOpen = useRef(false);
   const prevQuick = useRef(false);
 
-  // Eagerly load todos so modal and quick-add show correct data even when
-  // the inspector drawer is hidden.
+  // Eagerly load todos so the modal and quick-add show correct data the
+  // first time either one opens.
   useEffect(() => {
     if (!projectId || !port) return;
     void load(port, projectId);
