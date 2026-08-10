@@ -55,7 +55,7 @@
  * SessionGroupHeader.tsx). Pinned-ness is asserted via the group label.
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { rmSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -83,6 +83,24 @@ async function waitForWorkingSpinner(page: Page, chatId: string, timeout = 10_00
     chatId,
     { timeout, polling: 'raf' },
   );
+}
+
+/**
+ * Select a session row, retrying the click until the row reports itself active.
+ *
+ * The list is sorted by recency, so a row can slide out from under the pointer
+ * between Playwright's actionability check and the click: sending a message bumps
+ * its own chat to the top of the group and pushes every row below it down one
+ * slot. The click then lands on the neighbour, and the row under test never
+ * activates — the row is still there and still hittable, so nothing reports an
+ * interception; the selection simply went elsewhere. Re-clicking a row that is
+ * already active is a no-op, so the retry only ever costs the one wasted click.
+ */
+async function selectRow(row: Locator): Promise<void> {
+  await expect(async () => {
+    await row.click();
+    await expect(row).toHaveAttribute('data-active', 'true', { timeout: 2_000 });
+  }).toPass({ timeout: 20_000, intervals: [500, 1_000, 2_000] });
 }
 
 // ─── Row selection, hover actions, context menu, pin, meta line ──────────────
@@ -377,8 +395,13 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     project = await createTauriProject(app.page);
     // Both chats created up front (beforeAll) to avoid the known mid-test
     // useSessionListRouter navigation race (see chat.spec.ts / the shared brief).
-    chatIdA = await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    //
+    // B is created FIRST so that A, which the unread test sends from, is already the
+    // most recent. The list sorts by recency: created the other way round, A's send
+    // bumped it to the top and slid B down one slot exactly as the test clicked B,
+    // and the click landed on the row that had moved into B's place.
     chatIdB = await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    chatIdA = await createTauriChat(app.page, project.projectId, 'acceptEdits');
   });
 
   test.afterAll(async () => {
@@ -400,16 +423,15 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     const rowB = sidebar.row(chatIdB);
     const dotA = rowA.getByTestId('sessions-row-status-dot');
 
-    // Chat B is active (created last, per createTauriChat's select-on-create) —
-    // select A first so the message below originates from A's composer.
-    await rowA.click();
-    await expect(rowA).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    // A is already active (created last, per createTauriChat's select-on-create), so
+    // the message below originates from A's composer.
+    await selectRow(rowA);
 
     await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
     // Switch away immediately — A is now the BACKGROUND chat while its response
-    // streams in, which is exactly the scenario chat.notification exists for.
-    await rowB.click();
-    await expect(rowB).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    // streams in, which is exactly the scenario chat.notification exists for. The
+    // switch has to beat the reply, so nothing may be awaited between the two.
+    await selectRow(rowB);
 
     // A's response lands in the background: chat.notification reaches the
     // client and session-list-router's onMarkUnread(chatIdA) flips the logo
@@ -418,8 +440,7 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     await expect(dotA).toHaveAttribute('aria-label', 'idle');
 
     // Reselecting A clears the unread flag.
-    await rowA.click();
-    await expect(rowA).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    await selectRow(rowA);
     await expect(dotA).not.toHaveClass(/text-primary/, { timeout: 10_000 });
   });
 
