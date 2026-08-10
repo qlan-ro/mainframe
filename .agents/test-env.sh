@@ -7,6 +7,7 @@
 #   test-env.sh reset                    fleet-wide sweep of the test port ranges
 # Every verb accepts `--worktree <path>` to act on another checkout.
 # Targets: tauri = native shell via tauri-mcp bridge (max 1);
+# tauri-qa = packaged build via tauri-mcp bridge, isolated port/data dir (max 1);
 # browser = renderer+daemon only, cheapest — use when no scenario needs the native shell.
 # Project QA knowledge (fixtures, seeding, gotchas): .agents/test-worktree.md, ui-selectors.md
 set -uo pipefail
@@ -45,8 +46,9 @@ export MF_TARGET="$TARGET"
 launcher() {
   case "${1:-tauri}" in
     tauri) echo "$AGENTS/launch-test-tauri.sh tauri-mcp" ;;
+    tauri-qa) echo "$AGENTS/launch-test-tauri-qa.sh tauri-mcp" ;;
     browser) echo "$AGENTS/launch-test-browser.sh playwright-cli" ;;
-    *) echo "unknown target '$1' (tauri|browser)" >&2; return 64 ;;
+    *) echo "unknown target '$1' (tauri|tauri-qa|browser)" >&2; return 64 ;;
   esac
 }
 
@@ -64,5 +66,5 @@ case "$verb" in
   up) run up "${target:-tauri}" ;;
   down) exec bash "$AGENTS/stop-test.sh" $target ;;
   reset) exec bash "$AGENTS/cleanup-test.sh" ;;
-  *) echo "usage: $0 prepare|up [tauri|browser] | down [port ...] | reset [--worktree <path>]" >&2; exit 64 ;;
+  *) echo "usage: $0 prepare|up [tauri|tauri-qa|browser] | down [port ...] | reset [--worktree <path>]" >&2; exit 64 ;;
 esac

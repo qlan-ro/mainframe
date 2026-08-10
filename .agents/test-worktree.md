@@ -8,7 +8,7 @@ dispatches the `prepare-worktree` subagent for environment setup). See
 ## App Type
 
 Single-shell monorepo: one shared React renderer (`packages/ui`), one desktop
-shell (Tauri — the Electron shell was retired). Two testable **Targets** —
+shell (Tauri — the Electron shell was retired). Three testable **Targets** —
 pick one per run (user's ask → diff paths → default).
 
 ### Target: tauri (default)
@@ -43,6 +43,52 @@ pick one per run (user's ask → diff paths → default).
   a target project sitting on a different git branch is NOT a wrong-build
   signal; the shell/daemon code is built from this worktree regardless.
 
+### Target: tauri-qa (packaged build — CSP/signing/auto-updater QA only)
+
+- Type: `tauri-desktop`, packaged variant — a debug-profile app bundle built
+  with the `mcp-bridge-qa` feature and the `tauri.qa.conf.json` overlay
+  (global Tauri IPC, `'unsafe-inline'` in `script-src`, and Tauri's asset-hash
+  injection disabled for `script-src` — the hashes would otherwise cancel
+  `'unsafe-inline'`), not the dev shell.
+- Engine: `tauri-mcp`, same as `tauri`, but the bridge is compiled into a
+  *packaged* build via `mcp-bridge-qa` (dev's `mcp-bridge` feature is absent
+  from every other packaged build; this is the one exception).
+- Build: `bash scripts/build-qa-tauri.sh` once per checkout before the first
+  launch (or after any src-tauri/renderer change) — not part of `up`, because
+  a cold `tauri build --debug` is expensive enough to want explicit control
+  over when it re-runs.
+- Launch: `script: .agents/launch-test-tauri-qa.sh` — run it EXACTLY ONCE,
+  via `test-env.sh up tauri-qa`. From a worktree, invoke the script directly
+  instead (`bash .agents/launch-test-tauri-qa.sh`): `test-env.sh` re-execs the
+  **primary** checkout's harness, and the primary only knows the `tauri-qa`
+  target once this branch merges into it. It owns port/data-dir isolation
+  (derives its own `DAEMON_PORT` and `MAINFRAME_DATA_DIR`, distinct from the
+  `tauri` target's — see Environment below), refuses to launch on an
+  unisolated port or data dir, kills a previous QA instance it owns before
+  relaunching, and blocks until it prints `READY` + facts (`DAEMON_PORT`,
+  `DATA_DIR`, `BRIDGE=127.0.0.1:9323`, `APP`, `PID`, `LOG`), or exits 1 with
+  the log tail.
+- After READY: attach with `driver_session start {"host": "127.0.0.1", "port":
+  9323}` and verify `get_backend_state` names this checkout's `cwd` before
+  trusting any assertion — see `docs/guides/packaged-tauri-qa.md` §4.
+- Diff paths: `packages/app-tauri/src-tauri/tauri.qa.conf.json`,
+  `packages/app-tauri/src-tauri/src/mcp_bridge.rs`,
+  `scripts/build-qa-tauri.sh`, plus `packages/app-tauri/`, `packages/ui/` as
+  for the `tauri` target.
+- Gotchas — all documented in full at `docs/guides/packaged-tauri-qa.md`:
+  - **Bridge reset is stop-ALL, never targeted.** `driver_session stop` with
+    no `appIdentifier` — a targeted stop leaves the helper-registration cache
+    poisoned and every relaunch fails ref-based tools with `Resolve-ref
+    helper was not available in the webview after registration.`
+  - **Preview child-webview precondition is a different failure**, signaled
+    by a "window not found" error instead of that timeout — stop the mounted
+    preview's launch config before attaching.
+  - **Never reset the webview data store** — every Mainframe build shares one
+    bundle identifier (`ro.qlan.mainframe`) and one WKWebView data store;
+    doing so would also wipe the production app's store. Isolation here is
+    port/data-dir only.
+  - Teardown needs its ports passed explicitly — see Environment below.
+
 ### Target: browser (cheapest — use when NO scenario is native-required)
 
 - Type: `web-spa` — the shared `packages/ui` renderer in a plain browser +
@@ -64,22 +110,38 @@ pick one per run (user's ask → diff paths → default).
 
 Limits for multi-branch runs (consumed by the skill's Fleet Mode):
 
-- **Per-target caps: `tauri` max 1, `browser` max 4.** The tauri-mcp bridge
-  reliably tracks one dev app at a time (and dies while a preview child
-  webview is mounted — see Gotchas). Browser runs have no singleton (fresh
-  browser per run, isolated ports) and are light (daemon + Vite only) — they
-  run genuinely in parallel.
-- **Max parallel runs: 4 total**, but at most one tauri run at a time (its
-  full native build thrashes the machine; browser runs are cheap).
-- **Prefer the browser target.** It builds only the daemon, where tauri also
-  compiles the whole native shell — so it stays the default path for
-  renderer/daemon-only scenario sets. Reserve tauri for genuinely native
-  surfaces. Neither target is free in a fresh worktree: cargo can't share a
-  target dir across worktrees, so the first run in one pays a cold compile.
-- Daemon/Vite ports and `MAINFRAME_DATA_DIR=~/.mainframe_dev` are isolated
-  per run by `scripts/setup-ports.sh`, so parallel runs don't collide there —
-  but they DO share `~/.mainframe_dev`; scenarios that assert on global DB
-  state (project/chat counts) belong in sequential runs.
+- **Per-target caps: `tauri` max 1, `tauri-qa` max 1, `browser` max 4.** The
+  tauri-mcp bridge reliably tracks one app at a time per target (and dies
+  while a preview child webview is mounted — see Gotchas). Browser runs have
+  no singleton (fresh browser per run, isolated ports) and are light
+  (daemon + Vite only) — they run genuinely in parallel.
+- **`tauri` and `tauri-qa` may run concurrently in one checkout** — all three
+  isolation axes differ between them: bridge port (`9223` vs `9323`), daemon
+  port (`.env`'s `DAEMON_PORT` vs that port plus 1000), and data dir
+  (`~/.mainframe_dev` vs `~/.mainframe_qa`). Attachment verification
+  (`get_backend_state`'s `cwd`) is still required before trusting either
+  session — the bridge port alone does not prove which app a tool call is
+  driving. Across checkouts, a QA port derived from a low dev port can in
+  principle meet another checkout's dev port at `32416` (the dev range's
+  ceiling is the QA range's floor) — `launch-test-tauri-qa.sh`'s
+  already-listening refusal is the backstop: it kills only a port holder
+  whose binary lives under its own checkout, then refuses to launch if a
+  foreign holder remains, rather than colliding with it.
+- **Max parallel runs: 4 total**, but at most one `tauri`/`tauri-qa` build at
+  a time (a full native compile thrashes the machine; browser runs are
+  cheap).
+- **Prefer the browser target.** It builds only the daemon, where `tauri`/
+  `tauri-qa` also compile the whole native shell — so it stays the default
+  path for renderer/daemon-only scenario sets. Reserve `tauri` for genuinely
+  native surfaces and `tauri-qa` for CSP/signing/auto-updater QA the dev
+  target cannot reproduce (see `docs/guides/packaged-tauri-qa.md`). Neither
+  native target is free in a fresh worktree: cargo can't share a target dir
+  across worktrees, so the first run in one pays a cold compile.
+- Daemon/Vite ports and `MAINFRAME_DATA_DIR=~/.mainframe_dev` (or, for
+  `tauri-qa`, `~/.mainframe_qa`) are isolated per run, so parallel runs don't
+  collide there — but each target's runs DO share its own data dir;
+  scenarios that assert on global DB state (project/chat counts) belong in
+  sequential runs.
 - **Process kills in a fleet:** the Cleanup section below kills ANY listener in
   the test port ranges — including live test runs — so it is reachable only as
   `test-env.sh reset` and runs exactly once (orchestrator, before any env
@@ -98,24 +160,31 @@ Verify any candidate PID does not hold `31415` before sending SIGKILL.
 
 ## Environment
 
-`.env` is **generated** by `scripts/setup-ports.sh` (invoked from both launch
-scripts on first use), not hand-written. It always holds isolated free ports —
-the `31415`/`5173` defaults below are the *production* values and are
-deliberately never used for a test worktree. Both targets read the same `.env`,
-so the facts a run prints, the ports it listens on, and the ports `down` tears
-down are always the same set.
+`.env` is **generated** by `scripts/setup-ports.sh` (invoked from the `tauri`
+and `browser` launch scripts on first use), not hand-written. It always holds
+isolated free ports — the `31415`/`5173` defaults below are the *production*
+values and are deliberately never used for a test worktree. `tauri` and
+`browser` read the same `.env` directly, so the facts a run prints, the ports
+it listens on, and the ports `down` tears down are the same set for those two
+targets. `tauri-qa` instead **derives** its own ports from `.env` rather than
+reading it directly — see the `tauri-qa` row below — so its facts and ports
+are a different set that `down` does not tear down by default (pass them
+explicitly; see Stop / Restart).
 
 | Variable | Used by | Source | Isolated range / value |
 |---|---|---|---|
-| `DAEMON_PORT` | Core daemon | generated `.env` | free port in `31416–32416` |
+| `DAEMON_PORT` | Core daemon (`tauri`, `browser`) | generated `.env` | free port in `31416–32416` |
 | `VITE_PORT` | Vite dev server | generated `.env` | free port in `5174–6174` |
-| `MAINFRAME_DATA_DIR` | Core + renderer | generated `.env` | `~/.mainframe_dev` |
+| `MAINFRAME_DATA_DIR` | Core + renderer (`tauri`, `browser`) | generated `.env` | `~/.mainframe_dev` |
 | `VITE_DAEMON_HTTP_PORT` | Renderer HTTP | generated `.env` | `=$DAEMON_PORT` |
 | `VITE_DAEMON_WS_PORT` | Renderer WS | generated `.env` | `=$DAEMON_PORT` |
 | `LOG_LEVEL` | Core daemon | set by `launch-test-browser.sh` | `debug` |
+| `DAEMON_PORT` | Core daemon (`tauri-qa`) | derived by `launch-test-tauri-qa.sh` | `.env`'s `DAEMON_PORT + 1000` (override: `MF_QA_DAEMON_PORT`) |
+| `MAINFRAME_DATA_DIR` | Core + renderer (`tauri-qa`) | set by `launch-test-tauri-qa.sh` | `~/.mainframe_qa` (override: `MF_QA_DATA_DIR`) |
 
 Production defaults (never used here): `DAEMON_PORT=31415`, `VITE_PORT=5173`,
-`LOG_LEVEL=info`.
+`LOG_LEVEL=info`. Full isolation contract and endpoint table:
+`docs/guides/packaged-tauri-qa.md` §8–9.
 
 ## Cleanup (Kill Stale Dev Processes)
 
@@ -132,10 +201,13 @@ it.
 
 **Never use `pkill -f "mainframe"` unfiltered** — it can hit the production app. The commands above specifically target `run dev` processes and skip anything on port 31415.
 
-Each target's own **Launch** bullet above is authoritative (`launch-test-tauri.sh`
-or `launch-test-browser.sh`, run EXACTLY ONCE) — because it already does a full
+Each target's own **Launch** bullet above is authoritative
+(`launch-test-tauri.sh`, `launch-test-tauri-qa.sh`, or
+`launch-test-browser.sh`, run EXACTLY ONCE) — because it already does a full
 install + build, the dispatching `prepare-worktree` subagent does **not** need
-a separate build step for this project.
+a separate build step for this project. `tauri-qa` is the one exception: its
+app bundle build (`scripts/build-qa-tauri.sh`) is a separate, explicit step
+run before the first launch — see Target: tauri-qa above.
 
 ## Wait for Ready
 
@@ -145,6 +217,9 @@ Declarative facts the engines need after `READY`:
 - Daemon HTTP: `http://127.0.0.1:$DAEMON_PORT/api/projects` responds.
 - Tauri: Vite at `http://localhost:$VITE_PORT` (`localhost`, not
   `127.0.0.1`), app present in the bridge's `list_devices`.
+- Tauri-QA: daemon HTTP as above (on the derived `DAEMON_PORT`), plus the
+  bridge's own startup log line reporting `127.0.0.1:9323` — no Vite check,
+  since the packaged build serves assets from `tauri://`, not a dev server.
 
 ## Test Engines
 
@@ -152,7 +227,7 @@ Declarative facts the engines need after `READY`:
 |---|---|
 | `playwright-cli` (default, browser target) | Interactive step-by-step verification |
 | `playwright-test` (browser target) | Repeatable test suites |
-| `tauri-mcp` (tauri target) | See Target: tauri above |
+| `tauri-mcp` (tauri, tauri-qa targets) | See Target: tauri / Target: tauri-qa above |
 
 ### playwright-test config
 
@@ -230,6 +305,11 @@ to keep working.
 process (shared socket). At teardown that is intended; never use this
 mid-run hoping for a daemon-only restart — relaunch the app properly
 instead.
+
+**Tauri-QA caveat:** the default port set above comes from `.env`, which is
+the `tauri` target's *dev* port, not the derived QA port. Tearing down a
+`tauri-qa` run needs its ports passed explicitly:
+`.agents/test-env.sh down "$QA_DAEMON_PORT" 9323`.
 
 Then re-run the target's own **Launch** step (see its Target section above).
 

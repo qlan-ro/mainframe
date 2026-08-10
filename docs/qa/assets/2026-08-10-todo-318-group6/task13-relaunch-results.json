@@ -1,0 +1,23 @@
+[
+  {
+    "i": 1,
+    "bridgeLine": "WebSocket server listening on: 127.0.0.1:9323",
+    "identOk": true,
+    "execOk": true,
+    "execText": "Mainframe\n\n[Executed in window: main]"
+  },
+  {
+    "i": 2,
+    "bridgeLine": "WebSocket server listening on: 127.0.0.1:9323",
+    "identOk": true,
+    "execOk": true,
+    "execText": "Mainframe\n\n[Executed in window: main]"
+  },
+  {
+    "i": 3,
+    "bridgeLine": "WebSocket server listening on: 127.0.0.1:9323",
+    "identOk": true,
+    "execOk": true,
+    "execText": "Mainframe\n\n[Executed in window: main]"
+  }
+]

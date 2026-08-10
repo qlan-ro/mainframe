@@ -1,0 +1,38 @@
+[
+  {
+    "relaunch": 1,
+    "launch_script_bridge": "9323",
+    "bridge_log_line": "[MCP][WS_SERVER][INFO] WebSocket server listening on: 127.0.0.1:9323",
+    "session_started": true,
+    "identifier": "ro.qlan.mainframe",
+    "cwd_matches": true,
+    "execute_js": "Mainframe",
+    "execute_js_error": false,
+    "dom_snapshot_ok": true,
+    "pre_seed_used": false
+  },
+  {
+    "relaunch": 2,
+    "launch_script_bridge": "9323",
+    "bridge_log_line": "[MCP][WS_SERVER][INFO] WebSocket server listening on: 127.0.0.1:9323",
+    "session_started": true,
+    "identifier": "ro.qlan.mainframe",
+    "cwd_matches": true,
+    "execute_js": "Mainframe",
+    "execute_js_error": false,
+    "dom_snapshot_ok": true,
+    "pre_seed_used": false
+  },
+  {
+    "relaunch": 3,
+    "launch_script_bridge": "9323",
+    "bridge_log_line": "[MCP][WS_SERVER][INFO] WebSocket server listening on: 127.0.0.1:9323",
+    "session_started": true,
+    "identifier": "ro.qlan.mainframe",
+    "cwd_matches": true,
+    "execute_js": "Mainframe",
+    "execute_js_error": false,
+    "dom_snapshot_ok": true,
+    "pre_seed_used": false
+  }
+]
