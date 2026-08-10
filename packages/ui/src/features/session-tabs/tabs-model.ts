@@ -19,6 +19,22 @@ function findEntry(items: readonly ThreadListEntry[], id: string): ThreadListEnt
   return items.find((t) => t.id === id || t.remoteId === id);
 }
 
+/** The transient boot draft carries neither field; a just-sent draft is remoteId-stamped before `custom` catches up. */
+function isSessionEntry(entry: ThreadListEntry): boolean {
+  return entry.custom != null || entry.remoteId != null;
+}
+
+/**
+ * Whether the thread list is trustworthy enough to restore the persisted tabs
+ * against. Both halves are load-bearing: the runtime seeds `threadItems` with
+ * the new-thread draft before `list()` resolves, so a non-empty list is not a
+ * loaded one; and `isLoading` also goes false when the load FAILS, where
+ * restoring would commit an empty set over a live payload.
+ */
+export function canRestoreTabs(items: readonly ThreadListEntry[], isListLoading: boolean): boolean {
+  return !isListLoading && items.some(isSessionEntry);
+}
+
 /** Persisted ids → this boot's runtime ids. Unknown and archived ids drop out. */
 export function restoreTabIds(persisted: readonly string[], items: readonly ThreadListEntry[]): string[] {
   const ids: string[] = [];
