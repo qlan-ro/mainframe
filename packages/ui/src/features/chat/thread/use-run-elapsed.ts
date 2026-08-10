@@ -10,20 +10,6 @@ import { useEffect, useState } from 'react';
 
 const TICK_MS = 1000;
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/**
- * Whole seconds → "9s" / "1m 05s" / "1h 02m". The minute band zero-pads its
- * seconds so a ticking readout keeps a constant width; the hour band drops
- * seconds entirely (they are noise at that scale).
- */
-export function formatElapsedSeconds(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  if (total < 60) return `${total}s`;
-  if (total < 3600) return `${Math.floor(total / 60)}m ${pad(total % 60)}s`;
-  return `${Math.floor(total / 3600)}h ${pad(Math.floor(total / 60) % 60)}m`;
-}
-
 /**
  * Seconds elapsed since `active` last turned true, ticking every second.
  * `undefined` while inactive and for the first second of a run — a turn that
