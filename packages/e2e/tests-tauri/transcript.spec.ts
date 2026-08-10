@@ -76,6 +76,13 @@ async function scrollViewportToTop(page: Page): Promise<void> {
   });
 }
 
+// Serial in fact, so declared serial. Every describe here builds its transcript
+// with sends from its OWN earlier tests, and `beforeAll` re-runs on a retry — so
+// an undeclared retry handed the later tests a brand-new EMPTY chat, and each
+// failure re-seeded the app empty for every test after it. Declared, a retry
+// re-runs the whole block, sends included, and the transcript is there.
+test.describe.configure({ mode: 'serial' });
+
 // ─── §11 Transcript — thread turn (long text + Bash tool call) ────────────────
 
 test.describe('§transcript — thread turn', () => {
@@ -177,10 +184,16 @@ test.describe('§transcript — thread turn', () => {
     // At rest (post-idle autoscroll) the native ScrollToBottom is disabled — already at the tail.
     await expect(scrollBtn).toBeDisabled();
 
-    await scrollViewportToTop(page);
-    await expect(scrollBtn).toBeEnabled({ timeout: 5_000 });
-
-    await scrollBtn.click();
+    // Scroll and click as ONE retried unit: the viewport re-anchors to the tail on
+    // its own, and it did so between the enabled assertion and the click — leaving
+    // the button `disabled:invisible` and the click waiting out the whole test
+    // budget. Retrying the gesture rides that out; a button that can never be
+    // clicked still fails, here, saying so.
+    await expect(async () => {
+      await scrollViewportToTop(page);
+      await expect(scrollBtn).toBeEnabled({ timeout: 2_000 });
+      await scrollBtn.click({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000, intervals: [250, 500, 1_000] });
     await expect(scrollBtn).toBeDisabled({ timeout: 5_000 });
     // Corroborate "disabled" with the actual scroll position: within a few px of the tail.
     await expect
