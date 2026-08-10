@@ -1,6 +1,7 @@
 /**
- * SurfaceHost — SHELL_GEOMETRY wiring: the flat shell has no workspace inset,
- * and the divider gutter comes from the shared constant, not a hardcoded value.
+ * SurfaceHost — the outer wrapper carries only its flex-container classes,
+ * the divider gutter is the shared 9px value, and flex weights follow the
+ * lone-pane and two-pane rules.
  */
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
