@@ -1,10 +1,12 @@
 /**
- * AssistantMessage — MessagePathContextMenu mounting (274-A7).
+ * AssistantMessage — MessagePathContextMenu mounting (274-A7) and the
+ * GroupedParts indicator mode.
  *
  * Heavy assistant-ui/view-model deps are stubbed so only the wrapper
  * placement is under test: normal branch wraps GroupedParts in the menu
  * (skipped inside a nested/subagent transcript); the error branch never
- * wraps, in either context.
+ * wraps, in either context. The indicator mode follows the same nesting
+ * split — `never` at the top level, the default `no-text` when nested.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -15,8 +17,10 @@ let mockMeta: { errorText?: string; partGroups?: Record<string, string>; groupSu
 vi.mock('@assistant-ui/react', () => ({
   MessagePrimitive: {
     Root: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
-    GroupedParts: ({ children }: { children: (arg: unknown) => ReactNode }) => (
-      <div data-testid="grouped-parts-stub">{children({ part: { type: 'text', text: 'hi' }, children: null })}</div>
+    GroupedParts: ({ children, indicator }: { children: (arg: unknown) => ReactNode; indicator?: string }) => (
+      <div data-testid="grouped-parts-stub" data-indicator={indicator}>
+        {children({ part: { type: 'text', text: 'hi' }, children: null })}
+      </div>
     ),
   },
   useAuiState: () => 'msg-1',
@@ -76,5 +80,23 @@ describe('AssistantMessage — MessagePathContextMenu mounting', () => {
     );
     expect(screen.queryByTestId('chat-message-menu-trigger')).toBeNull();
     expect(screen.getByText('boom')).toBeInTheDocument();
+  });
+});
+
+describe('AssistantMessage — running-indicator mode', () => {
+  it('suppresses the per-message indicator at the top level, where ChatThread renders its own', () => {
+    mockMeta = { partGroups: {}, groupSummaries: {} };
+    render(<AssistantMessage />);
+    expect(screen.getByTestId('grouped-parts-stub')).toHaveAttribute('data-indicator', 'never');
+  });
+
+  it('keeps the per-message indicator inside a nested transcript, which has no thread-level one', () => {
+    mockMeta = { partGroups: {}, groupSummaries: {} };
+    render(
+      <NestedTranscriptProvider>
+        <AssistantMessage />
+      </NestedTranscriptProvider>,
+    );
+    expect(screen.getByTestId('grouped-parts-stub')).toHaveAttribute('data-indicator', 'no-text');
   });
 });

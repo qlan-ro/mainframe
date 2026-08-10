@@ -27,6 +27,7 @@ import { AssistantErrorBlock } from './AssistantErrorBlock';
 import { MessagePathContextMenu } from './MessagePathContextMenu';
 import { useIsNestedTranscript } from './nested-transcript-context';
 
+/** Nested-only: the top-level thread has ChatThread's labelled indicator instead. */
 function RunningIndicator() {
   return (
     <span
@@ -60,7 +61,9 @@ export function AssistantMessage() {
   }
 
   const groupedParts = (
-    <MessagePrimitive.GroupedParts groupBy={groupBy}>
+    // `never` at the top level — ChatThread's GeneratingIndicator already carries
+    // the pulse dot; nested transcripts have no such row, so they keep the default.
+    <MessagePrimitive.GroupedParts groupBy={groupBy} indicator={isNested ? 'no-text' : 'never'}>
       {({ part, children }) => {
         // GroupPart nodes carry `indices`; leaf parts do not.
         if ('indices' in part) {
