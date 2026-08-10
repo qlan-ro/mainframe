@@ -9,7 +9,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { canRestoreTabs, nextActiveAfterClose, persistTabIds, restoreTabIds, validTabIds } from '../tabs-model';
+import {
+  canRestoreTabs,
+  canonicalTabId,
+  nextActiveAfterClose,
+  persistTabIds,
+  restoreTabIds,
+  validTabIds,
+} from '../tabs-model';
 
 /** A real session row: a regular thread-list entry, optionally remoteId-stamped. */
 function entry(id: string, over: Partial<ThreadListEntry> = {}): ThreadListEntry {
@@ -83,6 +90,39 @@ describe('nextActiveAfterClose', () => {
     { name: 'the only tab leaves nothing active', tabs: ['a'], closed: 'a', active: 'a', expected: null },
   ])('closing $name', ({ tabs, closed, active, expected }) => {
     expect(nextActiveAfterClose(tabs, closed, active)).toBe(expected);
+  });
+});
+
+describe('canonicalTabId', () => {
+  it('collapses the local id onto the remote entry when both exist', () => {
+    const items = [
+      entry('__LOCALID_1', { remoteId: 'chat-a' }),
+      entry('chat-a', { custom: {}, title: 'Fix the parser' }),
+    ];
+
+    expect(canonicalTabId('__LOCALID_1', items)).toBe('chat-a');
+  });
+
+  it('returns the local id unchanged when the remote entry has not landed yet', () => {
+    const items = [entry('__LOCALID_1', { remoteId: 'chat-a' })];
+
+    expect(canonicalTabId('__LOCALID_1', items)).toBe('__LOCALID_1');
+  });
+
+  it('returns an unsent draft unchanged', () => {
+    const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'new' }];
+
+    expect(canonicalTabId('__LOCALID_1', items)).toBe('__LOCALID_1');
+  });
+
+  it('returns a canonical id unchanged (guards against a self-mapping loop)', () => {
+    const items = [entry('chat-a', { remoteId: 'chat-a', custom: {} })];
+
+    expect(canonicalTabId('chat-a', items)).toBe('chat-a');
+  });
+
+  it('returns an id with no entry at all unchanged', () => {
+    expect(canonicalTabId('chat-gone', [])).toBe('chat-gone');
   });
 });
 
