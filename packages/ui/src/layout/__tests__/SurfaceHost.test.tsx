@@ -34,12 +34,11 @@ beforeEach(() => {
 });
 
 describe('SurfaceHost — flat shell geometry', () => {
-  it('applies no inset classes to the outer wrapper', () => {
+  it('renders the outer wrapper with only the flex-container utilities', () => {
     render(<SurfaceHost />);
 
     const outer = screen.getByTestId('chat-thread-area');
-    expect(outer.className).not.toContain('pt-[4px]');
-    expect(outer.className).not.toContain('px-[10px]');
+    expect(outer.className).toBe('flex flex-1 flex-col overflow-hidden');
   });
 
   it('wires the shared gutter width through to the divider', () => {
