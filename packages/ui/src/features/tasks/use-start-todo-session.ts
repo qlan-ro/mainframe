@@ -19,7 +19,7 @@
  * before the session starts (mirrors desktop behavior).
  */
 import { useCallback } from 'react';
-import { useAssistantRuntime, useAui } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { startTodoSession, moveTodo, type TodoStatus } from '@/lib/api/todos';
 import { useTodosStore } from './use-todos-store';
 
@@ -27,7 +27,6 @@ export function useStartTodoSession(
   port: number,
   projectId: string | undefined,
 ): (todoId: string, currentStatus?: TodoStatus) => Promise<void> {
-  const runtime = useAssistantRuntime();
   const aui = useAui();
 
   return useCallback(
@@ -39,15 +38,16 @@ export function useStartTodoSession(
       }
       const { chatId, initialMessage } = await startTodoSession(port, todoId, projectId);
       // Reload the thread list so the new remote chat appears before switching.
-      await runtime.threads.reload();
+      await aui.threads().reload();
       // chatId IS the remoteId; switchToThread resolves it via threadIdMap.
       // Await it: the switch is async (mainThreadId only catches up when it
       // resolves), so prefilling before it lands would setText on the previously
-      // active thread's composer and open the new chat blank (#212).
-      await runtime.threads.switchToThread(chatId);
+      // active thread's composer and open the new chat blank (#212). The scope
+      // declares `void` but returns the runtime's promise, so the await holds.
+      await aui.threads().switchToThread(chatId);
       // Prefill the new chat's composer — NOT auto-sent (parity with desktop).
       aui.composer().setText(initialMessage);
     },
-    [port, projectId, runtime, aui],
+    [port, projectId, aui],
   );
 }
