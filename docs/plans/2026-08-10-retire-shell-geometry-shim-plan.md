@@ -242,10 +242,11 @@ explanatory prose.
   the inspector drawer has data", same substitution.
 
 **Verification:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/tasks/__tests__/TasksModalHost.test.tsx`
-still passes (comment-only change). `grep -rni "inspector" packages/ui/src` returns hits only in
-`store/ui-prefs.ts`, `store/__tests__/ui-prefs.test.ts`, `features/review/ReviewScopeSwitcher.tsx` and
+still passes (comment-only change). `git grep -Ini "inspector" -- packages/ui/src` returns hits only in
+`store/ui-prefs.ts`, `store/__tests__/ui-prefs.test.ts`, `features/review/ReviewScopeSwitcher.tsx`,
 `features/review/__tests__/ReviewPanel.test.tsx` — all four past-tense and all four on the do-not-touch
-list.
+list — plus `lib/appearance/shell-geometry.ts` if group 2 has not landed yet. That last hit is group 2's
+to clear; do not delete the shim from this group.
 
 #### Task 3.4 — Correct the design-system reference doc
 
@@ -258,7 +259,9 @@ entirely and `SurfaceHost` carries its background, border and gutter values inli
 the strings `SHELL_GEOMETRY` or `shell-geometry` (decision 6/7). Change nothing else in the file.
 
 **Verification:** `grep -n "SHELL_GEOMETRY\|shell-geometry" .claude/skills/mainframe-design-system/references/v2-stock.md`
-returns nothing; `git diff --stat` on the file shows a single changed line.
+returns nothing; `git diff --stat origin/main...HEAD -- .claude/skills/mainframe-design-system/references/v2-stock.md`
+shows one insertion and one deletion. Leave the file's two other `InspectorPane` mentions (lines 572 and
+585) alone — both are past-tense records of surfaces that died.
 
 ---
 
@@ -289,16 +292,25 @@ No file edits. Run each and record the output:
    by this run.
 2. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/layout/__tests__/SurfaceHost.test.tsx` — passes.
 3. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/store/__tests__/ui-prefs.test.ts` — passes,
-   with the file unmodified (`git diff --stat` shows it absent).
-4. `grep -rn "SHELL_GEOMETRY\|shell-geometry" . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=target --exclude-dir=docs/plans`
-   — zero hits. `docs/plans/` is excluded because this plan file necessarily names the identifier it
-   removes, and it is force-added to the branch (the directory is gitignored).
-5. `grep -rni "inspectorpane" . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=target --exclude-dir=docs/plans`
-   — hits only in `packages/ui/src/store/ui-prefs.ts`, `packages/ui/src/store/__tests__/ui-prefs.test.ts`
-   and `packages/ui/src/features/review/__tests__/ReviewPanel.test.tsx`, all past-tense.
-6. `git diff --stat` — no change to `store/ui-prefs.ts`, `store/__tests__/ui-prefs.test.ts`,
-   `features/review/ReviewScopeSwitcher.tsx`, `features/review/__tests__/ReviewPanel.test.tsx`,
-   `store/layout-placement.ts`, or anything under `packages/e2e/`.
+   with the file unmodified (check 6 confirms it is absent from the diff).
+4. `git grep -In "SHELL_GEOMETRY\|shell-geometry" -- ':(exclude)docs/plans'` — zero hits. Use `git grep`,
+   not `grep -r`: it searches tracked files only, which drops `node_modules` and the multi-GB Rust
+   `target/` dirs for free. The pathspec exclusion is required because this plan file necessarily names
+   the identifier it removes and is force-added to the branch (`docs/plans/` is gitignored).
+   Do **not** substitute `grep -r --exclude-dir=docs/plans` — `--exclude-dir` matches a directory *name*,
+   not a path, so a value containing a slash silently excludes nothing and the plan file trips the check.
+5. `git grep -In "InspectorPane" -- packages/ui/src` — hits only in `packages/ui/src/store/ui-prefs.ts`
+   and `packages/ui/src/store/__tests__/ui-prefs.test.ts`, both past-tense and both on the do-not-touch
+   list. The check is scoped to `packages/ui/src` deliberately: the identifier also appears in prose
+   across `packages/ui/CLAUDE.md`, `packages/e2e/tests-tauri/files-tree.spec.ts`,
+   `.claude/skills/mainframe-design-system/references/v2-stock.md` and two `docs/` research notes, all
+   describing the deletion in the past tense. Those are permitted by the brief and must not be edited.
+   Note that `features/review/__tests__/ReviewPanel.test.tsx` does **not** match this pattern — its
+   comment says "the retired inspector `ChangesPanel`", two words, so it never appears in this output.
+6. `git diff --stat origin/main...HEAD` — no change to `packages/ui/src/store/ui-prefs.ts`,
+   `packages/ui/src/store/__tests__/ui-prefs.test.ts`, `features/review/ReviewScopeSwitcher.tsx`,
+   `features/review/__tests__/ReviewPanel.test.tsx`, `store/layout-placement.ts`, or anything under
+   `packages/e2e/`.
 
 **Verification:** all six checks as stated. Any failure goes back to the owning group; do not patch
 another group's file from here.
