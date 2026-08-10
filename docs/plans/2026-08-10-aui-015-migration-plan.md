@@ -139,6 +139,8 @@ Do not touch `chat-to-thread-custom.ts` in this task.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/sessions/view-model/__tests__/thread-list-projection.test.ts` fails, and it fails on the missing export — not on a syntax error. Every other block in the file still passes.
 
+**Scheduling constraint this creates:** `packages/ui`'s typecheck is `tsc --noEmit` over `include: ["src"]`, which covers `src/**/__tests__/`. From the moment this task lands until task 3 heals it, `pnpm --filter @qlan-ro/mainframe-ui typecheck` is red package-wide, by design. Any task whose verify step demands a clean typecheck must therefore be scheduled after task 3, never between tasks 2 and 3.
+
 ---
 
 ### Task 3 — GREEN: add `archivedThreadItemsToSessionItems`
@@ -333,10 +335,10 @@ Both already import `useAuiState` alongside `useAssistantRuntime`; drop the latt
 **Files:** `packages/ui/src/features/chat/smart-actions/use-instruction-actions.ts`, `packages/ui/src/features/chat/smart-actions/__tests__/instruction-actions.test.ts`
 
 1. `useAssistantRuntime()` → `useAui()`.
-2. `runtime.thread.composer` → `aui.composer()`. In the aui client the composer is its own top-level scope, not a child of the thread scope; the two `setText` sites (`const composer = runtime.thread.composer` and `runtime.thread.composer.setText(insertText)`) both resolve to it.
+2. `runtime.thread.composer` → `aui.threads().thread('main').composer()` at both sites (`const composer = runtime.thread.composer` and `runtime.thread.composer.setText(insertText)`). Do **not** translate to `aui.composer()` here. The chips render inside a message part (`parts/markdown-text.tsx`, `parts/CodeHeader.tsx`), and `MessageByIndexProvider` rebinds the bare `composer` scope to *that message's edit composer* — so `aui.composer()` would make `append` write into an inert edit composer that never reaches the live composer, and would make `runInNewSession`'s final `setText` throw, because by then `switchToNewThread()` has left the message index unresolvable and the catch surfaces "Couldn't start a new session" over a draft that was created and never seeded. `aui.threads()` is a root scope no provider shadows, and `ThreadMethods.composer()` reaches the live main-thread composer — the same reasoning task 12 uses for `ReviewPanel`. After task 21 this reads `aui.threads.thread('main').composer`; `thread('main')` keeps its argument, since the sweep only strips no-argument accessors.
 3. `runtime.threads.getState().newThreadId` (twice) and `runtime.threads.switchToNewThread()` → `aui.threads()`. Keep the `await` on `switchToNewThread()` — the sequence depends on the yield before reading the fresh `newThreadId`.
-4. The header comment says `runtime.thread` tracks the thread across a switch where an index would go stale. That reasoning transfers to `aui.composer()`, which rebinds with the active thread — reword rather than delete.
-5. Test: update the `useAssistantRuntime` mock to the `useAui` shape, exposing both `composer` and `threads`.
+4. The header comment must keep warning that at this call site the bare `composer` scope is the message's *edit* composer, because `MessageByIndexProvider` rebinds it. Reword only the second half: `aui.threads().thread('main').composer()` reaches the live main-thread composer regardless of that rebinding, where `runtime.thread` used to. Do not reword it into a claim that `aui.composer()` rebinds with the active thread — that is the bug this task exists to avoid.
+5. Test: replace the `useAssistantRuntime` mock with `useAui: () => ({ threads: () => ({ thread: () => ({ composer: () => composerMock }), getState, switchToNewThread }) })`, where `composerMock` carries both `setText` and `getState` (the append path reads `.getState().text`). The mock must exercise the nested `threads().thread('main').composer()` path: a flat `composer` mock passes under either translation and would hide exactly the failure step 2 guards against.
 
 **Verify:** `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/smart-actions/__tests__/instruction-actions.test.ts` passes unchanged.
 
@@ -364,7 +366,7 @@ Before deleting, re-run the grep from the task-13 verify step across all of `pac
 
 1. The legacy-hook grep from the Verification commands section prints nothing across `packages/ui/src`.
 2. `pnpm --filter @qlan-ro/mainframe-ui typecheck` is clean.
-3. `pnpm --filter @qlan-ro/mainframe-ui test` matches the task-1 baseline — same pass count plus any tests added in task 2, and no new failures. Re-run individually any file the batch reds to rule out the known `React.act` batch artifact.
+3. `pnpm --filter @qlan-ro/mainframe-ui test` matches **baseline + 4**, with no new failures. Both deltas are deliberate: task 2 adds 5 cases, and task 17 deletes 1 — the record-shaped "skips ids absent from `threadItems`" case, which has no array analogue. Do not "fix" a count of baseline + 4 by restoring the deleted case. Re-run individually any file the batch reds to rule out the known `React.act` batch artifact.
 
 If any check fails, fix it here rather than carrying it into the bump — a red suite at the bump makes fallout unattributable.
 
