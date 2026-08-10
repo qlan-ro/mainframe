@@ -84,11 +84,13 @@ PID_FILE="/tmp/mf-tauri-qa-${DAEMON_PORT}.pid"
 # daemon sidecar it spawned orphaned and still holding DAEMON_PORT, because a
 # plain SIGTERM to the shell process doesn't run its sidecar-teardown path —
 # confirmed empirically, and it's exactly what would fail every relaunch after
-# the first. Kill by port too (same approach as stop-test.sh, which notes that
-# killing DAEMON_PORT takes the parent app down with it via the shared socket).
-# This ordering — kill before the "already listening" check below — is
-# load-bearing: checking first would make every relaunch refuse against its
-# own predecessor instead of replacing it.
+# the first. Kill any port holder whose binary lives under THIS checkout only —
+# scoped, unlike stop-test.sh's blanket kill-by-port, because a QA port derived
+# from a low dev port can in principle meet another checkout's dev port range;
+# an unscoped kill would take down that sibling's app instead of leaving the
+# in-use refusal below to catch it. This ordering — kill before the "already
+# listening" check — is load-bearing: checking first would make every relaunch
+# refuse against its own predecessor instead of replacing it.
 if [ -f "$PID_FILE" ]; then
   OLD_PID="$(cat "$PID_FILE")"
   if kill -0 "$OLD_PID" 2>/dev/null; then
@@ -96,8 +98,18 @@ if [ -f "$PID_FILE" ]; then
   fi
   rm -f "$PID_FILE"
 fi
-lsof -ti ":$DAEMON_PORT" 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti ":$BRIDGE_PORT" 2>/dev/null | xargs kill -9 2>/dev/null || true
+kill_if_ours() {
+  port="$1"
+  # `|| true` is load-bearing under `set -eo pipefail`: lsof exits 1 when
+  # nothing listens on the port, which is the common case here.
+  pid="$(lsof -ti ":$port" 2>/dev/null | head -1 || true)"
+  [ -n "$pid" ] || return 0
+  case "$(ps -p "$pid" -o command= 2>/dev/null)" in
+    "$PROJECT_ROOT"*) kill -9 "$pid" 2>/dev/null || true ;;
+  esac
+}
+kill_if_ours "$DAEMON_PORT"
+kill_if_ours "$BRIDGE_PORT"
 
 deadline=$((SECONDS + 15))
 while lsof -ti ":$BRIDGE_PORT" >/dev/null 2>&1; do
