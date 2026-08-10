@@ -222,6 +222,7 @@ export class ChatThreadController {
     const request = getChatMessages(this.port, this.daemonId)
       .then(({ messages, transcriptMissing, workflowRuns }) => {
         if (this.loadPromise !== request) return;
+        if (this.refusesEmptyRefresh(force, messages)) return;
         this.dispatch({ type: 'history.loaded', messages, transcriptMissing, workflowRuns });
         this.reconcilePendingAgainstHistory(messages);
       })
@@ -239,6 +240,32 @@ export class ChatThreadController {
 
   public refresh(): Promise<void> {
     return this.load(true);
+  }
+
+  /**
+   * Refuse an empty BACKGROUND re-seed of a thread that already holds messages.
+   *
+   * `history.loaded` replaces the transcript wholesale, and a re-seed fires on
+   * every reconnect/reattach — so one empty payload arriving at the wrong moment
+   * blanks a populated thread, and nothing schedules another read to undo it. The
+   * daemon is not lying when it says empty: verified on CI, every empty history
+   * response took `getMessages`'s "no history session for this chat" branch (a
+   * chat whose CLI session it cannot build a read from yet), never a failed read.
+   * "Empty" there means "I have nothing for you", not "this thread is empty" —
+   * and only the client knows it already has a transcript.
+   *
+   * A real emptying still lands: `/clear` arrives as its own `messages.cleared`
+   * event, not as a silent empty read. And the FIRST load is never refused, so a
+   * genuinely empty thread still renders as one.
+   */
+  private refusesEmptyRefresh(force: boolean, messages: DisplayMessage[]): boolean {
+    if (!force || messages.length > 0 || this.state.messageOrder.length === 0) return false;
+    console.warn(
+      `[chat-controller] refused an empty background re-seed for ${this.daemonId} — ` +
+        `keeping ${this.state.messageOrder.length} message(s) already on screen`,
+    );
+    this.dispatch({ type: 'history.refresh.refused' });
+    return true;
   }
 
   /**
