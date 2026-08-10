@@ -210,6 +210,20 @@ export function regularThreadItemsToSessionItems(entries: readonly ThreadListEnt
 }
 
 /**
+ * Archived sessions only — the source for the ArchivedSessionsDialog, and the
+ * exact complement of regularThreadItemsToSessionItems. It filters on the
+ * entry's own status rather than intersecting the `archivedThreadIds` bucket,
+ * because the store-scope `threadItems` array carries both buckets and that
+ * status is already what threadEntryToSessionItem keys on.
+ */
+export function archivedThreadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
+  return entries
+    .filter(hasSessionCustom)
+    .filter((entry) => entry.status === 'archived')
+    .map(threadEntryToSessionItem);
+}
+
+/**
  * Project only the archived threads from the runtime ThreadListState.
  *
  * assistant-ui keeps archived threads in `archivedThreadIds` (a separate bucket
