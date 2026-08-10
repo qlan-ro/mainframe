@@ -5,8 +5,8 @@
  * useSessionListRouter() runs INSIDE the provider (needs the live thread list).
  *
  * The chrome is the v2 shell (SidebarProvider + the ported SessionSidebar); the
- * surfaces, toolbar, inspector and overlay hosts are legacy islands that port
- * in place, one at a time.
+ * surfaces, toolbar and overlay hosts are legacy islands that port in place,
+ * one at a time.
  */
 import { useEffect } from 'react';
 import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';

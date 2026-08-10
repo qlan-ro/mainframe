@@ -13,7 +13,6 @@ import {
   GitCompareIcon,
   MessageSquareIcon,
   PanelLeftIcon,
-  PanelRightIcon,
   PlayIcon,
   SettingsIcon,
 } from 'lucide-react';
@@ -36,7 +35,6 @@ const COMMAND_ICONS: Record<string, ComponentType<{ className?: string; fill?: s
   review: GitCompareIcon,
   settings: SettingsIcon,
   sidebar: PanelLeftIcon,
-  inspector: PanelRightIcon,
   workspace: PlayIcon,
 };
 
