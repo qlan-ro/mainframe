@@ -19,22 +19,31 @@ function findEntry(items: readonly ThreadListEntry[], id: string): ThreadListEnt
   return items.find((t) => t.id === id || t.remoteId === id);
 }
 
-/** `custom` is written only by the adapter's `list()` projection, so it is the one proof a load actually succeeded. */
+/** The transient boot draft carries no `custom`; a session the list returned always does. */
 function isSessionEntry(entry: ThreadListEntry): boolean {
   return entry.custom != null;
 }
 
 /**
  * Whether the thread list is trustworthy enough to restore the persisted tabs
- * against. Both halves are load-bearing: the runtime seeds `threadItems` with
- * the new-thread draft before `list()` resolves, so a non-empty list is not a
- * loaded one; and `isLoading` also goes false when the load FAILS, where
- * restoring would commit an empty set over a live payload. A remoteId alone
- * does NOT qualify: `initialize()` stamps one on the draft after a failed load
- * too, and hydrating there would drop every persisted tab.
+ * against. All three conjuncts are load-bearing:
+ *
+ * - `listLoaded` — only `adapter.list()` returning proves the list is the real
+ *   one. `isLoading` goes false on the FAILURE path too, and both `initialize()`
+ *   (first send) and `fetch()` (a deep-link `switchToThread`) inject entries —
+ *   the latter with `custom` — into a list that never loaded. Restoring there
+ *   drops every persisted tab and the persist effect makes the loss permanent.
+ * - `!isListLoading` — a reload in flight is not a list to restore against.
+ * - at least one real session — the runtime seeds `threadItems` with the
+ *   new-thread draft, so a non-empty list is not a loaded one, and a list that
+ *   settles empty is "nothing restored yet", not "the user has no tabs".
  */
-export function canRestoreTabs(items: readonly ThreadListEntry[], isListLoading: boolean): boolean {
-  return !isListLoading && items.some(isSessionEntry);
+export function canRestoreTabs(
+  items: readonly ThreadListEntry[],
+  isListLoading: boolean,
+  listLoaded: boolean,
+): boolean {
+  return listLoaded && !isListLoading && items.some(isSessionEntry);
 }
 
 /** Persisted ids → this boot's runtime ids. Unknown and archived ids drop out. */

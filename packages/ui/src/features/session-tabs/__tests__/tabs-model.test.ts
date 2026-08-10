@@ -118,32 +118,36 @@ describe('validTabIds', () => {
 
 describe('canRestoreTabs', () => {
   it('returns false while the list is still loading, even with real sessions present', () => {
-    expect(canRestoreTabs([entry('chat-a', { custom: {} })], true)).toBe(false);
+    expect(canRestoreTabs([entry('chat-a', { custom: {} })], true, true)).toBe(false);
   });
 
   it('returns false for a settled list holding only the synthetic draft', () => {
     const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'new' }];
 
-    expect(canRestoreTabs(items, false)).toBe(false);
+    expect(canRestoreTabs(items, false, true)).toBe(false);
   });
 
   it('returns false for a settled empty list', () => {
-    expect(canRestoreTabs([], false)).toBe(false);
+    expect(canRestoreTabs([], false, true)).toBe(false);
   });
 
   it('returns true for a settled list with a real session', () => {
-    expect(canRestoreTabs([entry('chat-a', { custom: {} })], false)).toBe(true);
+    expect(canRestoreTabs([entry('chat-a', { custom: {} })], false, true)).toBe(true);
   });
 
   it('returns false for a remoteId-stamped draft with no listed session (first send after a failed load)', () => {
     const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }];
 
-    expect(canRestoreTabs(items, false)).toBe(false);
+    expect(canRestoreTabs(items, false, false)).toBe(false);
+  });
+
+  it('returns false for a custom-carrying entry when no list ever loaded (deep-link fetch injection)', () => {
+    expect(canRestoreTabs([entry('chat-a', { custom: {} })], false, false)).toBe(false);
   });
 
   it('returns true for a settled list of only archived entries', () => {
     const items = [entry('chat-a', { status: 'archived', custom: {} })];
 
-    expect(canRestoreTabs(items, false)).toBe(true);
+    expect(canRestoreTabs(items, false, true)).toBe(true);
   });
 });

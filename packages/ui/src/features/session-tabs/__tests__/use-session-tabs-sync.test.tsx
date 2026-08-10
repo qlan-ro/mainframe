@@ -2,15 +2,17 @@
  * useSessionTabsSync — boot-race regression tests (TDD red phase, #312).
  *
  * The runtime seeds `threadItems` synchronously with the transient new-thread
- * draft before `adapter.list()` resolves. Hydration must wait for the list to
- * SETTLE (isLoading === false) with at least one real session before it maps
- * persisted ids onto this boot's runtime ids — otherwise it restores an empty
- * set, latches, and the persist effect overwrites `mf:session-tabs` with `[]`.
+ * draft before `adapter.list()` resolves. Hydration must wait for a list that
+ * actually loaded (`useSessionListLoadState`), has SETTLED (isLoading === false)
+ * and carries at least one real session before it maps persisted ids onto this
+ * boot's runtime ids — otherwise it restores an empty set, latches, and the
+ * persist effect overwrites `mf:session-tabs` with the survivors.
  */
 import { it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { SESSION_TABS_STORAGE_KEY } from '../tabs-model';
 import { useSessionTabsStore } from '../store';
+import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
 
 // ---------------------------------------------------------------------------
 // Mutable module-scope state the mocked @assistant-ui/react selector reads.
@@ -50,7 +52,13 @@ beforeEach(() => {
   mainThreadIdValue = null;
   localStorage.clear();
   useSessionTabsStore.setState({ tabIds: [], hydrated: false });
+  useSessionListLoadState.setState({ loaded: false });
 });
+
+/** What `adapter.list()` returning does: latches the load flag the predicate gates on. */
+function listSucceeded(): void {
+  useSessionListLoadState.setState({ loaded: true });
+}
 
 it('does not latch hydrated against a loading, draft-only list (boot race)', () => {
   localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids: ['chat-a', 'chat-b'] }));
@@ -77,6 +85,7 @@ it('restores in persisted order once the list settles with real sessions', () =>
   ];
   isLoadingValue = false;
   mainThreadIdValue = 'chat-b';
+  listSucceeded();
   rerender();
 
   const state = useSessionTabsStore.getState();
@@ -89,6 +98,7 @@ it('does not clobber a persisted payload with a settled draft-only list, and res
   isLoadingValue = false;
   itemsValue = [{ id: '__LOCALID_1', status: 'new' }];
   mainThreadIdValue = '__LOCALID_1';
+  listSucceeded();
   const { rerender } = renderHook(() => useSessionTabsSync());
 
   expect(useSessionTabsStore.getState().hydrated).toBe(false);
@@ -106,9 +116,9 @@ it('does not clobber a persisted payload with a settled draft-only list, and res
   expect(state.tabIds).toEqual(['chat-a', 'chat-b']);
 });
 
-it('keeps the payload when the first send stamps a remoteId after a failed load', () => {
+it('keeps the payload through a failed load, a first send, and a deep-link fetch', () => {
   localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids: ['chat-a', 'chat-b'] }));
-  isLoadingValue = false;
+  isLoadingValue = false; // list() rejected: settled, but nothing was ever listed
   itemsValue = [{ id: '__LOCALID_1', status: 'new' }];
   mainThreadIdValue = '__LOCALID_1';
   const { rerender } = renderHook(() => useSessionTabsSync());
@@ -120,12 +130,24 @@ it('keeps the payload when the first send stamps a remoteId after a failed load'
   expect(useSessionTabsStore.getState().hydrated).toBe(false);
   expect(readPersistedIds()).toEqual(['chat-a', 'chat-b']);
 
+  // A deep-link switchToThread injects ONE custom-carrying entry via adapter.fetch().
+  itemsValue = [
+    { id: '__LOCALID_1', status: 'regular', remoteId: 'chat-new' },
+    { id: 'chat-a', status: 'regular', custom: {} },
+  ];
+  mainThreadIdValue = 'chat-a';
+  rerender();
+
+  expect(useSessionTabsStore.getState().hydrated).toBe(false);
+  expect(readPersistedIds()).toEqual(['chat-a', 'chat-b']);
+
   // The chat.created reload succeeds and the real sessions arrive.
   itemsValue = [
     { id: '__LOCALID_1', status: 'regular', remoteId: 'chat-new' },
     { id: 'chat-a', status: 'regular', custom: {} },
     { id: 'chat-b', status: 'regular', custom: {} },
   ];
+  listSucceeded();
   rerender();
 
   const state = useSessionTabsStore.getState();
@@ -137,6 +159,7 @@ it('boots clean on a genuinely session-less install', () => {
   isLoadingValue = false;
   itemsValue = [{ id: '__LOCALID_1', status: 'new' }];
   mainThreadIdValue = '__LOCALID_1';
+  listSucceeded();
 
   renderHook(() => useSessionTabsSync());
 
