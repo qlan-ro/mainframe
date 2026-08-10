@@ -71,6 +71,7 @@ vi.mock('../chat-controller-registry', () => ({
 
 // Import AFTER mocks so the module under test picks them up.
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
+import { useSessionListLoadState } from '../list-load-state';
 import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../../lib/api/chats';
 import { takeArchiveChoice } from '../archive-confirm-bridge';
 import { createForLocal } from '../new-thread-coordinator';
@@ -134,6 +135,21 @@ describe('chats-remote-adapter — list maps chats via chatToThreadCustom', () =
     expect(result.threads[0]?.status).toBe('regular');
     expect(result.threads[0]?.remoteId).toBe('chat-1');
     expect(custom(result.threads[0]?.custom).pinned).toBe(true);
+  });
+});
+
+describe('chats-remote-adapter — list latches the load flag', () => {
+  it('marks loaded only when listChats resolves, never when it rejects (#312)', async () => {
+    useSessionListLoadState.setState({ loaded: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+
+    mockListChats.mockRejectedValueOnce(new Error('daemon down'));
+    await expect(adapter.list()).rejects.toThrow('daemon down');
+    expect(useSessionListLoadState.getState().loaded).toBe(false);
+
+    mockListChats.mockResolvedValueOnce([]);
+    await adapter.list();
+    expect(useSessionListLoadState.getState().loaded).toBe(true);
   });
 });
 

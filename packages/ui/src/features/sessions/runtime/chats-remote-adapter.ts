@@ -28,6 +28,7 @@ import type { RemoteThreadListAdapter } from '@assistant-ui/react';
 import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
 import { takeArchiveChoice } from './archive-confirm-bridge';
+import { useSessionListLoadState } from './list-load-state';
 import { createForLocal } from './new-thread-coordinator';
 import { chatControllerRegistry } from './chat-controller-registry';
 
@@ -59,6 +60,8 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
   return {
     async list(): Promise<RemoteThreadListResponse> {
       const chats = await listChats(port);
+      // The one place that can tell a loaded list from a failed one (#312).
+      useSessionListLoadState.getState().markLoaded();
       return { threads: chats.map(toMetadata) };
     },
     async fetch(threadId: string): Promise<RemoteThreadMetadata> {

@@ -5,15 +5,18 @@
  * path at once — sidebar click, palette, toast deep-link, boot auto-select,
  * archived-active fallback — without touching any of those call sites.
  *
- * Also owns persistence: restore once the thread list has loaded (merging with
- * tabs the boot already opened), prune tabs whose thread vanished, and write
- * the boot-stable id set back on every change. Zero-session boots never
- * hydrate — with nothing in the list there is nothing to restore or persist.
+ * Also owns persistence: restore once a real `list()` has SETTLED carrying at
+ * least one session (merging with tabs the boot already opened), prune tabs
+ * whose thread vanished, and write the boot-stable id set back on every change.
+ * A list that is still loading, holds only the transient boot draft, or failed
+ * to load leaves `hydrated` false: the persisted payload survives untouched and
+ * a later, real list still restores it.
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
-import { SESSION_TABS_STORAGE_KEY, persistTabIds, restoreTabIds, validTabIds } from './tabs-model';
+import { SESSION_TABS_STORAGE_KEY, canRestoreTabs, persistTabIds, restoreTabIds, validTabIds } from './tabs-model';
 
 function readPersisted(): string[] {
   try {
@@ -31,6 +34,8 @@ function readPersisted(): string[] {
 
 export function useSessionTabsSync(): void {
   const items = useAuiState((s) => s.threads.threadItems);
+  const isListLoading = useAuiState((s) => s.threads.isLoading);
+  const listLoaded = useSessionListLoadState((s) => s.loaded);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const hydrated = useSessionTabsStore((s) => s.hydrated);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
@@ -39,9 +44,9 @@ export function useSessionTabsSync(): void {
   const pruneTo = useSessionTabsStore((s) => s.pruneTo);
 
   useEffect(() => {
-    if (hydrated || items.length === 0) return;
+    if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
     hydrate(restoreTabIds(readPersisted(), items));
-  }, [hydrated, items, hydrate]);
+  }, [hydrated, items, isListLoading, listLoaded, hydrate]);
 
   useEffect(() => {
     if (mainThreadId) ensureTab(mainThreadId);
