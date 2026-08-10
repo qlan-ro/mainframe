@@ -146,8 +146,17 @@ launch if the resolved values aren't isolated:
 2. `QA_DAEMON_PORT = ${MF_QA_DAEMON_PORT:-$((DAEMON_PORT + 1000))}`.
 3. `QA_DATA_DIR = ${MF_QA_DATA_DIR:-~/.mainframe_qa}`.
 4. Refuse (`REFUSED:` + reason, nonzero exit, nothing launched) if
-   `QA_DAEMON_PORT` is empty or `31415`, if `QA_DATA_DIR` resolves to
-   `~/.mainframe`, or if the QA bundle is missing.
+   `QA_DAEMON_PORT` is not a plain decimal number in `1024–65535`, or is
+   `31415`; if `QA_DATA_DIR` resolves to `~/.mainframe` or anywhere inside it;
+   or if the QA bundle is missing.
+
+Both gates compare **resolved** values, not the strings they were handed,
+because a near-miss reaches production either way: `parse_daemon_port`
+(`src-tauri/src/lib.rs`) falls back to production `31415` on any value it
+can't read as a `u16`, so `garbage`, `99999`, and `031415` would each launch
+the QA app onto the production daemon; and `~/.mainframe/`, `~/.mainframe/sub`,
+and a symlink to `~/.mainframe` all reach the production data dir while
+comparing unequal as strings.
 
 The gate reads the **resolved** values, never the ambient ones — an inherited
 production `DAEMON_PORT` in the calling shell is exactly what wedged the
@@ -161,8 +170,12 @@ production Mainframe app.
 Demonstrated refusals:
 
 ```bash
-MF_QA_DAEMON_PORT=31415 bash .agents/launch-test-tauri-qa.sh   # REFUSED, nothing launched
-MF_QA_DATA_DIR=~/.mainframe bash .agents/launch-test-tauri-qa.sh   # REFUSED, nothing launched
+MF_QA_DAEMON_PORT=31415 bash .agents/launch-test-tauri-qa.sh    # REFUSED, nothing launched
+MF_QA_DAEMON_PORT=garbage bash .agents/launch-test-tauri-qa.sh  # REFUSED (would resolve to 31415)
+MF_QA_DAEMON_PORT=99999 bash .agents/launch-test-tauri-qa.sh    # REFUSED (would resolve to 31415)
+MF_QA_DATA_DIR=~/.mainframe bash .agents/launch-test-tauri-qa.sh    # REFUSED
+MF_QA_DATA_DIR=~/.mainframe/ bash .agents/launch-test-tauri-qa.sh   # REFUSED
+MF_QA_DATA_DIR=~/.mainframe/sub bash .agents/launch-test-tauri-qa.sh # REFUSED
 ```
 
 ## 9. Endpoints

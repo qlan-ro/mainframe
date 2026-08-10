@@ -48,13 +48,38 @@ QA_DATA_DIR="${MF_QA_DATA_DIR:-$HOME/.mainframe_qa}"
 
 APP_PATH="$PROJECT_ROOT/packages/app-tauri/src-tauri/target/debug/bundle/macos/Mainframe.app"
 
+# Resolve symlinks and trailing slashes so the data-dir gate below compares
+# what the app will actually open, not the string it was handed. Works on a
+# path that doesn't exist yet (~/.mainframe_qa on a first run) by resolving the
+# deepest existing ancestor.
+canonical_path() {
+  p="${1%/}"
+  if [ -d "$p" ]; then (cd "$p" && pwd -P); return 0; fi
+  parent="$(dirname "$p")"
+  if [ -d "$parent" ]; then echo "$(cd "$parent" && pwd -P)/$(basename "$p")"; else echo "$p"; fi
+}
+
 # Step 4: refusal gate, on the resolved values.
-if [ -z "$QA_DAEMON_PORT" ] || [ "$QA_DAEMON_PORT" = "31415" ]; then
-  echo "REFUSED: QA_DAEMON_PORT must be isolated from production (31415), got '$QA_DAEMON_PORT'" >&2
+# The port must be a plain decimal integer: the shell's parse_daemon_port
+# (src-tauri/src/lib.rs) falls back to PRODUCTION 31415 on anything it can't
+# parse as a u16, so `garbage`, `99999`, and `031415` would each launch the QA
+# app straight onto the production daemon. Leading zeros are rejected outright
+# rather than normalized — Rust reads `031415` as 31415 while `test -eq` reads
+# it as octal, and no gate should depend on which of those two is right.
+case "$QA_DAEMON_PORT" in
+  '' | 0* | *[!0-9]*)
+    echo "REFUSED: QA_DAEMON_PORT must be a decimal port number, got '$QA_DAEMON_PORT'" >&2
+    exit 1
+    ;;
+esac
+if [ "$QA_DAEMON_PORT" -lt 1024 ] || [ "$QA_DAEMON_PORT" -gt 65535 ] || [ "$QA_DAEMON_PORT" -eq 31415 ]; then
+  echo "REFUSED: QA_DAEMON_PORT must be 1024-65535 and never production 31415, got '$QA_DAEMON_PORT'" >&2
   exit 1
 fi
-if [ "$QA_DATA_DIR" = "$HOME/.mainframe" ]; then
-  echo "REFUSED: QA_DATA_DIR must not resolve to the production data dir ($HOME/.mainframe)" >&2
+PROD_DATA_DIR="$(canonical_path "$HOME/.mainframe")"
+QA_DATA_DIR="$(canonical_path "$QA_DATA_DIR")"
+if [ "$QA_DATA_DIR" = "$PROD_DATA_DIR" ] || [ "${QA_DATA_DIR#"$PROD_DATA_DIR"/}" != "$QA_DATA_DIR" ]; then
+  echo "REFUSED: QA_DATA_DIR resolves inside the production data dir ($PROD_DATA_DIR), got '$QA_DATA_DIR'" >&2
   exit 1
 fi
 if [ ! -d "$APP_PATH" ]; then
@@ -91,9 +116,19 @@ PID_FILE="/tmp/mf-tauri-qa-${DAEMON_PORT}.pid"
 # in-use refusal below to catch it. This ordering — kill before the "already
 # listening" check — is load-bearing: checking first would make every relaunch
 # refuse against its own predecessor instead of replacing it.
+pid_is_ours() {
+  case "$1" in '' | *[!0-9]*) return 1 ;; esac
+  case "$(ps -p "$1" -o command= 2>/dev/null)" in
+    "$PROJECT_ROOT"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+# The PID file is keyed by port, so a stale one (or a sibling checkout whose
+# derived QA port equals this one) can name a recycled, unrelated PID. Signal
+# it only once ps confirms it is still one of ours.
 if [ -f "$PID_FILE" ]; then
   OLD_PID="$(cat "$PID_FILE")"
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  if pid_is_ours "$OLD_PID"; then
     kill "$OLD_PID" 2>/dev/null || true
   fi
   rm -f "$PID_FILE"
@@ -104,9 +139,7 @@ kill_if_ours() {
   # nothing listens on the port, which is the common case here.
   pid="$(lsof -ti ":$port" 2>/dev/null | head -1 || true)"
   [ -n "$pid" ] || return 0
-  case "$(ps -p "$pid" -o command= 2>/dev/null)" in
-    "$PROJECT_ROOT"*) kill -9 "$pid" 2>/dev/null || true ;;
-  esac
+  if pid_is_ours "$pid"; then kill -9 "$pid" 2>/dev/null || true; fi
 }
 kill_if_ours "$DAEMON_PORT"
 kill_if_ours "$BRIDGE_PORT"
