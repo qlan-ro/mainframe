@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { DAEMON_PORT } from '../../fixtures/daemon.js';
 import { sessionsSidebar, composer } from './page-objects.js';
 import { waitConnected } from './wait.js';
@@ -86,6 +86,19 @@ export async function createTauriChat(
     await toggle.waitFor({ timeout: 10_000 });
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
   }
+
+  // Confirm the new chat actually HOLDS the selection before handing it back.
+  // The row click and the plan toggle each fire `chat.updated` → a thread-list
+  // reload that can revert the active thread to whatever was open before (the
+  // race documented on the plan-approval tests). Nothing failed when that
+  // happened — the caller's next `sendMessage` simply went to the other chat,
+  // and the assertion that came after looked for a gate rendering out of view.
+  // Re-taking the selection is a no-op when it never moved.
+  await expect(async () => {
+    if ((await row.getAttribute('data-active')) !== 'true') await row.click();
+    await expect(row).toHaveAttribute('data-active', 'true', { timeout: 2_000 });
+  }).toPass({ timeout: 20_000, intervals: [250, 500, 1_000] });
+
   return chatId;
 }
 
