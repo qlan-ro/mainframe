@@ -9,7 +9,7 @@
  * instant it's discarded or committed — no imperative getState() polling.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
@@ -26,7 +26,7 @@ export interface DraftRowState {
 }
 
 export function useDraftRow(allItems: SessionItem[], filterProjectId: string | null): DraftRowState {
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   const newThreadId = useAuiState((s) => s.threads.newThreadId);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const draftCfg = useDraftConfigStore((s) => (newThreadId ? s.drafts.get(newThreadId) : undefined));
@@ -47,7 +47,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   //
   // `mainThreadId !== newThreadId` alone is NOT sufficient: SessionsNewButton's
   // pick() (pill-active New) synchronously arms the draft — setDraftConfig(nid,
-  // ...) — then calls `runtime.threads.switchToNewThread()`, which awaits an aui
+  // ...) — then calls `aui.threads().switchToNewThread()`, which awaits an aui
   // hook task before mainThreadId catches up to newThreadId. That produces a
   // real render where hasDraft just became true but mainThreadId still points at
   // whatever session was active BEFORE New was clicked — mismatched, but because
@@ -73,8 +73,8 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   }, [mainThreadId, newThreadId, hasDraft]);
 
   const onSelect = useCallback(() => {
-    if (model != null) runtime.threads.switchToThread(model.newThreadId);
-  }, [model, runtime]);
+    if (model != null) aui.threads().switchToThread(model.newThreadId);
+  }, [model, aui]);
 
   const onDiscard = useCallback(() => {
     if (newThreadId == null) return;
@@ -88,9 +88,9 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
     markDraftDiscarded(newThreadId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;
-    if (target != null) runtime.threads.switchToThread(target);
+    if (target != null) aui.threads().switchToThread(target);
     clear();
-  }, [newThreadId, allItems, runtime]);
+  }, [newThreadId, allItems, aui]);
 
   return { model, visible, selected, onSelect, onDiscard };
 }
