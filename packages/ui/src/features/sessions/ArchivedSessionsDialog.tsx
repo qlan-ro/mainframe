@@ -2,14 +2,14 @@
  * Archived sessions, and the way back out of the archive.
  *
  * The list is derived from the live thread list rather than fetched: archiving
- * never removes a chat, it only flags one, so the runtime already holds every
- * row this dialog can show.
+ * never removes a chat, it only flags one, so every row this dialog can show is
+ * already loaded.
  *
  * A restored row leaves immediately instead of waiting for the reload — the
  * reload is a round trip, and a row that lingers reads as a failed restore.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { ClockIcon, Loader2Icon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
 import { DialogRowList } from './DialogRowList';
-import { archivedThreadListStateToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { archivedThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { filterArchivedSessions } from '@/features/sessions/view-model/archived-sessions';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 
@@ -82,7 +82,7 @@ export function ArchivedSessionsDialog({
   projects,
   filterProjectId,
 }: ArchivedSessionsDialogProps) {
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   const [restoring, setRestoring] = useState<string | null>(null);
   const [restoredIds, setRestoredIds] = useState(new Set<string>());
 
@@ -94,9 +94,9 @@ export function ArchivedSessionsDialog({
 
   const items = useMemo(() => {
     if (!open) return [];
-    const all = archivedThreadListStateToSessionItems(runtime.threads.getState());
+    const all = archivedThreadItemsToSessionItems(aui.threads().getState().threadItems);
     return filterArchivedSessions(all, filterProjectId).filter((item) => !restoredIds.has(item.id));
-  }, [open, runtime, filterProjectId, restoredIds]);
+  }, [open, aui, filterProjectId, restoredIds]);
 
   const handleRestore = useCallback(
     async (chatId: string) => {
@@ -104,7 +104,7 @@ export function ArchivedSessionsDialog({
       setRestoring(chatId);
       try {
         await unarchiveChat(port, chatId);
-        runtime.threads.reload();
+        aui.threads().reload();
         setRestoredIds((prev) => new Set(prev).add(chatId));
       } catch (e: unknown) {
         console.warn('[v2/ArchivedSessionsDialog] unarchive failed', e);
@@ -112,7 +112,7 @@ export function ArchivedSessionsDialog({
         setRestoring(null);
       }
     },
-    [port, restoring, runtime],
+    [port, restoring, aui],
   );
 
   return (

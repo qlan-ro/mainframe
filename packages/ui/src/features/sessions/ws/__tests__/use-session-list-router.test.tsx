@@ -114,15 +114,15 @@ vi.mock('../../../../store/last-session', () => ({
 
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
+  // One stable client across renders — the WS wiring effect depends on it, and a
+  // fresh object per render would tear down and re-create the router each time.
+  // `threads()` re-reads the spy `let`s, so beforeEach reassignment still lands.
+  const auiClient = {
+    threads: () => ({ reload: reloadSpy, switchToThread: switchSpy }),
+  };
   return {
     ...actual,
-    useAssistantRuntime: () => ({
-      threads: {
-        reload: reloadSpy,
-        switchToThread: switchSpy,
-        getState: () => ({ threads: fakeThreadItems }),
-      },
-    }),
+    useAui: () => auiClient,
     useAuiState: (
       sel: (s: { threads: { mainThreadId: string | null; threadItems: typeof fakeThreadItems } }) => unknown,
     ) => sel({ threads: { mainThreadId: mainThreadIdValue, threadItems: fakeThreadItems } }),
