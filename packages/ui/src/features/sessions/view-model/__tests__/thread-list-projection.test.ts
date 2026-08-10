@@ -16,6 +16,7 @@ import {
   threadItemsToSessionItems,
   threadListStateToSessionItems,
   regularThreadItemsToSessionItems,
+  archivedThreadItemsToSessionItems,
 } from '../chat-to-thread-custom';
 
 // ---------------------------------------------------------------------------
@@ -259,5 +260,67 @@ describe('regularThreadItemsToSessionItems — excludes archived entries', () =>
 
   it('maps an empty array to an empty list', () => {
     expect(regularThreadItemsToSessionItems([])).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. archivedThreadItemsToSessionItems — the array-projection complement of
+//    regularThreadItemsToSessionItems: keeps only archived entries. This is
+//    the store-scope replacement for archivedThreadListStateToSessionItems
+//    (Record-shaped), which task 17 retires once every caller is migrated.
+// ---------------------------------------------------------------------------
+
+describe('archivedThreadItemsToSessionItems — keeps only archived entries', () => {
+  it('returns only the archived entries from a mix of regular and archived', () => {
+    const regular = makeEntry('chat-regular');
+    const archived = makeEntry('chat-archived', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([regular, archived]);
+
+    expect(result.map((i) => i.id)).toEqual(['chat-archived']);
+    expect(result.every((i) => i.status === 'archived')).toBe(true);
+  });
+
+  it('drops the custom-less draft entry even when its status is archived', () => {
+    const draft = makeEntry('__LOCALID_x', { status: 'archived', custom: undefined });
+    const archived = makeEntry('chat-archived', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([draft, archived]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-archived');
+  });
+
+  it('maps id, remoteId, title, and custom through unchanged, and sets status "archived"', () => {
+    const custom = makeCustom();
+    const entry = makeEntry('chat-1', {
+      remoteId: 'remote-1',
+      title: 'Archived session',
+      status: 'archived',
+      custom: asCustomSlot(custom),
+    });
+
+    const result = archivedThreadItemsToSessionItems([entry]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-1');
+    expect(result[0]?.remoteId).toBe('remote-1');
+    expect(result[0]?.title).toBe('Archived session');
+    expect(result[0]?.status).toBe('archived');
+    expect(result[0]?.custom).toBe(custom);
+  });
+
+  it('preserves the input array order', () => {
+    const a = makeEntry('a', { status: 'archived' });
+    const b = makeEntry('b', { status: 'archived' });
+    const c = makeEntry('c', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([c, a, b]);
+
+    expect(result.map((i) => i.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('returns an empty array for an empty input', () => {
+    expect(archivedThreadItemsToSessionItems([])).toEqual([]);
   });
 });
