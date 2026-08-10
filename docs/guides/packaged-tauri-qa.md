@@ -185,6 +185,15 @@ MF_QA_DATA_DIR=~/.mainframe/sub bash .agents/launch-test-tauri-qa.sh # REFUSED
 MF_QA_DATA_DIR=~/absent/../.mainframe bash .agents/launch-test-tauri-qa.sh # REFUSED ('..')
 ```
 
+`pid_is_ours`'s sibling-checkout boundary (fixed in f5b33ab2, `"$PROJECT_ROOT"/*`)
+was live-verified by extracting the shipped function and running it against
+two real PIDs — one launched from inside this checkout, one from a directory
+whose path merely shares `$PROJECT_ROOT` as a string prefix
+(`…-bridge-sib`, no separator). The fixed function matched only the first;
+re-running the pre-fix pattern (`"$PROJECT_ROOT"*`, no required `/`) against
+the same sibling PID matched it, confirming the scenario discriminates rather
+than passing vacuously.
+
 ## 9. Endpoints
 
 | | dev target | QA target |
