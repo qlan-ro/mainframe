@@ -60,6 +60,8 @@ These three rules decide every judgement call below. An implementer who deviates
 | `packages/e2e/tests-tauri/session-panel.spec.ts` | `settleForEscape` → bounded Escape retry; two comment updates |
 | `.changeset/<generated>.md` | e2e-only changeset |
 
+Tasks are numbered globally for hand-off: **A1–A6 = 1–6, B1–B4 = 7–10, C1–C3 = 11–13.**
+
 Read-only (do **not** edit): `packages/e2e/helpers/tauri/menus.ts` — `waitForDialogScrimsGone` and
 `closeMenus` are already correct and are imported by six specs; changing them re-risks
 `sessions`, `sessions-tags`, `sessions-filters`, `settings`, `files-tree`, `layout` and
