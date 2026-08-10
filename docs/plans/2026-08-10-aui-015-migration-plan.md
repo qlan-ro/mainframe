@@ -453,6 +453,16 @@ Adopt **only** if it is a strict drop-in that preserves current behaviour for ev
 
 **Verify:** the report states adopt or defer with the concrete behavioural reason. If deferred, the follow-up todo number is in the report.
 
+**Outcome: DEFER — follow-up todo #321. No code change.**
+
+aui's flag is not a drop-in: it is sourced from mounted React state, ours from the daemon.
+
+- `RemoteThreadListThreadListRuntimeCore.unstable_isThreadRunning` (`core@0.3.12`) delegates to `RemoteThreadListHookInstanceManager.__internal_isThreadRunning`, which is `instances.get(threadId)?.isRunning ?? false`. Instances exist only for threads aui has mounted this app session, so a chat the daemon is actively running that the user has not opened since launch reads `false`. Those rows render `working` today, straight off the REST list — this is the exact "not running rather than unknown" case the task named as the do-not-adopt condition.
+- Even for a warm, previously-visited thread the flag goes stale: `useChatRuntimeHook` gates `subscribeLive` on `active` (D4 dormancy), so a background thread's controller receives no WS events and its `isRunning` holds the value it had when the user switched away.
+- `deriveSessionBadge` also renders four states aui's boolean cannot express (`worktree-missing`, `transcript-missing`, `waiting`, `idle`) plus the unread modifier.
+
+Adopting would mean implementing `unstable_isThreadRunning` ourselves off `SessionCustom.displayStatus` — new plumbing, not a migration step. Left as-is.
+
 ---
 
 ### Task 24 — Evaluate `threads.reloadMainThread()`
