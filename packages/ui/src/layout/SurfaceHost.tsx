@@ -2,7 +2,6 @@ import { Fragment, memo, useCallback, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
-import { SHELL_GEOMETRY } from '@/lib/appearance/shell-geometry';
 import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
@@ -17,10 +16,13 @@ const SHORTCUT_MAP: Record<string, SurfaceId> = {
   '2': 'workspace',
 };
 
-// Each surface is its own rounded floating card (geo.surface), per the prototype
-// (04-engine `surfCard`); the MainToolbar sits transparent on the window background,
-// NOT inside a white card.
-const PANEL_LAYOUT = 'flex flex-col overflow-hidden';
+// Each surface is its own rounded floating card, per the prototype (04-engine
+// `surfCard`); the MainToolbar sits transparent on the window background, NOT
+// inside a white card.
+const PANEL_LAYOUT = 'flex flex-col overflow-hidden bg-background';
+
+// Gutter width in px — both dividers and the single-column spacer must agree.
+const DIVIDER_GUTTER = 9;
 
 function SurfaceView({ name }: { name: SurfaceId }) {
   if (name === 'chat') return <ChatSurface />;
@@ -32,8 +34,6 @@ function SurfaceHostImpl() {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
   const setTopFrac = useLayoutStore((s) => s.setTopFrac);
   const setVFrac = useLayoutStore((s) => s.setVFrac);
-  const geo = SHELL_GEOMETRY;
-  const panelCls = `${PANEL_LAYOUT} ${geo.surface}`;
 
   const outerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
@@ -95,11 +95,7 @@ function SurfaceHostImpl() {
   const twoCol = top.length === 2;
 
   return (
-    <div
-      data-testid="chat-thread-area"
-      ref={outerRef}
-      className={`flex flex-1 flex-col overflow-hidden ${geo.workspaceInset}`}
-    >
+    <div data-testid="chat-thread-area" ref={outerRef} className="flex flex-1 flex-col overflow-hidden">
       {/* Top row: 1 or 2 surfaces side by side. */}
       <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
         {top.map((name, i) => (
@@ -113,7 +109,7 @@ function SurfaceHostImpl() {
             <div
               data-drop-surface={name}
               style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
-              className={`min-w-0 ${panelCls}`}
+              className={`min-w-0 ${PANEL_LAYOUT}`}
             >
               <SurfaceView name={name} />
             </div>
@@ -123,11 +119,11 @@ function SurfaceHostImpl() {
                   axis="x"
                   containerRef={topRef}
                   onFrac={setTopFrac}
-                  lineClass={geo.divider}
-                  gutter={geo.gutter}
+                  lineClass="bg-border"
+                  gutter={DIVIDER_GUTTER}
                 />
               ) : (
-                <div style={{ width: geo.gutter, flexShrink: 0 }} />
+                <div style={{ width: DIVIDER_GUTTER, flexShrink: 0 }} />
               ))}
           </Fragment>
         ))}
@@ -136,9 +132,15 @@ function SurfaceHostImpl() {
       {/* Vertical divider + bottom strip. */}
       {bottom && (
         <>
-          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} lineClass={geo.divider} gutter={geo.gutter} />
+          <SurfDivider
+            axis="y"
+            containerRef={outerRef}
+            onFrac={setVFrac}
+            lineClass="bg-border"
+            gutter={DIVIDER_GUTTER}
+          />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
-            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${panelCls}`}>
+            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${PANEL_LAYOUT}`}>
               <SurfaceView name={bottom} />
             </div>
           </div>
