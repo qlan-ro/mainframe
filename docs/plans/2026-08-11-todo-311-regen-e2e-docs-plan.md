@@ -115,10 +115,17 @@ export function analyze({ sourceFiles, specFiles })  // → Report
 - `displayId(def)` → `def.templated ? def.prefix + '${…}' : def.prefix`. The `${…}` marker (with the
   Unicode ellipsis `…`) is what marks templated families in both artifacts.
 - `matchesDefinition(def, value)` → static: `value === def.prefix`. Templated:
-  `value.startsWith(def.prefix) && value.length > def.prefix.length`.
+  `value.startsWith(def.prefix)`, **equality included**. The prefix itself must match: a spec that
+  writes ``getByTestId(`session-tab-close-${id}`)`` contributes exactly `session-tab-close-` to `broad`
+  (text before the first `${`), and requiring `value.length > def.prefix.length` would report every
+  templated family a spec actually clicks — 17 of them, including `session-tab-close-${…}`,
+  `directory-picker-row-${…}` and `review-file-stat-${…}` — as unused.
 - `isLiveReference(defs, ref)` → true when some `d ∈ defs` satisfies `matchesDefinition(d, ref.prefix)`,
-  or `d.prefix.startsWith(ref.prefix)` when either side is templated. (A spec that rebuilds the same
-  template yields `ref.prefix === d.prefix`, which this covers.)
+  or `d.prefix.startsWith(ref.prefix)` when either side is templated. (A spec that rebuilds a shorter
+  prefix than the definition's is covered by the second clause.)
+- The broad pass uses `matchesDefinition(def, token)` **directly**, not `isLiveReference` — the latter's
+  reverse `d.prefix.startsWith(ref.prefix)` clause would let a bare literal like `'session'` mark every
+  templated `session-*` family referenced. `isLiveReference` is for strict refs only.
 - `analyze({ sourceFiles, specFiles })` takes `Array<{ path: string, text: string }>` for each side —
   all file I/O lives in `cli.mjs`, so `analyze` is pure and directly unit-testable. It returns:
 
@@ -126,7 +133,7 @@ export function analyze({ sourceFiles, specFiles })  // → Report
 /** @typedef {{
  *   definitions: Definition[],                              // deduped by displayId, sorted
  *   definedCount: number,                                   // definitions.length
- *   referencedCount: number,                                // definitions matched by some broad token
+ *   referencedCount: number,                                // definitions with a broad token satisfying matchesDefinition
  *   unused: Definition[],                                   // sorted, = definitions − referenced
  *   dead: Array<{ id: string, specs: string[] }>,            // strict refs matching no definition
  *   perSpec: Array<{ spec: string, live: number, dead: number }>,  // spec = path basename
@@ -176,8 +183,13 @@ Surface sections are ordered by unused count descending, then surface name ascen
 section are sorted bytewise. **No STALE banner.** The false-positive caveat prose above is carried
 over deliberately — it is still true.
 
-`renderGapReport` emits only mechanically-derived sections: the header (date + method sentence naming
-`packages/ui/src` and `packages/e2e/{tests-tauri,helpers,fixtures}`), the caveat blockquote, a
+`renderGapReport`'s header **must** open its italic line with the literal token `_Generated <date>.`,
+byte-identical in form to `renderUnused`'s — the date-preservation logic below reads that exact token
+back out of the file it is overwriting, so a header that phrases the date any other way silently breaks
+idempotence. After that token the header continues with the method sentence naming `packages/ui/src`
+and `packages/e2e/{tests-tauri,helpers,fixtures}`.
+
+Beyond the header, `renderGapReport` emits only mechanically-derived sections: the caveat blockquote, a
 `## Summary` table (defined / referenced / unused / dead-selector counts), `## Dead selectors` (the
 `dead` list with the specs that reference each), `## Per-spec health` (the `perSpec` table), and
 `## Untested surfaces, ranked` (the `bySurface` table). The stale hand-written narrative sections —
@@ -200,10 +212,15 @@ Node ESM entry, no dependencies beyond `node:fs/promises`, `node:path`, `node:ur
 - Directory entries are sorted before recursion so file order — and therefore output — does not depend
   on filesystem enumeration order.
 - **Date handling (this is what makes re-running byte-stable):** for each output file, the date is
-  taken from the first `_Generated (\d{4}-\d{2}-\d{2})` match in the **existing** file on disk. Flags
-  override: `--date=YYYY-MM-DD` sets it explicitly, `--today` stamps the current date. If the file does
-  not exist and no flag is given, today's date is used. Re-running with no flags therefore reproduces
-  the committed bytes exactly; you pass `--today` when you intend to restamp.
+  taken from the first `_Generated (\d{4}-\d{2}-\d{2})` match in the **existing** file on disk. Both
+  renderers emit that token (see `renderGapReport` above), so a generated file always round-trips.
+  Flags override: `--date=YYYY-MM-DD` sets it explicitly, `--today` stamps the current date. If the
+  file does not exist and no flag is given, today's date is used silently. If the file **exists but
+  carries no match**, today's date is used *and* the CLI writes `warning: no _Generated date in <path>,
+  stamping today` to stderr (exit code unchanged) — the token is only ever missing when someone
+  hand-edited generated output, and a silent fallback there makes every gate pass on the day of the run
+  and fail from the next day on. Re-running with no flags reproduces the committed bytes exactly; you
+  pass `--today` when you intend to restamp.
 - `--check`: render both documents and compare to disk. On any mismatch, write the offending path and
   the first differing line number to stderr and `process.exitCode = 1`; on match, exit 0 silently.
 - Write CLI output with `process.stdout.write` / `process.stderr.write`, not `console.*` (the root
@@ -214,8 +231,14 @@ Package scripts added to `packages/e2e/package.json`:
 ```json
 "testids": "node scripts/testid-inventory/cli.mjs",
 "testids:check": "node scripts/testid-inventory/cli.mjs --check",
-"test:tools": "node --test scripts/testid-inventory/"
+"test:tools": "node --test 'scripts/testid-inventory/**/*.test.mjs'"
 ```
+
+The glob and its quotes are load-bearing. `node --test <directory>` does not walk directories on this
+toolchain — it treats the path as a file to execute, so `node --test scripts/testid-inventory/` exits
+non-zero with `Cannot find module '.../scripts/testid-inventory'` (verified on the local Node v24.13.1).
+The quotes keep the shell from expanding the pattern before Node sees it. Node has matched
+`--test` globs since v21, so CI's Node 22 (`.github/actions/setup-workspace/action.yml:18`) is covered.
 
 ---
 
@@ -246,29 +269,39 @@ Cases to cover, at minimum:
 
 `analyze.test.mjs`
 8. `displayId` renders `daemon-row-${…}` for a templated definition and the bare id for a static one.
-9. `matchesDefinition` — static requires exact equality; templated matches `daemon-row-abc` but not
-   `daemon-row-` itself, and not `daemon-rowabc`.
+9. `matchesDefinition` — static requires exact equality; templated matches both `daemon-row-abc` and
+   the bare prefix `daemon-row-`, but not `daemon-rowabc`.
 10. `analyze` marks a definition referenced when only a broad token matches (the `openZone` case) and
     unused when nothing matches.
-11. `analyze` reports a strict ref with no matching definition in `dead`, with the referencing spec
+11. A spec whose only reference is ``getByTestId(`session-tab-close-${id}`)`` leaves the templated
+    definition `session-tab-close-${…}` **out of `unused`** and counted in `referencedCount` — the
+    backtick reference contributes exactly the prefix, so the two must match. (This is the real
+    `SessionTabPill.tsx` / `session-tabs.spec.ts` pair; getting it wrong publishes 17 live families as
+    unused.) The same ref must not appear in `dead`.
+12. `analyze` reports a strict ref with no matching definition in `dead`, with the referencing spec
     basename attached; a live strict ref does not appear there and increments that spec's `live`.
-12. `analyze` dedupes an id defined in two source files into a single entry and counts each templated
+13. `analyze` dedupes an id defined in two source files into a single entry and counts each templated
     family once.
-13. `analyze` sorts `definitions`/`unused` bytewise (assert an explicit expected array containing
+14. `analyze` sorts `definitions`/`unused` bytewise (assert an explicit expected array containing
     ids that `localeCompare` would order differently, e.g. `chat-Zed` vs `chat-abc`).
-14. Test files are **not** excluded inside `analyze` — the exclusion is `cli.mjs`'s job; assert that
+15. Test files are **not** excluded inside `analyze` — the exclusion is `cli.mjs`'s job; assert that
     `analyze` faithfully reports whatever `sourceFiles` it is handed.
 
 `render.test.mjs`
-15. `renderUnused` header states the date and all three counts, contains no "STALE" string, keeps the
+16. `renderUnused` header states the date and all three counts, contains no "STALE" string, keeps the
     caveat blockquote, groups by surface with `## <surface> (<n>)` headings, and marks templated
     families with `${…}`.
-16. `renderGapReport` emits the Summary / Dead selectors / Per-spec health / Untested surfaces sections
-    and contains none of the dropped narrative headings.
-17. Both renderers end with exactly one `\n` and are pure (same input → identical string twice).
+17. `renderGapReport` opens with the literal `_Generated <date>.` token — assert the exact substring
+    for a fixed date, and assert that `/_Generated (\d{4}-\d{2}-\d{2})/.exec(output)` recovers that
+    date, which is the round-trip the CLI depends on. It emits the Summary / Dead selectors / Per-spec
+    health / Untested surfaces sections and contains none of the dropped narrative headings.
+18. Both renderers end with exactly one `\n` and are pure (same input → identical string twice).
 
-**Verify:** `pnpm --filter @qlan-ro/mainframe-e2e exec node --test scripts/testid-inventory/` fails with
-module-not-found errors for `extract.mjs`, `analyze.mjs`, `render.mjs` — and for no other reason.
+**Verify:** `pnpm --filter @qlan-ro/mainframe-e2e exec node --test 'scripts/testid-inventory/**/*.test.mjs'`
+fails with module-not-found errors for `extract.mjs`, `analyze.mjs`, `render.mjs` — and for no other
+reason. Keep the glob quoted; a bare directory path makes Node try to *execute* the directory and the
+run fails on `Cannot find module` for the directory itself, which is indistinguishable from the red
+phase you want.
 
 ### 2. Implement `extract.mjs`
 
@@ -288,7 +321,7 @@ passes (cases 1–7). The other two suites still fail on missing modules.
 Implement `displayId`, `matchesDefinition`, `isLiveReference`, `analyze`. Imports `collectDefinitions`
 / `collectReferences` from `./extract.mjs`. No file I/O.
 
-**Verify:** `... node --test scripts/testid-inventory/__tests__/analyze.test.mjs` passes (cases 8–14).
+**Verify:** `... node --test scripts/testid-inventory/__tests__/analyze.test.mjs` passes (cases 8–15).
 
 ### 4. Implement `render.mjs`
 
@@ -297,8 +330,8 @@ Implement `displayId`, `matchesDefinition`, `isLiveReference`, `analyze`. Import
 Implement `renderUnused` and `renderGapReport` per the output contract. Pure string building; no I/O,
 no `Date` access (the date is a parameter).
 
-**Verify:** `... node --test scripts/testid-inventory/__tests__/render.test.mjs` passes (cases 15–17),
-and `... node --test scripts/testid-inventory/` is fully green.
+**Verify:** `... node --test scripts/testid-inventory/__tests__/render.test.mjs` passes (cases 16–18),
+and `... node --test 'scripts/testid-inventory/**/*.test.mjs'` is fully green.
 
 ### 5. Implement `cli.mjs` and wire the package scripts
 
@@ -328,9 +361,15 @@ Then audit the output by hand before committing:
 
 - Spot-check 10 ids from the new inventory with `grep -rn 'data-testid="<id>"' packages/ui/src` — every
   one must exist in non-test source.
-- `grep -nE 'chat-header-|chat-session-bar|answer-pill|inspector-|main-toolbar-files' packages/e2e/UNUSED-TESTIDS.md`
-  must return nothing. Those ids belong to retired surfaces; their absence is the **expected**
-  outcome, not a regression to file follow-up work on.
+- `grep -nE 'chat-header-pr-|chat-session-bar|answer-pill|inspector-|main-toolbar-files' packages/e2e/UNUSED-TESTIDS.md`
+  must return nothing. Those ids belong to retired surfaces and are absent from `packages/ui/src`
+  today (`chat-header-pr-` and `main-toolbar-files` survive only inside unit tests asserting their
+  absence, and the scan skips test files), so their absence here is the **expected** outcome, not a
+  regression to file follow-up work on. Do **not** widen this to `chat-header-`: the chat card header
+  is live (`packages/ui/src/features/chat/thread/ChatCardHeader.tsx` defines `chat-header`,
+  `chat-header-grip`, `chat-header-project`, `chat-header-split-right/-down`, `chat-header-hide`), and
+  `chat-header-grip` has no reference under `packages/e2e`, so it belongs in the inventory. Hand-editing
+  it out would break `testids:check`.
 - `grep -c 'STALE' packages/e2e/UNUSED-TESTIDS.md packages/e2e/COVERAGE-GAP-REPORT.md` returns 0 for both.
 - `grep -n 'app-electron\|packages/core\b\|packages/desktop' packages/e2e/COVERAGE-GAP-REPORT.md`
   returns nothing (the deleted packages must not be referenced).
@@ -354,11 +393,16 @@ Structure to keep: the header (regenerate the date to 2026-08-11, drop the STALE
 anchor link to `./UNUSED-TESTIDS.md`), the `P0/P1/P2` priority key, and per-surface sections listing
 **edges** — sequences, preconditions, conditional rendering that test-ids alone do not encode.
 
-Sections to **delete outright** (surfaces retired; annotate nothing): the chat-header PR pills, the
-toolbar Files toggle, the session bar / answer pill and their `chat-header-*` family, the app-level
-inspector pane, and the "Exclude — test-only fixture IDs" block (now handled mechanically by the
-generator's test-file exclusion). Re-verify each entry in "Dormant / unwired code" against the current
-tree; keep only what still exists and is still unwired.
+Sections to **delete outright** (surfaces retired; annotate nothing): the chat-header PR pills
+(`chat-header-pr-*`), the toolbar Files toggle (`main-toolbar-files`), the session bar and answer pill
+(`chat-session-bar`, `answer-pill`), the app-level inspector pane (`inspector-*`), and the "Exclude —
+test-only fixture IDs" block (now handled mechanically by the generator's test-file exclusion). The
+rest of the `chat-header-*` family is **not** retired — `ChatCardHeader.tsx` still ships `chat-header`,
+`chat-header-grip`, `chat-header-project`, `chat-header-split-right/-down` and `chat-header-hide`, and
+`chat-header.spec.ts` exercises them; cover that surface under Chat transcript rather than deleting it.
+
+Re-verify each entry in "Dormant / unwired code" against the current tree; keep only what still exists
+and is still unwired.
 
 Sections to **cover**, derived by reading `packages/ui/src/features/*` and `packages/ui/src/layout/*`
 and cross-checking against the refreshed inventory. The five starred ones are required by the brief:
@@ -371,7 +415,7 @@ and cross-checking against the refreshed inventory. The five starred ones are re
 | ★ Workspace surface + floating Files panel | `layout/`, `layout/surfaces`, `features/files` | `workspace-surface.spec.ts`, `files-tree.spec.ts`, `layout.spec.ts` |
 | ★ Spotlight / command palette | `features/palette` | `spotlight.spec.ts` |
 | ★ Gates (permission / plan / question) | `features/chat/gates` | `gates.spec.ts` |
-| Chat transcript & tool cards | `features/chat`, `features/chat/tools` | `chat.spec.ts`, `transcript.spec.ts`, `tool-cards.spec.ts` |
+| Chat transcript, card header & tool cards | `features/chat`, `features/chat/thread`, `features/chat/tools` | `chat.spec.ts`, `chat-header.spec.ts`, `transcript.spec.ts`, `tool-cards.spec.ts` |
 | Composer | `features/chat/composer` | `composer.spec.ts`, `composer-advanced.spec.ts` |
 | Editor, diff & review | `features/editor`, `features/review` | `editor.spec.ts`, `editor-diff.spec.ts`, `editor-comments-review.spec.ts`, `review-panel.spec.ts` |
 | Git & worktrees | `features/git` | `git-branch.spec.ts` |
@@ -391,8 +435,9 @@ no puffery.
 **Verify:**
 - `grep -oE '[0-9a-z-]+\.spec\.ts' packages/e2e/FLOW-MAP.md | sort -u` — pipe each name through
   `ls packages/e2e/tests-tauri/<name>`; every one resolves.
-- `grep -n 'STALE\|app-electron\|chat-session-bar\|answer-pill\|chat-header-\|inspector-pane' packages/e2e/FLOW-MAP.md`
-  returns nothing.
+- `grep -nE 'STALE|app-electron|chat-session-bar|answer-pill|chat-header-pr-|inspector-|main-toolbar-files' packages/e2e/FLOW-MAP.md`
+  returns nothing. `chat-header-` on its own is **not** in this list — that surface is live and the flow
+  map should document it.
 - Every backticked testid in the file resolves: for each, `grep -rq` it in `packages/ui/src` excluding
   test files (templated families matched by prefix).
 - The five starred sections are present.
@@ -435,6 +480,9 @@ Add a third entry to the existing `test` job matrix (which today has `ui` and `t
 The root `test` script excludes `@qlan-ro/mainframe-e2e` (its `test` script is Playwright), so without
 this the generator's tests never run anywhere. Do **not** add `testids:check` to CI: the inventory
 legitimately changes whenever a UI testid is added, and gating on it would fail unrelated PRs.
+
+The matrix entry runs the package script, so it inherits the quoted glob from task 5 — do not inline
+`node --test <directory>` here, it would make the job permanently red.
 
 **Verify:** `node -e "const y=require('node:fs').readFileSync('.github/workflows/ci.yml','utf8'); if(!y.includes('e2e-tools')) process.exit(1)"`
 and the matrix block still parses as valid YAML (`npx --yes yaml-lint .github/workflows/ci.yml`, or
@@ -479,7 +527,11 @@ Do **not** run the Playwright suite for this change — nothing under `tests-tau
 3. **Byte-for-byte reproducibility is achieved by preserving the recorded date.** The generator reads
    the date back from the file it is about to overwrite unless `--today` or `--date=` is passed. A
    generator that stamped `new Date()` unconditionally could never satisfy "running it on a clean
-   checkout leaves the committed file unchanged".
+   checkout leaves the committed file unchanged". This only holds because **both** renderers emit the
+   same `_Generated <date>.` token the reader looks for; a gap-report header that worded its date
+   differently would make every gate pass on the day of the run and fail `testids:check` on an
+   untouched checkout the next day. The token is pinned in both output contracts and asserted for the
+   gap report by render test case 17.
 4. **The 300-line file cap governs code, not generated Markdown.** The refreshed inventory will run to
    several hundred lines (≈770 definitions scanned); that is the artifact's purpose. The generator
    itself is split across four modules to stay under the cap.
