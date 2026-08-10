@@ -80,7 +80,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-import { closeMenus } from '../helpers/tauri/menus.js';
+import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -132,14 +132,24 @@ function seedBranchCommit(
 const menuLayers = (page: Page) => page.locator('[role="menu"]');
 
 /**
- * Open the branch menu. Waits for a previous menu layer to unmount first: Radix
- * keeps a closing menu mounted through its exit animation and swallows a trigger
- * click that lands in that window, so the menu would silently fail to open.
+ * Open the branch menu. Waits, in order, for: a previous menu layer to unmount
+ * (Radix keeps a closing menu mounted through its exit animation and swallows a
+ * trigger click that lands in that window, so the menu would silently fail to
+ * open); a dying dialog scrim to clear (this spec opens four kinds of dialog, and
+ * `data-slot="dialog-overlay"` outlives its dialog's content, intercepting the
+ * trigger click underneath it); and, once the search field renders, the branch
+ * list to finish its lazy load. `BranchPopover` fetches branches in an
+ * `open`-gated `useEffect`, and `BranchListView` renders the search field
+ * unconditionally, so the search field is visible well before any row exists —
+ * clicking a row before the list has landed and settled targets geometry that is
+ * still about to shift, which is what leaves the row's flyout mis-anchored.
  */
 async function openBranchPopover(page: Page): Promise<void> {
   await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
+  await waitForDialogScrimsGone(page);
   await page.getByTestId('main-toolbar-branch').click();
   await expect(page.getByTestId('git-branch-search')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-testid^="git-branch-row-"]').first()).toBeVisible({ timeout: 10_000 });
 }
 
 /**
