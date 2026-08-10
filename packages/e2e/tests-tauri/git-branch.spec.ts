@@ -23,8 +23,15 @@
  *     TRIGGER (a button), so its value is text, not `toHaveValue`.
  *   • Radix keeps a closing menu mounted through its exit animation and swallows a
  *     trigger click landing in that window, so `openBranchPopover` waits for the
- *     previous layer to unmount, and `closeBranchPopover` closes the flyout and the
- *     root separately (one Escape only pops the innermost layer).
+ *     previous layer to unmount, for a dying dialog scrim to clear, and for the
+ *     branch list's fresh GET to resolve (its `branches` state survives a close, so
+ *     a reopen shows the PREVIOUS open's stale rows instantly — waiting on a row
+ *     being visible is not enough to know the reload has landed); `closeBranchPopover`
+ *     closes the flyout and the root separately (one Escape only pops the innermost
+ *     layer). `openSubmenu` retries the open (never the item click) up to twice, and
+ *     every `git-submenu-*` click is bounded to its own 5s timeout via
+ *     `clickSubmenuItem`, so a stuck interaction fails in seconds and names the
+ *     element instead of riding the whole test timeout.
  *
  * TOOLBAR-CHIP FINDINGS (layout/MainToolbar.tsx — both of this file's older
  * findings are now obsolete):
@@ -137,18 +144,30 @@ const menuLayers = (page: Page) => page.locator('[role="menu"]');
  * trigger click that lands in that window, so the menu would silently fail to
  * open); a dying dialog scrim to clear (this spec opens four kinds of dialog, and
  * `data-slot="dialog-overlay"` outlives its dialog's content, intercepting the
- * trigger click underneath it); and, once the search field renders, the branch
- * list to finish its lazy load. `BranchPopover` fetches branches in an
- * `open`-gated `useEffect`, and `BranchListView` renders the search field
- * unconditionally, so the search field is visible well before any row exists —
- * clicking a row before the list has landed and settled targets geometry that is
- * still about to shift, which is what leaves the row's flyout mis-anchored.
+ * trigger click underneath it); and the branch list's *fresh* reload.
+ *
+ * That last wait has to be on the network response, not on a row being visible.
+ * `BranchPopover` keeps its `branches` state across a close — it is only
+ * refetched by the `open`-gated `useEffect` — so on every open AFTER the first,
+ * a row is visible INSTANTLY from the previous open's stale state, well before
+ * the fresh GET resolves. A row-presence wait is satisfied by that cache and
+ * returns immediately; the real reload then lands mid-test and re-sorts the
+ * list, which can close a flyout the test has already opened on the stale
+ * row's position (confirmed with a MutationObserver: reopening right after a
+ * CLI-side `checkoutBase()` showed the stale row swap out for the fresh one a
+ * beat after the wait had already resolved). Waiting for the GET itself is the
+ * only signal that is honest on both the first open and every reopen.
  */
 async function openBranchPopover(page: Page): Promise<void> {
   await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
   await waitForDialogScrimsGone(page);
+  const branchesLoaded = page.waitForResponse(
+    (r) => r.request().method() === 'GET' && r.url().includes('/git/branches'),
+    { timeout: 10_000 },
+  );
   await page.getByTestId('main-toolbar-branch').click();
   await expect(page.getByTestId('git-branch-search')).toBeVisible({ timeout: 10_000 });
+  await branchesLoaded;
   await expect(page.locator('[data-testid^="git-branch-row-"]').first()).toBeVisible({ timeout: 10_000 });
 }
 
