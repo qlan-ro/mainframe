@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { nextActiveAfterClose, persistTabIds, restoreTabIds, validTabIds } from '../tabs-model';
+import { canRestoreTabs, nextActiveAfterClose, persistTabIds, restoreTabIds, validTabIds } from '../tabs-model';
 
 /** A real session row: a regular thread-list entry, optionally remoteId-stamped. */
 function entry(id: string, over: Partial<ThreadListEntry> = {}): ThreadListEntry {
@@ -113,5 +113,37 @@ describe('validTabIds', () => {
     const items = [entry('chat-a'), entry('chat-b', { status: 'archived' })];
 
     expect([...validTabIds(items, null)]).toEqual(['chat-a']);
+  });
+});
+
+describe('canRestoreTabs', () => {
+  it('returns false while the list is still loading, even with real sessions present', () => {
+    expect(canRestoreTabs([entry('chat-a', { custom: {} })], true)).toBe(false);
+  });
+
+  it('returns false for a settled list holding only the synthetic draft', () => {
+    const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'new' }];
+
+    expect(canRestoreTabs(items, false)).toBe(false);
+  });
+
+  it('returns false for a settled empty list', () => {
+    expect(canRestoreTabs([], false)).toBe(false);
+  });
+
+  it('returns true for a settled list with a real session', () => {
+    expect(canRestoreTabs([entry('chat-a', { custom: {} })], false)).toBe(true);
+  });
+
+  it('returns true when the only real entry is a just-sent draft carrying remoteId but no custom', () => {
+    const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'regular', remoteId: 'chat-a' }];
+
+    expect(canRestoreTabs(items, false)).toBe(true);
+  });
+
+  it('returns true for a settled list of only archived entries', () => {
+    const items = [entry('chat-a', { status: 'archived', custom: {} })];
+
+    expect(canRestoreTabs(items, false)).toBe(true);
   });
 });
