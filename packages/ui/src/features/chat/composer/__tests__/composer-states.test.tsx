@@ -38,7 +38,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (
     selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; composer: { quote: undefined } }) => unknown,
   ) => selector({ thread: { isRunning: false, messages: [] }, composer: { quote: undefined } }),
-  useAui: () => ({ composer: () => ({ send: vi.fn() }) }),
+  useAui: () => ({ composer: { send: vi.fn() } }),
 }));
 
 vi.mock('../edit/composer-edit-context', () => ({

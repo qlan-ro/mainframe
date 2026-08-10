@@ -31,7 +31,7 @@ let fakeAuiState: FakeAuiState = { threads: { mainThreadId: '', newThreadId: nul
 const switchToThreadSpy = vi.fn();
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ threads: () => ({ switchToThread: switchToThreadSpy }) }),
+  useAui: () => ({ threads: { switchToThread: switchToThreadSpy } }),
   useAuiState: (selector: (s: FakeAuiState) => unknown) => selector(fakeAuiState),
 }));
 
@@ -116,7 +116,7 @@ describe('useDraftRow — no-op at boot before a main thread is selected', () =>
 // Regression (bug z): SessionsNewButton.pick() race with switchToNewThread()
 //
 // pick() synchronously does setDraftConfig(nid, {...}) THEN
-// `void aui.threads().switchToNewThread()` — an aui call that awaits an
+// `void aui.threads.switchToNewThread()` — an aui call that awaits an
 // internal hook task before mainThreadId catches up to newThreadId. That
 // means there is a REAL render where hasDraft is newly true but mainThreadId
 // still points at whatever session was active before New was clicked (an

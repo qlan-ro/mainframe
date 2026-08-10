@@ -29,12 +29,12 @@ export function useOpenDraft(): (args: OpenNewThreadDraftArgs) => Promise<void> 
     openNewThreadDraft(args, {
       filterProjectId,
       setFilterProjectId,
-      runtimeThreads: aui.threads(),
+      runtimeThreads: aui.threads,
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
       initializeDraft: ({ localId, projectId }) =>
         initializeDraft({ localId, projectId, port, defaultAdapterId, adapters }),
-      setText: (text) => aui.composer().setText(text),
+      setText: (text) => aui.composer.setText(text),
       mfToastError: (title, options) => toast.error(title, options),
     });
 }

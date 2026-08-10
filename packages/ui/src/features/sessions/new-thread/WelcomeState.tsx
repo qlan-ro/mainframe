@@ -37,7 +37,7 @@ export function WelcomeState({ projectId }: { projectId: string }) {
     };
   }, [port, projectId]);
 
-  const insert = (prefill: string) => aui.composer().setText(prefill);
+  const insert = (prefill: string) => aui.composer.setText(prefill);
 
   return (
     // Fill the scroll area and center the column vertically + horizontally (spec

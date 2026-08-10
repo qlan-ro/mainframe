@@ -26,12 +26,12 @@ export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promi
     openNewThreadDraft(args, {
       filterProjectId,
       setFilterProjectId,
-      runtimeThreads: aui.threads(),
+      runtimeThreads: aui.threads,
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
       initializeDraft: ({ localId, projectId }) =>
         initializeDraft({ localId, projectId, port, defaultAdapterId, adapters }),
-      setText: (text) => aui.composer().setText(text),
+      setText: (text) => aui.composer.setText(text),
       mfToastError: (title, options) => mfToast.error(title, options),
     });
 }

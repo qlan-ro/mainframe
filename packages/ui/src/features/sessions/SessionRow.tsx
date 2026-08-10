@@ -53,7 +53,7 @@ function useRowActions(item: SessionItem): RowActions {
 
   const setPinned = (pinned: boolean) => {
     void pinChat(port, item.id, pinned)
-      .then(() => aui.threads().reload())
+      .then(() => aui.threads.reload())
       .catch((e: unknown) => {
         console.warn('[SessionRow] pinChat failed', e);
       });
@@ -218,7 +218,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                         <SessionRowRename
                           initialTitle={title}
                           onCommit={(next) => {
-                            void aui.threadListItem().rename(next);
+                            void aui.threadListItem.rename(next);
                             setIsRenaming(false);
                           }}
                           onCancel={() => setIsRenaming(false)}

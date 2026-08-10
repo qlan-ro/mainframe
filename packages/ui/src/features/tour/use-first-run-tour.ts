@@ -31,7 +31,7 @@ export function useFirstRunTour(): boolean {
     if (completed || armedRef.current) return;
     // Regular-only: counting archived sessions would suppress the tour for someone
     // whose every session is archived — an empty workspace as far as the tour cares.
-    const sessionCount = () => regularThreadItemsToSessionItems(aui.threads().getState().threadItems).length;
+    const sessionCount = () => regularThreadItemsToSessionItems(aui.threads.getState().threadItems).length;
     // Returning user with sessions already loaded — never auto-open.
     if (sessionCount() > 0) return;
 

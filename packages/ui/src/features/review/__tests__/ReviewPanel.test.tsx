@@ -5,7 +5,7 @@
  *  - reviewOpen=false → nothing renders.
  *  - reviewOpen=true → review-modal renders + getGitStatus called.
  *  - Selecting a file from the file list renders ReviewDiffView for it.
- *  - The onAppend prop calls aui.threads().thread('main').append({ role, content }).
+ *  - The onAppend prop calls aui.threads.thread('main').append({ role, content }).
  *  - Empty git status renders "No changes to review".
  *  - Close button sets reviewOpen to false.
  *  - The change-scope switcher: default scope, per-scope data source, the branch
@@ -63,7 +63,7 @@ const mockAppend = vi.fn();
 vi.mock('@assistant-ui/react', async (orig) => ({
   ...(await orig<typeof import('@assistant-ui/react')>()),
   useAui: () => ({
-    threads: () => ({ thread: () => ({ append: mockAppend }) }),
+    threads: { thread: () => ({ append: mockAppend }) },
   }),
 }));
 
@@ -163,7 +163,7 @@ describe('ReviewPanel — open', () => {
 });
 
 describe('ReviewPanel — append call shape', () => {
-  it("wires onAppend to aui.threads().thread('main').append with the correct shape", async () => {
+  it("wires onAppend to aui.threads.thread('main').append with the correct shape", async () => {
     mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
 
     render(<ReviewPanel />);

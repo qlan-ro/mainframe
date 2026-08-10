@@ -63,7 +63,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     projectPath,
     chatId,
     sessions,
-    switchToThread: (id) => aui.threads().switchToThread(id),
+    switchToThread: (id) => aui.threads.switchToThread(id),
   });
 
   // Controlled selection: rows land async, after cmdk's own

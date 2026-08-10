@@ -93,10 +93,7 @@ export function ReviewPanel() {
   // panel is mounted at the app root, where no thread scope is bound.
   const handleAppend = useCallback(
     (text: string) => {
-      aui
-        .threads()
-        .thread('main')
-        .append({ role: 'user', content: [{ type: 'text', text }] });
+      aui.threads.thread('main').append({ role: 'user', content: [{ type: 'text', text }] });
     },
     [aui],
   );

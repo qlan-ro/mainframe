@@ -34,10 +34,10 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (selector: (s: { threadListItem: null; threads: { threadItems: [] } }) => unknown) =>
     selector({ threadListItem: null, threads: { threadItems: [] } }),
   useAui: () => ({
-    threads: () => ({
+    threads: {
       reload: vi.fn().mockResolvedValue(undefined),
       switchToThread: vi.fn(),
-    }),
+    },
   }),
 }));
 

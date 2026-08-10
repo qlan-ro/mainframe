@@ -54,7 +54,7 @@ function RuntimeBody({ port }: { port: number }) {
   // session via their "Open session →" CTA without reaching through to the runtime.
   const aui = useAui();
   useEffect(() => {
-    setSessionNavigator((chatId) => aui.threads().switchToThread(chatId));
+    setSessionNavigator((chatId) => aui.threads.switchToThread(chatId));
     return () => setSessionNavigator(null);
   }, [aui]);
 

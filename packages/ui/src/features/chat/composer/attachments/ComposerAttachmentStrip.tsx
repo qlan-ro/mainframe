@@ -120,7 +120,7 @@ export function ComposerAddAttachment() {
 export function ComposerAddMention({ textareaRef }: { textareaRef?: RefObject<HTMLTextAreaElement | null> }) {
   const aui = useAui();
   const handleClick = () => {
-    const composer = aui.composer();
+    const composer = aui.composer;
     const next = mentionDraft(readLiveComposerState(composer).text);
     const el = textareaRef?.current;
     if (!el) {

@@ -24,7 +24,7 @@ export function useNewChatHotkeyHandler(aui: AssistantClient): () => void {
       useNewSessionPickerTarget.getState().setOpen(true);
       return;
     }
-    resetNewThreadDraft(aui.threads().getState().newThreadId);
-    void aui.threads().switchToNewThread();
+    resetNewThreadDraft(aui.threads.getState().newThreadId);
+    void aui.threads.switchToNewThread();
   }, [filterProjectId, aui]);
 }

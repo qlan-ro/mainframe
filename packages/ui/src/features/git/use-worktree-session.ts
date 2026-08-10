@@ -27,12 +27,12 @@ export function useWorktreeSession(port: number, projectId: string | undefined, 
         worktreePath: wt.path,
         ...(branchName ? { branchName } : {}),
       });
-      await aui.threads().reload();
+      await aui.threads.reload();
       // chat.id IS the remoteId; the reload resolves the new chat into a thread
       // whose thread-list item carries `remoteId === chat.id`. switchToThread
       // takes the item.id (= remoteId for remote threads), same contract as
       // SearchPalette's precedent (use-active-identity.ts:29 / A10).
-      aui.threads().switchToThread(chat.id);
+      aui.threads.switchToThread(chat.id);
     },
     [port, projectId, adapterId, aui],
   );

@@ -4,8 +4,8 @@
  * Must run UNDER <AssistantRuntimeProvider> so it can reach the live thread
  * list + active thread. Applies the cross-cutting list side-effects (fix B9):
  *
- *   chat.created / chat.ended           → aui.threads().reload()
- *   chat.updated                        → aui.threads().reload() (idempotent;
+ *   chat.created / chat.ended           → aui.threads.reload()
+ *   chat.updated                        → aui.threads.reload() (idempotent;
  *                                          re-derives custom from the daemon)
  *   chat.notification / permission(notify) → unread.markUnread()
  *   chat.notification (attention_request)  → host.notify() (OS banner)
@@ -91,7 +91,7 @@ export function useSessionListRouter(): void {
         trailing = true;
         return;
       }
-      void aui.threads().reload();
+      void aui.threads.reload();
       cooling = setTimeout(() => {
         cooling = null;
         if (trailing) {
@@ -156,7 +156,7 @@ export function useSessionListRouter(): void {
       // unselected). Adopt the remote item, exactly like the manual sidebar click.
       const draftRemoteId = threadItems.find((t) => t.id === mainThreadId)?.remoteId;
       if (draftRemoteId != null && items.some((t) => t.id === draftRemoteId)) {
-        void aui.threads().switchToThread(draftRemoteId);
+        void aui.threads.switchToThread(draftRemoteId);
         return;
       }
 
@@ -169,7 +169,7 @@ export function useSessionListRouter(): void {
         const target = fallback();
         if (target != null) {
           prevRealActiveRef.current = null;
-          aui.threads().switchToThread(target);
+          aui.threads.switchToThread(target);
         }
       }
       return;
@@ -180,7 +180,7 @@ export function useSessionListRouter(): void {
     // is archived out from under us, fall back the same way.
     if (active.status === 'archived') {
       const target = fallback();
-      if (target != null) aui.threads().switchToThread(target);
+      if (target != null) aui.threads.switchToThread(target);
       return;
     }
 
@@ -212,7 +212,7 @@ export function useSessionListRouter(): void {
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
-      aui.threads().switchToThread(target);
+      aui.threads.switchToThread(target);
     }
   }, [items, mainThreadId, aui]);
 

@@ -24,7 +24,7 @@ export function useArchiveSession(remoteId: string, hasWorktree: boolean): () =>
         choice = answer;
       }
       stageArchiveChoice(remoteId, choice);
-      await aui.threadListItem().archive();
+      await aui.threadListItem.archive();
     })();
   }, [remoteId, hasWorktree, aui]);
 }

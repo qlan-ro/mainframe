@@ -47,14 +47,14 @@ export function SessionTabs() {
   const tabs = tabIds.map((id) => toTabEntry(id, items, mainThreadId));
 
   const handleActivate = (id: string) => {
-    if (id !== mainThreadId) aui.threads().switchToThread(id);
+    if (id !== mainThreadId) aui.threads.switchToThread(id);
   };
 
   const handleClose = (id: string) => {
     const next = nextActiveAfterClose(tabIds, id, mainThreadId);
     closeTab(id);
     if (next === null) newSession();
-    else if (next !== mainThreadId) aui.threads().switchToThread(next);
+    else if (next !== mainThreadId) aui.threads.switchToThread(next);
   };
 
   return (

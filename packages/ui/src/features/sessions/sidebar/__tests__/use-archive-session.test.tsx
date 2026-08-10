@@ -5,7 +5,7 @@
  * worktree dialog must not touch aui at all (previously the adapter threw
  * AFTER aui's optimistic archive had already switched the active thread away,
  * stranding the user on an empty draft). Asking BEFORE calling
- * aui.threadListItem().archive() means a cancel never reaches aui — nothing moves.
+ * aui.threadListItem.archive() means a cancel never reaches aui — nothing moves.
  *
  * Behaviors covered:
  *  1. hasWorktree=false — archives immediately, no prompt, stages deleteWorktree:false.
@@ -23,7 +23,7 @@ const requestWorktreeArchiveChoiceMock = vi.fn();
 const stageArchiveChoiceMock = vi.fn();
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ threadListItem: () => ({ archive: archiveSpy }) }),
+  useAui: () => ({ threadListItem: { archive: archiveSpy } }),
 }));
 
 vi.mock('../../runtime/archive-confirm-bridge', () => ({

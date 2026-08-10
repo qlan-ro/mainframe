@@ -35,7 +35,7 @@ export function useInstructionActions(): InstructionActions {
   // aui context's `composer` to that message's edit composer — an inert no-op
   // until the message is being edited, and a lookup that throws outright once
   // the thread switch leaves the index unresolvable. `threads` is a root scope
-  // no provider shadows, so `threads().thread('main').composer()` reaches the
+  // no provider shadows, so `threads.thread('main').composer()` reaches the
   // live composer regardless of that rebinding.
   const aui = useAui();
   const extras = useChatExtras();
@@ -48,7 +48,7 @@ export function useInstructionActions(): InstructionActions {
 
   const append = useCallback(
     (insertText: string) => {
-      const composer = aui.threads().thread('main').composer();
+      const composer = aui.threads.thread('main').composer();
       const existing = composer.getState().text;
       composer.setText(existing ? `${existing.trimEnd()}\n${insertText}` : insertText);
       focusComposerInput();
@@ -66,16 +66,16 @@ export function useInstructionActions(): InstructionActions {
         try {
           // Clear the reused draft slot before switching, so the new draft never
           // inherits an abandoned one's project.
-          resetNewThreadDraft(aui.threads().getState().newThreadId);
+          resetNewThreadDraft(aui.threads.getState().newThreadId);
           // `switchToNewThread` owns the slot — `newThreadId` is only readable
           // once it resolves, and prefilling earlier would fill the previously
           // active thread's composer (#212). It is typed `void` but implemented
           // async, so the await is load-bearing.
-          await aui.threads().switchToNewThread();
-          const localId = aui.threads().getState().newThreadId;
+          await aui.threads.switchToNewThread();
+          const localId = aui.threads.getState().newThreadId;
           if (localId == null) throw new Error('No draft session was created');
           await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters, adapterId });
-          aui.threads().thread('main').composer().setText(insertText);
+          aui.threads.thread('main').composer().setText(insertText);
         } catch (error) {
           mfToast.error('Couldn’t start a new session', {
             description: error instanceof Error ? error.message : String(error),

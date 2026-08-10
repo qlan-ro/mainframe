@@ -71,13 +71,13 @@ vi.mock('@assistant-ui/react', async () => {
     useAuiState: (selector: (state: unknown) => unknown) =>
       selector({ threads: { threadItems: [], mainThreadId: null } }),
     useAui: () => ({
-      composer: () => ({ setText: vi.fn() }),
-      threads: () => ({
+      composer: { setText: vi.fn() },
+      threads: {
         reload: vi.fn().mockResolvedValue(undefined),
         switchToThread: vi.fn(),
         switchToNewThread: vi.fn(),
         getState: () => ({ mainThreadId: 'main', newThreadId: '__LOCALID_test', threadItems: [] }),
-      }),
+      },
     }),
   };
 });

@@ -24,7 +24,7 @@ export function useAppendQuoteSegment(): (quote: string) => void {
       console.warn('[use-append-quote-segment] no active thread — quote dropped');
       return;
     }
-    const composer = aui.composer();
+    const composer = aui.composer;
     append(threadId, { quote, liveText: readLiveComposerState(composer).text });
     composer.setText('');
   };

@@ -64,7 +64,7 @@ const Probe: FC = () => {
   const id = useAuiState((s) => s.threadListItem.id);
   const title = useAuiState((s) => s.threadListItem.title);
   return (
-    <button data-testid={`probe-${title ?? 'untitled'}`} onClick={() => aui.threadListItem().rename(`${title}!`)}>
+    <button data-testid={`probe-${title ?? 'untitled'}`} onClick={() => aui.threadListItem.rename(`${title}!`)}>
       {id}
     </button>
   );

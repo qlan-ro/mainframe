@@ -153,7 +153,7 @@ export function ComposerTriggers({
   const text = useAuiState((s) => s.composer.text);
   const field = useTriggerField({
     value: text,
-    onChange: (next) => aui.composer().setText(next),
+    onChange: (next) => aui.composer.setText(next),
     triggers,
     textareaRef,
   });

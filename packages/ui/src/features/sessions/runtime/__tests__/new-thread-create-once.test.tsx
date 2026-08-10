@@ -16,14 +16,14 @@
  *   (1) our external-store `onNew`  (use-chat-thread-runtime), and
  *   (2) assistant-ui's native thread-list `initialize` (the seam the library's
  *       `RemoteThreadListHookInstanceManager` drives off the thread's
- *       `"initialize"` event — i.e. `aui.threadListItem().initialize()`).
+ *       `"initialize"` event — i.e. `aui.threadListItem.initialize()`).
  * `createForLocal` had no idempotency guard → TWO `POST /api/chats` → two daemon
  * chats. The controller bound to chat #1; aui stamped `item.remoteId` = chat #2
  * → an orphaned empty session.
  *
  * The test drives both seams the way production does —
- * `aui.threads().thread('main').append(...)` (onNew) AND
- * `aui.threads().item('main').initialize()` (the native thread-list seam) —
+ * `aui.threads.thread('main').append(...)` (onNew) AND
+ * `aui.threads.item('main').initialize()` (the native thread-list seam) —
  * within one act() tick, then asserts:
  *   1. `createChat` (the lib/api fn) is called EXACTLY ONCE.
  *   2. The id the controller sends the first message to (its `daemonId`, read
@@ -163,12 +163,12 @@ async function newThreadFirstSend(): Promise<{
   const { aui, unmount } = mountRuntime();
 
   await act(async () => {
-    await aui().threads().switchToNewThread();
+    await aui().threads.switchToNewThread();
   });
   await flush();
 
   // The threads scope exposes ids via getState(), not as own properties.
-  const localId = aui().threads().getState().mainThreadId;
+  const localId = aui().threads.getState().mainThreadId;
 
   setDraftConfig(localId, {
     projectId: 'p1',
@@ -183,8 +183,8 @@ async function newThreadFirstSend(): Promise<{
   });
 
   await act(async () => {
-    const sendP = aui().threads().thread('main').append('hello');
-    const initP = aui().threads().item('main').initialize();
+    const sendP = aui().threads.thread('main').append('hello');
+    const initP = aui().threads.item('main').initialize();
     await Promise.all([sendP, initP]);
   });
   await flush();
@@ -219,7 +219,7 @@ describe('new-thread create-once — one POST /api/chats per New+send', () => {
     const { aui, localId, unmount } = await newThreadFirstSend();
 
     // The id aui stamped on the (now-regular) thread item after initialize.
-    const stampedRemoteId = aui().threads().item('main').getState().remoteId;
+    const stampedRemoteId = aui().threads.item('main').getState().remoteId;
     expect(stampedRemoteId).toBe('chat-server-1');
 
     // The id the controller actually sent the first message to (== its daemonId).

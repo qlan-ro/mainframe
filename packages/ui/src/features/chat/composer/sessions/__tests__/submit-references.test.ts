@@ -35,12 +35,12 @@ const runtimeGetState = vi.fn(() => ({
 
 vi.mock('@assistant-ui/react', () => ({
   useAui: () => ({
-    thread: () => ({ append: (...args: unknown[]) => appendSpy(...args) }),
-    composer: () => ({
+    thread: { append: (...args: unknown[]) => appendSpy(...args) },
+    composer: {
       __internal_getRuntime: () => ({ getState: runtimeGetState }),
       getState: runtimeGetState,
       reset: () => Promise.resolve(),
-    }),
+    },
   }),
   useAuiState: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({

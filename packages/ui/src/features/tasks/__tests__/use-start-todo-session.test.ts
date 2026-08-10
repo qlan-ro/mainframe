@@ -18,7 +18,7 @@ const switchToThread = vi.fn<(id: string) => Promise<void>>();
 const setText = vi.fn<(text: string) => void>();
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ threads: () => ({ reload, switchToThread }), composer: () => ({ setText }) }),
+  useAui: () => ({ threads: { reload, switchToThread }, composer: { setText } }),
 }));
 
 vi.mock('@/lib/api/todos', () => ({

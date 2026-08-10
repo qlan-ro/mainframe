@@ -40,7 +40,7 @@ export function TagPopoverHost({ port }: { port: number }) {
     for (const update of updates) {
       await setChatTags(port, update.id, update.newTags);
     }
-    await aui.threads().reload();
+    await aui.threads.reload();
   }
 
   return (
@@ -54,7 +54,7 @@ export function TagPopoverHost({ port }: { port: number }) {
       registry={registry}
       threads={threads}
       onCascade={(updates) => void applyCascade(updates)}
-      onReload={() => void aui.threads().reload()}
+      onReload={() => void aui.threads.reload()}
     />
   );
 }

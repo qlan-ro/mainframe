@@ -116,9 +116,12 @@ vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
   // One stable client across renders — the WS wiring effect depends on it, and a
   // fresh object per render would tear down and re-create the router each time.
-  // `threads()` re-reads the spy `let`s, so beforeEach reassignment still lands.
+  // `threads` is a getter, not a frozen object: the router reads the scope as a
+  // property per call, so beforeEach's spy reassignment still lands.
   const auiClient = {
-    threads: () => ({ reload: reloadSpy, switchToThread: switchSpy }),
+    get threads() {
+      return { reload: reloadSpy, switchToThread: switchSpy };
+    },
   };
   return {
     ...actual,

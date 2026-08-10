@@ -9,7 +9,7 @@ vi.mock('../use-repo-suggestions', () => ({ useRepoSuggestions: () => ({ suggest
 vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: [{ id: 'proj-a', name: 'Mainframe' }] }) }));
 vi.mock('../../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/lib/api/git', () => ({ getGitBranch: vi.fn().mockResolvedValue({ branch: 'main' }) }));
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ composer: () => ({ setText }) }) }));
+vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ composer: { setText } }) }));
 
 import { WelcomeState } from '../WelcomeState';
 

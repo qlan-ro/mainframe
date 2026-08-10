@@ -47,7 +47,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   //
   // `mainThreadId !== newThreadId` alone is NOT sufficient: SessionsNewButton's
   // pick() (pill-active New) synchronously arms the draft — setDraftConfig(nid,
-  // ...) — then calls `aui.threads().switchToNewThread()`, which awaits an aui
+  // ...) — then calls `aui.threads.switchToNewThread()`, which awaits an aui
   // hook task before mainThreadId catches up to newThreadId. That produces a
   // real render where hasDraft just became true but mainThreadId still points at
   // whatever session was active BEFORE New was clicked — mismatched, but because
@@ -73,7 +73,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
   }, [mainThreadId, newThreadId, hasDraft]);
 
   const onSelect = useCallback(() => {
-    if (model != null) aui.threads().switchToThread(model.newThreadId);
+    if (model != null) aui.threads.switchToThread(model.newThreadId);
   }, [model, aui]);
 
   const onDiscard = useCallback(() => {
@@ -88,7 +88,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
     markDraftDiscarded(newThreadId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;
-    if (target != null) aui.threads().switchToThread(target);
+    if (target != null) aui.threads.switchToThread(target);
     clear();
   }, [newThreadId, allItems, aui]);
 

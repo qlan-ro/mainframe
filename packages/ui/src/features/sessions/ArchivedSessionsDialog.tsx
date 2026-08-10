@@ -94,7 +94,7 @@ export function ArchivedSessionsDialog({
 
   const items = useMemo(() => {
     if (!open) return [];
-    const all = archivedThreadItemsToSessionItems(aui.threads().getState().threadItems);
+    const all = archivedThreadItemsToSessionItems(aui.threads.getState().threadItems);
     return filterArchivedSessions(all, filterProjectId).filter((item) => !restoredIds.has(item.id));
   }, [open, aui, filterProjectId, restoredIds]);
 
@@ -104,7 +104,7 @@ export function ArchivedSessionsDialog({
       setRestoring(chatId);
       try {
         await unarchiveChat(port, chatId);
-        aui.threads().reload();
+        aui.threads.reload();
         setRestoredIds((prev) => new Set(prev).add(chatId));
       } catch (e: unknown) {
         console.warn('[v2/ArchivedSessionsDialog] unarchive failed', e);

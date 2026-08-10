@@ -106,7 +106,7 @@ export function ImportSessionList({ port, projectId, projectPath, onDone, onBack
           createdAt: session.createdAt,
           modifiedAt: session.modifiedAt,
         });
-        aui.threads().reload();
+        aui.threads.reload();
         onDone();
       } catch (e: unknown) {
         console.warn('[v2/ImportSessionList] import failed', e);

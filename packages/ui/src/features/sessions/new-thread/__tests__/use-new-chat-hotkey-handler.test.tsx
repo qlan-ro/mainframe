@@ -25,10 +25,10 @@ import { useNewChatHotkeyHandler } from '../use-new-chat-hotkey-handler';
 
 function makeRuntime(newThreadId: string | null, switchToNewThread = vi.fn()) {
   return {
-    threads: () => ({
+    threads: {
       getState: () => ({ newThreadId }),
       switchToNewThread,
-    }),
+    },
   } as unknown as Parameters<typeof useNewChatHotkeyHandler>[0];
 }
 
