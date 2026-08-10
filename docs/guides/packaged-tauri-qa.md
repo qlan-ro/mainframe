@@ -147,8 +147,13 @@ launch if the resolved values aren't isolated:
 3. `QA_DATA_DIR = ${MF_QA_DATA_DIR:-~/.mainframe_qa}`.
 4. Refuse (`REFUSED:` + reason, nonzero exit, nothing launched) if
    `QA_DAEMON_PORT` is not a plain decimal number in `1024–65535`, or is
-   `31415`; if `QA_DATA_DIR` resolves to `~/.mainframe` or anywhere inside it;
-   or if the QA bundle is missing.
+   `31415`; if `QA_DATA_DIR` contains a `..` component, or resolves to
+   `~/.mainframe` or anywhere inside it; or if the QA bundle is missing.
+
+`..` is refused outright rather than normalized: a component that doesn't
+exist yet can't be resolved, so `~/absent/../.mainframe/new` survives
+canonicalization intact, clears the containment check, and `mkdir -p` then
+creates the absent component and lands in the production dir anyway.
 
 Both gates compare **resolved** values, not the strings they were handed,
 because a near-miss reaches production either way: `parse_daemon_port`
@@ -177,6 +182,7 @@ MF_QA_DAEMON_PORT=99999 bash .agents/launch-test-tauri-qa.sh    # REFUSED (would
 MF_QA_DATA_DIR=~/.mainframe bash .agents/launch-test-tauri-qa.sh    # REFUSED
 MF_QA_DATA_DIR=~/.mainframe/ bash .agents/launch-test-tauri-qa.sh   # REFUSED
 MF_QA_DATA_DIR=~/.mainframe/sub bash .agents/launch-test-tauri-qa.sh # REFUSED
+MF_QA_DATA_DIR=~/absent/../.mainframe bash .agents/launch-test-tauri-qa.sh # REFUSED ('..')
 ```
 
 ## 9. Endpoints
