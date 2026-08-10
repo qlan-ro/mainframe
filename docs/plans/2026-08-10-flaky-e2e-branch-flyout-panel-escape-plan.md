@@ -362,3 +362,54 @@ lists exactly the two spec files plus the changeset (plus this plan). The whole-
   ~10 seconds with the row named. Do not raise the attempt count to make a run go green.
 - **Group A and B cannot run Playwright concurrently** (shared daemon port, preview port and
   `packages/ui/dist`). The dependency edge between them exists for that reason alone.
+
+---
+
+## Appendix — C2 acceptance evidence (2026-08-10, review-fixes stage)
+
+Command run verbatim, three consecutive times, foreground, from the worktree root:
+
+```
+E2E_MODE=mock MF_E2E_SKIP_BUILD=1 pnpm --filter @qlan-ro/mainframe-e2e exec \
+  playwright test tests-tauri/git-branch.spec.ts tests-tauri/session-panel.spec.ts
+```
+
+The four cases this todo's fix targets — `branch row flyout: checkout`, `branch row flyout: new
+branch from a selected branch`, `branch row flyout: merge fast-forwards a clean ancestor branch`,
+and `a rail click floats the panel; Escape dismisses it` — passed on the **first attempt, in single
+digit seconds, in all three runs** (checkout 2.4s/2.5s/2.5s, new-branch-from 1.8s/1.7s/2.2s,
+merge-ff 1.1s/1.1s/1.1s, rail-Escape 3.1s/3.1s/3.1s). No occurrence reached a timeout or a retry.
+The fix this todo describes is confirmed working under the exact joint-run condition the acceptance
+criterion specifies.
+
+**Run 1 — 21:02:44–21:03:44 EEST:** `42 passed (54.6s)`. 0 failed, 0 flaky.
+
+**Run 2 — 21:03:49–21:04:59 EEST:** `41 passed, 1 flaky (1.1m)`. The flaky case was **not** one of
+the four above: `quick actions: fetch, update all, and push current complete without error`
+(git-branch.spec.ts:668) failed on first attempt and passed on Playwright's built-in retry. Failure:
+`git rev-parse e2e-workspace` in the bare "remote" repo raised `fatal: ambiguous argument
+'e2e-workspace': unknown revision` for the full 15s poll window, even though the UI had already
+shown a "Pushed to origin/e2e-workspace" success toast.
+
+**Run 3 — 21:08:54–21:10:20 EEST:** `41 passed, 1 failed (1.3m)`. Same test, same failure signature,
+on both the initial attempt and Playwright's retry — this time it did not recover.
+
+**Verdict: C2 does not close.** The acceptance criterion is "zero flaky and zero failed on every
+run"; the quick-actions case broke that in 2 of 3 runs. This is a **different mechanism** from the
+bug this todo fixes, and reproduces only under the joint two-spec run (Group A's three standalone
+`git-branch.spec.ts` runs, task A6, saw no failures) — it involves a git push landing in the bare
+repo, not a Radix popper/menu race.
+
+Diagnosis so far (not fixed, no code changed for this): `BranchListView`'s push-current handler
+reads `currentBranch` from `BranchPopover`'s `branches.current` state
+(`packages/ui/src/features/git/BranchPopover.tsx:129`), which by this point in the test is the
+*fresh* GET this todo's A2 fix now waits for, so the toast naming `e2e-workspace` is credible — the
+push is real and targets the right branch. The unknown-revision result on the bare repo, persisting
+for the full 15s poll, points at either the daemon reporting push success before the underlying git
+process/ref-write is actually visible on disk, or a repo-path resolution issue specific to the
+worktree under joint-run load; neither is confirmed. `git-fetch` / `git-update-all` / `git-push-current`
+are the non-flyout quick actions the plan's task A4 explicitly scoped out of the click-bounding fix
+("Leave the non-flyout quick actions … alone — they are not the class this todo names"), and the
+mechanism here is unrelated to flyout anchoring or the rail-Escape overlay — fixing it would expand
+this todo into a new investigation. Recommend a follow-up todo: "git-branch quick-actions
+push-current: unknown-revision race in the joint two-spec run."
