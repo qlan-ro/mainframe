@@ -77,31 +77,52 @@ describe('hydrate', () => {
   });
 });
 
-describe('pruneTo', () => {
-  it('drops tabs whose thread vanished', () => {
+describe('reconcile', () => {
+  it('applies the resolver to the live ids', () => {
     useSessionTabsStore.setState({ tabIds: ['a', 'gone', 'b'] });
 
-    useSessionTabsStore.getState().pruneTo(new Set(['a', 'b']));
+    useSessionTabsStore.getState().reconcile((ids) => ids.filter((id) => id !== 'gone'));
 
     expect(read()).toEqual(['a', 'b']);
   });
 
-  it('leaves the state object untouched when every tab is still valid', () => {
-    // Identity matters, not just equality: the seam prunes on every thread-list
-    // change, and a fresh object each time would re-render the whole strip.
+  it('swaps an id in place — the tab keeps its slot', () => {
+    // This is the store half of the local→remote identity swap: the resolver
+    // maps one id to another without removing and re-appending it.
+    useSessionTabsStore.setState({ tabIds: ['a', 'local', 'b'] });
+
+    useSessionTabsStore.getState().reconcile((ids) => ids.map((id) => (id === 'local' ? 'remote' : id)));
+
+    expect(read()).toEqual(['a', 'remote', 'b']);
+  });
+
+  it('leaves the state object untouched when the resolver returns an equal list', () => {
+    // Identity matters, not just equality: the seam reconciles on every
+    // thread-list change, and a fresh object each time would re-render the
+    // whole strip while a chat streams — even though the resolver allocates a
+    // new array on every call.
     useSessionTabsStore.setState({ tabIds: ['a', 'b'] });
     const before = useSessionTabsStore.getState();
 
-    useSessionTabsStore.getState().pruneTo(new Set(['a', 'b', 'c']));
+    useSessionTabsStore.getState().reconcile((ids) => [...ids]);
 
     expect(useSessionTabsStore.getState()).toBe(before);
   });
 
-  it('empties the strip when nothing is valid', () => {
+  it('empties the strip when the resolver returns nothing', () => {
     useSessionTabsStore.setState({ tabIds: ['a'] });
 
-    useSessionTabsStore.getState().pruneTo(new Set<string>());
+    useSessionTabsStore.getState().reconcile(() => []);
 
     expect(read()).toEqual([]);
+  });
+
+  it('reads the current ids, not a snapshot captured before the call', () => {
+    useSessionTabsStore.setState({ tabIds: ['a'] });
+
+    useSessionTabsStore.getState().ensureTab('b');
+    useSessionTabsStore.getState().reconcile((ids) => ids);
+
+    expect(read()).toEqual(['a', 'b']);
   });
 });
