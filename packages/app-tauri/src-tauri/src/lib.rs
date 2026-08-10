@@ -1,5 +1,7 @@
 mod commands;
 mod log_sink;
+#[cfg(feature = "mcp-bridge")]
+mod mcp_bridge;
 mod memory_logger;
 mod menu;
 mod presence;
@@ -13,8 +15,6 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use tauri::{Emitter, Manager};
-#[cfg(feature = "mcp-bridge")]
-use tauri::ipc::CapabilityBuilder;
 
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{
@@ -84,11 +84,12 @@ pub fn run() {
         // (capabilities/preview.json) can grant exactly these four commands.
         .plugin(preview::bridge_plugin::init());
 
-    // Dev-only: MCP Bridge plugin (webview automation for the Tauri MCP server).
-    // Behind the non-default `mcp-bridge` feature (enabled by `tauri:dev`) so the
-    // crate is compiled out of release builds entirely.
+    // Dev/packaged-QA only: MCP Bridge plugin (webview automation for the Tauri
+    // MCP server). Behind the non-default `mcp-bridge` feature (enabled by
+    // `tauri:dev` or `mcp-bridge-qa`) so the crate is compiled out of release
+    // builds entirely.
     #[cfg(feature = "mcp-bridge")]
-    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    let builder = builder.plugin(mcp_bridge::plugin());
 
     builder
         .on_menu_event(|app, event| {
@@ -168,13 +169,7 @@ pub fn run() {
             // static capability set that ships in release builds. Mirrors the
             // `mcp-bridge`-feature plugin registration above.
             #[cfg(feature = "mcp-bridge")]
-            if let Err(e) = app.add_capability(
-                CapabilityBuilder::new("dev-mcp-bridge")
-                    .window("main")
-                    .permission("mcp-bridge:default"),
-            ) {
-                tracing::warn!(err = %e, "failed to add dev-mcp-bridge capability");
-            }
+            mcp_bridge::grant_capability(app.handle());
 
             // Register the terminal manager (uses the same login-shell env as the
             // daemon so shells inherit the correct PATH/SHELL).
