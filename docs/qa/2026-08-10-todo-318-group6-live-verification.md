@@ -5,6 +5,11 @@ Raw evidence from running the committed packaged-QA recipe end to end, per
 Per that plan, this group does not edit the committed doc or scripts — it
 records what actually happened and reports contradictions.
 
+> **Superseded by the addendum at the end of this file (2026-08-11).** The
+> blocking finding below was fixed on this branch and the recipe re-verified
+> end to end with no workaround. The body is kept as the record of how the
+> cause was found.
+
 **Headline finding: the committed recipe does not achieve working
 `webview_execute_js`/`webview_dom_snapshot`/`webview_screenshot` against the
 packaged QA app.** Helper registration (the ref-based tool gate) fails
@@ -320,6 +325,74 @@ session.
   nothing. Not a regression introduced by this todo; noted because it cost
   real time in this session and would equally mislead a human running the
   same recipe. Out of scope to fix here.
+
+## Addendum, 2026-08-11 — the blocking finding is fixed and re-verified
+
+The remedy this report recommended landed (`tauri.qa.conf.json` gains
+`"dangerousDisableAssetCspModification": ["script-src"]`; the Task 1 guard
+flipped from "key absent" to "key present and exactly `["script-src"]`"), and
+the recipe was re-run against a freshly built QA bundle. **Everything below ran
+with no pre-seed and no workaround of any kind — only the committed scripts.**
+
+| Probe | Before the fix | After |
+|---|---|---|
+| Served `script-src` | `'self' 'unsafe-inline'` + **336** `sha256-` sources | `'self' 'unsafe-inline'`, **0** hash sources |
+| Bridge's injected inline `<script>` | element in DOM, never executed | executes (`probe=1`) |
+| `window.__MCP__.resolveRef` | absent → registration timeout | `function`, first attempt |
+| `webview_execute_js {document.title}` | registration error every time | `"Mainframe"` |
+| `webview_dom_snapshot` / `webview_screenshot` | same registration error | real ref tree / native-path capture |
+
+The three acceptance criteria this report marked unmet are now met by the
+committed recipe:
+
+- **AC 3 (tool trio):** `webview_execute_js`, `webview_dom_snapshot`, and a
+  native-path `webview_screenshot` all succeed on the first attempt.
+- **AC 4 (relaunch gate):** three consecutive `launch-test-tauri-qa.sh`
+  relaunches in one MCP-server session, each with the documented stop-all reset
+  and no pre-seed — bridge bound to `127.0.0.1:9323` every time (its own log
+  line), `identifier`/`cwd` verified every time, `webview_execute_js` returning
+  `"Mainframe"` every time. Results:
+  `docs/qa/assets/2026-08-10-todo-318-group6/task13-relaunch-results-post-csp-fix.json`.
+- **AC 12 (packaged-only CSP smoke):** `new Function('return 1')` still returns
+  `BLOCKED:EvalError` against the packaged app. The fix removed the asset
+  hashes; it did not weaken the eval restriction, which is the property the
+  smoke exists to observe.
+
+### Task 14 completion: the composer restore and error copy this report could not observe
+
+The blocker recorded above (a QA data dir with zero projects, and project
+creation needing the native folder picker) has a bypass: the QA daemon's
+loopback REST is auth-exempt, so `POST /api/projects` and `POST /api/chats`
+seed both without touching the picker. Re-running the scenario that way —
+seed, re-pair through the XFF proxy, open the seeded chat, revoke the device,
+send — surfaced the two pieces that were missing:
+
+- **Error copy, verbatim from the failed message:** `Not authorized on this
+  daemon. Re-pair it from the daemon menu, then send again. Your attachments
+  are back in the composer.`
+- **Composer restore:** the dropped attachment (`qa318.txt`) is back in
+  `composer-attachments` after the failure, and the failed message renders
+  `Failed to send` above the sentence.
+
+Two mechanics worth recording, because both cost time and neither is obvious:
+
+1. **A text-only send does not 401 while the WebSocket is already open.**
+   `chat-thread-controller.sendMessage` puts text on the existing authenticated
+   socket (`this.ws.send({type:'message.send'})`), which the daemon keeps
+   honoring after the device is revoked — the send succeeds and the agent runs.
+   The 401 that carries a `status` comes from the **attachment upload**, a REST
+   call, which is also why the copy's restored-attachments clause exists at all.
+   Reaching that branch needs a send *with an attachment*.
+2. **The attachment can be added without the native file picker** by
+   dispatching a synthetic `DragEvent` carrying a `DataTransfer` at
+   `composer-dropzone`.
+
+**Observation, not a finding of this todo:** sending from a *draft* session
+(no server-side chat yet) while the device is revoked clears the composer and
+surfaces nothing — no failed message, no error copy, typed text lost. The
+draft's chat-creation REST call 401s (the needs-repair footer appears at that
+moment), but the pending-message projection that carries `describeSendError`
+only exists for an already-created chat. Worth its own todo.
 
 ## Cleanup
 
