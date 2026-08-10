@@ -93,7 +93,10 @@ warm-chrome comment pass.
 
 ## Task groups
 
-Four groups. No two groups write the same file.
+Four groups. No two groups write the same file. Ordering is two waves: groups 1 and 3 run together —
+their files are disjoint and neither runs a package-wide check — then group 2, then group 4. Group 2
+waits on group 3 as well as group 1 because its typecheck compiles the files group 3 edits; running them
+concurrently would make each group's gate fail on the other's half-finished file.
 
 ---
 
@@ -146,8 +149,10 @@ returns nothing.
 
 ### Group 2 — `surface-host-geometry` (ui)
 
-**depends_on:** `surface-host-red-test`. This group turns that test green, so it must not start before
-the failure has been observed.
+**depends_on:** `surface-host-red-test`, `dead-exports-and-comments`. This group turns the red test green,
+so it must not start before the failure has been observed. It also waits on group 3 because task 2.2's
+package-wide typecheck compiles `features/palette/SpotlightRow.tsx` and `layout/surface-icons.tsx` —
+group 3's files — and would report a red gate for an edit this group does not own.
 
 #### Task 2.1 — Inline the geometry into `SurfaceHost` and drop the dead inset
 
@@ -192,11 +197,14 @@ importer in the repo and task 2.1 removed it — no barrel, tsconfig path, or vi
 **Verification:** `ls packages/ui/src/lib/appearance` fails with "No such file or directory".
 `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes — an unresolved import would surface here.
 
+Any failure in another group's file goes back to the owning group; do not patch it from here.
+
 ---
 
 ### Group 3 — `dead-exports-and-comments` (ui)
 
-**depends_on:** none. Shares no file with any other group.
+**depends_on:** none. Shares no file with any other group, and runs in the first wave alongside group 1.
+Group 2 waits on this group; nothing here waits on anything.
 
 #### Task 3.1 — Delete the dead palette icon entry and its import
 
@@ -245,8 +253,8 @@ explanatory prose.
 still passes (comment-only change). `git grep -Ini "inspector" -- packages/ui/src` returns hits only in
 `store/ui-prefs.ts`, `store/__tests__/ui-prefs.test.ts`, `features/review/ReviewScopeSwitcher.tsx`,
 `features/review/__tests__/ReviewPanel.test.tsx` — all four past-tense and all four on the do-not-touch
-list — plus `lib/appearance/shell-geometry.ts` if group 2 has not landed yet. That last hit is group 2's
-to clear; do not delete the shim from this group.
+list — plus `lib/appearance/shell-geometry.ts`, which is still on disk: group 2 runs after this group and
+owns that deletion. Do not delete the shim from here.
 
 #### Task 3.4 — Correct the design-system reference doc
 
@@ -262,6 +270,8 @@ the strings `SHELL_GEOMETRY` or `shell-geometry` (decision 6/7). Change nothing 
 returns nothing; `git diff --stat origin/main...HEAD -- .claude/skills/mainframe-design-system/references/v2-stock.md`
 shows one insertion and one deletion. Leave the file's two other `InspectorPane` mentions (lines 572 and
 585) alone — both are past-tense records of surfaces that died.
+
+Any failure in another group's file goes back to the owning group; do not patch it from here.
 
 ---
 
