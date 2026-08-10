@@ -169,16 +169,52 @@ async function closeBranchPopover(page: Page): Promise<void> {
   await expect(page.getByTestId('git-submenu')).toHaveCount(0);
 }
 
-/** Open a branch row's action flyout (the row is a DropdownMenuSubTrigger). */
+/**
+ * Open a branch row's action flyout (the row is a DropdownMenuSubTrigger). The
+ * flyout anchors to the row's on-screen position, which is only final once the
+ * branch data has landed (the caller's `openBranchPopover` wait for that), but a
+ * mid-flight list re-render can still close an already-open Sub before Radix has
+ * finished anchoring it. Opening is side-effect-free, so this retries the open —
+ * and only the open, never the flyout item click that follows it — up to twice,
+ * re-asserting the row is visible between attempts instead of sleeping. The final
+ * attempt lets the assertion throw so a genuine failure names the row or the
+ * flyout, not a swallowed retry.
+ */
 async function openSubmenu(page: Page, branch: string): Promise<void> {
-  await page.getByTestId(`git-branch-row-${branch}`).click();
-  await expect(page.getByTestId('git-submenu')).toBeVisible({ timeout: 5_000 });
+  const row = page.getByTestId(`git-branch-row-${branch}`);
+  const submenu = page.getByTestId('git-submenu');
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await expect(row).toBeVisible({ timeout: 5_000 });
+    await row.click({ timeout: 5_000 });
+    if (attempt === maxAttempts) {
+      await expect(submenu).toBeVisible({ timeout: 5_000 });
+      return;
+    }
+    try {
+      await expect(submenu).toBeVisible({ timeout: 5_000 });
+      return;
+    } catch {
+      /* a mid-flight re-render closed the flyout before it settled; retry the open */
+    }
+  }
 }
 
 /** Open the branch menu and a branch's flyout in one step. */
 async function openBranchSubmenu(page: Page, branch: string): Promise<void> {
   await openBranchPopover(page);
   await openSubmenu(page, branch);
+}
+
+/**
+ * Click a flyout action item by its `git-submenu-*` testid. Bounded with its own
+ * timeout rather than inheriting the whole test timeout: selecting an item is a
+ * real git mutation (rule 2 — not retriable), so a failure here must surface in
+ * seconds and name the element, instead of riding the 45s mock test timeout the
+ * way an unbounded `.click()` would.
+ */
+async function clickSubmenuItem(page: Page, testid: string): Promise<void> {
+  await page.getByTestId(testid).click({ timeout: 5_000 });
 }
 
 /**
@@ -397,7 +433,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     const { page } = app;
     await openBranchSubmenu(page, 'feature/checkout-target');
     await expectItemEnabled(page, 'git-submenu-checkout');
-    await page.getByTestId('git-submenu-checkout').click();
+    await clickSubmenuItem(page, 'git-submenu-checkout');
     // Selecting the item closes the whole menu (BranchSubmenu items don't
     // preventDefault) — the outcome is read from git and from the toolbar chip.
     await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
@@ -421,7 +457,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
   test('branch row flyout: new branch from a selected branch', async () => {
     const { page } = app;
     await openBranchSubmenu(page, 'main');
-    await page.getByTestId('git-submenu-new-branch-from').click();
+    await clickSubmenuItem(page, 'git-submenu-new-branch-from');
     await expect(page.getByTestId('git-new-branch-dialog')).toBeVisible();
     // `git-new-branch-start` is a Select TRIGGER (a button showing SelectValue),
     // not an input — the start point is its text.
@@ -441,7 +477,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
 
     await openBranchSubmenu(page, 'feature/ff-branch');
     await expectItemEnabled(page, 'git-submenu-merge');
-    await page.getByTestId('git-submenu-merge').click();
+    await clickSubmenuItem(page, 'git-submenu-merge');
     await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
 
     await expect.poll(() => git(worktreePath, ['rev-parse', 'HEAD']).trim(), { timeout: 10_000 }).toBe(ffHead);
@@ -451,7 +487,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
   test('branch row flyout: Rename… hands off to the rename dialog', async () => {
     const { page } = app;
     await openBranchSubmenu(page, 'feature/rename-me');
-    await page.getByTestId('git-submenu-rename').click();
+    await clickSubmenuItem(page, 'git-submenu-rename');
 
     // Forms don't live in Radix menus: Rename is its own Dialog and the menu closes
     // behind it (RenameBranchDialog / BranchPopover's DialogState).
@@ -479,7 +515,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
   test('branch row flyout: delete force-deletes a not-yet-merged branch (two-step confirm)', async () => {
     const { page } = app;
     await openBranchSubmenu(page, 'feature/delete-me');
-    await page.getByTestId('git-submenu-delete').click();
+    await clickSubmenuItem(page, 'git-submenu-delete');
 
     const confirmDialog = page.getByTestId('git-confirm-dialog');
     await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
@@ -510,7 +546,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     expect(git(project.projectPath, ['rev-parse', 'feature/pull-target']).trim()).not.toBe(remoteHead);
 
     await openBranchSubmenu(page, 'feature/pull-target');
-    await page.getByTestId('git-submenu-pull').click();
+    await clickSubmenuItem(page, 'git-submenu-pull');
 
     await expect
       .poll(() => git(project.projectPath, ['rev-parse', 'feature/pull-target']).trim(), { timeout: 15_000 })
@@ -524,7 +560,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     expect(git(bareRepoPath, ['rev-parse', 'feature/push-target']).trim()).not.toBe(localHead);
 
     await openBranchSubmenu(page, 'feature/push-target');
-    await page.getByTestId('git-submenu-push').click();
+    await clickSubmenuItem(page, 'git-submenu-push');
 
     await expect
       .poll(() => git(bareRepoPath, ['rev-parse', 'feature/push-target']).trim(), { timeout: 15_000 })
@@ -535,13 +571,13 @@ test.describe('§git-branch — Toolbar branch popover', () => {
   test('conflict view: a conflicting merge routes the branch menu to the conflict dialog; abort recovers', async () => {
     const { page } = app;
     await openBranchSubmenu(page, 'feature/conflict-a');
-    await page.getByTestId('git-submenu-checkout').click();
+    await clickSubmenuItem(page, 'git-submenu-checkout');
     await expect
       .poll(() => git(worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim(), { timeout: 10_000 })
       .toBe('feature/conflict-a');
 
     await openBranchSubmenu(page, 'feature/conflict-b');
-    await page.getByTestId('git-submenu-merge').click();
+    await clickSubmenuItem(page, 'git-submenu-merge');
 
     // Selecting Merge closes the menu, and BranchPopover only swaps in the conflict
     // dialog while the menu is OPEN (`if (open && hasConflict)`), so the conflict
@@ -587,7 +623,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     // observable server-side outcome the row-disappearance is supposed to reflect.
     const respPromise = page.waitForResponse((r) => r.url().includes('/git/delete-worktree'));
 
-    await page.getByTestId('git-submenu-delete-worktree').click();
+    await clickSubmenuItem(page, 'git-submenu-delete-worktree');
     const confirmDialog = page.getByTestId('git-confirm-dialog');
     await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
     await expect(confirmDialog).toContainText('wt-delete');
@@ -652,7 +688,7 @@ test.describe('§git-branch — Toolbar branch popover', () => {
     // Also moved into the flyout — `git-submenu-new-session` is only rendered for a
     // branch that IS checked out in a worktree (BranchSubmenu's isWorktree branch).
     await openBranchSubmenu(page, 'feature/worktree-session');
-    await page.getByTestId('git-submenu-new-session').click();
+    await clickSubmenuItem(page, 'git-submenu-new-session');
 
     // The menu closes both ways here: the item select closes it, and the new-session
     // flow calls `onDone`/closeMenu as well (useNewSessionAction).
