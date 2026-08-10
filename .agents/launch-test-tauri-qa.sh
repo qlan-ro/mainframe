@@ -87,6 +87,16 @@ if [ "$QA_DAEMON_PORT" -lt 1024 ] || [ "$QA_DAEMON_PORT" -gt 65535 ] || [ "$QA_D
   echo "REFUSED: QA_DAEMON_PORT must be 1024-65535 and never production 31415, got '$QA_DAEMON_PORT'" >&2
   exit 1
 fi
+# `..` is refused rather than normalized: a component that doesn't exist yet
+# can't be resolved, so `$HOME/absent/../.mainframe/new` would survive
+# canonicalization intact and clear the containment check, and `mkdir -p` would
+# then create the absent component and land in the production dir anyway.
+case "/$QA_DATA_DIR/" in
+  */../*)
+    echo "REFUSED: QA_DATA_DIR must not contain '..' components, got '$QA_DATA_DIR'" >&2
+    exit 1
+    ;;
+esac
 PROD_DATA_DIR="$(canonical_path "$HOME/.mainframe")"
 QA_DATA_DIR="$(canonical_path "$QA_DATA_DIR")"
 if [ "$QA_DATA_DIR" = "$PROD_DATA_DIR" ] || [ "${QA_DATA_DIR#"$PROD_DATA_DIR"/}" != "$QA_DATA_DIR" ]; then
