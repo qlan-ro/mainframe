@@ -9,11 +9,12 @@
 import { create } from 'zustand';
 
 interface SessionTabsStore {
-  tabIds: string[];
+  /** Replaced wholesale on every change — the open set is never mutated in place. */
+  tabIds: readonly string[];
   /** True once the persisted set has been restored against a loaded thread list. */
   hydrated: boolean;
   /** Restored ids lead; tabs opened before hydration (boot draft/auto-select) follow. */
-  hydrate: (restored: string[]) => void;
+  hydrate: (restored: readonly string[]) => void;
   /** Idempotent append — the membership seam calls this on every active-thread change. */
   ensureTab: (id: string) => void;
   closeTab: (id: string) => void;
@@ -22,7 +23,7 @@ interface SessionTabsStore {
    * knows neither which ids are still valid nor how a session's two identities
    * collapse into one.
    */
-  reconcile: (resolve: (ids: readonly string[]) => string[]) => void;
+  reconcile: (resolve: (ids: readonly string[]) => readonly string[]) => void;
 }
 
 function sameIds(a: readonly string[], b: readonly string[]): boolean {
