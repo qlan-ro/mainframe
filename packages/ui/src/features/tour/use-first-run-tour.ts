@@ -10,8 +10,8 @@
  * the tour does not dismiss it.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
-import { threadListStateToSessionItems } from '../sessions/view-model/chat-to-thread-custom';
+import { useAui } from '@assistant-ui/react';
+import { regularThreadItemsToSessionItems } from '../sessions/view-model/chat-to-thread-custom';
 import { useTutorialStore } from '@/store/tutorial';
 
 /** Time to let the remote chats list load before deciding the workspace is empty. */
@@ -20,7 +20,7 @@ const SETTLE_MS = 1500;
 export function useFirstRunTour(): boolean {
   const completed = useTutorialStore((s) => s.completed);
   const step = useTutorialStore((s) => s.step);
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   // A persisted step > 0 means the tour was already running (e.g. a reload
   // mid-tour) — keep showing it without re-checking the workspace.
   const [armed, setArmed] = useState(step > 0);
@@ -29,7 +29,9 @@ export function useFirstRunTour(): boolean {
 
   useEffect(() => {
     if (completed || armedRef.current) return;
-    const sessionCount = () => threadListStateToSessionItems(runtime.threads.getState()).length;
+    // Regular-only: counting archived sessions would suppress the tour for someone
+    // whose every session is archived — an empty workspace as far as the tour cares.
+    const sessionCount = () => regularThreadItemsToSessionItems(aui.threads().getState().threadItems).length;
     // Returning user with sessions already loaded — never auto-open.
     if (sessionCount() > 0) return;
 
@@ -37,7 +39,7 @@ export function useFirstRunTour(): boolean {
       if (sessionCount() === 0) setArmed(true);
     }, SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [completed, runtime]);
+  }, [completed, aui]);
 
   return !completed && armed;
 }
