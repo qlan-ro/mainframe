@@ -14,8 +14,8 @@ import {
   canonicalTabId,
   nextActiveAfterClose,
   persistTabIds,
+  reconcileTabIds,
   restoreTabIds,
-  validTabIds,
 } from '../tabs-model';
 
 /** A real session row: a regular thread-list entry, optionally remoteId-stamped. */
@@ -126,33 +126,75 @@ describe('canonicalTabId', () => {
   });
 });
 
-describe('validTabIds', () => {
-  it('keeps regular entries', () => {
-    const items = [entry('chat-a'), entry('chat-b')];
+describe('reconcileTabIds', () => {
+  it('collapses the orphaned draft identity onto the created session, in its original slot', () => {
+    const items = [
+      entry('chat-a', { custom: {}, title: 'Older session' }),
+      entry('__LOCALID_9', { remoteId: 'chat-new' }), // orphan: regular, remoteId, no custom/title
+      entry('chat-new', { custom: {}, title: 'Fix the parser' }),
+    ];
 
-    expect([...validTabIds(items, 'chat-a')].sort()).toEqual(['chat-a', 'chat-b']);
+    expect(reconcileTabIds(['chat-a', '__LOCALID_9', 'chat-new'], items, 'chat-new')).toEqual(['chat-a', 'chat-new']);
   });
 
-  it('keeps the ACTIVE draft even though it is not a regular entry', () => {
+  it('collapses in place even before the seam appends the canonical id', () => {
+    const items = [
+      entry('chat-a', { custom: {}, title: 'Older session' }),
+      entry('__LOCALID_9', { remoteId: 'chat-new' }),
+      entry('chat-new', { custom: {}, title: 'Fix the parser' }),
+    ];
+
+    expect(reconcileTabIds(['chat-a', '__LOCALID_9'], items, 'chat-new')).toEqual(['chat-a', 'chat-new']);
+  });
+
+  it('keeps the pre-handoff draft as itself when only the local entry exists', () => {
+    const items = [entry('chat-a', { custom: {} }), entry('__LOCALID_9', { remoteId: 'chat-new' })];
+
+    expect(reconcileTabIds(['chat-a', '__LOCALID_9'], items, '__LOCALID_9')).toEqual(['chat-a', '__LOCALID_9']);
+  });
+
+  it('keeps the ACTIVE unsent draft even though it is not a regular entry', () => {
     // The unsent draft has status 'new' and no custom, so it is not a list row —
     // but it IS the focused tab while the user types into it.
     const items = [entry('chat-a'), entry('__LOCALID_1', { status: 'new' })];
 
-    expect([...validTabIds(items, '__LOCALID_1')].sort()).toEqual(['__LOCALID_1', 'chat-a']);
+    expect(reconcileTabIds(['chat-a', '__LOCALID_1'], items, '__LOCALID_1')).toEqual(['chat-a', '__LOCALID_1']);
   });
 
-  it('excludes an INACTIVE draft — the boot-draft cleanup rule', () => {
+  it('drops the INACTIVE unsent draft — the boot-draft cleanup rule', () => {
     // aui reuses one `__LOCALID_*` slot, so "+" reaches the same draft again;
     // a lingering "New Session" tab would survive every boot's auto-select redirect.
     const items = [entry('chat-a'), entry('__LOCALID_1', { status: 'new' })];
 
-    expect([...validTabIds(items, 'chat-a')]).toEqual(['chat-a']);
+    expect(reconcileTabIds(['chat-a', '__LOCALID_1'], items, 'chat-a')).toEqual(['chat-a']);
   });
 
-  it('excludes archived entries', () => {
+  it('drops archived entries', () => {
     const items = [entry('chat-a'), entry('chat-b', { status: 'archived' })];
 
-    expect([...validTabIds(items, null)]).toEqual(['chat-a']);
+    expect(reconcileTabIds(['chat-a', 'chat-b'], items, 'chat-a')).toEqual(['chat-a']);
+  });
+
+  it('drops ids whose thread vanished', () => {
+    const items = [entry('chat-a')];
+
+    expect(reconcileTabIds(['chat-a', 'chat-gone'], items, 'chat-a')).toEqual(['chat-a']);
+  });
+
+  it('keeps the active thread canonical when the active id is still the local one', () => {
+    const items = [
+      entry('chat-a', { custom: {}, title: 'Older session' }),
+      entry('__LOCALID_9', { remoteId: 'chat-new' }),
+      entry('chat-new', { custom: {}, title: 'Fix the parser' }),
+    ];
+
+    expect(reconcileTabIds(['chat-a', '__LOCALID_9'], items, '__LOCALID_9')).toEqual(['chat-a', 'chat-new']);
+  });
+
+  it('is a no-op on a set with nothing to collapse', () => {
+    const items = [entry('chat-a'), entry('chat-b')];
+
+    expect(reconcileTabIds(['chat-a', 'chat-b'], items, 'chat-a')).toEqual(['chat-a', 'chat-b']);
   });
 });
 
