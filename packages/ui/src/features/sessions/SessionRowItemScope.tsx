@@ -16,20 +16,22 @@
  * loudly if it is ever violated.
  */
 import type { PropsWithChildren } from 'react';
-import { AuiProvider, useAui } from '@assistant-ui/react';
-import type { AssistantClient } from '@assistant-ui/react';
+import { AuiConfig, AuiProvider, useAui } from '@assistant-ui/react';
 import { Derived } from '@assistant-ui/store';
 
 export function SessionRowItemScope({ id, children }: PropsWithChildren<{ id: string }>) {
-  const aui = useAui({
-    // `Derived` erases to `any` in the published typings, so the callback needs
-    // its parameter annotated or `noImplicitAny` rejects the file.
+  const aui = useAui();
+  const config = AuiConfig({
     threadListItem: Derived({
       source: 'threads',
       query: { type: 'id', id },
-      get: (client: AssistantClient) => client.threads().item({ id }),
+      get: (client) => client.threads.item({ id }),
     }),
   });
 
-  return <AuiProvider value={aui}>{children}</AuiProvider>;
+  return (
+    <AuiProvider extends={aui} config={config}>
+      {children}
+    </AuiProvider>
+  );
 }
