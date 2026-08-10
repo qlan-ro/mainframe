@@ -8,7 +8,7 @@
  * keyboard navigation the v1 version hand-rolled.
  */
 import { useEffect, useState } from 'react';
-import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandList } from '@/components/ui/command';
 import { InputGroupAddon } from '@/components/ui/input-group';
@@ -50,7 +50,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const parsed = parseQuery(query);
 
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const sessions = threadItemsToSessionItems(threadItems);
   const port = useDaemonPort();
@@ -63,7 +63,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     projectPath,
     chatId,
     sessions,
-    switchToThread: (id) => runtime.threads.switchToThread(id),
+    switchToThread: (id) => aui.threads().switchToThread(id),
   });
 
   // Controlled selection: rows land async, after cmdk's own
