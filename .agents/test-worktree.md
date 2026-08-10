@@ -47,7 +47,9 @@ pick one per run (user's ask → diff paths → default).
 
 - Type: `tauri-desktop`, packaged variant — a debug-profile app bundle built
   with the `mcp-bridge-qa` feature and the `tauri.qa.conf.json` overlay
-  (global Tauri IPC + relaxed `script-src`), not the dev shell.
+  (global Tauri IPC, `'unsafe-inline'` in `script-src`, and Tauri's asset-hash
+  injection disabled for `script-src` — the hashes would otherwise cancel
+  `'unsafe-inline'`), not the dev shell.
 - Engine: `tauri-mcp`, same as `tauri`, but the bridge is compiled into a
   *packaged* build via `mcp-bridge-qa` (dev's `mcp-bridge` feature is absent
   from every other packaged build; this is the one exception).

@@ -1,8 +1,11 @@
 //! Guards the security concessions the packaged-QA config overlay is allowed to make.
 //!
-//! `tauri.conf.json` must stay locked down forever; `tauri.qa.conf.json` (added in
-//! a later task) may relax exactly `script-src` to add `'unsafe-inline'` and
-//! `withGlobalTauri`, and nothing else. See docs/plans/2026-08-10-todo-318-packaged-tauri-qa-bridge-plan.md.
+//! `tauri.conf.json` must stay locked down forever; `tauri.qa.conf.json` may make
+//! exactly three concessions — `'unsafe-inline'` in `script-src`,
+//! `withGlobalTauri`, and disabling Tauri's asset-hash injection for `script-src`
+//! (without it, the injected hash sources make browsers ignore `'unsafe-inline'`
+//! in that same directive) — and nothing else.
+//! See docs/plans/2026-08-10-todo-318-packaged-tauri-qa-bridge-plan.md.
 
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -94,10 +97,24 @@ fn qa_overlay_relaxes_only_script_src_to_allow_inline() {
     );
 }
 
+// The QA overlay is the one config allowed to set this key, and only to the
+// narrow list form: Tauri injects a SHA-256 source for every bundled JS asset
+// into `script-src`, and per CSP any hash source in a directive makes browsers
+// ignore `'unsafe-inline'` in that same directive — which blocks the bridge's
+// injected helper. `true` would also stop the `style-src` injection, which the
+// bridge does not need.
 #[test]
-fn qa_overlay_has_no_csp_modification_escape_hatch() {
+fn qa_overlay_disables_asset_csp_modification_for_script_src_only() {
     let config = load_config(QA_CONFIG_PATH);
-    assert!(!security_object(&config).contains_key("dangerousDisableAssetCspModification"));
+    let disabled = security_object(&config)
+        .get("dangerousDisableAssetCspModification")
+        .expect("qa overlay must disable asset csp modification for script-src");
+
+    assert_eq!(
+        disabled,
+        &serde_json::json!(["script-src"]),
+        "must be exactly [\"script-src\"], got: {disabled}"
+    );
 }
 
 #[test]

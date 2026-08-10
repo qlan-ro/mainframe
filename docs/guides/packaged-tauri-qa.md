@@ -48,7 +48,10 @@ bash scripts/build-qa-tauri.sh
 ```
 
 `build-qa-tauri.sh` compiles the `mcp-bridge-qa` feature and the
-`tauri.qa.conf.json` overlay into a debug-profile app bundle (never a dmg) at
+`tauri.qa.conf.json` overlay — three security concessions, and only these
+three: `withGlobalTauri`, `'unsafe-inline'` in `script-src`, and
+`"dangerousDisableAssetCspModification": ["script-src"]` — into a
+debug-profile app bundle (never a dmg) at
 `packages/app-tauri/src-tauri/target/debug/bundle/macos/Mainframe.app`. The
 launch step is `.agents/launch-test-tauri-qa.sh` — it resolves isolated ports
 and a data dir, refuses to run without them, and blocks until it prints
@@ -62,6 +65,16 @@ the `tauri-qa` target once this branch merges into it. Until then, run:
 ```bash
 bash .agents/launch-test-tauri-qa.sh
 ```
+
+`'unsafe-inline'` alone is not enough to unblock the bridge's injected helper:
+Tauri appends a SHA-256 source to `script-src` for every bundled JS asset (336
+of them here), and per the CSP spec any hash source in a directive makes
+browsers ignore `'unsafe-inline'` in that same directive. That is what
+`"dangerousDisableAssetCspModification": ["script-src"]` turns off — narrowly,
+leaving the `style-src` hashes alone. Evidence:
+`docs/qa/2026-08-10-todo-318-group6-live-verification.md`.
+`packages/app-tauri/src-tauri/tests/config_guard.rs` fails if any of the three
+concessions widens, or if one reaches the default config.
 
 ## 4. Attach and verify attachment
 
