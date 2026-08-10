@@ -4,8 +4,8 @@
  * Must run UNDER <AssistantRuntimeProvider> so it can reach the live thread
  * list + active thread. Applies the cross-cutting list side-effects (fix B9):
  *
- *   chat.created / chat.ended           → aui.threads.reload()
- *   chat.updated                        → aui.threads.reload() (idempotent;
+ *   chat.created / chat.ended           → threads.reload()
+ *   chat.updated                        → threads.reload() (idempotent;
  *                                          re-derives custom from the daemon)
  *   chat.notification / permission(notify) → unread.markUnread()
  *   chat.notification (attention_request)  → host.notify() (OS banner)
@@ -60,14 +60,16 @@ function clearFilterOnCrossProject(active: SessionItem | undefined): void {
 }
 
 export function useSessionListRouter(): void {
-  const aui = useAui();
+  // The `threads` SCOPE, not the client: `useAui()` returns a fresh client on
+  // every main-thread switch, and the WS wiring below must outlive those.
+  const threads = useAui().threads;
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // Select the stable store-scope threadItems array; project to SessionItem[]
   // outside the selector (a fresh array would loop useAuiState's Object.is).
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 
-  // Keep a ref so the router callback (created once in the [aui] effect) can
+  // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
   const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -91,7 +93,7 @@ export function useSessionListRouter(): void {
         trailing = true;
         return;
       }
-      void aui.threads.reload();
+      void threads.reload();
       cooling = setTimeout(() => {
         cooling = null;
         if (trailing) {
@@ -124,9 +126,12 @@ export function useSessionListRouter(): void {
       if (cooling != null) clearTimeout(cooling);
       router.dispose();
     };
-    // `useAui()` returns a client whose identity only changes on a structural
-    // change, so the router keeps its created-once/disposed-on-unmount property.
-  }, [aui]);
+    // The scope's identity survives a thread switch (the client's does not), so
+    // the router keeps its created-once/disposed-on-unmount property — and the
+    // debounce state above survives with it. Re-running here on every switch
+    // would drop a queued trailing reload, stranding the list on stale metadata
+    // until the next event.
+  }, [threads]);
 
   // Active-thread side-effects: unread clear, cross-project filter clear, and the
   // archived-active fallback. `lastActiveRef` dedupes the once-per-activation work;
@@ -156,7 +161,7 @@ export function useSessionListRouter(): void {
       // unselected). Adopt the remote item, exactly like the manual sidebar click.
       const draftRemoteId = threadItems.find((t) => t.id === mainThreadId)?.remoteId;
       if (draftRemoteId != null && items.some((t) => t.id === draftRemoteId)) {
-        void aui.threads.switchToThread(draftRemoteId);
+        void threads.switchToThread(draftRemoteId);
         return;
       }
 
@@ -169,7 +174,7 @@ export function useSessionListRouter(): void {
         const target = fallback();
         if (target != null) {
           prevRealActiveRef.current = null;
-          aui.threads.switchToThread(target);
+          threads.switchToThread(target);
         }
       }
       return;
@@ -180,7 +185,7 @@ export function useSessionListRouter(): void {
     // is archived out from under us, fall back the same way.
     if (active.status === 'archived') {
       const target = fallback();
-      if (target != null) aui.threads.switchToThread(target);
+      if (target != null) threads.switchToThread(target);
       return;
     }
 
@@ -193,7 +198,7 @@ export function useSessionListRouter(): void {
     if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
     rememberActiveSession(active);
     clearFilterOnCrossProject(active);
-  }, [mainThreadId, items, threadItems, aui]);
+  }, [mainThreadId, items, threadItems, threads]);
 
   // Boot auto-select: open a session once the list first loads, so the app doesn't
   // land on the empty new-thread picker. Prefers the last session open before the
@@ -212,9 +217,9 @@ export function useSessionListRouter(): void {
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
-      aui.threads.switchToThread(target);
+      threads.switchToThread(target);
     }
-  }, [items, mainThreadId, aui]);
+  }, [items, mainThreadId, threads]);
 
   // GC: prune persisted layout entries for sessions no longer in the thread list.
   // Guard: only when the list is non-empty to avoid wiping everything before first load.
