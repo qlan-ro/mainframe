@@ -9,9 +9,14 @@ export default defineConfig({
   // replays recorded NDJSON with every inter-event delay capped at 120ms, so its slowest
   // PASSING test on CI is under 5s — a 2-min budget there only decides how long a hung test
   // takes to be declared dead, and rc.22 spent 12 of its 27 test-minutes doing exactly that.
-  // 45s keeps ~9x headroom over the slowest observed test. A spec that genuinely needs more
+  // 60s keeps ~12x headroom over the slowest observed test, and — the binding constraint —
+  // stays ABOVE the longest wait any test performs on itself. At 45s it tied `tool-cards`'
+  // own `waitFor({ timeout: 45_000 })`, so the backstop killed the test first and reported
+  // "Target page has been closed" instead of "waiting for chat-plan-gate": the failure was
+  // real either way, but the budget stole its diagnosis. A backstop below an in-test wait
+  // buys nothing and costs the error message. A spec that genuinely needs more
   // (stress-matrix) overrides per-test with `test.setTimeout`.
-  timeout: process.env['E2E_MODE'] === 'mock' ? 45_000 : 120_000,
+  timeout: process.env['E2E_MODE'] === 'mock' ? 60_000 : 120_000,
   // 40 min total by default — the full AI suite (serial) exceeds 10 min end-to-end. Override via
   // MF_E2E_GLOBAL_TIMEOUT (ms) for targeted multi-file invocations where 40 min would starve later
   // files sharing this one process budget (e.g. running a handful of specs back-to-back).
