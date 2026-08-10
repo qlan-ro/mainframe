@@ -54,9 +54,17 @@ APP_PATH="$PROJECT_ROOT/packages/app-tauri/src-tauri/target/debug/bundle/macos/M
 # deepest existing ancestor.
 canonical_path() {
   p="${1%/}"
-  if [ -d "$p" ]; then (cd "$p" && pwd -P); return 0; fi
-  parent="$(dirname "$p")"
-  if [ -d "$parent" ]; then echo "$(cd "$parent" && pwd -P)/$(basename "$p")"; else echo "$p"; fi
+  [ -n "$p" ] || p="/"
+  suffix=""
+  # Walk up to the deepest ancestor that exists: resolving only the immediate
+  # parent would leave `~/link-to-production/a/b` unresolved, and `mkdir -p`
+  # would then follow that symlink straight into the production data dir.
+  while [ ! -d "$p" ] && [ "$p" != "/" ] && [ "$p" != "." ]; do
+    suffix="/$(basename "$p")$suffix"
+    p="$(dirname "$p")"
+  done
+  [ ! -d "$p" ] || p="$(cd "$p" && pwd -P)"
+  printf '%s\n' "${p%/}$suffix"
 }
 
 # Step 4: refusal gate, on the resolved values.
@@ -65,9 +73,12 @@ canonical_path() {
 # parse as a u16, so `garbage`, `99999`, and `031415` would each launch the QA
 # app straight onto the production daemon. Leading zeros are rejected outright
 # rather than normalized — Rust reads `031415` as 31415 while `test -eq` reads
-# it as octal, and no gate should depend on which of those two is right.
+# it as octal, and no gate should depend on which of those two is right. Six or
+# more digits are rejected here, before the range check: they overflow `test`'s
+# integers, which then fails with "integer expression expected" — a non-zero
+# status that an `if` reads as "not out of range", passing the gate.
 case "$QA_DAEMON_PORT" in
-  '' | 0* | *[!0-9]*)
+  '' | 0* | *[!0-9]* | ??????*)
     echo "REFUSED: QA_DAEMON_PORT must be a decimal port number, got '$QA_DAEMON_PORT'" >&2
     exit 1
     ;;
@@ -116,10 +127,13 @@ PID_FILE="/tmp/mf-tauri-qa-${DAEMON_PORT}.pid"
 # in-use refusal below to catch it. This ordering — kill before the "already
 # listening" check — is load-bearing: checking first would make every relaunch
 # refuse against its own predecessor instead of replacing it.
+# The trailing slash is load-bearing: a bare `$PROJECT_ROOT*` prefix also
+# matches a sibling checkout whose path merely starts with ours
+# (`.worktrees/todo-318` vs `.worktrees/todo-318-other`).
 pid_is_ours() {
   case "$1" in '' | *[!0-9]*) return 1 ;; esac
   case "$(ps -p "$1" -o command= 2>/dev/null)" in
-    "$PROJECT_ROOT"*) return 0 ;;
+    "$PROJECT_ROOT"/*) return 0 ;;
     *) return 1 ;;
   esac
 }

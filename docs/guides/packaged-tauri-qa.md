@@ -153,10 +153,11 @@ launch if the resolved values aren't isolated:
 Both gates compare **resolved** values, not the strings they were handed,
 because a near-miss reaches production either way: `parse_daemon_port`
 (`src-tauri/src/lib.rs`) falls back to production `31415` on any value it
-can't read as a `u16`, so `garbage`, `99999`, and `031415` would each launch
-the QA app onto the production daemon; and `~/.mainframe/`, `~/.mainframe/sub`,
-and a symlink to `~/.mainframe` all reach the production data dir while
-comparing unequal as strings.
+can't read as a `u16`, so `garbage`, `99999`, `031415`, and a value too long
+for `test`'s integers would each launch the QA app onto the production daemon;
+and `~/.mainframe/`, `~/.mainframe/sub`, and a symlink to `~/.mainframe` — at
+any depth, existing or not — all reach the production data dir while comparing
+unequal as strings.
 
 The gate reads the **resolved** values, never the ambient ones — an inherited
 production `DAEMON_PORT` in the calling shell is exactly what wedged the
