@@ -41,10 +41,11 @@ url = "2"
 # with no token. Enable the real OS stores per platform.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
-# Dev-only: MCP Bridge plugin for the Tauri MCP server (webview screenshots,
-# DOM inspection, IPC). Optional + behind the non-default `mcp-bridge` feature
-# (enabled by `tauri:dev`), so it is excluded from the release binary entirely.
-tauri-plugin-mcp-bridge = { version = "0.11", optional = true }
+# Dev and packaged-QA only: MCP Bridge plugin for the Tauri MCP server (webview
+# screenshots, DOM inspection, IPC). Optional + behind the non-default
+# `mcp-bridge` feature (enabled by `tauri:dev`), so it is excluded from the
+# release binary entirely.
+tauri-plugin-mcp-bridge = { version = "0.12", optional = true }
 sysinfo = { version = "0.31", default-features = false, features = ["system"] }
 
 [features]
@@ -52,6 +53,10 @@ sysinfo = { version = "0.31", default-features = false, features = ["system"] }
 # by `tauri:dev` (--features mcp-bridge) and omitted by `tauri build`, so the
 # plugin's code is absent from release builds, not merely left unregistered.
 mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
+# Packaged-QA webview automation (todo #318): same bridge, compiled into a
+# non-default packaged build so tauri-mcp can drive it. Implies `mcp-bridge`;
+# turns on the loopback base port 9323 instead of dev's 9223. Not default.
+mcp-bridge-qa = ["mcp-bridge"]
 
 # macOS-only deps for the preview child-webview native snapshot (Task 5).
 # Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate
