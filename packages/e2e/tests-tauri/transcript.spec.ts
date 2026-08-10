@@ -92,7 +92,7 @@ async function transcriptDom(page: Page) {
 }
 
 /**
- * TODO(bug): the two tests below are SKIPPED pending an app fix. On the Linux CI
+ * TODO(bug) #320: the two tests below are SKIPPED pending an app fix. On the Linux CI
  * runner the transcript empties partway through this file and does not come back:
  * the four tests above pass while asserting message content, then every later
  * read of the thread returns `{threads:1, messages:0, textParts:0,
@@ -217,7 +217,7 @@ test.describe('§transcript — thread turn', () => {
     const { page } = app;
     test.skip(
       true,
-      'TODO(bug): on the Linux runner the thread empties partway through this file and stays empty — see the block comment above',
+      'TODO(bug) #320: on the Linux runner the thread empties partway through this file and stays empty — see the block comment above',
     );
     await waitForPopulatedTranscript(page);
     const scrollBtn = page.getByTestId('chat-scroll-to-bottom');
@@ -247,7 +247,7 @@ test.describe('§transcript — thread turn', () => {
     const { page } = app;
     test.skip(
       true,
-      'TODO(bug): on the Linux runner the thread empties partway through this file and stays empty — see the block comment above',
+      'TODO(bug) #320: on the Linux runner the thread empties partway through this file and stays empty — see the block comment above',
     );
     // Settle BEFORE opening the bar: the same re-render that empties the
     // transcript also takes the focus this test asserts on.
