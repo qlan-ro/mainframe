@@ -5,7 +5,7 @@
  *  - append fires exactly once with the serialized composition + the LIVE
  *    attachments (resolved to `CompleteAttachment`, mirroring what native
  *    `composer.send()` would have produced via the attachment adapter) and
- *    runConfig, wrapped in the shape `aui.thread().append` expects;
+ *    runConfig, wrapped in the shape `aui.thread.append` expects;
  *  - runConfig/attachments are read BEFORE `composer.reset()` runs — reset()
  *    clears the composer's entire state including runConfig, so reading it
  *    after would silently drop a per-send run config (spec Risks #1). Pinned
@@ -29,10 +29,10 @@
  * Mocking strategy
  * ----------------
  * `@assistant-ui/react` is stubbed with a fake `useAui`/`useAuiState` pair,
- * following the precedent in `ChatSelectionToolbar.test.tsx`: `composer()`
+ * following the precedent in `ChatSelectionToolbar.test.tsx`: `composer`
  * exposes `__internal_getRuntime().getState()` (the live, non-stale read —
  * see `use-append-quote-segment.ts`) alongside the plain `getState()`, and
- * `thread()` exposes an `append` spy. The segment store itself is the REAL
+ * `thread` exposes an `append` spy. The segment store itself is the REAL
  * `useComposerSegments` (seeded directly), not mocked — its own pure
  * transitions are already pinned by segment-model.test.ts/segment-store.test.ts;
  * this file only needs to pin the submit wiring.
@@ -61,13 +61,13 @@ const runtimeGetState = vi.fn(() => ({
 
 vi.mock('@assistant-ui/react', () => ({
   useAui: () => ({
-    thread: () => ({
+    thread: {
       append: (...args: unknown[]) => {
         callOrder.push('append');
         appendSpy(...args);
       },
-    }),
-    composer: () => ({
+    },
+    composer: {
       __internal_getRuntime: () => ({ getState: runtimeGetState }),
       getState: runtimeGetState,
       reset: () => {
@@ -80,7 +80,7 @@ vi.mock('@assistant-ui/react', () => ({
         liveText = '';
         return Promise.resolve();
       },
-    }),
+    },
   }),
   useAuiState: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({

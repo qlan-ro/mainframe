@@ -1,21 +1,21 @@
 /**
  * thread-list-projection — behavior tests for the canonical aui thread-entry →
- * SessionItem seam (threadItemsToSessionItems / threadListStateToSessionItems).
+ * SessionItem seam over the store-scope `threadItems` array: the full projection
+ * plus its regular-only and archived-only variants.
  *
  * These cover the mapping behaviors that previously lived in use-session-items
  * (field mapping, status mapping, undefined title) PLUS the seam-specific ones:
- * the array projection (store-scope shape) and the Record/threadIds projection
- * (runtime shape) — including threadIds ordering and skipping ids without a
- * materialized entry. The aui `custom` slot (typed Record<string, unknown>) is
- * narrowed to SessionCustom in exactly one place; the tests assert the narrowed
- * value is the same object reference that came in.
+ * order preservation and dropping the custom-less new/draft thread. The aui
+ * `custom` slot (typed Record<string, unknown>) is narrowed to SessionCustom in
+ * exactly one place; the tests assert the narrowed value is the same object
+ * reference that came in.
  */
 import { describe, it, expect } from 'vitest';
-import type { SessionCustom, ThreadListEntry, ThreadListRecordState } from '../chat-to-thread-custom';
+import type { SessionCustom, ThreadListEntry } from '../chat-to-thread-custom';
 import {
   threadItemsToSessionItems,
-  threadListStateToSessionItems,
   regularThreadItemsToSessionItems,
+  archivedThreadItemsToSessionItems,
 } from '../chat-to-thread-custom';
 
 // ---------------------------------------------------------------------------
@@ -55,23 +55,16 @@ function makeEntry(id: string, overrides: Partial<ThreadListEntry> = {}): Thread
   };
 }
 
-function makeState(entries: ThreadListEntry[]): ThreadListRecordState {
-  return {
-    threadIds: entries.map((e) => e.id),
-    threadItems: Object.fromEntries(entries.map((e) => [e.id, e])),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // 1. Full field mapping: id, remoteId, title, status:'regular', custom by ref
 // ---------------------------------------------------------------------------
 
-describe('threadListStateToSessionItems — maps an entry to a SessionItem with same fields', () => {
+describe('threadItemsToSessionItems — maps an entry to a SessionItem with same fields', () => {
   it('maps id, remoteId, title, status "regular", and custom (by reference) from one entry', () => {
     const custom = makeCustom();
-    const state = makeState([makeEntry('chat-1', { remoteId: 'chat-1', title: 'T', custom: asCustomSlot(custom) })]);
+    const entry = makeEntry('chat-1', { remoteId: 'chat-1', title: 'T', custom: asCustomSlot(custom) });
 
-    const result = threadListStateToSessionItems(state);
+    const result = threadItemsToSessionItems([entry]);
 
     expect(result).toHaveLength(1);
     expect(result[0]?.id).toBe('chat-1');
@@ -86,24 +79,24 @@ describe('threadListStateToSessionItems — maps an entry to a SessionItem with 
 // 2. status: 'archived' → 'archived'; any other → 'regular'
 // ---------------------------------------------------------------------------
 
-describe('threadListStateToSessionItems — status mapping', () => {
+describe('threadItemsToSessionItems — status mapping', () => {
   it('maps status "archived" to "archived"', () => {
-    const result = threadListStateToSessionItems(makeState([makeEntry('c1', { status: 'archived' })]));
+    const result = threadItemsToSessionItems([makeEntry('c1', { status: 'archived' })]);
     expect(result[0]?.status).toBe('archived');
   });
 
   it('maps status "active" to "regular"', () => {
-    const result = threadListStateToSessionItems(makeState([makeEntry('c2', { status: 'active' })]));
+    const result = threadItemsToSessionItems([makeEntry('c2', { status: 'active' })]);
     expect(result[0]?.status).toBe('regular');
   });
 
   it('maps status "regular" to "regular"', () => {
-    const result = threadListStateToSessionItems(makeState([makeEntry('c3', { status: 'regular' })]));
+    const result = threadItemsToSessionItems([makeEntry('c3', { status: 'regular' })]);
     expect(result[0]?.status).toBe('regular');
   });
 
   it('maps an unknown status string to "regular"', () => {
-    const result = threadListStateToSessionItems(makeState([makeEntry('c4', { status: 'some-other-status' })]));
+    const result = threadItemsToSessionItems([makeEntry('c4', { status: 'some-other-status' })]);
     expect(result[0]?.status).toBe('regular');
   });
 });
@@ -112,54 +105,31 @@ describe('threadListStateToSessionItems — status mapping', () => {
 // 3. title undefined maps to undefined
 // ---------------------------------------------------------------------------
 
-describe('threadListStateToSessionItems — undefined title maps to undefined', () => {
+describe('threadItemsToSessionItems — undefined title maps to undefined', () => {
   it('results in title undefined when the entry has no title', () => {
-    const result = threadListStateToSessionItems(makeState([makeEntry('c5', { title: undefined })]));
+    const result = threadItemsToSessionItems([makeEntry('c5', { title: undefined })]);
     expect(result[0]?.title).toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Order follows threadIds, not threadItems insertion/key order
+// 4. Emission order follows the input array order
 // ---------------------------------------------------------------------------
 
-describe('threadListStateToSessionItems — preserves threadIds order', () => {
-  it('emits items in threadIds order even when threadItems is keyed differently', () => {
+describe('threadItemsToSessionItems — preserves the input array order', () => {
+  it('emits items in the order aui listed them, not sorted by id', () => {
     const a = makeEntry('a');
     const b = makeEntry('b');
     const c = makeEntry('c');
-    // threadIds order is [c, a, b]; threadItems record key order is [a, b, c].
-    const state: ThreadListRecordState = {
-      threadIds: ['c', 'a', 'b'],
-      threadItems: { a, b, c },
-    };
 
-    const result = threadListStateToSessionItems(state);
+    const result = threadItemsToSessionItems([c, a, b]);
 
     expect(result.map((i) => i.id)).toEqual(['c', 'a', 'b']);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 5. Skips ids that have no materialized entry in threadItems
-// ---------------------------------------------------------------------------
-
-describe('threadListStateToSessionItems — skips ids absent from threadItems', () => {
-  it('drops a threadId whose entry is missing from the record', () => {
-    const a = makeEntry('a');
-    const state: ThreadListRecordState = {
-      threadIds: ['a', 'ghost'],
-      threadItems: { a },
-    };
-
-    const result = threadListStateToSessionItems(state);
-
-    expect(result.map((i) => i.id)).toEqual(['a']);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. threadItemsToSessionItems — array (store-scope) projection
+// 5. threadItemsToSessionItems — multi-entry array (store-scope) projection
 // ---------------------------------------------------------------------------
 
 describe('threadItemsToSessionItems — maps an ordered array of entries', () => {
@@ -189,7 +159,7 @@ describe('threadItemsToSessionItems — maps an ordered array of entries', () =>
 });
 
 // ---------------------------------------------------------------------------
-// 7. Drop the transient new/draft thread (no `custom`) — it is not a session row.
+// 6. Drop the transient new/draft thread (no `custom`) — it is not a session row.
 //    The native thread list always contains a __LOCALID_* entry with status
 //    'new' and custom undefined (no daemon chat yet). Mapping it would produce a
 //    SessionItem whose custom is undefined, crashing downstream `.custom.X`
@@ -207,11 +177,11 @@ describe('projection drops the custom-less new/draft thread', () => {
     expect(result[0]?.id).toBe('chat-real');
   });
 
-  it('threadListStateToSessionItems returns only the real entry from a mixed state', () => {
+  it('drops the draft entry wherever it sits in the array, not only when it leads', () => {
     const draft = makeEntry('__LOCALID_x', { status: 'new', custom: undefined });
     const real = makeEntry('chat-real');
 
-    const result = threadListStateToSessionItems(makeState([draft, real]));
+    const result = threadItemsToSessionItems([real, draft]);
 
     expect(result).toHaveLength(1);
     expect(result[0]?.id).toBe('chat-real');
@@ -219,7 +189,7 @@ describe('projection drops the custom-less new/draft thread', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. regularThreadItemsToSessionItems — excludes archived entries (the
+// 7. regularThreadItemsToSessionItems — excludes archived entries (the
 //    archived-leak fix). The store-scope threadItems array carries BOTH regular
 //    and archived threads; this projection is the sidebar/visible-list source
 //    and must drop archived ones, unlike threadItemsToSessionItems which keeps
@@ -259,5 +229,66 @@ describe('regularThreadItemsToSessionItems — excludes archived entries', () =>
 
   it('maps an empty array to an empty list', () => {
     expect(regularThreadItemsToSessionItems([])).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. archivedThreadItemsToSessionItems — the array-projection complement of
+//    regularThreadItemsToSessionItems: keeps only archived entries. It sources
+//    the ArchivedSessionsDialog, which is the only surface that shows them.
+// ---------------------------------------------------------------------------
+
+describe('archivedThreadItemsToSessionItems — keeps only archived entries', () => {
+  it('returns only the archived entries from a mix of regular and archived', () => {
+    const regular = makeEntry('chat-regular');
+    const archived = makeEntry('chat-archived', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([regular, archived]);
+
+    expect(result.map((i) => i.id)).toEqual(['chat-archived']);
+    expect(result.every((i) => i.status === 'archived')).toBe(true);
+  });
+
+  it('drops the custom-less draft entry even when its status is archived', () => {
+    const draft = makeEntry('__LOCALID_x', { status: 'archived', custom: undefined });
+    const archived = makeEntry('chat-archived', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([draft, archived]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-archived');
+  });
+
+  it('maps id, remoteId, title, and custom through unchanged, and sets status "archived"', () => {
+    const custom = makeCustom();
+    const entry = makeEntry('chat-1', {
+      remoteId: 'remote-1',
+      title: 'Archived session',
+      status: 'archived',
+      custom: asCustomSlot(custom),
+    });
+
+    const result = archivedThreadItemsToSessionItems([entry]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('chat-1');
+    expect(result[0]?.remoteId).toBe('remote-1');
+    expect(result[0]?.title).toBe('Archived session');
+    expect(result[0]?.status).toBe('archived');
+    expect(result[0]?.custom).toBe(custom);
+  });
+
+  it('preserves the input array order', () => {
+    const a = makeEntry('a', { status: 'archived' });
+    const b = makeEntry('b', { status: 'archived' });
+    const c = makeEntry('c', { status: 'archived' });
+
+    const result = archivedThreadItemsToSessionItems([c, a, b]);
+
+    expect(result.map((i) => i.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('returns an empty array for an empty input', () => {
+    expect(archivedThreadItemsToSessionItems([])).toEqual([]);
   });
 });

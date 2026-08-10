@@ -27,13 +27,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Mock @assistant-ui/react — BranchPopover uses useAuiState for adapterId.
-// useWorktreeSession (use-worktree-session.ts) uses useAssistantRuntime.
+// useWorktreeSession (use-worktree-session.ts) uses useAui.
 // ---------------------------------------------------------------------------
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (selector: (s: { threadListItem: null; threads: { threadItems: [] } }) => unknown) =>
     selector({ threadListItem: null, threads: { threadItems: [] } }),
-  useAssistantRuntime: () => ({
+  useAui: () => ({
     threads: {
       reload: vi.fn().mockResolvedValue(undefined),
       switchToThread: vi.fn(),

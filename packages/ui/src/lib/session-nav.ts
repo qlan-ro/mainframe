@@ -4,7 +4,7 @@
  * Callers outside the React tree (the global `mfToast`, WS event routers) can
  * request opening a session without reaching through to the assistant-ui
  * runtime. A root component inside the AssistantRuntimeProvider registers the
- * real navigator (`runtime.threads.switchToThread`, which resolves a remoteId
+ * real navigator (`aui.threads.switchToThread`, which resolves a remoteId
  * via the thread-id map); everything else calls `openSessionById`.
  */
 

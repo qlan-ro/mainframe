@@ -9,7 +9,7 @@
  * snapshot would leave every checkbox stuck where it opened.
  */
 import { useMemo } from 'react';
-import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { setChatTags } from '@/lib/api/tags';
 import { threadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import type { TagCascadeUpdate } from '@/features/sessions/tags/build-tag-cascade';
@@ -21,7 +21,7 @@ export function TagPopoverHost({ port }: { port: number }) {
   const target = useTagPopoverTarget((s) => s.target);
   const close = useTagPopoverTarget((s) => s.close);
   const registry = useTagRegistry(port);
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const threadItems = useAuiState((s) => s.threads.threadItems);
@@ -40,7 +40,7 @@ export function TagPopoverHost({ port }: { port: number }) {
     for (const update of updates) {
       await setChatTags(port, update.id, update.newTags);
     }
-    await runtime.threads.reload();
+    await aui.threads.reload();
   }
 
   return (
@@ -54,7 +54,7 @@ export function TagPopoverHost({ port }: { port: number }) {
       registry={registry}
       threads={threads}
       onCascade={(updates) => void applyCascade(updates)}
-      onReload={() => void runtime.threads.reload()}
+      onReload={() => void aui.threads.reload()}
     />
   );
 }

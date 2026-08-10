@@ -16,13 +16,14 @@
  *   (1) our external-store `onNew`  (use-chat-thread-runtime), and
  *   (2) assistant-ui's native thread-list `initialize` (the seam the library's
  *       `RemoteThreadListHookInstanceManager` drives off the thread's
- *       `"initialize"` event — i.e. `aui.threadListItem().initialize()`).
+ *       `"initialize"` event — i.e. `aui.threadListItem.initialize()`).
  * `createForLocal` had no idempotency guard → TWO `POST /api/chats` → two daemon
  * chats. The controller bound to chat #1; aui stamped `item.remoteId` = chat #2
  * → an orphaned empty session.
  *
- * The test drives both seams the way production does — `threads.main.append(...)`
- * (onNew) AND `threads.mainItem.initialize()` (the native thread-list seam) —
+ * The test drives both seams the way production does —
+ * `aui.threads.thread('main').append(...)` (onNew) AND
+ * `aui.threads.item('main').initialize()` (the native thread-list seam) —
  * within one act() tick, then asserts:
  *   1. `createChat` (the lib/api fn) is called EXACTLY ONCE.
  *   2. The id the controller sends the first message to (its `daemonId`, read
@@ -40,7 +41,7 @@ import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
 import type { Chat, ChatHistoryPayload, ClientEvent } from '@qlan-ro/mainframe-types';
-import type { AssistantRuntime } from '@assistant-ui/react';
+import type { AssistantClient } from '@assistant-ui/react';
 
 // ---------------------------------------------------------------------------
 // Network boundary mocks ONLY — aui + coordinator stay REAL.
@@ -102,7 +103,7 @@ vi.mock('../../../../lib/daemon/ws-client', () => {
 // Imports AFTER mocks — the subject + the real coordinator/registry/draft.
 // ---------------------------------------------------------------------------
 
-import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
 import { DaemonPortProvider } from '../daemon-port-context';
 import { useSessionsThreadList } from '../use-sessions-thread-list';
 import { setDraftConfig, clearDraftConfig } from '../draft-config';
@@ -111,31 +112,35 @@ import { createChat } from '../../../../lib/api/chats';
 
 const PORT = 31415;
 
-const RuntimeCapture: FC<{ runtimeRef: { current: AssistantRuntime | null } }> = ({ runtimeRef }) => {
-  runtimeRef.current = useAssistantRuntime();
+type AuiRef = { current: AssistantClient | null };
+
+const AuiCapture: FC<{ auiRef: AuiRef }> = ({ auiRef }) => {
+  auiRef.current = useAui();
   return null;
 };
 
 // Mounts the SAME runtime tree AppShell composes in production:
 // DaemonPortProvider → AssistantRuntimeProvider(useSessionsThreadList()).
-const SessionsRuntimeRoot: FC<{ runtimeRef: { current: AssistantRuntime | null } }> = ({ runtimeRef }) => {
+const SessionsRuntimeRoot: FC<{ auiRef: AuiRef }> = ({ auiRef }) => {
   const runtime = useSessionsThreadList();
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <RuntimeCapture runtimeRef={runtimeRef} />
+      <AuiCapture auiRef={auiRef} />
     </AssistantRuntimeProvider>
   );
 };
 
 function mountRuntime() {
-  const runtimeRef: { current: AssistantRuntime | null } = { current: null };
+  const auiRef: AuiRef = { current: null };
   const utils = render(
     <DaemonPortProvider port={PORT}>
-      <SessionsRuntimeRoot runtimeRef={runtimeRef} />
+      <SessionsRuntimeRoot auiRef={auiRef} />
     </DaemonPortProvider>,
   );
-  if (!runtimeRef.current) throw new Error('runtime not captured');
-  return { runtime: runtimeRef.current, ...utils };
+  if (!auiRef.current) throw new Error('aui client not captured');
+  // Read through the ref, never a snapshot: the client is re-created whenever
+  // the runtime's structure changes, and a stale one would act on a dead tree.
+  return { aui: () => auiRef.current!, ...utils };
 }
 
 /** Drain microtasks + the aui optimistic-update machinery. */
@@ -150,16 +155,20 @@ async function flush(): Promise<void> {
  * create seams (onNew via append + the native thread-list initialize) in one
  * tick — exactly what production does. Returns the local id + the runtime.
  */
-async function newThreadFirstSend(): Promise<{ runtime: AssistantRuntime; localId: string; unmount: () => void }> {
-  const { runtime, unmount } = mountRuntime();
+async function newThreadFirstSend(): Promise<{
+  aui: () => AssistantClient;
+  localId: string;
+  unmount: () => void;
+}> {
+  const { aui, unmount } = mountRuntime();
 
   await act(async () => {
-    await runtime.threads.switchToNewThread();
+    await aui().threads.switchToNewThread();
   });
   await flush();
 
-  // ThreadListRuntimeImpl exposes ids via getState(), not as own properties.
-  const localId = runtime.threads.getState().mainThreadId;
+  // The threads scope exposes ids via getState(), not as own properties.
+  const localId = aui().threads.getState().mainThreadId;
 
   setDraftConfig(localId, {
     projectId: 'p1',
@@ -174,13 +183,13 @@ async function newThreadFirstSend(): Promise<{ runtime: AssistantRuntime; localI
   });
 
   await act(async () => {
-    const sendP = runtime.threads.main.append('hello');
-    const initP = runtime.threads.mainItem.initialize();
+    const sendP = aui().threads.thread('main').append('hello');
+    const initP = aui().threads.item('main').initialize();
     await Promise.all([sendP, initP]);
   });
   await flush();
 
-  return { runtime, localId, unmount };
+  return { aui, localId, unmount };
 }
 
 beforeEach(() => {
@@ -207,10 +216,10 @@ describe('new-thread create-once — one POST /api/chats per New+send', () => {
   });
 
   it('converges: the controller send target === the stamped item.remoteId (no orphan)', async () => {
-    const { runtime, localId, unmount } = await newThreadFirstSend();
+    const { aui, localId, unmount } = await newThreadFirstSend();
 
     // The id aui stamped on the (now-regular) thread item after initialize.
-    const stampedRemoteId = runtime.threads.mainItem.getState().remoteId;
+    const stampedRemoteId = aui().threads.item('main').getState().remoteId;
     expect(stampedRemoteId).toBe('chat-server-1');
 
     // The id the controller actually sent the first message to (== its daemonId).

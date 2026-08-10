@@ -39,13 +39,14 @@ const messageScopedComposer = () => {
   throw new Error('useClientLookup: Index 3 out of bounds (length: 0)');
 };
 
+/** The live main-thread composer, reachable only through `threads.thread('main').composer()`. */
+const threadComposer = { setText, send, append, getState: getComposerState };
+
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ composer: messageScopedComposer }),
-  useAssistantRuntime: () => ({
-    thread: {
-      composer: { setText, send, append, getState: getComposerState },
-    },
+  useAui: () => ({
+    composer: messageScopedComposer,
     threads: {
+      thread: () => ({ composer: () => threadComposer }),
       switchToNewThread,
       switchToThread,
       append,

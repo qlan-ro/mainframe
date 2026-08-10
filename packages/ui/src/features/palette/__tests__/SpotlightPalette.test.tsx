@@ -17,7 +17,7 @@ vi.mock('@assistant-ui/react', async (orig) => {
   const o = await orig<typeof import('@assistant-ui/react')>();
   return {
     ...o,
-    useAssistantRuntime: () => ({ threads: { switchToThread: mockSwitch } }),
+    useAui: () => ({ threads: { switchToThread: mockSwitch } }),
     useAuiState: (sel: (s: unknown) => unknown) =>
       sel({
         threads: {

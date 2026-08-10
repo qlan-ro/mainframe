@@ -5,7 +5,7 @@
  * changed-file list (ReviewFileTree), the per-file diff with its toolbar
  * (ReviewDiffPane), and the commit composer (ReviewCommitRail). The diff body
  * keeps the side-by-side CmDiffEditor and its inline comment-to-agent form
- * (posted via the assistant-ui runtime's append) alongside the commit flow.
+ * (posted via the aui client's main-thread append) alongside the commit flow.
  *
  * The header's scope switcher (Session · Uncommitted · Branch) is the modal's
  * only data-source control: it drives `useWorkingChanges`, which owns all three
@@ -13,7 +13,7 @@
  * own diff pane; the workspace-diff route is the pane's "Open in workspace".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 // Fixed-width columns as in v1 — resizable panels land with the review
 // surface port.
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -35,7 +35,7 @@ export function ReviewPanel() {
 
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
 
   const [scope, setScope] = useState<ChangeScope>(DEFAULT_SCOPE);
   const {
@@ -89,11 +89,13 @@ export function ReviewPanel() {
     setSelectedFile(null);
   }
 
+  // Reached through the root `threads` scope, not the bare `thread` one: the
+  // panel is mounted at the app root, where no thread scope is bound.
   const handleAppend = useCallback(
     (text: string) => {
-      runtime.threads.main.append({ role: 'user', content: [{ type: 'text', text }] });
+      aui.threads.thread('main').append({ role: 'user', content: [{ type: 'text', text }] });
     },
-    [runtime],
+    [aui],
   );
 
   const toggleViewed = useCallback((path: string) => {

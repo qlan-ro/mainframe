@@ -14,7 +14,7 @@
  * stays outside `data-no-drag`, so the empty middle remains a window-drag area.
  */
 import { Plus } from 'lucide-react';
-import { useAssistantRuntime, useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
@@ -37,24 +37,24 @@ function toTabEntry(id: string, items: readonly ThreadListEntry[], activeId: str
 
 export function SessionTabs() {
   useSessionTabsSync();
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   const items = useAuiState((s) => s.threads.threadItems);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
-  const newSession = useNewChatHotkeyHandler(runtime);
+  const newSession = useNewChatHotkeyHandler(aui);
 
   const tabs = tabIds.map((id) => toTabEntry(id, items, mainThreadId));
 
   const handleActivate = (id: string) => {
-    if (id !== mainThreadId) void runtime.threads.switchToThread(id);
+    if (id !== mainThreadId) aui.threads.switchToThread(id);
   };
 
   const handleClose = (id: string) => {
     const next = nextActiveAfterClose(tabIds, id, mainThreadId);
     closeTab(id);
     if (next === null) newSession();
-    else if (next !== mainThreadId) void runtime.threads.switchToThread(next);
+    else if (next !== mainThreadId) aui.threads.switchToThread(next);
   };
 
   return (

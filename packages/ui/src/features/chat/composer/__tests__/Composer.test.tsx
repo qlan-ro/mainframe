@@ -8,7 +8,7 @@
  *      ComposerPrimitive.Input → textarea forwarding data-testid + disabled
  *      ComposerPrimitive.Cancel → button forwarding data-testid
  *      useAuiState → returns false (isRunning = false)
- *      useAui → thread().append + composer().{__internal_getRuntime,getState,reset},
+ *      useAui → thread.append + composer.{__internal_getRuntime,getState,reset},
  *        the shape `useSubmitComposition` consumes (Send is now a plain
  *        `<button type="submit">` inside `ComposerPrimitive.Root`, not a primitive)
  *  - Mock `./edit/composer-edit-context` to return { editing: null, cancelEdit: vi.fn() }
@@ -67,12 +67,14 @@ vi.mock('@assistant-ui/react', () => ({
   // exposes __internal_getRuntime().getState() (the live read submit() prefers)
   // and a no-op reset().
   useAui: () => ({
-    thread: () => ({ append: __appendSpy }),
-    composer: () => ({
+    // Delegate rather than capture: tests reassign `__appendSpy`, and the scope
+    // is now a plain property read once per render.
+    thread: { append: (...args: unknown[]) => __appendSpy(...args) },
+    composer: {
       __internal_getRuntime: () => ({ getState: __composerGetState }),
       getState: __composerGetState,
       reset: __resetSpy,
-    }),
+    },
   }),
 }));
 
@@ -175,7 +177,7 @@ describe('Composer — healthy shell', () => {
 // ---------------------------------------------------------------------------
 //
 // When isRunning=true, pressing plain Enter on the composer input must call
-// submit() → aui.thread().append() exactly once (the daemon-backed queue path)
+// submit() → aui.thread.append() exactly once (the daemon-backed queue path)
 // and prevent the default browser action. Every other combination must leave
 // appendSpy uncalled so the native path handles the event.
 

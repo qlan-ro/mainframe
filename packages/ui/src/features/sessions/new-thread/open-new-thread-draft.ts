@@ -9,9 +9,14 @@
 export interface OpenNewThreadDraftDeps {
   filterProjectId: string | null;
   setFilterProjectId: (id: string | null) => void;
+  /**
+   * Widened to accept the aui `threads` scope as-is: it declares `newThreadId`
+   * as `string | null`, `mainThreadId` as `string`, and `switchToNewThread()`
+   * as `void` — narrower than the legacy thread-list runtime this replaced.
+   */
   runtimeThreads: {
-    getState: () => { newThreadId: string | undefined; mainThreadId: string | null };
-    switchToNewThread: () => Promise<void>;
+    getState: () => { newThreadId: string | null | undefined; mainThreadId: string | null };
+    switchToNewThread: () => void | Promise<void>;
   };
   setReturnTarget: (id: string | null) => void;
   resetNewThreadDraft: (id: string | null | undefined) => void;

@@ -26,14 +26,14 @@ vi.mock('@assistant-ui/react', () => ({
   MessagePrimitive: { Attachments: () => null },
   useAuiState: () => undefined,
   useAui: () => ({
-    composer: () => ({
+    composer: {
       getState: () => ({ text: mockComposerText }),
       setText: setTextSpy,
       // Live-state seam (todo #316): the handler must read through this, not
       // the tap-memoized `getState()`, so a click right after another
       // programmatic write sees the current draft.
       __internal_getRuntime: () => ({ getState: () => ({ text: mockComposerText }) }),
-    }),
+    },
     attachment: { source: 'composer' },
   }),
 }));

@@ -24,11 +24,11 @@ const composerSetText = vi.fn();
 
 vi.mock('@assistant-ui/react', () => ({
   useAui: () => ({
-    composer: () => ({
+    composer: {
       __internal_getRuntime: () => ({ getState: composerGetState }),
       getState: composerGetState,
       setText: composerSetText,
-    }),
+    },
   }),
   useAuiState: (sel: (s: { threadListItem: { id: string } | undefined }) => unknown) =>
     sel({ threadListItem: __threadId ? { id: __threadId } : undefined }),

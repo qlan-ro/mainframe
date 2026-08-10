@@ -33,7 +33,7 @@
  * `base-composer-runtime-core.js`), so `runConfig`/`attachments` are read
  * into locals before it runs.
  *
- * `aui.thread().append()` requires `CompleteAttachment[]`, but a
+ * `aui.thread.append()` requires `CompleteAttachment[]`, but a
  * freshly-added attachment sits at `status: 'requires-action'` until
  * resolved — native `composer.send()` does this via the registered
  * `AttachmentAdapter.send()` before appending. We bypass `send()` (it can't
@@ -57,7 +57,7 @@ export function useSubmitComposition(): () => void {
 
   return () => {
     if (threadId == null) return;
-    const composer = aui.composer();
+    const composer = aui.composer;
     const state = readLiveComposerState(composer);
     const composition = useComposerSegments.getState().byThread[threadId];
 
@@ -72,7 +72,7 @@ export function useSubmitComposition(): () => void {
     const body = prependSessionReferences(wireText, references);
     const attachments = state.attachments.map(toCompleteAttachment);
     const runConfig = state.runConfig;
-    aui.thread().append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
+    aui.thread.append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
     composer.reset();
     useComposerSegments.getState().clear(threadId);
     useSessionReferences.getState().clear(threadId);

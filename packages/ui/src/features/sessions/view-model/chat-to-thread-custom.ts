@@ -83,21 +83,21 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
 /**
  * Canonical assistant-ui thread-entry → SessionItem seam.
  *
- * assistant-ui exposes the thread list through TWO containers with the same
- * per-entry shape but different wrappers:
- *   - the legacy runtime `ThreadListState` (useAssistantRuntime().threads.getState):
- *     `threadIds` + a `threadItems` Record keyed by id;
- *   - the store-scope `ThreadsState` (useAuiState((s) => s.threads)):
- *     `threadItems` as an ordered array.
- * Both carry per-entry `{ id, remoteId, status, title?, custom? }` where `custom`
- * is typed `Record<string, unknown>`. Our chatToThreadCustom projection always
- * writes a SessionCustom into that slot (see chats-remote-adapter), so the
+ * assistant-ui exposes the thread list through the store-scope `ThreadsState`
+ * (`useAuiState((s) => s.threads)`), whose `threadItems` is an ordered array of
+ * `{ id, remoteId, status, title?, custom? }` entries. That array holds BOTH
+ * regular and archived threads — aui separates the two only in its `threadIds` /
+ * `archivedThreadIds` id buckets — which is why `regularThreadItemsToSessionItems`
+ * and `archivedThreadItemsToSessionItems` both exist.
+ *
+ * `custom` is typed `Record<string, unknown>`. Our chatToThreadCustom projection
+ * always writes a SessionCustom into that slot (see chats-remote-adapter), so the
  * narrowing is sound. This module is the ONE place we narrow `custom` and the ONE
  * place that maps a thread entry to a SessionItem.
  *
- * The structural types below mirror the real `@assistant-ui/core` shapes (verified
+ * The structural type below mirrors the real `@assistant-ui/core` shape (verified
  * against core@0.2.10) WITHOUT importing aui, keeping this module dependency-free;
- * the live aui state is assignable to them.
+ * the live aui state is assignable to it.
  */
 export interface ThreadListEntry {
   id: string;
@@ -105,14 +105,6 @@ export interface ThreadListEntry {
   title?: string;
   status: string;
   custom?: Record<string, unknown> | undefined;
-}
-
-/** Runtime-shaped state: ordered ids + a Record of entries. */
-export interface ThreadListRecordState {
-  threadIds: readonly string[];
-  /** Separate bucket for archived threads — assistant-ui keeps them here, not in threadIds. */
-  archivedThreadIds?: readonly string[];
-  threadItems: Readonly<Record<string, ThreadListEntry>>;
 }
 
 /**
@@ -199,8 +191,7 @@ export function threadItemsToSessionItems(entries: readonly ThreadListEntry[]): 
  * project/attention aggregation over the visible set. Archived sessions live in
  * the ArchivedSessionsDialog, never the main list; including them here is the
  * archived-leak bug that surfaces when projecting the full store-scope
- * `threadItems` array (which the legacy `threadListStateToSessionItems` avoided
- * by walking the regular-only `threadIds` bucket).
+ * `threadItems` array, which carries both buckets.
  */
 export function regularThreadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
   return entries
@@ -210,31 +201,15 @@ export function regularThreadItemsToSessionItems(entries: readonly ThreadListEnt
 }
 
 /**
- * Project only the archived threads from the runtime ThreadListState.
- *
- * assistant-ui keeps archived threads in `archivedThreadIds` (a separate bucket
- * from `threadIds` which holds only active threads). Walking `threadIds` for
- * archived entries is always empty; this helper walks the correct bucket.
+ * Archived sessions only — the source for the ArchivedSessionsDialog, and the
+ * exact complement of regularThreadItemsToSessionItems. It filters on the
+ * entry's own status rather than intersecting the `archivedThreadIds` bucket,
+ * because the store-scope `threadItems` array carries both buckets and that
+ * status is already what threadEntryToSessionItem keys on.
  */
-export function archivedThreadListStateToSessionItems(state: ThreadListRecordState): SessionItem[] {
-  const ids = state.archivedThreadIds ?? [];
-  return ids
-    .map((id) => state.threadItems[id])
-    .filter((entry): entry is ThreadListEntry => entry != null)
+export function archivedThreadItemsToSessionItems(entries: readonly ThreadListEntry[]): SessionItem[] {
+  return entries
     .filter(hasSessionCustom)
-    .map(threadEntryToSessionItem);
-}
-
-/**
- * Project the runtime `ThreadListState` (Record + threadIds) to an ordered
- * SessionItem[] — the source for the sidebar list. Walks `threadIds` (the
- * canonical order) and resolves each via the `threadItems` Record, skipping ids
- * without a materialized entry and the custom-less new/draft thread.
- */
-export function threadListStateToSessionItems(state: ThreadListRecordState): SessionItem[] {
-  return state.threadIds
-    .map((id) => state.threadItems[id])
-    .filter((entry): entry is ThreadListEntry => entry != null)
-    .filter(hasSessionCustom)
+    .filter((entry) => entry.status === 'archived')
     .map(threadEntryToSessionItem);
 }

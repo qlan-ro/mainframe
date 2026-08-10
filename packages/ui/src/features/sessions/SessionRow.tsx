@@ -4,16 +4,12 @@
  * The active highlight stays native: `ThreadListItemPrimitive.Root` renders as
  * the `SidebarMenuItem` and sets `data-active` when it is the main thread, so
  * the button tints off the group rather than off a prop we would have to keep
- * in sync. Actions come from the item RUNTIME, not the item state, and the row
- * is keyed by the stable `item.id` — never `remoteId`, which a new chat can adopt.
+ * in sync. Actions come from the `threadListItem` scope on the aui client, not
+ * from the item state, and the row is keyed by the stable `item.id` — never
+ * `remoteId`, which a new chat can adopt.
  */
 import { memo, useCallback, useRef, useState } from 'react';
-import {
-  ThreadListItemPrimitive,
-  ThreadListItemRuntimeProvider,
-  useAssistantRuntime,
-  useThreadListItemRuntime,
-} from '@assistant-ui/react';
+import { ThreadListItemPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import { PinIcon } from 'lucide-react';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -26,6 +22,7 @@ import { useUnreadStore } from '@/store/unread-store';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useArchiveSession } from '@/features/sessions/sidebar/use-archive-session';
 import { useTagPopoverTarget } from '@/features/sessions/tags/use-tag-popover-target';
+import { SessionRowItemScope } from '@/features/sessions/SessionRowItemScope';
 import { pinChat } from '@/lib/api/chats';
 import { formatCompactTime } from './compact-time';
 import { RowHoverActions } from './SessionRowHoverActions';
@@ -51,12 +48,12 @@ interface RowActions {
 
 function useRowActions(item: SessionItem): RowActions {
   const port = useDaemonPort();
-  const assistantRuntime = useAssistantRuntime();
+  const aui = useAui();
   const onArchive = useArchiveSession(item.remoteId ?? item.id, item.custom.worktreePath != null);
 
   const setPinned = (pinned: boolean) => {
     void pinChat(port, item.id, pinned)
-      .then(() => assistantRuntime.threads.reload())
+      .then(() => aui.threads.reload())
       .catch((e: unknown) => {
         console.warn('[SessionRow] pinChat failed', e);
       });
@@ -141,7 +138,7 @@ interface SessionRowInnerProps {
 
 function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionRowInnerProps) {
   const { custom } = item;
-  const itemRuntime = useThreadListItemRuntime();
+  const aui = useAui();
   const unreadIds = useUnreadStore((s) => s.unread);
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -221,7 +218,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                         <SessionRowRename
                           initialTitle={title}
                           onCommit={(next) => {
-                            void itemRuntime.rename(next);
+                            void aui.threadListItem.rename(next);
                             setIsRenaming(false);
                           }}
                           onCancel={() => setIsRenaming(false)}
@@ -262,19 +259,21 @@ interface SessionRowProps {
 }
 
 /**
- * `getItemById` builds a subject that throws synchronously when the id is gone
- * — reachable during an optimistic archive — so the plain `threadItems` record
- * is checked first and only then resolved to a live runtime binding.
+ * Resolving a vanished id throws synchronously — reachable during an optimistic
+ * archive — so presence in `threadItems` is checked before the scope below it
+ * ever resolves. The selector returns the membership BOOLEAN, not the array, so
+ * a row only re-renders when its own presence flips rather than on every list
+ * change. `threadItems` holds regular and archived entries alike, so an archive
+ * does not trip this guard; a delete does.
  */
 function SessionRowResolver({ item, colorOf = DEFAULT_COLOR_OF, inPinnedGroup = false, projectName }: SessionRowProps) {
-  const threadListRuntime = useAssistantRuntime().threads;
-  const threadItems = threadListRuntime?.getState().threadItems;
-  if (threadItems == null || !(item.id in threadItems)) return null;
+  const present = useAuiState((s) => s.threads.threadItems.some((t) => t.id === item.id));
+  if (!present) return null;
 
   return (
-    <ThreadListItemRuntimeProvider runtime={threadListRuntime.getItemById(item.id)}>
+    <SessionRowItemScope id={item.id}>
       <SessionRowInner item={item} colorOf={colorOf} inPinnedGroup={inPinnedGroup} projectName={projectName} />
-    </ThreadListItemRuntimeProvider>
+    </SessionRowItemScope>
   );
 }
 

@@ -7,7 +7,7 @@
  * errand.
  */
 import { useCallback, useState } from 'react';
-import { useAssistantRuntime } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { ChevronLeftIcon, Loader2Icon } from 'lucide-react';
 import type { ExternalSession } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
@@ -90,7 +90,7 @@ interface ImportSessionListProps {
 }
 
 export function ImportSessionList({ port, projectId, projectPath, onDone, onBack }: ImportSessionListProps) {
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   const page = useExternalSessions(port, projectId);
   const [importing, setImporting] = useState<string | null>(null);
 
@@ -106,14 +106,14 @@ export function ImportSessionList({ port, projectId, projectPath, onDone, onBack
           createdAt: session.createdAt,
           modifiedAt: session.modifiedAt,
         });
-        runtime.threads.reload();
+        aui.threads.reload();
         onDone();
       } catch (e: unknown) {
         console.warn('[v2/ImportSessionList] import failed', e);
         setImporting(null);
       }
     },
-    [port, projectId, importing, runtime, onDone],
+    [port, projectId, importing, aui, onDone],
   );
 
   return (

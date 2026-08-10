@@ -9,7 +9,7 @@
  * one at a time.
  */
 import { useEffect } from 'react';
-import { AssistantRuntimeProvider, useAssistantRuntime } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { DirectoryPickerModal } from '@/features/files/DirectoryPickerModal';
 import { FindInPathModal } from '@/features/files/FindInPathModal';
@@ -52,18 +52,18 @@ function RuntimeBody({ port }: { port: number }) {
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
   // session via their "Open session →" CTA without reaching through to the runtime.
-  const runtime = useAssistantRuntime();
+  const aui = useAui();
   useEffect(() => {
-    setSessionNavigator((chatId) => runtime.threads.switchToThread(chatId));
+    setSessionNavigator((chatId) => aui.threads.switchToThread(chatId));
     return () => setSessionNavigator(null);
-  }, [runtime]);
+  }, [aui]);
 
   // Global ⌘N / Ctrl+N → new chat. In "All" view (no project pill active) this
   // opens the sidebar "+" button's project picker instead of switching straight
   // to a projectless new thread (see useNewChatHotkeyHandler for the branch and
   // resolveNewChatHotkeyAction for the seam); a project pill active keeps the
   // native path (reset the stale draft, switch — auto-config seeds the project).
-  useNewChatHotkey(useNewChatHotkeyHandler(runtime));
+  useNewChatHotkey(useNewChatHotkeyHandler(aui));
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();

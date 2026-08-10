@@ -32,8 +32,8 @@ import { useLayoutStore } from '../../../../store/layout';
 let markUnreadSpy: ReturnType<typeof vi.fn>;
 let clearUnreadSpy: ReturnType<typeof vi.fn>;
 let setFilterProjectIdSpy: ReturnType<typeof vi.fn>;
-let switchSpy: ReturnType<typeof vi.fn>;
-let reloadSpy: ReturnType<typeof vi.fn>;
+let switchSpy: ReturnType<typeof vi.fn<(id: string) => void>>;
+let reloadSpy: ReturnType<typeof vi.fn<() => void>>;
 
 // Values that tests can mutate before re-render to control hook behaviour
 let filterProjectIdValue: string | null;
@@ -114,15 +114,19 @@ vi.mock('../../../../store/last-session', () => ({
 
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
+  // One stable `threads` SCOPE across renders — the real scope survives a main-
+  // thread switch even though the client wrapping it does not, and the WS wiring
+  // effect depends on that stability (session-list-router-lifetime.test.tsx pins
+  // it against the real runtime). The methods delegate rather than capture, so
+  // beforeEach's spy reassignment still lands.
+  const threads = {
+    reload: () => reloadSpy(),
+    switchToThread: (id: string) => switchSpy(id),
+  };
+  const auiClient = { threads };
   return {
     ...actual,
-    useAssistantRuntime: () => ({
-      threads: {
-        reload: reloadSpy,
-        switchToThread: switchSpy,
-        getState: () => ({ threads: fakeThreadItems }),
-      },
-    }),
+    useAui: () => auiClient,
     useAuiState: (
       sel: (s: { threads: { mainThreadId: string | null; threadItems: typeof fakeThreadItems } }) => unknown,
     ) => sel({ threads: { mainThreadId: mainThreadIdValue, threadItems: fakeThreadItems } }),
