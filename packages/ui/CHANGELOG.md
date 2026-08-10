@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-ui
 
+## 2.0.0-rc.22
+
+### Patch Changes
+
+- [#591](https://github.com/qlan-ro/mainframe/pull/591) [`e2ed4bf`](https://github.com/qlan-ro/mainframe/commit/e2ed4bf33603fb378106cf9d4652551ffe6f0920) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Center the vertical hairline dividers in the composer, main toolbar and viewer toolbars. They rendered pinned to the top of their row, sitting visibly above the icons they separate.
+
+- Updated dependencies []:
+  - @qlan-ro/mainframe-types@2.0.0-rc.22
+
 ## 2.0.0-rc.21
 
 ### Minor Changes
