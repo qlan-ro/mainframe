@@ -8,6 +8,7 @@
  * plus the new project-filter and prefill behaviors the second call site needs.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { AssistantClient } from '@assistant-ui/react';
 import { openNewThreadDraft, type OpenNewThreadDraftDeps } from '../open-new-thread-draft';
 
 function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThreadDraftDeps {
@@ -200,5 +201,42 @@ describe('openNewThreadDraft — prefill', () => {
     await openNewThreadDraft({ projectId: 'proj-a' }, deps);
 
     expect(deps.setText).not.toHaveBeenCalled();
+  });
+});
+
+describe('openNewThreadDraft — the aui `threads` scope', () => {
+  // The scope both binding hooks now inject is narrower than the legacy thread
+  // list it replaces: `newThreadId` is `string | null`, `mainThreadId` is
+  // `string`, and `switchToNewThread()` is declared `void`. This assignment is
+  // the guard — `tsc` fails here if the injected type stops accepting it.
+  const auiThreads = null as unknown as ReturnType<AssistantClient['threads']>;
+
+  it('is accepted as the injected runtimeThreads', () => {
+    expect(makeDeps({ runtimeThreads: auiThreads }).runtimeThreads).toBe(auiThreads);
+  });
+
+  it('runs the whole sequence against a scope-shaped fake', async () => {
+    const calls: string[] = [];
+    let switched = false;
+    const deps = makeDeps({
+      runtimeThreads: {
+        getState: vi.fn((): { newThreadId: string | null; mainThreadId: string } => {
+          calls.push('getState');
+          return { newThreadId: switched ? '__LOCALID_7' : null, mainThreadId: 'thread-main' };
+        }),
+        switchToNewThread: vi.fn((): void => {
+          calls.push('switchToNewThread');
+          switched = true;
+        }),
+      },
+    });
+
+    await openNewThreadDraft({ projectId: 'proj-a', prefill: 'hello' }, deps);
+
+    expect(calls).toEqual(['getState', 'getState', 'switchToNewThread', 'getState']);
+    expect(deps.setReturnTarget).toHaveBeenCalledWith('thread-main');
+    expect(deps.resetNewThreadDraft).toHaveBeenCalledWith(null);
+    expect(deps.initializeDraft).toHaveBeenCalledWith({ localId: '__LOCALID_7', projectId: 'proj-a' });
+    expect(deps.setText).toHaveBeenCalledWith('hello');
   });
 });

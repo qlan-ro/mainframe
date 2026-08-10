@@ -1,9 +1,9 @@
 /**
  * useOpenNewThreadDraft — binds openNewThreadDraft's dependencies to the real
- * runtime/stores. Both the sidebar "New" button and the selection toolbar's
- * "New session" action call the returned function.
+ * aui client and stores. Both the sidebar "New" button and the selection
+ * toolbar's "New session" action call the returned function.
  */
-import { useAssistantRuntime, useAui } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { openNewThreadDraft, type OpenNewThreadDraftArgs } from './open-new-thread-draft';
 import { resetNewThreadDraft } from './reset-new-thread-draft';
 import { initializeDraft } from './initialize-draft';
@@ -15,7 +15,6 @@ import { useDaemonPort } from '../runtime/daemon-port-context';
 import { mfToast } from '@/lib/toast';
 
 export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promise<void> {
-  const runtime = useAssistantRuntime();
   const aui = useAui();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const setFilterProjectId = useSessionFilters((s) => s.setFilterProjectId);
@@ -27,7 +26,7 @@ export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promi
     openNewThreadDraft(args, {
       filterProjectId,
       setFilterProjectId,
-      runtimeThreads: runtime.threads,
+      runtimeThreads: aui.threads(),
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
       initializeDraft: ({ localId, projectId }) =>

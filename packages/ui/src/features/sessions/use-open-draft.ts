@@ -2,10 +2,11 @@
  * The v2 binding of the new-thread draft sequence.
  *
  * The sequence itself is order-sensitive and already dependency-injected, so
- * this only supplies the runtime, the stores and a toast. The shipped binding
- * would drag the v1 toast card across the boundary; everything else is shared.
+ * this only supplies the aui client's scopes, the stores and a toast. The
+ * shipped binding would drag the v1 toast card across the boundary; everything
+ * else is shared.
  */
-import { useAssistantRuntime, useAui } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { toast } from 'sonner';
 import { openNewThreadDraft, type OpenNewThreadDraftArgs } from '@/features/sessions/new-thread/open-new-thread-draft';
 import { resetNewThreadDraft } from '@/features/sessions/new-thread/reset-new-thread-draft';
@@ -17,7 +18,6 @@ import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
 
 export function useOpenDraft(): (args: OpenNewThreadDraftArgs) => Promise<void> {
-  const runtime = useAssistantRuntime();
   const aui = useAui();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const setFilterProjectId = useSessionFilters((s) => s.setFilterProjectId);
@@ -29,7 +29,7 @@ export function useOpenDraft(): (args: OpenNewThreadDraftArgs) => Promise<void> 
     openNewThreadDraft(args, {
       filterProjectId,
       setFilterProjectId,
-      runtimeThreads: runtime.threads,
+      runtimeThreads: aui.threads(),
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
       initializeDraft: ({ localId, projectId }) =>
