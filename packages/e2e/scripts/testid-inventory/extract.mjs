@@ -1,4 +1,8 @@
 const DEF_TOKEN_RE = /\b([A-Za-z-]*[tT]est[iI][dD][A-Za-z]*|triggerId)\s*[=:]\s*/g;
+// `function rowTestId(row) { return ...`${id}` }` — a helper whose return value IS the id,
+// not a caller-supplied literal. Requires the `function` keyword so a plain call site like
+// `rowTestId(row)` (no declaration) never triggers a body scan.
+const FUNCTION_DEF_TOKEN_RE = /\bfunction\s+([A-Za-z-]*[tT]est[iI][dD][A-Za-z]*|triggerId)\s*\(/g;
 const GET_BY_TEST_ID_RE = /getByTestId\((?:'([^']*)'|"([^"]*)"|`([^`]*)`)\)/g;
 const ATTR_SELECTOR_RE = /\[data-testid=(?:"([^"]*)"|'([^']*)')\]/g;
 const NESTED_QUOTED_RE = /'([^']*)'|"([^"]*)"/g;
@@ -105,6 +109,38 @@ function matchingBrace(code, literalByStart, start) {
   return code.length;
 }
 
+/** Index of the `)` closing the `(` at `start` (already consumed, so depth starts at 1). */
+function matchingParen(code, literalByStart, start) {
+  let depth = 1;
+  let i = start;
+  while (i < code.length) {
+    const literal = literalByStart.get(i);
+    if (literal) {
+      i = literal.end;
+      continue;
+    }
+    if (code[i] === '(') depth += 1;
+    else if (code[i] === ')' && (depth -= 1) === 0) return i;
+    i += 1;
+  }
+  return code.length;
+}
+
+/** First `{` at or after `from` — the function body opening a parameter list closes into. */
+function bodyBraceStart(code, literalByStart, from) {
+  let i = from;
+  while (i < code.length) {
+    const literal = literalByStart.get(i);
+    if (literal) {
+      i = literal.end;
+      continue;
+    }
+    if (code[i] === '{') return i;
+    i += 1;
+  }
+  return -1;
+}
+
 /**
  * Definitions from a braced expression — `{cond ? 'a-id' : 'b-id'}`, `{`row-${id}`}`.
  * Both arms count; the kebab guard keeps an incidental `'utf-8'`-shaped operand
@@ -122,10 +158,29 @@ function braceDefinitions(code, literals, literalByStart, braceStart, tokenName)
 }
 
 /**
+ * Definitions returned by a testid-shaped helper function's body — `function
+ * rowTestId(row) { return ... \`session-panel-summary-${row.kind}\`; }` — found by
+ * jumping from the declaration's `(` past its parameter list to the body's `{`
+ * and running `braceDefinitions` there.
+ * @returns {Array<{ prefix: string, templated: boolean }>}
+ */
+function functionBodyDefinitions(code, literals, literalByStart) {
+  const definitions = [];
+  for (const match of code.matchAll(FUNCTION_DEF_TOKEN_RE)) {
+    const parenOpen = match.index + match[0].length - 1;
+    const parenClose = matchingParen(code, literalByStart, parenOpen + 1);
+    const braceStart = bodyBraceStart(code, literalByStart, parenClose + 1);
+    if (braceStart === -1) continue;
+    definitions.push(...braceDefinitions(code, literals, literalByStart, braceStart, match[1]));
+  }
+  return definitions;
+}
+
+/**
  * Collects every id the UI defines: `data-testid` attributes, the `testId` /
  * `testIdPrefix` / `dismissTestId` prop family, `testid:` object keys in menu
- * and segmented-option descriptors, and `triggerId` (a prop rendered straight
- * into a `data-testid`).
+ * and segmented-option descriptors, `triggerId` (a prop rendered straight into
+ * a `data-testid`), and ids a testid-shaped helper function returns.
  * @param {string} sourceText @returns {Array<{ prefix: string, templated: boolean }>}
  */
 export function collectDefinitions(sourceText) {
@@ -143,6 +198,7 @@ export function collectDefinitions(sourceText) {
       definitions.push(...braceDefinitions(code, literals, literalByStart, valueStart, tokenName));
     }
   }
+  definitions.push(...functionBodyDefinitions(code, literals, literalByStart));
   return definitions;
 }
 

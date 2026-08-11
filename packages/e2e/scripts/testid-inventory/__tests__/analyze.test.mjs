@@ -218,7 +218,37 @@ test('analyze treats a strict ref composing a harvested suffix onto a static def
   ];
   const report = analyze({ sourceFiles, specFiles });
   assert.equal(report.dead.length, 0);
-  assert.ok(report.unused.some((d) => d.prefix === 'git-confirm-dialog'), 'suffix liveness stays out of unused');
+  assert.ok(
+    report.unused.some((d) => d.prefix === 'git-confirm-dialog'),
+    'suffix liveness stays out of unused',
+  );
+});
+
+test('analyze treats a strict ref into a helper-function-returned id as live, and the sibling family as unused', () => {
+  const sourceFiles = [
+    {
+      path: '/repo/packages/ui/src/features/session-panel/SummarySection.tsx',
+      text: [
+        'function rowTestId(row) {',
+        "  return row.kind === 'pr' ? `session-panel-summary-pr-${row.number}` : `session-panel-summary-${row.kind}`;",
+        '}',
+        'const el = <div data-testid={rowTestId(row)} />;',
+      ].join('\n'),
+    },
+  ];
+  const specFiles = [
+    {
+      path: '/repo/packages/e2e/tests-tauri/session-panel.spec.ts',
+      text: "await page.getByTestId('session-panel-summary-branch').click();",
+    },
+  ];
+  const report = analyze({ sourceFiles, specFiles });
+  assert.equal(report.dead.length, 0);
+  assert.ok(!report.unused.some((d) => d.prefix === 'session-panel-summary-'), 'branch/context/changes family is live');
+  assert.ok(
+    report.unused.some((d) => d.prefix === 'session-panel-summary-pr-'),
+    'pr family has no reference, stays unused',
+  );
 });
 
 test('analyze lists a spec with zero strict refs in perSpec, sorted by basename ascending', () => {

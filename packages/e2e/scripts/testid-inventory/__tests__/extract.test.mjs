@@ -39,7 +39,11 @@ test('collectDefinitions ignores a bare data-testid passthrough', () => {
 });
 
 test('collectDefinitions discards a templated id with an empty prefix', () => {
-  const lines = ['function Unlink({ surface, n }) {', '  return <button data-testid={`${PREFIX[surface]}-unlink-${n}`} />;', '}'];
+  const lines = [
+    'function Unlink({ surface, n }) {',
+    '  return <button data-testid={`${PREFIX[surface]}-unlink-${n}`} />;',
+    '}',
+  ];
   const src = lines.join('\n');
   assert.deepEqual(collectDefinitions(src), []);
 });
@@ -122,6 +126,23 @@ test('collectDefinitions finds an itemTestIdPrefix object-literal property and m
   assert.deepEqual(collectDefinitions(src), [{ prefix: 'automations-skill-item', templated: true }]);
 });
 
+test('collectDefinitions finds both templated ids a testid-shaped helper function returns', () => {
+  const lines = [
+    'function rowTestId(row) {',
+    "  return row.kind === 'pr' ? `session-panel-summary-pr-${row.number}` : `session-panel-summary-${row.kind}`;",
+    '}',
+  ];
+  assert.deepEqual(collectDefinitions(lines.join('\n')), [
+    { prefix: 'session-panel-summary-pr-', templated: true },
+    { prefix: 'session-panel-summary-', templated: true },
+  ]);
+});
+
+test('collectDefinitions ignores a plain call to a testid-shaped helper function (not its declaration)', () => {
+  const src = '<div data-testid={rowTestId(row)} />;';
+  assert.deepEqual(collectDefinitions(src), []);
+});
+
 test('collectReferences survives an apostrophe in a block comment', () => {
   const lines = [
     '/**',
@@ -140,7 +161,7 @@ test('collectReferences survives an apostrophe inside a double-quoted string', (
 });
 
 test('collectReferences reads the id nested inside an attribute-selector literal', () => {
-  const src = "await page.locator('[data-testid=\"zone-tab-files\"]').click();";
+  const src = 'await page.locator(\'[data-testid="zone-tab-files"]\').click();';
   assert.ok(collectReferences(src).broad.includes('zone-tab-files'));
 });
 
@@ -203,7 +224,7 @@ test('collectReferences drops tokens shorter than 4 characters from broad', () =
 });
 
 test('stringLiterals collects single-, double- and backtick-quoted string contents', () => {
-  const src = "const a = 'single-quote'; const b = \"double-quote\"; const c = `back-tick`;";
+  const src = 'const a = \'single-quote\'; const b = "double-quote"; const c = `back-tick`;';
   const literals = stringLiterals(src);
   assert.ok(literals.includes('single-quote'));
   assert.ok(literals.includes('double-quote'));

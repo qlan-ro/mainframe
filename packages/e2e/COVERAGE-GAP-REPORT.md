@@ -13,10 +13,10 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 956 |
-| Referenced | 546 |
-| Unused | 410 |
-| Dead selectors | 15 |
+| Defined | 959 |
+| Referenced | 547 |
+| Unused | 412 |
+| Dead selectors | 12 |
 
 ## Dead selectors
 
@@ -29,9 +29,6 @@ read in both directions._
 - `permission-card` — referenced by: wait.ts
 - `plan-approval-card` — referenced by: wait.ts
 - `session-bar-status` — referenced by: wait.ts
-- `session-panel-summary-branch` — referenced by: session-panel.spec.ts
-- `session-panel-summary-changes` — referenced by: session-panel.spec.ts
-- `session-panel-summary-context` — referenced by: session-panel.spec.ts
 - `tool-card` — referenced by: wait.ts
 - `zone-button-tab-dropdown` — referenced by: zones.ts
 - `zone-tab-dropdown-option-${…}` — referenced by: zones.ts
@@ -62,7 +59,7 @@ read in both directions._
 | page-objects.ts | 20 | 0 |
 | preview.spec.ts | 49 | 0 |
 | review-panel.spec.ts | 65 | 0 |
-| session-panel.spec.ts | 95 | 5 |
+| session-panel.spec.ts | 100 | 0 |
 | session-tabs.spec.ts | 11 | 0 |
 | sessions-draft.spec.ts | 70 | 0 |
 | sessions-filters.spec.ts | 40 | 0 |
@@ -96,17 +93,17 @@ read in both directions._
 | skills | 24 | 24 |
 | sessions | 80 | 21 |
 | settings | 33 | 16 |
+| composer | 44 | 13 |
 | preview | 31 | 13 |
-| composer | 43 | 12 |
 | url | 11 | 11 |
 | daemon | 29 | 10 |
 | provider | 9 | 9 |
+| session | 40 | 8 |
 | sidebar | 20 | 8 |
 | automation | 7 | 7 |
 | editor | 28 | 7 |
 | run | 8 | 7 |
 | search | 16 | 7 |
-| session | 38 | 7 |
 | image | 7 | 6 |
 | smart | 6 | 6 |
 | workspace | 27 | 6 |

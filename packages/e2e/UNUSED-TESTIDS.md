@@ -1,7 +1,7 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e references
-(546). Unused: 410._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (959) minus e2e references
+(547). Unused: 412._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
@@ -251,6 +251,22 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `settings-pane-remote-access`
 - `settings-remote-access-port-tunnels-section`
 
+## composer (13)
+
+- `composer-adapter-locked-${…}`
+- `composer-adapter-logo-${…}`
+- `composer-attachments`
+- `composer-dropzone`
+- `composer-mention-session-${…}`
+- `composer-model-group-header-${…}`
+- `composer-model-older-header`
+- `composer-segment`
+- `composer-segment-input`
+- `composer-tuning-warning`
+- `composer-worktree-busy`
+- `composer-worktree-draft-cancel`
+- `composer-worktree-draft-panel`
+
 ## preview (13)
 
 - `preview-annotation-backdrop`
@@ -266,21 +282,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `preview-toolbar-capture`
 - `preview-toolbar-region`
 - `preview-tunnel-pending`
-
-## composer (12)
-
-- `composer-adapter-locked-${…}`
-- `composer-adapter-logo-${…}`
-- `composer-attachments`
-- `composer-dropzone`
-- `composer-model-group-header-${…}`
-- `composer-model-older-header`
-- `composer-segment`
-- `composer-segment-input`
-- `composer-tuning-warning`
-- `composer-worktree-busy`
-- `composer-worktree-draft-cancel`
-- `composer-worktree-draft-panel`
 
 ## url (11)
 
@@ -320,6 +321,17 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `provider-quota-row-${…}`
 - `provider-quota-unknown-${…}`
 - `provider-quota-window-${…}`
+
+## session (8)
+
+- `session-panel-launch-spinner-${…}`
+- `session-panel-summary-empty`
+- `session-panel-summary-pr-${…}`
+- `session-panel-task-${…}`
+- `session-panel-workflow-${…}`
+- `session-panel-workflow-back-${…}`
+- `session-panel-working-dot`
+- `session-tabs`
 
 ## sidebar (8)
 
@@ -371,16 +383,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `search-palette-footer`
 - `search-palette-loading`
 - `search-palette-symbol-row-${…}`
-
-## session (7)
-
-- `session-panel-launch-spinner-${…}`
-- `session-panel-summary-empty`
-- `session-panel-task-${…}`
-- `session-panel-workflow-${…}`
-- `session-panel-workflow-back-${…}`
-- `session-panel-working-dot`
-- `session-tabs`
 
 ## image (6)
 
