@@ -24,6 +24,7 @@ import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { formatElapsedSeconds } from '../format-duration';
 import { useRunElapsed } from './use-run-elapsed';
+import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { FindBar } from '../find/FindBar';
@@ -137,6 +138,7 @@ function ThreadFooterInput() {
 
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
+  const { viewportRef, contentRef } = useThreadBottomPin();
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   return (
     <ComposerEditProvider>
@@ -150,6 +152,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
           (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
           <ThreadPrimitive.Viewport
+            ref={viewportRef}
             data-testid="chat-thread-viewport"
             data-mf-chat-thread
             className="relative flex flex-1 flex-col overflow-y-auto"
@@ -157,7 +160,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             {/* Width cap: 48rem, minus the rail block (58px) MIRRORED on both
                 sides — in a narrow zone the transcript clears the floating
                 rail instead of running under it, with a symmetric left inset. */}
-            <div className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
+            <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
               <LoadErrorBanner />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
