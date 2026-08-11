@@ -75,12 +75,21 @@ describe('single mode', () => {
     useTabDragStore.setState({ draggingId: 'chat-b' });
   });
 
-  it('offers one half-surface target', () => {
+  it('offers BOTH halves — no dead drop area', () => {
     render(<ZoneDropLayer />);
 
-    expect(screen.getByTestId('zone-drop-split')).toHaveTextContent('Open in split');
+    expect(screen.getByTestId('zone-drop-split-left')).toHaveTextContent('Split left');
+    expect(screen.getByTestId('zone-drop-split')).toHaveTextContent('Split right');
     expect(screen.queryByTestId('zone-drop-left')).toBeNull();
     expect(screen.queryByTestId('zone-drop-right')).toBeNull();
+  });
+
+  it('drop on the LEFT half puts the dragged chat left, current chat right', () => {
+    render(<ZoneDropLayer />);
+
+    drop('zone-drop-split-left');
+
+    expect(useZonesStore.getState().zones).toEqual(['chat-b', 'chat-a']);
   });
 
   it('splits the active chat against the dragged one, active on the left', () => {

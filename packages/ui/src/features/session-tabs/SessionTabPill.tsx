@@ -89,6 +89,11 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
       aria-selected={tab.active}
       data-preview={tab.preview ? 'true' : 'false'}
       data-dragging={dragging || undefined}
+      // preventDefault at MOUSEDOWN, not at the drag threshold: WebKit anchors
+      // a native text selection on mousedown, and once that gesture starts no
+      // later user-select/removeAllRanges stops it from painting the
+      // transcript as the pointer crosses it.
+      onMouseDown={(event) => event.preventDefault()}
       onPointerDown={onPointerDown}
       onClick={(event) => {
         if (draggedRef.current) {
