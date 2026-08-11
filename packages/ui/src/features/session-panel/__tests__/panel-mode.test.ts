@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  derivePanelMode,
-  gutterFitsPanel,
-  gutterFitsRail,
-  INLINE_MIN_WIDTH,
-  PANEL_BLOCK_WIDTH,
-  RAIL_MIN_WIDTH,
-} from '../panel-mode';
+import { derivePanelMode, gutterFitsPanel, INLINE_MIN_WIDTH, PANEL_BLOCK_WIDTH } from '../panel-mode';
 
 describe('INLINE_MIN_WIDTH', () => {
   it('reserves the card, the rail and their margins in ONE gutter', () => {
@@ -17,20 +10,6 @@ describe('INLINE_MIN_WIDTH', () => {
   it('is the transcript column plus BOTH gutters — 1468px', () => {
     // max-w-3xl 768 (border-box: px-5 is inside) + 2 × 350
     expect(INLINE_MIN_WIDTH).toBe(1468);
-  });
-});
-
-describe('RAIL_MIN_WIDTH', () => {
-  it('is the transcript column plus a rail block in BOTH gutters — 876px', () => {
-    // 768 + 2 × (rail 42 + ml-1 4 + mr-2 8)
-    expect(RAIL_MIN_WIDTH).toBe(876);
-  });
-});
-
-describe('gutterFitsRail', () => {
-  it('fits at the exact threshold and not one pixel below', () => {
-    expect(gutterFitsRail(876)).toBe(true);
-    expect(gutterFitsRail(875)).toBe(false);
   });
 });
 
@@ -69,8 +48,10 @@ describe('derivePanelMode — the gutter is short', () => {
     expect(derivePanelMode({ surfaceWidth: 1467, userCollapsed: false, overlayOpen: false })).toBe('rail');
   });
 
-  it('holds the rail down to the rail threshold', () => {
+  it('holds the rail at any measured width — it has no minimum', () => {
     expect(derivePanelMode({ surfaceWidth: 876, userCollapsed: false, overlayOpen: false })).toBe('rail');
+    expect(derivePanelMode({ surfaceWidth: 640, userCollapsed: false, overlayOpen: false })).toBe('rail');
+    expect(derivePanelMode({ surfaceWidth: 1, userCollapsed: false, overlayOpen: false })).toBe('rail');
   });
 
   it('floats as an overlay once a rail click asks for it', () => {
@@ -84,17 +65,13 @@ describe('derivePanelMode — the gutter is short', () => {
   });
 });
 
-describe('derivePanelMode — the gutter is under even the rail', () => {
-  it('hides everything one pixel below the rail threshold', () => {
-    expect(derivePanelMode({ surfaceWidth: 875, userCollapsed: false, overlayOpen: false })).toBe('hidden');
-  });
-
-  it('hides at an unmeasured (zero) width, so nothing flashes before the first measure', () => {
+describe('derivePanelMode — unmeasured', () => {
+  it('hides only at a zero width, so nothing flashes before the first measure', () => {
     expect(derivePanelMode({ surfaceWidth: 0, userCollapsed: false, overlayOpen: false })).toBe('hidden');
+    expect(derivePanelMode({ surfaceWidth: 0, userCollapsed: true, overlayOpen: true })).toBe('hidden');
   });
 
-  it('ignores a stale overlay flag and the collapse preference alike', () => {
-    expect(derivePanelMode({ surfaceWidth: 640, userCollapsed: false, overlayOpen: true })).toBe('hidden');
-    expect(derivePanelMode({ surfaceWidth: 640, userCollapsed: true, overlayOpen: false })).toBe('hidden');
+  it('keeps the overlay below the old rail floor — narrow widths are still interactive', () => {
+    expect(derivePanelMode({ surfaceWidth: 640, userCollapsed: false, overlayOpen: true })).toBe('overlay');
   });
 });

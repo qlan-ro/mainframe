@@ -30,8 +30,10 @@ import { useContextPercent } from './use-context-percent';
 import { RailIconButton, RailMeterButton } from './SessionRailButton';
 import type { SessionPanelState } from './use-session-panel-state';
 
+// Vertically centred (`self-center`), not top-anchored: the top-right corner
+// belongs to the find-in-chat band, which the rail used to sit on top of.
 const RAIL_CHROME =
-  'pointer-events-auto mt-2 mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-start rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
+  'pointer-events-auto mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-center rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
 
 interface SessionPanelRailProps {
   state: SessionPanelState;

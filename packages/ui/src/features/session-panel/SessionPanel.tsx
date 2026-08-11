@@ -114,8 +114,8 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
     railButtons.current.get(targetId ?? 'summary')?.focus();
   }, [mode, targetId]);
 
-  // After every hook: when the gutter can't even hold the rail, nothing may
-  // overlap the transcript — no card, no rail, no root.
+  // After every hook: hidden now only means "not yet measured" — the rail
+  // itself has no minimum width and floats over the transcript when narrow.
   if (hidden) return null;
 
   return (
