@@ -39,6 +39,18 @@ test('isLiveReference is false when no definition matches', () => {
   assert.equal(isLiveReference(defs, { prefix: 'ghost-button', templated: false }), false);
 });
 
+test('isLiveReference is true when the ref composes a known suffix onto a static definition', () => {
+  const defs = [{ prefix: 'git-confirm-dialog', templated: false }];
+  const ref = { prefix: 'git-confirm-dialog-confirm', templated: false };
+  assert.equal(isLiveReference(defs, ref, ['-confirm']), true);
+});
+
+test('isLiveReference ignores an unknown suffix even when the remainder matches a definition', () => {
+  const defs = [{ prefix: 'git-confirm-dialog', templated: false }];
+  const ref = { prefix: 'git-confirm-dialog-confirm', templated: false };
+  assert.equal(isLiveReference(defs, ref, ['-cancel']), false);
+});
+
 test('analyze marks a definition referenced via a broad (non-strict) token and unused when nothing matches', () => {
   const sourceFiles = [
     {
@@ -168,6 +180,45 @@ test('analyze groups unused counts by surface, sorted by unused count descending
     { surface: 'daemon', defined: 1, unused: 1 },
     { surface: 'gates', defined: 1, unused: 0 },
   ]);
+});
+
+test('analyze treats a strict ref into an itemTestIdPrefix family as live, not dead', () => {
+  const sourceFiles = [
+    {
+      path: '/repo/packages/ui/src/features/chat/composer/triggers/ComposerTriggers.tsx',
+      text: "const triggers = [{ itemTestIdPrefix: 'composer-file-item' }];",
+    },
+  ];
+  const specFiles = [
+    {
+      path: '/repo/packages/e2e/tests-tauri/composer-advanced.spec.ts',
+      text: "await page.getByTestId('composer-file-item-notes').click();",
+    },
+  ];
+  const report = analyze({ sourceFiles, specFiles });
+  assert.equal(report.dead.length, 0);
+});
+
+test('analyze treats a strict ref composing a harvested suffix onto a static definition as live, not dead', () => {
+  const sourceFiles = [
+    {
+      path: '/repo/packages/ui/src/features/git/git-confirm.ts',
+      text: "requestConfirm({ ...opts, testid: 'git-confirm-dialog' });",
+    },
+    {
+      path: '/repo/packages/ui/src/features/shared/ConfirmDialog.tsx',
+      text: 'const el = <button data-testid={`${testid}-confirm`} />;',
+    },
+  ];
+  const specFiles = [
+    {
+      path: '/repo/packages/e2e/tests-tauri/git-branch.spec.ts',
+      text: "await page.getByTestId('git-confirm-dialog-confirm').click();",
+    },
+  ];
+  const report = analyze({ sourceFiles, specFiles });
+  assert.equal(report.dead.length, 0);
+  assert.ok(report.unused.some((d) => d.prefix === 'git-confirm-dialog'), 'suffix liveness stays out of unused');
 });
 
 test('analyze lists a spec with zero strict refs in perSpec, sorted by basename ascending', () => {

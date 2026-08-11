@@ -1,21 +1,31 @@
-const DEF_TOKEN_RE = /\b(?:[A-Za-z-]*[tT]est[iI][dD][A-Za-z]*|triggerId)\s*[=:]\s*/g;
+const DEF_TOKEN_RE = /\b([A-Za-z-]*[tT]est[iI][dD][A-Za-z]*|triggerId)\s*[=:]\s*/g;
 const GET_BY_TEST_ID_RE = /getByTestId\((?:'([^']*)'|"([^"]*)"|`([^`]*)`)\)/g;
 const ATTR_SELECTOR_RE = /\[data-testid=(?:"([^"]*)"|'([^']*)')\]/g;
 const NESTED_QUOTED_RE = /'([^']*)'|"([^"]*)"/g;
 const KEBAB_ID_RE = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]*)+$/;
 const MIN_TEMPLATE_PREFIX_LENGTH = 4;
 const MIN_BROAD_TOKEN_LENGTH = 4;
+// A single-interpolation `data-testid` template — `${x}-confirm` — composes a
+// runtime id from a caller-supplied prefix; the text after `}` is the static
+// suffix a prefix definition can be combined with.
+const TESTID_SUFFIX_TEMPLATE_RE = /data-testid=\{`\$\{[^{}]*\}([A-Za-z0-9-]+)`\}/g;
 
 /**
  * Splits a possibly-templated attribute value into a Definition, discarding
  * templated prefixes too short to be a useful match (empty, or under the
  * 4-char floor a bare `${PREFIX[x]}-unlink-${n}` composite would otherwise pass).
- * @param {string} value
+ * A token name ending in `Prefix` (`itemTestIdPrefix`, `testIdPrefix`) is
+ * always templated even when its literal has no `${` — the id it defines is
+ * a caller-supplied prefix a component composes with a suffix at render time.
+ * @param {string} value @param {string} [tokenName]
  * @returns {{ prefix: string, templated: boolean } | null}
  */
-function toDefinition(value) {
+function toDefinition(value, tokenName) {
   const templateStart = value.indexOf('${');
-  if (templateStart === -1) return value ? { prefix: value, templated: false } : null;
+  if (templateStart === -1) {
+    if (!value) return null;
+    return { prefix: value, templated: Boolean(tokenName?.endsWith('Prefix')) };
+  }
   const prefix = value.slice(0, templateStart);
   if (prefix.length < MIN_TEMPLATE_PREFIX_LENGTH) return null;
   return { prefix, templated: true };
@@ -100,12 +110,12 @@ function matchingBrace(code, literalByStart, start) {
  * Both arms count; the kebab guard keeps an incidental `'utf-8'`-shaped operand
  * inside the same expression from minting a definition.
  */
-function braceDefinitions(code, literals, literalByStart, braceStart) {
+function braceDefinitions(code, literals, literalByStart, braceStart, tokenName) {
   const braceEnd = matchingBrace(code, literalByStart, braceStart);
   const definitions = [];
   for (const literal of literals) {
     if (literal.start <= braceStart || literal.end > braceEnd) continue;
-    const definition = toDefinition(literal.value);
+    const definition = toDefinition(literal.value, tokenName);
     if (definition && KEBAB_ID_RE.test(definition.prefix)) definitions.push(definition);
   }
   return definitions;
@@ -123,16 +133,31 @@ export function collectDefinitions(sourceText) {
   const literalByStart = new Map(literals.map((literal) => [literal.start, literal]));
   const definitions = [];
   for (const match of code.matchAll(DEF_TOKEN_RE)) {
+    const tokenName = match[1];
     const valueStart = match.index + match[0].length;
     const literal = literalByStart.get(valueStart);
     if (literal) {
-      const definition = toDefinition(literal.value);
+      const definition = toDefinition(literal.value, tokenName);
       if (definition) definitions.push(definition);
     } else if (code[valueStart] === '{') {
-      definitions.push(...braceDefinitions(code, literals, literalByStart, valueStart));
+      definitions.push(...braceDefinitions(code, literals, literalByStart, valueStart, tokenName));
     }
   }
   return definitions;
+}
+
+/**
+ * Static suffixes a component appends after a single-interpolation prefix in
+ * a `data-testid` template — `data-testid={\`${testid}-confirm\`}` yields
+ * `-confirm`. Scoped to dead-selector liveness only (see analyze.mjs); a
+ * generic suffix rule over-matches for the unused computation.
+ * @param {string} sourceText @returns {string[]}
+ */
+export function collectTestIdSuffixes(sourceText) {
+  const { code } = scanSource(sourceText);
+  const suffixes = new Set();
+  for (const match of code.matchAll(TESTID_SUFFIX_TEMPLATE_RE)) suffixes.add(match[1]);
+  return [...suffixes];
 }
 
 /**

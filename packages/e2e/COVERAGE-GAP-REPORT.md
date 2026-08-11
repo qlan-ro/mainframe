@@ -14,32 +14,24 @@ read in both directions._
 | Metric | Count |
 |---|---|
 | Defined | 956 |
-| Referenced | 544 |
-| Unused | 412 |
-| Dead selectors | 23 |
+| Referenced | 546 |
+| Unused | 410 |
+| Dead selectors | 15 |
 
 ## Dead selectors
 
 - `ask-question-card` — referenced by: wait.ts
 - `changes-panel` — referenced by: files-tree.spec.ts
 - `chat-composer-worktree-missing` — referenced by: composer.spec.ts
-- `composer-file-item-index.ts` — referenced by: composer-advanced.spec.ts
-- `composer-file-item-notes` — referenced by: composer-advanced.spec.ts
-- `composer-file-item-notes/todo.md` — referenced by: composer-advanced.spec.ts
-- `composer-skill-item-greet-user` — referenced by: composer-advanced.spec.ts
-- `git-confirm-dialog-confirm` — referenced by: git-branch.spec.ts
 - `inspector-tab-changes` — referenced by: files-tree.spec.ts
 - `inspector-tab-files` — referenced by: files-tree.spec.ts
 - `message-image-thumb` — referenced by: composer.spec.ts
 - `permission-card` — referenced by: wait.ts
 - `plan-approval-card` — referenced by: wait.ts
 - `session-bar-status` — referenced by: wait.ts
-- `session-panel-rail-activity-dot` — referenced by: session-panel.spec.ts
 - `session-panel-summary-branch` — referenced by: session-panel.spec.ts
 - `session-panel-summary-changes` — referenced by: session-panel.spec.ts
 - `session-panel-summary-context` — referenced by: session-panel.spec.ts
-- `sessions-remove-project-dialog-confirm` — referenced by: sessions-filters.spec.ts
-- `sessions-section-jump` — referenced by: sessions-filters.spec.ts, sessions-rows.spec.ts
 - `tool-card` — referenced by: wait.ts
 - `zone-button-tab-dropdown` — referenced by: zones.ts
 - `zone-tab-dropdown-option-${…}` — referenced by: zones.ts
@@ -52,7 +44,7 @@ read in both directions._
 | background-client.ts | 0 | 0 |
 | chat-header.spec.ts | 15 | 0 |
 | chat.spec.ts | 29 | 0 |
-| composer-advanced.spec.ts | 80 | 7 |
+| composer-advanced.spec.ts | 87 | 0 |
 | composer.spec.ts | 47 | 2 |
 | daemon-picker.spec.ts | 66 | 0 |
 | daemon.ts | 0 | 0 |
@@ -63,18 +55,18 @@ read in both directions._
 | files-tree.spec.ts | 49 | 3 |
 | find-in-path.spec.ts | 55 | 0 |
 | gates.spec.ts | 40 | 0 |
-| git-branch.spec.ts | 77 | 3 |
+| git-branch.spec.ts | 80 | 0 |
 | global-setup.ts | 0 | 0 |
 | layout.spec.ts | 53 | 0 |
 | menus.ts | 0 | 0 |
 | page-objects.ts | 20 | 0 |
 | preview.spec.ts | 49 | 0 |
 | review-panel.spec.ts | 65 | 0 |
-| session-panel.spec.ts | 94 | 6 |
+| session-panel.spec.ts | 95 | 5 |
 | session-tabs.spec.ts | 11 | 0 |
 | sessions-draft.spec.ts | 70 | 0 |
-| sessions-filters.spec.ts | 38 | 2 |
-| sessions-rows.spec.ts | 28 | 1 |
+| sessions-filters.spec.ts | 40 | 0 |
+| sessions-rows.spec.ts | 29 | 0 |
 | sessions-tags.spec.ts | 54 | 0 |
 | sessions.spec.ts | 49 | 0 |
 | settings.spec.ts | 73 | 0 |
@@ -104,8 +96,8 @@ read in both directions._
 | skills | 24 | 24 |
 | sessions | 80 | 21 |
 | settings | 33 | 16 |
-| composer | 43 | 14 |
 | preview | 31 | 13 |
+| composer | 43 | 12 |
 | url | 11 | 11 |
 | daemon | 29 | 10 |
 | provider | 9 | 9 |

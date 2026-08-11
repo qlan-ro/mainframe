@@ -1,7 +1,7 @@
 # e2e — test-ids not referenced by any test
 
 _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e references
-(544). Unused: 412._
+(546). Unused: 410._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
@@ -40,7 +40,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `automations-editor-issues`
 - `automations-editor-name`
 - `automations-editor-save`
-- `automations-file-item`
+- `automations-file-item${…}`
 - `automations-if-add-condition-${…}`
 - `automations-if-add-otherwise-${…}`
 - `automations-if-match-all`
@@ -75,7 +75,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `automations-section-editor`
 - `automations-section-library`
 - `automations-section-run`
-- `automations-skill-item`
+- `automations-skill-item${…}`
 - `automations-step-${…}`
 - `automations-step-config-${…}`
 - `automations-step-delete-${…}`
@@ -251,23 +251,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `settings-pane-remote-access`
 - `settings-remote-access-port-tunnels-section`
 
-## composer (14)
-
-- `composer-adapter-locked-${…}`
-- `composer-adapter-logo-${…}`
-- `composer-attachments`
-- `composer-dropzone`
-- `composer-file-item`
-- `composer-model-group-header-${…}`
-- `composer-model-older-header`
-- `composer-segment`
-- `composer-segment-input`
-- `composer-skill-item`
-- `composer-tuning-warning`
-- `composer-worktree-busy`
-- `composer-worktree-draft-cancel`
-- `composer-worktree-draft-panel`
-
 ## preview (13)
 
 - `preview-annotation-backdrop`
@@ -283,6 +266,21 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (956) minus e2e refe
 - `preview-toolbar-capture`
 - `preview-toolbar-region`
 - `preview-tunnel-pending`
+
+## composer (12)
+
+- `composer-adapter-locked-${…}`
+- `composer-adapter-logo-${…}`
+- `composer-attachments`
+- `composer-dropzone`
+- `composer-model-group-header-${…}`
+- `composer-model-older-header`
+- `composer-segment`
+- `composer-segment-input`
+- `composer-tuning-warning`
+- `composer-worktree-busy`
+- `composer-worktree-draft-cancel`
+- `composer-worktree-draft-panel`
 
 ## url (11)
 

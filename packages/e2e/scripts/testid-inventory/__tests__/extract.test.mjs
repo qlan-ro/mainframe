@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectDefinitions, collectReferences, stringLiterals } from '../extract.mjs';
+import { collectDefinitions, collectReferences, collectTestIdSuffixes, stringLiterals } from '../extract.mjs';
 
 test('collectDefinitions finds a static data-testid attribute', () => {
   const src = 'const el = <button data-testid="chat-send-button" />;';
@@ -13,13 +13,19 @@ test('collectDefinitions finds a templated data-testid attribute', () => {
   assert.deepEqual(collectDefinitions(src), [{ prefix: 'daemon-row-', templated: true }]);
 });
 
-test('collectDefinitions finds testId and testIdPrefix prop literals', () => {
-  const lines = ['<Toggle testId="settings-toggle-foo" />;', '<Field testIdPrefix="tasks-field" />;'];
-  const src = lines.join('\n');
-  assert.deepEqual(collectDefinitions(src), [
-    { prefix: 'settings-toggle-foo', templated: false },
-    { prefix: 'tasks-field', templated: false },
-  ]);
+test('collectDefinitions finds a testId prop literal', () => {
+  const src = '<Toggle testId="settings-toggle-foo" />;';
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'settings-toggle-foo', templated: false }]);
+});
+
+test('collectDefinitions marks a *Prefix token as templated even without a ${ in its literal', () => {
+  const src = '<Field testIdPrefix="tasks-field" />;';
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'tasks-field', templated: true }]);
+});
+
+test('collectDefinitions marks an itemTestIdPrefix literal as templated', () => {
+  const src = "const triggers = [{ itemTestIdPrefix: 'composer-file-item' }];";
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'composer-file-item', templated: true }]);
 });
 
 test('collectDefinitions treats a backtick value with no ${ as a static definition', () => {
@@ -55,7 +61,7 @@ test('collectDefinitions returns entries in order of appearance and may repeat',
     { prefix: 'chat-send-button', templated: false },
     { prefix: 'daemon-row-', templated: true },
     { prefix: 'settings-toggle-foo', templated: false },
-    { prefix: 'tasks-field', templated: false },
+    { prefix: 'tasks-field', templated: true },
     { prefix: 'chat-send-button', templated: false },
   ]);
 });
@@ -111,9 +117,9 @@ test('collectDefinitions finds a camelCase testId object-literal property', () =
   assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'settings-about-version', templated: false }]);
 });
 
-test('collectDefinitions finds an itemTestIdPrefix object-literal property', () => {
+test('collectDefinitions finds an itemTestIdPrefix object-literal property and marks it templated', () => {
   const src = "const config = { itemTestIdPrefix: 'automations-skill-item' };";
-  assert.deepEqual(collectDefinitions(src), [{ prefix: 'automations-skill-item', templated: false }]);
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'automations-skill-item', templated: true }]);
 });
 
 test('collectReferences survives an apostrophe in a block comment', () => {
@@ -210,4 +216,27 @@ test('stringLiterals reduces a backtick literal to the text before the first ${'
   const literals = stringLiterals(src);
   assert.ok(literals.includes('daemon-row-'));
   assert.ok(!literals.some((l) => l.includes('${')));
+});
+
+test('collectTestIdSuffixes harvests the static suffix from a single-interpolation data-testid template', () => {
+  const src = 'const el = <button data-testid={`${testid}-confirm`} />;';
+  assert.deepEqual(collectTestIdSuffixes(src), ['-confirm']);
+});
+
+test('collectTestIdSuffixes ignores a template with a second interpolation after the suffix', () => {
+  const src = 'const el = <button data-testid={`${a}-${b}`} />;';
+  assert.deepEqual(collectTestIdSuffixes(src), []);
+});
+
+test('collectTestIdSuffixes ignores a backtick template that is not a data-testid attribute', () => {
+  const src = 'const label = `${testid}-confirm`;';
+  assert.deepEqual(collectTestIdSuffixes(src), []);
+});
+
+test('collectTestIdSuffixes dedupes repeated suffixes across a file', () => {
+  const lines = [
+    'const a = <button data-testid={`${testId}-menu`} />;',
+    'const b = <button data-testid={`${testId}-menu`} />;',
+  ];
+  assert.deepEqual(collectTestIdSuffixes(lines.join('\n')), ['-menu']);
 });
