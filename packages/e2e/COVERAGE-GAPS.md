@@ -1,15 +1,21 @@
 # e2e coverage gaps
 
-_Last updated 2026-05-31. Companion to [`UNUSED-TESTIDS.md`](./UNUSED-TESTIDS.md) (the raw
-auto-generated dump). This file triages those 164 unused test-ids into **why** each is uncovered and
+> **Stale as of 2026-08-11.** The buckets below were triaged on 2026-05-31 against the pre-v2 tree.
+> `UNUSED-TESTIDS.md` was regenerated on 2026-08-11 and its id counts no longer match this file's.
+> Re-triaging the refreshed inventory is separate work, not covered here.
+
+_Companion to [`UNUSED-TESTIDS.md`](./UNUSED-TESTIDS.md) (the raw auto-generated dump — see that file
+for the current unused-id count). This file triages those ids into **why** each is uncovered and
 **what** a covering test would look like, so the next pass can pick high-value work without
 re-deriving the analysis._
 
 ## How to regenerate the raw list
 
 ```bash
-node /tmp/testid-gap.mjs   # writes UNUSED-TESTIDS.md (source test-ids minus e2e references)
+pnpm --filter @qlan-ro/mainframe-e2e run testids
 ```
+
+`testids:check` verifies the committed `UNUSED-TESTIDS.md` and `COVERAGE-GAP-REPORT.md` are current.
 
 ## Methodology caveats
 
