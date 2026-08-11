@@ -129,7 +129,9 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
           data-testid={`session-tab-close-${tab.id}`}
           variant="ghost"
           size="icon-2xs"
-          className={cn('opacity-0 group-hover:opacity-100', tab.active && 'opacity-60')}
+          // Grouped (split) tabs are both ON SCREEN, so both keep the resting
+          // ✕ the active tab gets — it closes the zone, not a hidden session.
+          className={cn('opacity-0 group-hover:opacity-100', (tab.active || grouped) && 'opacity-60')}
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab.id);
