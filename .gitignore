@@ -64,3 +64,4 @@ docs/CODE-ANALYSIS*
 packages/e2e/logs/
 .playwright-cli/
 dist-local/
+/packages/e2e/daemon-logs/

@@ -65,6 +65,14 @@ export async function launchTauriApp(opts?: {
       await context.addInitScript((value: string) => localStorage.setItem('mf:tutorial', value), TOUR_SUPPRESS);
     }
     const page = await context.newPage();
+    // Echo the app's warnings/errors to stdout, where the CI job log keeps them.
+    // Without this the renderer's side of a failure is invisible on CI — every
+    // client-side theory this suite has produced was inferred from the DOM alone.
+    page.on('console', (message) => {
+      if (message.type() !== 'warning' && message.type() !== 'error') return;
+      console.log(`[browser:${message.type()}] ${message.text()}`);
+    });
+    page.on('pageerror', (error) => console.log(`[browser:pageerror] ${error.message}`));
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
     await waitConnected(page);
 
