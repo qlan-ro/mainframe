@@ -12,7 +12,7 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { Columns2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTabDragStore } from './tab-drag-store';
-import { useZonesStore, type ZoneIndex } from './zones-store';
+import { splitVisible, useZonesStore, type ZoneIndex } from './zones-store';
 
 function DropTarget({
   testId,
@@ -65,7 +65,9 @@ export function ZoneDropLayer() {
     if (store.focusedIndex === index) aui.threads.switchToThread(draggingId);
   };
 
-  if (zones != null) {
+  // Only a VISIBLE split offers per-zone targets — a parked pair is off
+  // screen, and the drop below rebuilds the pair around the current chat.
+  if (splitVisible(zones, mainThreadId)) {
     return (
       <div className="pointer-events-none absolute inset-0 z-40 flex gap-2 p-3">
         <DropTarget testId="zone-drop-left" label="Show here" className="flex-1" onDrop={() => dropOnZone(0)} />
@@ -74,7 +76,7 @@ export function ZoneDropLayer() {
     );
   }
 
-  // Single mode: nothing to split against when dragging the active chat.
+  // Single view: nothing to split against when dragging the active chat.
   if (mainThreadId == null || draggingId === mainThreadId || mainThreadId.startsWith('__LOCALID_')) return null;
 
   return (

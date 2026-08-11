@@ -144,23 +144,10 @@ describe('a preview tab entering the split', () => {
 describe('restoring the split across a boot', () => {
   const V3_PAIR = JSON.stringify({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'] });
 
-  it('parks the pair and only switches focus to the left zone first', () => {
+  it('sets the pair with NO focus choreography — rendering derives from membership (parking model)', () => {
     localStorage.setItem(SESSION_TABS_STORAGE_KEY, V3_PAIR);
     settledList([SESSION_A, SESSION_B]);
     mainThreadIdValue = '__LOCALID_boot';
-
-    renderHook(() => useSessionTabsSync());
-
-    expect(switchToThread).toHaveBeenCalledTimes(1);
-    expect(switchToThread).toHaveBeenCalledWith('chat-a');
-    // Opening here would hand the reconciler a draft main and close it again.
-    expect(zones()).toBeNull();
-  });
-
-  it('opens inline when focus is ALREADY the left zone — a deep-link boot has no focus change to wait for', () => {
-    localStorage.setItem(SESSION_TABS_STORAGE_KEY, V3_PAIR);
-    settledList([SESSION_A, SESSION_B]);
-    mainThreadIdValue = 'chat-a';
 
     renderHook(() => useSessionTabsSync());
 
@@ -168,27 +155,12 @@ describe('restoring the split across a boot', () => {
     expect(zones()).toEqual(['chat-a', 'chat-b']);
   });
 
-  it('opens the split once focus has landed on the left zone', () => {
+  it('restores the pair only once — a user close later the same boot sticks', () => {
     localStorage.setItem(SESSION_TABS_STORAGE_KEY, V3_PAIR);
     settledList([SESSION_A, SESSION_B]);
-    mainThreadIdValue = '__LOCALID_boot';
+    mainThreadIdValue = 'chat-a';
     const { rerender } = renderHook(() => useSessionTabsSync());
 
-    mainThreadIdValue = 'chat-a';
-    rerender();
-
-    expect(zones()).toEqual(['chat-a', 'chat-b']);
-    expect(useZonesStore.getState().focusedIndex).toBe(0);
-  });
-
-  it('opens the split only once, not on every later focus change', () => {
-    localStorage.setItem(SESSION_TABS_STORAGE_KEY, V3_PAIR);
-    settledList([SESSION_A, SESSION_B]);
-    mainThreadIdValue = '__LOCALID_boot';
-    const { rerender } = renderHook(() => useSessionTabsSync());
-
-    mainThreadIdValue = 'chat-a';
-    rerender();
     act(() => {
       useZonesStore.getState().closeSplit();
     });
@@ -237,12 +209,8 @@ describe('restoring the split across a boot', () => {
     );
     settledList([SESSION_A, SESSION_LOCAL_B]);
     mainThreadIdValue = '__LOCALID_boot';
-    const { rerender } = renderHook(() => useSessionTabsSync());
 
-    expect(switchToThread).toHaveBeenCalledWith('__LOCALID_5');
-
-    mainThreadIdValue = '__LOCALID_5';
-    rerender();
+    renderHook(() => useSessionTabsSync());
 
     expect(zones()).toEqual(['__LOCALID_5', 'chat-a']);
   });

@@ -72,13 +72,14 @@ export function useSessionListRouter(): void {
 
   // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
-  // While split, VISIBLE counts as viewed: both zone chats join the suppression
-  // set, and entering the split clears a joining chat's existing dot.
+  // While the split is VISIBLE, both zone chats count as viewed: they join the
+  // suppression set and clear their dots on entry. A PARKED pair is off screen
+  // and badges normally.
   const zones = useZonesStore((s) => s.zones);
   const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const active = mainThreadId == null ? undefined : items.find((t) => t.id === mainThreadId);
-    const zoneIds = zones ?? [];
+    const zoneIds = zones != null && mainThreadId != null && zones.includes(mainThreadId) ? zones : [];
     const zoneRemotes = zoneIds
       .map((id) => items.find((t) => t.id === id)?.remoteId)
       .filter((id): id is string => id != null);

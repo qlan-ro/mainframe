@@ -22,7 +22,7 @@
  * outlive a list load that failed.
  */
 import { useEffect, useRef } from 'react';
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
@@ -64,7 +64,6 @@ function readPersisted(): PersistedTabs {
 }
 
 export function useSessionTabsSync(): void {
-  const aui = useAui();
   const items = useAuiState((s) => s.threads.threadItems);
   const isListLoading = useAuiState((s) => s.threads.isLoading);
   const listLoaded = useSessionListLoadState((s) => s.loaded);
@@ -76,9 +75,6 @@ export function useSessionTabsSync(): void {
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
 
-  // A restored split parks here until focus lands on its left zone (below).
-  const pendingZonesRef = useRef<[string, string] | null>(null);
-
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
     const persisted = readPersisted();
@@ -86,31 +82,18 @@ export function useSessionTabsSync(): void {
       restoreTabIds(persisted.ids, items),
       persisted.preview === null ? null : (restoreTabIds([persisted.preview], items)[0] ?? null),
     );
-    // Restore the split only when BOTH zones still resolve. The pair is PARKED
-    // until focus actually lands on the left zone: switchToThread resolves
-    // async, and opening the split while the boot draft is still main would
-    // make the reconciler read draft-main and close it straight back. When
-    // focus is ALREADY there (deep-link boot straight into the left chat) the
-    // parked effect would never fire — open inline instead.
+    // Restore the split only when BOTH zones still resolve. Setting the pair
+    // is enough: the split renders whenever the active chat is a member (the
+    // parking model), so a boot that lands on a member shows it and any other
+    // boot leaves it parked behind a member tab click. No focus choreography —
+    // the old parked-restore dance existed only because rendering used to be
+    // forced rather than derived.
     const zones = restoreTabIds(persisted.zones, items);
     const [left, right] = zones;
     if (zones.length === 2 && left != null && right != null) {
-      if (mainThreadId === left) {
-        useZonesStore.getState().openSplit(left, right);
-      } else {
-        pendingZonesRef.current = [left, right];
-        aui.threads.switchToThread(left);
-      }
+      useZonesStore.getState().openSplit(left, right);
     }
-  }, [hydrated, items, isListLoading, listLoaded, hydrate, aui, mainThreadId]);
-
-  // Opens the parked restore once the switch has landed (see above).
-  useEffect(() => {
-    const pending = pendingZonesRef.current;
-    if (pending == null || mainThreadId !== pending[0]) return;
-    pendingZonesRef.current = null;
-    useZonesStore.getState().openSplit(pending[0], pending[1]);
-  }, [mainThreadId]);
+  }, [hydrated, items, isListLoading, listLoaded, hydrate]);
 
   useEffect(() => {
     if (mainThreadId) ensureTab(mainThreadId, { pin: shouldPinOnOpen(mainThreadId, items) });

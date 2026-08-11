@@ -59,8 +59,8 @@ describe('switching to a chat already in the split', () => {
   });
 });
 
-describe('switching to a chat outside the split', () => {
-  it('replaces the LEFT zone when the left slot has focus', () => {
+describe('switching to a chat outside the split — the pair PARKS', () => {
+  it('never rewrites the pair, whichever slot had focus', () => {
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
     mainThreadIdValue = 'chat-a';
     const { rerender } = renderHook(() => useZonesReconciler());
@@ -68,11 +68,11 @@ describe('switching to a chat outside the split', () => {
     mainThreadIdValue = 'chat-c';
     rerender();
 
-    expect(zones()).toEqual(['chat-c', 'chat-b']);
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
     expect(focusedIndex()).toBe(0);
   });
 
-  it('replaces the RIGHT zone when the right slot has focus', () => {
+  it('keeps the pair from the right slot too, and remembers its focus', () => {
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
     mainThreadIdValue = 'chat-b';
     const { rerender } = renderHook(() => useZonesReconciler());
@@ -80,13 +80,27 @@ describe('switching to a chat outside the split', () => {
     mainThreadIdValue = 'chat-c';
     rerender();
 
-    expect(zones()).toEqual(['chat-a', 'chat-c']);
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
+    expect(focusedIndex()).toBe(1);
+  });
+
+  it('coming back to a member picks the split up where it was', () => {
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    mainThreadIdValue = 'chat-a';
+    const { rerender } = renderHook(() => useZonesReconciler());
+
+    mainThreadIdValue = 'chat-c';
+    rerender();
+    mainThreadIdValue = 'chat-b';
+    rerender();
+
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
     expect(focusedIndex()).toBe(1);
   });
 });
 
 describe('switching to an unsent draft', () => {
-  it('closes the split — the welcome flow owns the whole surface', () => {
+  it('parks the pair like any other outside switch — the welcome flow shows alone', () => {
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
     mainThreadIdValue = 'chat-b';
     const { rerender } = renderHook(() => useZonesReconciler());
@@ -94,8 +108,8 @@ describe('switching to an unsent draft', () => {
     mainThreadIdValue = '__LOCALID_7';
     rerender();
 
-    expect(zones()).toBeNull();
-    expect(focusedIndex()).toBe(0);
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
+    expect(focusedIndex()).toBe(1);
   });
 });
 

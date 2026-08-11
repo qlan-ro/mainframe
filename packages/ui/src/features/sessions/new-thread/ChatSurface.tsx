@@ -118,11 +118,11 @@ export function ChatSurface() {
 
   const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
 
-  // Split mode: two ExternalThread-mounted zones side by side, each a complete
-  // chat column (own header, panel and rail); focus is a click (switchToThread),
-  // so `mainThreadId` keeps meaning "the focused zone". The draft guard covers
-  // the one frame before the reconciler closes the split.
-  if (zones != null && mainThreadId != null && !mainThreadId.startsWith('__LOCALID_')) {
+  // Split mode renders only while the focused chat is a MEMBER of the pair —
+  // any other active session parks the split behind the normal single view
+  // (the pair survives; a member tab click brings it back). Focus is a click
+  // (switchToThread), so `mainThreadId` keeps meaning "the focused zone".
+  if (zones != null && mainThreadId != null && zones.includes(mainThreadId)) {
     const closeZone = (closedId: string) => {
       const other = zones[0] === closedId ? zones[1] : zones[0];
       closeSplit();

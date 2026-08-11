@@ -143,8 +143,16 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   const aui = useAui();
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // Visible-but-unfocused zone chats get the dimmed selection tint — the
-  // focused one keeps the native full data-active treatment.
-  const zoneDimmed = useZonesStore((s) => s.zones != null && s.zones.includes(item.id) && mainThreadId !== item.id);
+  // focused one keeps the native full data-active treatment. A parked pair is
+  // off screen, so its rows carry no tint.
+  const zoneDimmed = useZonesStore(
+    (s) =>
+      s.zones != null &&
+      mainThreadId != null &&
+      s.zones.includes(mainThreadId) &&
+      s.zones.includes(item.id) &&
+      mainThreadId !== item.id,
+  );
   const unreadIds = useUnreadStore((s) => s.unread);
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);

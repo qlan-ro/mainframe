@@ -1,14 +1,27 @@
 /**
- * useZoneHotkeys — ⌘\ / Ctrl+\ closes the FOCUSED zone, leaving the other chat
- * on the whole surface. Observable outcome: the zones store collapses and aui
- * is switched to the SURVIVOR (the zone that did NOT have focus).
+ * useZoneHotkeys — ⌘\ / Ctrl+\ closes the VISIBLE split's focused zone,
+ * leaving the other chat on the whole surface. Observable outcome: the zones
+ * store collapses and aui is switched to the SURVIVOR (the zone that did NOT
+ * have focus). A PARKED pair (main outside the split) is not what the
+ * shortcut aims at, so it stays inert.
  *
- * The hook takes the aui client as an argument, so the fake below is the whole
- * seam — no provider, no module mock.
+ * The aui client is an argument; `useAuiState` (the main-thread read the
+ * visibility gate needs) is the one module mock.
  */
 import { fireEvent, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { useAui } from '@assistant-ui/react';
+
+let mainThreadIdValue: string | null = null;
+vi.mock('@assistant-ui/react', async () => {
+  const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
+  return {
+    ...actual,
+    useAuiState: (sel: (s: { threads: { mainThreadId: string | null } }) => unknown) =>
+      sel({ threads: { mainThreadId: mainThreadIdValue } }),
+  };
+});
+
 import { useZonesStore } from '../zones-store';
 import { useZoneHotkeys } from '../use-zone-hotkeys';
 
@@ -23,6 +36,7 @@ const pressCmdBackslash = () => fireEvent.keyDown(window, { key: '\\', metaKey: 
 
 beforeEach(() => {
   switchToThread.mockReset();
+  mainThreadIdValue = 'chat-a';
   useZonesStore.setState({ zones: null, focusedIndex: 0 });
 });
 
@@ -40,6 +54,7 @@ describe('while the surface is split', () => {
   });
 
   it('closes the split and lands on the LEFT chat when the right zone has focus', () => {
+    mainThreadIdValue = 'chat-b';
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
     renderHook(() => useZoneHotkeys(aui));
 
@@ -77,7 +92,18 @@ describe('inert cases', () => {
     expect(switchToThread).not.toHaveBeenCalled();
   });
 
+  it('stays inert on a PARKED pair — main is outside the split', () => {
+    mainThreadIdValue = 'chat-elsewhere';
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    renderHook(() => useZoneHotkeys(aui));
+
+    expect(pressCmdBackslash()).toBe(true);
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
+    expect(switchToThread).not.toHaveBeenCalled();
+  });
+
   it('ignores a bare backslash — it is a character, not a command', () => {
+    mainThreadIdValue = 'chat-b';
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
     renderHook(() => useZoneHotkeys(aui));
 

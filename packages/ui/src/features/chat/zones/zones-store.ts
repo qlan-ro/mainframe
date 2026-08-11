@@ -3,10 +3,13 @@
  * (docs/plans/2026-08-11-split-chat-zones.md).
  *
  * Zone ids are aui item ids (the same id space the session-tab store uses).
- * `mainThreadId` stays the single focus axis: while split it must be a member
- * of `zones` — use-zones-reconciler enforces that by replacing the focused
- * slot when a switch lands on a chat outside the split (the Claude Code
- * desktop rule: "clicking another session replaces whichever pane has focus").
+ * The pair is an ARRANGEMENT, not a lock on navigation: the split renders
+ * only while `mainThreadId` is a member (`splitVisible`). Switching to any
+ * other session PARKS it — normal single-chat view, pair kept — and clicking
+ * either member's tab brings it back. (This replaced the Claude Code desktop
+ * replace-the-focused-pane rule after live use: a plain click must never
+ * rewrite the pair.) Only explicit gestures edit it: ⌘-click/drag retarget,
+ * the zone ✕ / a member tab's ✕ / ⌘\\ dissolve it.
  */
 import { create } from 'zustand';
 
@@ -37,7 +40,13 @@ export const useZonesStore = create<ZonesState>((set) => ({
   closeSplit: () => set({ zones: null, focusedIndex: 0 }),
 }));
 
-/** A chat is visible while split iff it holds one of the two slots. */
+/** A chat holds one of the two slots. */
 export function isVisibleZone(zones: [string, string] | null, id: string | null | undefined): boolean {
   return id != null && zones != null && zones.includes(id);
+}
+
+/** The split RENDERS only while the focused chat is a member; otherwise the
+ *  pair is parked behind the normal single-chat view. */
+export function splitVisible(zones: [string, string] | null, mainThreadId: string | null | undefined): boolean {
+  return isVisibleZone(zones, mainThreadId);
 }
