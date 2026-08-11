@@ -51,8 +51,11 @@ interface SessionTabPillProps {
 export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPin }: SessionTabPillProps) {
   // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
   // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
-  // The flag swallows the click that follows a drag's pointerup.
+  // The flag swallows the click that follows a drag's pointerup. While the
+  // drag is live the page must not select text under the moving pointer —
+  // suppress selection globally and show a grabbing cursor until release.
   const draggedRef = useRef(false);
+  const dragging = useTabDragStore((s) => s.draggingId === tab.id);
   const onPointerDown = (event: React.PointerEvent) => {
     if (event.button !== 0) return;
     const { clientX, clientY } = event;
@@ -62,11 +65,16 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
       if (useTabDragStore.getState().draggingId !== id) {
         draggedRef.current = true;
         useTabDragStore.getState().start(id);
+        window.getSelection()?.removeAllRanges();
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'grabbing';
       }
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
       // After the drop target's own pointerup (bubbles first) has acted.
       requestAnimationFrame(() => useTabDragStore.getState().end());
     };
@@ -80,6 +88,7 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
       role="tab"
       aria-selected={tab.active}
       data-preview={tab.preview ? 'true' : 'false'}
+      data-dragging={dragging || undefined}
       onPointerDown={onPointerDown}
       onClick={(event) => {
         if (draggedRef.current) {
@@ -95,6 +104,8 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
         // h-full puts the underline on the toolbar's bottom hairline and the
         // label on the toolbar midline — one alignment for every tab state.
         'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
+        // The dragged pill ghosts so the cursor + drop targets read as the live thing.
+        dragging && 'opacity-40',
         !grouped &&
           'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
         tab.active

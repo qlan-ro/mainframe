@@ -29,14 +29,18 @@ function DropTarget({
     <div
       data-testid={testId}
       onPointerUp={onDrop}
+      // The hover state must be unmissable mid-drag: solid primary border, a
+      // real fill jump, and the label pops — this is the only "you can drop
+      // here" signal the gesture has.
       className={cn(
         'pointer-events-auto flex items-center justify-center rounded-lg border-2 border-dashed',
-        'border-primary/40 bg-primary/5 text-sm text-muted-foreground transition-colors',
-        'hover:border-primary/70 hover:bg-primary/15 hover:text-foreground',
+        'border-primary/50 bg-primary/10 text-sm font-medium text-muted-foreground',
+        'transition-all duration-100',
+        'hover:border-primary hover:border-solid hover:bg-primary/25 hover:text-foreground hover:shadow-lg',
         className,
       )}
     >
-      <span className="flex items-center gap-1.5">
+      <span className="pointer-events-none flex items-center gap-1.5">
         <Columns2 className="size-3.5" aria-hidden />
         {label}
       </span>
