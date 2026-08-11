@@ -33,6 +33,8 @@ vi.mock('@/lib/api/todos', () => ({
   uploadAttachment: vi.fn(),
 }));
 
+vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn(), success: vi.fn() } }));
+
 let mockProjectId: string | undefined = 'proj-1';
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectName: 'repo', projectId: mockProjectId, chatId: 'chat-9', isWorktree: false }),
@@ -54,6 +56,7 @@ vi.mock('@/features/tasks/sidebar/TaskEditModal', () => ({
 const { TasksCard } = await import('../TasksCard');
 const { useTodosStore } = await import('@/features/tasks/use-todos-store');
 const todosApi = await import('@/lib/api/todos');
+const { mfToast } = await import('@/lib/toast');
 
 function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): Todo {
   return {
@@ -195,6 +198,74 @@ describe('TasksCard — the edit modal', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(todosApi.createTodo).not.toHaveBeenCalled();
+  });
+
+  const pasteImage = (input: HTMLElement, name = 'shot.png') => {
+    const file = new File(['x'], name, { type: 'image/png' });
+    fireEvent.paste(input, { clipboardData: { files: [file] } });
+  };
+
+  it('holds a pasted image and shows the count chip', async () => {
+    await renderLoaded([]);
+    const input = await screen.findByTestId('session-panel-tasks-new');
+
+    pasteImage(input);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('session-panel-tasks-attachments')).toHaveTextContent('1 attachment'),
+    );
+    pasteImage(input, 'shot-2.png');
+    await waitFor(() =>
+      expect(screen.getByTestId('session-panel-tasks-attachments')).toHaveTextContent('2 attachments'),
+    );
+  });
+
+  it('discards the pending attachments from the chip', async () => {
+    await renderLoaded([]);
+    const input = await screen.findByTestId('session-panel-tasks-new');
+    pasteImage(input);
+    await waitFor(() => expect(screen.getByTestId('session-panel-tasks-attachments')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('session-panel-tasks-attachments-clear'));
+
+    expect(screen.queryByTestId('session-panel-tasks-attachments')).toBeNull();
+  });
+
+  it('uploads the pending attachments to the created todo, then clears the chip', async () => {
+    vi.mocked(todosApi.createTodo).mockResolvedValue({ ...OPEN_TODO, id: 'todo-new', number: 99 });
+    vi.mocked(todosApi.uploadAttachment).mockResolvedValue({
+      id: 'att-1',
+      filename: 'shot.png',
+      mimeType: 'image/png',
+      sizeBytes: 1,
+    } as never);
+    await renderLoaded([]);
+    const input = await screen.findByTestId('session-panel-tasks-new');
+    pasteImage(input);
+    await waitFor(() => expect(screen.getByTestId('session-panel-tasks-attachments')).toBeInTheDocument());
+
+    fireEvent.change(input, { target: { value: 'With screenshot' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(todosApi.uploadAttachment).toHaveBeenCalledWith(
+        31415,
+        'todo-new',
+        expect.objectContaining({ filename: 'shot.png', mimeType: 'image/png' }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByTestId('session-panel-tasks-attachments')).toBeNull());
+  });
+
+  it('rejects a non-image paste and attaches nothing', async () => {
+    await renderLoaded([]);
+    const input = await screen.findByTestId('session-panel-tasks-new');
+    const file = new File(['x'], 'notes.pdf', { type: 'application/pdf' });
+
+    fireEvent.paste(input, { clipboardData: { files: [file] } });
+
+    await waitFor(() => expect(mfToast.error).toHaveBeenCalledWith('Attachment not added', expect.anything()));
+    expect(screen.queryByTestId('session-panel-tasks-attachments')).toBeNull();
   });
 
   it('opens on the todo whose row was clicked', async () => {
