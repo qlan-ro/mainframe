@@ -13,11 +13,13 @@
  * horizontally (no scrollbar — the app's opt-out idiom). The trailing spacer
  * stays outside `data-no-drag`, so the empty middle remains a window-drag area.
  */
+import { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
+import { useProjects } from '@/features/sessions/use-projects';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
@@ -29,15 +31,18 @@ import { useSessionTabsSync } from './use-session-tabs-sync';
 function toTabEntry(
   id: string,
   items: readonly ThreadListEntry[],
+  projectNames: ReadonlyMap<string, string>,
   activeId: string | null,
   preview: boolean,
 ): SessionTabEntry {
   const entry = items.find((t) => t.id === id);
   const isDraft = entry == null || entry.status === 'new';
+  const projectId = (entry?.custom as { projectId?: string } | undefined)?.projectId;
   return {
     id,
     title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
-    projectId: (entry?.custom as { projectId?: string } | undefined)?.projectId,
+    projectId,
+    projectName: projectId != null ? projectNames.get(projectId) : undefined,
     active: id === activeId,
     preview,
   };
@@ -53,6 +58,8 @@ export function SessionTabs() {
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const pinTab = useSessionTabsStore((s) => s.pinTab);
   const newSession = useNewChatHotkeyHandler(aui);
+  const { projects } = useProjects();
+  const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 
   // Between the chat.created reload and the router's handover the active
   // thread is still the draft's local id while its tab is already canonical;
@@ -76,7 +83,7 @@ export function SessionTabs() {
         return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
       })()
     : displayIds;
-  const tabs = ordered.map((id) => toTabEntry(id, items, activeTabId, id === previewId));
+  const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId));
 
   const handleActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already

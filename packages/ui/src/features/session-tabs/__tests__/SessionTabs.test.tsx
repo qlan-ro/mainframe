@@ -30,6 +30,11 @@ vi.mock('@assistant-ui/react', async () => {
 
 vi.mock('../use-session-tabs-sync', () => ({ useSessionTabsSync: () => {} }));
 
+// The avatar's project-name lookup fetches through the daemon port — inert here.
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [], loading: false, reloadProjects: () => {} }),
+}));
+
 vi.mock('@/features/sessions/new-thread/use-new-chat-hotkey-handler', () => ({
   useNewChatHotkeyHandler: () => newSession,
 }));

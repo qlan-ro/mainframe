@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
+import { ProjectAvatar } from '@/features/sessions/ProjectAvatar';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
@@ -33,6 +34,7 @@ export interface SessionTabEntry {
   id: string;
   title: string;
   projectId: string | undefined;
+  projectName: string | undefined;
   active: boolean;
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
@@ -118,11 +120,11 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
           : 'font-medium text-muted-foreground hover:text-foreground',
       )}
     >
-      <span
-        className={cn('size-1.5 shrink-0 rounded-full', !tab.projectId && 'bg-muted-foreground/40')}
-        style={tab.projectId ? { background: projectColor(tab.projectId) } : undefined}
-        aria-hidden
-      />
+      {tab.projectId != null ? (
+        <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
+      ) : (
+        <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+      )}
       <span className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}>{tab.title}</span>
       {tab.preview && (
         <Hint label="Keep open">
