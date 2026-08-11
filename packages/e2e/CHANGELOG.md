@@ -1,5 +1,11 @@
 # @qlan-ro/mainframe-e2e
 
+## 0.1.1-rc.2
+
+### Patch Changes
+
+- [#609](https://github.com/qlan-ro/mainframe/pull/609) [`1d56239`](https://github.com/qlan-ro/mainframe/commit/1d56239afaddacbcdf24157cb72ec66b90eaf233) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add a committed testid-inventory generator (`pnpm --filter @qlan-ro/mainframe-e2e run testids`) and regenerate `UNUSED-TESTIDS.md` and `COVERAGE-GAP-REPORT.md` against the current single-tree UI, replacing the stale hand-rebuilt docs and their unreproducible `/tmp` regeneration script.
+
 ## 0.1.1-rc.1
 
 ### Patch Changes
