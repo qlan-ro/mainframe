@@ -23,7 +23,7 @@ pub(super) fn repo() -> RepoRef {
     }
 }
 
-fn issue_json(number: u64, title: &str, state: &str) -> serde_json::Value {
+pub(super) fn issue_json(number: u64, title: &str, state: &str) -> serde_json::Value {
     json!({
         "number": number, "title": title, "body": "body text",
         "labels": [{"name": "bug"}], "state": state,
@@ -88,23 +88,30 @@ async fn list_open_issues_follows_pagination() {
 }
 
 #[tokio::test]
-async fn requests_carry_a_user_agent() {
-    // The live API answers 403 "Request forbidden by administrative rules" to a
-    // request without one; reqwest sends none by default, so only a header
-    // assertion catches the regression before it reaches GitHub.
+async fn list_open_issues_drops_pull_requests() {
+    // The issues endpoint also returns PRs, marked by a `pull_request` key.
     let server = MockServer::start().await;
+    let mut pull_request = issue_json(2, "a pull request", "open");
+    pull_request["pull_request"] =
+        json!({"url": "https://api.github.com/repos/qlan/mainframe/pulls/2"});
     Mock::given(method("GET"))
-        .and(path("/repos/qlan/mainframe/issues/5"))
-        .and(header("user-agent", "mainframe"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(5, "t", "open")))
+        .and(path("/repos/qlan/mainframe/issues"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            issue_json(1, "one", "open"),
+            pull_request,
+            issue_json(3, "three", "open"),
+        ])))
         .expect(1)
         .mount(&server)
         .await;
 
-    client(server.uri())
-        .get_issue(&repo(), 5, "tok")
+    let issues = client(server.uri())
+        .list_open_issues(&repo(), "tok")
         .await
         .unwrap();
+
+    let numbers: Vec<u64> = issues.iter().map(|issue| issue.number).collect();
+    assert_eq!(numbers, vec![1, 3]);
 }
 
 #[tokio::test]

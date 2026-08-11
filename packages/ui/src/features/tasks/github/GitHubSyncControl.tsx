@@ -7,7 +7,7 @@
  * GitHub brand mark, and a hand-rolled one is not worth the drift.
  */
 import React from 'react';
-import { ChevronDown, CircleDot, Download, FileText, RefreshCw, Unlink } from 'lucide-react';
+import { ChevronDown, CircleDot, Download, FileText, KeyRound, RefreshCw, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import {
@@ -90,6 +90,11 @@ export function GitHubSyncControl(): React.ReactElement {
           >
             <FileText className={ITEM_ICON} aria-hidden />
             Last sync report
+          </DropdownMenuItem>
+
+          <DropdownMenuItem data-testid="tasks-github-menu-token" onSelect={() => openDialog({ kind: 'token' })}>
+            <KeyRound className={ITEM_ICON} aria-hidden />
+            Update GitHub token…
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

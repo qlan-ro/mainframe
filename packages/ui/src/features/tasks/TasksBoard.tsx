@@ -28,6 +28,7 @@ import { LinkRepoDialog } from './github/LinkRepoDialog';
 import { ImportIssuesDialog } from './github/ImportIssuesDialog';
 import { PublishTaskDialog } from './github/PublishTaskDialog';
 import { SyncReportDialog } from './github/SyncReportDialog';
+import { UpdateTokenDialog } from './github/UpdateTokenDialog';
 import { useGitHubSyncStore } from './github/use-github-sync-store';
 import type { Todo } from '@/lib/api/todos';
 
@@ -199,6 +200,7 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
       <ImportIssuesDialog />
       <PublishTaskDialog />
       <SyncReportDialog />
+      <UpdateTokenDialog />
     </div>
   );
 }

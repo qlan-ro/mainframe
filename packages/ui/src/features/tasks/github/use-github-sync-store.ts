@@ -35,10 +35,16 @@ import {
   type WorkflowLabelSet,
 } from '@/lib/api/todos-github';
 import type { Todo } from '@/lib/api/todos';
+import { ApiRequestError } from '@/lib/api/http';
 import { useTodosStore } from '../use-todos-store';
 
 export type GitHubSyncDialog =
-  null | { kind: 'link' } | { kind: 'import' } | { kind: 'publish'; todo: Todo } | { kind: 'report' };
+  | null
+  | { kind: 'link' }
+  | { kind: 'import' }
+  | { kind: 'publish'; todo: Todo }
+  | { kind: 'report' }
+  | { kind: 'token'; returnTo?: 'import' };
 
 interface GitHubSyncState {
   port: number | null;
@@ -54,6 +60,8 @@ interface GitHubSyncState {
   issues: RemoteIssue[];
   loading: boolean;
   error: string | null;
+  /** The last `error` was GitHub refusing our credential — offer the token fix, not a retry. */
+  errorAuth: boolean;
   dialog: GitHubSyncDialog;
   bannerDismissed: boolean;
   init: (port: number, projectId: string) => void;
@@ -101,6 +109,7 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
     issues: [],
     loading: false,
     error: null,
+    errorAuth: false,
     dialog: null,
     bannerDismissed: false,
 
@@ -110,7 +119,7 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
       const { port, projectId } = get();
       if (port === null || projectId === null) return;
       const seq = ++_loadSeq;
-      set({ loading: true, error: null });
+      set({ loading: true, error: null, errorAuth: false });
       try {
         const [status, pairs] = await Promise.all([getLink(port, projectId), listPairs(port, projectId)]);
         if (seq !== _loadSeq) return;
@@ -158,11 +167,20 @@ export const useGitHubSyncStore = create<GitHubSyncState>((set, get) => {
     loadIssues: async () => {
       const { port, projectId } = get();
       if (port === null || projectId === null) return;
-      set({ error: null });
+      set({ error: null, errorAuth: false });
       try {
         set({ issues: await listIssues(port, projectId) });
       } catch (err) {
-        set({ error: messageOf(err, 'Failed to load the repository issues') });
+        // 503 is the daemon's "integration not ready to talk to GitHub" —
+        // a missing or rejected credential. The raw message embeds GitHub's
+        // JSON body, so it is replaced, not shown.
+        const auth = err instanceof ApiRequestError && err.status === 503;
+        set({
+          error: auth
+            ? 'GitHub rejected the stored credential — the token is missing, expired, or revoked.'
+            : messageOf(err, 'Failed to load the repository issues'),
+          errorAuth: auth,
+        });
       }
     },
 

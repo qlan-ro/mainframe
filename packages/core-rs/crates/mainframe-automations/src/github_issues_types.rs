@@ -87,6 +87,15 @@ pub(crate) struct RawIssue {
     state: String,
     html_url: String,
     updated_at: String,
+    // GitHub's issues endpoints return pull requests too, marked by this key.
+    #[serde(default)]
+    pull_request: Option<serde::de::IgnoredAny>,
+}
+
+impl RawIssue {
+    pub(crate) fn is_pull_request(&self) -> bool {
+        self.pull_request.is_some()
+    }
 }
 
 impl From<RawIssue> for IssueSnapshot {

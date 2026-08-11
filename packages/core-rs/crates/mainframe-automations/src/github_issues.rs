@@ -73,7 +73,13 @@ impl GitHubIssuesClient {
             let response = check_status(self.send(request).await?).await?;
             let next = next_page_url(response.headers());
             let page: Vec<RawIssue> = parse_body(response).await?;
-            issues.extend(page.into_iter().map(IssueSnapshot::from));
+            // The issues endpoint returns pull requests too — a PR paired
+            // with a task would sync task edits into the PR, so drop them.
+            issues.extend(
+                page.into_iter()
+                    .filter(|raw| !raw.is_pull_request())
+                    .map(IssueSnapshot::from),
+            );
             match next {
                 Some(next_url) => url = next_url,
                 None => break,
