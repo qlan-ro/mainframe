@@ -432,3 +432,55 @@ must be spiked before anything else is built.
   split, which clears the system-moved flag; ending the split restores the
   workspace to its prior slot only when that flag is still set — a manual
   rearrangement is never overridden.
+
+---
+
+## Spike result (2026-08-11) — §2.2's hinge FALSIFIED, and replaced
+
+The proposed mechanism does not exist at the API level:
+`ThreadListItemRuntimeProvider` only rebinds the `threadListItem` scope in the
+Aui store config (verified in `@assistant-ui/core` 0.3.12,
+`dist/react/providers/ThreadListItemRuntimeProvider.js`) — it never rebinds
+`thread`, which is what `ThreadPrimitive` renders. `ThreadListItemRuntime`
+exposes no thread-runtime accessor either. **Do not re-try that path.**
+
+The working mechanism is the 0.15 client system's **`ExternalThread`**
+(`@assistant-ui/core` `dist/store/clients/external-thread.d.ts`): a thread
+client built from plain props — `messages: (ThreadMessage & {id})[]`,
+`isRunning`, `extras`, `onNew`, `onCancel`, `onRespondToToolApproval`,
+`attachmentAdapter`, queue/branch adapters — mounted via
+`<AuiProvider extends={aui} config={AuiConfig({ thread: ExternalThread(props) })}>`.
+Our side already produces every input: `projectChatThreadMessages(state)`
+returns converted `ThreadMessage[]`, and the controller registry keeps per-chat
+state warm with `subscribeLive()` gated separately.
+
+Spike verified in the running app (throwaway mount beside the main transcript):
+
+1. A full `ChatThread` under the rebound config rendered a NON-main session's
+   45-message transcript while another session stayed `mainThreadId`.
+2. A message sent through zone B's composer (`onNew` → `controller.sendMessage`)
+   created a live CLI turn whose reply streamed into zone B — with chat A's own
+   live subscription concurrently open. No cross-talk (per-controller
+   `chatId`-filtered event routing held).
+3. A draft typed into zone B mid-stream survived the state updates — the
+   `ExternalThread` config rebuild updates the client in place; no remount, no
+   scroll reset.
+
+Consequences for the build:
+
+- In split mode, render **both** zones as `ExternalThread` mounts keyed by
+  chatId (main-thread native tree unmounted): focus clicks then change only
+  `mainThreadId` — pure context, zero remount — instead of swapping rendering
+  mechanisms between the native path and the zone path.
+- Extras must be built by a shared factory (extracted from
+  `use-chat-thread-runtime.ts`) so `useChatExtras()` consumers (gates, markers,
+  composer toolbar) work identically in a zone; the extras brand symbol is
+  module-private, so the factory has to live in (or be re-exported from) that
+  module.
+- Sweep needed: direct `threads.mainThreadId` reads inside the chat tree (e.g.
+  ThreadFooterInput's projectless-draft check) assume "this visible thread is
+  main" and mis-read in a zone.
+- The item runtime for `ThreadListItemRuntimeProvider` (zone header/title reads)
+  is reachable via the runtime object App.tsx already owns
+  (`runtime.threads.getItemById(chatId)`) — the spike's
+  `__internal_getAssistantRuntime` hatch is not needed in the real build.
