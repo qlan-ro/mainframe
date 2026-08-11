@@ -58,7 +58,7 @@ capture the sizing/mode state machine the spec exercises._
 ## ★ Session tabs
 
 _Spec: `session-tabs.spec.ts`. Chrome-style tabs in the `MainToolbar` — the active session is
-whichever tab is focused; there is one chat surface (`docs/plans/2026-08-08-session-tabs-and-workspace-files.md`)._
+whichever tab is focused; there is one chat surface._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
@@ -72,7 +72,7 @@ whichever tab is focused; there is one chat surface (`docs/plans/2026-08-08-sess
 
 _Specs: `workspace-surface.spec.ts`, `files-tree.spec.ts`, `layout.spec.ts`. The Files tree is a
 floating glass panel over the workspace surface — the session panel's pattern mirrored on the other
-side (`docs/plans/2026-08-08-session-tabs-and-workspace-files.md`)._
+side._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
@@ -157,7 +157,7 @@ preconditions that make a row's disabled/hidden state easy to get wrong in a new
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| M1 | Send | P0 | not running, worktree present | composer-input, composer-prompt-highlight | send disabled when empty and no attachments/captures; Shift+Enter inserts a newline; a missing worktree disables the input |
+| M1 | Send | P0 | not running, worktree present | chat-composer-input, composer-prompt-highlight | send disabled when empty and no attachments/captures; Shift+Enter inserts a newline; a missing worktree disables the input |
 | M2 | Provider row lock | P0 | first message not yet sent | composer-provider-footer, composer-model-select | unlocked and reachable before the first send; locks (Locked copy, disabled pills) once the provider row's first message has gone out |
 | M3 | Model / effort tuning | P1 | model selected | composer-model-select, composer-model-group-header-${…} | the effort flyout's option set is per-model (a haiku-tier model exposes no flyout at all; a sonnet-tier model offers `max` but not `xhigh`; an opus-tier model exposes all three); enabling "ultracode" pins the effort to `xhigh` and freezes the levels |
 | M4 | Permission-mode select | P1 | any | composer-permission-mode-select | switching to Unattended (yolo) is visually distinct (renders red) |
@@ -244,7 +244,7 @@ the shape of each section, not full depth._
 | AU5 | Step editor | P0 | editor target set | automations-editor-name, automations-editor-save, automations-step-${…}, automations-step-config-${…} | steps are reorderable (`automations-step-grip-${…}`); `automations-editor-issues` surfaces validation problems inline rather than blocking save silently |
 | AU6 | Trigger / condition builder | P1 | editor open | automations-trigger-${…}, automations-if-add-condition-${…}, automations-if-match-all, automations-if-match-any | match-all vs. match-any is a per-branch toggle, not global to the automation |
 | AU7 | Run view | P0 | a run id is active | automations-run-view, automations-run-timeline, automations-run-again, automations-run-cancel | timeline renders step-by-step; "Run again" re-invokes with the same inputs; cancel is only available while the run is in-flight |
-| AU8 | Run — interactive step forms | P1 | a step needs input mid-run | automations-run-form-ix-1 | pending-interaction count surfaces in the header (`automations-title-count`, "N need you") across every section, not just Run |
+| AU8 | Run — interactive step forms | P1 | a step needs input mid-run | automations-run-step-${…}-form | pending-interaction count surfaces in the header (`automations-title-count`, "N need you") across every section, not just Run |
 | AU9 | Details | P1 | library row clicked | automations-details-tab-${…}, automations-details-runs, automations-details-step-${…} | tabbed overview/steps/runs; `automations-details-not-found` covers a deleted-automation deep link |
 
 ## Viewers & preview
