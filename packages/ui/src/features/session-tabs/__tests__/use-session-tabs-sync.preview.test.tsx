@@ -136,7 +136,7 @@ describe('activation', () => {
   });
 });
 
-describe('persistence (v2)', () => {
+describe('persistence (v3)', () => {
   it('writes the pinned ids and the preview under a v2 payload', () => {
     localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 2, ids: ['chat-a'], preview: null }));
     settledList([SESSION_A, SESSION_B]);
@@ -144,7 +144,7 @@ describe('persistence (v2)', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 2, ids: ['chat-a'], preview: 'chat-b' });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
   });
 
   it('stores the preview as its boot-stable remoteId', () => {
@@ -157,7 +157,7 @@ describe('persistence (v2)', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 2, ids: ['chat-a'], preview: 'chat-b' });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
   });
 
   it('stores a null preview for an unsent draft that means nothing next boot', () => {
@@ -169,7 +169,7 @@ describe('persistence (v2)', () => {
 
     // The draft pinned, so it is the dropped pin — and the restored preview
     // stays as the only survivor of the write.
-    expect(readPersisted()).toEqual({ v: 2, ids: ['chat-a'], preview: 'chat-b' });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
   });
 
   it('clears the stored preview once the user closes it', () => {
@@ -181,7 +181,7 @@ describe('persistence (v2)', () => {
     useSessionTabsStore.getState().closeTab('chat-b');
     rerender();
 
-    expect(readPersisted()).toEqual({ v: 2, ids: ['chat-a'], preview: null });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: null, zones: [] });
   });
 });
 
@@ -248,6 +248,6 @@ describe('restore', () => {
     expect(state.hydrated).toBe(true);
     expect(state.tabIds).toEqual(['chat-a']);
     expect(state.previewId).toBe('chat-c');
-    expect(readPersisted()).toEqual({ v: 2, ids: ['chat-a'], preview: 'chat-c' });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-c', zones: [] });
   });
 });

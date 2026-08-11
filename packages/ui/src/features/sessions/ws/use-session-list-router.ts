@@ -29,6 +29,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { getHost } from '../../../lib/host';
 import { useUnreadStore } from '../../../store/unread-store';
+import { useZonesStore } from '../../chat/zones/zones-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { useLastSessionStore } from '../../../store/last-session';
@@ -71,13 +72,24 @@ export function useSessionListRouter(): void {
 
   // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
+  // While split, VISIBLE counts as viewed: both zone chats join the suppression
+  // set, and entering the split clears a joining chat's existing dot.
+  const zones = useZonesStore((s) => s.zones);
   const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const active = mainThreadId == null ? undefined : items.find((t) => t.id === mainThreadId);
+    const zoneIds = zones ?? [];
+    const zoneRemotes = zoneIds
+      .map((id) => items.find((t) => t.id === id)?.remoteId)
+      .filter((id): id is string => id != null);
     activeChatIdsRef.current = new Set(
-      [mainThreadId ?? undefined, active?.id, active?.remoteId].filter((id): id is string => id != null),
+      [mainThreadId ?? undefined, active?.id, active?.remoteId, ...zoneIds, ...zoneRemotes].filter(
+        (id): id is string => id != null,
+      ),
     );
-  }, [items, mainThreadId]);
+    const unreadStore = useUnreadStore.getState();
+    for (const id of [...zoneIds, ...zoneRemotes]) unreadStore.clearUnread(id);
+  }, [items, mainThreadId, zones]);
 
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {

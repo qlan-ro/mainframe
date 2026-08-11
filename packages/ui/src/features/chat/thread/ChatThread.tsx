@@ -121,10 +121,12 @@ function ThreadFooterInput() {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
   // A projectless draft has nowhere to create the chat: the welcome screen's
   // picker resolves the project first, and the composer appears with it.
-  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  // Read the ITEM id, not mainThreadId — under a split zone this thread is not
+  // the main one, and the rebound threadListItem is the identity that matches.
+  const itemId = useAuiState((s) => s.threadListItem?.id ?? null);
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
-  const hasDraftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.has(mainThreadId) : false));
-  const projectlessDraft = mainThreadId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
+  const hasDraftCfg = useDraftConfigStore((s) => (itemId ? s.drafts.has(itemId) : false));
+  const projectlessDraft = itemId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
   return (
     <>
       <DegradedChatCard />

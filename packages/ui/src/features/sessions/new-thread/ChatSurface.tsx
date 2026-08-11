@@ -35,6 +35,8 @@ import { useSessionPanelState } from '@/features/session-panel/use-session-panel
 import { ChatZone } from '@/features/chat/zones/ChatZone';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
+import { useZoneHotkeys } from '@/features/chat/zones/use-zone-hotkeys';
+import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
@@ -49,6 +51,7 @@ export function ChatSurface() {
   // Keeps `mainThreadId ∈ zones` while split (and closes the split on a draft).
   useZonesReconciler();
   const aui = useAui();
+  useZoneHotkeys(aui);
   const zones = useZonesStore((s) => s.zones);
   const closeSplit = useZonesStore((s) => s.closeSplit);
 
@@ -126,7 +129,7 @@ export function ChatSurface() {
       if (mainThreadId !== other) aui.threads.switchToThread(other);
     };
     return (
-      <div data-testid="chat-split-row" className="flex min-h-0 flex-1 overflow-hidden">
+      <div data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
         <ChatZone
           chatId={zones[0]}
           focused={mainThreadId === zones[0]}
@@ -140,6 +143,7 @@ export function ChatSurface() {
           onFocus={() => aui.threads.switchToThread(zones[1])}
           onClose={() => closeZone(zones[1])}
         />
+        <ZoneDropLayer />
       </div>
     );
   }
@@ -156,6 +160,7 @@ export function ChatSurface() {
           <ChatThread emptyState={welcome} />
         </div>
         <SessionPanel state={panelState} />
+        <ZoneDropLayer />
       </div>
     </div>
   );

@@ -18,11 +18,16 @@
  *
  * data-testid: session-tab-<id> / session-tab-close-<id> / session-tab-pin-<id>.
  */
+import { useRef } from 'react';
 import { Pin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
+import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+
+/** Pixels of pointer travel before a press becomes a drag-to-split. */
+const DRAG_THRESHOLD = 6;
 
 export interface SessionTabEntry {
   id: string;
@@ -44,13 +49,45 @@ interface SessionTabPillProps {
 }
 
 export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPin }: SessionTabPillProps) {
+  // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
+  // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
+  // The flag swallows the click that follows a drag's pointerup.
+  const draggedRef = useRef(false);
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (event.button !== 0) return;
+    const { clientX, clientY } = event;
+    const id = tab.id;
+    const onMove = (e: PointerEvent) => {
+      if (Math.abs(e.clientX - clientX) + Math.abs(e.clientY - clientY) < DRAG_THRESHOLD) return;
+      if (useTabDragStore.getState().draggingId !== id) {
+        draggedRef.current = true;
+        useTabDragStore.getState().start(id);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      // After the drop target's own pointerup (bubbles first) has acted.
+      requestAnimationFrame(() => useTabDragStore.getState().end());
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
   return (
     <div
       data-testid={`session-tab-${tab.id}`}
       role="tab"
       aria-selected={tab.active}
       data-preview={tab.preview ? 'true' : 'false'}
-      onClick={(event) => onActivate(tab.id, event.metaKey)}
+      onPointerDown={onPointerDown}
+      onClick={(event) => {
+        if (draggedRef.current) {
+          draggedRef.current = false;
+          return;
+        }
+        onActivate(tab.id, event.metaKey);
+      }}
       onDoubleClick={() => {
         if (tab.preview) onPin(tab.id);
       }}

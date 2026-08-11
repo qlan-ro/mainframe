@@ -22,7 +22,8 @@
  * outlive a list load that failed.
  */
 import { useEffect, useRef } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
 import {
@@ -38,27 +39,32 @@ import {
 interface PersistedTabs {
   ids: string[];
   preview: string | null;
+  /** v3: the open split's zone pair — absent/short pairs restore as no split. */
+  zones: string[];
 }
 
 function readPersisted(): PersistedTabs {
   try {
     const raw = localStorage.getItem(SESSION_TABS_STORAGE_KEY);
-    if (!raw) return { ids: [], preview: null };
+    if (!raw) return { ids: [], preview: null, zones: [] };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null };
-    const { ids, preview } = parsed as { ids?: unknown; preview?: unknown };
+    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null, zones: [] };
+    const { ids, preview, zones } = parsed as { ids?: unknown; preview?: unknown; zones?: unknown };
     return {
       ids: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
       // v1 payloads carry no preview — every restored tab was pinned.
       preview: typeof preview === 'string' ? preview : null,
+      // v1/v2 payloads carry no zones — they restore unsplit.
+      zones: Array.isArray(zones) ? zones.filter((id): id is string => typeof id === 'string') : [],
     };
   } catch {
     /* expected — corrupt storage reads as no persisted tabs */
-    return { ids: [], preview: null };
+    return { ids: [], preview: null, zones: [] };
   }
 }
 
 export function useSessionTabsSync(): void {
+  const aui = useAui();
   const items = useAuiState((s) => s.threads.threadItems);
   const isListLoading = useAuiState((s) => s.threads.isLoading);
   const listLoaded = useSessionListLoadState((s) => s.loaded);
@@ -70,6 +76,9 @@ export function useSessionTabsSync(): void {
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
 
+  // A restored split parks here until focus lands on its left zone (below).
+  const pendingZonesRef = useRef<[string, string] | null>(null);
+
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
     const persisted = readPersisted();
@@ -77,7 +86,25 @@ export function useSessionTabsSync(): void {
       restoreTabIds(persisted.ids, items),
       persisted.preview === null ? null : (restoreTabIds([persisted.preview], items)[0] ?? null),
     );
-  }, [hydrated, items, isListLoading, listLoaded, hydrate]);
+    // Restore the split only when BOTH zones still resolve. The pair is PARKED
+    // until focus actually lands on the left zone: switchToThread resolves
+    // async, and opening the split while the boot draft is still main would
+    // make the reconciler read draft-main and close it straight back.
+    const zones = restoreTabIds(persisted.zones, items);
+    const [left, right] = zones;
+    if (zones.length === 2 && left != null && right != null) {
+      pendingZonesRef.current = [left, right];
+      aui.threads.switchToThread(left);
+    }
+  }, [hydrated, items, isListLoading, listLoaded, hydrate, aui]);
+
+  // Opens the parked restore once the switch has landed (see above).
+  useEffect(() => {
+    const pending = pendingZonesRef.current;
+    if (pending == null || mainThreadId !== pending[0]) return;
+    pendingZonesRef.current = null;
+    useZonesStore.getState().openSplit(pending[0], pending[1]);
+  }, [mainThreadId]);
 
   useEffect(() => {
     if (mainThreadId) ensureTab(mainThreadId, { pin: shouldPinOnOpen(mainThreadId, items) });
@@ -95,18 +122,20 @@ export function useSessionTabsSync(): void {
   // `items` changes identity on every stream tick (title/status updates), so
   // this effect runs hot while a chat is running — skip the write unless the
   // MAPPED id set actually changed.
+  const zonesPair = useZonesStore((s) => s.zones);
   const lastWrittenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated) return;
     const ids = persistTabIds(tabIds, items);
     const preview = previewId === null ? null : (persistTabIds([previewId], items)[0] ?? null);
-    const key = `${ids.join('\0')}\0\0${preview ?? ''}`;
+    const zones = zonesPair === null ? [] : persistTabIds([...zonesPair], items);
+    const key = `${ids.join('\0')}\0\0${preview ?? ''}\0\0${zones.join('\0')}`;
     if (key === lastWrittenRef.current) return;
     try {
-      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 2, ids, preview }));
+      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 3, ids, preview, zones }));
       lastWrittenRef.current = key;
     } catch {
       /* expected — storage may be unavailable; tabs simply don't survive the boot */
     }
-  }, [hydrated, tabIds, previewId, items]);
+  }, [hydrated, tabIds, previewId, zonesPair, items]);
 }

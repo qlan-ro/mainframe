@@ -9,13 +9,25 @@
  *
  * Mounted once, by ChatSurface.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useLayoutStore } from '@/store/layout';
 import { useZonesStore, type ZoneIndex } from './zones-store';
 
 export function useZonesReconciler(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const zones = useZonesStore((s) => s.zones);
+
+  // Workspace follower (split plan, decision 8): entering the split parks a
+  // top-row workspace in the bottom strip; leaving it restores the workspace
+  // unless the user repositioned things in between.
+  const wasSplit = useRef(false);
+  useEffect(() => {
+    const split = zones != null;
+    if (split && !wasSplit.current) useLayoutStore.getState().moveWorkspaceForChatSplit();
+    if (!split && wasSplit.current) useLayoutStore.getState().restoreWorkspaceAfterChatSplit();
+    wasSplit.current = split;
+  }, [zones]);
 
   useEffect(() => {
     if (zones == null || mainThreadId == null) return;

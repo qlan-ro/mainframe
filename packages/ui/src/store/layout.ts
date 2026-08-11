@@ -72,6 +72,16 @@ export interface LayoutStore {
 
   /** Drag-reposition a whole surface within the layout. */
   repositionSurface: (surface: SurfaceId, target: RepositionTarget) => void;
+  /** True while the chat split (not the user) parked the workspace in the strip.
+   *  Transient by design: after a reload the restore simply doesn't fire, which
+   *  errs toward never overriding an arrangement. */
+  workspaceSystemMoved: boolean;
+  /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
+   *  the bottom strip when the chat splits… */
+  moveWorkspaceForChatSplit: () => void;
+  /** …and returns beside the chat on unsplit — unless the user repositioned
+   *  anything in between (repositionSurface clears the flag). */
+  restoreWorkspaceAfterChatSplit: () => void;
   /** Drag an open workspace tab to a pane edge (center = join pane 1, edge = split). */
   moveTabToPaneEdge: (tabId: string, edge: RunDropEdge) => void;
   /**
@@ -166,7 +176,25 @@ export const useLayoutStore = create<LayoutStore>()(
 
       repositionSurface(surface, target) {
         const { layout, run } = get();
+        // A manual reposition takes ownership — the split must not undo it.
+        set({ workspaceSystemMoved: false });
         writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
+      },
+
+      workspaceSystemMoved: false,
+
+      moveWorkspaceForChatSplit() {
+        const { layout, run } = get();
+        if (!layout.top.includes('workspace')) return;
+        set({ workspaceSystemMoved: true });
+        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'bottom'), run });
+      },
+
+      restoreWorkspaceAfterChatSplit() {
+        const { layout, run, workspaceSystemMoved } = get();
+        set({ workspaceSystemMoved: false });
+        if (!workspaceSystemMoved || layout.bottom !== 'workspace') return;
+        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'top-right'), run });
       },
 
       moveTabToPaneEdge(tabId, edge) {
