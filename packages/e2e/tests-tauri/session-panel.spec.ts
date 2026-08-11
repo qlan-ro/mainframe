@@ -210,21 +210,20 @@ async function selectChat(page: Page, chatId: string): Promise<void> {
 }
 
 /**
- * Clear every Radix overlay before an Escape assertion, by taking hover AND
- * focus somewhere inert.
+ * Dismiss the floating session panel with Escape, retrying the press because a
+ * transient Radix layer can legitimately eat one.
  *
- * ANY open Radix layer consumes the first Escape — its DismissableLayer calls
+ * ANY open Radix layer consumes an Escape — its DismissableLayer calls
  * `preventDefault`, and the panel's own handler bails on `defaultPrevented` by
  * design ("an open dialog owns Escape", use-session-panel-state.ts). A rail
  * click leaves the pointer on a `Hint`-wrapped button and focus inside it, so
- * both doors have to be shut:
+ * both doors have to be shut before Escape can reach the panel:
  *
- * One real click on the floating card's own Summary heading shuts every door at
+ * One real click on the floating card's own Summary heading shuts both doors at
  * once, which merely moving the pointer does not:
  *
  *   - a pointerdown closes an open Radix tooltip outright, instead of racing its
- *     open/close delays — a `toHaveCount(0)` wait can otherwise pass in the
- *     window BEFORE a scheduled layer opens.
+ *     open/close delays.
  *   - it takes hover off the rail without parking on something else that opens a
  *     layer of its own. Parking over the sessions sidebar opens a row's
  *     `SessionMetaCard` hover card, which swallows Escape exactly like a tooltip
@@ -234,15 +233,29 @@ async function selectChat(page: Page, chatId: string): Promise<void> {
  *     toggle. And it is inside the panel root, so light dismiss reads it as
  *     "inside" and the card stays up.
  *
- * The wait is on `[data-radix-popper-content-wrapper]` — the one selector that
- * covers tooltips, hover cards, popovers and menus alike.
+ * That click cannot guarantee every door is shut, though: a hover-driven layer
+ * (a tooltip or hover card whose open timer was already ticking) can still open
+ * AFTER the click, inside this helper's own budget, and it would eat the next
+ * Escape the same way. So this presses Escape up to 3 times, same shape as
+ * `closeMenus` in helpers/tauri/menus.ts — press, give it a short settle to
+ * consume, re-read the outcome — and returns as soon as the overlay is gone. A
+ * press that gets swallowed by a transient layer just costs one more iteration
+ * instead of failing the test; the caller still owns the authoritative
+ * `expect(overlay).toHaveCount(0)` assertion, so a genuine regression fails
+ * there and names the overlay.
  */
-async function settleForEscape(page: Page): Promise<void> {
-  await page
-    .getByTestId('session-panel-overlay')
-    .getByTestId('session-panel-section-summary')
-    .click({ position: { x: 4, y: 4 } });
-  await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0, { timeout: 5_000 });
+async function dismissOverlayWithEscape(page: Page): Promise<void> {
+  const overlay = page.getByTestId('session-panel-overlay');
+  await overlay.getByTestId('session-panel-section-summary').click({ position: { x: 4, y: 4 } });
+  for (let attempt = 0; attempt < 3 && (await overlay.count()) > 0; attempt++) {
+    await page.keyboard.press('Escape');
+    // Each press needs its own settle before the count is read again — firing
+    // them back-to-back sends every Escape into the same animation window,
+    // where Radix has already handled the first and ignores the rest.
+    await overlay.waitFor({ state: 'detached', timeout: 1_500 }).catch(() => {
+      /* expected when a transient layer ate this press instead of the panel */
+    });
+  }
 }
 
 /**
@@ -410,8 +423,7 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
     // Not a modal: the card floats over the thread but the inline card stays absent.
     await expect(page.getByTestId('session-panel')).toHaveCount(0);
 
-    await settleForEscape(page);
-    await page.keyboard.press('Escape');
+    await dismissOverlayWithEscape(page);
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
   });
 
@@ -448,7 +460,8 @@ test.describe('§session-panel — modes, rail, activity, launch', () => {
 
   // Dismissal here is a SECOND right-click, not Escape, and that is deliberate:
   // a right-click leaves the rail button's tooltip open, and that tooltip owns
-  // the first Escape (see `settleForEscape`). Escape-to-dismiss is covered from the
+  // the first Escape (see `dismissOverlayWithEscape`, which retries a press an
+  // open layer swallows this way). Escape-to-dismiss is covered from the
   // left-click route above; this asserts the re-click-to-close branch for a
   // NON-summary section, which nothing else reaches.
   test('right-clicking the rail launch button floats the panel on the Launch section', async () => {
