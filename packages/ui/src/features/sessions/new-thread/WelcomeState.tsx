@@ -3,11 +3,12 @@
  * headline, and up to 3 repo-derived suggestion rows that pre-fill the composer.
  * The "FROM THE REPO" section renders only when suggestions exist.
  */
-import { useEffect, useState } from 'react';
-import { GitBranch } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronDown, GitBranch } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import { ProjectChip } from '@/components/ui/project-chip';
 import { getGitBranch } from '@/lib/api/git';
+import { BranchPopover } from '@/features/git/BranchPopover';
 import { useProjects } from '../use-projects';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useRepoSuggestions } from './use-repo-suggestions';
@@ -19,23 +20,23 @@ export function WelcomeState({ projectId }: { projectId: string }) {
   const { projects } = useProjects();
   const { suggestions } = useRepoSuggestions(projectId);
   const [branch, setBranch] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? projectId;
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadBranch = useCallback(() => {
     getGitBranch(port, projectId)
-      .then((r) => {
-        if (!cancelled) setBranch(r.branch);
-      })
+      .then((r) => setBranch(r.branch))
       .catch((err: unknown) => {
-        if (!cancelled) setBranch(null);
+        setBranch(null);
         console.warn('[WelcomeState] getGitBranch failed', err);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [port, projectId]);
+
+  useEffect(() => {
+    setBranch(null);
+    loadBranch();
+  }, [loadBranch]);
 
   const insert = (prefill: string) => aui.composer.setText(prefill);
 
@@ -47,10 +48,27 @@ export function WelcomeState({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-2">
           <ProjectChip projectId={projectId} name={projectName} size={18} />
           {branch != null && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <GitBranch size={12} />
-              <span className="font-mono">{branch}</span>
-            </span>
+            // The draft's branch manager (the titlebar chip is gone): a fresh
+            // session starts from whatever branch is picked here.
+            <BranchPopover
+              port={port}
+              projectId={projectId}
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
+              onBranchChanged={loadBranch}
+              triggerLabel="Switch branch"
+            >
+              <button
+                type="button"
+                data-testid="welcome-branch"
+                onClick={() => setPickerOpen((o) => !o)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <GitBranch size={12} />
+                <span className="font-mono">{branch}</span>
+                <ChevronDown size={10} aria-hidden />
+              </button>
+            </BranchPopover>
           )}
         </div>
 

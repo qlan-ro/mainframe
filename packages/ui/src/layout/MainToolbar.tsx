@@ -5,7 +5,6 @@ import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
-import { BranchChip } from '../features/git/BranchChip';
 import { SessionTabs } from '../features/session-tabs/SessionTabs';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph } from './surface-icons';
@@ -17,34 +16,21 @@ interface MainToolbarProps {
   sidebarRendered: boolean;
   /** One-click expand from either collapsed state. */
   onExpandSidebar: () => void;
-  branchName?: string;
-  /** Whether the active session runs in a git worktree (vs. the shared main repo). */
-  isWorktree?: boolean;
-  port: number;
   projectId?: string;
-  chatId?: string;
 }
 
 /**
  * Shell-level surface-area toolbar (above SurfaceHost): chrome-style session
  * tabs across the middle (the active session is the focused tab), workspace
- * controls (branch chip · search · advisor · surfaces · theme) on the right.
+ * controls (search · advisor · surfaces · theme) on the right.
  * The old left identity section (project name + branch chip) is gone — the
- * sidebar and the session panel carry project context, and the branch manager
- * moved into the right cluster. The Files control lives on the workspace
- * strip itself (WorkspaceStripChrome), not here
+ * sidebar and the session panel carry project context. Branch management left
+ * the chrome entirely: it lives on the welcome screen and on the session
+ * panel's branch row. The Files control lives on the workspace strip itself
+ * (WorkspaceStripChrome), not here
  * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  */
-export function MainToolbar({
-  leadingInset,
-  sidebarRendered,
-  onExpandSidebar,
-  branchName,
-  isWorktree = false,
-  port,
-  projectId,
-  chatId,
-}: MainToolbarProps) {
+export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, projectId }: MainToolbarProps) {
   const mode = useTheme((s) => s.mode);
   const toggleTheme = useTheme((s) => s.toggle);
   const isDark = mode === 'dark';
@@ -82,9 +68,8 @@ export function MainToolbar({
       {/* Middle: the session tab strip (its trailing slack stays a drag region). */}
       <SessionTabs />
 
-      {/* Right: controls — branch │ search │ project tools │ workspace. */}
+      {/* Right: controls — search │ project tools │ workspace. */}
       <div className="flex shrink-0 items-center gap-0.5">
-        <BranchChip port={port} projectId={projectId} chatId={chatId} branchName={branchName} isWorktree={isWorktree} />
         <Hint label="Search (⌘O)">
           <Button
             data-testid="main-toolbar-search"

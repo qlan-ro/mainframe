@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import type { Suggestion } from '@qlan-ro/mainframe-types';
 
 let __suggestions: Suggestion[] = [];
 const setText = vi.fn();
+
+// Shallow: the real popover fires git fetches when open, and its own behavior
+// belongs to its own suite. Here we only care that the branch label triggers it.
+vi.mock('@/features/git/BranchPopover', () => ({
+  BranchPopover: ({ open, children }: { open: boolean; children: ReactNode }) => (
+    <div data-testid="branch-popover" data-open={String(open)}>
+      {children}
+    </div>
+  ),
+}));
 
 vi.mock('../use-repo-suggestions', () => ({ useRepoSuggestions: () => ({ suggestions: __suggestions }) }));
 vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: [{ id: 'proj-a', name: 'Mainframe' }] }) }));
@@ -33,6 +44,16 @@ describe('WelcomeState', () => {
     expect(screen.getByTestId('sessions-welcome')).toHaveTextContent('What should we take on?');
     expect(screen.getByText('Mainframe')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('main')).toBeInTheDocument());
+  });
+
+  it('opens the branch popover from the branch label', async () => {
+    render(<WelcomeState projectId="proj-a" />);
+    const trigger = await screen.findByTestId('welcome-branch');
+    expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'false');
+
+    fireEvent.click(trigger);
+
+    expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'true');
   });
 
   it('does not render the From the repo section when there are no suggestions', () => {

@@ -12,11 +12,13 @@
  *    would read as "no changes"
  *  - a session with nothing to report shows one muted placeholder, not an
  *    empty card
- *  - the panel's collapse control appears on the heading only when a collapse
- *    handler is supplied, and calls it
+ *  - the branch row is the branch manager: a button that opens the
+ *    BranchPopover, and a static row for a draft worktree
  *
  * Mocked dependencies: the identity, branch, context-percent, chat-extras,
- * working-changes and thread-list data sources.
+ * working-changes and thread-list data sources. `BranchPopover` is mocked
+ * shallowly — the real one fires git fetches when open, and its own behavior
+ * belongs to its own suite.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
@@ -40,8 +42,18 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 }));
 
 let mockBranch: string | undefined = 'feat/session-panel';
+let mockIsDraftWorktree = false;
+const refetch = vi.fn();
 vi.mock('@/features/sessions/use-display-branch', () => ({
-  useDisplayBranch: () => ({ branch: mockBranch, isDraftWorktree: false, refetch: vi.fn() }),
+  useDisplayBranch: () => ({ branch: mockBranch, isDraftWorktree: mockIsDraftWorktree, refetch }),
+}));
+
+vi.mock('@/features/git/BranchPopover', () => ({
+  BranchPopover: ({ open, children }: { open: boolean; children: ReactNode }) => (
+    <div data-testid="branch-popover" data-open={String(open)}>
+      {children}
+    </div>
+  ),
 }));
 
 let mockPercent: number | null = 42;
@@ -97,6 +109,7 @@ beforeEach(() => {
   mockIdentity = { projectId: 'proj-1', chatId: 'chat-9' };
   mockIsWorktree = false;
   mockBranch = 'feat/session-panel';
+  mockIsDraftWorktree = false;
   mockPercent = 42;
   mockUsage = { percentage: 42, totalTokens: 84_000, maxTokens: 200_000 };
   mockChanges = {
@@ -222,18 +235,29 @@ describe('SummarySection — nothing to report', () => {
   });
 });
 
-describe('SummarySection — collapse control', () => {
-  it('renders no collapse control when the panel cannot be collapsed', () => {
+describe('SummarySection — the branch row manages the branch', () => {
+  it('opens the branch popover when the row is clicked', async () => {
     render(<SummarySection port={31415} />);
-    expect(screen.queryByTestId('session-panel-collapse')).toBeNull();
+    const row = screen.getByTestId('session-panel-summary-branch');
+    expect(row.tagName).toBe('BUTTON');
+    expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'false');
+
+    await userEvent.click(row);
+
+    expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'true');
   });
 
-  it('collapses the panel on click, and names itself for a screen reader', async () => {
-    const onCollapse = vi.fn();
-    render(<SummarySection port={31415} onCollapse={onCollapse} />);
-    const button = screen.getByTestId('session-panel-collapse');
-    expect(button).toHaveAttribute('aria-label', 'Collapse panel');
-    await userEvent.click(button);
-    expect(onCollapse).toHaveBeenCalledTimes(1);
+  it('stays a static row for a draft worktree — branch writes would hit the root repo', () => {
+    mockIsDraftWorktree = true;
+    render(<SummarySection port={31415} />);
+    expect(screen.getByTestId('session-panel-summary-branch').tagName).toBe('DIV');
+    expect(screen.queryByTestId('branch-popover')).toBeNull();
+  });
+
+  it('stays a static row for a session with no project', () => {
+    mockIdentity = { projectId: undefined, chatId: 'chat-9' };
+    render(<SummarySection port={31415} />);
+    expect(screen.getByTestId('session-panel-summary-branch').tagName).toBe('DIV');
+    expect(screen.queryByTestId('branch-popover')).toBeNull();
   });
 });
