@@ -21,7 +21,7 @@ import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
-import { nextActiveAfterClose } from './tabs-model';
+import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
 function toTabEntry(id: string, items: readonly ThreadListEntry[], activeId: string | null): SessionTabEntry {
@@ -44,17 +44,23 @@ export function SessionTabs() {
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const newSession = useNewChatHotkeyHandler(aui);
 
-  const tabs = tabIds.map((id) => toTabEntry(id, items, mainThreadId));
+  // Between the chat.created reload and the router's handover the active
+  // thread is still the draft's local id while its tab is already canonical;
+  // comparing raw ids would blank the active underline and mis-resolve a close
+  // in that window. aui switches on either id, so clicks pass the tab id.
+  const activeTabId = canonicalTabId(mainThreadId, items);
+
+  const tabs = tabIds.map((id) => toTabEntry(id, items, activeTabId));
 
   const handleActivate = (id: string) => {
-    if (id !== mainThreadId) aui.threads.switchToThread(id);
+    if (id !== activeTabId) aui.threads.switchToThread(id);
   };
 
   const handleClose = (id: string) => {
-    const next = nextActiveAfterClose(tabIds, id, mainThreadId);
+    const next = nextActiveAfterClose(tabIds, id, activeTabId);
     closeTab(id);
     if (next === null) newSession();
-    else if (next !== mainThreadId) aui.threads.switchToThread(next);
+    else if (next !== activeTabId) aui.threads.switchToThread(next);
   };
 
   return (

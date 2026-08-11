@@ -94,8 +94,51 @@ export function nextActiveAfterClose(
  * again — a lingering "New Session" tab would be dead weight (and the boot
  * draft would otherwise survive every boot's auto-select redirect).
  */
-export function validTabIds(items: readonly ThreadListEntry[], activeId: string | null): Set<string> {
+function validTabIds(items: readonly ThreadListEntry[], activeId: string | null): Set<string> {
   const valid = new Set(items.filter((t) => t.status === 'regular').map((t) => t.id));
   if (activeId !== null) valid.add(activeId);
   return valid;
+}
+
+/**
+ * A session's ONE tab id. aui keeps both of a session's identities in its
+ * thread map for the run — the first send stamps `remoteId` onto the local
+ * entry (`RemoteThreadListThreadListRuntimeCore.initialize`) and the
+ * `chat.created` reload adds a second, remote-keyed entry (`classifyThreads`),
+ * with nothing deleting the first. `switchToThread` resolves either id, so the
+ * remote-keyed one is the safe canonical form.
+ *
+ * Only collapse once that remote-keyed entry exists: until it lands (and
+ * forever, after a failed list load) the local entry is the session's only
+ * entry, and a tab pointing at an id with no entry would show "New Session"
+ * and no project colour. Lookups are by exact id — matching `remoteId` too
+ * would collapse a session onto itself before its canonical entry arrives.
+ */
+export function canonicalTabId(id: string, items: readonly ThreadListEntry[]): string {
+  const remoteId = items.find((t) => t.id === id)?.remoteId;
+  if (remoteId == null || remoteId === id) return id;
+  return items.some((t) => t.id === remoteId) ? remoteId : id;
+}
+
+/**
+ * The open set, expressed in canonical ids with the dead tabs dropped.
+ *
+ * First-wins dedupe is what makes the local→remote handoff an in-place swap:
+ * the membership seam appends the canonical id at the end, so the set reads
+ * `[…, '__LOCALID_x', 'chat-x']`, and keeping the first occurrence merges the
+ * appended tab into the slot the draft tab already held instead of moving the
+ * session to the end of the strip.
+ */
+export function reconcileTabIds(
+  tabIds: readonly string[],
+  items: readonly ThreadListEntry[],
+  activeId: string | null,
+): string[] {
+  const valid = validTabIds(items, activeId === null ? null : canonicalTabId(activeId, items));
+  const next: string[] = [];
+  for (const id of tabIds) {
+    const canonical = canonicalTabId(id, items);
+    if (valid.has(canonical) && !next.includes(canonical)) next.push(canonical);
+  }
+  return next;
 }

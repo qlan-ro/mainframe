@@ -5,18 +5,25 @@
  * path at once — sidebar click, palette, toast deep-link, boot auto-select,
  * archived-active fallback — without touching any of those call sites.
  *
- * Also owns persistence: restore once a real `list()` has SETTLED carrying at
- * least one session (merging with tabs the boot already opened), prune tabs
- * whose thread vanished, and write the boot-stable id set back on every change.
- * A list that is still loading, holds only the transient boot draft, or failed
- * to load leaves `hydrated` false: the persisted payload survives untouched and
- * a later, real list still restores it.
+ * Also owns reconciliation and persistence: restore once a real `list()` has
+ * SETTLED carrying at least one session (merging with tabs the boot already
+ * opened), reconcile the open set on every thread-list change, and write the
+ * boot-stable id set back. A list that is still loading, holds only the
+ * transient boot draft, or failed to load leaves `hydrated` false: the
+ * persisted payload survives untouched and a later, real list still restores it.
+ *
+ * Reconciling both prunes vanished threads AND collapses identities: a
+ * session's pre-send and post-create ids are ONE member, merged onto the
+ * remote-keyed entry in the slot the draft tab already held. It runs before
+ * hydration on purpose — pre-hydration the set holds only ids the seam added
+ * for an active thread, all valid by construction, and a ghost must not
+ * outlive a list load that failed.
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
-import { SESSION_TABS_STORAGE_KEY, canRestoreTabs, persistTabIds, restoreTabIds, validTabIds } from './tabs-model';
+import { SESSION_TABS_STORAGE_KEY, canRestoreTabs, persistTabIds, reconcileTabIds, restoreTabIds } from './tabs-model';
 
 function readPersisted(): string[] {
   try {
@@ -41,7 +48,7 @@ export function useSessionTabsSync(): void {
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const hydrate = useSessionTabsStore((s) => s.hydrate);
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
-  const pruneTo = useSessionTabsStore((s) => s.pruneTo);
+  const reconcile = useSessionTabsStore((s) => s.reconcile);
 
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
@@ -53,9 +60,8 @@ export function useSessionTabsSync(): void {
   }, [mainThreadId, ensureTab]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    pruneTo(validTabIds(items, mainThreadId));
-  }, [hydrated, items, mainThreadId, pruneTo]);
+    reconcile((ids) => reconcileTabIds(ids, items, mainThreadId));
+  }, [items, mainThreadId, reconcile]);
 
   // `items` changes identity on every stream tick (title/status updates), so
   // this effect runs hot while a chat is running — skip the write unless the
