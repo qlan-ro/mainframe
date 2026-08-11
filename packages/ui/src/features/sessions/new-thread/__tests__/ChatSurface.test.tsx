@@ -9,11 +9,11 @@
  *  2. A brand-new local thread (__LOCALID_* / status 'new' / no messages) whose
  *     draft already resolved a project → ChatThread renders WITH the welcome
  *     empty-state passed through as its `emptyState` prop (composer stays live).
- *  3. Anything else (a pre-existing/regular chat with messages) → a plain
+ *  3. A brand-new local thread whose draft has NOT resolved a project → the same
+ *     ChatThread + welcome empty-state, handed no projectId: the welcome screen
+ *     owns the picker, so there is no boot-settle fallback and no dead end.
+ *  4. Anything else (a pre-existing/regular chat with messages) → a plain
  *     ChatThread, no welcome empty-state.
- *  4. Zero-session boot fallback: projects>0, "All" view, still on the boot
- *     draft with no resolved project after a settle window → open the shared
- *     project-picker store instead of leaving a dead-end projectless surface.
  *
  * The session panel mounts in branch 2/3 only, and `SessionPanel` is stubbed
  * here: it is covered by its own suite, and rendering it for real would drag the
@@ -21,7 +21,7 @@
  * test. What this file owns is where the panel mounts and what it is handed —
  * including that the ResizeObserver measures the thread row, not the panel.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { SessionPanelState } from '@/features/session-panel/use-session-panel-state';
@@ -68,7 +68,9 @@ vi.mock('../../../chat/thread/ChatThread', () => ({
 }));
 vi.mock('../../../chat/thread/ChatCardHeader', () => ({ ChatCardHeader: () => <div data-testid="chat-header" /> }));
 vi.mock('../ChatEmptyState', () => ({
-  ChatEmptyState: ({ variant }: { variant: string }) => <div data-testid={`empty-${variant}`} />,
+  ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
+    <div data-testid={`empty-${variant}`} data-project={projectId ?? ''} />
+  ),
 }));
 vi.mock('@/features/session-panel/SessionPanel', () => ({
   SessionPanel: ({ state }: { state: SessionPanelState }) => (
@@ -88,7 +90,6 @@ class RecordingResizeObserver {
 }
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RecordingResizeObserver;
 
-import { useNewSessionPickerTarget } from '../../sidebar/use-new-session-picker-target';
 import { ChatSurface } from '../ChatSurface';
 
 describe('ChatSurface', () => {
@@ -102,7 +103,6 @@ describe('ChatSurface', () => {
     __filterProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
     __initialization = { status: 'ready' };
-    useNewSessionPickerTarget.setState({ open: false });
   });
 
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {
@@ -124,7 +124,20 @@ describe('ChatSurface', () => {
   it('renders ChatThread with the welcome empty-state for a resolved draft', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
+    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', 'proj-a');
+  });
+
+  it('renders the welcome empty-state with no project for a projectless new local thread', () => {
+    __draftMap = new Map();
+    __filterProjectId = null;
+    __initialization = { status: 'idle' };
+    render(<ChatSurface />);
+
+    expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
+    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    // No boot-settle picker and no dead end: the welcome screen owns the choice.
+    expect(screen.queryByText('Initializing session…')).toBeNull();
+    expect(screen.queryByTestId('empty-firstrun')).toBeNull();
   });
 
   it('renders a plain ChatThread (no empty-state) for a non-draft chat', () => {
@@ -210,74 +223,5 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
 
     expect(screen.queryByTestId('session-panel-root')).toBeNull();
-  });
-});
-
-describe('ChatSurface — zero-session boot fallback (All view, projects>0, unresolved boot draft)', () => {
-  beforeEach(() => {
-    __mainThreadId = '__LOCALID_1';
-    __itemStatus = 'new';
-    __messageCount = 0;
-    __projects = [{ id: 'proj-a' }];
-    __loading = false;
-    __filterProjectId = null;
-    __draftMap = new Map(); // no resolved project — the dead-end shape
-    useNewSessionPickerTarget.setState({ open: false });
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('opens the shared project-picker store once the boot-settle window elapses', () => {
-    render(<ChatSurface />);
-    expect(useNewSessionPickerTarget.getState().open).toBe(false);
-
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(useNewSessionPickerTarget.getState().open).toBe(true);
-  });
-
-  it('does not open the picker when a project pill is active', () => {
-    __filterProjectId = 'proj-a';
-    render(<ChatSurface />);
-
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(useNewSessionPickerTarget.getState().open).toBe(false);
-  });
-
-  it('does not open the picker once the draft already resolved a project', () => {
-    __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
-    render(<ChatSurface />);
-
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(useNewSessionPickerTarget.getState().open).toBe(false);
-  });
-
-  it('does not open the picker if the thread stops being the new local draft before settle (sessions loaded and redirected away)', () => {
-    const { rerender } = render(<ChatSurface />);
-
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-    __mainThreadId = 'chat-123';
-    __itemStatus = 'regular';
-    __messageCount = 4;
-    rerender(<ChatSurface />);
-
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(useNewSessionPickerTarget.getState().open).toBe(false);
   });
 });

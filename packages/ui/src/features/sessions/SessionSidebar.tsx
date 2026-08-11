@@ -28,7 +28,6 @@ import { selectPendingInteractionCount, useAutomationsStore } from '@/features/a
 import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
-import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
@@ -145,7 +144,6 @@ export function SessionSidebar({ className }: { className?: string }) {
     return map;
   }, [sortedProjects]);
 
-  const sessionCounts = useSessionCounts(allItems);
   const draft = useDraftRow(allItems, filterProjectId);
 
   const tagNames = useMemo(() => tagsInUse(allItems, filterProjectId), [allItems, filterProjectId]);
@@ -178,8 +176,6 @@ export function SessionSidebar({ className }: { className?: string }) {
           groups={groups}
           projectNames={projectNames}
           colorOf={registry.colorOf}
-          projects={sortedProjects}
-          sessionCounts={sessionCounts}
           draft={draft}
           hasFilters={hasFilters}
         />

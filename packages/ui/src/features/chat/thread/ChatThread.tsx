@@ -25,6 +25,7 @@ import { useRotatingPhrase } from './use-rotating-phrase';
 import { formatElapsedSeconds } from '../format-duration';
 import { useRunElapsed } from './use-run-elapsed';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
+import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { FindBar } from '../find/FindBar';
 import { useFindHotkey } from '../find/use-find-hotkey';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
@@ -118,10 +119,16 @@ function CompactingIndicator() {
 
 function ThreadFooterInput() {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
+  // A projectless draft has nowhere to create the chat: the welcome screen's
+  // picker resolves the project first, and the composer appears with it.
+  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  const itemStatus = useAuiState((s) => s.threadListItem?.status);
+  const hasDraftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.has(mainThreadId) : false));
+  const projectlessDraft = mainThreadId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
   return (
     <>
       <DegradedChatCard />
-      {!directoryMissing && <Composer />}
+      {!directoryMissing && !projectlessDraft && <Composer />}
     </>
   );
 }

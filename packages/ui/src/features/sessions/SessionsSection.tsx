@@ -8,7 +8,7 @@
  * to stay reachable from the bottom of a long list, the same way Tasks and Tags
  * stay reachable from the top.
  */
-import type { Project, TagColor } from '@qlan-ro/mainframe-types';
+import type { TagColor } from '@qlan-ro/mainframe-types';
 import { SidebarMenu } from '@/components/ui/sidebar';
 import { SidebarJumpSection } from '../shared/SidebarJumpSection';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
@@ -25,23 +25,12 @@ interface SessionsSectionProps {
   /** Project id → name, for the row hover cards and the draft row. */
   projectNames: Record<string, string>;
   colorOf?: (name: string) => TagColor;
-  projects: Project[];
-  /** Project id → session count, for the new-session picker. */
-  sessionCounts: Record<string, number>;
   draft: DraftRowState;
   /** True when any filter narrows the list — changes the empty copy. */
   hasFilters: boolean;
 }
 
-export function SessionsSection({
-  groups,
-  projectNames,
-  colorOf,
-  projects,
-  sessionCounts,
-  draft,
-  hasFilters,
-}: SessionsSectionProps) {
+export function SessionsSection({ groups, projectNames, colorOf, draft, hasFilters }: SessionsSectionProps) {
   const { filterProjectId, sortMode, setSortMode } = useSessionFilters();
 
   // "All" view is the only one where a row has to name its project; a filter
@@ -53,8 +42,6 @@ export function SessionsSection({
       <SessionsNewButton
         filterProjectId={filterProjectId}
         filterProjectName={filterProjectId != null ? (projectNames[filterProjectId] ?? null) : null}
-        projects={projects}
-        sessionCounts={sessionCounts}
       />
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />

@@ -4,7 +4,9 @@ import type { ReactNode } from 'react';
 import type { Suggestion } from '@qlan-ro/mainframe-types';
 
 let __suggestions: Suggestion[] = [];
+let __suggestionsArg: string | null | undefined;
 const setText = vi.fn();
+const selectProject = vi.fn();
 
 // Shallow: the real popover fires git fetches when open, and its own behavior
 // belongs to its own suite. Here we only care that the branch label triggers it.
@@ -28,8 +30,21 @@ vi.mock('@/features/git/BranchPopover', () => ({
   ),
 }));
 
-vi.mock('../use-repo-suggestions', () => ({ useRepoSuggestions: () => ({ suggestions: __suggestions }) }));
-vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: [{ id: 'proj-a', name: 'Mainframe' }] }) }));
+vi.mock('../use-repo-suggestions', () => ({
+  useRepoSuggestions: (projectId: string | null) => {
+    __suggestionsArg = projectId;
+    return { suggestions: __suggestions };
+  },
+}));
+vi.mock('../use-select-draft-project', () => ({ useSelectDraftProject: () => selectProject }));
+vi.mock('../../use-projects', () => ({
+  useProjects: () => ({
+    projects: [
+      { id: 'proj-a', name: 'Mainframe' },
+      { id: 'proj-b', name: 'Sidecar' },
+    ],
+  }),
+}));
 vi.mock('../../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/lib/api/git', () => ({ getGitBranch: vi.fn().mockResolvedValue({ branch: 'main' }) }));
 vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ composer: { setText } }) }));
@@ -45,10 +60,15 @@ const S = (over: Partial<Suggestion> = {}): Suggestion => ({
   ...over,
 });
 
+/** Radix menu triggers open on POINTERDOWN, not click. */
+const openPicker = () => fireEvent.pointerDown(screen.getByTestId('welcome-project'), { button: 0 });
+
 describe('WelcomeState', () => {
   beforeEach(() => {
     __suggestions = [];
+    __suggestionsArg = undefined;
     setText.mockReset();
+    selectProject.mockReset();
   });
 
   it('renders the headline and the project + branch context line', async () => {
@@ -81,5 +101,60 @@ describe('WelcomeState', () => {
     expect(screen.getByText('From the repo')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('sessions-welcome-suggestion-1'));
     expect(setText).toHaveBeenCalledWith('Fix TODOs.');
+  });
+
+  it('prompts for a task once a project is picked', () => {
+    render(<WelcomeState projectId="proj-a" />);
+    expect(screen.getByTestId('sessions-welcome')).toHaveTextContent(
+      'Describe a task, or pick a starting point below.',
+    );
+  });
+
+  it('asks the repo suggestions for the picked project', () => {
+    render(<WelcomeState projectId="proj-a" />);
+    expect(__suggestionsArg).toBe('proj-a');
+  });
+});
+
+describe('WelcomeState — no project picked yet', () => {
+  beforeEach(() => {
+    __suggestions = [];
+    __suggestionsArg = undefined;
+    setText.mockReset();
+    selectProject.mockReset();
+  });
+
+  it('shows the choose-a-project trigger and subtitle', () => {
+    render(<WelcomeState />);
+    expect(screen.getByTestId('welcome-project')).toHaveTextContent('Choose a project');
+    expect(screen.getByTestId('sessions-welcome')).toHaveTextContent('Choose a project to get started.');
+  });
+
+  it('renders no branch pill', () => {
+    render(<WelcomeState />);
+    expect(screen.queryByTestId('welcome-branch')).toBeNull();
+    expect(screen.queryByTestId('branch-popover')).toBeNull();
+  });
+
+  it('asks the repo suggestions for no project', () => {
+    render(<WelcomeState />);
+    expect(__suggestionsArg).toBeNull();
+  });
+
+  it('lists every project in the picker', () => {
+    render(<WelcomeState />);
+    openPicker();
+
+    expect(screen.getByTestId('welcome-project-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('welcome-project-proj-a')).toHaveTextContent('Mainframe');
+    expect(screen.getByTestId('welcome-project-proj-b')).toHaveTextContent('Sidecar');
+  });
+
+  it('scopes the draft to the project picked from the menu', () => {
+    render(<WelcomeState />);
+    openPicker();
+    fireEvent.click(screen.getByTestId('welcome-project-proj-b'));
+
+    expect(selectProject).toHaveBeenCalledExactlyOnceWith('proj-b');
   });
 });
