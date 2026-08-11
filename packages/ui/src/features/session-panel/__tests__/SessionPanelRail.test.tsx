@@ -178,7 +178,7 @@ describe('SessionPanelRail — background activity', () => {
   it('shows no live dot when nothing is running', () => {
     render(rail());
     expect(screen.queryByTestId('session-panel-rail-activity-dot')).toBeNull();
-    expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', 'Background Activity');
+    expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', 'Activity');
   });
 
   it('shows the live dot and the running count once work is running', () => {

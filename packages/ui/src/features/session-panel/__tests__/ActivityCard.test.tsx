@@ -9,7 +9,7 @@
  * Behaviors covered:
  *  - the empty state keeps the card header and shows one muted placeholder row,
  *    with no count badge (D6)
- *  - one row per live task, with its description, elapsed time and working dot
+ *  - one row per live task, with its description, elapsed time and kind glyph
  *  - the count badge appears only while work is running
  *  - the header X closes the panel
  *  - a live workflow row drills into its run panel; the breadcrumb comes back
@@ -103,9 +103,9 @@ describe('ActivityCard — empty (D6)', () => {
 });
 
 describe('ActivityCard — card chrome', () => {
-  it('titles the card Background Activity', () => {
+  it('titles the card Activity', () => {
     render(card());
-    expect(screen.getByTestId('session-panel-card-activity')).toHaveTextContent('Background Activity');
+    expect(screen.getByTestId('session-panel-card-activity')).toHaveTextContent('Activity');
   });
 
   it('closes the panel from the header X', () => {
@@ -136,14 +136,17 @@ describe('ActivityCard — task rows', () => {
     expect(badge()).toHaveTextContent('2');
   });
 
-  it('marks every row as working with the pulse dot — the daemon ships no other status', () => {
-    mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
+  it('leads each row with its kind glyph — agent, task, or other', () => {
+    mockTasks = {
+      'a-1': task('a-1', 'agent', 'reviewer'),
+      'b-1': task('b-1', 'bash', 'pnpm dev'),
+      'c-1': task('c-1', 'other', 'mystery work'),
+    };
     render(card());
 
-    expect(within(screen.getByTestId('session-panel-task-a-1')).getByTestId('session-panel-working-dot')).toHaveClass(
-      'animate-pulse',
-    );
-    expect(within(screen.getByTestId('session-panel-task-b-1')).getByTestId('session-panel-working-dot')).toBeVisible();
+    expect(within(screen.getByTestId('session-panel-task-a-1')).getByTestId('session-panel-kind-agent')).toBeVisible();
+    expect(within(screen.getByTestId('session-panel-task-b-1')).getByTestId('session-panel-kind-bash')).toBeVisible();
+    expect(within(screen.getByTestId('session-panel-task-c-1')).getByTestId('session-panel-kind-other')).toBeVisible();
   });
 
   it('leaves agent and bash rows inert — there is nothing to drill into', () => {

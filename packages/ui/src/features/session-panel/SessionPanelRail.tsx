@@ -1,7 +1,7 @@
 /**
  * SessionPanelRail — the floating pill at the chat surface's right edge, the
  * switchboard for the stacked panels. Top-down: Session · context usage ·
- * Background Activity · Launch · Tasks.
+ * Activity · Launch · Tasks.
  *
  * Every button TOGGLES its panel — open panels stack beside the transcript, or
  * float over it when the gutter is short. The launch button's old one-click
@@ -12,7 +12,7 @@
  * belongs to the find-in-chat band, which the rail used to sit on top of.
  */
 import { useMemo } from 'react';
-import { Activity, Info, ListTodo, Play } from 'lucide-react';
+import { Info, ListTodo, Logs, Play } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { severityOf } from '@/features/quota/quota-format';
@@ -51,7 +51,7 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
   const control = deriveLaunchRunControl(configs, scopeStatuses, selectedConfigName);
   const live = control.mode === 'running';
 
-  const activityLabel = running > 0 ? runningLabel(running) : 'Background Activity';
+  const activityLabel = running > 0 ? runningLabel(running) : 'Activity';
 
   return (
     <div data-testid="session-panel-rail" className={RAIL_CHROME}>
@@ -82,7 +82,7 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
         <RailIconButton
           testId="session-panel-rail-activity"
           label={activityLabel}
-          icon={Activity}
+          icon={Logs}
           pressed={isPanelVisible('activity')}
           dot={running > 0}
           onClick={() => togglePanel('activity')}

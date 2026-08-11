@@ -3,12 +3,10 @@
  * background bash tasks, and workflow runs, as its own stacked panel.
  *
  * The daemon ships only running work (there is no status field on
- * `BackgroundActivityTask` — see background-task.ts), so every row reads as
- * working and the count IS the list length. That is why `elements-agent-status`
- * contributes only its working dot here: its `waiting` / `done` branches, and
- * the `error` branch our workflow model would want, have no data to render, and
- * its trailing pause/rerun button has no handler upstream. Its pill fill goes
- * too — these rows are flat by design.
+ * `BackgroundActivityTask` — see background-task.ts), so every row IS running
+ * and the count is the list length. The row's leading glyph says what KIND of
+ * work it is — workflow, subagent, task — not its state; liveness is carried
+ * by the ticking elapsed column and the rail button's pulse dot.
  *
  * A workflow row drills in place into its run panel — the level swap the
  * composer's two-level popover used to do, minus the popover.
@@ -20,7 +18,8 @@
  * and a panel that vanishes when work finishes is worse than a placeholder.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bot, ChevronLeft, ChevronRight, CircleDashed, Logs, SquareTerminal, Workflow } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
@@ -42,34 +41,34 @@ const KIND_LABEL: Record<BackgroundWorkKind, string> = {
   other: 'Task',
 };
 
-/**
- * Working dot, lifted from assistant-ui's `elements-agent-status`
- * (https://r.assistant-ui.com/elements-agent-status.json, fetched 2026-08-07;
- * sha256 of its `files[0].content`
- * b2ab3bceee1da9fc28fb0243d38399ce67e08cb6e55c17d40efc72f8a1293227 — the
- * registry item carries no version, so re-pull and diff against that hash),
- * in place of the spinner. Re-themed to `primary` — upstream's `blue-500` is
- * not a token here, and `primary` is the app's settled "working" signal
- * (AssistantMessage's RunningIndicator, the thread's running indicator).
- *
- * The 6px dot sits in the 14px slot the spinner occupied so the title column
- * does not shift.
- */
-function WorkingDot() {
-  return (
-    <span aria-hidden className="flex size-3.5 shrink-0 items-center justify-center">
-      <span
-        data-testid="session-panel-working-dot"
-        className="size-1.5 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
-      />
-    </span>
-  );
-}
+const KIND_ICON: Record<BackgroundWorkKind, LucideIcon> = {
+  agent: Bot,
+  bash: SquareTerminal,
+  workflow: Workflow,
+  other: CircleDashed,
+};
 
-function RowBody({ title, detail, startedAt, now }: { title: string; detail: string; startedAt: number; now: number }) {
+function RowBody({
+  kind,
+  title,
+  detail,
+  startedAt,
+  now,
+}: {
+  kind: BackgroundWorkKind;
+  title: string;
+  detail: string;
+  startedAt: number;
+  now: number;
+}) {
+  const Icon = KIND_ICON[kind] ?? CircleDashed;
   return (
     <>
-      <WorkingDot />
+      <Icon
+        data-testid={`session-panel-kind-${kind}`}
+        className="size-3.5 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{title}</div>
         <div className="truncate text-xs text-muted-foreground">{detail}</div>
@@ -83,6 +82,7 @@ function TaskRow({ task, now }: { task: BackgroundActivityTask; now: number }) {
   return (
     <div data-testid={`session-panel-task-${task.id}`} className={ROW}>
       <RowBody
+        kind={task.kind}
         title={task.description || 'Background task'}
         detail={KIND_LABEL[task.kind] ?? 'Task'}
         startedAt={task.startedAt}
@@ -114,6 +114,7 @@ function WorkflowRow({
       className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
     >
       <RowBody
+        kind="workflow"
         title={run.workflowName ?? task.description ?? 'Workflow'}
         detail={`${agents} agent${agents === 1 ? '' : 's'}`}
         startedAt={task.startedAt}
@@ -135,7 +136,7 @@ function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () =
         className="flex items-center gap-1 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3" aria-hidden />
-        Background Activity
+        Activity
       </button>
       <WorkflowRunPanel run={run} />
     </>
@@ -155,13 +156,7 @@ export function ActivityCard({ onClose }: { onClose: () => void }) {
   useEffect(() => setDrillTaskId(null), [chatId]);
 
   return (
-    <PanelCard
-      id="activity"
-      label="Background Activity"
-      icon={Activity}
-      count={running > 0 ? running : undefined}
-      onClose={onClose}
-    >
+    <PanelCard id="activity" label="Activity" icon={Logs} count={running > 0 ? running : undefined} onClose={onClose}>
       <div className="flex flex-col gap-0.5 p-2">
         {drillRun ? (
           <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
