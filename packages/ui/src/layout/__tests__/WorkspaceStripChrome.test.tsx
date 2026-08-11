@@ -1,13 +1,12 @@
 /**
  * WorkspaceStripChrome — the strip ends shared by the tab strip and the
- * empty-state header: the grip belongs to the primary pane only, and closing
- * is refused at the dynamic floor.
+ * empty-state header: closing is refused at the dynamic floor. (The surface
+ * drag grip is gone — the whole surface-drag system was retired 2026-08-12.)
  */
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
-import { useSurfaceDragStore } from '../use-surface-drag';
 import { WorkspaceStripActions, WorkspaceStripLead } from '../WorkspaceStripChrome';
 
 // v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
@@ -24,27 +23,12 @@ function seedLayout(top: ('chat' | 'workspace')[], bottom: 'chat' | 'workspace' 
 
 beforeEach(() => {
   seedLayout(['chat', 'workspace']);
-  useSurfaceDragStore.getState().cancel();
 });
 
 describe('WorkspaceStripLead', () => {
-  it('renders the surface drag grip on the primary pane', () => {
+  it('carries no drag grip — the surface-drag system is retired', () => {
     render(<WorkspaceStripLead primary />);
-    expect(screen.getByTestId('workspace-surface-drag')).toBeInTheDocument();
-  });
-
-  it('omits the grip on a secondary pane — the gesture moves the surface, not the pane', () => {
-    render(<WorkspaceStripLead primary={false} />);
     expect(screen.queryByTestId('workspace-surface-drag')).not.toBeInTheDocument();
-  });
-
-  it('the grip starts a surface drag on pointer-down', () => {
-    render(<WorkspaceStripLead primary />);
-    fireEvent.pointerDown(screen.getByTestId('workspace-surface-drag'), { clientX: 12, clientY: 8 });
-
-    const drag = useSurfaceDragStore.getState();
-    expect(drag.kind).toBe('surface');
-    expect(drag.surface).toBe('workspace');
   });
 });
 

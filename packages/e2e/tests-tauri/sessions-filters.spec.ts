@@ -58,13 +58,14 @@
  * `sessions-filter-pill-<id>`); this file keeps its own local `projectRow()` because
  * every test here needs the row directly.
  *
- * THE PROJECT SWITCHER IS VIEW-ONLY (D12, packages/ui/CLAUDE.md): `ProjectSection`'s
- * `onSelect` is wired straight to `useSessionFilters.setFilterProjectId` and to
- * nothing else — picking a project narrows the list and never activates a session,
- * and clearing the filter never touches the active thread. Only
- * `useSessionListRouter` moves the active thread (boot auto-select, archived-active
- * fallback, first-send handoff). Assertions here therefore prove what the switcher
- * does NOT do; activating a session is always an explicit row click.
+ * PICKING A PROJECT ALSO ACTIVATES ITS MOST RECENT SESSION (supersedes the old
+ * view-only D12 reading): `SessionSidebar.handleSelectProject` sets the filter AND —
+ * when the chosen project is not the active session's — switches to
+ * `pickProjectSession(allItems, id)`, the project's most-recently-updated
+ * non-archived session, so dependent context (todos scope, session panel) follows
+ * the selection. A project with no live sessions leaves the active thread alone.
+ * Clearing the filter ("All projects", id === null) only WIDENS the list — it never
+ * switches. Assertions below pin both halves.
  */
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
@@ -148,7 +149,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
   });
 
-  test('clicking a project row filters the list and leaves the active session alone', async () => {
+  test("clicking a project row filters the list and activates that project's most recent session", async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
@@ -164,10 +165,9 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
     await expect(rows.first()).toHaveAttribute('data-chat-id', chatIdA);
-    // View-only (D12): A's session is NOT activated by narrowing to A, and the
-    // active thread stays B — which the filter just hid, so nothing in the
-    // visible list carries the active flag.
-    await expect(page.locator('[data-testid="sessions-row"][data-active="true"]')).toHaveCount(0);
+    // The active session followed the selection: A's only session is now the
+    // active thread, so the one visible row carries the active flag.
+    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
   test('clicking the already-active project row is a no-op (single-select switcher, not a toggle)', async () => {
@@ -184,38 +184,38 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByTestId('sessions-row')).toHaveCount(1, { timeout: 10_000 });
 
-    // Activating a session is the user's job, not the switcher's — click A's row so
-    // the next step can prove that clearing the filter leaves it alone.
-    await sidebar.row(chatIdA).click();
+    // A's session is already active (the previous test's selection activated it),
+    // and re-picking the active project is inert — no switch, no filter change.
     await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     await page.getByTestId('sidebar-project-all').click();
     await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
 
-    // The previously-activated session (A) is still the active one — clearing
-    // the filter is view-only and does not touch the active thread (D12).
+    // "All projects" only widens the list: clearing the filter never switches
+    // the active thread, so A's session is still the active one.
     await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
   });
 
-  test('switching to a different project re-narrows the list; the active session survives both hops', async () => {
+  test("switching to a different project re-narrows the list and activates that project's session", async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
-    // A's session is active on entry (the previous test selected it).
+    // A's session is active on entry (the previous test left it selected).
     await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     await projectRow(page, projectB.projectId).click();
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
     await expect(rows.first()).toHaveAttribute('data-chat-id', chatIdB);
+    // The hop carried the active session with it — B's most recent session.
+    await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     await page.getByTestId('sidebar-project-all').click();
     await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
-    // Neither hop moved the active thread: A is still selected even though the
-    // B filter hid it in between.
-    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
+    // Widening back to "All" leaves the active thread where the B hop put it.
+    await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
   });
 
   test('right-click hint dismiss persists across reload', async () => {

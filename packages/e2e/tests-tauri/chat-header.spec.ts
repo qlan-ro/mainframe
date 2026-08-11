@@ -27,7 +27,7 @@
  *    modal coverage lives in review-panel.spec.ts)
  *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
  *                                  own testids, referenced here only to observe split/hide effects
- *   [data-drop-surface="chat|workspace"] — layout engine's per-surface panel wrapper
+ *   [data-surface="chat|workspace"] — layout engine's per-surface panel wrapper
  *
  * SurfaceId is 'chat' | 'workspace' since the 2026-08-05 Files+Run merge, so there
  * is exactly one surface to split to and the split controls unmount once it is placed
@@ -112,7 +112,7 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
     await expect(hideButton).toBeEnabled();
     await hideButton.click();
 
-    await expect(page.locator('[data-drop-surface="chat"]')).toHaveCount(0);
+    await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
     await expect(page.getByTestId('chat-header')).toHaveCount(0);
     // Files remains the sole lit surface.
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
@@ -154,8 +154,8 @@ test.describe('§chat-header — split controls', () => {
     await page.getByTestId('chat-header-split-right').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const workspaceBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
+    const workspaceBox = await page.locator('[data-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
     expect(workspaceBox).not.toBeNull();
     // Same row: comparable y, Chat stays leftmost.
@@ -173,8 +173,8 @@ test.describe('§chat-header — split controls', () => {
     await page.getByTestId('chat-header-split-down').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const workspaceBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
+    const workspaceBox = await page.locator('[data-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
     expect(workspaceBox).not.toBeNull();
     // The strip spans the full width below the top row, so Chat keeps the whole row.

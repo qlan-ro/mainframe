@@ -105,7 +105,8 @@ describe('WorkflowLauncherRow', () => {
     ['completed', [agent({ state: 'done' })], 'green', false],
     ['completed', [agent({ state: 'done' }), agent({ agentId: 'a-2', state: 'error' })], 'amber', false],
     ['failed', [], 'red', false],
-    ['running', [], 'amber', true],
+    // Running is the app's working hue; amber stays reserved for "completed, with failures".
+    ['running', [], 'accent', true],
     ['stopped', [], 'hollow', false],
     ['paused', [], 'hollow', false],
     ['unavailable', [], 'hollow', false],

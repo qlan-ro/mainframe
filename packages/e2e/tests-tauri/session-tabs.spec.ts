@@ -3,17 +3,25 @@
  * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  *
  * UI-only, no recordings: tabs are pure chrome over the thread list. One
- * project + two chats; every activation path inserts a tab through the one
- * membership seam, so creating/clicking chats grows the strip.
+ * project + two chats; every activation path goes through the one membership
+ * seam (`useSessionTabsSync`), which is EDITOR-STYLE: an activation fills the
+ * single PREVIEW slot, replacing whatever was previewed, and only pinning
+ * (double-click or the pill's pin button) promotes a tab into the pinned set
+ * that survives the next activation. So opening two sessions in a row leaves
+ * ONE tab, not two — the contract pinned below, taken from the store's own
+ * unit tests (`session-tabs/__tests__/use-session-tabs-sync.preview.test.tsx`).
  *
  * Testid reference (verified against packages/ui/src/features/session-tabs/):
  *   session-tabs             — the strip root (inside main-toolbar)
- *   session-tab-<threadId>   — a tab pill (role=tab, aria-selected); threadId is
- *                              the chat id for daemon-created chats
+ *   session-tab-<threadId>   — a tab pill (role=tab, aria-selected, data-preview);
+ *                              threadId is the chat id for daemon-created chats
  *   session-tab-close-<id>   — a tab's hover close button
- *   session-tabs-new         — the "+" button (sidebar New flow)
+ *   session-tab-pin-<id>     — a preview tab's hover pin ("Keep open")
+ *   session-tabs-new         — the "+" button (the one-click new-session flow)
  *   sessions-row + data-chat-id — a sidebar session row (helpers/tauri/testids)
- *   sessions-new-picker      — the shared "NEW SESSION IN…" project picker
+ *   sessions-welcome / welcome-project — the draft's welcome screen and its
+ *                              project picker, which own the project choice now
+ *                              (the anchored "NEW SESSION IN…" popover is gone)
  */
 import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -40,36 +48,62 @@ test.describe('§session-tabs', () => {
     await closeTauriApp(app);
   });
 
-  test('each activated session becomes a tab; the last activated is selected', async () => {
+  // `createTauriChat` activates each chat it creates, so chatA was previewed
+  // and chatB then REPLACED it in the same slot — the strip holds one tab.
+  test('activating a session fills the single preview slot; the next activation replaces it', async () => {
     const { page } = app;
-    await expect(page.locator(TAB_PILLS)).toHaveCount(2, { timeout: 10_000 });
+    await expect(page.locator(TAB_PILLS)).toHaveCount(1, { timeout: 10_000 });
     await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'false');
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('data-preview', 'true');
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveCount(0);
+  });
+
+  test('pinning the preview keeps it; the next activation opens its own preview', async () => {
+    const { page } = app;
+    await page.getByTestId(`session-tab-pin-${chatB}`).click({ force: true });
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('data-preview', 'false', {
+      timeout: 10_000,
+    });
+
+    await sessionsSidebar(page).row(chatA).click();
+
+    await expect(page.locator(TAB_PILLS)).toHaveCount(2, { timeout: 10_000 });
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('data-preview', 'true');
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'false');
   });
 
   test('clicking a tab switches the active session', async () => {
     const { page } = app;
-    await page.getByTestId(`session-tab-${chatA}`).click();
-    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'true', {
+    await page.getByTestId(`session-tab-${chatB}`).click();
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'true', {
       timeout: 10_000,
     });
-    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'false');
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'false');
   });
 
   test('closing the active tab removes it and activates the neighbor', async () => {
     const { page } = app;
-    // chatA is active from the previous test; closing it should land on chatB.
-    await page.getByTestId(`session-tab-close-${chatA}`).click({ force: true });
+    // chatB (pinned, first in display order) is active from the previous test;
+    // closing it should land on its only neighbor, the chatA preview.
+    await page.getByTestId(`session-tab-close-${chatB}`).click({ force: true });
 
-    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a closed session reopens as a tab when activated from the sidebar', async () => {
     const { page } = app;
-    await sessionsSidebar(page).row(chatA).click();
+    // Pin what's on screen first — otherwise reopening chatB would just replace
+    // the chatA preview and the strip would stay at one tab.
+    await page.getByTestId(`session-tab-pin-${chatA}`).click({ force: true });
+    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('data-preview', 'false', {
+      timeout: 10_000,
+    });
 
-    await expect(page.getByTestId(`session-tab-${chatA}`)).toHaveAttribute('aria-selected', 'true', {
+    await sessionsSidebar(page).row(chatB).click();
+
+    await expect(page.getByTestId(`session-tab-${chatB}`)).toHaveAttribute('aria-selected', 'true', {
       timeout: 10_000,
     });
     await expect(page.locator(TAB_PILLS)).toHaveCount(2);
@@ -78,9 +112,9 @@ test.describe('§session-tabs', () => {
   test('the "+" button starts the new-session flow', async () => {
     const { page } = app;
     await page.getByTestId('session-tabs-new').click();
-    // No project pill is active in "All" view, so the flow opens the shared
-    // project picker (same one the sidebar "+" opens) rather than a bare draft.
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
-    await page.keyboard.press('Escape');
+    // One click, no anchored picker: the projectless draft opens straight away
+    // and its welcome screen owns the project choice.
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('welcome-project')).toBeVisible();
   });
 });

@@ -13,17 +13,13 @@
  *   message column; the composer stays live so the first send still flows
  *   through onNew → coordinator → ONE createChat (no chat is created until the
  *   first send, D3).
- * - Zero-session boot fallback: projects>0, "All" view (no project pill), and
- *   still on the unresolved boot draft after BOOT_SETTLE_MS → open the shared
- *   project-picker popover (same one the sidebar "+" button opens) instead of
- *   leaving a projectless dead-end (no project chip, no file tree, first send
- *   fails and rolls back). This state can otherwise only arise at boot: every
- *   other path into a new local thread (the "+" button's pick(), a pill-active
- *   ⌘N) resolves `draftCfg` before/at activation. The settle window lets
- *   useSessionListRouter's boot auto-select win the race when real sessions
- *   exist — see the effect below for how the cancel-on-redirect works.
- * - Everything else (a sent local thread, a pre-existing chat, or a new local
- *   thread with no project resolved yet) shows the plain ChatThread.
+ * - A new local thread with NO project resolved shows the same Welcome
+ *   empty-state in its choose-project form: the welcome screen owns the
+ *   project picker (the old anchored "NEW SESSION IN…" popover is gone), and
+ *   ChatThread hides the composer until a project is picked — the first send
+ *   needs one to create the chat in.
+ * - Everything else (a sent local thread or a pre-existing chat) shows the
+ *   plain ChatThread.
  *
  * The session panel floats over that row in the last two cases; the thread
  * column keeps the full width and its own centred transcript. Its state machine
@@ -32,53 +28,52 @@
  * which shrinks when the surface is split and which the panel measuring its own
  * box would never see.
  */
-import { useEffect, useRef } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useCallback, useRef, useState } from 'react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
+import { ChatZone } from '@/features/chat/zones/ChatZone';
+import { SplitDivider } from '@/features/chat/zones/SplitDivider';
+import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
+import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
+import { useZoneHotkeys } from '@/features/chat/zones/use-zone-hotkeys';
+import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
-import { useNewSessionPickerTarget } from '../sidebar/use-new-session-picker-target';
 import { IDLE_INITIALIZATION, useNewThreadReady } from '../runtime/new-thread-ready-store';
-
-/** How long to wait, once we look like the zero-session boot dead-end, before
- *  forcing the project picker open. Long enough for useSessionListRouter's
- *  boot auto-select to win the race and redirect away when real sessions
- *  exist (mirrors useFirstRunTour's SETTLE_MS). */
-const BOOT_SETTLE_MS = 1500;
-
-/** Zero-session boot fallback (see the file-header note). Cancelable: any
- *  dependency change (e.g. the boot auto-select redirects to a real session,
- *  or the draft resolves a project) clears the pending timer/opens state
- *  before it fires. */
-function useZeroSessionBootPicker(args: { isDeadEnd: boolean }): void {
-  const { isDeadEnd } = args;
-  const autoOpenedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isDeadEnd) {
-      if (autoOpenedRef.current) {
-        autoOpenedRef.current = false;
-        useNewSessionPickerTarget.getState().setOpen(false);
-      }
-      return;
-    }
-    const timer = setTimeout(() => {
-      autoOpenedRef.current = true;
-      useNewSessionPickerTarget.getState().setOpen(true);
-    }, BOOT_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [isDeadEnd]);
-}
 
 export function ChatSurface() {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
   useNewThreadAutoConfig();
+  // Keeps `mainThreadId ∈ zones` while split (and closes the split on a draft).
+  useZonesReconciler();
+  const aui = useAui();
+  useZoneHotkeys(aui);
+  const zones = useZonesStore((s) => s.zones);
+  const closeSplit = useZonesStore((s) => s.closeSplit);
+  const splitFrac = useZonesStore((s) => s.frac);
+
+  // Width gate for the split: below 2×MIN_ZONE_WIDTH each zone would be
+  // unusable, so the pair stays parked behind the single view until the
+  // surface widens again. Measured on the surface root — the panel hook's
+  // hostRef only attaches in single mode, so it cannot feed this decision.
+  const [surfaceWidth, setSurfaceWidth] = useState<number | null>(null);
+  const widthObserverRef = useRef<ResizeObserver | null>(null);
+  const measureSurface = useCallback((el: HTMLDivElement | null) => {
+    widthObserverRef.current?.disconnect();
+    widthObserverRef.current = null;
+    if (el == null) return;
+    const observer = new ResizeObserver(() => setSurfaceWidth(el.clientWidth));
+    observer.observe(el);
+    setSurfaceWidth(el.clientWidth);
+    widthObserverRef.current = observer;
+  }, []);
+  const splitFits = surfaceWidth == null || surfaceWidth >= MIN_ZONE_WIDTH * 2 + 1;
 
   const panelState = useSessionPanelState();
   // `hostRef` is the hook's state-backed callback ref — passed straight through,
@@ -104,10 +99,6 @@ export function ChatSurface() {
 
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
-
-  useZeroSessionBootPicker({
-    isDeadEnd: isNewLocal && !loading && projects.length > 0 && draftCfg == null && filterProjectId == null,
-  });
 
   if (isNewLocal && !loading && projects.length === 0) {
     return (
@@ -145,11 +136,43 @@ export function ChatSurface() {
     );
   }
 
-  const welcome =
-    isNewLocal && draftCfg != null ? <ChatEmptyState variant="welcome" projectId={draftCfg.projectId} /> : undefined;
+  const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
+
+  // Split mode renders only while the focused chat is a MEMBER of the pair
+  // AND both zones clear MIN_ZONE_WIDTH — any other active session, or a
+  // too-narrow surface, parks the split behind the normal single view (the
+  // pair survives; a member tab click / widening brings it back). Focus is a
+  // click (switchToThread), so `mainThreadId` keeps meaning "the focused zone".
+  if (zones != null && mainThreadId != null && zones.includes(mainThreadId) && splitFits) {
+    const closeZone = (closedId: string) => {
+      const other = zones[0] === closedId ? zones[1] : zones[0];
+      closeSplit();
+      if (mainThreadId !== other) aui.threads.switchToThread(other);
+    };
+    return (
+      <div ref={measureSurface} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
+        <ChatZone
+          chatId={zones[0]}
+          grow={splitFrac}
+          focused={mainThreadId === zones[0]}
+          onFocus={() => aui.threads.switchToThread(zones[0])}
+          onClose={() => closeZone(zones[0])}
+        />
+        <SplitDivider />
+        <ChatZone
+          chatId={zones[1]}
+          grow={1 - splitFrac}
+          focused={mainThreadId === zones[1]}
+          onFocus={() => aui.threads.switchToThread(zones[1])}
+          onClose={() => closeZone(zones[1])}
+        />
+        <ZoneDropLayer canSplit />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
       {/* The row the panel floats over — what its ResizeObserver measures, and
           the containing block its absolute root resolves against. */}
@@ -160,6 +183,7 @@ export function ChatSurface() {
           <ChatThread emptyState={welcome} />
         </div>
         <SessionPanel state={panelState} />
+        <ZoneDropLayer canSplit={splitFits} />
       </div>
     </div>
   );

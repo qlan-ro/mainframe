@@ -157,40 +157,44 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  /* Neutral charcoal ladder (2026-08-11): the Figma-app chrome grays — canvas
+     ~#1e1e1e (0.235), panels ~#282828 (0.285), cards ~#2c2c2c (0.30),
+     hover/chips ~#383838 (0.35) — so surfaces separate like an editor's dark
+     UI instead of flattening into one black. */
+  --background: oklch(0.235 0 0);
   --foreground: oklch(0.92 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.3 0 0);
   --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.3 0 0);
   --popover-foreground: oklch(0.92 0 0);
   --primary: oklch(0.624 0.206 255.486);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.274 0 0);
+  --secondary: oklch(0.35 0 0);
   --secondary-foreground: oklch(0.92 0 0);
-  --muted: oklch(0.269 0 0);
+  --muted: oklch(0.35 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --accent: oklch(0.35 0 0);
   --accent-foreground: oklch(0.92 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.75 0.17 150);
   --warning: oklch(0.794 0.127 63.093);
   --bubble-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
   --ring: var(--primary);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.285 0 0);
   --sidebar-foreground: oklch(0.92 0 0);
   --sidebar-primary: oklch(0.624 0.206 255.486);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-selection: color-mix(in oklch, var(--sidebar-primary) 30%, transparent);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.35 0 0);
   --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: var(--sidebar-primary);
 }
 

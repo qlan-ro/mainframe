@@ -13,11 +13,11 @@
  * Testid reference (verified against source):
  *   sidebar-settings           — v2/features/sessions/SessionSidebar.tsx HeaderActions (was
  *                                `sidebar-settings-button`)
- *   sidebar-tasks              — same HeaderActions (dispatches `mf:open-tasks`; was
- *                                `sidebar-tasks-button`)
- *   sidebar-workflows          — same HeaderActions, opens the Automations v2 host via
- *                                `useAutomationsNav().openHost()` (was `sidebar-workflows-button`)
- *   sidebar-workflows-pending  — the pending-interaction dot on that button
+ *   sidebar-action-kanban      — SidebarActions row (dispatches `mf:open-tasks`; was the
+ *                                icon-only `sidebar-tasks`)
+ *   sidebar-action-automations — SidebarActions row, opens the Automations v2 host via
+ *                                `useAutomationsNav().openHost()` (was `sidebar-workflows`)
+ *   sidebar-action-automations-pending  — the pending-interaction dot on that row
  *   settings-dialog / settings-dialog-close — features/settings/SettingsDialog.tsx
  *   tasks-board-modal / tasks-board-close   — features/tasks/TasksBoard.tsx (mounted by TasksModalHost)
  *   automations-host / automations-view / automations-close — features/automations/AutomationsHost.tsx +
@@ -75,7 +75,7 @@ test.describe('§sidebar-chrome', () => {
 
   test('tasks button opens the tasks modal', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-tasks').click();
+    await page.getByTestId('sidebar-action-kanban').click();
     await expect(page.getByTestId('tasks-board-modal')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('tasks-board-close').click();
     await expect(page.getByTestId('tasks-board-modal')).toHaveCount(0, { timeout: 5_000 });
@@ -83,13 +83,13 @@ test.describe('§sidebar-chrome', () => {
 
   test('workflows button opens the automations panel', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-workflows').click();
+    await page.getByTestId('sidebar-action-automations').click();
     await expect(page.getByTestId('automations-host')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('automations-close').click();
     await expect(page.getByTestId('automations-host')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  // TODO(recording): the pending dot (`sidebar-workflows-pending` in SessionSidebar.tsx
+  // TODO(recording): the pending dot (`sidebar-action-automations-pending` in SessionSidebar.tsx
   // HeaderActions, `pending > 0` from
   // selectPendingInteractionCount(useAutomationsStore)) is populated by the automations WS
   // event stream when a run pauses on a needs-you interaction — there's no REST seed for that

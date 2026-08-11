@@ -9,13 +9,11 @@ import {
   retargetUrlTab as retargetUrlTabReducer,
   tabIdsForScope,
   tabIdsInPane,
-  type RunDropEdge,
   type RunState,
   type RunTab,
   type TabMode,
 } from './run-pane';
 import {
-  moveTabToPaneEdge as moveTabToPaneEdgeReducer,
   openFileTab as openFileTabReducer,
   promoteFileTab as promoteFileTabReducer,
   type OpenFileTarget,
@@ -29,7 +27,6 @@ import {
   placeInLayout,
   removeSurface,
   repositionInLayout,
-  type RepositionTarget,
   type SurfaceId,
   type WorkspaceLayout,
 } from './layout-placement';
@@ -44,6 +41,15 @@ export interface SessionWorkspace {
 }
 
 // ── store ─────────────────────────────────────────────────────────────────
+
+/** Injected by features/chat/zones (store/ cannot import features/): true
+ *  while the chat split is on screen. Workspace placement consults it so a
+ *  surface lit mid-split lands in the bottom strip instead of taking half the
+ *  top row and starving the split below its width floor. */
+let chatSplitVisibleProbe: () => boolean = () => false;
+export function registerChatSplitVisibleProbe(probe: () => boolean): void {
+  chatSplitVisibleProbe = probe;
+}
 
 const INITIAL_LAYOUT: WorkspaceLayout = {
   top: ['chat'],
@@ -70,10 +76,16 @@ export interface LayoutStore {
   /** Place the workspace surface side-by-side ('v') or in the bottom strip ('h'). */
   splitSurface: (orientation: 'v' | 'h') => void;
 
-  /** Drag-reposition a whole surface within the layout. */
-  repositionSurface: (surface: SurfaceId, target: RepositionTarget) => void;
-  /** Drag an open workspace tab to a pane edge (center = join pane 1, edge = split). */
-  moveTabToPaneEdge: (tabId: string, edge: RunDropEdge) => void;
+  /** Set while the chat split parked the workspace in the strip — holds the
+   *  top-row side it came from so the restore returns it there. Transient by
+   *  design: after a reload the restore simply doesn't fire, which errs toward
+   *  never overriding an arrangement. */
+  workspaceSystemMoved: 'top-left' | 'top-right' | null;
+  /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
+   *  the bottom strip when the chat splits… */
+  moveWorkspaceForChatSplit: () => void;
+  /** …and returns beside the chat on unsplit. */
+  restoreWorkspaceAfterChatSplit: () => void;
   /**
    * Open (or focus) a file-backed tab in the workspace and light the surface.
    * Returns the id of the tab now focused.
@@ -112,6 +124,17 @@ export const useLayoutStore = create<LayoutStore>()(
       set({ layout: next.layout, run: next.run, sessions: nextSessions });
     }
 
+    /** placeInLayout for the workspace, but split-aware: while the chat split
+     *  is visible a newly lit workspace goes UNDER it (bottom strip), claimed
+     *  as system-moved so unsplitting brings it up beside the chat. */
+    function placeWorkspace(layout: WorkspaceLayout): WorkspaceLayout {
+      if (chatSplitVisibleProbe() && layout.bottom == null && !layout.top.includes('workspace')) {
+        set({ workspaceSystemMoved: 'top-right' });
+        return { ...layout, bottom: 'workspace' };
+      }
+      return placeInLayout(layout, 'workspace');
+    }
+
     return {
       layout: INITIAL_LAYOUT,
       run: null,
@@ -136,7 +159,14 @@ export const useLayoutStore = create<LayoutStore>()(
         // Dynamic floor: the last lit surface (chat or workspace) can't be hidden.
         if (isSurfaceFloor(layout, surface)) return;
         const isActive = layout.top.includes(surface) || layout.bottom === surface;
-        writeWorkspace({ layout: isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface), run });
+        writeWorkspace({
+          layout: isActive
+            ? removeSurface(layout, surface)
+            : surface === 'workspace'
+              ? placeWorkspace(layout)
+              : placeInLayout(layout, surface),
+          run,
+        });
       },
 
       setTopFrac(frac) {
@@ -157,29 +187,33 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         if (!layoutCanSplit(layout)) return;
         if (orientation === 'v') {
-          writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run });
+          writeWorkspace({ layout: placeWorkspace(layout), run });
         } else {
           if (layout.bottom) return;
           writeWorkspace({ layout: { ...layout, bottom: 'workspace' }, run });
         }
       },
 
-      repositionSurface(surface, target) {
+      workspaceSystemMoved: null,
+
+      moveWorkspaceForChatSplit() {
         const { layout, run } = get();
-        writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
+        if (!layout.top.includes('workspace')) return;
+        set({ workspaceSystemMoved: layout.top[0] === 'workspace' ? 'top-left' : 'top-right' });
+        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'bottom'), run });
       },
 
-      moveTabToPaneEdge(tabId, edge) {
-        const { layout, run } = get();
-        if (!run) return;
-        const nextRun = moveTabToPaneEdgeReducer(run, tabId, edge);
-        if (nextRun !== run) writeWorkspace({ layout, run: nextRun });
+      restoreWorkspaceAfterChatSplit() {
+        const { layout, run, workspaceSystemMoved } = get();
+        set({ workspaceSystemMoved: null });
+        if (workspaceSystemMoved == null || layout.bottom !== 'workspace') return;
+        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', workspaceSystemMoved), run });
       },
 
       openFileTab(target, mode, paneId) {
         const { layout, run } = get();
         const next = openFileTabReducer(run, target, mode, paneId);
-        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: next.run });
+        writeWorkspace({ layout: placeWorkspace(layout), run: next.run });
         return next.tabId;
       },
 
@@ -197,7 +231,7 @@ export const useLayoutStore = create<LayoutStore>()(
         // false so the subscriber disposes the orphaned terminal (Task 10). On
         // success it returns a real RunState; commit it and light the workspace.
         if (nextRun === null) return false;
-        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: nextRun });
+        writeWorkspace({ layout: placeWorkspace(layout), run: nextRun });
         return true;
       },
 

@@ -62,7 +62,7 @@ export function RailIconButton({ testId, label, icon: Icon, pressed, dot, classN
   );
 }
 
-interface RailMeterButtonProps extends Omit<ButtonProps, 'children' | 'size' | 'variant'> {
+interface RailMeterProps extends ComponentProps<'div'> {
   testId: string;
   label: string;
   percent: number;
@@ -74,20 +74,22 @@ interface RailMeterButtonProps extends Omit<ButtonProps, 'children' | 'size' | '
  * rather than redrawn, since the quota footer already answers "how full is it?"
  * with this donut and a rail is too narrow for a horizontal meter. The number
  * rides below because `QuotaRing` masks its own children away.
+ *
+ * An INDICATOR, not a control: plain chrome, no hover, no click. The rest
+ * props/ref still spread so `Hint`'s tooltip trigger reaches the DOM node.
  */
-export function RailMeterButton({ testId, label, percent, severity, className, ...props }: RailMeterButtonProps) {
+export function RailMeter({ testId, label, percent, severity, className, ...props }: RailMeterProps) {
   return (
-    <Button
+    <div
       data-testid={testId}
       aria-label={label}
-      variant="ghost"
-      size="icon-sm"
-      className={cn('h-auto w-8 flex-col gap-1 rounded-2xl py-1.5', RAIL_INK, className)}
+      className={cn('flex w-8 flex-col items-center gap-1 py-1.5 select-none', RAIL_INK, className)}
       {...props}
     >
-      <QuotaRing usedPercent={percent} severity={severity} />
+      {/* Muted: the rail is quiet chrome — only the red band may shout. */}
+      <QuotaRing usedPercent={percent} severity={severity} muted />
       {/* Mono: a numeric count is one of the reserved mono cases. */}
       <span className="font-mono text-xs tabular-nums">{percent}%</span>
-    </Button>
+    </div>
   );
 }

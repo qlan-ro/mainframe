@@ -7,13 +7,15 @@
  * rebuild, so every non-visual module is imported from `@/features/sessions`.
  */
 import { useMemo } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { ListTodoIcon, SettingsIcon, ZapIcon } from 'lucide-react';
+import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { pickProjectSession } from '@/features/sessions/view-model/initial-session';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { attentionCount } from '@/features/sessions/view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
@@ -21,12 +23,9 @@ import { applySessionFilters } from '@/features/sessions/filter/apply-session-fi
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useAddProject } from '@/features/sessions/use-add-project';
-import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
-import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
 import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
-import { useSessionCounts } from '@/features/sessions/sidebar/use-session-counts';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
@@ -35,9 +34,9 @@ import { UpdatePill } from '@/layout/UpdatePill';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
 import { QuotaFooter } from '../quota/QuotaFooter';
-import { TasksSidebarSection } from '../tasks/sidebar/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
+import { SidebarActions } from './SidebarActions';
 import { TagFilterBar } from './TagFilterBar';
 import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
@@ -45,39 +44,10 @@ import { useRemoveProject } from '@/features/sessions/use-remove-project';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
-  const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
-  const openAutomations = useAutomationsNav((s) => s.openHost);
   const openSettings = useSettingsStore((s) => s.open);
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="relative"
-        data-testid="sidebar-workflows"
-        title="Workflows"
-        onClick={openAutomations}
-      >
-        <ZapIcon />
-        {pendingAutomations > 0 && (
-          <span
-            data-testid="sidebar-workflows-pending"
-            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
-          />
-        )}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-testid="sidebar-tasks"
-        title="Tasks"
-        // The todos board host (TasksModalHost, mounted at the app root)
-        // listens for this window event; there is no store seam to call.
-        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
-      >
-        <ListTodoIcon />
-      </Button>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -93,12 +63,26 @@ function HeaderActions() {
 }
 
 export function SessionSidebar({ className }: { className?: string }) {
+  const aui = useAui();
   const threadItems = useAuiState((s) => s.threads.threadItems);
+  const { projectId: activeProjectId } = useActiveIdentity();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
+
+  // Selecting a project the active session does not belong to also activates
+  // that project's most recent session, so dependent context (todos scope,
+  // session panel) follows the selection. The filter is set FIRST: the
+  // cross-project-activate reconciliation clears the filter only when the
+  // activated chat's project differs from it, and here they match.
+  const handleSelectProject = (id: string | null) => {
+    setFilterProjectId(id);
+    if (id === null || id === activeProjectId) return;
+    const target = pickProjectSession(allItems, id);
+    if (target !== null) aui.threads.switchToThread(target);
+  };
   const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
   const registry = useTagRegistry(useDaemonPort());
@@ -130,7 +114,6 @@ export function SessionSidebar({ className }: { className?: string }) {
     return map;
   }, [sortedProjects]);
 
-  const sessionCounts = useSessionCounts(allItems);
   const draft = useDraftRow(allItems, filterProjectId);
 
   const tagNames = useMemo(() => tagsInUse(allItems, filterProjectId), [allItems, filterProjectId]);
@@ -143,16 +126,20 @@ export function SessionSidebar({ className }: { className?: string }) {
           documents the header as the home for a workspace switcher, and it is
           the one thing a long session list must not scroll away. */}
       <SidebarHeader>
-        <div className="flex items-center justify-between">
+        {/* data-drag-region: the traffic-light strip is title-bar chrome — its
+            empty run drags the window (buttons are auto-excluded by the host
+            handler, so Settings/collapse still click). */}
+        <div data-drag-region className="flex items-center justify-between">
           <div aria-hidden style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
           <UpdatePill />
           <HeaderActions />
         </div>
+        <SidebarActions filterProjectId={filterProjectId} />
         <ProjectSection
           projects={sortedProjects}
           attention={attention}
           activeId={filterProjectId}
-          onSelect={setFilterProjectId}
+          onSelect={handleSelectProject}
           onRemoveProject={onRemoveProject}
           onAddProject={() => void onAddProject()}
         />
@@ -163,12 +150,9 @@ export function SessionSidebar({ className }: { className?: string }) {
           groups={groups}
           projectNames={projectNames}
           colorOf={registry.colorOf}
-          projects={sortedProjects}
-          sessionCounts={sessionCounts}
           draft={draft}
           hasFilters={hasFilters}
         />
-        <TasksSidebarSection />
       </SidebarScrollRegion>
 
       {/* The rule is load-bearing, not decoration: the footer butts straight up

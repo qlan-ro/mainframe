@@ -19,13 +19,24 @@ const SEVERITY_FILL: Record<QuotaSeverity, string> = {
 // not a colour.
 const DONUT_MASK = 'radial-gradient(circle, transparent 54%, black 55%)';
 
-export function QuotaRing({ usedPercent, severity }: { usedPercent: number; severity: QuotaSeverity }) {
+export function QuotaRing({
+  usedPercent,
+  severity,
+  muted = false,
+}: {
+  usedPercent: number;
+  severity: QuotaSeverity;
+  /** Quiet placement (the session rail): normal/amber fill drops to the muted
+   *  ink; red still alarms — danger never goes quiet. */
+  muted?: boolean;
+}) {
+  const fill = muted && severity !== 'red' ? 'var(--muted-foreground)' : SEVERITY_FILL[severity];
   return (
     <span
       aria-hidden
       className="size-4 shrink-0 rounded-full"
       style={{
-        background: `conic-gradient(${SEVERITY_FILL[severity]} ${usedPercent}%, var(--muted) 0)`,
+        background: `conic-gradient(${fill} ${usedPercent}%, var(--muted) 0)`,
         WebkitMask: DONUT_MASK,
         mask: DONUT_MASK,
       }}

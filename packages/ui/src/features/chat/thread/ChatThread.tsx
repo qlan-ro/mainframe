@@ -24,7 +24,9 @@ import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { formatElapsedSeconds } from '../format-duration';
 import { useRunElapsed } from './use-run-elapsed';
+import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
+import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { FindBar } from '../find/FindBar';
 import { useFindHotkey } from '../find/use-find-hotkey';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
@@ -118,16 +120,25 @@ function CompactingIndicator() {
 
 function ThreadFooterInput() {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
+  // A projectless draft has nowhere to create the chat: the welcome screen's
+  // picker resolves the project first, and the composer appears with it.
+  // Read the ITEM id, not mainThreadId — under a split zone this thread is not
+  // the main one, and the rebound threadListItem is the identity that matches.
+  const itemId = useAuiState((s) => s.threadListItem?.id ?? null);
+  const itemStatus = useAuiState((s) => s.threadListItem?.status);
+  const hasDraftCfg = useDraftConfigStore((s) => (itemId ? s.drafts.has(itemId) : false));
+  const projectlessDraft = itemId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
   return (
     <>
       <DegradedChatCard />
-      {!directoryMissing && <Composer />}
+      {!directoryMissing && !projectlessDraft && <Composer />}
     </>
   );
 }
 
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
+  const { viewportRef, contentRef } = useThreadBottomPin();
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   return (
     <ComposerEditProvider>
@@ -141,11 +152,15 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
           (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
           <ThreadPrimitive.Viewport
+            ref={viewportRef}
             data-testid="chat-thread-viewport"
             data-mf-chat-thread
             className="relative flex flex-1 flex-col overflow-y-auto"
           >
-            <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
+            {/* Width cap: 48rem, minus the rail block (58px) MIRRORED on both
+                sides — in a narrow zone the transcript clears the floating
+                rail instead of running under it, with a symmetric left inset. */}
+            <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
               <LoadErrorBanner />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
@@ -172,7 +187,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </Button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-3xl px-5 pb-4">
+              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-[min(48rem,100%-116px)] px-5 pb-4">
                 <WorktreeSwitchBanner />
                 <ThreadFooterInput />
               </div>

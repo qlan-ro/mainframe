@@ -50,7 +50,10 @@ function MarkerContent({ className, ...props }: React.ComponentProps<'span'>) {
     <span
       data-slot="marker-content"
       className={cn(
-        'min-w-0 wrap-break-word group-data-[variant=separator]/marker:flex-none group-data-[variant=separator]/marker:text-center *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground',
+        // flex-initial, NOT flex-none, in separator mode: a long one-paragraph
+        // marker (hook feedback) must shrink and wrap inside the column —
+        // flex-none sized it at max-content and ran it under the side panel.
+        'min-w-0 wrap-break-word group-data-[variant=separator]/marker:flex-initial group-data-[variant=separator]/marker:text-center *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground',
         className,
       )}
       {...props}

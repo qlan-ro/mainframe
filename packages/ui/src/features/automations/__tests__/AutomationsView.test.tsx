@@ -1,7 +1,12 @@
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AutomationsView } from '../AutomationsView';
+
+// The library row's project annotation fetches through the daemon port — inert here.
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+}));
 
 // The header's Hint needs the v2 TooltipProvider; the app mounts one at the
 // root (via SidebarProvider), so the test supplies its own.

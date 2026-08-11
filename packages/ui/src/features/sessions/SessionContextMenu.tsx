@@ -5,7 +5,7 @@
  * including the parts the hover actions overlay.
  */
 import type { ReactNode } from 'react';
-import { ArchiveIcon, CopyIcon, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
+import { ArchiveIcon, Columns2, CopyIcon, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -21,6 +21,7 @@ interface SessionContextMenuProps {
   onRename: () => void;
   onTags: () => void;
   onArchive: () => void;
+  onOpenInSplit: () => void;
   claudeSessionId?: string;
   children: ReactNode;
 }
@@ -32,6 +33,7 @@ export function SessionContextMenu({
   onRename,
   onTags,
   onArchive,
+  onOpenInSplit,
   claudeSessionId,
   children,
 }: SessionContextMenuProps) {
@@ -54,6 +56,10 @@ export function SessionContextMenu({
         <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
           <TagIcon />
           Tags
+        </ContextMenuItem>
+        <ContextMenuItem data-testid="sessions-ctx-open-split" onSelect={onOpenInSplit}>
+          <Columns2 />
+          Open in Split
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive}>

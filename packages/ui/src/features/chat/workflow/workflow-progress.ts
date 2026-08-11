@@ -15,7 +15,7 @@ export interface WorkflowLaunch {
   error?: string;
 }
 
-export type OutcomeTone = 'green' | 'amber' | 'red' | 'hollow';
+export type OutcomeTone = 'green' | 'amber' | 'red' | 'hollow' | 'accent';
 
 export interface OutcomeDot {
   tone: OutcomeTone;
@@ -129,7 +129,8 @@ function countAgents(agents: readonly ClaudeWorkflowAgent[]): AgentCounts {
 export function outcomeDot(run: ClaudeWorkflowRun, _now: number): OutcomeDot {
   switch (run.status) {
     case 'running':
-      return { tone: 'amber', pulse: true };
+      // The app's working hue — amber would collide with "completed, with failures".
+      return { tone: 'accent', pulse: true };
     case 'failed':
       return { tone: 'red', pulse: false };
     case 'completed':

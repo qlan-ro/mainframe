@@ -1,6 +1,5 @@
 import { useAuiState } from '@assistant-ui/react';
-import { EyeOff, GripHorizontal, LayoutPanelLeft, LayoutPanelTop, MessageSquare } from 'lucide-react';
-import { emitSurfaceIntent } from '@/store/surface-intents';
+import { EyeOff, LayoutPanelLeft, LayoutPanelTop, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
@@ -12,44 +11,22 @@ import { ChatModelChip } from './ChatModelChip';
 /**
  * The chat surface's header row. Same height, border and gutters as the
  * workspace strip (`WorkspaceStripChrome.STRIP_ROW`) — one surface header
- * treatment, not two — but its own file: the workspace's leading grip begins a
- * surface DRAG, while `data-drag-region` here hands the row to the OS as a
- * window drag region, so nothing is shared but the vocabulary.
+ * treatment, not two. `data-drag-region` hands the row to the OS as a window
+ * drag region. (The old reposition grip is gone: chat only ever sits in the
+ * top row, and with the split + the split-aware workspace placement there was
+ * nothing left for dragging the chat surface to do.)
  */
 const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] pr-1.5 pl-2';
 
 /**
- * The chat surface's reposition grip. Emits an intent rather than reaching into
- * `layout/` (features never import it); SurfaceHost forwards it to the drag
- * store. `data-no-drag` keeps the host's window-drag handler off the gesture —
- * the row is a window drag region and the grip is not a <button>.
- */
-function ChatSurfaceGrip() {
-  return (
-    <span
-      data-testid="chat-header-grip"
-      data-no-drag
-      className="shrink-0 cursor-grab"
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        emitSurfaceIntent({ type: 'begin-surface-drag', surface: 'chat', clientX: e.clientX, clientY: e.clientY });
-      }}
-    >
-      <GripHorizontal size={13} className="text-muted-foreground" />
-    </span>
-  );
-}
-
-/**
- * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): grip,
- * chat icon, a fixed "New Session" title, and the draft's project chip. No
- * model chip / PR pills — that state doesn't exist
- * until the chat is created on first send.
+ * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): chat
+ * icon, a fixed "New Session" title, and the draft's project chip. No model
+ * chip / PR pills — that state doesn't exist until the chat is created on
+ * first send.
  */
 function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | null; projectName: string | null }) {
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <ChatSurfaceGrip />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">New Session</span>
       {projectId != null && projectName != null && (
@@ -60,23 +37,57 @@ function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | n
   );
 }
 
+/** Zone-mode controls: the split pair renders one header PER zone, and the
+ *  zone's close ✕ replaces the whole-surface split/hide cluster. */
+export interface ZoneHeaderControls {
+  chatId: string;
+  onClose: () => void;
+}
+
 /**
  * The chat zone's surface header (the `SurfaceTabStrip` equivalent for chat):
- * drag-to-reposition grip, chat icon, session title and the split controls.
- * Detected-PR links live in the session panel's Summary (the header pills were
- * retired with the session-tabs rework); Review moved to the session panel. No
- * traffic-light inset — the shell `MainToolbar` above owns the collapsed clearance.
+ * chat icon, session title and the split controls. Detected-PR links live in
+ * the session panel's Summary (the header pills were retired with the
+ * session-tabs rework); Review moved to the session panel. No traffic-light
+ * inset — the shell `MainToolbar` above owns the collapsed clearance.
+ *
+ * In zone mode (`zone` set) the row belongs to ONE zone of the split: the
+ * whole-surface controls (split, hide) drop and the zone close ✕ takes their
+ * place; title/model resolve per zone through the rebound providers.
  */
-function ChatCardHeaderReal() {
+function ChatCardHeaderReal({ zone }: { zone?: ZoneHeaderControls }) {
   const title = useAuiState((s) => s.threadListItem?.title) ?? 'Untitled';
   const splitAvailable = useLayoutStore((s) => layoutCanSplit(s.layout));
   const splitSurface = useLayoutStore((s) => s.splitSurface);
   const chatIsFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'chat'));
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
 
+  if (zone != null) {
+    return (
+      <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
+        <MessageSquare size={13} className="shrink-0 text-primary" />
+        <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
+        <ChatModelChip />
+        <span className="flex-1" />
+        <Hint label="Close zone">
+          <Button
+            data-testid={`chat-zone-close-${zone.chatId}`}
+            variant="ghost"
+            size="icon-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              zone.onClose();
+            }}
+          >
+            <X className="text-muted-foreground" />
+          </Button>
+        </Hint>
+      </div>
+    );
+  }
+
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
-      <ChatSurfaceGrip />
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatModelChip />
@@ -130,18 +141,18 @@ function ChatCardHeaderReal() {
  * cleanly mounts/unmounts each side rather than conditionally skipping hooks
  * within a single component instance.
  */
-export function ChatCardHeader() {
+export function ChatCardHeader({ zone }: { zone?: ZoneHeaderControls } = {}) {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const isDraft = localId != null && localId.startsWith('__LOCALID_') && itemStatus === 'new';
   const draftCfg = useDraftConfigStore((s) => (localId ? s.drafts.get(localId) : undefined));
   const { projects } = useProjects();
 
-  if (isDraft) {
+  if (isDraft && zone == null) {
     const projectId = draftCfg?.projectId ?? null;
     const projectName = projectId != null ? (projects.find((p) => p.id === projectId)?.name ?? projectId) : null;
     return <ChatCardHeaderDraft projectId={projectId} projectName={projectName} />;
   }
 
-  return <ChatCardHeaderReal />;
+  return <ChatCardHeaderReal zone={zone} />;
 }

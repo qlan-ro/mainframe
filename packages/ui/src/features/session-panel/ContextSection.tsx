@@ -49,10 +49,9 @@ interface ContextSectionProps {
   port: number;
   open: boolean;
   onToggle: () => void;
-  sectionRef?: (el: HTMLElement | null) => void;
 }
 
-export function ContextSection({ port, open, onToggle, sectionRef }: ContextSectionProps) {
+export function ContextSection({ port, open, onToggle }: ContextSectionProps) {
   const { context, chatId } = useSessionContext();
   const openSheet = useSetupAdvisor((s) => s.openSheet);
 
@@ -70,7 +69,6 @@ export function ContextSection({ port, open, onToggle, sectionRef }: ContextSect
       count={count > 0 ? count : undefined}
       open={open}
       onToggle={onToggle}
-      sectionRef={sectionRef}
     >
       {memoryFiles.length > 0 && (
         <PanelSubGroup label="Context" count={memoryFiles.length}>

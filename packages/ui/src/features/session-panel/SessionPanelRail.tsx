@@ -1,47 +1,47 @@
 /**
- * SessionPanelRail — the floating pill at the chat surface's right edge, shown
- * whenever the panel's card is not. Top-down: open the panel · Background
- * Activity · context usage · the launch quick action.
+ * SessionPanelRail — the floating pill at the chat surface's right edge, the
+ * switchboard for the stacked panels. Top-down: Session · context usage ·
+ * Activity · Launch · Tasks.
  *
- * Every button routes through `selectSection`, which expands its target and
- * brings the card back — inline when the gutter beside the transcript holds it,
- * floating over the thread when it doesn't — so a collapsed section is revealed
- * by the same click that scrolls to it. A button reads engaged only while the
- * panel IT floated is showing; a click that restored the card inline leaves the
- * rail gone, with nothing to press.
+ * Every button TOGGLES its panel — open panels stack beside the transcript, or
+ * float over it when the gutter is short. The launch button's old one-click
+ * run/stop moved into the Launch panel's rows; the rail glyph keeps the run
+ * state (dot when something is live) so the signal survives the move.
  *
- * The launch button is a quick action, not a menu: one click runs or stops the
- * config `deriveLaunchRunControl` targets. Config *selection* lives in the
- * panel's Launch section, and a right-click opens it — the same gesture the
- * other rail icons use, so rail-only mode keeps a route to the list.
+ * Vertically centred (`self-center`), not top-anchored: the top-right corner
+ * belongs to the find-in-chat band, which the rail used to sit on top of.
  */
-import { useCallback, useMemo } from 'react';
-import { Activity, Info, Play, Square } from 'lucide-react';
+import { useMemo } from 'react';
+import { Info, ListTodo, Logs, Play } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
-import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { severityOf } from '@/features/quota/quota-format';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRunControl } from '@/features/run/derive-launch-control';
-import type { SessionPanelSectionId } from '@/store/ui-prefs';
 import { runningCount, runningLabel } from './activity-view';
 import { useContextPercent } from './use-context-percent';
-import { RailIconButton, RailMeterButton } from './SessionRailButton';
+import { RailIconButton, RailMeter } from './SessionRailButton';
 import type { SessionPanelState } from './use-session-panel-state';
 
 const RAIL_CHROME =
-  'pointer-events-auto mt-2 mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-start rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
+  // mr-3, not mr-2: the transcript's auto-hide scrollbar draws at the host's
+  // right edge, and the extra 4px keeps the pill clean off it.
+  'pointer-events-auto mr-3 ml-1 flex shrink-0 flex-col items-center gap-1 self-center rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
+
+/** The launch glyph keeps the toolbar quick-action's filled green arrow. */
+function LaunchGlyph({ className }: { className?: string }) {
+  return <Play className={cn(className, 'text-success')} fill="currentColor" aria-hidden />;
+}
 
 interface SessionPanelRailProps {
   state: SessionPanelState;
   port: number;
-  /** Lets the panel hand focus back to the button that opened an overlay. */
-  registerButton?: (id: SessionPanelSectionId, el: HTMLButtonElement | null) => void;
 }
 
-export function SessionPanelRail({ state, port, registerButton }: SessionPanelRailProps) {
-  const { mode, focusRequest, selectSection } = state;
+export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
+  const { isPanelVisible, togglePanel } = state;
   const { projectId, chatId } = useActiveIdentity();
   const extras = useChatExtras();
   const percent = useContextPercent();
@@ -49,87 +49,66 @@ export function SessionPanelRail({ state, port, registerButton }: SessionPanelRa
   const backgroundTasks = extras?.state.backgroundTasks;
   const running = useMemo(() => runningCount(Object.values(backgroundTasks ?? {})), [backgroundTasks]);
 
-  const { configs, scopeStatuses, selectedConfigName, handleLaunch, handleStop } = useLaunchActions(
-    port,
-    projectId,
-    chatId,
-  );
+  const { configs, scopeStatuses, selectedConfigName } = useLaunchActions(port, projectId, chatId);
   const control = deriveLaunchRunControl(configs, scopeStatuses, selectedConfigName);
   const live = control.mode === 'running';
-  const target = control.target;
-  // chatId is mandatory: the daemon derives the effective worktree path from it,
-  // so a start/stop issued without one acts on the wrong tree.
-  const canLaunch = target != null && chatId != null;
 
-  const onLaunchClick = useCallback(() => {
-    if (!target || chatId == null) return;
-    if (live) handleStop(target);
-    else handleLaunch(target);
-  }, [target, chatId, live, handleLaunch, handleStop]);
-
-  const onLaunchContextMenu = useCallback(
-    (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-      selectSection('launch');
-    },
-    [selectSection],
-  );
-
-  const isTargeting = (id: SessionPanelSectionId) => mode === 'overlay' && focusRequest?.id === id;
-  const register = (id: SessionPanelSectionId) => (el: HTMLButtonElement | null) => registerButton?.(id, el);
-
-  const activityLabel = running > 0 ? runningLabel(running) : 'Background Activity';
-  const launchLabel = !canLaunch ? 'No launch configs' : live ? `Stop ${control.label}` : `Start ${control.label}`;
+  const activityLabel = running > 0 ? runningLabel(running) : 'Activity';
 
   return (
     <div data-testid="session-panel-rail" className={RAIL_CHROME}>
-      <Hint label="Session panel" side="left">
+      <Hint label="Session" side="left">
         <RailIconButton
-          ref={register('summary')}
           testId="session-panel-rail-open"
-          label="Session panel"
+          label="Session"
           icon={Info}
-          pressed={isTargeting('summary')}
-          onClick={() => selectSection('summary')}
-        />
-      </Hint>
-
-      <Hint label={activityLabel} side="left">
-        <RailIconButton
-          ref={register('activity')}
-          testId="session-panel-rail-activity"
-          label={activityLabel}
-          icon={Activity}
-          pressed={isTargeting('activity')}
-          dot={running > 0}
-          onClick={() => selectSection('activity')}
+          pressed={isPanelVisible('session')}
+          onClick={() => togglePanel('session')}
         />
       </Hint>
 
       {percent != null && (
         <Hint label={`Context: ${percent}% used`} side="left">
-          <RailMeterButton
+          {/* An indicator, not a control — the Context details live in the
+              Session card, one click up on the i. */}
+          <RailMeter
             testId="session-panel-rail-context"
             label={`Context: ${percent}% used`}
             percent={percent}
             severity={severityOf(percent)}
-            onClick={() => selectSection('summary')}
           />
         </Hint>
       )}
 
-      <Separator className="my-0.5 w-4" />
-
-      {/* The glyph carries run-vs-stop by shape; the rail's ink stays uniform. */}
-      <Hint label={launchLabel} side="left">
+      <Hint label={activityLabel} side="left">
         <RailIconButton
-          ref={register('launch')}
+          testId="session-panel-rail-activity"
+          label={activityLabel}
+          icon={Logs}
+          pressed={isPanelVisible('activity')}
+          dot={running > 0}
+          onClick={() => togglePanel('activity')}
+        />
+      </Hint>
+
+      <Hint label={live ? `Launch — ${control.label} running` : 'Launch'} side="left">
+        <RailIconButton
           testId="session-panel-rail-launch"
-          label={launchLabel}
-          icon={live ? Square : Play}
-          disabled={!canLaunch}
-          onClick={onLaunchClick}
-          onContextMenu={onLaunchContextMenu}
+          label="Launch"
+          icon={LaunchGlyph}
+          pressed={isPanelVisible('launch')}
+          dot={live}
+          onClick={() => togglePanel('launch')}
+        />
+      </Hint>
+
+      <Hint label="Tasks" side="left">
+        <RailIconButton
+          testId="session-panel-rail-tasks"
+          label="Tasks"
+          icon={ListTodo}
+          pressed={isPanelVisible('tasks')}
+          onClick={() => togglePanel('tasks')}
         />
       </Hint>
     </div>

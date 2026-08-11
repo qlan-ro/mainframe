@@ -24,6 +24,7 @@ const DOT_FILL: Record<string, string> = {
   amber: 'bg-warning',
   red: 'bg-destructive',
   hollow: 'border border-muted-foreground',
+  accent: 'bg-primary',
 };
 
 function LauncherDot({ tone, pulse }: OutcomeDot) {

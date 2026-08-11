@@ -4,8 +4,7 @@
  * the collapse trigger, with the chevron on the trailing edge.
  *
  * Open-state is a prop, not local state: `store/ui-prefs.ts` owns it so an
- * expansion survives a remount and a session switch. `sectionRef` is the panel
- * state machine's scroll-to registration — a rail click scrolls to this element.
+ * expansion survives a remount and a session switch.
  */
 import type { ComponentType, ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
@@ -27,27 +26,13 @@ interface PanelSectionProps {
   count?: number;
   open: boolean;
   onToggle: () => void;
-  sectionRef?: (el: HTMLElement | null) => void;
   children: ReactNode;
 }
 
-export function PanelSection({
-  id,
-  label,
-  icon: Icon,
-  count,
-  open,
-  onToggle,
-  sectionRef,
-  children,
-}: PanelSectionProps) {
+export function PanelSection({ id, label, icon: Icon, count, open, onToggle, children }: PanelSectionProps) {
   return (
     <Collapsible open={open} onOpenChange={onToggle} asChild>
-      <section
-        ref={sectionRef}
-        data-testid={`session-panel-section-${id}`}
-        className="shrink-0 border-b border-border last:border-b-0"
-      >
+      <section data-testid={`session-panel-section-${id}`} className="shrink-0 border-b border-border last:border-b-0">
         <CollapsibleTrigger asChild>
           <button
             type="button"

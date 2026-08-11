@@ -12,21 +12,21 @@
  * them. A row that has nothing to say is not emitted; when nothing is emitted at
  * all the section says so rather than rendering an empty card.
  */
+import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { Gauge, GitBranch, GitCompare, GitPullRequest, PanelRightClose } from 'lucide-react';
+import { Gauge, GitBranch, GitCompare, GitPullRequest } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { BranchPopover } from '@/features/git/BranchPopover';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
 import { useHost } from '@/lib/host';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { SECTION_HEAD } from './PanelSection';
 import { deriveSummaryRows, type SummaryRow } from './summary-view';
 import { useContextPercent } from './use-context-percent';
 
@@ -75,15 +75,67 @@ function RowTrailing({ row }: { row: SummaryRow }) {
   return <span className={ROW_TRAILING}>{row.value}</span>;
 }
 
-function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () => void }) {
+function RowBody({ row }: { row: SummaryRow }) {
   const Icon = ROW_ICON[row.kind];
-  const body = (
+  return (
     <>
       <Icon className={cn('size-3.5 shrink-0', row.kind === 'pr' ? 'text-success' : 'text-muted-foreground')} />
       <span className={ROW_LABEL}>{rowText(row)}</span>
       <RowTrailing row={row} />
     </>
   );
+}
+
+/**
+ * The branch row IS the branch manager now (the titlebar chip is gone): it
+ * opens the full BranchPopover. Static for a worktree draft — branch actions
+ * without a chatId would mutate the ROOT repo while the row advertises
+ * worktree isolation — and for a session with no project.
+ */
+function BranchRowView({
+  row,
+  port,
+  projectId,
+  chatId,
+  disabled,
+  onBranchChanged,
+}: {
+  row: SummaryRow;
+  port: number;
+  projectId?: string;
+  chatId?: string;
+  disabled: boolean;
+  onBranchChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (disabled || projectId == null) return <SummaryRowView row={row} />;
+
+  return (
+    <BranchPopover
+      port={port}
+      projectId={projectId}
+      chatId={chatId}
+      open={open}
+      onOpenChange={setOpen}
+      onBranchChanged={onBranchChanged}
+      triggerLabel="Manage branch"
+    >
+      {/* No onClick of its own: DropdownMenuTrigger toggles on pointerdown,
+          and a second toggle here closes the menu on release. */}
+      <button
+        type="button"
+        data-testid={rowTestId(row)}
+        className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
+      >
+        <RowBody row={row} />
+      </button>
+    </BranchPopover>
+  );
+}
+
+function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () => void }) {
+  const body = <RowBody row={row} />;
 
   return (
     <Hint label={row.tooltip}>
@@ -105,17 +157,12 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
   );
 }
 
-interface SummarySectionProps {
-  port: number;
-  sectionRef?: (el: HTMLElement | null) => void;
-  /** Omitted where collapsing makes no sense — the floating card dismisses itself. */
-  onCollapse?: () => void;
-}
-
-export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionProps) {
+export function SummarySection({ port }: { port: number }) {
   const host = useHost();
   const { projectId, chatId, branchName, isWorktree } = useActiveIdentity();
-  const { branch } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
+  // `refetch` is the popover-write path: a BranchPopover write broadcasts no
+  // `chat.updated`, so nothing else invalidates the displayed branch.
+  const { branch, isDraftWorktree, refetch } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
   const percent = useContextPercent();
   const usage = useChatExtras()?.state.contextUsage;
   const prs = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems))?.detectedPrs ?? [];
@@ -130,47 +177,41 @@ export function SummarySection({ port, sectionRef, onCollapse }: SummarySectionP
     changes: projectId && !changes.loading && !changes.error ? toChangesSummary(changes) : null,
   });
 
+  // No section heading of its own: the card header ("Session") names it, so
+  // the rows start immediately.
   return (
-    <section ref={sectionRef} data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
-      <div className={SECTION_HEAD}>
-        <span className="min-w-0 truncate text-sm font-medium">Summary</span>
-        {onCollapse && (
-          <>
-            <span className="flex-1" />
-            <Hint label="Collapse panel">
-              <Button
-                data-testid="session-panel-collapse"
-                aria-label="Collapse panel"
-                variant="ghost"
-                size="icon-xs"
-                onClick={onCollapse}
-                className="text-muted-foreground"
-              >
-                <PanelRightClose className="size-3.5" />
-              </Button>
-            </Hint>
-          </>
-        )}
-      </div>
-      <div className="flex flex-col gap-0.5 pb-2">
+    <section data-testid="session-panel-section-summary" className="shrink-0 border-b border-border">
+      <div className="flex flex-col gap-0.5 py-2">
         {rows.length === 0 ? (
           <div data-testid="session-panel-summary-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
             No session details yet
           </div>
         ) : (
-          rows.map((row) => (
-            <SummaryRowView
-              key={rowTestId(row)}
-              row={row}
-              onActivate={
-                row.kind === 'pr'
-                  ? () => void host.shell.openExternal(row.url)
-                  : row.kind === 'changes'
-                    ? () => emitSurfaceIntent({ type: 'open-review' })
-                    : undefined
-              }
-            />
-          ))
+          rows.map((row) =>
+            row.kind === 'branch' ? (
+              <BranchRowView
+                key={rowTestId(row)}
+                row={row}
+                port={port}
+                projectId={projectId}
+                chatId={chatId}
+                disabled={isDraftWorktree}
+                onBranchChanged={refetch}
+              />
+            ) : (
+              <SummaryRowView
+                key={rowTestId(row)}
+                row={row}
+                onActivate={
+                  row.kind === 'pr'
+                    ? () => void host.shell.openExternal(row.url)
+                    : row.kind === 'changes'
+                      ? () => emitSurfaceIntent({ type: 'open-review' })
+                      : undefined
+                }
+              />
+            ),
+          )
         )}
       </div>
     </section>

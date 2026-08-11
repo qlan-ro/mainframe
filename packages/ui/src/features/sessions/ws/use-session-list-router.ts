@@ -29,6 +29,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { getHost } from '../../../lib/host';
 import { useUnreadStore } from '../../../store/unread-store';
+import { useZonesStore } from '../../chat/zones/zones-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { useLastSessionStore } from '../../../store/last-session';
@@ -38,8 +39,11 @@ import { pickInitialSession } from '../view-model/initial-session';
 import { pickArchiveFallback } from '../view-model/session-fallback';
 import { createSessionListRouter } from './session-list-router';
 
+/** The previous layout-followed session, for the split-member gate below. */
+let lastLayoutSessionId: string | null = null;
+
 /** Persist the newly-active session (boot restore + per-project + workspace layout). */
-function rememberActiveSession(active: SessionItem | undefined): void {
+function rememberActiveSession(active: SessionItem | undefined, items: readonly SessionItem[]): void {
   if (active?.remoteId == null) return;
   useLastSessionStore.getState().setLastSessionId(active.remoteId);
   if (active.custom?.projectId != null) {
@@ -47,6 +51,18 @@ function rememberActiveSession(active: SessionItem | undefined): void {
   }
   // Follow the active session with its remembered workspace layout, keyed by the
   // stable daemon chat id. Skipped for the __LOCALID_* draft (no remoteId yet).
+  // ALSO skipped when flipping focus BETWEEN the two chats of an open split:
+  // the surface arrangement belongs to the visible split there, and swapping
+  // per-session layouts made the workspace blink in and out per zone click.
+  const zonePair = useZonesStore.getState().zones;
+  if (zonePair != null && lastLayoutSessionId != null) {
+    const memberRemoteIds = zonePair.map((id) => items.find((t) => t.id === id)?.remoteId ?? id);
+    if (memberRemoteIds.includes(active.remoteId) && memberRemoteIds.includes(lastLayoutSessionId)) {
+      lastLayoutSessionId = active.remoteId;
+      return;
+    }
+  }
+  lastLayoutSessionId = active.remoteId;
   useLayoutStore.getState().setActiveSession(active.remoteId);
 }
 
@@ -71,13 +87,25 @@ export function useSessionListRouter(): void {
 
   // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
+  // While the split is VISIBLE, both zone chats count as viewed: they join the
+  // suppression set and clear their dots on entry. A PARKED pair is off screen
+  // and badges normally.
+  const zones = useZonesStore((s) => s.zones);
   const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const active = mainThreadId == null ? undefined : items.find((t) => t.id === mainThreadId);
+    const zoneIds = zones != null && mainThreadId != null && zones.includes(mainThreadId) ? zones : [];
+    const zoneRemotes = zoneIds
+      .map((id) => items.find((t) => t.id === id)?.remoteId)
+      .filter((id): id is string => id != null);
     activeChatIdsRef.current = new Set(
-      [mainThreadId ?? undefined, active?.id, active?.remoteId].filter((id): id is string => id != null),
+      [mainThreadId ?? undefined, active?.id, active?.remoteId, ...zoneIds, ...zoneRemotes].filter(
+        (id): id is string => id != null,
+      ),
     );
-  }, [items, mainThreadId]);
+    const unreadStore = useUnreadStore.getState();
+    for (const id of [...zoneIds, ...zoneRemotes]) unreadStore.clearUnread(id);
+  }, [items, mainThreadId, zones]);
 
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
@@ -196,7 +224,7 @@ export function useSessionListRouter(): void {
     const unreadStore = useUnreadStore.getState();
     unreadStore.clearUnread(mainThreadId);
     if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
-    rememberActiveSession(active);
+    rememberActiveSession(active, items);
     clearFilterOnCrossProject(active);
   }, [mainThreadId, items, threadItems, threads]);
 

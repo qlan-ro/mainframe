@@ -71,7 +71,7 @@ function RuntimeBody({ port }: { port: number }) {
   const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
   const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
   const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
-  const { branchName, worktreePath, projectPath, projectId, chatId, isWorktree } = useActiveIdentity();
+  const { worktreePath, projectPath, projectId } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)
   // can normalize open-file path flavors to a canonical relative key (F1 fix).
@@ -108,11 +108,7 @@ function RuntimeBody({ port }: { port: number }) {
           leadingInset={sidebarVisible ? 0 : TRAFFIC_LIGHTS_SPACER_WIDTH}
           sidebarRendered={sidebarVisible}
           onExpandSidebar={() => setSidebarVisible(true)}
-          branchName={branchName}
-          isWorktree={isWorktree}
-          port={port}
           projectId={projectId}
-          chatId={chatId}
         />
         <SurfaceHost />
       </SidebarInset>

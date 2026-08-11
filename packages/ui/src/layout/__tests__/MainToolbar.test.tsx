@@ -6,14 +6,10 @@ import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
 
-// The tab strip needs the aui runtime, and the branch chip needs a live git
-// read — neither is this suite's subject. Their own suites cover them for real
-// (features/session-tabs/__tests__, features/git/__tests__/BranchChip.test.tsx).
+// The tab strip needs the aui runtime, which is not this suite's subject; its
+// own suite covers it for real (features/session-tabs/__tests__).
 vi.mock('@/features/session-tabs/SessionTabs', () => ({
   SessionTabs: () => <div data-testid="mock-session-tabs" />,
-}));
-vi.mock('@/features/git/BranchChip', () => ({
-  BranchChip: () => <div data-testid="mock-branch-chip" />,
 }));
 
 import { MainToolbar } from '../MainToolbar';
@@ -27,7 +23,7 @@ const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof
 type ToolbarProps = Parameters<typeof MainToolbar>[0];
 
 const renderToolbar = (overrides: Partial<ToolbarProps> = {}) =>
-  render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} port={31415} {...overrides} />);
+  render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} {...overrides} />);
 
 beforeEach(() => {
   localStorage.clear();

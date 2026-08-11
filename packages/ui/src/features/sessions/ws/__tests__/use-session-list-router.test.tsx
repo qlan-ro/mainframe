@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '../../../../store/layout';
+import { useZonesStore } from '../../../chat/zones/zones-store';
 
 // ---------------------------------------------------------------------------
 // Spy declarations — module-scope lets reset in beforeEach
@@ -160,8 +161,9 @@ beforeEach(() => {
   fakeThreadItems = [];
   factoryCallCount = 0;
 
-  // Real store (not mocked in this file) — reset to a clean slate each test.
+  // Real stores (not mocked in this file) — reset to a clean slate each test.
   useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
+  useZonesStore.setState({ zones: null, focusedIndex: 0 });
 });
 
 it('calls createSessionListRouter exactly once and captures function-typed deps', () => {
@@ -639,6 +641,92 @@ describe('useSessionListRouter — onMarkUnread for active thread is a no-op', (
 
     expect(markUnreadSpy).toHaveBeenCalledTimes(1);
     expect(markUnreadSpy).toHaveBeenCalledWith('chat-B');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Split view: a VISIBLE zone counts as viewed, focused or not
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — the split suppresses unread for both zones', () => {
+  /** chat-A active; thread-B is the other zone, created this run (remote chat-B). */
+  function splitOnAandB() {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p1' } },
+      { id: 'thread-B', remoteId: 'chat-B', custom: { projectId: 'p1' } },
+      { id: 'chat-C', remoteId: 'chat-C', custom: { projectId: 'p1' } },
+    ];
+  }
+
+  it('does NOT mark the unfocused zone unread', () => {
+    splitOnAandB();
+    useZonesStore.setState({ zones: ['chat-A', 'thread-B'], focusedIndex: 0 });
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('thread-B');
+    });
+
+    expect(markUnreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT mark the unfocused zone unread by its remoteId either', () => {
+    splitOnAandB();
+    useZonesStore.setState({ zones: ['chat-A', 'thread-B'], focusedIndex: 0 });
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('chat-B');
+    });
+
+    expect(markUnreadSpy).not.toHaveBeenCalled();
+  });
+
+  it('still marks a chat that is on neither side of the split', () => {
+    splitOnAandB();
+    useZonesStore.setState({ zones: ['chat-A', 'thread-B'], focusedIndex: 0 });
+
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onMarkUnread('chat-C');
+    });
+
+    expect(markUnreadSpy).toHaveBeenCalledTimes(1);
+    expect(markUnreadSpy).toHaveBeenCalledWith('chat-C');
+  });
+
+  it('marks the second chat again once the split closes', () => {
+    splitOnAandB();
+    useZonesStore.setState({ zones: ['chat-A', 'thread-B'], focusedIndex: 0 });
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      useZonesStore.getState().closeSplit();
+    });
+    act(() => {
+      capturedDeps.onMarkUnread('thread-B');
+    });
+
+    expect(markUnreadSpy).toHaveBeenCalledTimes(1);
+    expect(markUnreadSpy).toHaveBeenCalledWith('thread-B');
+  });
+
+  it('clears the dot of a chat that joins the split under both of its ids', () => {
+    splitOnAandB();
+    renderHook(() => useSessionListRouter());
+    clearUnreadSpy.mockClear();
+
+    act(() => {
+      useZonesStore.getState().openSplit('chat-A', 'thread-B');
+    });
+
+    expect(clearUnreadSpy).toHaveBeenCalledWith('chat-A');
+    expect(clearUnreadSpy).toHaveBeenCalledWith('thread-B');
+    expect(clearUnreadSpy).toHaveBeenCalledWith('chat-B');
   });
 });
 

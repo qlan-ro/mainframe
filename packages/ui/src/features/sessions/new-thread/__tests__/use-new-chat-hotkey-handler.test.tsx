@@ -1,26 +1,19 @@
 /**
  * useNewChatHotkeyHandler — behavior tests.
  *
- * Builds the ⌘N callback: "All" view → opens the shared project-picker store
- * instead of switching to a new thread; a project pill active → unchanged
- * (reset the stale draft + switchToNewThread).
+ * One behavior for every view now that the anchored "NEW SESSION IN…" popover
+ * is gone: reset the stale draft on the reused slot, then switch to the new
+ * thread. No project-filter branch — the welcome screen's own picker (or
+ * useNewThreadAutoConfig, with a pill active) resolves the project afterwards.
  */
 import { it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-
-let fakeFilterProjectId: string | null = null;
-
-vi.mock('@/store/session-filters', () => ({
-  useSessionFilters: (selector: (s: { filterProjectId: string | null }) => unknown) =>
-    selector({ filterProjectId: fakeFilterProjectId }),
-}));
 
 const resetNewThreadDraftSpy = vi.fn();
 vi.mock('../reset-new-thread-draft', () => ({
   resetNewThreadDraft: (...args: unknown[]) => resetNewThreadDraftSpy(...args),
 }));
 
-import { useNewSessionPickerTarget } from '../../sidebar/use-new-session-picker-target';
 import { useNewChatHotkeyHandler } from '../use-new-chat-hotkey-handler';
 
 function makeRuntime(newThreadId: string | null, switchToNewThread = vi.fn()) {
@@ -33,26 +26,10 @@ function makeRuntime(newThreadId: string | null, switchToNewThread = vi.fn()) {
 }
 
 beforeEach(() => {
-  fakeFilterProjectId = null;
   resetNewThreadDraftSpy.mockReset();
-  useNewSessionPickerTarget.setState({ open: false });
 });
 
-it('opens the project picker instead of switching to a new thread when no project pill is active (All view)', () => {
-  fakeFilterProjectId = null;
-  const switchToNewThread = vi.fn();
-  const runtime = makeRuntime('__LOCALID_1', switchToNewThread);
-
-  const { result } = renderHook(() => useNewChatHotkeyHandler(runtime));
-  result.current();
-
-  expect(useNewSessionPickerTarget.getState().open).toBe(true);
-  expect(switchToNewThread).not.toHaveBeenCalled();
-  expect(resetNewThreadDraftSpy).not.toHaveBeenCalled();
-});
-
-it('resets the stale draft and switches to a new thread when a project pill is active (auto-config seeds the project)', () => {
-  fakeFilterProjectId = 'proj-42';
+it('resets the draft on the reused slot and switches to the new thread', () => {
   const switchToNewThread = vi.fn();
   const runtime = makeRuntime('__LOCALID_1', switchToNewThread);
 
@@ -61,5 +38,29 @@ it('resets the stale draft and switches to a new thread when a project pill is a
 
   expect(resetNewThreadDraftSpy).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
   expect(switchToNewThread).toHaveBeenCalledTimes(1);
-  expect(useNewSessionPickerTarget.getState().open).toBe(false);
+});
+
+it('still switches to the new thread when no draft slot is allocated yet', () => {
+  const switchToNewThread = vi.fn();
+  const runtime = makeRuntime(null, switchToNewThread);
+
+  const { result } = renderHook(() => useNewChatHotkeyHandler(runtime));
+  result.current();
+
+  expect(resetNewThreadDraftSpy).toHaveBeenCalledExactlyOnceWith(null);
+  expect(switchToNewThread).toHaveBeenCalledTimes(1);
+});
+
+it('resets the draft before switching, so the fresh thread never reads the stale config', () => {
+  const order: string[] = [];
+  resetNewThreadDraftSpy.mockImplementation(() => void order.push('reset'));
+  const runtime = makeRuntime(
+    '__LOCALID_1',
+    vi.fn(() => void order.push('switch')),
+  );
+
+  const { result } = renderHook(() => useNewChatHotkeyHandler(runtime));
+  result.current();
+
+  expect(order).toEqual(['reset', 'switch']);
 });

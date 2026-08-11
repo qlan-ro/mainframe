@@ -11,13 +11,9 @@ import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: vi.fn() }));
-// Neither the tab strip (aui runtime) nor the branch chip (live git read) is
-// this suite's subject; both have their own suites.
+// The tab strip (aui runtime) is not this suite's subject; it has its own suite.
 vi.mock('@/features/session-tabs/SessionTabs', () => ({
   SessionTabs: () => <div data-testid="mock-session-tabs" />,
-}));
-vi.mock('@/features/git/BranchChip', () => ({
-  BranchChip: () => <div data-testid="mock-branch-chip" />,
 }));
 
 import { MainToolbar } from '../MainToolbar';
@@ -37,9 +33,7 @@ beforeEach(() => {
 
 describe('MainToolbar — Setup Advisor open action arity', () => {
   it('clicking automation-recommender-open lands the section on recommendations, not the click event', () => {
-    render(
-      <MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" port={31415} />,
-    );
+    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" />);
 
     const button = screen.getByTestId('automation-recommender-open');
     fireEvent.click(button);
@@ -51,9 +45,7 @@ describe('MainToolbar — Setup Advisor open action arity', () => {
   });
 
   it('keeps the automation-recommender-open testid on the toolbar button', () => {
-    render(
-      <MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" port={31415} />,
-    );
+    render(<MainToolbar leadingInset={0} sidebarRendered={true} onExpandSidebar={vi.fn()} projectId="p1" />);
 
     expect(screen.getByTestId('automation-recommender-open').tagName).toBe('BUTTON');
   });

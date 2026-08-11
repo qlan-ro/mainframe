@@ -28,7 +28,6 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
   const { projectId } = useActiveIdentity();
   const startSession = useStartTodoSession(port, projectId);
   const { load, view } = useTodosStore();
-  const prevOpen = useRef(false);
   const prevQuick = useRef(false);
 
   // Eagerly load todos so the modal and quick-add show correct data the
@@ -38,18 +37,17 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
     void load(port, projectId);
   }, [port, projectId, load]);
 
-  // Refetch on the open/quickOpen rising edge. The store has no WS event
+  // Refetch on the quick-add rising edge. The store has no WS event
   // (single-window refetch-on-mutation), so a change made outside this window
-  // — agent sessions, another window, direct DB writes — would otherwise leave
-  // the modal showing boot-time statuses. The store's _loadSeq guard keeps
-  // concurrent loads safe; todos are not cleared, so the list stays rendered.
+  // — agent sessions, another window, direct DB writes — would otherwise show
+  // boot-time statuses. The full modal needs no edge here: TasksBoard mounts
+  // fresh on each open (Radix unmounts DialogContent) and loads itself.
   useEffect(() => {
     if (!projectId || !port) return;
-    const justOpened = (open && !prevOpen.current) || (quickOpen && !prevQuick.current);
-    prevOpen.current = open;
+    const justOpened = quickOpen && !prevQuick.current;
     prevQuick.current = quickOpen;
     if (justOpened) void load(port, projectId);
-  }, [open, quickOpen, projectId, port, load]);
+  }, [quickOpen, projectId, port, load]);
 
   // ⌘⇧T → open quick-add dialog
   useEffect(() => {

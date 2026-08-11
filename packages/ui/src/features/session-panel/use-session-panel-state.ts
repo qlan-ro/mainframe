@@ -1,27 +1,21 @@
 /**
  * use-session-panel-state — the session panel's state machine: which mode the
- * panel is in (inline / rail / overlay), which section a rail click is pointing
- * at, and the scroll registry that gets it there.
+ * stack is in (inline / rail / overlay) and which panels are open in it.
  *
- * Section open-state is NOT held here. `store/ui-prefs.ts` is its single owner,
- * so an expansion survives a remount and a session switch; this hook only reads
- * and writes through. A rail click therefore writes a persisted preference —
- * intended, so the section you navigated to is still open next session.
+ * Open-state is NOT held here. `store/ui-prefs.ts` is its single owner, so an
+ * open panel survives a remount and a session switch; this hook only reads and
+ * writes through. A rail click therefore writes a persisted preference —
+ * intended, so the panels you work with are still open next session.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
   useUiPrefs,
+  isSessionPanelOpen,
   isSessionPanelSectionOpen,
-  type SessionPanelSectionId,
+  type SessionPanelId,
   type SessionPanelOpenSectionId,
 } from '@/store/ui-prefs';
-import { derivePanelMode, gutterFitsPanel, gutterFitsRail, type PanelMode } from './panel-mode';
-
-export interface FocusRequest {
-  id: SessionPanelSectionId;
-  /** Bumped on every rail click so re-clicking the same section scrolls again. */
-  seq: number;
-}
+import { derivePanelMode, gutterFitsPanel, type PanelMode } from './panel-mode';
 
 export interface SessionPanelState {
   /** Goes on the chat surface's horizontal row — the FULL width, including the
@@ -40,17 +34,15 @@ export interface SessionPanelState {
   rootRef: RefObject<HTMLDivElement | null>;
   surfaceWidth: number;
   mode: PanelMode;
-  focusRequest: FocusRequest | null;
-  isSectionOpen: (id: SessionPanelSectionId) => boolean;
+  isPanelOpen: (id: SessionPanelId) => boolean;
+  /** Open AND showing — false for an open panel whose stack is not floated on a
+   *  short gutter. The rail's engaged state follows this, not the raw bit. */
+  isPanelVisible: (id: SessionPanelId) => boolean;
+  /** Rail toggle. Opening on a short gutter also floats the stack over the
+   *  transcript — the click asked to see the panel, not just to arm a bit. */
+  togglePanel: (id: SessionPanelId) => void;
+  isSectionOpen: (id: SessionPanelOpenSectionId) => boolean;
   toggleSection: (id: SessionPanelOpenSectionId) => void;
-  /** Rail icon click: expand + scroll to a section, and bring the card back —
-   *  inline when the gutter fits it, floating over the transcript when it doesn't. */
-  selectSection: (id: SessionPanelSectionId) => void;
-  /** The inline card's own collapse control; persists, so it survives a reload. */
-  collapsePanel: () => void;
-  closeOverlay: () => void;
-  /** Callback ref each section hangs on its element so scroll-to works. */
-  registerSection: (id: SessionPanelSectionId) => (el: HTMLElement | null) => void;
 }
 
 /** Radix portals render outside the panel root; a click in one is not "outside". */
@@ -70,16 +62,14 @@ function hasOpenDialogOutside(root: HTMLElement | null): boolean {
 export function useSessionPanelState(): SessionPanelState {
   const [hostEl, setHostEl] = useState<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const sectionEls = useRef(new Map<SessionPanelSectionId, HTMLElement>());
   const [surfaceWidth, setSurfaceWidth] = useState(0);
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
 
+  const openPanels = useUiPrefs((s) => s.sessionPanelOpen);
+  const toggleSessionPanel = useUiPrefs((s) => s.toggleSessionPanel);
+  const openSessionPanel = useUiPrefs((s) => s.openSessionPanel);
   const sections = useUiPrefs((s) => s.sessionPanelSections);
   const toggleSessionPanelSection = useUiPrefs((s) => s.toggleSessionPanelSection);
-  const expandSessionPanelSection = useUiPrefs((s) => s.expandSessionPanelSection);
-  const userCollapsed = useUiPrefs((s) => s.sessionPanelCollapsed);
-  const setUserCollapsed = useUiPrefs((s) => s.setSessionPanelCollapsed);
 
   // Keyed on the host ELEMENT, so the observer attaches whenever the row
   // (re)mounts — including the cold-boot case where the initializing branch
@@ -96,16 +86,23 @@ export function useSessionPanelState(): SessionPanelState {
   }, [hostEl]);
 
   const gutterFits = gutterFitsPanel(surfaceWidth);
-  const railFits = gutterFitsRail(surfaceWidth);
-  const mode = derivePanelMode({ surfaceWidth, userCollapsed, overlayOpen });
+  const mode = derivePanelMode({ surfaceWidth, overlayOpen });
 
-  // A floated panel has no reason to survive the gutter opening back up: once
-  // there is room, the card belongs in it (or in the rail, if the user said so).
-  // And when the surface squeezes below even the rail, a stale overlay flag
-  // would pop the card back the moment the rail returns — drop it there too.
+  // A floated stack has no reason to survive the gutter opening back up: once
+  // there is room, the panels belong in it.
   useEffect(() => {
-    if (overlayOpen && (gutterFits || !railFits)) setOverlayOpen(false);
-  }, [gutterFits, railFits, overlayOpen]);
+    if (overlayOpen && gutterFits) setOverlayOpen(false);
+  }, [gutterFits, overlayOpen]);
+
+  // The session card is on by default whenever there is room: the first time
+  // the gutter fits after boot, it opens — even over a persisted close from a
+  // previous run. Closing it stays honoured within the run (the ref arms once).
+  const bootOpened = useRef(false);
+  useEffect(() => {
+    if (bootOpened.current || !gutterFits) return;
+    bootOpened.current = true;
+    openSessionPanel('session');
+  }, [gutterFits, openSessionPanel]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
@@ -131,73 +128,40 @@ export function useSessionPanelState(): SessionPanelState {
     };
   }, [mode]);
 
-  // Scroll the requested section into view once the panel has rendered it.
-  useEffect(() => {
-    if (!focusRequest) return;
-    sectionEls.current.get(focusRequest.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, [focusRequest, mode]);
+  const hostRef = useCallback((el: HTMLElement | null) => setHostEl(el), []);
 
-  const isSectionOpen = useCallback(
-    (id: SessionPanelSectionId) => (id === 'summary' ? true : isSessionPanelSectionOpen(sections, id)),
-    [sections],
+  const isPanelOpen = useCallback((id: SessionPanelId) => isSessionPanelOpen(openPanels, id), [openPanels]);
+
+  const isPanelVisible = useCallback(
+    (id: SessionPanelId) => (mode === 'inline' || mode === 'overlay') && isSessionPanelOpen(openPanels, id),
+    [mode, openPanels],
   );
 
-  const selectSection = useCallback(
-    (id: SessionPanelSectionId) => {
-      // Clicking the section a floated panel is already showing closes it again.
-      if (mode === 'overlay' && focusRequest?.id === id) {
-        setOverlayOpen(false);
+  const togglePanel = useCallback(
+    (id: SessionPanelId) => {
+      const open = isSessionPanelOpen(useUiPrefs.getState().sessionPanelOpen, id);
+      const gutterFits = gutterFitsPanel(surfaceWidth);
+      // Open but not showing (short gutter, stack not floated): the click asked
+      // to SEE the panel, so float the stack rather than silently closing it.
+      if (open && !gutterFits && !overlayOpen) {
+        setOverlayOpen(true);
         return;
       }
-      if (id !== 'summary') expandSessionPanelSection(id);
-      setFocusRequest((current) => ({ id, seq: (current?.seq ?? 0) + 1 }));
-      if (mode === 'inline') return;
-      // A rail click always means "show me this". Where the card goes depends on
-      // room, not on how it got collapsed: a fitting gutter takes it back inline
-      // (clearing the persisted collapse, the same on-the-record intent an
-      // expanded section records), a short one floats it over the transcript.
-      if (gutterFits) setUserCollapsed(false);
-      else setOverlayOpen(true);
+      toggleSessionPanel(id);
+      if (!open && !gutterFits) setOverlayOpen(true);
     },
-    [expandSessionPanelSection, focusRequest, gutterFits, mode, setUserCollapsed],
+    [toggleSessionPanel, surfaceWidth, overlayOpen],
   );
 
-  const collapsePanel = useCallback(() => setUserCollapsed(true), [setUserCollapsed]);
-
-  const closeOverlay = useCallback(() => setOverlayOpen(false), []);
-
-  const registerSection = useCallback(
-    (id: SessionPanelSectionId) => (el: HTMLElement | null) => {
-      if (el) sectionEls.current.set(id, el);
-      else sectionEls.current.delete(id);
-    },
-    [],
-  );
-
-  return useMemo(
-    () => ({
-      hostRef: setHostEl,
-      rootRef,
-      surfaceWidth,
-      mode,
-      focusRequest,
-      isSectionOpen,
-      toggleSection: toggleSessionPanelSection,
-      selectSection,
-      collapsePanel,
-      closeOverlay,
-      registerSection,
-    }),
-    [
-      surfaceWidth,
-      mode,
-      focusRequest,
-      isSectionOpen,
-      toggleSessionPanelSection,
-      selectSection,
-      collapsePanel,
-      closeOverlay,
-      registerSection,
-    ],
-  );
+  return {
+    hostRef,
+    rootRef,
+    surfaceWidth,
+    mode,
+    isPanelOpen,
+    isPanelVisible,
+    togglePanel,
+    isSectionOpen: (id) => isSessionPanelSectionOpen(sections, id),
+    toggleSection: toggleSessionPanelSection,
+  };
 }

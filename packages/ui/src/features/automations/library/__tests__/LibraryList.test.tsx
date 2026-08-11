@@ -10,6 +10,11 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { useAutomationsNav } from '../../data/use-automations-nav';
 import { LibraryList } from '../LibraryList';
 
+// The row's project annotation fetches through the daemon port — inert here.
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+}));
+
 const DEFAULT_LOAD_ALL = useAutomationsStore.getState().loadAll;
 
 const AUTOMATION_A: AutomationSummary = {
