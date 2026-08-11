@@ -23,8 +23,11 @@
 import { useExternalStoreRuntime, useAuiState } from '@assistant-ui/react';
 import { createAttachmentAdapter } from '../composer/attachment-adapter';
 
-/** Stateless — the per-chat daemon upload happens in the controller on send. */
-const ATTACHMENT_ADAPTER = createAttachmentAdapter();
+/** Stateless — the per-chat daemon upload happens in the controller on send.
+ *  Exported for the split-view zone mount (ChatZone), which builds an
+ *  ExternalThread client with the same adapter. */
+export const CHAT_ATTACHMENT_ADAPTER = createAttachmentAdapter();
+const ATTACHMENT_ADAPTER = CHAT_ATTACHMENT_ADAPTER;
 import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
@@ -63,6 +66,35 @@ export interface ChatRuntimeExtras {
 
 function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
   return typeof extras === 'object' && extras != null && symbolMfExtras in extras;
+}
+
+/**
+ * The one place extras are assembled — shared by the native runtime hook and
+ * the split-view zone mount so `useChatExtras()` consumers (gates, markers,
+ * composer toolbar) behave identically in a zone. Lives here because the brand
+ * symbol is module-private on purpose.
+ */
+export function buildChatExtras(
+  controller: ChatThreadController,
+  port: number,
+  state: ChatThreadState,
+): ChatRuntimeExtras {
+  return {
+    [symbolMfExtras]: true as const,
+    state,
+    permissions: state.interactions.permissions,
+    queued: state.interactions.queued,
+    port,
+    cancel: () => controller.cancel(),
+    replyToPermission: (response) => controller.replyToPermission(response),
+    cancelQueued: (messageId) => controller.cancelQueued(messageId),
+    editQueued: (messageId, content) => controller.editQueued(messageId, content),
+    retryMessage: (clientId) => controller.retryMessage(clientId),
+    retry: () => controller.refresh(),
+    acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
+    dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
+    clearWorktreeSwitch: () => controller.clearWorktreeSwitch(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,25 +177,7 @@ export function useChatThreadRuntime(
 
   const messageRepository = useMemo(() => projectChatThreadRepository(state), [state]);
 
-  const extras = useMemo(
-    (): ChatRuntimeExtras => ({
-      [symbolMfExtras]: true as const,
-      state,
-      permissions: state.interactions.permissions,
-      queued: state.interactions.queued,
-      port,
-      cancel: () => controller.cancel(),
-      replyToPermission: (response) => controller.replyToPermission(response),
-      cancelQueued: (messageId) => controller.cancelQueued(messageId),
-      editQueued: (messageId, content) => controller.editQueued(messageId, content),
-      retryMessage: (clientId) => controller.retryMessage(clientId),
-      retry: () => controller.refresh(),
-      acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
-      dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
-      clearWorktreeSwitch: () => controller.clearWorktreeSwitch(),
-    }),
-    [controller, port, state],
-  );
+  const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
 
   // The restore below needs the runtime this hook produces, which doesn't exist
   // yet when onNew is created — the ref closes that loop.

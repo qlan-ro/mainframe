@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
 import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
@@ -62,7 +63,21 @@ export function SessionTabs() {
   const displayIds = previewId === null ? tabIds : [...tabIds, previewId];
   const tabs = displayIds.map((id) => toTabEntry(id, items, activeTabId, id === previewId));
 
-  const handleActivate = (id: string) => {
+  const handleActivate = (id: string, split: boolean) => {
+    // ⌘-click: open the split (or retarget its unfocused slot). A tab already
+    // visible, and any draft, degrades to a plain focus click.
+    if (split && activeTabId != null && id !== activeTabId && !id.startsWith('__LOCALID_')) {
+      const zonesStore = useZonesStore.getState();
+      if (zonesStore.zones == null) {
+        if (!activeTabId.startsWith('__LOCALID_')) {
+          zonesStore.openSplit(activeTabId, id);
+          return;
+        }
+      } else if (!zonesStore.zones.includes(id)) {
+        zonesStore.replaceZone(zonesStore.focusedIndex === 0 ? 1 : 0, id);
+        return;
+      }
+    }
     if (id !== activeTabId) aui.threads.switchToThread(id);
   };
 

@@ -35,7 +35,8 @@ export interface SessionTabEntry {
 
 interface SessionTabPillProps {
   tab: SessionTabEntry;
-  onActivate: (id: string) => void;
+  /** `split` is true on a ⌘-click — the open-in-split gesture. */
+  onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
 }
@@ -47,7 +48,7 @@ export function SessionTabPill({ tab, onActivate, onClose, onPin }: SessionTabPi
       role="tab"
       aria-selected={tab.active}
       data-preview={tab.preview ? 'true' : 'false'}
-      onClick={() => onActivate(tab.id)}
+      onClick={(event) => onActivate(tab.id, event.metaKey)}
       onDoubleClick={() => {
         if (tab.preview) onPin(tab.id);
       }}
