@@ -3,8 +3,6 @@ export type SurfaceIntent =
   | { type: 'open-diff'; path: string; original?: string; modified?: string }
   | { type: 'reveal-file'; path: string }
   | { type: 'activate-surface'; surface: 'chat' | 'workspace' }
-  /** Begin a surface-reposition drag from a feature-owned header grip (handled by SurfaceHost). */
-  | { type: 'begin-surface-drag'; surface: 'chat' | 'workspace'; clientX: number; clientY: number }
   /** Trigger the file-open picker / command palette. */
   | { type: 'open-file-picker' }
   /** Spawn a new terminal in the workspace (optionally targeting a pane). */

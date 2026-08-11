@@ -8,7 +8,6 @@ import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
 import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
-import { useSurfaceDragStore } from './use-surface-drag';
 import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
 const SHORTCUT_MAP: Record<string, SurfaceId> = {
@@ -41,14 +40,6 @@ function SurfaceHostImpl() {
   // Stable subscription — reads live store state inside the callback, no re-sub on toggle.
   useEffect(() => {
     return onSurfaceIntent((intent) => {
-      if (intent.type === 'begin-surface-drag') {
-        // Feature-owned grips (the chat header) can't import layout/ — they emit
-        // this intent and the drag store takes over from here.
-        useSurfaceDragStore
-          .getState()
-          .beginSurfaceDrag(intent.surface, { clientX: intent.clientX, clientY: intent.clientY });
-        return;
-      }
       if (intent.type !== 'activate-surface') return;
       const state = useLayoutStore.getState();
       const cur = state.layout;

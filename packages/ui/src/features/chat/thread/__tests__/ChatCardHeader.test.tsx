@@ -85,13 +85,14 @@ describe('ChatCardHeader — structure', () => {
     expect(screen.getByTestId('chat-header')).toHaveClass('h-9');
   });
 
-  it('renders grip and message-square icons as SVGs inside the header', () => {
+  it('renders the message-square icon and carries no reposition grip', () => {
     renderHeader();
 
     const root = screen.getByTestId('chat-header');
-    const svgs = root.querySelectorAll('svg');
-    // GripHorizontal + MessageSquare — at least two SVG icons present
-    expect(svgs.length).toBeGreaterThanOrEqual(2);
+    expect(root.querySelector('svg.lucide-message-square')).toBeTruthy();
+    // The chat drag grip was retired with the surface-drag intent — the split
+    // and the split-aware workspace placement left it nothing to do.
+    expect(root.querySelector('[data-testid="chat-header-grip"]')).toBeNull();
   });
 
   it('renders the ChatModelChip slot', () => {
