@@ -26,7 +26,9 @@ import { RailIconButton, RailMeter } from './SessionRailButton';
 import type { SessionPanelState } from './use-session-panel-state';
 
 const RAIL_CHROME =
-  'pointer-events-auto mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-center rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
+  // mr-3, not mr-2: the transcript's auto-hide scrollbar draws at the host's
+  // right edge, and the extra 4px keeps the pill clean off it.
+  'pointer-events-auto mr-3 ml-1 flex shrink-0 flex-col items-center gap-1 self-center rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
 
 /** The launch glyph keeps the toolbar quick-action's filled green arrow. */
 function LaunchGlyph({ className }: { className?: string }) {
