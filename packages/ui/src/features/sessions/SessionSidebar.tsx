@@ -9,7 +9,7 @@
 import { useMemo } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { ListTodoIcon, SettingsIcon, ZapIcon } from 'lucide-react';
+import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
@@ -23,8 +23,6 @@ import { applySessionFilters } from '@/features/sessions/filter/apply-session-fi
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useAddProject } from '@/features/sessions/use-add-project';
-import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
-import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
 import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
@@ -38,6 +36,7 @@ import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
 import { QuotaFooter } from '../quota/QuotaFooter';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
+import { SidebarActions } from './SidebarActions';
 import { TagFilterBar } from './TagFilterBar';
 import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
@@ -45,39 +44,10 @@ import { useRemoveProject } from '@/features/sessions/use-remove-project';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
-  const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
-  const openAutomations = useAutomationsNav((s) => s.openHost);
   const openSettings = useSettingsStore((s) => s.open);
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="relative"
-        data-testid="sidebar-workflows"
-        title="Workflows"
-        onClick={openAutomations}
-      >
-        <ZapIcon />
-        {pendingAutomations > 0 && (
-          <span
-            data-testid="sidebar-workflows-pending"
-            className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
-          />
-        )}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-testid="sidebar-tasks"
-        title="Tasks"
-        // The todos board host (TasksModalHost, mounted at the app root)
-        // listens for this window event; there is no store seam to call.
-        onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
-      >
-        <ListTodoIcon />
-      </Button>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -161,6 +131,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           <UpdatePill />
           <HeaderActions />
         </div>
+        <SidebarActions filterProjectId={filterProjectId} />
         <ProjectSection
           projects={sortedProjects}
           attention={attention}

@@ -8,8 +8,8 @@
  *
  * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   sidebar-tasks → dispatches `mf:open-tasks` (features/sessions/SessionSidebar.tsx
- *     HeaderActions; the old `sidebar-tasks-button` id died with the v1 SidebarHeader)
+ *   sidebar-action-kanban → dispatches `mf:open-tasks` (features/sessions/SidebarActions.tsx;
+ *     succeeded the icon-only `sidebar-tasks`, which died with the header icon cluster)
  *     → tasks-board-modal. This sidebar-footer button survived the move below.
  *   session-panel-rail-tasks → the session panel's Tasks CARD
  *     (features/session-panel/TasksCard.tsx) — where the left sidebar's Tasks
@@ -67,7 +67,7 @@
  * Deliberately deleted (do not re-assert): every `tasks-sidebar-*` id. The v2
  * rebuild had already dropped `tasks-sidebar-expand`, `-section-toggle` and
  * `-view-all`; the section itself is gone now, so the remaining five ids went
- * with it. The board is still reached via `sidebar-tasks`.
+ * with it. The board is still reached via `sidebar-action-kanban`.
  *
  * v2 interaction contracts that changed how these controls are driven:
  *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
@@ -121,7 +121,7 @@ async function openTasksCard(page: Page): Promise<void> {
 }
 
 async function openBoard(page: Page): Promise<void> {
-  await page.getByTestId('sidebar-tasks').click();
+  await page.getByTestId('sidebar-action-kanban').click();
   await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
 }
 
@@ -234,7 +234,7 @@ test.describe('§tasks', () => {
 
   test('sidebar tasks button opens the board populated with both seeded tasks', async () => {
     const { page } = app;
-    await page.getByTestId('sidebar-tasks').click();
+    await page.getByTestId('sidebar-action-kanban').click();
     const modal = page.getByTestId('tasks-board-modal');
     await expect(modal).toBeVisible({ timeout: 10_000 });
     await expect(modal).toContainText('2 active');
