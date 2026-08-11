@@ -7,7 +7,7 @@
  * plain count — no width measurement.
  */
 import { useState } from 'react';
-import { LayoutGridIcon, PlusIcon } from 'lucide-react';
+import { FolderPlus, LayoutGridIcon } from 'lucide-react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Hint } from '@/components/ui/hint';
@@ -67,8 +67,9 @@ export function ProjectSection({
           <Hint label="Add project">
             {/* top/right retuned: stock's offsets assume the group's own p-2,
                 which this section drops in favour of the header's inset. */}
+            {/* FolderPlus, matching the first-run hero's Add-project CTA. */}
             <SidebarGroupAction data-testid="sidebar-projects-add" className="top-1 right-0" onClick={onAddProject}>
-              <PlusIcon />
+              <FolderPlus />
               <span className="sr-only">Add project</span>
             </SidebarGroupAction>
           </Hint>
