@@ -4,6 +4,7 @@
  * zone's fraction into the zones store — clamped so NEITHER side ever goes
  * under MIN_ZONE_WIDTH (the same floor that parks the split entirely).
  */
+import { cn } from '@/lib/utils';
 import { MIN_ZONE_WIDTH, useZonesStore } from './zones-store';
 
 export function SplitDivider() {
@@ -37,10 +38,15 @@ export function SplitDivider() {
       role="separator"
       aria-orientation="vertical"
       onPointerDown={onPointerDown}
-      className="relative w-px shrink-0 cursor-col-resize bg-border"
-    >
-      {/* Widened grab area; tints on hover so the line reads as draggable. */}
-      <div className="absolute inset-y-0 -right-1.5 -left-1.5 transition-colors hover:bg-primary/20" />
-    </div>
+      // Same recipe as the sidebar's resize rail (sidebar.tsx SidebarRail): an
+      // 8px grab strip whose resting hairline thickens to the 2px
+      // sidebar-border line on hover — one resize vocabulary app-wide.
+      className={cn(
+        'relative z-20 w-2 shrink-0 cursor-col-resize transition-all ease-linear',
+        'before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border',
+        'after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:bg-transparent',
+        'hover:after:bg-sidebar-border',
+      )}
+    />
   );
 }
