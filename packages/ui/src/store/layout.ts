@@ -72,10 +72,11 @@ export interface LayoutStore {
 
   /** Drag-reposition a whole surface within the layout. */
   repositionSurface: (surface: SurfaceId, target: RepositionTarget) => void;
-  /** True while the chat split (not the user) parked the workspace in the strip.
+  /** Set while the chat split (not the user) parked the workspace in the strip —
+   *  holds the top-row side it came from so the restore returns it there.
    *  Transient by design: after a reload the restore simply doesn't fire, which
    *  errs toward never overriding an arrangement. */
-  workspaceSystemMoved: boolean;
+  workspaceSystemMoved: 'top-left' | 'top-right' | null;
   /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
    *  the bottom strip when the chat splits… */
   moveWorkspaceForChatSplit: () => void;
@@ -177,24 +178,24 @@ export const useLayoutStore = create<LayoutStore>()(
       repositionSurface(surface, target) {
         const { layout, run } = get();
         // A manual reposition takes ownership — the split must not undo it.
-        set({ workspaceSystemMoved: false });
+        set({ workspaceSystemMoved: null });
         writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
       },
 
-      workspaceSystemMoved: false,
+      workspaceSystemMoved: null,
 
       moveWorkspaceForChatSplit() {
         const { layout, run } = get();
         if (!layout.top.includes('workspace')) return;
-        set({ workspaceSystemMoved: true });
+        set({ workspaceSystemMoved: layout.top[0] === 'workspace' ? 'top-left' : 'top-right' });
         writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'bottom'), run });
       },
 
       restoreWorkspaceAfterChatSplit() {
         const { layout, run, workspaceSystemMoved } = get();
-        set({ workspaceSystemMoved: false });
-        if (!workspaceSystemMoved || layout.bottom !== 'workspace') return;
-        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'top-right'), run });
+        set({ workspaceSystemMoved: null });
+        if (workspaceSystemMoved == null || layout.bottom !== 'workspace') return;
+        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', workspaceSystemMoved), run });
       },
 
       moveTabToPaneEdge(tabId, edge) {

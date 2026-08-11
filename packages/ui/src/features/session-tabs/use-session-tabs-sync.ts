@@ -89,14 +89,20 @@ export function useSessionTabsSync(): void {
     // Restore the split only when BOTH zones still resolve. The pair is PARKED
     // until focus actually lands on the left zone: switchToThread resolves
     // async, and opening the split while the boot draft is still main would
-    // make the reconciler read draft-main and close it straight back.
+    // make the reconciler read draft-main and close it straight back. When
+    // focus is ALREADY there (deep-link boot straight into the left chat) the
+    // parked effect would never fire — open inline instead.
     const zones = restoreTabIds(persisted.zones, items);
     const [left, right] = zones;
     if (zones.length === 2 && left != null && right != null) {
-      pendingZonesRef.current = [left, right];
-      aui.threads.switchToThread(left);
+      if (mainThreadId === left) {
+        useZonesStore.getState().openSplit(left, right);
+      } else {
+        pendingZonesRef.current = [left, right];
+        aui.threads.switchToThread(left);
+      }
     }
-  }, [hydrated, items, isListLoading, listLoaded, hydrate, aui]);
+  }, [hydrated, items, isListLoading, listLoaded, hydrate, aui, mainThreadId]);
 
   // Opens the parked restore once the switch has landed (see above).
   useEffect(() => {

@@ -7,8 +7,9 @@
  * aui is mocked down to the one field the hook reads, driven by a module-scope
  * variable + rerender — the same seam the session-tabs suites use.
  */
-import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLayoutStore } from '@/store/layout';
 import { useZonesStore } from '../zones-store';
 
 let mainThreadIdValue: string | null;
@@ -119,5 +120,72 @@ describe('with no split open', () => {
 
     expect(zones()).toEqual(['chat-a', 'chat-b']);
     expect(focusedIndex()).toBe(1);
+  });
+});
+
+/**
+ * The workspace follower (split plan, decision 8). The layout mutators are
+ * swapped for spies through the store itself, so this suite pins WHEN the
+ * follower fires; what each mutator does to the layout lives in
+ * store/__tests__/layout.chat-split.test.ts.
+ */
+describe('the workspace follows the split', () => {
+  const realMove = useLayoutStore.getState().moveWorkspaceForChatSplit;
+  const realRestore = useLayoutStore.getState().restoreWorkspaceAfterChatSplit;
+  let move: ReturnType<typeof vi.fn<() => void>>;
+  let restore: ReturnType<typeof vi.fn<() => void>>;
+
+  beforeEach(() => {
+    move = vi.fn();
+    restore = vi.fn();
+    useLayoutStore.setState({ moveWorkspaceForChatSplit: move, restoreWorkspaceAfterChatSplit: restore });
+  });
+
+  afterEach(() => {
+    useLayoutStore.setState({
+      moveWorkspaceForChatSplit: realMove,
+      restoreWorkspaceAfterChatSplit: realRestore,
+    });
+  });
+
+  it('parks the workspace when the split opens', () => {
+    mainThreadIdValue = 'chat-a';
+    renderHook(() => useZonesReconciler());
+    expect(move).not.toHaveBeenCalled();
+
+    act(() => {
+      useZonesStore.getState().openSplit('chat-a', 'chat-b');
+    });
+
+    expect(move).toHaveBeenCalledTimes(1);
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it('restores the workspace when the split closes', () => {
+    mainThreadIdValue = 'chat-a';
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    renderHook(() => useZonesReconciler());
+
+    act(() => {
+      useZonesStore.getState().closeSplit();
+    });
+
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(move).toHaveBeenCalledTimes(1); // the mount itself entered the split
+  });
+
+  it('leaves the workspace alone while the split only swaps a zone', () => {
+    mainThreadIdValue = 'chat-a';
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    renderHook(() => useZonesReconciler());
+    move.mockClear();
+
+    act(() => {
+      useZonesStore.getState().replaceZone(1, 'chat-c');
+    });
+
+    expect(useZonesStore.getState().zones).toEqual(['chat-a', 'chat-c']);
+    expect(move).not.toHaveBeenCalled();
+    expect(restore).not.toHaveBeenCalled();
   });
 });
