@@ -791,10 +791,14 @@ test.describe('§git-branch — session-panel branch popover', () => {
   // fixtures above depend on. Last test in the file — it leaves a draft active.
   test('the welcome screen branch pill opens the same popover for the project', async () => {
     const { page } = app;
+    // One-click "+" → the projectless draft; the welcome screen owns the project
+    // pick (`welcome-project` → `welcome-project-<id>`), and the branch pill
+    // appears once that pick resolves.
     await sessionsSidebar(page).newButton().click();
-    await page.getByTestId(`sessions-new-picker-project-${project.projectId}`).click({ timeout: 10_000 });
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('welcome-project').click({ timeout: 10_000 });
+    await page.getByTestId(`welcome-project-${project.projectId}`).click({ timeout: 10_000 });
+    await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0, { timeout: 10_000 });
 
     // The pill names the PROJECT's checkout (`main`), not any worktree session's.
     const pill = page.getByTestId('welcome-branch');

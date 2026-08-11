@@ -160,10 +160,11 @@ test.describe('§window-states First-run tour', () => {
     // tests need the first-run tour to actually arm, and its addInitScript re-fires
     // on every reload, so a plain removeItem+reload here could never win.
     app = await launchTauriApp({ suppressTour: false });
-    // One project (zero chats) so ChatSurface renders ChatThread's live Composer
-    // (data-tut="composer"/"model" anchors) instead of the composer-less
-    // FirstRunState hero — useFirstRunTour only counts REAL sessions (chats), so
-    // this project seeds an empty-sessions workspace that arms the tour on reload.
+    // One project (zero chats) — useFirstRunTour only counts REAL sessions, so
+    // this seeds the empty-sessions workspace that arms the tour on reload. The
+    // boot draft stays PROJECTLESS there (the welcome screen owns the project
+    // pick), so the composer — and with it the `composer`/`model` tour anchors —
+    // is deliberately absent; see the walk test for what that means for the tour.
     project = await createTauriProject(app.page);
   });
 
@@ -188,18 +189,22 @@ test.describe('§window-states First-run tour', () => {
     await expect(page.getByTestId('tour-skip-btn')).toBeVisible();
   });
 
-  // Step 3 ("model") legitimately has no anchor on a genuinely empty (zero-session)
-  // workspace — `composer-model-select` (`data-tut="model"`) is rendered by
-  // `ComposerToolbar`, which gates its whole toolbar on a resolved `chat`
-  // (`if (!chat) return null`). `TutorialOverlay.remeasure` detects that after its
-  // settle window and auto-skips the step in the current direction of travel, so a
-  // first-time user never sees a label card pointing at nothing. That part still
-  // works and is unit-covered (TutorialOverlay.test.tsx).
-  //
-  test('Next/Back walk the reachable steps, auto-skipping the anchorless model step; Done completes the tour', async () => {
+  // Steps 2 ("composer") and 3 ("model") legitimately have no anchor on a
+  // genuinely empty (zero-session) workspace: the boot draft has no project, so
+  // ChatThread withholds the composer entirely — and with it `data-tut="composer"`
+  // and the `composer-model-select` (`data-tut="model"`) inside its toolbar.
+  // `TutorialOverlay.remeasure` detects an absent anchor after its ~30ms settle
+  // window and skips the step in the current direction of travel, so a first-time
+  // user never sees a label card pointing at nothing. Only steps 1 (sessions) and
+  // 4 (workspace) are reachable in this state; the skip itself is unit-covered
+  // (TutorialOverlay.test.tsx).
+  test('Next/Back walk the reachable steps, auto-skipping the two composer-anchored steps; Done completes the tour', async () => {
     const { page } = app;
     const label = page.getByTestId('tour-label-card');
     const spotlight = page.getByTestId('tour-spotlight');
+
+    // The premise of the skips below: no composer on an unresolved draft.
+    await expect(page.getByTestId('chat-composer-input')).toHaveCount(0);
 
     // Step 1/4 — sessions. No Back button at the first step.
     await expect(label).toContainText('Start a session');
@@ -207,30 +212,26 @@ test.describe('§window-states First-run tour', () => {
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Next');
 
-    // Step 2/4 — composer.
+    // Next auto-skips the anchorless steps 2 (composer) and 3 (model) and lands
+    // directly on step 4 (workspace) — each settle window is ~30ms, so a short
+    // poll covers both hops.
     await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 2 of 4');
-    await expect(label).toContainText('Hand work to your agent');
-    await expect(spotlight).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tour-back-btn')).toBeVisible();
-
-    // Next auto-skips the anchorless step 3 (model) and lands directly on
-    // step 4 (workspace) — the settle window is ~30ms, so a short poll suffices.
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4', { timeout: 2_000 });
+    await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
     await expect(label).toContainText('Open the workspace');
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
+    await expect(page.getByTestId('tour-back-btn')).toBeVisible();
 
-    // Back from step 4 auto-skips the same anchorless step in the backward
-    // direction, landing back on step 2 (composer).
+    // Back from step 4 skips the same two steps in the backward direction,
+    // landing back on step 1 — where there is no Back button again.
     await page.getByTestId('tour-back-btn').click();
-    await expect(label).toContainText('Step 2 of 4', { timeout: 2_000 });
-    await expect(label).toContainText('Hand work to your agent');
+    await expect(label).toContainText('Step 1 of 4', { timeout: 5_000 });
+    await expect(label).toContainText('Start a session');
+    await expect(page.getByTestId('tour-back-btn')).toHaveCount(0);
 
     // Forward again lands back on step 4 (last step).
     await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4', { timeout: 2_000 });
+    await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
 
     // Step dots — 4 total, all present at the last step (STEPS.length is
     // unaffected by the auto-skip; it just never lingers on step 3).

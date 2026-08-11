@@ -28,7 +28,8 @@
  *   sessions-import-project-<id>  — project picker button in import dialog
  *   external-session-item         — row in session list inside import dialog
  *   import-session-btn            — Import button on each external-session row
- *   sessions-new-picker           — sidebar "New" project picker (no project selected)
+ *   sessions-welcome / welcome-project — the projectless draft's welcome screen and
+ *                                   its project picker (see the note below)
  *   daemon-footer-trigger         — sidebar footer daemon status (used for readiness waits)
  *   sessions-archive-keep-worktree   — ArchiveWorktreeDialog "Keep worktree" button
  *   sessions-archive-delete-worktree — ArchiveWorktreeDialog "Delete worktree" button
@@ -42,18 +43,11 @@
  * rows mounted), so a row count is a count of what fits, not of what exists. Rows
  * carry Virtuoso's `data-item-index`, which is what the pagination block asserts on.
  *
- * THE ZERO-SESSION BOOT PICKER (why every §35 describe dismisses a menu in setup):
- * `ChatSurface`'s `useZeroSessionBootPicker` force-opens the `sessions-new-picker`
- * DropdownMenu BOOT_SETTLE_MS (1.5s) after the app settles on an unresolved boot
- * draft with projects > 0, no project filter and no draft config — i.e. exactly a
- * project with zero sessions. It is a MODAL Radix layer, so it owns `<html>`'s
- * pointer events and every sidebar/toolbar click below it reports "waiting for
- * element to be visible, enabled and stable" on an element that is plainly on
- * screen. The §45 describes seed a chat and never reach that state; the §35
- * describes MUST keep the session list empty (the imported row is asserted as
- * `sessions-row` `.first()`), so they dismiss the menu once in `beforeAll`
- * instead. One dismissal is enough: the effect re-arms only when its dead-end
- * condition itself flips.
+ * THE ZERO-SESSION BOOT IS NO LONGER A MODAL DEAD-END: `useZeroSessionBootPicker`
+ * and the force-opened `sessions-new-picker` DropdownMenu are gone. A boot with
+ * projects > 0 and no sessions lands on the draft's WELCOME SCREEN, which owns the
+ * project choice inline (`welcome-project`) — no modal layer sits over the sidebar,
+ * so the §35 describes no longer dismiss anything in `beforeAll`.
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -107,20 +101,7 @@ function uuidForIndex(n: number): string {
   return `eeeeeeee-eeee-4eee-8eee-${n.toString(16).padStart(12, '0')}`;
 }
 
-// ── zero-session boot picker + import dialog helpers (see the header note) ────
-
-/** Wait out the boot-settle window and close the force-opened "New session in…"
- *  menu, so the modal layer stops swallowing sidebar clicks. Bounded and
- *  tolerant: if the picker never opens, `closeMenus` is a no-op assertion. */
-async function dismissBootPicker(page: Page): Promise<void> {
-  await page
-    .getByTestId('sessions-new-picker')
-    .waitFor({ timeout: 10_000 })
-    .catch(() => {
-      /* expected when the app is not at the boot dead-end */
-    });
-  await closeMenus(page);
-}
+// ── import dialog helpers ────────────────────────────────────────────────────
 
 /**
  * Open the import dialog and advance past step 1 onto the session list.
@@ -169,32 +150,29 @@ test.describe('§45 Sessions panel', () => {
 
   // SP1: new-session button behaviour.
   //
-  // BEHAVIOUR DIFFERENCE vs desktop (documented):
-  //   The in-composer "choose a project" picker (formerly NewThreadConfigPicker)
-  //   is gone. When no project filter pill is active, the sidebar "New" button
-  //   is wrapped in NewSessionPickerPopover (`sessions-new-picker`), which lists
-  //   projects to pick from BEFORE any draft thread is created. Only picking a
-  //   project row calls switchToNewThread() (draft-aware new-thread D3,
-  //   app-tauri/CLAUDE.md) — so no `sessions-row` is created merely by opening
-  //   the popover.
-  test('SP1: new-session button shows project picker (no filter active)', async () => {
+  // The anchored "NEW SESSION IN…" popover is gone: the "+" is ONE CLICK and
+  // opens a projectless draft whose WELCOME SCREEN owns the project choice
+  // (`welcome-project` → `welcome-project-<id>`). Until a project is picked the
+  // draft has no config, so the sidebar shows no draft row, the composer stays
+  // hidden, and — the D3 invariant this test really guards — no chat and no
+  // `sessions-row` exists yet.
+  test('SP1: new-session button opens the welcome screen project picker (no filter active)', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     const rowsBefore = await page.getByTestId('sessions-row').count();
 
     await sidebar.newButton().click();
 
-    // In "All" view (no project filter pill), clicking New opens the project
-    // picker popover — NOT the composer directly.
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('welcome-project')).toBeVisible();
+    // Nothing to send into yet — the composer only mounts once a project resolves.
+    await expect(page.getByTestId('chat-composer-input')).toHaveCount(0);
 
-    // No draft/chat is created merely by opening the popover — the sessions-row
-    // count should NOT increase before a project row is picked.
+    // No draft row and no session: the project pick precedes any draft config,
+    // and the chat itself is still created on first send only.
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
     const rowsAfter = await page.getByTestId('sessions-row').count();
     expect(rowsAfter).toBe(rowsBefore);
-
-    // Close the popover so it doesn't linger over later tests.
-    await page.keyboard.press('Escape');
   });
 
   // SP6: rename a session.
@@ -395,12 +373,6 @@ test.describe('§35 External session import', () => {
         { timeout: 15_000 },
       )
       .toBe(2);
-
-    // `createTauriProject` reloaded into the zero-session boot dead-end, so the
-    // forced project picker is (or is about to be) open over the sidebar. This
-    // describe needs the session list empty, so dismiss it rather than seed a
-    // session — see the header note.
-    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {
@@ -535,8 +507,6 @@ test.describe('§35 External session import — pagination', () => {
     // Trigger the daemon's external-session scan for the project (same pre-warm
     // pattern as the §35 import block above).
     await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
-    // Zero sessions here too — dismiss the forced boot picker (header note).
-    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {
@@ -617,8 +587,6 @@ test.describe('§35 External session import — retry on error', () => {
       gitBranch: 'main',
     });
     await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
-    // Zero sessions here too — dismiss the forced boot picker (header note).
-    await dismissBootPicker(app.page);
   });
 
   test.afterAll(async () => {

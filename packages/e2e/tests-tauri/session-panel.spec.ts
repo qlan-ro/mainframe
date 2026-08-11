@@ -652,24 +652,24 @@ test.describe('§session-panel — Summary rows', () => {
     await expect(page.getByTestId('session-panel-rail-context')).toContainText(`${percent}%`, { timeout: 10_000 });
   });
 
-  // The meter NAVIGATES rather than toggling: it opens the Session card (never
-  // closes it) and expands Context inside it, so it is a reliable route to the
-  // section from any state.
-  test('the rail meter opens the Session card and expands its Context section', async () => {
+  // The meter is an INDICATOR, not a control (RailMeter: plain chrome, no hover,
+  // no click) — it reads the number and the Session card owns the details, one
+  // click up on the i. Clicking it must therefore change nothing; the rail's
+  // Session button is the route back to the card.
+  test('the rail meter is an indicator: clicking it opens nothing, the Session button does', async () => {
     const { page } = app;
-    const contextToggle = page.getByTestId('session-panel-section-toggle-context');
-    // Context is expanded by ui-prefs default — collapse it, so the expand below
-    // is the meter's doing and not the initial state.
-    await expect(contextToggle).toHaveAttribute('data-state', 'open');
-    await contextToggle.click();
-    await expect(contextToggle).toHaveAttribute('data-state', 'closed');
+    const card = page.getByTestId('session-panel-card-session');
 
     await page.getByTestId('session-panel-card-close-session').click();
-    await expect(page.getByTestId('session-panel-card-session')).toHaveCount(0, { timeout: 5_000 });
+    await expect(card).toHaveCount(0, { timeout: 5_000 });
 
     await page.getByTestId('session-panel-rail-context').click();
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible({ timeout: 5_000 });
-    await expect(contextToggle).toHaveAttribute('data-state', 'open');
+    // Deliberately inert: a beat to let a toggle land if the meter had one.
+    await page.waitForTimeout(500);
+    await expect(card).toHaveCount(0);
+
+    await page.getByTestId('session-panel-rail-open').click();
+    await expect(card).toBeVisible({ timeout: 5_000 });
   });
 
   test('clicking the changes row opens the review modal', async () => {

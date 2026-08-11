@@ -536,11 +536,11 @@ test.describe('§tasks', () => {
 
   // ─── Session-panel Tasks card ────────────────────────────────────────────
 
-  // Successor to the left-sidebar section's coverage: rows, the New button, and
+  // Successor to the left-sidebar section's coverage: rows, the quick-add row, and
   // row → edit modal. The card and the board share one zustand store
   // (use-todos-store.ts, refetch-on-mutation), so the rows below reflect every
   // task the board and the quick dialog created above without a reload.
-  test('tasks card: rows, New task, and a row opening its edit modal', async () => {
+  test('tasks card: rows, the quick-add row, and a row opening its edit modal', async () => {
     const { page } = app;
     await openTasksCard(page);
 
@@ -551,12 +551,15 @@ test.describe('§tasks', () => {
     }
     await expect(page.getByTestId('session-panel-tasks-empty')).toHaveCount(0);
 
-    // New task opens a card-local create modal (independent of the board).
-    await page.getByTestId('session-panel-tasks-new').click();
-    await expect(page.getByTestId('tasks-edit-title')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tasks-edit-save')).toHaveText('Create task');
-    await page.getByTestId('tasks-edit-cancel').click();
-    await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
+    // The first row IS the create input (Reminders-style) — there is no create
+    // modal on this card any more. Escape abandons the draft title without
+    // creating anything; Enter is the create gesture, pinned in the next test.
+    const quickAdd = page.getByTestId('session-panel-tasks-new');
+    await expect(quickAdd).toHaveAttribute('placeholder', 'New task');
+    await quickAdd.fill('Abandoned quick-add draft');
+    await quickAdd.press('Escape');
+    await expect(quickAdd).toHaveValue('');
+    await expect(page.getByTestId('session-panel-task-row-6')).toHaveCount(0);
 
     // Clicking a row opens the edit modal for that task.
     await page.getByTestId('session-panel-task-row-3').click();
@@ -568,15 +571,21 @@ test.describe('§tasks', () => {
   // Successor to "a 6th active task overflows into a static 'N more' row": the
   // card has no VISIBLE_TASKS cap and no residual row, so the 6th task is a row
   // like any other. Kept as a scenario (rather than deleted with the cap) because
-  // the daemon-side numbering and the card's live refresh are what it really pins.
-  test('tasks card: a 6th active task gets a row of its own — the list is uncapped', async () => {
+  // the daemon-side numbering and the card's live refresh are what it really pins
+  // — and the 6th task is created through the card's own quick-add row, so the
+  // create gesture (type + Enter, focus kept for the next one) rides along.
+  test('tasks card: quick-add creates a 6th active task, and it gets a row of its own — the list is uncapped', async () => {
     const { page } = app;
     await openTasksCard(page);
 
-    await openQuickDialog(page);
-    await page.getByTestId('tasks-quick-title').fill('Overflow fixture task');
-    await page.getByTestId('tasks-quick-create').click();
-    await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
+    const quickAdd = page.getByTestId('session-panel-tasks-new');
+    await quickAdd.fill('Overflow fixture task');
+    await quickAdd.press('Enter');
+    // The input clears, ready for the next task. Focus is NOT asserted: the row
+    // disables itself while the create is in flight (`disabled={adding}`), which
+    // blurs it, and nothing restores focus afterwards — so the component's
+    // "focus stays" claim is not a behaviour this spec can pin today.
+    await expect(quickAdd).toHaveValue('', { timeout: 10_000 });
 
     // Daemon list order is status, order_index, created_at — #6 is the newest
     // 'open' task, and it renders instead of collapsing into a count.

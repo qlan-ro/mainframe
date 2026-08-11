@@ -1,28 +1,35 @@
 /**
  * §sessions-draft — the new-session Welcome flow (app-tauri browser mode).
  *
- * Covers the rebuilt draft-thread surface: NewSessionPickerPopover (project
- * picker, "All" view) → DraftSessionRow (sidebar synthetic row) → WelcomeState
- * (repo suggestions) / FirstRunState (zero projects), with the chat created
- * ONLY on first send (D3) and no cross-project draft leak on repeated New
- * cycles (the historical slot-reuse regression). Also covers the bugfix where
- * ⌘N in "All" view and a zero-session boot both used to strand the user on a
- * projectless dead-end new-thread surface instead of resolving a project
- * first (useNewChatHotkeyHandler + ChatSurface's boot-settle fallback, both
- * driving the shared useNewSessionPickerTarget store).
+ * THE WELCOME SCREEN OWNS THE PROJECT CHOICE. The anchored "NEW SESSION IN…"
+ * popover is gone: the sidebar "+", the tab-strip "+" and ⌘N are all ONE CLICK
+ * and open a PROJECTLESS draft. Its welcome screen shows the choose-project
+ * state — a `welcome-project` trigger over a dropdown of `welcome-project-<id>`
+ * rows — and until a project is picked there is no draft row, no suggestions and
+ * NO COMPOSER (the first send needs a project to create the chat in). With a
+ * project filter active the draft seeds that project directly and the welcome
+ * shows it already picked, so the dropdown step is skipped.
+ *
+ * The rest of the surface is unchanged: DraftSessionRow (sidebar synthetic row)
+ * → WelcomeState (repo suggestions) / FirstRunState (zero projects), the chat
+ * created ONLY on first send (D3), and no cross-project draft leak on repeated
+ * New cycles (the historical slot-reuse regression).
  *
  * `docs/plans/2026-07-03-tauri-e2e-test-plan.md` §6 is STALE (written against a
  * deleted NewThreadConfigPicker) — scenarios below are derived from the CURRENT
- * source: `packages/ui/src/features/sessions/new-thread/` + `sidebar/DraftSessionRow.tsx`
- * + `sidebar/SessionsNewButton.tsx`.
+ * source: `packages/ui/src/features/sessions/new-thread/` + `DraftSessionRow.tsx`
+ * + `SessionsNewButton.tsx`.
  *
  * Testid reference (verified against source):
- *   sessions-new-button              — the list header's "+" (v2 SessionsNewButton.tsx). In "All"
- *                                      view it is a DropdownMenu trigger; with a project filter
- *                                      active it opens the draft directly.
- *   sessions-new-picker              — the picker menu content (All view only)
- *   sessions-new-picker-project-<id> — project row inside the picker
- *   sessions-draft-row               — the synthetic draft row's BUTTON (v2 DraftSessionRow.tsx)
+ *   sessions-new-button              — the list header's "+" (SessionsNewButton.tsx); one
+ *                                      click, whether or not a project filter is active
+ *   sessions-welcome                 — WelcomeState root (ChatEmptyState variant='welcome')
+ *   welcome-project                  — the welcome screen's project trigger: "Choose a
+ *                                      project" until one is picked, the ProjectChip after
+ *   welcome-project-picker           — the dropdown content it opens
+ *   welcome-project-<id>             — one project row inside that dropdown
+ *   sessions-draft-row               — the synthetic draft row's BUTTON (DraftSessionRow.tsx).
+ *                                      It renders only once the draft HAS a project.
  *   sessions-draft-row-title         — draft row's "New Session" title span
  *   sessions-draft-row-discard       — the ✕. It is a `SidebarMenuAction`, i.e. a SIBLING of
  *                                      `sessions-draft-row` inside the list item — not a
@@ -36,7 +43,6 @@
  *                                      project a draft belongs to is asserted on the chat
  *                                      header's chip instead.
  *   chat-header-project              — ChatCardHeaderDraft's project chip (names the project)
- *   sessions-welcome                 — WelcomeState root (ChatEmptyState variant='welcome')
  *   sessions-welcome-suggestion-<i>  — one repo-derived suggestion row (SuggestionRow.tsx)
  *   sessions-firstrun                — FirstRunState root (zero projects)
  *   sessions-firstrun-add-project    — FirstRunState's "Add project…" CTA
@@ -68,7 +74,7 @@ function projectRow(page: Page, projectId: string): Locator {
 }
 
 /**
- * Pick a project out of the "New session in…" menu and wait for that menu to be
+ * Pick a project on the draft's welcome screen and wait for the dropdown to be
  * GONE, not merely closing.
  *
  * Radix keeps a closing menu's content mounted through its exit animation, and
@@ -79,15 +85,23 @@ function projectRow(page: Page, projectId: string): Locator {
  * (rather than pressing Escape) also keeps a menu that fails to self-close on
  * select a visible failure instead of a silently dismissed one.
  */
-async function pickProjectFromPicker(page: Page, projectId: string): Promise<void> {
-  await page.getByTestId(`sessions-new-picker-project-${projectId}`).click({ timeout: 10_000 });
-  await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0, { timeout: 10_000 });
+async function pickProjectFromWelcome(page: Page, projectId: string): Promise<void> {
+  await page.getByTestId('welcome-project').click({ timeout: 10_000 });
+  await page.getByTestId(`welcome-project-${projectId}`).click({ timeout: 10_000 });
+  await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0, { timeout: 10_000 });
+}
+
+/** The one-click "+": a projectless draft whose welcome screen asks for a project. */
+async function openProjectlessDraft(page: Page): Promise<void> {
+  await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
+  await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
 }
 
 /**
  * Close an open composer config menu and wait for its layer to retire.
  *
- * One blind `Escape` is not enough, for the same reason `pickProjectFromPicker`
+ * One blind `Escape` is not enough, for the same reason `pickProjectFromWelcome`
  * asserts on the menu's absence: while a Radix menu lives it owns `<html>`'s
  * pointer events, so the NEXT trigger's click is swallowed and retried until the
  * test budget runs out — which is how this read in CI, as `<html> intercepts
@@ -113,9 +127,8 @@ async function closeConfigMenu(page: Page, options: Locator): Promise<void> {
 async function ensureDraftRow(page: Page, projectId: string): Promise<void> {
   const draftRow = page.getByTestId('sessions-draft-row');
   if ((await draftRow.count()) === 0) {
-    await sessionsSidebar(page).newButton().click();
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
-    await pickProjectFromPicker(page, projectId);
+    await openProjectlessDraft(page);
+    await pickProjectFromWelcome(page, projectId);
   }
   await expect(draftRow).toBeVisible({ timeout: 10_000 });
 }
@@ -188,13 +201,18 @@ function baseName(p: string): string {
  */
 async function dismissPersistentToasts(page: Page): Promise<void> {
   const closers = page.locator(`${TOAST.root} ${TOAST.close}`);
-  for (let remaining = await closers.count(); remaining > 0; remaining--) {
-    await closers.first().click();
-  }
-  await expect(closers).toHaveCount(0, { timeout: 5_000 });
+  // Retried as a whole: a persistent toast can be raised WHILE this is clearing
+  // them (the failed agent run behind the last one keeps erroring), so a single
+  // pass can end holding a toast that appeared after its count was taken.
+  await expect(async () => {
+    for (let remaining = await closers.count(); remaining > 0; remaining--) {
+      await closers.first().click();
+    }
+    await expect(closers).toHaveCount(0, { timeout: 1_000 });
+  }).toPass({ timeout: 20_000, intervals: [250, 500, 1_000] });
 }
 
-test.describe('§sessions-draft — All view picker + draft row', () => {
+test.describe('§sessions-draft — All view welcome picker + draft row', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let existingChatId: string;
@@ -213,25 +231,25 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
   });
 
   // Previously: `sessions-draft-row` never rendered after picking a project
-  // from the "All view" picker — `use-draft-row.ts`'s discard-on-navigate-away
+  // in "All" view — `use-draft-row.ts`'s discard-on-navigate-away
   // effect fired on the render where the draft config had just been armed but
   // `mainThreadId` hadn't yet caught up to `newThreadId` (the switch is
   // awaited), wiping the draft it was meant to display. Fixed by the
   // product-bug-fix campaign: a `wasSelectedRef` gate now requires the draft
   // to have genuinely been selected (`mainThreadId === newThreadId` on some
   // earlier render) before treating a mismatch as a real navigate-away.
-  test('New (All view) opens the project picker; picking a project resolves the draft without creating a chat', async () => {
+  test('New (All view) opens the welcome picker; picking a project there resolves the draft without creating a chat', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
     const rowsBefore = await page.getByTestId('sessions-row').count();
 
-    await sidebar.newButton().click();
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
-    // Opening the picker creates no draft/chat yet.
+    await openProjectlessDraft(page);
+    // The projectless draft creates no session and carries no draft row — and
+    // with nowhere to send yet, no composer either.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    await expect(composer(page).input()).toHaveCount(0);
 
-    await pickProjectFromPicker(page, project.projectId);
+    await pickProjectFromWelcome(page, project.projectId);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
@@ -242,6 +260,10 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     // name (v2 DraftSessionRow → ProjectAvatar); the name is on the chat header.
     await expect(draftRow.getByTestId('project-avatar')).toBeVisible();
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
+    // The welcome screen now names the picked project, and the composer — which
+    // the choose-project state withheld — is live for the first send.
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath));
+    await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
   });
 
   // Continues from the previous test's draft-row — see the fix note documented on
@@ -285,16 +307,15 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     await expect(previousRow).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
-  // This test independently re-triggers the picker flow — see the fix note
+  // This test independently re-triggers the welcome flow — see the fix note
   // documented on the first test in this describe block.
   test('first send creates exactly one chat in the picked project (no chat exists before send)', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
     const rowsBefore = await page.getByTestId('sessions-row').count();
     const chatsBefore = await fetchProjectChatIds(project.projectId);
 
-    await sidebar.newButton().click();
-    await pickProjectFromPicker(page, project.projectId);
+    await openProjectlessDraft(page);
+    await pickProjectFromWelcome(page, project.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     // Still no new sessions-row while the draft is unsent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
@@ -319,7 +340,6 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
   // race deterministic — before the fix the message vanished on every run.
   test('the first user message stays visible when the history read predates persistence', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
 
     // GET only. The send itself travels over the WebSocket, so nothing else on this
     // path is faulted today — but pinning the method keeps a future write on
@@ -344,8 +364,8 @@ test.describe('§sessions-draft — All view picker + draft row', () => {
     // already tore down throws, and that throw REPLACED the only report of which
     // step actually hung. This is the last test in the describe and `afterAll`
     // closes the app, so the route cannot leak into anything.
-    await sidebar.newButton().click({ timeout: 10_000 });
-    await pickProjectFromPicker(page, project.projectId);
+    await openProjectlessDraft(page);
+    await pickProjectFromWelcome(page, project.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
 
     // A failed agent run earlier in this describe parks a persistent error toast
@@ -392,7 +412,7 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
   // project filter was active. `use-draft-row.ts`'s `onDiscard` now marks
   // the draft in a discarded-drafts suppression set before resetting, so the
   // row clears reliably under an active project filter.
-  test('with a project selected, New skips the picker and the draft inherits that project', async () => {
+  test('with a project selected, New skips the project pick and the draft inherits that project', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
@@ -402,11 +422,14 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     });
 
     await sidebar.newButton().click();
-    // No picker — the draft resolves straight from the selected project.
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
+    // No dropdown step: the draft seeded the selected project, so the welcome
+    // screen opens with it already picked and the composer live.
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(projectA.projectPath));
+    await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
+    await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
     // The draft row's project marker only renders in "All" view (`showProject`,
     // DraftSessionRow.tsx) — with a project selected the row omits it. The chat
     // header's chip always names the draft's project (ChatCardHeaderDraft's
@@ -425,7 +448,6 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
 
   test('abandoning a draft in project A does not leak into a second New picking project B', async () => {
     const { page } = app;
-    const sidebar = sessionsSidebar(page);
     // Guarantee "All" view.
     await expect(page.getByTestId('sessions-new-button')).toBeVisible();
 
@@ -437,19 +459,20 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     // initial (both e2e projects are `mf-e2e-<hex>`, so the initial cannot tell
     // them apart) — the chat header's chip is what names the draft's project.
     const headerProject = page.getByTestId('chat-header-project');
-    await sidebar.newButton().click();
-    await pickProjectFromPicker(page, projectA.projectId);
+    await openProjectlessDraft(page);
+    await pickProjectFromWelcome(page, projectA.projectId);
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
     await expect(headerProject).toContainText(baseName(projectA.projectPath));
 
     // WITHOUT sending, click New again — the reused draft slot must not stack.
-    await sidebar.newButton().click();
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(1);
+    // Re-opening resets the slot's config, so the draft row retires with it and
+    // the welcome screen is back to asking for a project.
+    await openProjectlessDraft(page);
+    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
 
     // This time pick project B — the stale A config must be fully replaced, not merged.
-    await pickProjectFromPicker(page, projectB.projectId);
+    await pickProjectFromWelcome(page, projectB.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(1);
     await expect(headerProject).toContainText(baseName(projectB.projectPath), { timeout: 10_000 });
     await expect(headerProject).not.toContainText(baseName(projectA.projectPath));
@@ -463,18 +486,17 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
   });
 });
 
-// ─── §sessions-draft — bugfix: ⌘N in "All" view opens the project picker ────
+// ─── §sessions-draft — ⌘N takes the same one-click path as the "+" ─────────
 //
-// Regression coverage for the reported bug: ⌘N in "All" view used to bypass
-// SessionsNewButton's picker entirely (AppShell's hotkey called
-// switchToNewThread() directly), dropping the user on a projectless dead-end
-// (no project chip, no file tree; first send failed and rolled back via the
-// coordinator's "no draft config" guard). Fixed via useNewChatHotkeyHandler +
-// the shared useNewSessionPickerTarget store — ⌘N now opens the SAME anchored
-// popover the "+" button does when no project is selected, and is
-// unchanged (switch straight to a new thread) when one IS selected.
+// ⌘N and the "+" share `useNewChatHotkeyHandler`: reset the stale draft, switch
+// to the new thread, and let the surface resolve the project — the welcome
+// screen's picker in "All" view, the selected project directly when one is
+// active. The historical dead-end this block guards (a projectless draft whose
+// first send failed and rolled back via the coordinator's "no draft config"
+// guard) is now unreachable because the composer itself is withheld until a
+// project resolves.
 
-test.describe('§sessions-draft — ⌘N in "All" view opens the project picker (no projectless session)', () => {
+test.describe('§sessions-draft — ⌘N opens the welcome project picker (no projectless send)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -489,7 +511,7 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
     await closeTauriApp(app);
   });
 
-  test('⌘N opens the same anchored picker as the "+" button; no projectless draft is created', async () => {
+  test('⌘N opens the same welcome picker as the "+" button; nothing is sendable until a project is picked', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
     // Guarantee "All" view (no project selected).
@@ -497,13 +519,15 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
 
     await page.keyboard.press('ControlOrMeta+n');
 
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 10_000 });
-    // The picker gates project choice BEFORE any draft/chat exists — no
-    // projectless dead-end row and no new session.
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
+    // The welcome screen gates project choice BEFORE any draft config, chat or
+    // composer exists — no projectless dead-end and no new session.
+    await expect(composer(page).input()).toHaveCount(0);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
 
-    await pickProjectFromPicker(page, project.projectId);
+    await pickProjectFromWelcome(page, project.projectId);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
@@ -527,7 +551,7 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
     await waitForCreatedChat(project.projectId, chatsBefore);
   });
 
-  test('with a project selected, ⌘N still skips the picker and seeds that project directly', async () => {
+  test('with a project selected, ⌘N skips the project pick and seeds that project directly', async () => {
     const { page } = app;
 
     await projectRow(page, project.projectId).click();
@@ -536,11 +560,11 @@ test.describe('§sessions-draft — ⌘N in "All" view opens the project picker 
     });
 
     await page.keyboard.press('ControlOrMeta+n');
-    // No picker this time — the draft resolves straight from the selected project.
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
+    // No dropdown step — the draft resolves straight from the selected project.
+    await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
 
     // Clean up: discard, then clear the filter. The project switcher list is
@@ -580,11 +604,14 @@ test.describe('§sessions-draft — WelcomeState suggestions', () => {
     // mean the daemon signal broke, which this test must catch.
     expect(suggestions.length).toBeGreaterThan(0);
 
-    await sessionsSidebar(page).newButton().click();
-    await pickProjectFromPicker(page, project.projectId);
+    await openProjectlessDraft(page);
+    const rows = page.locator('[data-testid^="sessions-welcome-suggestion-"]:not([data-testid*="insert"])');
+    // Suggestions are repo-derived, so the choose-project state has none to show.
+    await expect(rows).toHaveCount(0);
+
+    await pickProjectFromWelcome(page, project.projectId);
 
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-    const rows = page.locator('[data-testid^="sessions-welcome-suggestion-"]:not([data-testid*="insert"])');
     await expect(rows).toHaveCount(suggestions.length, { timeout: 10_000 });
   });
 
@@ -617,11 +644,13 @@ test.describe('§sessions-draft — FirstRunState (zero projects)', () => {
     await closeTauriApp(app);
   });
 
-  test('a workspace with no projects shows the FirstRunState hero, not the project picker or Welcome state', async () => {
+  test('a workspace with no projects shows the FirstRunState hero, not the Welcome state', async () => {
     const { page } = app;
     await expect(page.getByTestId('sessions-firstrun')).toBeVisible({ timeout: 15_000 });
+    // There is no project to choose, so the welcome screen (and its picker)
+    // never renders — the hero owns the whole surface.
     await expect(page.getByTestId('sessions-welcome')).toHaveCount(0);
-    await expect(page.getByTestId('sessions-new-picker')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-project')).toHaveCount(0);
   });
 
   test('the "Add project…" CTA opens the directory picker', async () => {
@@ -633,16 +662,16 @@ test.describe('§sessions-draft — FirstRunState (zero projects)', () => {
   });
 });
 
-// ─── §sessions-draft — bugfix: zero-session boot opens the project picker ───
+// ─── §sessions-draft — zero-session boot lands on the welcome picker ───────
 //
 // Regression coverage: booting into "All" view with projects>0 but 0 sessions
 // used to strand the user on the boot draft with no project resolved (no
-// FirstRunState — projects exist — and no picker either, since nothing had
-// opened it). ChatSurface's boot-settle effect now force-opens the same
-// anchored picker after BOOT_SETTLE_MS if the boot draft is still
-// unresolved, so the workspace never lands on that dead-end surface.
+// FirstRunState — projects exist — and no way to pick one either). The welcome
+// screen IS that way now: the boot draft renders its choose-project state, so
+// the workspace never lands on a dead-end surface and no modal layer has to be
+// force-opened over the sidebar to rescue it.
 
-test.describe('§sessions-draft — zero-session boot (projects>0, no sessions) opens the project picker', () => {
+test.describe('§sessions-draft — zero-session boot (projects>0, no sessions) lands on the welcome picker', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -658,14 +687,18 @@ test.describe('§sessions-draft — zero-session boot (projects>0, no sessions) 
     await closeTauriApp(app);
   });
 
-  test('boot lands on the project picker, not a projectless dead-end surface', async () => {
+  test('boot lands on the welcome project picker, not a projectless dead-end surface', async () => {
     const { page } = app;
-    await expect(page.getByTestId('sessions-new-picker')).toBeVisible({ timeout: 15_000 });
-    // No dead-end draft/session sitting behind the forced picker.
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
+    // Unresolved, so nothing to send into and nothing to discard — and projects
+    // exist, so this is not the first-run hero either.
+    await expect(composer(page).input()).toHaveCount(0);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
     await expect(page.getByTestId('sessions-firstrun')).toHaveCount(0);
 
-    await pickProjectFromPicker(page, project.projectId);
-    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await pickProjectFromWelcome(page, project.projectId);
+    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+    await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
   });
 });

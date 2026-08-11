@@ -13,7 +13,7 @@
  * nothing to scope to, so the card says so instead of rendering an empty list
  * that reads as "no tasks".
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ListTodo, Paperclip, Plus, X } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { uploadAttachment, type Todo } from '@/lib/api/todos';
@@ -89,6 +89,7 @@ function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
   const create = useTodosStore((s) => s.create);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { pending, onPaste, clear } = usePendingPaste();
 
   const submit = async (): Promise<void> => {
@@ -112,6 +113,9 @@ function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
       });
     } finally {
       setAdding(false);
+      // `disabled` blurred the input during the awaited create — refocus after
+      // the re-enable renders, or "Enter, next task" needs a click in between.
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -123,6 +127,7 @@ function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
       <div className="flex w-full items-center gap-2">
         <Plus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <input
+          ref={inputRef}
           data-testid="session-panel-tasks-new"
           data-noring
           value={draft}
