@@ -46,6 +46,9 @@ vi.mock('@assistant-ui/react', () => ({
       threadListItem: { id: __mainThreadId, status: __itemStatus },
       thread: { messages: { length: __messageCount } },
     }),
+  // The split machinery (reconciler, hotkeys, zone focus clicks) needs the
+  // client; no case here opens a split, so the switch is inert.
+  useAui: () => ({ threads: { switchToThread: () => {} } }),
 }));
 vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects, loading: __loading }) }));
 vi.mock('../../runtime/draft-config', () => ({
@@ -190,8 +193,10 @@ describe('ChatSurface', () => {
   it('observes the row holding the thread, so a split surface measures what shrinks', () => {
     render(<ChatSurface />);
 
-    expect(observed).toHaveLength(1);
-    const row = observed[0] as HTMLElement;
+    // Two observers: the surface root (split-fits width gate) and the panel's
+    // host row. The row is the one that excludes the header.
+    expect(observed).toHaveLength(2);
+    const row = observed.find((el) => !el.contains(screen.getByTestId('chat-header'))) as HTMLElement;
     expect(row.contains(screen.getByTestId('chat-thread'))).toBe(true);
     expect(row.contains(screen.getByTestId('session-panel-root'))).toBe(true);
     expect(row.contains(screen.getByTestId('chat-header'))).toBe(false);

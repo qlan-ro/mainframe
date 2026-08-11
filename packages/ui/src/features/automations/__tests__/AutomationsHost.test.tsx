@@ -13,6 +13,11 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: vi.fn(() => ({ projectId: undefined })),
 }));
 
+// The library row's project annotation fetches through the daemon port — inert here.
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+}));
+
 beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: undefined } as ReturnType<typeof useActiveIdentity>);
   useAutomationsStore.setState({ activeProjectId: null });

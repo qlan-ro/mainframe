@@ -20,6 +20,9 @@ import userEvent from '@testing-library/user-event';
 const mockSetView = vi.fn();
 const mockSetSort = vi.fn();
 const mockSetFilters = vi.fn();
+// Stable identity — the board's load effect depends on it; a per-render vi.fn()
+// would re-fire the effect forever.
+const mockLoad = vi.fn();
 let mockTodos: import('@/lib/api/todos').Todo[] = [];
 let mockLoading = false;
 
@@ -27,6 +30,8 @@ vi.mock('../use-todos-store', () => ({
   useTodosStore: vi.fn(() => ({
     todos: mockTodos,
     loading: mockLoading,
+    // The board owns the load effect now (the sidebar section that used to is gone).
+    load: mockLoad,
     filters: { types: [], priorities: [], labels: [], search: '' },
     sort: { key: 'priority', dir: 'asc' },
     view: 'list',
