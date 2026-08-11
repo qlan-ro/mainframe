@@ -1,7 +1,7 @@
 /**
  * SessionPanelRail — the floating pill at the chat surface's right edge, the
  * switchboard for the stacked panels. Top-down: Session · context usage ·
- * Background Activity · Tasks · Launch.
+ * Background Activity · Launch · Tasks.
  *
  * Every button TOGGLES its panel — open panels stack beside the transcript, or
  * float over it when the gutter is short. The launch button's old one-click
@@ -12,9 +12,9 @@
  * belongs to the find-in-chat band, which the rail used to sit on top of.
  */
 import { useMemo } from 'react';
-import { Activity, Info, ListTodo, Rocket } from 'lucide-react';
+import { Activity, Info, ListTodo, Play } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
-import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { severityOf } from '@/features/quota/quota-format';
 import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -27,6 +27,11 @@ import type { SessionPanelState } from './use-session-panel-state';
 
 const RAIL_CHROME =
   'pointer-events-auto mr-2 ml-1 flex shrink-0 flex-col items-center gap-1 self-center rounded-full border border-border bg-background/85 px-1 py-2 shadow-md backdrop-blur-xl';
+
+/** The launch glyph keeps the toolbar quick-action's filled green arrow. */
+function LaunchGlyph({ className }: { className?: string }) {
+  return <Play className={cn(className, 'text-success')} fill="currentColor" aria-hidden />;
+}
 
 interface SessionPanelRailProps {
   state: SessionPanelState;
@@ -84,6 +89,17 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
         />
       </Hint>
 
+      <Hint label={live ? `Launch — ${control.label} running` : 'Launch'} side="left">
+        <RailIconButton
+          testId="session-panel-rail-launch"
+          label="Launch"
+          icon={LaunchGlyph}
+          pressed={isPanelVisible('launch')}
+          dot={live}
+          onClick={() => togglePanel('launch')}
+        />
+      </Hint>
+
       <Hint label="Tasks" side="left">
         <RailIconButton
           testId="session-panel-rail-tasks"
@@ -91,19 +107,6 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
           icon={ListTodo}
           pressed={isPanelVisible('tasks')}
           onClick={() => togglePanel('tasks')}
-        />
-      </Hint>
-
-      <Separator className="my-0.5 w-4" />
-
-      <Hint label={live ? `Launch — ${control.label} running` : 'Launch'} side="left">
-        <RailIconButton
-          testId="session-panel-rail-launch"
-          label="Launch"
-          icon={Rocket}
-          pressed={isPanelVisible('launch')}
-          dot={live}
-          onClick={() => togglePanel('launch')}
         />
       </Hint>
     </div>

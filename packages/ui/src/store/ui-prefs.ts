@@ -21,14 +21,14 @@ export type SidebarSection = 'projects';
 /** The rail's independent stacked panels, in rail/stack order. Declared here
  *  rather than in `features/session-panel/` because this store persists their
  *  open-state and `store/` must not import from `features/`. */
-export type SessionPanelId = 'session' | 'activity' | 'tasks' | 'launch';
+export type SessionPanelId = 'session' | 'activity' | 'launch' | 'tasks';
 
 /** Open on first run: the session card alone — the other panels are opt-in. */
 const SESSION_PANEL_DEFAULTS: Record<SessionPanelId, boolean> = {
   session: true,
   activity: false,
-  tasks: false,
   launch: false,
+  tasks: false,
 };
 
 export type SessionPanelOpen = Partial<Record<SessionPanelId, boolean>>;

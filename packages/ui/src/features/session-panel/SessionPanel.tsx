@@ -36,7 +36,7 @@ import { TasksCard } from './TasksCard';
 import type { SessionPanelState } from './use-session-panel-state';
 
 // Stack order mirrors the rail's button order, top to bottom.
-const PANEL_IDS: SessionPanelId[] = ['session', 'activity', 'tasks', 'launch'];
+const PANEL_IDS: SessionPanelId[] = ['session', 'activity', 'launch', 'tasks'];
 
 /** The session card: Summary is the identity, Plan and Context fold under it. */
 function SessionCard({ state, port, onClose }: { state: SessionPanelState; port: number; onClose: () => void }) {
@@ -56,8 +56,8 @@ function PanelStack({ state, port }: { state: SessionPanelState; port: number })
     <>
       {state.isPanelOpen('session') && <SessionCard state={state} port={port} onClose={close('session')} />}
       {state.isPanelOpen('activity') && <ActivityCard onClose={close('activity')} />}
-      {state.isPanelOpen('tasks') && <TasksCard onClose={close('tasks')} />}
       {state.isPanelOpen('launch') && <LaunchCard port={port} onClose={close('launch')} />}
+      {state.isPanelOpen('tasks') && <TasksCard onClose={close('tasks')} />}
     </>
   );
 }

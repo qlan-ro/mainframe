@@ -5,14 +5,14 @@
  * panel, and reads engaged only while that panel is actually showing.
  *
  * Behaviors covered:
- *  - the five controls render, top-down: session · activity · context · tasks ·
- *    launch
+ *  - the five controls render, top-down: session · context · activity · launch ·
+ *    tasks
  *  - each button toggles its own panel id
  *  - `aria-pressed` follows isPanelVisible, not the raw open bit
  *  - the activity dot appears only while background work is running, and the
  *    button's name carries the running count
- *  - the launch glyph is a Rocket, with a dot when a config is live — the old
- *    one-click run/stop moved into the Launch panel's rows
+ *  - the launch glyph is the filled green play arrow, with a dot when a config
+ *    is live — the old one-click run/stop moved into the Launch panel's rows
  *  - the context meter renders the percentage, vanishes when it is unknown, and
  *    is a plain indicator — not a control
  *
@@ -196,11 +196,13 @@ describe('SessionPanelRail — background activity', () => {
 });
 
 describe('SessionPanelRail — the launch glyph', () => {
-  it('is a Rocket, not a run control', () => {
+  it('is the filled green play arrow, and toggles rather than runs', () => {
     render(rail());
     const launch = screen.getByTestId('session-panel-rail-launch');
-    expect(launch.querySelector('.lucide-rocket')).toBeTruthy();
-    expect(launch.querySelector('.lucide-play')).toBeNull();
+    const glyph = launch.querySelector('.lucide-play');
+    expect(glyph).toBeTruthy();
+    expect(glyph).toHaveClass('text-success');
+    expect(glyph).toHaveAttribute('fill', 'currentColor');
     expect(launch.querySelector('.lucide-square')).toBeNull();
   });
 

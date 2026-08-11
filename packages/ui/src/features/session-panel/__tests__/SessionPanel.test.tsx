@@ -190,7 +190,7 @@ describe('SessionPanel — the stack', () => {
           '[data-testid="session-panel-card-session"],[data-testid^="stub-activity"],[data-testid^="stub-launch"],[data-testid^="stub-tasks"]',
         ),
     ).map((el) => el.getAttribute('data-testid'));
-    expect(rendered).toEqual(['session-panel-card-session', 'stub-activity', 'stub-tasks', 'stub-launch']);
+    expect(rendered).toEqual(['session-panel-card-session', 'stub-activity', 'stub-launch', 'stub-tasks']);
   });
 
   it('renders only the panels that are open', () => {
