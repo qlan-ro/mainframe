@@ -1,125 +1,202 @@
-# E2E Coverage Gap Report
+# e2e — test-id coverage gap report
 
-_Generated 2026-05-30. Method: diff `data-testid` defined in `packages/app-electron/src` against
-test-ids referenced via `.locator('[data-testid=...]')` in `packages/e2e/{tests,fixtures,helpers}`._
+_Generated 2026-08-11. Source: packages/ui/src data-testids and
+packages/e2e/{tests-tauri,helpers,fixtures} references. Method: same diff as UNUSED-TESTIDS.md,
+read in both directions._
 
-> **Caveat:** this is a literal-string diff. Test-ids that are templated/dynamic
-> (e.g. `chat-list-item` keyed by domain id, `dir-entry-${path}`) are undercounted on both
-> sides. Specs that locate by role/text rather than test-id also read as `live:0` here even
-> when they assert real behavior. Treat the ranking as directional and the exact counts as a floor.
+> "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
+> string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
+> buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
+> marks templated id families.
 
 ## Summary
 
-| State | Count | Meaning |
-|---|---|---|
-| Test-ids defined in source | 272 | raw count |
-| — test-only fixture IDs | −10 | not product UI (see below) — remove from denominator |
-| **Real interactive surface** | **~262** | actual product test-ids |
-| Live & exercised by e2e | ~33 | working coverage (~13%) |
-| **Dead testid selectors in specs** | ~19 | specs target renamed/removed UI |
-| **Dead role/text selectors** | + more | non-testid stale locators (see "Beyond testids" below) |
-| **Never covered** | ~229 | flows that never had a test |
+| Metric | Count |
+|---|---|
+| Defined | 892 |
+| Referenced | 366 |
+| Unused | 526 |
+| Dead selectors | 67 |
 
-Stack itself is current (`@playwright/test ^1.60.0`). The problem is **coverage drift**, not framework age.
+## Dead selectors
 
-### Test-only fixture IDs (exclude from the surface count)
-
-These match the test-id grep but only exist inside component unit tests, never the running app —
-do **not** write e2e against them: `btn`, `row`, `sub`, `tl`, `outside`, `slot-action`,
-`thrower-output`, `my-label`, `my-row`, `plugin-view`. (`thumb-name` IS real product UI.)
-
-### Beyond testids — dead role/text selectors & dormant code (from the full surface sweep)
-
-The existing specs also use non-testid locators that are now broken, plus reference unwired code:
-- `[data-testid="right-panel"]` — no such element; the panel root has no testid.
-- Zone tabs queried as `getByRole('tab', …)` — they are `<button>`s with `data-testid="zone-tab-{id}"`;
-  mode switching goes through `zone-button-tab-dropdown` → `zone-tab-dropdown-option-{mode}`.
-- `[data-testid="line-comment-popover"]` (14-editor) — `LineCommentPopover` is **dormant/unwired**;
-  the live path is `line-comment-widget` + `editor-inline-comment-input` via the glyph margin.
-- `settings-modal` root testid is **missing** from the DOM (only `settings-modal-close` exists),
-  yet `TutorialOverlay` queries it — a latent bug worth fixing alongside test work.
-
-## Dead selectors — CORRECTED after source + live-DOM verification (2026-05-30)
-
-> The original list below was derived from a **literal-string grep** of source, which produced
-> **false positives for dynamically-templated test-ids**. Verified against current source and the
-> running app, the real picture is:
-
-**Genuinely dead (confirmed absent in source + DOM):**
-`right-panel`, `project-dropdown`, `project-selector`, `chat-status-idle`, `chat-status-working`,
-`line-comment-popover`, `todos-panel-icon`, plus the role/text mode selectors in 12-changes-tab.
-
-**NOT dead — false positives (templated test-ids; render fine at runtime):**
-`todo-column-{open,in_progress,done}` (`todo-column-${status}`), `picker-item-command-{clear,compact}`
-(`picker-item-${type}-${name}`), `launch-config-{Web,Worker}` (`launch-config-${name}`),
-`task-progress-item-completed` (`task-progress-item-${status}`), `user-command-bubble` (static, present).
-(27-custom-commands & 33-task-progress are `test.describe.skip` regardless.)
-
-**Keystone breakages (shared fixtures — break ~every spec, higher impact than any single spec):**
-- `fixtures/project.ts` `openPickerAndSelectPath` drove the removed `project-selector`/`project-dropdown`
-  flow → **fixed** to `chats-add-project` + project-group post-condition. ✓ verified (no-AI probe)
-- `helpers/wait.ts` `waitForAIIdle` waited on dead `chat-status-working` (so it never actually waited)
-  → **fixed** to `session-bar-status` "Thinking" detection. ✓ selector verified; behavioral (timing)
-  confirmation needs an AI run.
+- `${T.sessionRow}` — referenced by: page-objects.ts
+- `${contentTestid}` — referenced by: zones.ts
+- `${railButtonTestid}` — referenced by: zones.ts
+- `ask-question-card` — referenced by: wait.ts
+- `changes-panel` — referenced by: files-tree.spec.ts
+- `chat-composer-worktree-missing` — referenced by: composer.spec.ts
+- `chat-queued-cancel` — referenced by: composer-advanced.spec.ts
+- `chat-queued-edit` — referenced by: composer-advanced.spec.ts
+- `chat-write-trigger` — referenced by: tool-cards.spec.ts
+- `composer-file-item-index.ts` — referenced by: composer-advanced.spec.ts
+- `composer-file-item-notes` — referenced by: composer-advanced.spec.ts
+- `composer-file-item-notes/todo.md` — referenced by: composer-advanced.spec.ts
+- `composer-skill-item-greet-user` — referenced by: composer-advanced.spec.ts
+- `connection-overlay` — referenced by: window-states.spec.ts
+- `file-tree-find-in-file` — referenced by: files-tree.spec.ts, find-in-path.spec.ts
+- `file-tree-find-in-folder` — referenced by: files-tree.spec.ts, find-in-path.spec.ts
+- `git-confirm-dialog` — referenced by: git-branch.spec.ts
+- `git-confirm-dialog-confirm` — referenced by: git-branch.spec.ts
+- `git-submenu-checkout` — referenced by: git-branch.spec.ts
+- `git-submenu-delete` — referenced by: git-branch.spec.ts
+- `git-submenu-delete-worktree` — referenced by: git-branch.spec.ts
+- `git-submenu-merge` — referenced by: git-branch.spec.ts
+- `git-submenu-new-branch-from` — referenced by: git-branch.spec.ts
+- `git-submenu-new-session` — referenced by: git-branch.spec.ts
+- `git-submenu-pull` — referenced by: git-branch.spec.ts
+- `git-submenu-push` — referenced by: git-branch.spec.ts
+- `git-submenu-rename` — referenced by: git-branch.spec.ts
+- `inspector-tab-changes` — referenced by: files-tree.spec.ts
+- `inspector-tab-files` — referenced by: files-tree.spec.ts
+- `markdown-mode-edit` — referenced by: editor.spec.ts
+- `markdown-mode-preview` — referenced by: editor.spec.ts, viewers.spec.ts
+- `marker-body` — referenced by: tool-cards.spec.ts
+- `message-image-thumb` — referenced by: composer.spec.ts
+- `permission-card` — referenced by: wait.ts
+- `plan-approval-card` — referenced by: wait.ts
+- `read-card-trigger` — referenced by: tool-cards.spec.ts
+- `search-palette-change-row-${…}` — referenced by: editor-diff.spec.ts, spotlight.spec.ts
+- `search-palette-change-row-orphan.txt` — referenced by: editor-diff.spec.ts
+- `search-palette-command-row-sidebar` — referenced by: spotlight.spec.ts
+- `search-palette-empty` — referenced by: spotlight.spec.ts
+- `search-palette-file-row-${…}` — referenced by: spotlight.spec.ts
+- `search-palette-session-row-${…}` — referenced by: spotlight.spec.ts
+- `session-bar-status` — referenced by: wait.ts
+- `session-panel-rail-activity-dot` — referenced by: session-panel.spec.ts
+- `session-panel-summary-branch` — referenced by: session-panel.spec.ts
+- `session-panel-summary-changes` — referenced by: session-panel.spec.ts
+- `session-panel-summary-context` — referenced by: session-panel.spec.ts
+- `sessions-remove-project-dialog` — referenced by: sessions-filters.spec.ts
+- `sessions-remove-project-dialog-confirm` — referenced by: sessions-filters.spec.ts
+- `sessions-section-jump` — referenced by: sessions-filters.spec.ts, sessions-rows.spec.ts
+- `tool-card` — referenced by: wait.ts
+- `viewer-image-actual-toggle` — referenced by: viewers.spec.ts
+- `viewer-image-fit-toggle` — referenced by: viewers.spec.ts
+- `viewer-svg-preview-toggle` — referenced by: viewers.spec.ts
+- `viewer-svg-source-toggle` — referenced by: viewers.spec.ts
+- `web-fetch-card-trigger` — referenced by: tool-cards.spec.ts
+- `workspace-files-panel` — referenced by: files-tree.spec.ts, page-objects.ts
+- `workspace-picker-launch-${…}` — referenced by: preview.spec.ts
+- `workspace-picker-launch-echo-once` — referenced by: workspace-surface.spec.ts
+- `workspace-picker-launch-exit-immediately` — referenced by: workspace-surface.spec.ts
+- `workspace-picker-launch-sleep-long` — referenced by: workspace-surface.spec.ts
+- `workspace-picker-new-terminal` — referenced by: workspace-surface.spec.ts
+- `workspace-picker-open-file` — referenced by: page-objects.ts, workspace-surface.spec.ts
+- `workspace-picker-open-url` — referenced by: workspace-surface.spec.ts
+- `workspace-picker-view-changes` — referenced by: workspace-surface.spec.ts
+- `zone-button-tab-dropdown` — referenced by: zones.ts
+- `zone-tab-dropdown-option-${mode}` — referenced by: zones.ts
 
 ## Per-spec health
 
-| Spec | live | dead | note |
-|---|---|---|---|
-| 01-launch | 1 | 0 | |
-| 02-projects | 0 | 2 | project picker re-tagged |
-| 04-chat-lifecycle | 1 | 0 | |
-| 05-messaging | 2 | 0 | |
-| 06-permissions | 2 | 1 | |
-| 07-plan-approval | 2 | 0 | |
-| 08-ask-user-question | 1 | 0 | |
-| 10-context-tab | 0 | 1 | |
-| 12-changes-tab | 0 | 1 | |
-| 14-editor | 0 | 2 | review/comment flow re-tagged |
-| 15-search | 0 | 0 | likely role/text locators |
-| 19-todos | 3 | 4 | board → modal/quick restructure |
-| 21-multi-chat | 1 | 0 | |
-| 22-app-restart | 2 | 0 | |
-| 25-image-lightbox | 5 | 0 | healthiest |
-| 26-tutorial | 4 | 2 | |
-| 27-custom-commands | 3 | 3 | command picker re-tagged |
-| 28-sandbox-launch | 6 | 3 | |
-| 30-composer-attachments | 2 | 0 | |
-| 31-composer-context-picker | 1 | 0 | |
-| 32-chat-status-context | 3 | 0 | |
-| 33-task-progress | 1 | 1 | |
-| 35-external-sessions | 4 | 0 | |
-| 36-codex-plan-approval | 2 | 0 | |
+| Spec | Live | Dead |
+|---|---|---|
+| app-tauri.ts | 0 | 0 |
+| background-client.ts | 0 | 0 |
+| chat-header.spec.ts | 15 | 0 |
+| chat.spec.ts | 29 | 0 |
+| composer-advanced.spec.ts | 77 | 10 |
+| composer.spec.ts | 47 | 2 |
+| daemon-picker.spec.ts | 66 | 0 |
+| daemon.ts | 0 | 0 |
+| directory-picker.spec.ts | 42 | 0 |
+| editor-comments-review.spec.ts | 46 | 0 |
+| editor-diff.spec.ts | 31 | 2 |
+| editor.spec.ts | 38 | 7 |
+| files-tree.spec.ts | 42 | 10 |
+| find-in-path.spec.ts | 46 | 9 |
+| gates.spec.ts | 40 | 0 |
+| git-branch.spec.ts | 64 | 16 |
+| global-setup.ts | 0 | 0 |
+| layout.spec.ts | 53 | 0 |
+| menus.ts | 0 | 0 |
+| page-objects.ts | 18 | 3 |
+| preview.spec.ts | 46 | 3 |
+| review-panel.spec.ts | 65 | 0 |
+| session-panel.spec.ts | 94 | 6 |
+| session-tabs.spec.ts | 11 | 0 |
+| sessions-draft.spec.ts | 70 | 0 |
+| sessions-filters.spec.ts | 37 | 3 |
+| sessions-rows.spec.ts | 28 | 1 |
+| sessions-tags.spec.ts | 54 | 0 |
+| sessions.spec.ts | 49 | 0 |
+| settings.spec.ts | 73 | 0 |
+| setup.ts | 1 | 0 |
+| sidebar-chrome.spec.ts | 16 | 0 |
+| spotlight.spec.ts | 31 | 9 |
+| stress-matrix.spec.ts | 11 | 0 |
+| tasks.spec.ts | 182 | 0 |
+| testids.ts | 0 | 0 |
+| tool-cards.spec.ts | 105 | 12 |
+| transcript.spec.ts | 18 | 0 |
+| viewers.spec.ts | 44 | 11 |
+| wait.ts | 3 | 0 |
+| wait.ts | 0 | 8 |
+| window-states.spec.ts | 30 | 4 |
+| workspace-surface.spec.ts | 43 | 11 |
+| ws-control.ts | 0 | 0 |
+| zones.ts | 0 | 4 |
 
-## Untested surfaces, ranked by size (candidate flows to author)
+## Untested surfaces, ranked
 
-| Surface | Untested | Has spec? | Priority rationale |
-|---|---|---|---|
-| todos | 29 | 19-todos (stale) | core panel, board restructured — rewrite |
-| chat | 25 | partial | permission/plan/question buttons — critical paths |
-| composer | 22 | partial | send/stop/queued/worktree/model — primary input |
-| sandbox | 16 | 28 (partial) | capture/inspect/screenshot lifecycle |
-| session | 9 | partial | session bar, tags, row actions |
-| branch | 9 | none | branch popover: fetch/push/new/update |
-| editor | 7 | 14 (stale) | inline/line review comments |
-| thread | 7 | none | find-in-thread, quote, tool-result collapse |
-| new (branch) | 6 | none | new-branch dialog |
-| find | 5 | none | find-in-path modal |
-| named (tunnel) | 5 | none | tunnel config |
-| tags | 5 | none | tag create/rename/recolor/delete |
-| message | 4 | none | copy, thinking-toggle, read-more |
-| rename (branch) | 4 | none | rename-branch dialog |
-| capture | 4 | none | capture rows/thumbs |
-| fileview | 4 | none | next/prev change, reveal-in-tree |
-
-Smaller surfaces (1–3 untested) cover: settings modal, search palette, terminal, status-bar
-updates, conflict view, directory picker, pairing, review modal, fullview, zone controls, tool
-card expanders, project groups, etc.
-
-## Recommended sequencing
-
-1. **Repair the 19 dead selectors** — re-point or delete stale specs so the suite is green/honest first.
-2. **Author new flows** in size+criticality order: todos → chat (permission/plan/question) →
-   composer → sandbox → branch/editor → the long tail.
-3. Feed each surface's flow (edges derived from handlers/state, anchored on these test-ids) to the
-   `test-scenarios` skill; review the result with `e2e-reviewer`.
+| Surface | Defined | Unused |
+|---|---|---|
+| chat | 145 | 82 |
+| automations | 76 | 74 |
+| tasks | 90 | 71 |
+| sessions | 78 | 31 |
+| skills | 23 | 23 |
+| settings | 30 | 20 |
+| preview | 31 | 16 |
+| review | 24 | 15 |
+| viewer | 19 | 12 |
+| daemon | 29 | 11 |
+| url | 11 | 11 |
+| composer | 39 | 10 |
+| provider | 9 | 9 |
+| session | 38 | 9 |
+| tool | 8 | 8 |
+| automation | 7 | 7 |
+| image | 7 | 7 |
+| run | 8 | 7 |
+| editor | 27 | 6 |
+| git | 24 | 6 |
+| sidebar | 19 | 6 |
+| smart | 6 | 6 |
+| main | 7 | 5 |
+| named | 5 | 5 |
+| search | 8 | 5 |
+| workspace | 20 | 5 |
+| worktree | 5 | 5 |
+| file | 11 | 4 |
+| push | 4 | 4 |
+| thread | 4 | 4 |
+| toast | 4 | 4 |
+| web | 4 | 4 |
+| directory | 14 | 3 |
+| error | 4 | 3 |
+| external | 3 | 3 |
+| pairing | 3 | 3 |
+| read | 3 | 3 |
+| tunnel | 3 | 3 |
+| app | 2 | 2 |
+| edit | 2 | 2 |
+| find | 9 | 2 |
+| remote | 2 | 2 |
+| archived | 1 | 1 |
+| gate | 1 | 1 |
+| import | 1 | 1 |
+| new | 1 | 1 |
+| quick | 1 | 1 |
+| restore | 1 | 1 |
+| setup | 1 | 1 |
+| surface | 3 | 1 |
+| dialog | 1 | 0 |
+| diff | 4 | 0 |
+| drop | 1 | 0 |
+| markdown | 1 | 0 |
+| project | 1 | 0 |
+| show | 1 | 0 |
+| surf | 1 | 0 |
+| tour | 7 | 0 |
