@@ -86,7 +86,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
       {showStack && mode === 'inline' && (
         <div
           data-testid="session-panel"
-          className={cn(stackChrome, 'mt-4 mr-1 mb-2 ml-2 max-h-[calc(100%-24px)] self-start')}
+          className={cn(stackChrome, '*:shadow-sm', 'mt-4 mr-1 mb-2 ml-2 max-h-[calc(100%-24px)] self-start')}
         >
           <PanelStack state={state} port={port} />
         </div>
@@ -96,7 +96,7 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
           data-testid="session-panel-overlay"
           role="dialog"
           aria-label="Session panel"
-          className={cn(stackChrome, 'absolute top-2 right-full z-30 max-h-[calc(100%-16px)]')}
+          className={cn(stackChrome, '*:shadow-xl', 'absolute top-2 right-full z-30 max-h-[calc(100%-16px)]')}
         >
           <PanelStack state={state} port={port} />
         </div>

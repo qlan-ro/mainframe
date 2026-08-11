@@ -121,10 +121,11 @@ function BranchRowView({
       onBranchChanged={onBranchChanged}
       triggerLabel="Manage branch"
     >
+      {/* No onClick of its own: DropdownMenuTrigger toggles on pointerdown,
+          and a second toggle here closes the menu on release. */}
       <button
         type="button"
         data-testid={rowTestId(row)}
-        onClick={() => setOpen((o) => !o)}
         className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
       >
         <RowBody row={row} />

@@ -1,6 +1,6 @@
 /**
  * §tasks — Tasks feature specs: quick-create, board (list/board views), the
- * left-sidebar Tasks section, full edit modal, filters/sort, and start-session.
+ * session panel's Tasks card, full edit modal, filters/sort, and start-session.
  *
  * Scope: docs/plans/2026-07-03-tauri-e2e-test-plan.md spec #29 (Cluster D).
  * UI-only — no agent-turn recording needed (Tasks live entirely in daemon REST
@@ -8,23 +8,38 @@
  *
  * Entry points (verified against source):
  *   ControlOrMeta+Shift+T (window keydown, TasksModalHost.tsx)      → tasks-quick-dialog
- *   sidebar-tasks → dispatches `mf:open-tasks` (v2/features/sessions/SessionSidebar.tsx
+ *   sidebar-tasks → dispatches `mf:open-tasks` (features/sessions/SessionSidebar.tsx
  *     HeaderActions; the old `sidebar-tasks-button` id died with the v1 SidebarHeader)
- *     → tasks-board-modal
- *   TasksSidebarSection (left sidebar) — rebuilt in v2/features/tasks/; always
- *     mounted while a project is active (renders null without one), so no toggle
- *     is needed to reach it.
+ *     → tasks-board-modal. This sidebar-footer button survived the move below.
+ *   session-panel-rail-tasks → the session panel's Tasks CARD
+ *     (features/session-panel/TasksCard.tsx) — where the left sidebar's Tasks
+ *     section went. It is opt-in: `store/ui-prefs.ts` opens the Session card
+ *     only, so the rail button is the way in and a second click closes it again.
  *
- * Two render trees own this feature since the v2 shell landed, and both are
- * exercised here:
- *   - the board modal + quick dialog are still the v1 bodies
- *     (packages/ui/src/features/tasks/*) inside a v2 dialog shell;
- *   - the sidebar section and the modal it opens are v2
- *     (packages/ui/src/v2/features/tasks/*).
- * Both TaskEditModal implementations carry the same `tasks-edit-*` testids, so
- * the assertions below are shared; only their select option labels differ
- * slightly (v1 renders PRIORITIES raw, v2 runs every option through
- * `replace('_', ' ')` — identical for the underscore-free priorities).
+ * ── The sidebar section became a panel card ──────────────────────────────────
+ * `tasks-sidebar-section` / `-new` / `-empty` / `-row-<n>` / `-overflow` /
+ * `-section-jump` are GONE from the product (no `tasks-sidebar` testid is emitted
+ * anywhere any more). Their successors live on the card: `session-panel-tasks-new`,
+ * `session-panel-tasks-empty`, `session-panel-tasks-no-project` and
+ * `session-panel-task-row-<number>`. The card lists EVERY active task — the old
+ * VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so the
+ * overflow scenario below pins the uncapped list instead of being deleted.
+ *
+ * The card sits on the chat surface's right edge and only stacks inline when the
+ * chat host clears `INLINE_MIN_WIDTH` (1468, panel-mode.ts); narrower, a rail
+ * click FLOATS it and any outside pointerdown light-dismisses it — which every
+ * board/dialog interaction here would do. Hence the explicit wide viewport in
+ * `beforeAll`: the card has to be inline to survive the tests that drive other
+ * surfaces around it.
+ *
+ * TWO TaskEditModal implementations are still in play, and both are exercised
+ * here: the board opens `features/tasks/TaskEditModal.tsx` (the quick dialog is a
+ * third body of its own, QuickTaskDialog.tsx), while the Tasks card opens
+ * `features/tasks/sidebar/TaskEditModal.tsx` — the one the left-sidebar section
+ * used to open, which moved into the card with it. They carry
+ * the same `tasks-edit-*` testids, so the assertions below are shared; only their
+ * select option labels differ slightly (both run options through
+ * `replace('_', ' ')`, identical for the underscore-free priorities).
  *
  * Testid reference (verified against source):
  *   tasks-quick-dialog / tasks-quick-feature / tasks-quick-bug / tasks-quick-title /
@@ -44,21 +59,15 @@
  *   tasks-label-pill-<label> / tasks-label-remove-<label> / tasks-label-input
  *   tasks-dep-pill-<n> / tasks-dep-remove-<n> / tasks-dep-input / tasks-dep-opt-<n>
  *   tasks-attach-add / tasks-attach-<id> (root) / tasks-attach-delete-<id>
- *   tasks-sidebar-section / tasks-sidebar-section-jump / tasks-sidebar-new /
- *     tasks-sidebar-empty / tasks-sidebar-row-<n> / tasks-sidebar-overflow
- *     (v2 TasksSidebarSection.tsx + TasksSidebarList.tsx; the list still caps at
- *     VISIBLE_TASKS = 5 rows)
+ *   session-panel-rail-tasks / session-panel-card-tasks / session-panel-card-close-tasks
+ *     — the rail toggle, the card, and its header X (features/session-panel/)
+ *   session-panel-tasks-new / session-panel-tasks-empty /
+ *     session-panel-tasks-no-project / session-panel-task-row-<n> — the card's body
  *
- * Deliberately deleted by the v2 sidebar rebuild (do not re-assert):
- *   - `tasks-sidebar-expand` — the v2 section header carries no expand-to-modal
- *     button (TasksSidebarSection.tsx docstring: "a control that opens nothing is
- *     worse than a missing one"). The board is reached via `sidebar-tasks`.
- *   - `tasks-sidebar-section-toggle` — SidebarJumpSection replaced the collapse
- *     with a scroll-to-content jump (`tasks-sidebar-section-jump`); with one
- *     scroller a collapse only shortened the scroll.
- *   - `tasks-sidebar-view-all` — the overflow row is now a STATIC `<div>`
- *     (`tasks-sidebar-overflow`, text "N more"), not a link: TasksSidebarList.tsx
- *     says "the full Tasks view has no host in v2 yet".
+ * Deliberately deleted (do not re-assert): every `tasks-sidebar-*` id. The v2
+ * rebuild had already dropped `tasks-sidebar-expand`, `-section-toggle` and
+ * `-view-all`; the section itself is gone now, so the remaining five ids went
+ * with it. The board is still reached via `sidebar-tasks`.
  *
  * v2 interaction contracts that changed how these controls are driven:
  *   - The List/Board switch is a Radix `Tabs` (TasksBoard.tsx), so the selected
@@ -100,6 +109,17 @@ async function openQuickDialog(page: Page): Promise<void> {
   await page.getByTestId('tasks-quick-dialog').waitFor({ timeout: 5_000 });
 }
 
+/**
+ * Show the session panel's Tasks card. Opt-in (ui-prefs opens the Session card
+ * alone), and the rail button TOGGLES — clicking it while the card is up would
+ * close it — so this only clicks when the card is absent.
+ */
+async function openTasksCard(page: Page): Promise<void> {
+  const card = page.getByTestId('session-panel-card-tasks');
+  if ((await card.count()) === 0) await page.getByTestId('session-panel-rail-tasks').click();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+}
+
 async function openBoard(page: Page): Promise<void> {
   await page.getByTestId('sidebar-tasks').click();
   await page.getByTestId('tasks-board-modal').waitFor({ timeout: 10_000 });
@@ -132,6 +152,10 @@ test.describe('§tasks', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
+    // Wide enough for the session panel's Tasks card to stack INLINE (host must
+    // clear INLINE_MIN_WIDTH = 1468); at the harness default of 1280 the card
+    // only floats, and the first board click would light-dismiss it.
+    await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
     testImagePath = path.join(project.projectPath, 'test-attachment.png');
     writeFileSync(testImagePath, Buffer.from(TINY_PNG_BASE64, 'base64'));
@@ -143,7 +167,7 @@ test.describe('§tasks', () => {
     await closeTauriApp(app);
   });
 
-  test('board and sidebar section show empty state before any tasks exist', async () => {
+  test('board and the Tasks card show empty state before any tasks exist', async () => {
     const { page } = app;
 
     await openBoard(page);
@@ -152,10 +176,13 @@ test.describe('§tasks', () => {
     await expect(empty).toContainText('No tasks yet');
     await closeBoard(page);
 
-    // The left-sidebar Tasks section is always mounted while a project is active.
-    const sectionEmpty = page.getByTestId('tasks-sidebar-empty');
-    await expect(sectionEmpty).toBeVisible({ timeout: 10_000 });
-    await expect(sectionEmpty).toHaveText('No active tasks');
+    // The Tasks card replaced the left-sidebar section; a project is active, so
+    // it scopes to that project rather than showing the no-project note.
+    await openTasksCard(page);
+    const cardEmpty = page.getByTestId('session-panel-tasks-empty');
+    await expect(cardEmpty).toBeVisible({ timeout: 10_000 });
+    await expect(cardEmpty).toHaveText('No active tasks');
+    await expect(page.getByTestId('session-panel-tasks-no-project')).toHaveCount(0);
   });
 
   // ─── Quick-create (⌘⇧T) ─────────────────────────────────────────────────
@@ -507,56 +534,58 @@ test.describe('§tasks', () => {
     await closeBoard(page);
   });
 
-  // ─── Sidebar section ─────────────────────────────────────────────────────
+  // ─── Session-panel Tasks card ────────────────────────────────────────────
 
-  // The expand-to-modal affordance was deliberately dropped by the v2 rebuild
-  // (TasksSidebarSection.tsx), so this covers what the section still offers:
-  // rows, the New button, and row → edit modal.
-  test('sidebar section: rows, New button, and a row opening its edit modal', async () => {
+  // Successor to the left-sidebar section's coverage: rows, the New button, and
+  // row → edit modal. The card and the board share one zustand store
+  // (use-todos-store.ts, refetch-on-mutation), so the rows below reflect every
+  // task the board and the quick dialog created above without a reload.
+  test('tasks card: rows, New task, and a row opening its edit modal', async () => {
     const { page } = app;
+    await openTasksCard(page);
 
-    await expect(page.getByTestId('tasks-sidebar-section')).toBeVisible({ timeout: 10_000 });
-
-    // All 5 tasks are still open/in_progress (none done) at this point —
-    // exactly VISIBLE_TASKS, so every row shows and there is no overflow row.
+    // All 5 tasks are still open/in_progress (none done) at this point, and the
+    // card caps nothing — every active task gets a row.
     for (const n of [1, 2, 3, 4, 5]) {
-      await expect(page.getByTestId(`tasks-sidebar-row-${n}`)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId(`session-panel-task-row-${n}`)).toBeVisible({ timeout: 10_000 });
     }
-    await expect(page.getByTestId('tasks-sidebar-overflow')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-tasks-empty')).toHaveCount(0);
 
-    // New button opens a section-local create modal (independent of the board).
-    await page.getByTestId('tasks-sidebar-new').click();
+    // New task opens a card-local create modal (independent of the board).
+    await page.getByTestId('session-panel-tasks-new').click();
     await expect(page.getByTestId('tasks-edit-title')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tasks-edit-save')).toHaveText('Create task');
     await page.getByTestId('tasks-edit-cancel').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
 
     // Clicking a row opens the edit modal for that task.
-    await page.getByTestId('tasks-sidebar-row-3').click();
+    await page.getByTestId('session-panel-task-row-3').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveValue('Alpha bug report', { timeout: 5_000 });
     await page.getByTestId('tasks-edit-cancel').click();
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('sidebar section: a 6th active task overflows into a static "N more" row', async () => {
+  // Successor to "a 6th active task overflows into a static 'N more' row": the
+  // card has no VISIBLE_TASKS cap and no residual row, so the 6th task is a row
+  // like any other. Kept as a scenario (rather than deleted with the cap) because
+  // the daemon-side numbering and the card's live refresh are what it really pins.
+  test('tasks card: a 6th active task gets a row of its own — the list is uncapped', async () => {
     const { page } = app;
+    await openTasksCard(page);
 
-    // The section caps at VISIBLE_TASKS = 5 rows — a 6th active task collapses
-    // into a residual count instead of scrolling.
     await openQuickDialog(page);
     await page.getByTestId('tasks-quick-title').fill('Overflow fixture task');
     await page.getByTestId('tasks-quick-create').click();
     await expect(page.getByTestId('tasks-quick-dialog')).toHaveCount(0, { timeout: 5_000 });
 
-    // Was a "View all N tasks" link; the v2 list renders the residual count as
-    // plain text because the full Tasks view has no v2 host to link to yet, so
-    // there is no click target to assert here — the board is reached via
-    // `sidebar-tasks` below instead.
-    const overflow = page.getByTestId('tasks-sidebar-overflow');
-    await expect(overflow).toHaveText('1 more', { timeout: 10_000 });
-    // Daemon list order is status, order_index, created_at — #6 (the newest
-    // 'open' task) is the row past the cap.
-    await expect(page.getByTestId('tasks-sidebar-row-6')).toHaveCount(0);
+    // Daemon list order is status, order_index, created_at — #6 is the newest
+    // 'open' task, and it renders instead of collapsing into a count.
+    const row6 = page.getByTestId('session-panel-task-row-6');
+    await expect(row6).toBeVisible({ timeout: 10_000 });
+    await expect(row6).toContainText('Overflow fixture task');
+    for (const n of [1, 2, 3, 4, 5]) {
+      await expect(page.getByTestId(`session-panel-task-row-${n}`)).toBeVisible();
+    }
 
     // Delete the fixture so the later delete tests keep their active counts.
     await openBoard(page);
@@ -565,7 +594,8 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-list-row-6')).toHaveCount(0, { timeout: 5_000 });
     await closeBoard(page);
 
-    await expect(overflow).toHaveCount(0, { timeout: 5_000 });
+    // The card follows the deletion through the shared store.
+    await expect(row6).toHaveCount(0, { timeout: 5_000 });
   });
 
   // ─── Delete ──────────────────────────────────────────────────────────────

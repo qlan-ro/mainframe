@@ -36,14 +36,14 @@ const RAIL_MARGINS = 12;
  * depend on the surface width, so the gutter that admitted the card has to
  * admit the rail the card collapses into.
  *
- * Deliberately conservative — neither state needs all 382. The card occupies
- * 312 (`ml-2` + `w-72` + `mr-4`) and the rail 54. Budgeting for both keeps the
+ * Deliberately conservative — neither state needs all 350. The stack occupies
+ * 300 (`ml-2` + `w-72` + `mr-1`) and the rail 54. Budgeting for both keeps the
  * threshold put when either one's margins are tuned, which is why stepping the
  * card's right inset from 8 to 16 did not move it.
  */
 export const PANEL_BLOCK_WIDTH = PANEL_MARGIN + PANEL_WIDTH + RAIL_MARGINS + RAIL_WIDTH;
 
-/** Surface width at which BOTH gutters clear a panel block — 1532px. */
+/** Surface width at which BOTH gutters clear a panel block — 1468px. */
 export const INLINE_MIN_WIDTH = TRANSCRIPT_WIDTH + 2 * PANEL_BLOCK_WIDTH;
 
 export type PanelMode = 'inline' | 'rail' | 'overlay' | 'hidden';

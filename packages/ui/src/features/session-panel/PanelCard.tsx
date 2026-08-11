@@ -16,8 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { SessionPanelId } from '@/store/ui-prefs';
 
+// No shadow of its own: stacked cards with individual heavy shadows bleed
+// into the gaps between them. The stack container sets elevation per mode
+// (`*:shadow-*` — subtle inline, stronger when floating over the transcript).
 const CARD_CHROME =
-  'pointer-events-auto flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background/85 shadow-lg backdrop-blur-xl';
+  'pointer-events-auto flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-background/85 backdrop-blur-xl';
 
 interface PanelCardProps {
   id: SessionPanelId;

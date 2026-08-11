@@ -58,10 +58,11 @@ export function WelcomeState({ projectId }: { projectId: string }) {
               onBranchChanged={loadBranch}
               triggerLabel="Switch branch"
             >
+              {/* No onClick of its own: DropdownMenuTrigger toggles on
+                  pointerdown, and a second toggle here closes it on release. */}
               <button
                 type="button"
                 data-testid="welcome-branch"
-                onClick={() => setPickerOpen((o) => !o)}
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <GitBranch size={12} />

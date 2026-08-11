@@ -21,7 +21,7 @@
  * belongs to its own suite.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { ContextUsage, DetectedPr } from '@qlan-ro/mainframe-types';
@@ -48,9 +48,21 @@ vi.mock('@/features/sessions/use-display-branch', () => ({
   useDisplayBranch: () => ({ branch: mockBranch, isDraftWorktree: mockIsDraftWorktree, refetch }),
 }));
 
+// The trigger carries NO onClick of its own (the real DropdownMenuTrigger owns
+// the gesture — pinned by e2e), so the mock exposes onOpenChange for the test
+// to drive the wiring through.
 vi.mock('@/features/git/BranchPopover', () => ({
-  BranchPopover: ({ open, children }: { open: boolean; children: ReactNode }) => (
+  BranchPopover: ({
+    open,
+    onOpenChange,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (next: boolean) => void;
+    children: ReactNode;
+  }) => (
     <div data-testid="branch-popover" data-open={String(open)}>
+      <button data-testid="branch-popover-drive" onClick={() => onOpenChange(!open)} />
       {children}
     </div>
   ),
@@ -236,13 +248,14 @@ describe('SummarySection — nothing to report', () => {
 });
 
 describe('SummarySection — the branch row manages the branch', () => {
-  it('opens the branch popover when the row is clicked', async () => {
+  it('renders the row as the popover trigger and wires the open state through', async () => {
     render(<SummarySection port={31415} />);
-    const row = screen.getByTestId('session-panel-summary-branch');
+    const popover = screen.getByTestId('branch-popover');
+    const row = within(popover).getByTestId('session-panel-summary-branch');
     expect(row.tagName).toBe('BUTTON');
-    expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'false');
+    expect(popover).toHaveAttribute('data-open', 'false');
 
-    await userEvent.click(row);
+    await userEvent.click(screen.getByTestId('branch-popover-drive'));
 
     expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'true');
   });

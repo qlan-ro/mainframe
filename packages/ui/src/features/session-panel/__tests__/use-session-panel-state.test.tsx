@@ -113,6 +113,24 @@ describe('useSessionPanelState — panel open state', () => {
     setWidth(1600);
     expect(result.current.isPanelVisible('tasks')).toBe(false);
   });
+
+  it('re-opens the session card on boot when the gutter fits, over a persisted close', () => {
+    act(() => useUiPrefs.setState({ sessionPanelOpen: { session: false } }));
+    const { result } = renderPanelState();
+    setWidth(1600);
+    expect(result.current.isPanelOpen('session')).toBe(true);
+  });
+
+  it('honours a close made during the run — boot-open arms only once', () => {
+    const { result } = renderPanelState();
+    setWidth(1600);
+    act(() => result.current.togglePanel('session'));
+    expect(result.current.isPanelOpen('session')).toBe(false);
+    // The gutter re-fitting later must not resurrect it this run.
+    setWidth(1000);
+    setWidth(1600);
+    expect(result.current.isPanelOpen('session')).toBe(false);
+  });
 });
 
 describe('useSessionPanelState — togglePanel', () => {

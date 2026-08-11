@@ -8,9 +8,21 @@ const setText = vi.fn();
 
 // Shallow: the real popover fires git fetches when open, and its own behavior
 // belongs to its own suite. Here we only care that the branch label triggers it.
+// The pill carries NO onClick of its own (the real DropdownMenuTrigger owns
+// the gesture — pinned by e2e), so the mock exposes onOpenChange for the test
+// to drive the wiring through.
 vi.mock('@/features/git/BranchPopover', () => ({
-  BranchPopover: ({ open, children }: { open: boolean; children: ReactNode }) => (
+  BranchPopover: ({
+    open,
+    onOpenChange,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (next: boolean) => void;
+    children: ReactNode;
+  }) => (
     <div data-testid="branch-popover" data-open={String(open)}>
+      <button data-testid="branch-popover-drive" onClick={() => onOpenChange(!open)} />
       {children}
     </div>
   ),
@@ -46,12 +58,13 @@ describe('WelcomeState', () => {
     await waitFor(() => expect(screen.getByText('main')).toBeInTheDocument());
   });
 
-  it('opens the branch popover from the branch label', async () => {
+  it('renders the branch pill as the popover trigger and wires the open state through', async () => {
     render(<WelcomeState projectId="proj-a" />);
     const trigger = await screen.findByTestId('welcome-branch');
+    expect(trigger.tagName).toBe('BUTTON');
     expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'false');
 
-    fireEvent.click(trigger);
+    fireEvent.click(screen.getByTestId('branch-popover-drive'));
 
     expect(screen.getByTestId('branch-popover')).toHaveAttribute('data-open', 'true');
   });

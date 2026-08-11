@@ -98,6 +98,16 @@ export function useSessionPanelState(): SessionPanelState {
     if (overlayOpen && gutterFits) setOverlayOpen(false);
   }, [gutterFits, overlayOpen]);
 
+  // The session card is on by default whenever there is room: the first time
+  // the gutter fits after boot, it opens — even over a persisted close from a
+  // previous run. Closing it stays honoured within the run (the ref arms once).
+  const bootOpened = useRef(false);
+  useEffect(() => {
+    if (bootOpened.current || !gutterFits) return;
+    bootOpened.current = true;
+    openSessionPanel('session');
+  }, [gutterFits, openSessionPanel]);
+
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
     if (mode !== 'overlay') return;
