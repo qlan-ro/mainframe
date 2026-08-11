@@ -1,6 +1,16 @@
 import { spawn, execFileSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { mkdtempSync, rmSync, openSync, closeSync, existsSync } from 'fs';
+import {
+  mkdtempSync,
+  rmSync,
+  openSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -190,6 +200,59 @@ export async function startDaemon(opts?: { recordingKey?: string; mockMaxDelayMs
   }
 }
 
+/**
+ * Keep the daemon's logs before its data dir is deleted.
+ *
+ * The daemon's tracing output goes to `<MAINFRAME_DATA_DIR>/logs/server.<date>.log`
+ * (logging.rs; the stdout layer stays quiet, so the spawn's own capture only ever
+ * holds a panic). That data dir is the temp dir this file removes at teardown — so
+ * on CI the logs of a failing run were destroyed with it, and a Linux-only failure
+ * could only be read through the DOM. Both go next to the report, in their own
+ * directory rather than inside `playwright-report/`, which the HTML reporter wipes
+ * when it writes, and the workflow uploads them.
+ */
+const DAEMON_LOG_DIR = path.resolve(__dirname, '../daemon-logs');
+/** Enough tail to cover a describe; a whole run's logging would dwarf the report. */
+const MAX_KEPT_LOG_BYTES = 1_000_000;
+
+function keepTail(source: string, destination: string): void {
+  if (!existsSync(source)) return;
+  const contents = readFileSync(source);
+  if (contents.byteLength === 0) return;
+  const kept =
+    contents.byteLength > MAX_KEPT_LOG_BYTES ? contents.subarray(contents.byteLength - MAX_KEPT_LOG_BYTES) : contents;
+  mkdirSync(DAEMON_LOG_DIR, { recursive: true });
+  writeFileSync(destination, kept);
+}
+
+async function preserveDaemonLog(handle: DaemonHandle): Promise<void> {
+  const name = path.basename(handle.testDataDir);
+  const kept: string[] = [];
+  try {
+    const tracingDir = path.join(handle.testDataDir, 'logs');
+    if (existsSync(tracingDir)) {
+      for (const file of readdirSync(tracingDir)) {
+        const destination = path.join(DAEMON_LOG_DIR, `${name}-${file}`);
+        keepTail(path.join(tracingDir, file), destination);
+        if (existsSync(destination)) kept.push(destination);
+      }
+    }
+    // Empty unless the daemon panicked — which is exactly when it matters.
+    const stdio = path.join(DAEMON_LOG_DIR, `${name}-stdio.log`);
+    keepTail(path.join(handle.testDataDir, 'daemon.log'), stdio);
+    if (existsSync(stdio)) kept.push(stdio);
+  } catch (err) {
+    console.warn('[e2e] could not preserve the daemon logs', err);
+  }
+
+  // On CI these files are not collected — the workflow uploads only
+  // `playwright-report/`, and an attachment made from an `afterAll` hook never
+  // reaches it. Read them from the artifact-free path: the local directory below,
+  // or add an upload step for `packages/e2e/daemon-logs/` (needs a token with the
+  // `workflow` scope).
+  if (kept.length > 0) console.log(`[e2e] kept ${kept.length} daemon log(s) for ${name} in daemon-logs/`);
+}
+
 export async function stopDaemon(handle: DaemonHandle | undefined): Promise<void> {
   if (!handle) return;
   await new Promise<void>((resolve) => {
@@ -202,5 +265,6 @@ export async function stopDaemon(handle: DaemonHandle | undefined): Promise<void
       resolve();
     }, 3_000);
   });
+  await preserveDaemonLog(handle);
   rmSync(handle.testDataDir, { recursive: true, force: true });
 }
