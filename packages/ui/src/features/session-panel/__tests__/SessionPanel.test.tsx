@@ -183,7 +183,7 @@ describe('SessionPanel — the rail is always there', () => {
 });
 
 describe('SessionPanel — the stack', () => {
-  it('renders one card per open panel, in render order', () => {
+  it('renders one card per open panel, matching the rail order', () => {
     render(<SessionPanel state={panelState('inline', ['session', 'activity', 'launch', 'tasks'])} />);
     const rendered = Array.from(
       screen
@@ -192,7 +192,7 @@ describe('SessionPanel — the stack', () => {
           '[data-testid="session-panel-card-session"],[data-testid^="stub-activity"],[data-testid^="stub-launch"],[data-testid^="stub-tasks"]',
         ),
     ).map((el) => el.getAttribute('data-testid'));
-    expect(rendered).toEqual(['session-panel-card-session', 'stub-activity', 'stub-launch', 'stub-tasks']);
+    expect(rendered).toEqual(['session-panel-card-session', 'stub-activity', 'stub-tasks', 'stub-launch']);
   });
 
   it('renders only the panels that are open', () => {
