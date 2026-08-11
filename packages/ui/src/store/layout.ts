@@ -45,6 +45,15 @@ export interface SessionWorkspace {
 
 // ── store ─────────────────────────────────────────────────────────────────
 
+/** Injected by features/chat/zones (store/ cannot import features/): true
+ *  while the chat split is on screen. Workspace placement consults it so a
+ *  surface lit mid-split lands in the bottom strip instead of taking half the
+ *  top row and starving the split below its width floor. */
+let chatSplitVisibleProbe: () => boolean = () => false;
+export function registerChatSplitVisibleProbe(probe: () => boolean): void {
+  chatSplitVisibleProbe = probe;
+}
+
 const INITIAL_LAYOUT: WorkspaceLayout = {
   top: ['chat'],
   bottom: null,
@@ -123,6 +132,17 @@ export const useLayoutStore = create<LayoutStore>()(
       set({ layout: next.layout, run: next.run, sessions: nextSessions });
     }
 
+    /** placeInLayout for the workspace, but split-aware: while the chat split
+     *  is visible a newly lit workspace goes UNDER it (bottom strip), claimed
+     *  as system-moved so unsplitting brings it up beside the chat. */
+    function placeWorkspace(layout: WorkspaceLayout): WorkspaceLayout {
+      if (chatSplitVisibleProbe() && layout.bottom == null && !layout.top.includes('workspace')) {
+        set({ workspaceSystemMoved: 'top-right' });
+        return { ...layout, bottom: 'workspace' };
+      }
+      return placeInLayout(layout, 'workspace');
+    }
+
     return {
       layout: INITIAL_LAYOUT,
       run: null,
@@ -147,7 +167,14 @@ export const useLayoutStore = create<LayoutStore>()(
         // Dynamic floor: the last lit surface (chat or workspace) can't be hidden.
         if (isSurfaceFloor(layout, surface)) return;
         const isActive = layout.top.includes(surface) || layout.bottom === surface;
-        writeWorkspace({ layout: isActive ? removeSurface(layout, surface) : placeInLayout(layout, surface), run });
+        writeWorkspace({
+          layout: isActive
+            ? removeSurface(layout, surface)
+            : surface === 'workspace'
+              ? placeWorkspace(layout)
+              : placeInLayout(layout, surface),
+          run,
+        });
       },
 
       setTopFrac(frac) {
@@ -168,7 +195,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         if (!layoutCanSplit(layout)) return;
         if (orientation === 'v') {
-          writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run });
+          writeWorkspace({ layout: placeWorkspace(layout), run });
         } else {
           if (layout.bottom) return;
           writeWorkspace({ layout: { ...layout, bottom: 'workspace' }, run });
@@ -208,7 +235,7 @@ export const useLayoutStore = create<LayoutStore>()(
       openFileTab(target, mode, paneId) {
         const { layout, run } = get();
         const next = openFileTabReducer(run, target, mode, paneId);
-        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: next.run });
+        writeWorkspace({ layout: placeWorkspace(layout), run: next.run });
         return next.tabId;
       },
 
@@ -226,7 +253,7 @@ export const useLayoutStore = create<LayoutStore>()(
         // false so the subscriber disposes the orphaned terminal (Task 10). On
         // success it returns a real RunState; commit it and light the workspace.
         if (nextRun === null) return false;
-        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: nextRun });
+        writeWorkspace({ layout: placeWorkspace(layout), run: nextRun });
         return true;
       },
 

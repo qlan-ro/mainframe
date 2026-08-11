@@ -13,13 +13,20 @@
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { useLayoutStore } from '@/store/layout';
+import { registerChatSplitVisibleProbe, useLayoutStore } from '@/store/layout';
 import { splitVisible, useZonesStore, type ZoneIndex } from './zones-store';
+
+// The layout store's workspace placement is split-aware through this probe
+// (store/ cannot import features/, so the dependency is inverted). Module
+// scope: the reconciler is imported by ChatSurface, which always mounts.
+let splitVisibleNow = false;
+registerChatSplitVisibleProbe(() => splitVisibleNow);
 
 export function useZonesReconciler(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const zones = useZonesStore((s) => s.zones);
   const visible = splitVisible(zones, mainThreadId);
+  splitVisibleNow = visible;
 
   const wasVisible = useRef(false);
   useEffect(() => {
