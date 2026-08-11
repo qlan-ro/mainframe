@@ -4,6 +4,18 @@ Research: `docs/research/2026-08-11-split-chat-view-patterns.md` (Candidate B +
 the ExternalThread spike). This plan implements that recommendation with the
 user's settled decisions.
 
+**STATUS 2026-08-11: SHIPPED (P1–P4) on `fix/ui-inline-fixes`.** All phases
+implemented, live-verified and unit-covered (~85 cases across zones-store,
+reconciler incl. the workspace follower, open-in-split, drop layer, hotkey,
+v3 persistence with the parked restore, zone unread suppression, tab-strip
+⌘-click/grouping). Two user-feedback deltas over the plan: each zone renders
+the REAL ChatCardHeader (zone mode with a close ✕) instead of new zone chrome,
+and each zone carries its own session panel + rail; the split tab pair also
+regroups adjacent under one shared underline. One provider subtlety worth
+keeping: a zone's `thread` + `threadListItem` configs must ride ONE AuiProvider
+— an inner `extends={aui}` chains to the root and silently drops the outer
+scope.
+
 ## Decisions (settled 2026-08-11)
 
 | # | Decision | Choice |
