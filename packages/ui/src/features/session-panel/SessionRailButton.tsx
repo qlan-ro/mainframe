@@ -85,7 +85,8 @@ export function RailMeterButton({ testId, label, percent, severity, className, .
       className={cn('h-auto w-8 flex-col gap-1 rounded-2xl py-1.5', RAIL_INK, className)}
       {...props}
     >
-      <QuotaRing usedPercent={percent} severity={severity} />
+      {/* Muted: the rail is quiet chrome — only the red band may shout. */}
+      <QuotaRing usedPercent={percent} severity={severity} muted />
       {/* Mono: a numeric count is one of the reserved mono cases. */}
       <span className="font-mono text-xs tabular-nums">{percent}%</span>
     </Button>

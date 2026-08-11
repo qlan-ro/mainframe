@@ -1,7 +1,7 @@
 /**
  * SessionPanelRail — the floating pill at the chat surface's right edge, the
- * switchboard for the stacked panels. Top-down: Session · Background Activity ·
- * context usage · Tasks · Launch.
+ * switchboard for the stacked panels. Top-down: Session · context usage ·
+ * Background Activity · Tasks · Launch.
  *
  * Every button TOGGLES its panel — open panels stack beside the transcript, or
  * float over it when the gutter is short. The launch button's old one-click
@@ -60,6 +60,23 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
         />
       </Hint>
 
+      {percent != null && (
+        <Hint label={`Context: ${percent}% used`} side="left">
+          <RailMeterButton
+            testId="session-panel-rail-context"
+            label={`Context: ${percent}% used`}
+            percent={percent}
+            severity={severityOf(percent)}
+            onClick={() => {
+              // Navigates rather than toggles: the meter points at the Context
+              // section inside the session card, so it sits under the Session i.
+              openPanel('session');
+              expandSection('context');
+            }}
+          />
+        </Hint>
+      )}
+
       <Hint label={activityLabel} side="left">
         <RailIconButton
           testId="session-panel-rail-activity"
@@ -70,23 +87,6 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
           onClick={() => togglePanel('activity')}
         />
       </Hint>
-
-      {percent != null && (
-        <Hint label={`Context: ${percent}% used`} side="left">
-          <RailMeterButton
-            testId="session-panel-rail-context"
-            label={`Context: ${percent}% used`}
-            percent={percent}
-            severity={severityOf(percent)}
-            onClick={() => {
-              // Navigates rather than toggles: the meter points at the Context
-              // section inside the session card.
-              openPanel('session');
-              expandSection('context');
-            }}
-          />
-        </Hint>
-      )}
 
       <Hint label="Tasks" side="left">
         <RailIconButton
