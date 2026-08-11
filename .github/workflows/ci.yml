@@ -61,6 +61,8 @@ jobs:
             command: pnpm --filter @qlan-ro/mainframe-ui exec vitest run --maxWorkers=4
           - name: types
             command: pnpm --filter @qlan-ro/mainframe-types exec vitest run --maxWorkers=4
+          - name: e2e-tools
+            command: pnpm --filter @qlan-ro/mainframe-e2e run test:tools
 
     steps:
       - uses: actions/checkout@v7
