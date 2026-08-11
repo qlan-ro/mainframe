@@ -5,9 +5,9 @@
  * view (todo #233) — straight to its one run, to the Runs tab if there's
  * history to browse, or to Overview if it's never run.
  *
- * No scope badge: automations are project-scoped non-configurably (todo
- * #234 bullet 1) — every row the library shows already belongs to the
- * current project, so a badge would carry no information.
+ * The project badge names the automation's own project. The daemon list is
+ * scoped to the active project PLUS unscoped (projectId null) automations,
+ * so the badge is what distinguishes "yours" from "everywhere".
  *
  * Owns its own async gateway calls (toggle/run), mirroring the v1
  * `WfLibraryRow` pattern — this is thin fetch-and-patch glue, not domain
@@ -18,11 +18,13 @@
  * gaps its own children at 6px — a single flat gap collapses that rhythm.
  */
 import React, { useState } from 'react';
-import { Pencil, Play, Zap } from 'lucide-react';
+import { Pencil, Play, Trash2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { Switch } from '@/components/ui/switch';
 import { mfToast } from '@/lib/toast';
+import { requestConfirm } from '@/lib/confirm-bridge';
+import { useProjects } from '@/features/sessions/use-projects';
 import type { AutomationRunSummary, AutomationSummary } from '../contract';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
@@ -42,12 +44,20 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
   const patchRun = useAutomationsStore((s) => s.patchRun);
+  const removeDefinition = useAutomationsStore((s) => s.removeDefinition);
   const runCount = useAutomationsStore((s) => s.runs.filter((r) => r.automationId === automation.id).length);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openRun = useAutomationsNav((s) => s.openRun);
   const openDetails = useAutomationsNav((s) => s.openDetails);
+  const { projects } = useProjects();
   const [toggling, setToggling] = useState(false);
   const [running, setRunning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const projectName =
+    automation.projectId == null
+      ? 'All projects'
+      : (projects.find((p) => p.id === automation.projectId)?.name ?? automation.projectId);
 
   function handleRowClick(): void {
     if (runCount === 1 && lastRun) openRun(lastRun.id);
@@ -70,6 +80,27 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
       mfToast.error('Could not update the automation', { description: errorMessage(err) });
     } finally {
       setToggling(false);
+    }
+  }
+
+  async function handleDelete(): Promise<void> {
+    if (deleting) return;
+    const confirmed = await requestConfirm({
+      title: `Delete "${automation.name}"?`,
+      body: 'The automation and its run history are removed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      testid: 'automations-delete-confirm',
+    });
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await gateway.deleteAutomation(automation.id);
+      removeDefinition(automation.id);
+    } catch (err) {
+      mfToast.error('Could not delete the automation', { description: errorMessage(err) });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -111,6 +142,12 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-[8px]">
           <span className="truncate text-sm font-semibold tracking-tight text-foreground">{automation.name}</span>
+          <span
+            data-testid={`automations-library-project-${automation.id}`}
+            className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-muted px-[7px] text-xs text-muted-foreground"
+          >
+            {projectName}
+          </span>
         </div>
         {automation.description && (
           <div className="mt-[2px] truncate text-xs text-muted-foreground">{automation.description}</div>
@@ -142,6 +179,18 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
             className="inline-flex size-[28px] shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Pencil size={13} aria-hidden />
+          </button>
+        </Hint>
+
+        <Hint label="Delete">
+          <button
+            type="button"
+            data-testid={`automations-library-delete-${automation.id}`}
+            disabled={deleting}
+            onClick={stopAnd(() => void handleDelete())}
+            className="inline-flex size-[28px] shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-45"
+          >
+            <Trash2 size={13} aria-hidden />
           </button>
         </Hint>
 

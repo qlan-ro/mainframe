@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
@@ -64,12 +64,31 @@ pub(crate) fn engine_error(err: EngineError) -> Response {
     }
 }
 
-async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
+async fn list(
+    State(ctx): State<Arc<AppCtx>>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
     match engine.list().await {
-        Ok(list) => ok(list),
+        Ok(list) => {
+            // `?projectId=` scopes the list to that project PLUS unscoped
+            // automations (project_id null — legacy/global ones, which every
+            // project may run). No param returns everything.
+            let filtered = match params
+                .get("projectId")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
+                Some(pid) => list
+                    .into_iter()
+                    .filter(|a| a.project_id.as_deref().is_none_or(|p| p == pid))
+                    .collect(),
+                None => list,
+            };
+            ok(filtered)
+        }
         Err(err) => engine_error(err),
     }
 }

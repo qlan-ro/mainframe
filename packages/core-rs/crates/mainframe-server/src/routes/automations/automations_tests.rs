@@ -1,10 +1,11 @@
 //! CRUD + runs route tests (T9.3): WS4 envelope, A4 enabled toggle, 202 on
 //! manual run, timeline + 32 KB truncation, A8 delete.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use axum::body::{Bytes, to_bytes};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use mainframe_types::automation::AutomationRunStatus;
@@ -33,6 +34,32 @@ fn bytes(value: &Value) -> Bytes {
     Bytes::from(serde_json::to_vec(value).unwrap())
 }
 
+/// A create body scoped to one project.
+fn project_body(name: &str, project_id: &str) -> Value {
+    let mut body = notify_body(name);
+    body["scope"] = json!("project");
+    body["projectId"] = json!(project_id);
+    body
+}
+
+/// Ids from the list route, sorted: the store orders by `created_at`, which
+/// ties for automations created inside the same millisecond.
+async fn list_ids(h: &AutomationsHarness, project_id: Option<&str>) -> Vec<String> {
+    let params: HashMap<String, String> = project_id
+        .map(|pid| HashMap::from([("projectId".to_string(), pid.to_string())]))
+        .unwrap_or_default();
+    let (status, body) = read(list(State(h.ctx.clone()), Query(params)).await).await;
+    assert_eq!(status, StatusCode::OK);
+    let mut ids: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["id"].as_str().unwrap().to_string())
+        .collect();
+    ids.sort();
+    ids
+}
+
 async fn create_ok(h: &AutomationsHarness, body: &Value) -> String {
     let (status, envelope) = read(create(State(h.ctx.clone()), bytes(body)).await).await;
     assert_eq!(status, StatusCode::OK);
@@ -53,7 +80,7 @@ async fn wait_status(h: &AutomationsHarness, run_id: &str, wanted: AutomationRun
 #[tokio::test]
 async fn all_handlers_503_without_the_engine() {
     let ctx = AppCtx::test_ctx();
-    let (status, body) = read(list(State(ctx)).await).await;
+    let (status, body) = read(list(State(ctx), Query(HashMap::new())).await).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body["error"], "automation service not available");
 }
@@ -63,7 +90,7 @@ async fn create_list_get_round_trip() {
     let h = automations_ctx().await;
     let id = create_ok(&h, &notify_body("Daily")).await;
 
-    let (status, body) = read(list(State(h.ctx.clone())).await).await;
+    let (status, body) = read(list(State(h.ctx.clone()), Query(HashMap::new())).await).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["enabled"], json!(true));
@@ -72,6 +99,23 @@ async fn create_list_get_round_trip() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["name"], "Daily");
     assert_eq!(body["data"]["definition"]["steps"][0]["kind"], "notify");
+}
+
+#[tokio::test]
+async fn list_scopes_to_the_project_plus_unscoped_automations() {
+    let h = automations_ctx().await;
+    let id_a = create_ok(&h, &project_body("Scoped to A", "proj-a")).await;
+    let id_b = create_ok(&h, &project_body("Scoped to B", "proj-b")).await;
+    // No projectId — a legacy/global automation every project may run.
+    let id_unscoped = create_ok(&h, &notify_body("Everywhere")).await;
+
+    let mut scoped = vec![id_a.clone(), id_unscoped.clone()];
+    scoped.sort();
+    assert_eq!(list_ids(&h, Some("proj-a")).await, scoped);
+
+    let mut everything = vec![id_a, id_b, id_unscoped];
+    everything.sort();
+    assert_eq!(list_ids(&h, None).await, everything);
 }
 
 #[tokio::test]
