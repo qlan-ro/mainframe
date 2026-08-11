@@ -126,7 +126,10 @@ export function SessionSidebar({ className }: { className?: string }) {
           documents the header as the home for a workspace switcher, and it is
           the one thing a long session list must not scroll away. */}
       <SidebarHeader>
-        <div className="flex items-center justify-between">
+        {/* data-drag-region: the traffic-light strip is title-bar chrome — its
+            empty run drags the window (buttons are auto-excluded by the host
+            handler, so Settings/collapse still click). */}
+        <div data-drag-region className="flex items-center justify-between">
           <div aria-hidden style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
           <UpdatePill />
           <HeaderActions />

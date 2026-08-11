@@ -80,6 +80,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Window geometry persistence (position/size/monitor) — without it the
+        // window opens on the primary display every launch.
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         // Child-preview → app callbacks; a plugin so the remote capability
         // (capabilities/preview.json) can grant exactly these four commands.
         .plugin(preview::bridge_plugin::init());
@@ -141,7 +144,7 @@ pub fn run() {
             // doesn't invalidate it. `no-store` forces every asset request to hit the
             // current bundle, at effectively zero cost since these are local reads.
             let window_config = app.config().app.windows[0].clone();
-            tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
+            let main_window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
                 .expect("invalid main window config")
                 .on_web_resource_request(|_request, response| {
                     response.headers_mut().insert(
@@ -151,6 +154,15 @@ pub fn run() {
                 })
                 .build()
                 .expect("failed to create main window");
+
+            // Manually created windows are not auto-restored by the plugin —
+            // reapply the saved geometry explicitly (no-op on first launch).
+            {
+                use tauri_plugin_window_state::{StateFlags, WindowExt};
+                if let Err(e) = main_window.restore_state(StateFlags::all()) {
+                    tracing::warn!(err = %e, "failed to restore window state");
+                }
+            }
 
             // Build + set the native application menu. Errors are logged and the
             // app continues without a menu rather than panicking (degrade gracefully).
