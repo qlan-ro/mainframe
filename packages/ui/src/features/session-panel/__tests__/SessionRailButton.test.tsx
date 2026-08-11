@@ -8,7 +8,7 @@
  *    when the caller passes no pressed state (the launch button never toggles)
  *  - RailIconButton shows the live dot only when `dot` is set
  *  - A disabled RailIconButton does not fire onClick
- *  - RailMeterButton renders the percentage and its accessible name
+ *  - RailMeter renders the percentage and its accessible name
  *  - Hint wrapping from the OUTSIDE reaches the real <button>: Radix's
  *    TooltipTrigger clones the child, so a component that swallowed its rest
  *    props would silently lose the tooltip (and its ref)
@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Activity } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { RailIconButton, RailMeterButton } from '../SessionRailButton';
+import { RailIconButton, RailMeter } from '../SessionRailButton';
 
 describe('RailIconButton', () => {
   it('renders the testid, the glyph and the accessible name', () => {
@@ -82,28 +82,18 @@ describe('RailIconButton', () => {
   });
 });
 
-describe('RailMeterButton', () => {
+describe('RailMeter', () => {
   it('renders the percentage and the accessible name', () => {
-    render(
-      <RailMeterButton testId="session-panel-rail-context" label="Context: 42% used" percent={42} severity="normal" />,
-    );
-    const button = screen.getByTestId('session-panel-rail-context');
-    expect(button).toHaveAttribute('aria-label', 'Context: 42% used');
-    expect(button).toHaveTextContent('42%');
+    render(<RailMeter testId="session-panel-rail-context" label="Context: 42% used" percent={42} severity="normal" />);
+    const meter = screen.getByTestId('session-panel-rail-context');
+    expect(meter).toHaveAttribute('aria-label', 'Context: 42% used');
+    expect(meter).toHaveTextContent('42%');
   });
 
-  it('fires onClick', () => {
-    const onClick = vi.fn();
-    render(
-      <RailMeterButton
-        testId="rail-context"
-        label="Context: 8% used"
-        percent={8}
-        severity="normal"
-        onClick={onClick}
-      />,
-    );
-    fireEvent.click(screen.getByTestId('rail-context'));
-    expect(onClick).toHaveBeenCalledTimes(1);
+  it('is an indicator, not a control — no button in the tree', () => {
+    render(<RailMeter testId="rail-context" label="Context: 8% used" percent={8} severity="normal" />);
+    const meter = screen.getByTestId('rail-context');
+    expect(meter.tagName).toBe('DIV');
+    expect(meter.querySelector('button')).toBeNull();
   });
 });

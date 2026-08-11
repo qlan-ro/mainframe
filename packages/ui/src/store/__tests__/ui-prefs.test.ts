@@ -114,22 +114,8 @@ describe('session-card section actions', () => {
     expect(useUiPrefs.getState().sessionPanelSections.context).toBe(false);
   });
 
-  it('expandSessionPanelSection is idempotent — twice on an open section leaves it open', () => {
-    useUiPrefs.getState().expandSessionPanelSection('plan');
-    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
-    useUiPrefs.getState().expandSessionPanelSection('plan');
-    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
-  });
-
-  it('expandSessionPanelSection re-opens a section the user collapsed', () => {
-    useUiPrefs.getState().toggleSessionPanelSection('context');
-    expect(useUiPrefs.getState().sessionPanelSections.context).toBe(false);
-    useUiPrefs.getState().expandSessionPanelSection('context');
-    expect(useUiPrefs.getState().sessionPanelSections.context).toBe(true);
-  });
-
   it('persists the map to localStorage', () => {
-    useUiPrefs.getState().expandSessionPanelSection('plan');
+    useUiPrefs.getState().toggleSessionPanelSection('plan');
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.sessionPanelSections).toEqual({ plan: true });
   });

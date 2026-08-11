@@ -41,11 +41,8 @@ export interface SessionPanelState {
   /** Rail toggle. Opening on a short gutter also floats the stack over the
    *  transcript — the click asked to see the panel, not just to arm a bit. */
   togglePanel: (id: SessionPanelId) => void;
-  /** Idempotent open — for controls that navigate to a panel's content. */
-  openPanel: (id: SessionPanelId) => void;
   isSectionOpen: (id: SessionPanelOpenSectionId) => boolean;
   toggleSection: (id: SessionPanelOpenSectionId) => void;
-  expandSection: (id: SessionPanelOpenSectionId) => void;
 }
 
 /** Radix portals render outside the panel root; a click in one is not "outside". */
@@ -73,7 +70,6 @@ export function useSessionPanelState(): SessionPanelState {
   const openSessionPanel = useUiPrefs((s) => s.openSessionPanel);
   const sections = useUiPrefs((s) => s.sessionPanelSections);
   const toggleSessionPanelSection = useUiPrefs((s) => s.toggleSessionPanelSection);
-  const expandSessionPanelSection = useUiPrefs((s) => s.expandSessionPanelSection);
 
   // Keyed on the host ELEMENT, so the observer attaches whenever the row
   // (re)mounts — including the cold-boot case where the initializing branch
@@ -157,14 +153,6 @@ export function useSessionPanelState(): SessionPanelState {
     [toggleSessionPanel, surfaceWidth, overlayOpen],
   );
 
-  const openPanel = useCallback(
-    (id: SessionPanelId) => {
-      openSessionPanel(id);
-      if (!gutterFitsPanel(surfaceWidth)) setOverlayOpen(true);
-    },
-    [openSessionPanel, surfaceWidth],
-  );
-
   return {
     hostRef,
     rootRef,
@@ -173,9 +161,7 @@ export function useSessionPanelState(): SessionPanelState {
     isPanelOpen,
     isPanelVisible,
     togglePanel,
-    openPanel,
     isSectionOpen: (id) => isSessionPanelSectionOpen(sections, id),
     toggleSection: toggleSessionPanelSection,
-    expandSection: expandSessionPanelSection,
   };
 }

@@ -82,8 +82,6 @@ interface UiPrefsState {
   /** Idempotent open — for controls that navigate to a panel's content. */
   openSessionPanel: (id: SessionPanelId) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
-  /** Idempotent open — navigating to an already-open section must not collapse it. */
-  expandSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
 }
 
 /** Selector helper: a section with no recorded state is expanded by default. */
@@ -143,8 +141,6 @@ export const useUiPrefs = create<UiPrefsState>()(
             [id]: !isSessionPanelSectionOpen(s.sessionPanelSections, id),
           },
         })),
-      expandSessionPanelSection: (id) =>
-        set((s) => ({ sessionPanelSections: { ...s.sessionPanelSections, [id]: true } })),
     }),
     {
       name: 'mf:ui-prefs',

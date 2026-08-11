@@ -181,32 +181,6 @@ describe('useSessionPanelState — togglePanel', () => {
   });
 });
 
-describe('useSessionPanelState — openPanel', () => {
-  it('is idempotent — a second call never closes what it opened', () => {
-    const { result } = renderPanelState();
-    setWidth(1600);
-    act(() => result.current.openPanel('session'));
-    act(() => result.current.openPanel('session'));
-    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(true);
-    expect(result.current.isPanelOpen('session')).toBe(true);
-  });
-
-  it('floats the stack when the gutter is short', () => {
-    const { result } = renderPanelState();
-    setWidth(1000);
-    act(() => result.current.openPanel('tasks'));
-    expect(useUiPrefs.getState().sessionPanelOpen.tasks).toBe(true);
-    expect(result.current.mode).toBe('overlay');
-  });
-
-  it('leaves an inline stack inline', () => {
-    const { result } = renderPanelState();
-    setWidth(1600);
-    act(() => result.current.openPanel('launch'));
-    expect(result.current.mode).toBe('inline');
-  });
-});
-
 describe('useSessionPanelState — section open state', () => {
   it('reads the ui-prefs defaults: Context open, Plan collapsed', () => {
     const { result } = renderPanelState();
@@ -221,12 +195,5 @@ describe('useSessionPanelState — section open state', () => {
     expect(result.current.isSectionOpen('plan')).toBe(true);
     act(() => result.current.toggleSection('plan'));
     expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(false);
-  });
-
-  it('expandSection is idempotent — navigating twice never collapses the target', () => {
-    const { result } = renderPanelState();
-    act(() => result.current.expandSection('plan'));
-    act(() => result.current.expandSection('plan'));
-    expect(result.current.isSectionOpen('plan')).toBe(true);
   });
 });

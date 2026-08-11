@@ -98,10 +98,8 @@ function panelState(mode: PanelMode, open: SessionPanelId[] = ['session']): Sess
     isPanelOpen: isOpen,
     isPanelVisible: (id: SessionPanelId) => (mode === 'inline' || mode === 'overlay') && isOpen(id),
     togglePanel,
-    openPanel: vi.fn(),
     isSectionOpen: () => true,
     toggleSection: vi.fn(),
-    expandSection: vi.fn(),
     closeOverlay: vi.fn(),
   } as unknown as SessionPanelState;
 }

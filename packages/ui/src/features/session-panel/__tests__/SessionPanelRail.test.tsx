@@ -14,7 +14,7 @@
  *  - the launch glyph is a Rocket, with a dot when a config is live — the old
  *    one-click run/stop moved into the Launch panel's rows
  *  - the context meter renders the percentage, vanishes when it is unknown, and
- *    NAVIGATES (opens the session card, expands Context) rather than toggling
+ *    is a plain indicator — not a control
  *
  * Mocked dependencies:
  *  - ./use-context-percent — the resolved context fill
@@ -78,8 +78,6 @@ const configs: LaunchConfiguration[] = [
 const task = (id: string): BackgroundActivityTask => ({ id, kind: 'agent', description: `work ${id}`, startedAt: 0 });
 
 const togglePanel = vi.fn();
-const openPanel = vi.fn();
-const expandSection = vi.fn();
 
 /** `visible` lists the panels the stack is currently showing. */
 function panelState(visible: SessionPanelId[] = []): SessionPanelState {
@@ -91,10 +89,8 @@ function panelState(visible: SessionPanelId[] = []): SessionPanelState {
     isPanelOpen: (id: SessionPanelId) => visible.includes(id),
     isPanelVisible: (id: SessionPanelId) => visible.includes(id),
     togglePanel,
-    openPanel,
     isSectionOpen: () => true,
     toggleSection: vi.fn(),
-    expandSection,
     closeOverlay: vi.fn(),
   } as unknown as SessionPanelState;
 }
@@ -108,8 +104,6 @@ beforeEach(() => {
   mockSelected = null;
   mockTasks = {};
   togglePanel.mockReset();
-  openPanel.mockReset();
-  expandSection.mockReset();
 });
 
 describe('SessionPanelRail — shape', () => {
@@ -159,7 +153,6 @@ describe('SessionPanelRail — toggling panels', () => {
     render(rail());
     fireEvent.click(screen.getByTestId('session-panel-rail-launch'));
     expect(togglePanel).toHaveBeenCalledWith('launch');
-    expect(openPanel).not.toHaveBeenCalled();
   });
 
   it('reads engaged only for the panels that are showing', () => {
@@ -171,20 +164,13 @@ describe('SessionPanelRail — toggling panels', () => {
   });
 });
 
-describe('SessionPanelRail — the context meter navigates', () => {
-  it('opens the session card and expands Context, without toggling', () => {
+describe('SessionPanelRail — the context meter is an indicator', () => {
+  it('is not a control: clicking it drives no panel state', () => {
     render(rail());
-    fireEvent.click(screen.getByTestId('session-panel-rail-context'));
-    expect(openPanel).toHaveBeenCalledWith('session');
-    expect(expandSection).toHaveBeenCalledWith('context');
+    const meter = screen.getByTestId('session-panel-rail-context');
+    expect(meter.tagName).toBe('DIV');
+    fireEvent.click(meter);
     expect(togglePanel).not.toHaveBeenCalled();
-  });
-
-  it('still expands Context when the session card is already showing', () => {
-    render(rail(['session']));
-    fireEvent.click(screen.getByTestId('session-panel-rail-context'));
-    expect(openPanel).toHaveBeenCalledWith('session');
-    expect(expandSection).toHaveBeenCalledWith('context');
   });
 });
 

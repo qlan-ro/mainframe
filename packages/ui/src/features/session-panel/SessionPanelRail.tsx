@@ -22,7 +22,7 @@ import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRunControl } from '@/features/run/derive-launch-control';
 import { runningCount, runningLabel } from './activity-view';
 import { useContextPercent } from './use-context-percent';
-import { RailIconButton, RailMeterButton } from './SessionRailButton';
+import { RailIconButton, RailMeter } from './SessionRailButton';
 import type { SessionPanelState } from './use-session-panel-state';
 
 const RAIL_CHROME =
@@ -34,7 +34,7 @@ interface SessionPanelRailProps {
 }
 
 export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
-  const { isPanelVisible, togglePanel, openPanel, expandSection } = state;
+  const { isPanelVisible, togglePanel } = state;
   const { projectId, chatId } = useActiveIdentity();
   const extras = useChatExtras();
   const percent = useContextPercent();
@@ -62,17 +62,13 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
 
       {percent != null && (
         <Hint label={`Context: ${percent}% used`} side="left">
-          <RailMeterButton
+          {/* An indicator, not a control — the Context details live in the
+              Session card, one click up on the i. */}
+          <RailMeter
             testId="session-panel-rail-context"
             label={`Context: ${percent}% used`}
             percent={percent}
             severity={severityOf(percent)}
-            onClick={() => {
-              // Navigates rather than toggles: the meter points at the Context
-              // section inside the session card, so it sits under the Session i.
-              openPanel('session');
-              expandSection('context');
-            }}
           />
         </Hint>
       )}
