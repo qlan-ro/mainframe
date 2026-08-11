@@ -2,8 +2,8 @@
  * The chat-split workspace follower (split plan, decision 8): entering the split
  * parks a top-row workspace in the bottom strip, and leaving it puts the
  * workspace back — but only while the arrangement is still the one the split
- * made. `workspaceSystemMoved` is that ownership flag: any manual reposition
- * takes it away, and the restore then leaves the layout alone.
+ * made. `workspaceSystemMoved` is that ownership flag; only the restore
+ * itself clears it now that no gesture can reposition a surface.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useLayoutStore, type WorkspaceLayout } from '../layout';
@@ -123,25 +123,6 @@ describe('restoreWorkspaceAfterChatSplit', () => {
   });
 });
 
-describe('a manual reposition takes ownership back', () => {
-  it('clears the claim', () => {
-    seedLayout({ top: ['chat', 'workspace'] });
-    store().moveWorkspaceForChatSplit();
-    expect(store().workspaceSystemMoved).toBe('top-right');
-
-    store().repositionSurface('workspace', 'bottom');
-
-    expect(store().workspaceSystemMoved).toBeNull();
-  });
-
-  it('so the unsplit restore leaves the user arrangement untouched', () => {
-    seedLayout({ top: ['chat', 'workspace'] });
-    store().moveWorkspaceForChatSplit();
-    store().repositionSurface('workspace', 'bottom');
-
-    store().restoreWorkspaceAfterChatSplit();
-
-    expect(layout().top).toEqual(['chat']);
-    expect(layout().bottom).toBe('workspace');
-  });
-});
+// (The manual-reposition ownership cases died with the surface-drag system —
+// no gesture can reposition a surface anymore, so nothing clears the claim
+// besides the restore itself.)

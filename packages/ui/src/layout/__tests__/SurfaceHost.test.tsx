@@ -64,7 +64,7 @@ describe('SurfaceHost — lone pane reclaims the full row', () => {
     });
     const { container } = render(<SurfaceHost />);
 
-    const pane = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
+    const pane = container.querySelector('[data-surface="chat"]') as HTMLElement;
     expect(pane.style.flex).toBe('1 1 0%');
   });
 
@@ -79,8 +79,8 @@ describe('SurfaceHost — lone pane reclaims the full row', () => {
     });
     const { container } = render(<SurfaceHost />);
 
-    const chat = container.querySelector('[data-drop-surface="chat"]') as HTMLElement;
-    const ws = container.querySelector('[data-drop-surface="workspace"]') as HTMLElement;
+    const chat = container.querySelector('[data-surface="chat"]') as HTMLElement;
+    const ws = container.querySelector('[data-surface="workspace"]') as HTMLElement;
     expect(chat.style.flex).toBe('0.3 1 0%');
     expect(ws.style.flex).toBe('0.7 1 0%');
   });

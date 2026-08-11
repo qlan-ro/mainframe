@@ -25,7 +25,7 @@
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
  *   success on background 3.39 / 9.50          (a glyph/dot hue, never body text)
  *
- * `--mf-glass` is gone (2026-08-07): its one consumer, `layout/SurfaceDragLayer`,
+ * `--mf-glass` is gone (2026-08-07): its one consumer, the deleted `layout/SurfaceDragLayer`,
  * is on `bg-background/85` now, so the chip's worst case is `foreground` over
  * `background` — already covered by the first guardrail below.
  *

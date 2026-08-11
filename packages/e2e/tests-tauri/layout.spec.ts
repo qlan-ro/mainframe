@@ -9,7 +9,7 @@
  *
  * Source read: packages/ui/src/layout/{SurfaceRail,SurfaceHost,SurfDivider,
  * WorkspaceEmptyState,WorkspaceTabStrip,WorkspaceStripChrome,WorkspaceTabPill,
- * use-surface-drag,SurfaceDragLayer}.tsx,
+
  * packages/ui/src/layout/surfaces/WorkspaceSurface.tsx,
  * packages/ui/src/store/{layout,layout-placement,layout-persist,run-pane,
  * run-pane-file-tabs}.ts.
@@ -23,21 +23,14 @@
  *   workspace-surface-close / -drag — hide the surface / its drag grip
  *   WORKSPACE.strip / .pane / .tab / .add — pane-id-keyed roots (see helpers/tauri/testids.ts)
  *   surf-divider-x / surf-divider-y — horizontal/vertical resize dividers
- *   surface-drag-layer              — ghost + drop-zone overlay, mounted only mid-drag
- *   drop-zone-<center|left|right|top|bottom> — drop-zone highlight (keyed by EDGE only,
- *                                     not by target surface — see SurfaceDragLayer.tsx)
  *   file-picker-dialog / file-picker-input / file-picker-row-<path> — the file opener
- *   [data-drop-surface="chat|workspace"] — the layout engine's own hit-test region
- *                                     attribute; used here for pane bounding-box checks
- *                                     (the same attribute SurfaceDragLayer hit-tests via
- *                                     elementFromPoint, so it's the correct anchor for
- *                                     both "where is this pane" and "where do I drop").
+ *   [data-surface="chat|workspace"] — the layout engine's pane containers; used
+ *                                     here for pane bounding-box checks
  *
- * Two behaviours the merge changed, and this spec now pins:
- *   • cross-surface tab adoption is GONE — a tab drag only reshapes panes WITHIN
- *     the workspace, so the drag block below drags workspace tab → pane edge.
- *   • hiding the workspace PRESERVES its tabs (the terminal cache detaches without
- *     disposing), so a hide/show round-trip is asserted to bring the tabs back.
+ * Pinned behaviour: hiding the workspace PRESERVES its tabs (the terminal cache
+ * detaches without disposing), so a hide/show round-trip is asserted to bring
+ * the tabs back. (The tab-drag and surface-drag gestures were deleted with the
+ * surface-drag system, 2026-08-12.)
  *
  * Per-session layout persistence: `useLayoutStore.setActiveSession` is wired from
  * `useSessionListRouter` (called with `active.remoteId` on every session switch,
@@ -48,18 +41,11 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer, workspace } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
-import { waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 
-// ─── drag-gesture helpers ──────────────────────────────────────────────────────
-// Pointer-driven (not HTML5 DnD) — mirrors use-surface-drag.ts's own model: a
-// window pointermove/pointerup pair, with a 4px jitter threshold before a drag
-// is treated as real. Real `page.mouse` events so the SUT's own
-// `document.elementFromPoint` hit-testing resolves drop zones exactly as it
-// would for a live user drag.
+// ─── drag-gesture helpers (divider resizes) ───────────────────────────────────
 
-/** Press the left button at `from` and move past the 4px jitter threshold so the
- *  drag store (DRAG_THRESHOLD_PX in use-surface-drag.ts) registers a real drag.
- *  Does NOT release the button. */
+/** Press the left button at `from` and nudge past the jitter threshold so the
+ *  divider's pointer handler registers a real drag. Does NOT release. */
 async function beginDrag(page: Page, from: { x: number; y: number }): Promise<void> {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
@@ -67,27 +53,10 @@ async function beginDrag(page: Page, from: { x: number; y: number }): Promise<vo
 }
 
 /** Step the still-pressed pointer toward `to` in several intermediate moves, so
- *  SurfaceDragLayer's pointermove listener samples the path (and resolves a drop
- *  zone via elementFromPoint) rather than jumping straight to the end. */
+ *  the divider's pointermove handler samples the path rather than jumping
+ *  straight to the end. */
 async function moveDragTo(page: Page, to: { x: number; y: number }, steps = 6): Promise<void> {
   await page.mouse.move(to.x, to.y, { steps });
-}
-
-/** `beginDrag` for a SURFACE/TAB drag rather than a divider.
- *
- *  SurfaceDragLayer subscribes to `pointermove` inside an effect that runs only
- *  after React commits the mount, so moves dispatched between pointerdown and that
- *  commit are dropped on the floor and no drop zone ever resolves. Waiting for the
- *  layer to appear is the commit signal. The divider drags don't need this — they
- *  are handled by SurfaceHost's own pointer handlers, with no layer. */
-async function beginLayerDrag(page: Page, from: { x: number; y: number }): Promise<void> {
-  // `page.mouse.*` performs NO actionability check, so a press dispatched while the
-  // file picker is still unmounting lands on a `pointer-events: none` <body> and is
-  // swallowed silently — the drag never starts and the layer never mounts. Waiting the
-  // scrim out is what makes this deterministic in a full-suite run.
-  await waitForDialogScrimsGone(page);
-  await beginDrag(page, from);
-  await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
 }
 
 /** Open a file through the workspace's file picker (the empty-state card row, or a
@@ -215,8 +184,8 @@ test.describe('§20 layout — splits + divider resize', () => {
     await page.getByTestId('chat-header-split-right').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
+    const wsBox = await page.locator('[data-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
     expect(wsBox).not.toBeNull();
     // Same row (top-row split): comparable y, Chat stays leftmost.
@@ -238,14 +207,14 @@ test.describe('§20 layout — splits + divider resize', () => {
     const { page } = app;
     const box = await page.getByTestId('surf-divider-x').boundingBox();
     if (!box) throw new Error('surf-divider-x has no bounding box');
-    const wsBefore = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const wsBefore = await page.locator('[data-surface="workspace"]').boundingBox();
     if (!wsBefore) throw new Error('workspace pane has no bounding box');
 
     await beginDrag(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
     await moveDragTo(page, { x: box.x + box.width / 2 + 120, y: box.y + box.height / 2 });
     await page.mouse.up();
 
-    const wsAfter = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const wsAfter = await page.locator('[data-surface="workspace"]').boundingBox();
     if (!wsAfter) throw new Error('workspace pane has no bounding box after drag');
     expect(Math.abs(wsAfter.width - wsBefore.width)).toBeGreaterThan(30);
 
@@ -257,7 +226,7 @@ test.describe('§20 layout — splits + divider resize', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('file-picker-dialog')).toHaveCount(0);
 
-    const wsAfterRerender = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const wsAfterRerender = await page.locator('[data-surface="workspace"]').boundingBox();
     if (!wsAfterRerender) throw new Error('workspace pane has no bounding box after re-render');
     expect(Math.abs(wsAfterRerender.width - wsAfter.width)).toBeLessThan(3);
   });
@@ -271,8 +240,8 @@ test.describe('§20 layout — splits + divider resize', () => {
     await page.getByTestId('chat-header-split-down').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
-    const chatBox = await page.locator('[data-drop-surface="chat"]').boundingBox();
-    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
+    const wsBox = await page.locator('[data-surface="workspace"]').boundingBox();
     expect(chatBox).not.toBeNull();
     expect(wsBox).not.toBeNull();
     // The workspace sits below the top row (allow the divider's own gutter height).
@@ -284,7 +253,7 @@ test.describe('§20 layout — splits + divider resize', () => {
     await moveDragTo(page, { x: box.x + box.width / 2, y: box.y + box.height / 2 - 90 });
     await page.mouse.up();
 
-    const wsAfter = await page.locator('[data-drop-surface="workspace"]').boundingBox();
+    const wsAfter = await page.locator('[data-surface="workspace"]').boundingBox();
     if (!wsAfter) throw new Error('workspace pane has no bounding box after drag');
     expect(Math.abs(wsAfter.height - wsBox!.height)).toBeGreaterThan(25);
   });
@@ -344,84 +313,9 @@ test.describe('§20 layout — drag: workspace tab to a pane edge, and escape-ca
     await closeTauriApp(app);
   });
 
-  test('Escape cancels a tab drag; the pane count is unchanged', async () => {
-    const { page } = app;
-    const tab = workspace(page).tab('CLAUDE.md');
-    const tabBox = await tab.boundingBox();
-    if (!tabBox) throw new Error('workspace tab has no bounding box');
-    const tabCenter = { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 };
-
-    await beginLayerDrag(page, tabCenter);
-    await moveDragTo(page, { x: tabCenter.x, y: tabCenter.y + 60 });
-    await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('surface-drag-layer')).toHaveCount(0);
-    // Release back over the tab's own origin (a harmless re-click of that tab)
-    // rather than wherever the drag last pointed, so the mouseup can't land on an
-    // unrelated control.
-    await page.mouse.move(tabCenter.x, tabCenter.y);
-    await page.mouse.up();
-
-    await expect(workspace(page).panes()).toHaveCount(1);
-    await expect(workspace(page).tabs()).toHaveCount(2);
-  });
-
-  test('dragging a tab onto the right edge splits the workspace into a second pane', async () => {
-    const { page } = app;
-    const tab = workspace(page).tab('CLAUDE.md');
-    const tabBox = await tab.boundingBox();
-    if (!tabBox) throw new Error('workspace tab has no bounding box');
-    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
-    if (!wsBox) throw new Error('workspace pane has no bounding box');
-    // Well inside the outer 25% edge band (computeDropEdge in use-surface-drag.ts) and
-    // vertically centered, so it resolves unambiguously to the right edge.
-    const edgeTarget = { x: wsBox.x + wsBox.width * 0.95, y: wsBox.y + wsBox.height / 2 };
-
-    await beginLayerDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
-    await moveDragTo(page, edgeTarget);
-    await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
-    await page.mouse.up();
-
-    await expect(workspace(page).panes()).toHaveCount(2, { timeout: 5_000 });
-    // The tab moved rather than being copied — one pill per pane, both still open.
-    await expect(workspace(page).tabs()).toHaveCount(2);
-    await expect(page.locator('[data-testid^="workspace-pane-close-"]')).toBeVisible();
-  });
-
-  test('dragging it back to the center rejoins the first pane and un-splits', async () => {
-    const { page } = app;
-    const tab = workspace(page).tab('CLAUDE.md');
-    const tabBox = await tab.boundingBox();
-    if (!tabBox) throw new Error('workspace tab has no bounding box');
-    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
-    if (!wsBox) throw new Error('workspace pane has no bounding box');
-    const center = { x: wsBox.x + wsBox.width / 2, y: wsBox.y + wsBox.height / 2 };
-
-    await beginLayerDrag(page, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
-    await moveDragTo(page, center);
-    await expect(page.getByTestId('drop-zone-center')).toBeVisible({ timeout: 3_000 });
-    await page.mouse.up();
-
-    await expect(workspace(page).panes()).toHaveCount(1, { timeout: 5_000 });
-    await expect(workspace(page).tabs()).toHaveCount(2);
-  });
-
-  // TODO(app-tauri): whole-surface grip drag (repositionSurface → top-left / top-right /
-  // bottom, via workspace-surface-drag) is NOT covered here. It commits through the exact
-  // same drag-store + SurfaceDragLayer elementFromPoint hit-testing path already exercised
-  // by the tab drags above, but landing a grip drag precisely on the OTHER surface's drop
-  // region — and asserting the resulting top/bottom reshuffle — needs coordinates relative
-  // to whichever panel occupies each reposition target, which shifts as panes are added and
-  // removed earlier in this describe. Kept to the structurally-identical, more
-  // deterministic tab-drag case instead of guessing those coordinates blind.
-  test('surface grip drag reposition (top-left / top-right / bottom) — not covered (live-run needed)', async () => {
-    test.skip(
-      true,
-      'TODO(app-tauri): needs a live run to pin reposition-target coordinates deterministically; ' +
-        'see the comment above this test for why the tab-drag case was prioritized instead.',
-    );
-  });
+  // (The tab-drag and surface-grip reposition cases lived here until the
+  // surface-drag system was deleted, 2026-08-12 — no gesture moves surfaces or
+  // splits panes anymore; re-add coverage with whatever replaces it.)
 });
 
 // ─── §20d Per-session layout persistence ────────────────────────────────────────

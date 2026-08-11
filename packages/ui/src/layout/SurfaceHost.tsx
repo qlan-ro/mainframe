@@ -6,7 +6,6 @@ import { onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
-import { SurfaceDragLayer } from './SurfaceDragLayer';
 import { SurfDivider } from './SurfDivider';
 import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
@@ -98,7 +97,7 @@ function SurfaceHostImpl() {
                 stay in the store so re-opening restores the dragged ratio
                 (same guard the vertical axis has via `bottom ? vFlex.top : 1`). */}
             <div
-              data-drop-surface={name}
+              data-surface={name}
               style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
               className={`min-w-0 ${PANEL_LAYOUT}`}
             >
@@ -131,13 +130,12 @@ function SurfaceHostImpl() {
             gutter={DIVIDER_GUTTER}
           />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
-            <div data-drop-surface={bottom} className={`min-w-0 flex-1 ${PANEL_LAYOUT}`}>
+            <div data-surface={bottom} className={`min-w-0 flex-1 ${PANEL_LAYOUT}`}>
               <SurfaceView name={bottom} />
             </div>
           </div>
         </>
       )}
-      <SurfaceDragLayer />
     </div>
   );
 }

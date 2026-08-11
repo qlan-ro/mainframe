@@ -524,50 +524,9 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
     await expect(page.getByTestId('workspace-surface-close')).toBeEnabled();
   });
 
-  test('secondary-pane close: dragging a tab onto the pane edge splits it, then workspace-pane-close un-splits', async () => {
-    const { page } = app;
-
-    // A second tab is needed: `moveTabToPaneEdge` no-ops on the surface's last
-    // remaining tab (there would be nothing left to split against). A file tab is
-    // the cheapest second tab that needs no daemon process.
-    await workspace(page).openFilePicker();
-    await page.getByTestId('file-picker-dialog').waitFor({ timeout: 5_000 });
-    await page.getByTestId('file-picker-input').fill('index.ts');
-    const row = page.locator('[data-testid^="file-picker-row-"]').filter({ hasText: 'index.ts' }).first();
-    await row.waitFor({ timeout: 5_000 });
-    await row.click();
-
-    const fileTab = workspace(page).tab('index.ts');
-    await fileTab.waitFor({ timeout: 5_000 });
-    // `page.mouse.*` performs no actionability check, so a press dispatched while the
-    // picker dialog is still unmounting lands on a `pointer-events: none` <body> and is
-    // silently swallowed — the drag never starts. Wait the dialog out first.
-    await expect(page.getByTestId('file-picker-dialog')).toHaveCount(0, { timeout: 5_000 });
-    const tabBox = await fileTab.boundingBox();
-    if (!tabBox) throw new Error('workspace tab has no bounding box');
-    const wsBox = await page.locator('[data-drop-surface="workspace"]').boundingBox();
-    if (!wsBox) throw new Error('workspace surface has no bounding box');
-    const edgeTarget = { x: wsBox.x + wsBox.width * 0.95, y: wsBox.y + wsBox.height / 2 };
-
-    await page.mouse.move(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(tabBox.x + tabBox.width / 2 + 8, tabBox.y + tabBox.height / 2 + 8, { steps: 2 });
-    // SurfaceDragLayer subscribes to `pointermove` in an effect, so every move
-    // dispatched before React commits its mount is dropped and no drop zone ever
-    // resolves. The layer appearing is that commit signal.
-    await expect(page.getByTestId('surface-drag-layer')).toBeVisible({ timeout: 3_000 });
-    await page.mouse.move(edgeTarget.x, edgeTarget.y, { steps: 6 });
-    await expect(page.getByTestId('drop-zone-right')).toBeVisible({ timeout: 3_000 });
-    await page.mouse.up();
-
-    await expect(page.locator(WORKSPACE.pane)).toHaveCount(2, { timeout: 5_000 });
-    const closeSecondary = page.locator('[data-testid^="workspace-pane-close-"]');
-    await expect(closeSecondary).toBeVisible({ timeout: 5_000 });
-
-    await closeSecondary.click();
-    await expect(page.locator(WORKSPACE.pane)).toHaveCount(1);
-    await expect(page.locator('[data-testid^="workspace-pane-close-"]')).toHaveCount(0);
-  });
+  // (The secondary-pane close case rode the tab-drag gesture, deleted with the
+  // surface-drag system 2026-08-12 — pane splitting has no UI path until a
+  // replacement lands.)
 
   test('workspace-surface-close is disabled once the workspace is the sole lit surface (the dynamic floor)', async () => {
     const { page } = app;

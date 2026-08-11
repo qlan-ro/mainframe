@@ -1,13 +1,13 @@
 /**
- * WorkspaceTabPill — the file-tab affordances the merge added: an italic title for
- * the preview slot, double-click to promote, and a pill that is its own drag
- * handle. (The type glyphs and the launch Stop are covered by the strip's test.)
+ * WorkspaceTabPill — the file-tab affordances the merge added: an italic title
+ * for the preview slot and double-click to promote. (The type glyphs and the
+ * launch Stop are covered by the strip's test; the tab-drag gesture died with
+ * the surface-drag system, 2026-08-12.)
  */
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
-import { useSurfaceDragStore } from '../use-surface-drag';
 import { WorkspaceTabPill } from '../WorkspaceTabPill';
 import type { RunPane, RunTab } from '@/store/run-pane';
 
@@ -32,9 +32,7 @@ const pill = (pane: RunPane, tab: RunTab) => (
   <WorkspaceTabPill pane={pane} tab={tab} configs={[]} scopeStatuses={{}} onStop={vi.fn()} />
 );
 
-beforeEach(() => {
-  useSurfaceDragStore.getState().cancel();
-});
+beforeEach(() => {});
 
 describe('WorkspaceTabPill — preview vs permanent', () => {
   it('italicises a preview tab title', () => {
@@ -58,7 +56,7 @@ describe('WorkspaceTabPill — preview vs permanent', () => {
   });
 });
 
-describe('WorkspaceTabPill — activation, close, drag', () => {
+describe('WorkspaceTabPill — activation and close', () => {
   it('clicking the pill activates that tab', () => {
     const pane = seed([permanent, preview], 'tab-b');
     render(pill(pane, preview));
@@ -75,23 +73,5 @@ describe('WorkspaceTabPill — activation, close, drag', () => {
     const run = useLayoutStore.getState().run!;
     expect(run.panes[0]!.tabs.map((t) => t.id)).toEqual(['tab-b']);
     expect(run.panes[0]!.active).toBe('tab-b');
-  });
-
-  it('a left-button press on the pill begins a tab drag', () => {
-    const pane = seed([permanent, preview]);
-    render(pill(pane, preview));
-
-    fireEvent.pointerDown(screen.getByTestId('workspace-tab-tab-a'), { button: 0, clientX: 4, clientY: 6 });
-    const drag = useSurfaceDragStore.getState();
-    expect(drag.kind).toBe('tab');
-    expect(drag.tabId).toBe('tab-a');
-  });
-
-  it('a right-button press does NOT begin a drag', () => {
-    const pane = seed([permanent, preview]);
-    render(pill(pane, preview));
-
-    fireEvent.pointerDown(screen.getByTestId('workspace-tab-tab-a'), { button: 2, clientX: 4, clientY: 6 });
-    expect(useSurfaceDragStore.getState().kind).toBeNull();
   });
 });

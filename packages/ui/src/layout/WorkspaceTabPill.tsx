@@ -25,7 +25,6 @@ import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
-import { useSurfaceDragStore } from './use-surface-drag';
 import type { RunPane, RunTab } from '@/store/run-pane';
 
 const GLYPHS: Record<RunTab['kind'], typeof Eye> = {
@@ -51,7 +50,6 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
   const activateRunTab = useLayoutStore((s) => s.activateRunTab);
   const closeRunTab = useLayoutStore((s) => s.closeRunTab);
   const promoteFileTab = useLayoutStore((s) => s.promoteFileTab);
-  const beginTabDrag = useSurfaceDragStore((s) => s.beginTabDrag);
   const isActive = tab.id === pane.active;
 
   // The config object is resolved so `onStop` hits the same daemon stop call the
@@ -67,12 +65,6 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
       aria-selected={isActive}
       onClick={() => activateRunTab(pane.id, tab.id)}
       onDoubleClick={() => promoteFileTab(tab.id)}
-      onPointerDown={(e) => {
-        // The whole pill is the drag handle (no visible grip). A press that moves
-        // less than the drag store's threshold still counts as a click.
-        if (e.button !== 0) return;
-        beginTabDrag(tab.id, { clientX: e.clientX, clientY: e.clientY });
-      }}
       className={cn(
         'group flex h-6 max-w-40 min-w-0 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pr-1 pl-2 text-xs select-none',
         isActive

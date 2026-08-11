@@ -114,23 +114,8 @@ describe('layout store — per-session workspaces', () => {
   });
 });
 
-describe('layout store — reposition + in-workspace tab drag', () => {
+describe('layout store — workspace tabs', () => {
   beforeEach(resetStores);
-
-  it('repositionSurface moves the workspace from the top row to the bottom strip', () => {
-    const s = useLayoutStore.getState();
-    s.toggleSurface('workspace');
-    s.repositionSurface('workspace', 'bottom');
-    const { layout } = useLayoutStore.getState();
-    expect(layout.bottom).toBe('workspace');
-    expect(layout.top).not.toContain('workspace');
-  });
-
-  it('repositionSurface never sends chat to the bottom strip', () => {
-    const s = useLayoutStore.getState();
-    s.repositionSurface('chat', 'bottom');
-    expect(useLayoutStore.getState().layout.bottom).toBeNull();
-  });
 
   it('openFileTab opens a file into the workspace and lights the surface', () => {
     const tabId = useLayoutStore.getState().openFileTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, 'preview');
@@ -139,16 +124,6 @@ describe('layout store — reposition + in-workspace tab drag', () => {
     expect(run?.panes[0]!.tabs.map((t) => t.path)).toEqual(['/a.ts']);
     expect(run?.panes[0]!.active).toBe(tabId);
     expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true);
-  });
-
-  it('moveTabToPaneEdge splits the workspace into two panes', () => {
-    const s = useLayoutStore.getState();
-    s.openFileTab({ kind: 'code', path: '/a.ts', title: 'a.ts' }, 'permanent');
-    const second = s.openFileTab({ kind: 'code', path: '/b.ts', title: 'b.ts' }, 'permanent');
-
-    s.moveTabToPaneEdge(second, 'right');
-
-    expect(useLayoutStore.getState().run?.panes).toHaveLength(2);
   });
 
   it('closePane that empties the workspace removes the surface from the layout', () => {

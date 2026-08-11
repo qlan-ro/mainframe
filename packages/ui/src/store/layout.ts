@@ -9,13 +9,11 @@ import {
   retargetUrlTab as retargetUrlTabReducer,
   tabIdsForScope,
   tabIdsInPane,
-  type RunDropEdge,
   type RunState,
   type RunTab,
   type TabMode,
 } from './run-pane';
 import {
-  moveTabToPaneEdge as moveTabToPaneEdgeReducer,
   openFileTab as openFileTabReducer,
   promoteFileTab as promoteFileTabReducer,
   type OpenFileTarget,
@@ -29,7 +27,6 @@ import {
   placeInLayout,
   removeSurface,
   repositionInLayout,
-  type RepositionTarget,
   type SurfaceId,
   type WorkspaceLayout,
 } from './layout-placement';
@@ -79,21 +76,16 @@ export interface LayoutStore {
   /** Place the workspace surface side-by-side ('v') or in the bottom strip ('h'). */
   splitSurface: (orientation: 'v' | 'h') => void;
 
-  /** Drag-reposition a whole surface within the layout. */
-  repositionSurface: (surface: SurfaceId, target: RepositionTarget) => void;
-  /** Set while the chat split (not the user) parked the workspace in the strip —
-   *  holds the top-row side it came from so the restore returns it there.
-   *  Transient by design: after a reload the restore simply doesn't fire, which
-   *  errs toward never overriding an arrangement. */
+  /** Set while the chat split parked the workspace in the strip — holds the
+   *  top-row side it came from so the restore returns it there. Transient by
+   *  design: after a reload the restore simply doesn't fire, which errs toward
+   *  never overriding an arrangement. */
   workspaceSystemMoved: 'top-left' | 'top-right' | null;
   /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
    *  the bottom strip when the chat splits… */
   moveWorkspaceForChatSplit: () => void;
-  /** …and returns beside the chat on unsplit — unless the user repositioned
-   *  anything in between (repositionSurface clears the flag). */
+  /** …and returns beside the chat on unsplit. */
   restoreWorkspaceAfterChatSplit: () => void;
-  /** Drag an open workspace tab to a pane edge (center = join pane 1, edge = split). */
-  moveTabToPaneEdge: (tabId: string, edge: RunDropEdge) => void;
   /**
    * Open (or focus) a file-backed tab in the workspace and light the surface.
    * Returns the id of the tab now focused.
@@ -202,13 +194,6 @@ export const useLayoutStore = create<LayoutStore>()(
         }
       },
 
-      repositionSurface(surface, target) {
-        const { layout, run } = get();
-        // A manual reposition takes ownership — the split must not undo it.
-        set({ workspaceSystemMoved: null });
-        writeWorkspace({ layout: repositionInLayout(layout, surface, target), run });
-      },
-
       workspaceSystemMoved: null,
 
       moveWorkspaceForChatSplit() {
@@ -223,13 +208,6 @@ export const useLayoutStore = create<LayoutStore>()(
         set({ workspaceSystemMoved: null });
         if (workspaceSystemMoved == null || layout.bottom !== 'workspace') return;
         writeWorkspace({ layout: repositionInLayout(layout, 'workspace', workspaceSystemMoved), run });
-      },
-
-      moveTabToPaneEdge(tabId, edge) {
-        const { layout, run } = get();
-        if (!run) return;
-        const nextRun = moveTabToPaneEdgeReducer(run, tabId, edge);
-        if (nextRun !== run) writeWorkspace({ layout, run: nextRun });
       },
 
       openFileTab(target, mode, paneId) {
