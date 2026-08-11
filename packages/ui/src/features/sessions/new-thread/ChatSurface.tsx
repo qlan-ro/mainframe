@@ -34,6 +34,7 @@ import { useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
+import { SplitDivider } from '@/features/chat/zones/SplitDivider';
 import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
 import { useZoneHotkeys } from '@/features/chat/zones/use-zone-hotkeys';
@@ -55,6 +56,7 @@ export function ChatSurface() {
   useZoneHotkeys(aui);
   const zones = useZonesStore((s) => s.zones);
   const closeSplit = useZonesStore((s) => s.closeSplit);
+  const splitFrac = useZonesStore((s) => s.frac);
 
   // Width gate for the split: below 2×MIN_ZONE_WIDTH each zone would be
   // unusable, so the pair stays parked behind the single view until the
@@ -151,13 +153,15 @@ export function ChatSurface() {
       <div ref={measureSurface} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
         <ChatZone
           chatId={zones[0]}
+          grow={splitFrac}
           focused={mainThreadId === zones[0]}
           onFocus={() => aui.threads.switchToThread(zones[0])}
           onClose={() => closeZone(zones[0])}
         />
-        <div aria-hidden className="w-px shrink-0 bg-border" />
+        <SplitDivider />
         <ChatZone
           chatId={zones[1]}
+          grow={1 - splitFrac}
           focused={mainThreadId === zones[1]}
           onFocus={() => aui.threads.switchToThread(zones[1])}
           onClose={() => closeZone(zones[1])}

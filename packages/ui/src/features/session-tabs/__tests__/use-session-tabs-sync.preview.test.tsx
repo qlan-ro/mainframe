@@ -144,7 +144,7 @@ describe('persistence (v3)', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [], zonesFrac: null });
   });
 
   it('stores the preview as its boot-stable remoteId', () => {
@@ -157,7 +157,7 @@ describe('persistence (v3)', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [], zonesFrac: null });
   });
 
   it('stores a null preview for an unsent draft that means nothing next boot', () => {
@@ -169,7 +169,7 @@ describe('persistence (v3)', () => {
 
     // The draft pinned, so it is the dropped pin — and the restored preview
     // stays as the only survivor of the write.
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [], zonesFrac: null });
   });
 
   it('clears the stored preview once the user closes it', () => {
@@ -181,7 +181,7 @@ describe('persistence (v3)', () => {
     useSessionTabsStore.getState().closeTab('chat-b');
     rerender();
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: null, zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: null, zones: [], zonesFrac: null });
   });
 });
 
@@ -248,6 +248,6 @@ describe('restore', () => {
     expect(state.hydrated).toBe(true);
     expect(state.tabIds).toEqual(['chat-a']);
     expect(state.previewId).toBe('chat-c');
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-c', zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-c', zones: [], zonesFrac: null });
   });
 });

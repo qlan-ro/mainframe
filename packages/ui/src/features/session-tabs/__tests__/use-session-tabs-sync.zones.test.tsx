@@ -1,10 +1,9 @@
 /**
  * useSessionTabsSync — the split half of the persisted strip (`mf:session-tabs`
- * v3). The zone pair is stored beside the tab ids, in the same boot-stable id
- * space, and restoring it is deliberately a TWO-STEP dance: focus is switched to
- * the left zone first and the split only opens once focus has landed there.
- * Opening it while the boot draft was still the focused chat made the reconciler
- * read a draft-main and close the split straight back.
+ * v3). The zone pair (and its divider fraction) is stored beside the tab ids,
+ * in the same boot-stable id space. Restoring just SETS the pair — under the
+ * parking model the split renders whenever the active chat is a member, so no
+ * focus choreography is needed or performed.
  *
  * (The preview slot and the v1/v2 payloads live in
  * use-session-tabs-sync.preview.test.tsx.)
@@ -66,7 +65,7 @@ beforeEach(() => {
   localStorage.clear();
   useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: false });
   useSessionListLoadState.setState({ loaded: false });
-  useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  useZonesStore.setState({ zones: null, focusedIndex: 0, frac: 0.5 });
 });
 
 describe('writing the open split', () => {
@@ -78,7 +77,13 @@ describe('writing the open split', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'] });
+    expect(readPersisted()).toEqual({
+      v: 3,
+      ids: ['chat-a', 'chat-b'],
+      preview: null,
+      zones: ['chat-a', 'chat-b'],
+      zonesFrac: 0.5,
+    });
   });
 
   it('stores a zone as its boot-stable remoteId, exactly like a tab', () => {
@@ -91,7 +96,30 @@ describe('writing the open split', () => {
 
     // `ids` gains chat-b too: zones ⊆ pinned tabs, so the membership effect
     // pinned the tab-less zone member — both persist remote-keyed.
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'] });
+    expect(readPersisted()).toEqual({
+      v: 3,
+      ids: ['chat-a', 'chat-b'],
+      preview: null,
+      zones: ['chat-a', 'chat-b'],
+      zonesFrac: 0.5,
+    });
+  });
+
+  it('stores the divider fraction with the pair, rounded to 3 places', () => {
+    localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 2, ids: ['chat-a', 'chat-b'], preview: null }));
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0, frac: 0.6180339 });
+
+    renderHook(() => useSessionTabsSync());
+
+    expect(readPersisted()).toEqual({
+      v: 3,
+      ids: ['chat-a', 'chat-b'],
+      preview: null,
+      zones: ['chat-a', 'chat-b'],
+      zonesFrac: 0.618,
+    });
   });
 
   it('empties the stored pair when the user closes the split', () => {
@@ -106,7 +134,7 @@ describe('writing the open split', () => {
     });
     rerender();
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: [] });
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: [], zonesFrac: null });
   });
 });
 
@@ -153,6 +181,19 @@ describe('restoring the split across a boot', () => {
 
     expect(switchToThread).not.toHaveBeenCalled();
     expect(zones()).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('restores the divider fraction with the pair; a payload without one keeps the even split', () => {
+    localStorage.setItem(
+      SESSION_TABS_STORAGE_KEY,
+      JSON.stringify({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'], zonesFrac: 0.7 }),
+    );
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+
+    renderHook(() => useSessionTabsSync());
+
+    expect(useZonesStore.getState().frac).toBe(0.7);
   });
 
   it('restores the pair only once — a user close later the same boot sticks', () => {

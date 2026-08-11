@@ -20,21 +20,31 @@ export type ZoneIndex = 0 | 1;
  *  clear it; narrower, the pair stays parked behind the single view. */
 export const MIN_ZONE_WIDTH = 480;
 
+/** The divider can't give either side less than this share outright; the
+ *  pixel-accurate MIN_ZONE_WIDTH clamp happens at the drag site, which knows
+ *  the row's real width. */
+const FRAC_MIN = 0.15;
+const FRAC_MAX = 0.85;
+
 interface ZonesState {
   /** The two visible chats, left to right; null = single-zone (no split). */
   zones: [string, string] | null;
   /** The slot `mainThreadId` occupies — the slot a tab switch replaces. */
   focusedIndex: ZoneIndex;
+  /** The left zone's share of the row (divider-dragged); 0.5 = even. */
+  frac: number;
   /** Opens the split with the current chat left and `second` right; focus stays left. */
   openSplit: (first: string, second: string) => void;
   replaceZone: (index: ZoneIndex, id: string) => void;
   setFocusedIndex: (index: ZoneIndex) => void;
+  setFrac: (frac: number) => void;
   closeSplit: () => void;
 }
 
 export const useZonesStore = create<ZonesState>((set) => ({
   zones: null,
   focusedIndex: 0,
+  frac: 0.5,
   openSplit: (first, second) => set({ zones: [first, second], focusedIndex: 0 }),
   replaceZone: (index, id) =>
     set((s) => {
@@ -42,7 +52,8 @@ export const useZonesStore = create<ZonesState>((set) => ({
       return { zones: index === 0 ? [id, s.zones[1]] : [s.zones[0], id] };
     }),
   setFocusedIndex: (index) => set({ focusedIndex: index }),
-  closeSplit: () => set({ zones: null, focusedIndex: 0 }),
+  setFrac: (frac) => set({ frac: Math.min(FRAC_MAX, Math.max(FRAC_MIN, frac)) }),
+  closeSplit: () => set({ zones: null, focusedIndex: 0, frac: 0.5 }),
 }));
 
 /** A chat holds one of the two slots. */

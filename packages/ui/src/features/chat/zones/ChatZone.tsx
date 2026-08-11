@@ -31,11 +31,14 @@ import { ChatThread } from '../thread/ChatThread';
 export function ChatZone({
   chatId,
   focused,
+  grow = 1,
   onFocus,
   onClose,
 }: {
   chatId: string;
   focused: boolean;
+  /** Flex share of the split row (divider-dragged); both zones share basis 0. */
+  grow?: number;
   onFocus: () => void;
   onClose: () => void;
 }) {
@@ -97,6 +100,9 @@ export function ChatZone({
       <div
         data-testid={`chat-zone-${chatId}`}
         data-focused={focused}
+        // flex-1 gives 1 1 0%; the inline grow overrides just the share so the
+        // divider drag resizes without touching shrink/basis.
+        style={{ flexGrow: grow }}
         className={cn(
           'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-opacity',
           !focused && 'opacity-75',

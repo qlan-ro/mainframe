@@ -41,25 +41,33 @@ interface PersistedTabs {
   preview: string | null;
   /** v3: the open split's zone pair — absent/short pairs restore as no split. */
   zones: string[];
+  /** The divider fraction saved with the pair; absent → even split. */
+  zonesFrac: number | null;
 }
 
 function readPersisted(): PersistedTabs {
   try {
     const raw = localStorage.getItem(SESSION_TABS_STORAGE_KEY);
-    if (!raw) return { ids: [], preview: null, zones: [] };
+    if (!raw) return { ids: [], preview: null, zones: [], zonesFrac: null };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null, zones: [] };
-    const { ids, preview, zones } = parsed as { ids?: unknown; preview?: unknown; zones?: unknown };
+    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null, zones: [], zonesFrac: null };
+    const { ids, preview, zones, zonesFrac } = parsed as {
+      ids?: unknown;
+      preview?: unknown;
+      zones?: unknown;
+      zonesFrac?: unknown;
+    };
     return {
       ids: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
       // v1 payloads carry no preview — every restored tab was pinned.
       preview: typeof preview === 'string' ? preview : null,
       // v1/v2 payloads carry no zones — they restore unsplit.
       zones: Array.isArray(zones) ? zones.filter((id): id is string => typeof id === 'string') : [],
+      zonesFrac: typeof zonesFrac === 'number' && zonesFrac > 0 && zonesFrac < 1 ? zonesFrac : null,
     };
   } catch {
     /* expected — corrupt storage reads as no persisted tabs */
-    return { ids: [], preview: null, zones: [] };
+    return { ids: [], preview: null, zones: [], zonesFrac: null };
   }
 }
 
@@ -92,6 +100,7 @@ export function useSessionTabsSync(): void {
     const [left, right] = zones;
     if (zones.length === 2 && left != null && right != null) {
       useZonesStore.getState().openSplit(left, right);
+      if (persisted.zonesFrac != null) useZonesStore.getState().setFrac(persisted.zonesFrac);
     }
   }, [hydrated, items, isListLoading, listLoaded, hydrate]);
 
@@ -106,6 +115,7 @@ export function useSessionTabsSync(): void {
   // restore whose tab was closed pre-reboot) gets one. Otherwise the strip and
   // the split disagree about what is open.
   const zonesPair = useZonesStore((s) => s.zones);
+  const zoneFrac = useZonesStore((s) => s.frac);
   useEffect(() => {
     if (zonesPair == null) return;
     const store = useSessionTabsStore.getState();
@@ -131,13 +141,14 @@ export function useSessionTabsSync(): void {
     const ids = persistTabIds(tabIds, items);
     const preview = previewId === null ? null : (persistTabIds([previewId], items)[0] ?? null);
     const zones = zonesPair === null ? [] : persistTabIds([...zonesPair], items);
-    const key = `${ids.join('\0')}\0\0${preview ?? ''}\0\0${zones.join('\0')}`;
+    const zonesFrac = zonesPair === null ? null : Math.round(zoneFrac * 1000) / 1000;
+    const key = `${ids.join('\0')}\0\0${preview ?? ''}\0\0${zones.join('\0')}\0\0${zonesFrac ?? ''}`;
     if (key === lastWrittenRef.current) return;
     try {
-      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 3, ids, preview, zones }));
+      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 3, ids, preview, zones, zonesFrac }));
       lastWrittenRef.current = key;
     } catch {
       /* expected — storage may be unavailable; tabs simply don't survive the boot */
     }
-  }, [hydrated, tabIds, previewId, zonesPair, items]);
+  }, [hydrated, tabIds, previewId, zonesPair, zoneFrac, items]);
 }
