@@ -11,6 +11,8 @@
 import { memo, useCallback, useRef, useState } from 'react';
 import { ThreadListItemPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import { PinIcon } from 'lucide-react';
+import { openInSplit } from '@/features/chat/zones/open-in-split';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
@@ -139,6 +141,10 @@ interface SessionRowInnerProps {
 function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionRowInnerProps) {
   const { custom } = item;
   const aui = useAui();
+  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  // Visible-but-unfocused zone chats get the dimmed selection tint — the
+  // focused one keeps the native full data-active treatment.
+  const zoneDimmed = useZonesStore((s) => s.zones != null && s.zones.includes(item.id) && mainThreadId !== item.id);
   const unreadIds = useUnreadStore((s) => s.unread);
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -173,6 +179,9 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
       onRename={() => queueMicrotask(() => setIsRenaming(true))}
       onTags={openTagsFromMenu}
       onArchive={actions.onArchive}
+      onOpenInSplit={() => {
+        if (!openInSplit(mainThreadId, item.id)) aui.threads.switchToThread(item.id);
+      }}
       claudeSessionId={custom.claudeSessionId}
     >
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
@@ -192,9 +201,23 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton
                   size="sm"
+                  data-zone-visible={zoneDimmed || undefined}
+                  // ⌘-click opens/retargets the split; capture so the native
+                  // trigger's switchToThread never fires for the absorbed case.
+                  onClickCapture={(e) => {
+                    if (!e.metaKey) return;
+                    if (openInSplit(mainThreadId, item.id)) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
                   // pr-2!: the variants reserve a gutter for an overlaid
                   // SidebarMenuAction, but the actions render inline now.
-                  className={cn(ROW_INDENT, 'h-auto py-1 pr-2! group-data-active/menu-item:bg-sidebar-selection')}
+                  className={cn(
+                    ROW_INDENT,
+                    'h-auto py-1 pr-2! group-data-active/menu-item:bg-sidebar-selection',
+                    zoneDimmed && 'bg-sidebar-selection/40',
+                  )}
                 >
                   <RowBody
                     item={item}

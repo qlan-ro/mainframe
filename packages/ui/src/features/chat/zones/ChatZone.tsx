@@ -6,60 +6,27 @@
  * through this mount while split, so a focus click changes only context
  * (`switchToThread`), never a mount — no transcript remount, no scroll jump.
  *
+ * The zone is a complete chat column: the regular ChatCardHeader (zone mode —
+ * close ✕ instead of the whole-surface controls) and its own session panel +
+ * rail, both resolving per zone because `useActiveIdentity` and the panel
+ * cards read the rebound `threadListItem`/extras contexts.
+ *
  * The zone holds its own live-subscription ref; `subscribeLive` is ref-counted
  * on the controller, so the focused zone (also main, whose per-item runtime
  * hook holds a ref of its own) is safe.
  */
 import { useCallback, useEffect, useMemo } from 'react';
-import { X } from 'lucide-react';
-import {
-  AuiConfig,
-  AuiProvider,
-  ExternalThread,
-  ThreadListItemRuntimeProvider,
-  useAui,
-  useAuiState,
-  type AppendMessage,
-} from '@assistant-ui/react';
+import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
+import { Derived } from '@assistant-ui/store';
 import { cn } from '@/lib/utils';
+import { SessionPanel } from '@/features/session-panel/SessionPanel';
+import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { buildChatExtras, CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { projectChatThreadMessages } from '../controller/project-messages';
+import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
-
-function ZoneHeader({ chatId, focused, onClose }: { chatId: string; focused: boolean; onClose: () => void }) {
-  const title = useAuiState((s) => s.threads.threadItems.find((t) => t.id === chatId)?.title);
-  return (
-    <div
-      className={cn(
-        'flex h-7 shrink-0 items-center gap-2 border-b border-border px-2.5',
-        focused ? 'bg-foreground/4' : 'bg-transparent',
-      )}
-    >
-      <span
-        className={cn(
-          'min-w-0 flex-1 truncate text-xs font-medium',
-          focused ? 'text-foreground' : 'text-muted-foreground',
-        )}
-      >
-        {title ?? 'Session'}
-      </span>
-      <button
-        type="button"
-        data-testid={`chat-zone-close-${chatId}`}
-        aria-label="Close zone"
-        onClick={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-        className="flex size-4.5 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-      >
-        <X size={11} aria-hidden />
-      </button>
-    </div>
-  );
-}
 
 export function ChatZone({
   chatId,
@@ -76,6 +43,7 @@ export function ChatZone({
   const port = useDaemonPort();
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
   const state = useControllerState(controller);
+  const panelState = useSessionPanelState();
 
   // Seed once + hold this zone's live ref for as long as it is visible.
   useEffect(() => {
@@ -97,6 +65,10 @@ export function ChatZone({
     [controller],
   );
 
+  // ONE provider carries both scopes: `thread` (the ExternalThread client) and
+  // `threadListItem` (the by-id Derived query, SessionRowItemScope's pattern).
+  // They cannot be nested providers — an inner `extends={aui}` chains to the
+  // ROOT context and would drop the outer rebinding.
   const config = useMemo(
     () =>
       AuiConfig({
@@ -111,18 +83,16 @@ export function ChatZone({
           },
           attachmentAdapter: CHAT_ATTACHMENT_ADAPTER,
         }),
+        threadListItem: Derived({
+          source: 'threads',
+          query: { type: 'id', id: chatId },
+          get: (client) => client.threads.item({ id: chatId }),
+        }),
       }),
-    [messages, isRunning, state.loadState.type, extras, onNew, controller],
+    [messages, isRunning, state.loadState.type, extras, onNew, controller, chatId],
   );
 
-  // The item scope (title/status reads inside the tree) must match the zone's
-  // chat, not the focused one. The accessor is optional-but-typed public API.
-  const itemRuntime = useMemo(
-    () => aui.threads.__internal_getAssistantRuntime?.().threads.getItemById(chatId),
-    [aui, chatId],
-  );
-
-  const body = (
+  return (
     <AuiProvider extends={aui} config={config}>
       <div
         data-testid={`chat-zone-${chatId}`}
@@ -135,14 +105,16 @@ export function ChatZone({
           if (!focused) onFocus();
         }}
       >
-        <ZoneHeader chatId={chatId} focused={focused} onClose={onClose} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <ChatThread />
+        <ChatCardHeader zone={{ chatId, onClose }} />
+        {/* The row this zone's panel floats over — measured per zone, so each
+            side derives its own rail/overlay mode from its own width. */}
+        <div ref={panelState.hostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ChatThread />
+          </div>
+          <SessionPanel state={panelState} />
         </div>
       </div>
     </AuiProvider>
   );
-
-  if (!itemRuntime) return body;
-  return <ThreadListItemRuntimeProvider runtime={itemRuntime}>{body}</ThreadListItemRuntimeProvider>;
 }

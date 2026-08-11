@@ -35,13 +35,15 @@ export interface SessionTabEntry {
 
 interface SessionTabPillProps {
   tab: SessionTabEntry;
+  /** Inside the split pair's group container — the group owns the underline. */
+  grouped?: boolean;
   /** `split` is true on a ⌘-click — the open-in-split gesture. */
   onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
 }
 
-export function SessionTabPill({ tab, onActivate, onClose, onPin }: SessionTabPillProps) {
+export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPin }: SessionTabPillProps) {
   return (
     <div
       data-testid={`session-tab-${tab.id}`}
@@ -56,9 +58,10 @@ export function SessionTabPill({ tab, onActivate, onClose, onPin }: SessionTabPi
         // h-full puts the underline on the toolbar's bottom hairline and the
         // label on the toolbar midline — one alignment for every tab state.
         'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
-        'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
+        !grouped &&
+          'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
         tab.active
-          ? 'font-semibold text-foreground after:opacity-100'
+          ? cn('font-semibold text-foreground', !grouped && 'after:opacity-100')
           : 'font-medium text-muted-foreground hover:text-foreground',
       )}
     >

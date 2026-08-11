@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
@@ -61,23 +62,26 @@ export function SessionTabs() {
 
   // Pinned tabs in order; the preview slot renders last (editor-style).
   const displayIds = previewId === null ? tabIds : [...tabIds, previewId];
-  const tabs = displayIds.map((id) => toTabEntry(id, items, activeTabId, id === previewId));
+
+  // While split, the two zone tabs regroup ADJACENT (in zone order, at the
+  // first member's position) so the strip mirrors the surface — a visual
+  // reorder only, the stored pin order is untouched.
+  const zones = useZonesStore((s) => s.zones);
+  const zoneMembers = zones == null ? [] : zones.filter((id) => displayIds.includes(id));
+  const grouped = zoneMembers.length === 2;
+  const ordered = grouped
+    ? (() => {
+        const firstAt = displayIds.findIndex((id) => zoneMembers.includes(id));
+        const rest = displayIds.filter((id) => !zoneMembers.includes(id));
+        return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
+      })()
+    : displayIds;
+  const tabs = ordered.map((id) => toTabEntry(id, items, activeTabId, id === previewId));
 
   const handleActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already
     // visible, and any draft, degrades to a plain focus click.
-    if (split && activeTabId != null && id !== activeTabId && !id.startsWith('__LOCALID_')) {
-      const zonesStore = useZonesStore.getState();
-      if (zonesStore.zones == null) {
-        if (!activeTabId.startsWith('__LOCALID_')) {
-          zonesStore.openSplit(activeTabId, id);
-          return;
-        }
-      } else if (!zonesStore.zones.includes(id)) {
-        zonesStore.replaceZone(zonesStore.focusedIndex === 0 ? 1 : 0, id);
-        return;
-      }
-    }
+    if (split && openInSplit(activeTabId, id)) return;
     if (id !== activeTabId) aui.threads.switchToThread(id);
   };
 
@@ -94,9 +98,59 @@ export function SessionTabs() {
         data-no-drag
         className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
       >
-        {tabs.map((tab) => (
-          <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} onPin={pinTab} />
-        ))}
+        {grouped ? (
+          <>
+            {tabs
+              .filter((tab) => !zoneMembers.includes(tab.id))
+              .slice(
+                0,
+                ordered.findIndex((id) => zoneMembers.includes(id)),
+              )
+              .map((tab) => (
+                <SessionTabPill
+                  key={tab.id}
+                  tab={tab}
+                  onActivate={handleActivate}
+                  onClose={handleClose}
+                  onPin={pinTab}
+                />
+              ))}
+            {/* The split pair reads as ONE unit: shared underline across both. */}
+            <div
+              data-testid="session-tabs-zone-group"
+              className="relative flex h-full shrink items-center rounded-t-sm bg-foreground/4 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground"
+            >
+              {tabs
+                .filter((tab) => zoneMembers.includes(tab.id))
+                .map((tab) => (
+                  <SessionTabPill
+                    key={tab.id}
+                    tab={tab}
+                    grouped
+                    onActivate={handleActivate}
+                    onClose={handleClose}
+                    onPin={pinTab}
+                  />
+                ))}
+            </div>
+            {tabs
+              .filter((tab) => !zoneMembers.includes(tab.id))
+              .slice(ordered.findIndex((id) => zoneMembers.includes(id)))
+              .map((tab) => (
+                <SessionTabPill
+                  key={tab.id}
+                  tab={tab}
+                  onActivate={handleActivate}
+                  onClose={handleClose}
+                  onPin={pinTab}
+                />
+              ))}
+          </>
+        ) : (
+          tabs.map((tab) => (
+            <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} onPin={pinTab} />
+          ))
+        )}
       </div>
       <Hint label="New session">
         <Button

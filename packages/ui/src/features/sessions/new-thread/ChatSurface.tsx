@@ -115,9 +115,10 @@ export function ChatSurface() {
 
   const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
 
-  // Split mode: two ExternalThread-mounted zones side by side; focus is a click
-  // (switchToThread), so `mainThreadId` keeps meaning "the focused zone". The
-  // draft guard covers the one frame before the reconciler closes the split.
+  // Split mode: two ExternalThread-mounted zones side by side, each a complete
+  // chat column (own header, panel and rail); focus is a click (switchToThread),
+  // so `mainThreadId` keeps meaning "the focused zone". The draft guard covers
+  // the one frame before the reconciler closes the split.
   if (zones != null && mainThreadId != null && !mainThreadId.startsWith('__LOCALID_')) {
     const closeZone = (closedId: string) => {
       const other = zones[0] === closedId ? zones[1] : zones[0];
@@ -125,24 +126,20 @@ export function ChatSurface() {
       if (mainThreadId !== other) aui.threads.switchToThread(other);
     };
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <ChatCardHeader />
-        <div ref={setHostRef} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
-          <ChatZone
-            chatId={zones[0]}
-            focused={mainThreadId === zones[0]}
-            onFocus={() => aui.threads.switchToThread(zones[0])}
-            onClose={() => closeZone(zones[0])}
-          />
-          <div aria-hidden className="w-px shrink-0 bg-border" />
-          <ChatZone
-            chatId={zones[1]}
-            focused={mainThreadId === zones[1]}
-            onFocus={() => aui.threads.switchToThread(zones[1])}
-            onClose={() => closeZone(zones[1])}
-          />
-          <SessionPanel state={panelState} />
-        </div>
+      <div data-testid="chat-split-row" className="flex min-h-0 flex-1 overflow-hidden">
+        <ChatZone
+          chatId={zones[0]}
+          focused={mainThreadId === zones[0]}
+          onFocus={() => aui.threads.switchToThread(zones[0])}
+          onClose={() => closeZone(zones[0])}
+        />
+        <div aria-hidden className="w-px shrink-0 bg-border" />
+        <ChatZone
+          chatId={zones[1]}
+          focused={mainThreadId === zones[1]}
+          onFocus={() => aui.threads.switchToThread(zones[1])}
+          onClose={() => closeZone(zones[1])}
+        />
       </div>
     );
   }
