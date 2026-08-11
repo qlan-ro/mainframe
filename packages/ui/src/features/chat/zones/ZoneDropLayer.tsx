@@ -60,13 +60,15 @@ function DropTarget({
   );
 }
 
-export function ZoneDropLayer() {
+/** `canSplit`: the host surface clears 2×MIN_ZONE_WIDTH — when it doesn't,
+ *  offering a split that could never render would be a lying drop target. */
+export function ZoneDropLayer({ canSplit = true }: { canSplit?: boolean }) {
   const aui = useAui();
   const draggingId = useTabDragStore((s) => s.draggingId);
   const zones = useZonesStore((s) => s.zones);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
 
-  if (draggingId == null || draggingId.startsWith('__LOCALID_')) return null;
+  if (draggingId == null || draggingId.startsWith('__LOCALID_') || !canSplit) return null;
 
   const dropOnZone = (index: ZoneIndex) => {
     const store = useZonesStore.getState();

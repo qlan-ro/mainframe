@@ -15,6 +15,11 @@ import { create } from 'zustand';
 
 export type ZoneIndex = 0 | 1;
 
+/** A zone below this is unusable (user-measured verdict, 2026-08-12: 483px
+ *  zones were the floor). The surface renders the split only when BOTH zones
+ *  clear it; narrower, the pair stays parked behind the single view. */
+export const MIN_ZONE_WIDTH = 480;
+
 interface ZonesState {
   /** The two visible chats, left to right; null = single-zone (no split). */
   zones: [string, string] | null;

@@ -28,12 +28,13 @@
  * which shrinks when the surface is split and which the panel measuring its own
  * box would never see.
  */
+import { useCallback, useRef, useState } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
 import { useZoneHotkeys } from '@/features/chat/zones/use-zone-hotkeys';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
@@ -54,6 +55,23 @@ export function ChatSurface() {
   useZoneHotkeys(aui);
   const zones = useZonesStore((s) => s.zones);
   const closeSplit = useZonesStore((s) => s.closeSplit);
+
+  // Width gate for the split: below 2×MIN_ZONE_WIDTH each zone would be
+  // unusable, so the pair stays parked behind the single view until the
+  // surface widens again. Measured on the surface root — the panel hook's
+  // hostRef only attaches in single mode, so it cannot feed this decision.
+  const [surfaceWidth, setSurfaceWidth] = useState<number | null>(null);
+  const widthObserverRef = useRef<ResizeObserver | null>(null);
+  const measureSurface = useCallback((el: HTMLDivElement | null) => {
+    widthObserverRef.current?.disconnect();
+    widthObserverRef.current = null;
+    if (el == null) return;
+    const observer = new ResizeObserver(() => setSurfaceWidth(el.clientWidth));
+    observer.observe(el);
+    setSurfaceWidth(el.clientWidth);
+    widthObserverRef.current = observer;
+  }, []);
+  const splitFits = surfaceWidth == null || surfaceWidth >= MIN_ZONE_WIDTH * 2 + 1;
 
   const panelState = useSessionPanelState();
   // `hostRef` is the hook's state-backed callback ref — passed straight through,
@@ -118,18 +136,19 @@ export function ChatSurface() {
 
   const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
 
-  // Split mode renders only while the focused chat is a MEMBER of the pair —
-  // any other active session parks the split behind the normal single view
-  // (the pair survives; a member tab click brings it back). Focus is a click
-  // (switchToThread), so `mainThreadId` keeps meaning "the focused zone".
-  if (zones != null && mainThreadId != null && zones.includes(mainThreadId)) {
+  // Split mode renders only while the focused chat is a MEMBER of the pair
+  // AND both zones clear MIN_ZONE_WIDTH — any other active session, or a
+  // too-narrow surface, parks the split behind the normal single view (the
+  // pair survives; a member tab click / widening brings it back). Focus is a
+  // click (switchToThread), so `mainThreadId` keeps meaning "the focused zone".
+  if (zones != null && mainThreadId != null && zones.includes(mainThreadId) && splitFits) {
     const closeZone = (closedId: string) => {
       const other = zones[0] === closedId ? zones[1] : zones[0];
       closeSplit();
       if (mainThreadId !== other) aui.threads.switchToThread(other);
     };
     return (
-      <div data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div ref={measureSurface} data-testid="chat-split-row" className="relative flex min-h-0 flex-1 overflow-hidden">
         <ChatZone
           chatId={zones[0]}
           focused={mainThreadId === zones[0]}
@@ -143,13 +162,13 @@ export function ChatSurface() {
           onFocus={() => aui.threads.switchToThread(zones[1])}
           onClose={() => closeZone(zones[1])}
         />
-        <ZoneDropLayer />
+        <ZoneDropLayer canSplit />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
       {/* The row the panel floats over — what its ResizeObserver measures, and
           the containing block its absolute root resolves against. */}
@@ -160,7 +179,7 @@ export function ChatSurface() {
           <ChatThread emptyState={welcome} />
         </div>
         <SessionPanel state={panelState} />
-        <ZoneDropLayer />
+        <ZoneDropLayer canSplit={splitFits} />
       </div>
     </div>
   );
