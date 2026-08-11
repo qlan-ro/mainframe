@@ -19,6 +19,9 @@
  *  5. The footer reads "Import {n} issues" for the current selection count.
  *  6. `tasks-github-import-confirm` calls `importIssues` with exactly the
  *     selected, importable issue numbers (never a paired one).
+ *  7. A rejected credential (`errorAuth`) offers `tasks-github-import-update-token`,
+ *     which opens the token dialog with `returnTo: 'import'`; any other failure
+ *     offers no such button.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -33,13 +36,15 @@ const ISSUES: RemoteIssue[] = [
 
 const importIssues = vi.fn();
 const closeDialog = vi.fn();
+const openDialog = vi.fn();
 
 let dialog: null | { kind: 'import' } | { kind: 'link' };
 let issues: RemoteIssue[];
 let error: string | null;
+let errorAuth: boolean;
 
 vi.mock('../use-github-sync-store', () => ({
-  useGitHubSyncStore: () => ({ dialog, issues, error, importIssues, closeDialog }),
+  useGitHubSyncStore: () => ({ dialog, issues, error, errorAuth, importIssues, openDialog, closeDialog }),
 }));
 
 const { ImportIssuesDialog } = await import('../ImportIssuesDialog');
@@ -49,6 +54,7 @@ beforeEach(() => {
   dialog = { kind: 'import' };
   issues = ISSUES;
   error = null;
+  errorAuth = false;
 });
 
 describe('ImportIssuesDialog — visibility', () => {
@@ -90,6 +96,39 @@ describe('ImportIssuesDialog — load failure', () => {
     render(<ImportIssuesDialog />);
     expect(screen.getByText('No open issues to import.')).toBeTruthy();
     expect(screen.queryByTestId('tasks-github-import-error')).toBeNull();
+  });
+});
+
+describe('ImportIssuesDialog — rejected credential', () => {
+  const AUTH_ERROR = 'GitHub rejected the stored credential — the token is missing, expired, or revoked.';
+
+  it('offers the token fix when GitHub refused the stored credential', () => {
+    issues = [];
+    error = AUTH_ERROR;
+    errorAuth = true;
+    render(<ImportIssuesDialog />);
+    expect(screen.getByTestId('tasks-github-import-error').textContent).toBe(AUTH_ERROR);
+    expect(screen.getByTestId('tasks-github-import-update-token').textContent).toContain('Update GitHub token…');
+  });
+
+  it('offers no token fix for a failure that is not a credential problem', () => {
+    issues = [];
+    error = 'daemon unreachable';
+    errorAuth = false;
+    render(<ImportIssuesDialog />);
+    expect(screen.getByTestId('tasks-github-import-error').textContent).toBe('daemon unreachable');
+    expect(screen.queryByTestId('tasks-github-import-update-token')).toBeNull();
+  });
+
+  it('opens the token dialog set to return to the import dialog', async () => {
+    issues = [];
+    error = AUTH_ERROR;
+    errorAuth = true;
+    render(<ImportIssuesDialog />);
+
+    await userEvent.click(screen.getByTestId('tasks-github-import-update-token'));
+
+    expect(openDialog).toHaveBeenCalledWith({ kind: 'token', returnTo: 'import' });
   });
 });
 

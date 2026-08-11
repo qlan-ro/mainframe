@@ -73,6 +73,7 @@ const INITIAL_STATE = {
   issues: [],
   loading: false,
   error: null,
+  errorAuth: false,
   dialog: null,
   bannerDismissed: false,
 };

@@ -18,12 +18,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { listGitHubRemotes, type GitHubRemote } from '@/lib/api/git';
-import { CredentialConnect } from '@/features/automations/steps/CredentialConnect';
 import { useAutomationsStore } from '@/features/automations/data/use-automations-store';
 import { runOrToast } from './run-or-toast';
+import { GITHUB_CREDENTIAL_LABEL, GitHubTokenField, useSaveGitHubToken } from './GitHubTokenField';
 import { useGitHubSyncStore } from './use-github-sync-store';
-
-const GITHUB_SERVICE = 'github';
 
 function RemoteRow({ remote }: { remote: GitHubRemote }): React.ReactElement {
   return (
@@ -37,14 +35,31 @@ function RemoteRow({ remote }: { remote: GitHubRemote }): React.ReactElement {
 
 export function LinkRepoDialog(): React.ReactElement {
   const { port, projectId, linkRepo, closeDialog } = useGitHubSyncStore();
-  const connectedCredential = useAutomationsStore((s) =>
-    s.credentials.includes(GITHUB_SERVICE) ? GITHUB_SERVICE : null,
-  );
+  const gateway = useAutomationsStore((s) => s.gateway);
+  const { busy, save } = useSaveGitHubToken();
 
   const [remotes, setRemotes] = React.useState<GitHubRemote[]>([]);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<string | null>(null);
-  const [connected, setConnected] = React.useState<string | null>(null);
+  const [connected, setConnected] = React.useState(false);
+  const [editingToken, setEditingToken] = React.useState(false);
+
+  // The automations store only knows the labels once its surface has loaded,
+  // so the connected state is seeded from the daemon, not from that store.
+  React.useEffect(() => {
+    let live = true;
+    void gateway
+      .listCredentialLabels()
+      .then((labels) => {
+        if (live) setConnected(labels.includes(GITHUB_CREDENTIAL_LABEL));
+      })
+      .catch(() => {
+        /* expected — an unreachable daemon reads as "not connected" */
+      });
+    return () => {
+      live = false;
+    };
+  }, [gateway]);
 
   React.useEffect(() => {
     if (port === null || projectId === null) return;
@@ -61,19 +76,25 @@ export function LinkRepoDialog(): React.ReactElement {
     };
   }, [port, projectId]);
 
-  const credentialLabel = connected ?? connectedCredential;
   const remote = remotes.find((candidate) => candidate.name === selected);
-  const canConfirm = remote !== undefined && credentialLabel !== null && projectId !== null;
+  const canConfirm = remote !== undefined && connected && projectId !== null;
+
+  const saveToken = async (token: string): Promise<void> => {
+    if (await save(token)) {
+      setConnected(true);
+      setEditingToken(false);
+    }
+  };
 
   const confirm = (): Promise<void> =>
     runOrToast('Could not link the repository', async () => {
-      if (remote === undefined || credentialLabel === null || projectId === null) return;
+      if (remote === undefined || !connected || projectId === null) return;
       await linkRepo({
         projectId,
         owner: remote.owner,
         repo: remote.repo,
         remoteName: remote.name,
-        credentialLabel,
+        credentialLabel: GITHUB_CREDENTIAL_LABEL,
       });
       closeDialog();
     });
@@ -109,13 +130,32 @@ export function LinkRepoDialog(): React.ReactElement {
             </RadioGroup>
           )}
 
-          <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">GitHub credential</span>
-            <CredentialConnect
-              service={GITHUB_SERVICE}
-              testId="tasks-github-credential"
-              onChange={(label) => setConnected(label ?? null)}
-            />
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">GitHub token</span>
+              {connected && !editingToken && (
+                <span data-testid="tasks-github-credential-connected" className="inline-flex items-center gap-1.5">
+                  <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+                  <span className="text-xs text-foreground">connected</span>
+                  <Button
+                    data-testid="tasks-github-credential-replace"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingToken(true)}
+                    className="h-6 px-1.5 text-xs text-muted-foreground"
+                  >
+                    Replace…
+                  </Button>
+                </span>
+              )}
+            </div>
+            {(!connected || editingToken) && (
+              <GitHubTokenField
+                busy={busy}
+                onSave={(token) => void saveToken(token)}
+                testId="tasks-github-credential"
+              />
+            )}
           </div>
         </div>
 

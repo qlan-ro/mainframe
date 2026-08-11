@@ -3,11 +3,31 @@
 //! `github_issues_tests.rs` to keep both files under the 300-line limit.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::github_issues::GitHubError;
-use super::github_issues_tests::{client, repo};
+use super::github_issues_tests::{client, issue_json, repo};
+
+#[tokio::test]
+async fn requests_carry_a_user_agent() {
+    // The live API answers 403 "Request forbidden by administrative rules" to a
+    // request without one; reqwest sends none by default, so only a header
+    // assertion catches the regression before it reaches GitHub.
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/repos/qlan/mainframe/issues/5"))
+        .and(header("user-agent", "mainframe"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(5, "t", "open")))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    client(server.uri())
+        .get_issue(&repo(), 5, "tok")
+        .await
+        .unwrap();
+}
 
 /// Mounts a single `GET issues/1` response and returns the error `get_issue` produces.
 async fn get_issue_error(response: ResponseTemplate, token: &str) -> GitHubError {

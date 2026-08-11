@@ -65,7 +65,7 @@ function IssueRow({ issue, selected, onToggle }: RowProps): React.ReactElement {
 }
 
 export function ImportIssuesDialog(): React.ReactElement | null {
-  const { dialog, issues, error, importIssues, closeDialog } = useGitHubSyncStore();
+  const { dialog, issues, error, errorAuth, importIssues, openDialog, closeDialog } = useGitHubSyncStore();
   const [selected, setSelected] = React.useState<ReadonlySet<number>>(new Set());
   const isOpen = dialog?.kind === 'import';
 
@@ -113,9 +113,21 @@ export function ImportIssuesDialog(): React.ReactElement | null {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {issues.length === 0 ? (
             error !== null ? (
-              <p data-testid="tasks-github-import-error" className="px-2 py-4 text-sm text-destructive">
-                {error}
-              </p>
+              <div className="flex flex-col items-start gap-2 px-2 py-4">
+                <p data-testid="tasks-github-import-error" className="text-sm text-destructive">
+                  {error}
+                </p>
+                {errorAuth && (
+                  <Button
+                    data-testid="tasks-github-import-update-token"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openDialog({ kind: 'token', returnTo: 'import' })}
+                  >
+                    Update GitHub token…
+                  </Button>
+                )}
+              </div>
             ) : (
               <p className="px-2 py-4 text-sm text-muted-foreground">No open issues to import.</p>
             )

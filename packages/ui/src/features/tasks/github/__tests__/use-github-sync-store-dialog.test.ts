@@ -9,7 +9,8 @@
  *
  * Behaviors covered:
  *  1. openDialog / closeDialog — sets and clears `dialog`.
- *  2. dismissBanner — sets `bannerDismissed` to true.
+ *  2. openDialog — the token dialog keeps its `returnTo` target and fetches nothing.
+ *  3. dismissBanner — sets `bannerDismissed` to true.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -32,6 +33,7 @@ vi.mock('../../use-todos-store', () => ({
 }));
 
 import { useGitHubSyncStore } from '../use-github-sync-store';
+import * as githubApi from '@/lib/api/todos-github';
 
 const INITIAL_STATE = {
   port: null,
@@ -45,6 +47,7 @@ const INITIAL_STATE = {
   issues: [],
   loading: false,
   error: null,
+  errorAuth: false,
   dialog: null,
   bannerDismissed: false,
 };
@@ -69,6 +72,30 @@ describe('useGitHubSyncStore.openDialog / closeDialog', () => {
       result.current.closeDialog();
     });
     expect(result.current.dialog).toBeNull();
+  });
+});
+
+describe('useGitHubSyncStore.openDialog — token dialog', () => {
+  it('keeps the return target so a saved token can flow back into the import dialog', () => {
+    const { result } = renderHook(() => useGitHubSyncStore());
+
+    act(() => {
+      result.current.openDialog({ kind: 'token', returnTo: 'import' });
+    });
+
+    expect(result.current.dialog).toEqual({ kind: 'token', returnTo: 'import' });
+  });
+
+  it('fetches nothing — the token dialog reads no remote state', () => {
+    const { result } = renderHook(() => useGitHubSyncStore());
+
+    act(() => {
+      result.current.init(31415, 'proj-abc');
+      result.current.openDialog({ kind: 'token' });
+    });
+
+    expect(githubApi.listIssues).not.toHaveBeenCalled();
+    expect(githubApi.getReport).not.toHaveBeenCalled();
   });
 });
 

@@ -5,11 +5,11 @@
  * `../use-github-sync-store`'s link/task/run mutations. Split from
  * use-github-sync-store.test.ts (finding #13, todo #286) — init/load lives
  * in use-github-sync-store-load.test.ts, dialog/banner state in
- * use-github-sync-store-dialog.test.ts.
+ * use-github-sync-store-dialog.test.ts, the issue fetch and its failure
+ * classification in use-github-sync-store-issues.test.ts.
  *
  * Behaviors covered:
  *  - linkRepo/unlinkRepo — call the client then refetch this store's own load, never the todos store.
- *  - loadIssues — calls the client and sets `issues`; never refetches the todos store.
  *  - importIssues/publish/unlinkPair — call the client, refetch this store's load, AND the todos store.
  *  - sync — sets running true during the call and false after, sets lastRun, refetches both stores.
  *  - sync running gating — a second call while already running is refused (client not called again).
@@ -37,7 +37,7 @@ vi.mock('../../use-todos-store', () => ({
 
 import { useGitHubSyncStore } from '../use-github-sync-store';
 import * as githubApi from '@/lib/api/todos-github';
-import type { Link, Pair, RemoteIssue, RunSummary, WorkflowLabelSet } from '@/lib/api/todos-github';
+import type { Link, Pair, RunSummary, WorkflowLabelSet } from '@/lib/api/todos-github';
 
 const PORT = 31415;
 const PROJECT_ID = 'proj-abc';
@@ -62,8 +62,6 @@ const PAIR_A: Pair = {
   stateReason: null,
 };
 
-const ISSUE_FIXTURE: RemoteIssue = { number: 42, title: 'Fix the login bug', labels: ['bug'], pairedTodoNumber: null };
-
 const RUN_FIXTURE: RunSummary = {
   runId: 'run-1',
   finishedAt: '2026-07-31T14:22:00.000Z',
@@ -86,6 +84,7 @@ const INITIAL_STATE = {
   issues: [],
   loading: false,
   error: null,
+  errorAuth: false,
   dialog: null,
   bannerDismissed: false,
 };
@@ -154,46 +153,6 @@ describe('useGitHubSyncStore.unlinkRepo', () => {
     expect(githubApi.getLink).toHaveBeenCalledOnce();
     expect(result.current.link).toBeNull();
     expect(mockTodosLoad).not.toHaveBeenCalled();
-  });
-});
-
-describe('useGitHubSyncStore.loadIssues', () => {
-  it('calls listIssues and sets issues, without refetching the todos store', async () => {
-    vi.mocked(githubApi.listIssues).mockResolvedValue([ISSUE_FIXTURE]);
-
-    const { result } = renderHook(() => useGitHubSyncStore());
-    act(() => {
-      result.current.init(PORT, PROJECT_ID);
-    });
-
-    await act(async () => {
-      await result.current.loadIssues();
-    });
-
-    expect(githubApi.listIssues).toHaveBeenCalledWith(PORT, PROJECT_ID);
-    expect(result.current.issues).toEqual([ISSUE_FIXTURE]);
-    expect(mockTodosLoad).not.toHaveBeenCalled();
-  });
-
-  it('clears a stale error from a previous failed attempt once a retry succeeds', async () => {
-    vi.mocked(githubApi.listIssues).mockRejectedValueOnce(new Error('no credential'));
-    vi.mocked(githubApi.listIssues).mockResolvedValueOnce([]);
-
-    const { result } = renderHook(() => useGitHubSyncStore());
-    act(() => {
-      result.current.init(PORT, PROJECT_ID);
-    });
-
-    await act(async () => {
-      await result.current.loadIssues();
-    });
-    expect(result.current.error).toBe('no credential');
-
-    await act(async () => {
-      await result.current.loadIssues();
-    });
-    expect(result.current.error).toBeNull();
-    expect(result.current.issues).toEqual([]);
   });
 });
 

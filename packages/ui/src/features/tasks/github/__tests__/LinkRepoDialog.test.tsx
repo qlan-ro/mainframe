@@ -2,27 +2,29 @@
 /**
  * LinkRepoDialog.test.tsx
  *
- * Red-phase test for the link dialog (`../LinkRepoDialog`, not yet created —
- * task 36 of the plan implements it against this file, per the spec's
- * "Linking a project to a repository" section and task 30's
- * `listGitHubRemotes(port, projectId, chatId?)` client, added to `lib/api/git.ts`).
+ * The link dialog (`../LinkRepoDialog`), per the spec's "Linking a project to
+ * a repository" section and task 30's `listGitHubRemotes(port, projectId,
+ * chatId?)` client in `lib/api/git.ts`.
  *
  * Behaviors covered:
  *  1. Lists exactly the remotes the route returned, one radio per remote, the derived
  *     `owner/repo` as the label and the remote name as secondary text.
  *  2. `tasks-github-link-confirm` is disabled with neither a remote selected nor a
- *     credential connected, and while only one of the two is satisfied.
+ *     token stored, and while only one of the two is satisfied.
  *  3. `tasks-github-link-confirm` is enabled once both a remote is selected and a
- *     credential is connected, and confirming calls `linkRepo` with the selected remote's
- *     owner/repo/remoteName and the connected credential label.
- *  4. `tasks-github-link-cancel` calls `closeDialog()`.
+ *     token is stored, and confirming calls `linkRepo` with the selected remote's
+ *     owner/repo/remoteName and the `github` credential label.
+ *  4. Connectedness is seeded from the daemon's credential labels: 'github' present
+ *     shows the connected pill; absent shows the paste-a-PAT field.
+ *  5. Pasting and saving a token stores it and flips the dialog to connected.
+ *  6. `tasks-github-link-cancel` calls `closeDialog()`.
  *
- * The credential row reuses `CredentialConnect` (an existing, separately tested
- * component) — stubbed here to a single button that fires `onChange`, so this file
- * exercises only LinkRepoDialog's own confirm-enablement logic.
+ * The token row is the real `GitHubTokenField` on the real automations store
+ * with a fake gateway — the old `CredentialConnect` stub is gone, along with
+ * the placeholder token GitHub rejected with a 401.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const PORT = 31415;
@@ -37,13 +39,8 @@ vi.mock('../use-github-sync-store', () => ({
   useGitHubSyncStore: () => ({ port: PORT, projectId: PROJECT_ID, linkRepo, closeDialog }),
 }));
 
-vi.mock('@/features/automations/steps/CredentialConnect', () => ({
-  CredentialConnect: ({ onChange }: { onChange: (label: string | undefined) => void }) => (
-    <button data-testid="stub-credential-connect" onClick={() => onChange('github-creds')}>
-      Connect GitHub
-    </button>
-  ),
-}));
+import { useAutomationsStore } from '@/features/automations/data/use-automations-store';
+import { createFakeGateway as fakeGateway } from '@/features/automations/data/__tests__/fake-gateway';
 
 const { LinkRepoDialog } = await import('../LinkRepoDialog');
 
@@ -52,9 +49,15 @@ const REMOTES = [
   { name: 'upstream', owner: 'qlan-ro', repo: 'mainframe-fork' },
 ];
 
+/** Seeds the daemon's stored credential labels the dialog reads connectedness from. */
+const withStoredLabels = (labels: string[]): void => {
+  useAutomationsStore.setState({ credentials: [], gateway: fakeGateway({ listCredentialLabels: async () => labels }) });
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   listGitHubRemotes.mockResolvedValue(REMOTES);
+  withStoredLabels([]);
 });
 
 describe('LinkRepoDialog — remote list', () => {
@@ -78,30 +81,72 @@ describe('LinkRepoDialog — remote list', () => {
   });
 });
 
+describe('LinkRepoDialog — token row', () => {
+  it('shows the paste-a-PAT field when no github token is stored', async () => {
+    render(<LinkRepoDialog />);
+    expect(await screen.findByTestId('tasks-github-credential-input')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-github-credential-connected')).toBeNull();
+  });
+
+  it('shows the connected pill instead of the field when a github token is stored', async () => {
+    withStoredLabels(['github']);
+    render(<LinkRepoDialog />);
+
+    expect((await screen.findByTestId('tasks-github-credential-connected')).textContent).toContain('connected');
+    expect(screen.queryByTestId('tasks-github-credential-input')).toBeNull();
+  });
+
+  it('reveals the field again when Replace… is clicked', async () => {
+    withStoredLabels(['github']);
+    render(<LinkRepoDialog />);
+
+    await userEvent.click(await screen.findByTestId('tasks-github-credential-replace'));
+
+    expect(screen.getByTestId('tasks-github-credential-input')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-github-credential-connected')).toBeNull();
+  });
+
+  it('stores a pasted token under the github label and flips the row to connected', async () => {
+    const putCredential = vi.fn(async () => {});
+    useAutomationsStore.setState({
+      credentials: [],
+      gateway: fakeGateway({ listCredentialLabels: async () => [], putCredential }),
+    });
+    render(<LinkRepoDialog />);
+
+    await userEvent.type(await screen.findByTestId('tasks-github-credential-input'), 'ghp_live_abc');
+    await userEvent.click(screen.getByTestId('tasks-github-credential-save'));
+
+    expect(putCredential).toHaveBeenCalledWith('github', 'ghp_live_abc');
+    expect((await screen.findByTestId('tasks-github-credential-connected')).textContent).toContain('connected');
+  });
+});
+
 describe('LinkRepoDialog — confirm enablement', () => {
-  it('is disabled with neither a remote selected nor a credential connected', async () => {
+  it('is disabled with neither a remote selected nor a token stored', async () => {
     render(<LinkRepoDialog />);
     await screen.findByTestId('tasks-github-remote-origin');
     expect(screen.getByTestId('tasks-github-link-confirm')).toBeDisabled();
   });
 
-  it('stays disabled with a remote selected but no credential connected', async () => {
+  it('stays disabled with a remote selected but no token stored', async () => {
     render(<LinkRepoDialog />);
     await userEvent.click(await screen.findByTestId('tasks-github-remote-origin'));
     expect(screen.getByTestId('tasks-github-link-confirm')).toBeDisabled();
   });
 
-  it('stays disabled with a credential connected but no remote selected', async () => {
+  it('stays disabled with a token stored but no remote selected', async () => {
+    withStoredLabels(['github']);
     render(<LinkRepoDialog />);
-    await screen.findByTestId('tasks-github-remote-origin');
-    await userEvent.click(screen.getByTestId('stub-credential-connect'));
+    await screen.findByTestId('tasks-github-credential-connected');
     expect(screen.getByTestId('tasks-github-link-confirm')).toBeDisabled();
   });
 
-  it('enables once both a remote is selected and a credential is connected, and confirm calls linkRepo', async () => {
+  it('enables once both a remote is selected and a token is stored, and confirm calls linkRepo', async () => {
+    withStoredLabels(['github']);
     render(<LinkRepoDialog />);
+    await screen.findByTestId('tasks-github-credential-connected');
     await userEvent.click(await screen.findByTestId('tasks-github-remote-origin'));
-    await userEvent.click(screen.getByTestId('stub-credential-connect'));
 
     const confirm = screen.getByTestId('tasks-github-link-confirm');
     expect(confirm).toBeEnabled();
@@ -112,7 +157,20 @@ describe('LinkRepoDialog — confirm enablement', () => {
       owner: 'qlan-ro',
       repo: 'mainframe',
       remoteName: 'origin',
-      credentialLabel: 'github-creds',
+      credentialLabel: 'github',
+    });
+  });
+
+  it('enables after a token is pasted and saved with a remote already selected', async () => {
+    render(<LinkRepoDialog />);
+    await userEvent.click(await screen.findByTestId('tasks-github-remote-origin'));
+    expect(screen.getByTestId('tasks-github-link-confirm')).toBeDisabled();
+
+    await userEvent.type(screen.getByTestId('tasks-github-credential-input'), 'ghp_live_abc');
+    await userEvent.click(screen.getByTestId('tasks-github-credential-save'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tasks-github-link-confirm')).toBeEnabled();
     });
   });
 });
