@@ -1,269 +1,329 @@
 # E2E Flow Map — All Untested Surfaces
 
-_Generated 2026-05-30 by reading the renderer components/handlers, anchored on the test-id gap
-list in [`COVERAGE-GAP-REPORT.md`](./COVERAGE-GAP-REPORT.md). These are the **edges** (sequences,
+_Generated 2026-08-11 by reading the renderer components and handlers, anchored on the test-id gap
+list in [`UNUSED-TESTIDS.md`](./UNUSED-TESTIDS.md). These are the **edges** (sequences,
 preconditions, conditional rendering) that test-ids alone don't encode — the input for the
 `test-scenarios` skill and for authoring specs._
 
-> **STALE — do not trust the inventory (2026-08-06).** This file was generated against the
-> pre-v2 Electron renderer and predates both the UI-v2 port (PR #565) and the right-sidebar
-> revamp. It still lists ids from surfaces deleted since (e.g. `chat-session-bar-*`), and it is
-> missing every id added by the v2 shell and the session panel. The revamp deleted or renamed
-> `inspector-tab-*`, `changes-panel`, `changes-mode-*`, `changes-row-*`, `main-toolbar-launch*`,
-> `main-toolbar-play`, `composer-background-activity`, `chat-background-*`, `sidebar-bottom-*`,
-> `sidebar-context-*`, and `chat-header-context*` — none of which appear below, which is itself
-> the tell. Regenerating it is its own task; treat this as history until then.
-
 Priority key: **P0** critical user path · **P1** important · **P2** edge/secondary.
 
-> **Coverage note:** the first 5 sections (Todos, Chat cards, Composer, Sandbox, Branch) were the
-> initial high-priority pass; sections 6–11 (Sessions, Skills/Plugins/Tutorial, Files/Editor/Review,
-> Thread/Messages, Navigation & Layout, Settings/Remote/Chrome) complete the sweep across every
-> remaining surface.
-
-### Exclude — test-only fixture IDs (NOT product UI)
-
-These appear only in component unit tests, never in the running app. They inflated the raw
-"untested" count and should be **removed from the denominator**, not tested in e2e:
-`btn`, `row`, `sub`, `tl`, `outside`, `slot-action`, `thrower-output`, `my-label`, `my-row`,
-`plugin-view`. (`thumb-name` IS real — chat image thumbnails.)
-
-### Dormant / unwired code (don't test until wired)
-
-- **`LineCommentPopover`** (`editor-line-comment-input` / `-send` / `-close`, popover variant of
-  `line-comment-widget`) is not imported by any consumer. The live editor-comment path is
-  `editor-inline-comment-*` via the glyph margin. `14-editor.spec.ts` targets a non-existent
-  `line-comment-popover` — fix to `line-comment-widget` + `editor-inline-comment-input`.
-- **`settings-modal`** testid is absent from the DOM even though `TutorialOverlay` queries it;
-  only `settings-modal-close` exists. Add the testid or anchor tests on the close button.
-- **Tutorial `data-tutorial="step-1"/"step-2"`** are not attached to any element — those steps
-  auto-advance and the overlay is invisible until step 3 (composer) / step 4 (adapter dropdown).
-
 ---
 
-## TODOS (panel restructured — 19-todos.spec.ts is stale, rewrite)
+## Sessions list & filters
+
+_Specs: `sessions.spec.ts`, `sessions-rows.spec.ts`, `sessions-filters.spec.ts`,
+`sessions-tags.spec.ts`, `sessions-draft.spec.ts`. This surface has the deepest existing coverage in
+the suite — the rows below are the preconditions and edges worth keeping in view, not gaps._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| T1 | Quick-create task | P0 | project active; todos plugin registered `quick-create` action (triggered via `usePluginLayoutStore.triggerAction`, **not** a panel button) | todos-quick-dialog, -title-input, -body-input, -create, todos-label-input | create disabled until title non-empty; "No active project" toast; image paste ≤10MB; Cmd+Enter submits |
-| T2 | Full modal — create | P0 | TodosPanel visible | todos-new, todos-modal-dialog, -title/-type/-priority/-status-select, -body-input, -save | `todos-modal-upload`/`-file-input` exist **only in create mode**; save disabled until title set |
-| T3 | Full modal — edit | P0 | ≥1 todo exists | todos-modal-* , todos-modal-cancel, -close | edit mode swaps upload UI for `TodoAttachments`; cancel==close; Esc closes |
-| T4 | Attachments on existing todo | P1 | modal open in edit | todos-attachments-upload, -file-input | only images .jpg/.png/.gif/.webp ≤10MB; >10MB silently skipped |
-| T5 | Dependencies add/remove | P1 | modal open; ≥1 other todo | todos-dep-add-toggle, -search | toggle hidden when no candidates; max 5 shown w/o search; Esc closes dropdown |
-| T6 | Filtering | P1 | todos loaded | todos-filter-search, -search-clear, -labels-toggle, -filter-clear | labels-toggle only if a label exists; filter-clear only when filter active; search is title-only |
-| T7 | Start session from in-progress todo (modal) | P0 | todo status==in_progress; modal edit | todos-modal-start-session | button absent unless status==in_progress; pulls attachments → composer; activates fullview |
-| T8 | Load failure + retry | P1 | daemon down / API fails | todos-retry | manual retry only; no auto-retry; error screen replaces board |
+| SL1 | New session — filtered vs. "All" | P0 | sidebar loaded | sessions-new-button, sessions-new-picker, sessions-new-picker-project-${…} | a project filter active skips the picker and opens the draft directly; "All" view opens a menu; re-clicking retargets the one reused draft rather than stacking a second |
+| SL2 | Select / switch row | P0 | ≥1 session | sessions-row, sessions-row-title | click sets `data-active`; row action buttons stopPropagation so clicking Pin/Tag/Archive doesn't switch the session |
+| SL3 | Row hover actions vs. context menu | P1 | ≥1 session | sessions-row-action-pin, sessions-row-action-tags, sessions-row-action-archive, sessions-ctx-pin, sessions-ctx-rename, sessions-ctx-tags, sessions-ctx-archive, sessions-ctx-copy-id | hover reveals a subset (pin/tag/archive) in front of the relative time; right-click adds Rename and Copy Session ID; copy-id only shown once a `claudeSessionId` exists |
+| SL4 | Rename | P1 | ≥1 session | sessions-rename-input | Enter commits, Esc cancels; input is the row title swapped in place |
+| SL5 | Archive with worktree | P1 | chat has a worktree | sessions-archive-cancel, sessions-archive-confirm-dialog, sessions-archive-keep-worktree, sessions-archive-delete-worktree | only a chat with an attached worktree prompts keep-vs-delete; deleting removes the directory from disk |
+| SL6 | View / restore archived | P1 | ≥1 archived | sessions-archived-dialog, restore-session-btn | scoped to the active project filter |
+| SL7 | Project filter switcher | P0 | ≥1 project | sidebar-project-, sidebar-project-all, sidebar-project-badge-${…} | single-select, not a toggle — re-clicking the already-active row is a no-op; switching projects re-narrows the list but leaves the active session alone if it survives the new filter |
+| SL8 | Project switcher overflow | P2 | >5 projects | sidebar-project-more | "Show N more" / "Show less" toggle past the fifth row |
+| SL9 | Tag filter bar | P1 | ≥1 tag applied to a session | sessions-tag-filter-bar, sessions-tag-filter-${…}, sessions-tag-filter-synthetic-${…} | bar is absent until a tag is in use; synthetic `has-pr`/`has-worktree` chips appear once a session carries one; toggling multiple chips AND-filters |
+| SL10 | Sort menu | P1 | ≥1 session | sessions-sort-button, sessions-sort-popover | switching sort mode changes which group label is "parked" (Pinned/Today/Yesterday/Earlier vs. per-project) |
+| SL11 | Tag create / rename / recolor / delete | P1 | tag popover open (from row hover action or context menu) | sessions-tag-popover, sessions-tag-popover-create, sessions-tag-popover-search, sessions-tag-registry-rename, sessions-tag-recolor-panel, sessions-tag-registry-delete, sessions-tag-delete-confirm-ok | create is type + Enter, applies immediately; rename cascades to every row wearing the tag; delete needs the two-step confirm dialog; disallowed names show an inline validation message and suppress create |
+| SL12 | Remove project | P1 | right-click a project row | sidebar-project-remove-menu-${…} | Rename is disabled from this menu (rename lives elsewhere); Remove needs confirm and shows a toast |
+| SL13 | Draft session lifecycle | P0 | new draft opened, not yet sent | sessions-draft-row, sessions-draft-row-title, sessions-draft-row-discard | draft resolves a project without creating a chat; composer config selectors (model/adapter/permission) are usable pre-send; the chat is created on the **first send only**, exactly one; discarding (✕) clears the row and restores the previously active session |
+| SL14 | Draft suggestions | P2 | project has git history | sessions-welcome-suggestion-${…}, sessions-welcome-suggestion-insert-${…} | row count matches the daemon response; clicking one inserts its exact prefill text into the composer |
+| SL15 | Import external sessions | P1 | external CLI sessions exist for the project | sessions-import-dialog, sessions-import-project-${…}, sessions-import-back, sessions-import-load-more, sessions-import-retry | import button is disabled with no external sessions; dialog opens paginated (windowed) and pages in more on scroll-to-end, retiring the sentinel; import does not switch the active chat; a failed fetch shows an error state with retry |
+| SL16 | Zero-project / zero-session boot | P0 | fresh workspace, no projects | sessions-firstrun, sessions-firstrun-add-project | shows the FirstRunState hero instead of the project picker or a projectless dead-end surface |
+| SL17 | Worktree-missing warning | P1 | chat's worktree path no longer exists on disk | sessions-row-meta-worktree | the row's worktree glyph flips to a warning, the status dot to worktree-missing, and the hover card (`SessionMetaCard`) surfaces the warning text |
+| SL18 | Unread marking | P1 | a response lands while a different chat is active | — | row marks unread; clears on reselect |
 
----
+## ★ Session panel
 
-## CHAT INTERACTIVE CARDS (permission / plan / question)
-
-Routing in `BottomCard`: `AskUserQuestion`→question card, `ExitPlanMode`→plan card, else→permission card.
-All replace the composer while `pendingPermission` is set; session bar shows "Awaiting".
-
-| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
-|---|------|-----|---------------|--------------|---------------|
-| C1 | Permission — allow once | P0 | CLI `can_use_tool` for non-question/non-plan tool | chat-permission-allow-once-button, -details-toggle | allow-once sends no `updatedPermissions` → re-prompts next time; 3s watchdog re-shows if response lost |
-| C2 | Permission — deny | P0 | same | chat-permission-deny-button | deny w/o interrupt doesn't stop the turn |
-| C3 | Permission — always allow | P1 | `request.suggestions.length>0` | chat-permission-always-allow-button | **button absent when suggestions empty** — test both states; sends suggestions verbatim |
-| C4 | Plan — approve | P0 | chat in plan mode; CLI calls ExitPlanMode | chat-plan-approve-button, -exec-mode-select, -clear-context-checkbox | exec-mode `yolo`→bypassPermissions; clearContext=true wipes history + restarts CLI |
-| C5 | Plan — reject | P0 | same | chat-plan-reject-button | bare deny, no message |
-| C6 | Plan — revise loop | P1 | same | chat-plan-revise-button, -feedback-input, -send-feedback-button, -cancel-revise-button | send disabled until feedback non-empty; Cmd+Enter sends; loop repeats until approve/reject |
-| C7 | Question — single-select submit | P0 | AskUserQuestion, 1 question, multiSelect:false | chat-question-option-<label>, -submit-button | submit disabled until a pick; selecting replaces prior |
-| C8 | Question — multi-select | P1 | multiSelect:true | chat-question-option-<label>, -submit-button | toggles add/remove; submit enabled while ≥1 selected |
-| C9 | Question — "other" free text | P1 | any question | chat-question-option-other, -other-input | empty "other" → filtered to '' / []; deselect hides input |
-| C10 | Question — skip | P1 | any | chat-question-skip-button | bare deny anytime, discards selections |
-| C11 | Question — multi-question nav | P1 | questions.length>1 | chat-question-next-button, -back-button, -submit-button | back absent on Q1; Next↔Submit swap on last; selections persist across nav |
-
-_(The review-changes button and PR badges are session-bar actions, not cards — see SP13/SP14.)_
-
----
-
-## COMPOSER
+_Spec: `session-panel.spec.ts` — the widest and most detailed of the new-surface suites. Rows below
+capture the sizing/mode state machine the spec exercises._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| M1 | Type + send | P0 | chat open, not running, worktree present | composer-prompt-input, -prompt-highlight, -send | send disabled when empty & no captures; Shift+Enter=newline; worktreeMissing disables input |
-| M2 | Stop / interrupt | P0 | agent running | composer-stop | stop replaces send while running; race no-op if finishes first |
-| M3 | Queue while running + edit/cancel | P1 | agent running | composer-queued-edit, -edit-input, -save, -cancel | Enter while running queues; save no-ops if unchanged/empty; cancel = immediate, no confirm |
-| M4 | Adapter select | P1 | no messages yet | composer-adapter-select | **disabled once hasMessages**; resets model to adapter default |
-| M5 | Model select | P1 | any | composer-model-select | hides effort if model's supportedEfforts is empty/absent |
-| M6 | Effort select + features popover | P2 | model with supportedEfforts + not running | composer-effort-select, composer-features-trigger, composer-feature-{key} | effort hidden for models with no supportedEfforts; option set is per-model; ultracode locks chip to xhigh; disabled while running |
-| M7 | Permission-mode select | P1 | any | composer-permission-mode-select | yolo renders red; controls auto-approval level |
-| M8 | Attach file | P1 | no error showing | composer-attach, composer-attachments | >5MB → error banner |
-| M9 | Dismiss composer error | P2 | composerError set | composer-dismiss-error | clears banner |
-| M10 | Open context picker | P1 | project open | composer-context-picker | also `@`/`/` triggers; arrow/enter/esc nav |
-| M11 | Worktree enable — new branch | P1 | git project, no active worktree | composer-worktree, -enable, -branch-name, -tab-new, -cancel | name regex validation inline; mid-session warns "paused & resumed" |
-| M12 | Worktree enable — existing | P1 | git project, existing worktrees | composer-worktree-tab-existing | "No worktrees found" empty state |
+| SP1 | Three display modes | P0 | chat active | session-panel-root, session-panel, session-panel-overlay, session-panel-rail | `inline` (wide surface, card sits beside the transcript), `overlay` (a rail click floats the card over the thread; Escape or an outside pointer dismisses it), `rail`-only (surface too narrow, or the gutter can't even hold the rail — then nothing renders); narrowing/widening the surface transitions between them live |
+| SP2 | Rail → card focus return | P1 | overlay dismissed by keyboard | session-panel-rail-open, -activity, -launch | when a floating card goes away with focus still inside it, focus returns to the rail button that opened it — but only if nothing else claimed focus in the meantime |
+| SP3 | Rail button re-targeting | P1 | rail visible | session-panel-rail-open, -activity, -context | every rail button routes through `selectSection`, which both expands the target section and brings the card back (inline if the gutter holds it, floating otherwise) |
+| SP4 | Summary — no collapse trigger | P0 | panel open | session-panel-section-summary | Summary is always expanded and carries no collapse header, unlike every other section |
+| SP5 | Background Activity | P1 | panel open | session-panel-section-toggle-activity | starts collapsed; the rail button expands it straight to its empty state if nothing is running |
+| SP6 | Launch section | P1 | ≥1 launch config | session-panel-launch-row-${…}, session-panel-launch-spinner-${…} | lists every config with a start glyph, no live rows when nothing is running |
+| SP7 | Rail launch quick action | P0 | a launch config is targetable | session-panel-rail-launch | one click runs/stops via `deriveLaunchRunControl`; disabled ("No launch configs") when nothing is targetable or `chatId` is missing; right-click opens the Launch section instead of firing the action |
+| SP8 | Plan section collapse | P1 | todos exist on the session | session-panel-plan, session-panel-plan-toggle, session-panel-plan-step-${…} | section is hidden until todos exist; expanding reveals steps with the in-progress one showing its `activeForm`; collapsing hides steps but keeps the header and progress bar |
+| SP9 | Context section sub-groups | P0 | panel open | session-panel-context-file-${…}, session-panel-skill-${…} | expanded by default; a Session sub-group lists in-session file mentions (each with an `@` badge, opens as a workspace editor tab on click); a Skills sub-group shows its own empty state with Manage still reachable |
+| SP10 | Attachment tiles | P1 | ≥1 attachment | session-panel-attachment-${…}, session-panel-attachment-grid | image tiles open the lightbox; non-image tiles do not |
+| SP11 | Summary branch/changes/context rows | P0 | chat active | session-panel-summary-branch-wt | branch row names the live branch, no worktree badge unless a worktree is attached; changes row shows +/- totals with the file count on the tooltip only; context row is absent before the first turn and reports a real percentage after one; clicking the changes row opens the review modal |
 
----
+## ★ Session tabs
 
-## SANDBOX (28-sandbox-launch.spec.ts partial)
-
-| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
-|---|------|-----|---------------|--------------|---------------|
-| S1 | Start process | P0 | launch config exists, status stopped | sandbox-button-start, -restart, -stop | start→starting→running; preview shows spinner; retries url ≤15× |
-| S2 | Stop single | P0 | running | sandbox-button-stop | resets webviewReady |
-| S3 | Stop all (popover) | P1 | ≥1 running | sandbox-button-stop-all, -stop-process-{name} | Promise.all; click-outside closes |
-| S4 | Restart | P1 | running | sandbox-button-restart | stop→clear logs→start; logs clear between |
-| S5 | Reload webview | P1 | preview running, webviewReady | sandbox-button-reload | no-op if ref null |
-| S6 | Inspect / element pick | P0 | preview ready | sandbox-button-inspect | 2nd click cancels; Esc cancels; zoom-corrected crop; auto-creates chat |
-| S7 | Full screenshot | P0 | preview ready | sandbox-button-screenshot, capture-thumb | adds capture; auto-creates chat |
-| S8 | Region capture + annotate + submit | P0 | preview ready | sandbox-button-region-capture, -submit-captures, -cancel-capture, capture-meta-row | submit disabled until ≥1 region; <4px drag ignored; per-region remove |
-| S9 | Cancel region capture | P1 | capturing | sandbox-button-cancel-capture | button/Esc/re-click all exit, discard pending |
-| S10 | Mobile view toggle | P2 | preview ready | sandbox-button-mobile-view | 390×844; resets on tab switch |
-| S11 | Console toggle + clear logs | P1 | process selected | sandbox-button-toggle-console, -clear-logs | clear disabled if no process; per-tab state; 500-entry cap |
-| S12 | Clear session | P2 | Electron, project active, running | sandbox-button-clear-session | non-Electron: not rendered; reloads after clear |
-| S13 | Generate with agent | P1 | LaunchPopover open, project active | sandbox-button-generate-with-agent | sends `/launch-config`; creates chat if none |
-| S14 | Capture thumbs in composer + remove | P1 | ≥1 capture | capture-thumb, -thumb-name, -thumb-remove, captures-container, capture-meta-row, sandbox-capture-context | meta-row only when selector/annotation; send enabled with captures + empty text |
-
----
-
-## BRANCH / WORKTREE (no existing spec)
-
-All flows: git project active, daemon connected. API endpoints under `/api/projects/:id/git/*`.
-
-| # | Flow | Pri | Key test-ids | Notable edges |
-|---|------|-----|--------------|---------------|
-| B1 | Open/close popover | P0 | branch-button, branch-popover-search-input | absent if no git repo; worktree banner if active |
-| B2 | Search/filter branches | P1 | branch-popover-search-input, branch-list-local/remote-toggle | filters local+remote+groups; "No matching branches" |
-| B3 | Expand/collapse sections | P1 | branch-list-local-toggle, -remote-toggle | remote-toggle only if remotes exist |
-| B4 | Submenu (local branch) | P0 | branch-submenu-dialog, branch-row-select-* | current/worktree branches disable subset of actions |
-| B5 | Submenu (remote branch) | P1 | branch-list-remote-row-*, branch-submenu-dialog | delete-remote confirms |
-| B6 | Checkout | P0 | branch-submenu-item-checkout | dirty-tree confirm; updates status bar |
-| B7 | Fetch | P1 | branch-popover-fetch | busy disables all; pulse icon |
-| B8 | Push | P1 | branch-popover-push | reject toast; no-tracking → daemon default |
-| B9 | Update all | P1 | branch-popover-update-all | conflict → ConflictView |
-| B10 | New branch (quick action) | P0 | branch-popover-new-branch, new-branch-dialog, -name-input, -start-point-select, -create, -cancel, -back | name regex + exists check client-side; back/cancel no API |
-| B11 | New branch from specific | P1 | branch-submenu-item-new-branch-from-…, new-branch-start-point-select | start-point pre-selected |
-| B12 | Rename | P1 | branch-submenu-item-rename, rename-branch-name-input, -rename, -cancel, -back | rename disabled if empty; Enter submits |
-| B13 | Delete local | P1 | branch-submenu-item-delete-branch | confirm; not-merged → force confirm |
-| B14 | Pull | P1 | branch-submenu-item-pull | no-tracking error; conflict → ConflictView |
-| B15 | Merge into current | P1 | branch-submenu-item-merge-into-current-branch | conflict → conflict-view-dialog + abort |
-| B16 | Rebase onto | P1 | branch-submenu-item-rebase-current-onto-this | conflict path; abort |
-| B17 | Conflict / abort view | P1 | conflict-view-dialog, conflict-view-abort | popover opens directly in conflict view |
-| B18 | Worktree sections | P2 | worktree-section-toggle/-new-session/-delete-* | delete confirms; new-session creates chat |
-
-_(Worktree/branch info shown in the session list & import popover are session-surface flows — see SP15/SP16.)_
-
----
-
-## SESSIONS PANEL (left list + session bar) — partial: 02-projects, 04-chat-lifecycle, 21-multi-chat, 35-external-sessions
+_Spec: `session-tabs.spec.ts`. Chrome-style tabs in the `MainToolbar` — the active session is
+whichever tab is focused; there is one chat surface (`docs/plans/2026-08-08-session-tabs-and-workspace-files.md`)._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| SP1 | New session — single project | P0 | exactly 1 project | chats-new-session | disabled when 0 projects; immediate create |
-| SP2 | New session — multi-project picker | P0 | ≥2 projects, no filter | chats-new-session, chats-new-session-project-{id} | with active filter, skips popover & creates in filtered project |
-| SP3 | Select / switch session | P0 | ≥1 chat | chat-list-item, session-title-text, session-bar | clicking row buttons doesn't select (stopPropagation); waiting/worktreeMissing/unread badges |
-| SP4 | Filter by project pill | P1 | ≥2 projects | chats-filter-pill-{name}, chats-filter-pill-All | toggle on/off; auto-activates most recent; persisted to localStorage |
-| SP5 | Filter by tag / clear | P1 | a tag/worktree/PR exists | session-filter-tags, chats-clear-filters | AND-filter; synthetic has-pr/has-worktree pills; bar absent when nothing to filter |
-| SP6 | Rename session | P1 | ≥1 chat | chats-session-rename-{id}, chats-session-rename-input-{id}, session-title-text | Enter commits, Esc cancels; empty=no-op; re-focus on re-sort |
-| SP7 | Row context menu | P1 | ≥1 chat | chat-list-item (right-click), session-row-actions | Tags/Rename/Pin/Archive/Copy-Session-ID; group header → Delete Project |
-| SP8 | Archive session | P1 | ≥1 active chat | chats-session-archive-{id} | worktree → confirm delete-or-keep; activates next chat |
-| SP9 | View + restore archived | P1 | ≥1 archived | archived-sessions-btn, archived-session-item, restore-session-btn | "No archived sessions"; scoped to project filter |
-| SP10 | Session bar identity | P0 | chat active | session-bar, session-bar-branch, session-bar-model | status: Thinking/Awaiting/Compacting/Starting/Error/Worktree-Missing; context % bar |
-| SP11 | Background tasks pill + popover | P1 | ≥1 running bg task | chat-session-bar-bg-tasks-pill, -popover | pill absent if none; kill button; recovered marker; no outside-click close |
-| SP12 | Add project | P1 | panel open | chats-add-project | opens DirectoryPickerModal |
-| SP13 | Review changes button | P2 | chat active | chat-review-changes-button | session-bar action; Cmd+Shift+R; opens the Review modal (F12); absent if chat not found |
-| SP14 | PR badges | P2 | daemon emits `chat.prDetected` | chat-pr-badges | session-bar; absent when none; opens external; created>mentioned precedence |
-| SP15 | Session row worktree pill | P2 | chat has worktreePath | worktree-pill | blue badge in the session row; tooltip shows full path |
-| SP16 | Import external session (branch/worktree) | P2 | ImportSessionsPopover open; external sessions w/ metadata | external-session-branch, external-session-worktree, import-session-btn | branch/worktree labels shown only when metadata present |
+| ST1 | Membership sync | P0 | any thread activation (sidebar click, palette, toast deep-link, boot auto-select, archived-active fallback) | session-tab-${…} | `useSessionTabsSync` inserts a tab for whatever thread becomes active, covering every activation path through one seam rather than each call site |
+| ST2 | Close tab | P0 | ≥1 tab open | session-tab-close-${…} | closing removes from the open set only — it never archives the session; closing the active tab picks the next tab via `nextActiveAfterClose`; closing the last tab falls back to the new-session flow (same as sidebar "+" / ⌘N) |
+| ST3 | New session from strip | P0 | any state | session-tabs-new | same handler as the sidebar "+" and ⌘N |
+| ST4 | Persistence + pruning | P1 | app reload with open tabs | — (localStorage `mf:session-tabs`) | restores once a real session list load settles carrying ≥1 session, merging with tabs the boot already opened; prunes tabs whose thread vanished; a still-loading or failed list leaves the persisted payload untouched for a later real load |
+| ST5 | Overflow | P2 | tab row wider than available space | — | pills shrink from `w-45` to `min-w-24`, then the row scrolls horizontally with no visible scrollbar |
 
-## SKILLS PANEL / PLUGINS / TUTORIAL
+## ★ Workspace surface + floating Files panel
 
-_Tool-call cards render **inline in the chat thread** — they live in the THREAD section (TH8–TH13),
-not here. This section is the standalone surfaces._
+_Specs: `workspace-surface.spec.ts`, `files-tree.spec.ts`, `layout.spec.ts`. The Files tree is a
+floating glass panel over the workspace surface — the session panel's pattern mirrored on the other
+side (`docs/plans/2026-08-08-session-tabs-and-workspace-files.md`)._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| SK1 | Skills panel browse + invoke | P1 | project active, skills loaded | skills-item-name-{id}, -menu-{id}, -edit-{id}, -delete-{id} | left panel (not thread); click row → sets composer pending invocation; plugin skills have no Delete |
-| SK2 | Plugin fullview | P1 | fullview contribution registered | fullview-modal, -backdrop, -button-close | the plugin rendered inside the fullview modal; modal open/close mechanics = NL2 |
-| SK3 | Tutorial next/skip | P1 | first launch, no messages | tutorial-next-btn, tutorial-skip-btn | steps 1-2 auto-advance (no Next); overlay invisible until step 3 |
+| WS1 | Empty vs. populated surface | P0 | workspace surface lit | workspace-surface, workspace-empty-state, workspace-pane-${…} | with no tabs, shows a header (split/close controls stay reachable even with nothing open) plus the empty-state picker card; the `+`/add affordance lives only in the empty state, not repeated in the header |
+| WS2 | Empty-state picker rows | P1 | workspace empty | workspace-picker-open-file, workspace-picker-view-changes, workspace-picker-recent-${…}, workspace-picker-open-url, workspace-picker-new-terminal, workspace-picker-launch-${…} | recent-file rows and launch-config rows are data-driven, present only when there's something to list |
+| WS3 | Files panel toggle | P0 | workspace surface lit | workspace-files-open, workspace-files-panel | strip button toggles the floating panel; `aria-pressed` mirrors open state; Escape or a pointer outside (portal- and trigger-aware) light-dismisses; hidden, not unmounted, when closed — expanded folders and scroll position survive a dismiss |
+| WS4 | Files panel — no project | P1 | no active project/chat | workspace-files-panel | shows "Open a session to browse its files." instead of a tree |
+| WS5 | File tree browse | P0 | project active | files-tree-node (via `FileTree`) | expand/collapse lazily fetches children; clicking a file opens it as a workspace editor tab and closes the panel (`onCollapse`) |
+| WS6 | Scope-filtered tabs | P0 | active session has a launch scope (project + worktree) | — | the surface renders only tabs matching the active session's `scopeKey`; a tab opened under another project/worktree does not leak in; legacy tabs predating per-tab scope keys fall back to the first scope with statuses for the active project |
+| WS7 | Add-tab menu | P1 | a pane exists | workspace-tab-strip-add-${…}, workspace-add-menu-${…}, workspace-pane-open-file-${…}, workspace-pane-new-terminal-${…}, workspace-pane-open-url-${…}, workspace-pane-launch-${…} | one menu per pane; launch entries are per-config |
+| WS8 | Split / un-split | P0 | workspace has content | workspace-surface-drag, workspace-surface-close, workspace-pane-close-${…} | split controls live on the chat header, not the workspace strip — the strip only renders while the workspace is already placed, which is exactly when a split can't be triggered from here; primary-pane close is disabled at the dynamic floor (whichever surface is the sole lit one); a secondary pane's close un-splits without hiding the primary |
+| WS9 | Tab drag between panes | P1 | 2 panes | data-drop-surface="workspace" | dragging a tab onto an edge splits into a second pane; dragging back to center rejoins and un-splits; Escape cancels a drag mid-gesture, pane count unchanged |
+| WS10 | Layout persistence per session | P0 | layout arranged, switch sessions | — (`mf:session-layout` v2) | arranging a layout in session A does not leak into session B; A's arrangement is restored on return |
+| WS11 | Hide vs. close | P1 | a file open in a pane | — | `toggleSurface('workspace')` hides but preserves panes and tabs; the terminal cache detaches without disposing; kill-before-remove and tunnel release only happen on the real close paths (`closeRunTab`, `closePane`, `releaseRunScope`) |
+| WS12 | File picker (tab-strip add) | P1 | pane exists | dir-picker / file-picker (via `FilePickerDialog`) | opens from the add button with a search hint; arrow-key navigation; Enter opens the selected file; unmatched query shows a no-match empty state |
 
-## FILES / EDITOR / REVIEW — partial/stale: 12-changes-tab, 14-editor (dead selectors, see report)
+## ★ Spotlight / command palette
 
-| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
-|---|------|-----|---------------|--------------|---------------|
-| F1 | Files panel browse + refresh | P0 | project active, files tab | zone-tab-files, files-root-toggle, files-refresh, files-tree-node-{path} | refresh hidden <160px width; auto-refresh on context.updated/focus |
-| F2 | Expand dir / open file | P0 | root expanded | files-tree-node-{path} | dir toggles+loads children; file → openEditorTab |
-| F3 | File viewer navigation | P0 | diff open, >1 hunk | fileview-next-change, -prev-change, -reveal-in-tree, -collapse | next/prev only when diffChangeCount>1; reveal only when filePath set |
-| F4 | Expand collapsed file view | P1 | fileView set & collapsed | layout-expand-file-view | rail absent when no file open |
-| F5 | Changes tab refresh + mode | P0 | changes tab | zone-tab-changes, changes-refresh, changes-{session/uncommitted/branch}-file-{path}, zone-button-tab-dropdown | refresh disabled if session mode & no chat |
-| F6 | Find in path modal | P1 | right-click dir → Find in Path | find-in-path-modal, -input, -include-ignored, -close | include-ignored only for dir scope; 200-result cap; debounced; Esc/backdrop close |
-| F7 | Inline comment add + send | P0 | editor with onLineComment | line-comment-widget, editor-inline-comment-input, -send, -cancel | send disabled when empty; Enter sends, Shift+Enter newline; via glyph margin |
-| F8 | Submit review (batch) | P1 | ≥1 comment widget w/ text | editor-submit-review | "Submit review (N)"; disabled if all empty; closes all on submit |
-| F9 | Center: save file | P0 | dirty editor file | center-button-save | Cmd+S; no-op for external/null path |
-| F10 | Center: disk-change banner | P0 | dirty + file:changed event | center-button-reload-from-disk, center-button-keep-mine | reload loses edits; keep-mine preserves; silent reload if not dirty |
-| F11 | Directory picker | P0 | picker open | dir-picker-modal, dir-entry-{path}, directory-picker-cancel, -close, dir-picker-select-btn | cancel==close; Esc/backdrop cancel; select disabled until valid selection |
-| F12 | Review changes modal | P0 | chat w/ projectId | review-modal, review-button-close, review-button-mode-inline, -side-by-side | opened via chat-review-changes-button / Cmd+Shift+R (= SP13); FileTree + DiffView of git changes; **no backdrop/Esc close**; mode toggle only when a file is selected |
-
-## THREAD / MESSAGES
-
-_Interactions rendered **inside a chat message thread**. App-shell/navigation surfaces (search
-palette, modals, zones) live in the next section, not here._
+_Spec: `spotlight.spec.ts` — thoroughly covered end to end already; rows note the mode grammar for
+future edge cases._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| TH1 | Find in thread (open/search/nav/close) | P0 | chat w/ messages | find-bar, thread-find-input, -next, -prev, -close | Cmd+F; 80ms debounce; wraps; next/prev disabled at 0 matches; Esc closes; needs CSS Highlight API; only user+assistant text indexed |
-| TH2 | Quote selection into composer | P1 | text selected in thread | thread-quote | excludes composer selection; blockquote-prefixed; clears selection |
-| TH3 | Expand/collapse truncated tool result | P1 | server-truncated result | thread-tool-result-expand, -collapse | async fetch full; error → "no longer available" |
-| TH4 | Copy code block | P1 | assistant code block | message-part-copy | icon→check 2s; silent fail in insecure ctx |
-| TH5 | Copy URL from link | P2 | markdown link | message-part-copy-url | tooltip on hover; also right-click menu |
-| TH6 | Toggle thinking block | P1 | reasoning part | message-part-thinking-toggle | per-instance; CSS animated |
-| TH7 | Read more / show less | P1 | user msg >600 chars | message-read-more | absent ≤600 chars; counts node text not pixels |
-| TH8 | Generic tool card expand | P0 | non-special tool call, result defined | tool-card, tool-card-toggle | hideToggle hides icon but toggle still works; truncated → ToolResultExpand |
-| TH9 | MCP tool card expand | P0 | mcp__* tool done | tool-mcp-expand | disabled while running/error; tooltip full name; server prefix stripped |
-| TH10 | Skill loaded card expand | P0 | skill_loaded child in TaskGroup | tool-skill-expand | only inside TaskGroupCard; top-level Skill = non-expandable SlashCommandCard |
-| TH11 | Schedule tool card expand | P1 | CronList(>0)/Monitor(content) | tool-schedule-expand | ScheduleWakeup/CronCreate/CronDelete not expandable |
-| TH12 | Task subagent group expand | P0 | _TaskGroup tool | tool-task-group-toggle | recursively renders child cards; dedups prompt; strips usage |
-| TH13 | Task/agent tracking card | P0 | Task/Agent tool | task-card, task-card-agent, task-card-model | non-expandable; usage stats on complete; model optional |
-| TH14 | Selector breadcrumb (display) | P2 | selector path in a message/composer bubble | selector-breadcrumb, selector-crumb | renders in message/composer bubbles (not the sessions panel); clip-path chevrons; collapses >3 segments; render-only |
+| SPL1 | Open / close | P0 | app running | search-palette | ⌘O opens; Esc closes; the `main-toolbar-search` button also opens it |
+| SPL2 | Mode grammar | P0 | palette open | search-palette-mode-chip | prefix-driven: no prefix → files + sessions, `>` → commands, `@` → symbols, `#` → working-tree changes; the mode chip renders once a prefix is typed |
+| SPL3 | Default mode, empty query | P1 | palette open, no query | — | lists recent sessions |
+| SPL4 | Result selection | P0 | rows present | search-palette-input | controlled selection: cmdk's own select-first-on-search tick runs before rows land async, so the effect re-selects the first row once results arrive if the prior selection no longer exists |
+| SPL5 | `@` symbol mode | P2 | a running LSP server for the file's language | — | opens the file at the symbol's line; without a running LSP server the row never resolves |
+| SPL6 | Empty state | P1 | query with no matches | search-palette-empty vs. search-palette-loading | loading and empty are distinct testids on the same `CommandEmpty` slot |
 
-## NAVIGATION & LAYOUT (app shell)
+## ★ Gates (permission / plan / question)
 
-_App-wide navigation and panel/window chrome — not tied to any one chat thread._
+_Spec: `gates.spec.ts` + the interactive-card assertions inside `chat.spec.ts`. Routing lives in
+`ChatGateMount`, dispatched by `ControlRequest.toolName`; only one gate is mounted at a time, at the
+thread tail._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| NL1 | Global search palette | P0 | project + sessions | search-palette-dialog, -input, search-palette-session-{id}, -file-{path} | Cmd+O; command palette over sessions+files; ≥2 chars triggers file search; arrow nav; resizable |
-| NL2 | Fullview modal (open/close/backdrop/esc) | P1 | fullview plugin | fullview-modal, -backdrop, -button-close | toggle semantics; inner click stopPropagation; hosts the plugin in SK2 |
-| NL3 | Zone minimize | P1 | zone expanded | zone-button-minimize | sets activeTab null; tab re-opens |
-| NL4 | Zone tab dropdown | P2 | dropdown-style tabs | zone-button-tab-dropdown, zone-tab-dropdown-option-{id} | outside-click closes; buttons-style uses zone-tab-{id} |
-| NL5 | Context section toggle | P2 | context section count>0 | context-section-title | right-rail context tab; native details/summary; absent when count 0; click summary not the label |
+| G1 | Permission — allow once / deny | P0 | CLI `can_use_tool` for a non-question/non-plan tool | chat-permission-gate, chat-permission-allow-once, chat-permission-deny | allow-once sends no `updatedPermissions`, so the same tool re-prompts next time; an answered gate simply unmounts — the daemon shifts the pending permission so the delivery re-read finds nothing to restore |
+| G2 | Permission — always allow | P1 | `request.suggestions.length > 0` | chat-permission-always-allow | **button is absent when suggestions are empty** — test both states |
+| G3 | Permission details | P1 | permission gate showing | chat-permission-details-toggle, chat-permission-details-pre | toggles a raw-input JSON dump; the card width matches the composer at both narrow and wide surface widths |
+| G4 | Plan — approve | P0 | chat in plan mode; CLI calls `ExitPlanMode` | chat-plan-gate, chat-plan-approve, chat-plan-execmode-${…}, chat-plan-clear-context | exec-mode `yolo` → bypassPermissions; `clearContext` wipes history and restarts the CLI; the approved plan renders as a durable PlanBubble in the transcript, not this card |
+| G5 | Plan — reject vs. keep-planning | P0 | plan gate showing | chat-plan-reject, chat-plan-keep-planning | reject is a bare deny with no message; "Keep planning" (not "revise" — renamed from the pre-v2 label) opens the feedback row inline on the same card |
+| G6 | Plan — revise loop | P1 | "Keep planning" clicked | chat-plan-feedback-input, chat-plan-send-feedback, chat-plan-revise-cancel | send disabled until feedback is non-empty; sending triggers a new plan gate; the first PlanCard is left resultless in the transcript |
+| G7 | Question — single-select | P0 | AskUserQuestion, 1 question, `multiSelect:false` | chat-question-gate, chat-question-option-${…}, chat-question-submit | submit disabled until a pick; selecting replaces the prior selection |
+| G8 | Question — multi-select | P1 | `multiSelect:true` | chat-question-option-${…} | toggling adds/removes; submit enables once ≥1 option is selected |
+| G9 | Question — "other" free text | P1 | any question | chat-question-other-input-${…} | revealed by selecting the "Other…" option; deselecting hides the input again |
+| G10 | Question — multi-question nav | P1 | `questions.length > 1` | chat-question-next, chat-question-back, chat-question-submit | Back is absent on question 1; Next/Submit swap on the last question; a "N of M" counter renders only when there's more than one question; selections persist across navigation |
+| G11 | Question — skip | P1 | any | chat-question-skip | answers the whole request with `undefined`, discarding all selections, regardless of which question is active |
+| G12 | Queue ordering | P0 | ≥2 pending gates from the same turn | — | queue-front-only rendering: tool 1's gate resolves before tool 2's ever mounts, in the order the daemon queued them |
 
-## SETTINGS / REMOTE ACCESS / TERMINAL / CHROME
+## Chat transcript, card header & tool cards
+
+_Specs: `chat.spec.ts`, `chat-header.spec.ts`, `transcript.spec.ts`, `tool-cards.spec.ts` — all four
+have deep existing coverage; rows below are the conditional-rendering edges worth keeping visible._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| SE1 | Open settings | P0 | app running | left-rail-settings, settings-modal-sidebar-tab-{id} | Cmd+,; re-fetches on open; **no `settings-modal` root testid** |
-| SE2 | Close settings | P0 | settings open | settings-modal-close | X / backdrop / Esc |
-| SE3 | Set + save worktree dir | P1 | General tab | general-worktree-dir-input, -save | save shown only when dirty; Enter saves; no validation; no error UI |
-| SE4 | Configure named tunnel (first time) | P0 | Remote Access tab, no config | named-tunnel-token-input, -url-input, -save | save disabled until both fields; state starting→verifying→ready; save error has no testid |
-| SE5 | Stop/start named tunnel | P1 | config saved | named-tunnel-toggle | disabled mid-action |
-| SE6 | Clear named tunnel config | P1 | config saved | named-tunnel-clear-config | restores form; re-shows quick tunnel; hides pairing |
-| SE7 | Enable quick tunnel | P1 | no named config | quick-tunnel-toggle | only shown when no named config; dns_verified=false → unreachable |
-| SE8 | Re-check DNS | P2 | tunnel unreachable | tunnel-recheck-verify | no guard on repeat clicks |
-| SE9 | Generate pairing code | P1 | tunnel ready | pairing-generate-code, pairing-code-copy | 5-min countdown; gated on tunnel.verified; silent error |
-| SE10 | Regenerate pairing code | P2 | code displayed | pairing-regenerate-code | disabled while generating |
-| SE11 | Open new terminal | P0 | project active, terminal panel | terminal-button-new, terminal-panel | empty state msg; tab per terminal; close kills |
-| SE12 | Project group name/parent | P2 | project w/ parent | project-group-name, project-group-parent | parent row only if parentProjectId; collapse persisted |
-| SE13 | App update download | P1 | update available | status-bar-update-download | "Downloading N%"; download error not surfaced |
-| SE14 | App update install | P1 | update downloaded | status-bar-update-install | restarts app |
-| SE15 | Connection overlay | P0 | daemon disconnects | connection-overlay | z-9998 covers all incl. settings; no controls; auto-unmounts on reconnect |
-| SE16 | Error boundary retry | P1 | render error in boundary | error-boundary-retry | custom fallback omits the button; recurs if unresolved |
-| SE17 | Status bar branch button | P1 | git project | status-bar-branch | bottom status-bar (chrome); opens BranchPopover (= the B1 trigger); worktree icon; conflict warning; 60s poll |
-| SE18 | Default-model dropdown | P2 | settings ModelDropdown open | model-dropdown-trigger | sets the default model for NEW sessions, not the active chat |
+| CH1 | Card header — split controls | P0 | chat surface active | chat-header-split-right, chat-header-split-down | rendered only while `layoutCanSplit` — i.e. only while the workspace is not already placed; split-right puts the workspace beside chat in the top row, split-down docks it in the bottom strip |
+| CH2 | Card header — hide | P0 | chat active | chat-header-hide | disabled while chat is the dynamic floor (the sole lit surface); enabled once another surface (e.g. Files, via ⌘/Ctrl+2) is lit, and hides the chat surface on click |
+| CH3 | Card header — drag grip | P1 | chat active | chat-header-grip | emits a `begin-surface-drag` intent (surface reposition), distinct from the row's own `data-drag-region` OS window-drag handling |
+| CH4 | Card header — draft vs. real | P1 | `__LOCALID_*` draft thread | chat-header, chat-header-project | draft header shows a fixed "New Session" title and only the project chip — no model chip, no split/hide controls, since that state doesn't exist until the chat is created on first send |
+| CH5 | Message action bar | P1 | assistant message rendered | chat-message-copy, chat-message-export, chat-message-timestamp, chat-message-timing | copy sets a transient copied state; export produces Markdown; the timing pill shows total duration on hover |
+| CH6 | Read more / less | P1 | user message >600 chars | chat-user-readmore-toggle | absent at ≤600 chars; the threshold counts node text, not rendered pixels |
+| CH7 | Find in thread | P0 | chat with messages | find-bar (via thread-find-input/-next/-prev/-close) | ⌘F; debounced search; wraps at the ends; next/prev disabled at 0 matches; only user + assistant text is indexed |
+| CH8 | Scroll to bottom | P1 | scrolled up in a long thread | chat-scroll-to-bottom | appears on scroll-up, returns to the tail on click |
+| CH9 | Compaction pill | P2 | a compaction event occurred | chat-compaction-pill | system message renders the pill after compaction |
+| CH10 | Degraded chat | P1 | chat's worktree/project root is gone | chat-degraded-card, chat-degraded-continue, chat-degraded-recreate-worktree, chat-degraded-delete | recovery card replaces the composer; distinct actions for continuing without the worktree, recreating it, or deleting the chat |
+| CH11 | Tool card expand — generic | P0 | non-special tool call, result defined | chat-tool-group, chat-tool-group-toggle | consecutive explore-family tool calls collapse under one `ToolGroup` header; a tool name absent from the registry falls through to the generic `ToolFallback` card |
+| CH12 | Bash card | P0 | Bash tool call | chat-bash-card, chat-bash-trigger, chat-bash-output | collapsed by default; expanding reveals colorized output; exit-code coloring on the exit line, error border on a failed call |
+| CH13 | Edit card | P0 | Edit tool call | chat-edit-card, chat-edit-open-diff | open by default with +/- stat pills and the diff body visible; "Open in diff editor" opens a workspace diff tab seeded with the tool's original/modified sides |
+| CH14 | Task / subagent group | P0 | `_TaskGroup` or `Task`/`Agent` tool | chat-task-card, chat-task-agent | collapsed by default with agent name/description; expanding renders the nested subagent transcript recursively |
+| CH15 | Skill card | P1 | `Skill` tool call / `skill_loaded` child | chat-skill-loaded-pill | a top-level `Skill` call renders as a non-expandable slash-command row; `skill_loaded` inside a TaskGroup renders an expandable system pill |
+| CH16 | File-path pill context menu | P1 | assistant content with a file-path pill (Read/Edit/Write cards) | tool-card-path-copy-absolute, tool-card-path-copy-relative | right-click on the pill shows exactly the two copy actions; right-click elsewhere in the message shows no menu at all |
+| CH17 | Truncated tool result | P1 | server-truncated result | tool-result-expand-toggle | "Show full output" triggers an async fetch of the full result; failure shows "no longer available" |
+| CH18 | PR chip | P2 | daemon detects a PR for the chat | — (session panel Summary, not the header — header PR pills were retired with the session-tabs rework) | see Session panel SP11 |
+
+## Composer
+
+_Specs: `composer.spec.ts`, `composer-advanced.spec.ts` — comprehensive; rows below are the
+preconditions that make a row's disabled/hidden state easy to get wrong in a new spec._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| M1 | Send | P0 | not running, worktree present | composer-input, composer-prompt-highlight | send disabled when empty and no attachments/captures; Shift+Enter inserts a newline; a missing worktree disables the input |
+| M2 | Provider row lock | P0 | first message not yet sent | composer-provider-footer, composer-model-select | unlocked and reachable before the first send; locks (Locked copy, disabled pills) once the provider row's first message has gone out |
+| M3 | Model / effort tuning | P1 | model selected | composer-model-select, composer-model-group-header-${…} | the effort flyout's option set is per-model (a haiku-tier model exposes no flyout at all; a sonnet-tier model offers `max` but not `xhigh`; an opus-tier model exposes all three); enabling "ultracode" pins the effort to `xhigh` and freezes the levels |
+| M4 | Permission-mode select | P1 | any | composer-permission-mode-select | switching to Unattended (yolo) is visually distinct (renders red) |
+| M5 | Worktree — new branch | P1 | git project, no active worktree | composer-worktree-branch-name, composer-worktree-enable | name validated client-side inline; invalid names disable Enable; mid-session (chat already has messages) shows a warning that the session pauses and resumes |
+| M6 | Worktree — existing tab | P1 | git project, existing worktrees | composer-worktree-tab-existing | lists pre-existing project worktrees; Enable creates a new one and reopening the popover shows the active-info readout |
+| M7 | Queue while running | P1 | agent running | composer-attachments (queued row) | sending while running queues at the thread tail; editing a queued message and saving (⌘/Ctrl+Enter) updates its content; a second queued message gets FIFO position 2; the queue is consumed by the CLI once the run ends |
+| M8 | @ mention popover | P1 | composer focused | composer-add-mention | typing `@` opens the file-mention popover; picking a directory keeps the token open for drill-down (vs. a file, which closes it); Escape closes without clearing the typed text; ARIA combobox wiring (`aria-controls`) resolves to the portalled listbox |
+| M9 | / skill popover | P1 | composer focused, project has skills | composer-trigger-popover | picking a skill inserts the literal `/skill` token, not a directive chip |
+| M10 | Quote from selection | P1 | assistant text selected | composer-quote-preview, composer-quote-dismiss | selecting text shows a floating selection toolbar; clicking Quote adds a preview pill above the composer; dismissing clears it |
+| M11 | Attach / dropzone | P1 | composer not in error state | composer-add-attachment, composer-dropzone, composer-attachment-tile | attaching an image shows a thumbnail; removing clears it; oversize attachments (>5MB) show an error banner |
+
+## Editor, diff & review
+
+_Specs: `editor.spec.ts`, `editor-diff.spec.ts`, `editor-comments-review.spec.ts`,
+`review-panel.spec.ts` — thorough; a couple of edges worth naming explicitly._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| ED1 | Diff navigation | P0 | diff open, >1 hunk | diff-next-change, diff-prev-change | both disabled when `changeCount === 0`; scroll a far-apart chunk into view |
+| ED2 | Reveal in tree | P1 | diff tab ready | diff-reveal | `DiffHeader` always receives a `filePath`, so the button mounts as soon as the tab is ready, not after an async resolve |
+| ED3 | Disk-change banner | P0 | dirty editor file, `file:changed` event | editor-tab-disk-conflict, editor-tab-reload, editor-tab-keep-mine | reload discards local edits; keep-mine preserves them; a non-dirty file reloads silently with no banner |
+| ED4 | Save-error banner | P1 | save fails | editor-tab-save-error | persists until the next successful save or the tab closes |
+| ED5 | Inline comment lifecycle | P0 | editor with `onLineComment`, gutter line clicked | editor-comment-widget, editor-comment-widget-save | Cancel and Escape both close without saving, but the typed text is **not** discarded — there is no separate draft buffer, so reopening the same anchor shows the same unsaved text |
+| ED6 | Submit review (batch) | P1 | ≥1 comment with text | editor-submit-review-btn | shows the total comment count; disabled while every comment is empty; submitting clears the gutter and posts a `ReviewCommentCard` to the chat |
+| ED7 | Right-click on a gutter line | P1 | editor with an LSP language mapping | editor-context-menu-copy, editor-context-menu-copy-ref, editor-context-menu-add-context | Copy Reference writes `path:line (word)`; Add Agent Context sets the composer quote to the same reference; Go to Definition / Find All References are disabled for file types with no LSP mapping |
+| ED8 | Review modal — scope switch | P0 | review modal open | review-scope-${…} | Uncommitted / Branch / Session scopes swap the comparison line and file set independently; Session scope under the mock CLI lists no files and reports no totals |
+| ED9 | Review modal — commit | P0 | review modal open, Uncommitted scope | review-commit-input, review-commit-submit, review-commit-suggestion-${…}, review-commit-unviewed-warning | submit disabled until a message is entered; a suggestion chip prefixes the message; unviewed files are flagged before commit; committing stages and commits every changed file |
+| ED10 | Review modal — viewed toggle | P1 | file selected | review-viewed-toggle, review-viewed-counter | marks the file viewed and advances the header progress counter |
+
+## Git & worktrees
+
+_Spec: `git-branch.spec.ts` — comprehensive. Renamed since the pre-v2 doc: the old `branch-*` ids are
+now `git-*`._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| GB1 | Open popover, lazy-load | P0 | git project | main-toolbar-branch, git-branch-popover | branches lazy-load on open, not eagerly with the toolbar |
+| GB2 | Search / section collapse | P1 | popover open | git-branch-search, git-branch-section-toggle-${…} | filters by substring; the Local section header collapses/expands its rows independently of Remote |
+| GB3 | New branch (quick action) | P0 | popover open | git-new-branch-dialog, git-new-branch-name, git-new-branch-create | creates, checks out, and refreshes the toolbar chip in one flow |
+| GB4 | Branch row flyout — checkout | P0 | row flyout open | git-submenu | switches the worktree's current branch |
+| GB5 | Branch row flyout — merge / rebase | P1 | row flyout open | git-submenu | merge fast-forwards a clean ancestor branch; a conflicting merge routes to the conflict dialog instead |
+| GB6 | Conflict view | P1 | merge/rebase/pull produced a conflict | git-conflict-view, git-conflict-abort | abort recovers from the conflict dialog |
+| GB7 | Rename | P1 | row flyout → Rename… | git-rename-view, git-rename-input, git-rename-submit | "Rename…" hands off from the flyout to a dedicated dialog rather than inline-editing the row |
+| GB8 | Delete (not-yet-merged) | P1 | row flyout → Delete | — | two-step confirm before a force-delete |
+| GB9 | Pull / push / fetch / update-all | P1 | popover open | git-fetch, git-push-current, git-update-all | pull fast-forwards from the bare remote; push sends a local-only commit; quick actions (fetch/update-all/push-current) complete without error against the bare remote fixture |
+| GB10 | Worktree branch — delete | P1 | branch has an attached worktree | git-worktree-row-${…} | "Delete Worktree" removes the directory, distinct from deleting the branch |
+| GB11 | Worktree branch — new session | P1 | branch has an attached worktree | git-worktree-row-${…} | "New Session on Worktree" creates a worktree-scoped chat |
+
+## Tasks / todos
+
+_Spec: `tasks.spec.ts` — deep coverage across board/list/edit/filter/sort/GitHub-sync. Rows below name
+the preconditions a new spec would need to reproduce, since the surface's `github/` subtree has no
+dedicated spec file yet._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| T1 | Quick-create task | P0 | project active | tasks-quick-dialog, tasks-quick-title, tasks-quick-create | create disabled until title is non-empty |
+| T2 | Full edit modal — create/edit | P0 | board open | tasks-edit-title, tasks-edit-save | shared modal for create and edit; save persists type/priority/status/labels/assignees/milestone |
+| T3 | List/board view toggle | P1 | board open | tasks-view-list, tasks-view-board | switches `TaskListView` and `TaskBoardView` |
+| T4 | Status cycle | P0 | ≥1 task | tasks-list-row-cycle-${…} | cycles open → in_progress → done → open on the list row, no modal needed |
+| T5 | Row expand | P1 | ≥1 task | tasks-list-row-expand-${…} | reveals the body plus Start/Edit CTAs; collapse hides them again |
+| T6 | Dependency picker | P1 | edit modal open, ≥1 other task | tasks-dep-input, tasks-dep-opt-${…}, tasks-dep-remove-${…} | adds/removes a dependency; the picker's candidate list excludes the task being edited |
+| T7 | Attachments | P1 | edit modal open | tasks-attach-add, tasks-attach-delete-${…} | add and delete round-trip through the modal |
+| T8 | Filter + sort | P1 | ≥3 tasks | tasks-filter-search, tasks-filter-opt-${…}, tasks-filter-clear | search narrows the list; a filter chip narrows further; Clear resets both; the sort menu's priority-then-number ordering is deterministic |
+| T9 | Sidebar overflow | P2 | >5 active tasks | tasks-sidebar-overflow | 6th+ active task collapses into a static "N more" row rather than growing the sidebar |
+| T10 | Delete | P1 | ≥1 task | tasks-list-row-delete-${…}, tasks-edit-delete | deletable from both the list row and the edit modal |
+| T11 | GitHub — link / import | P1 | GitHub credential connected | tasks-github-link-dialog, tasks-github-import-dialog, tasks-github-import-issue-${…} | link requires an explicit confirm; import lists candidate issues and supports "import all" |
+| T12 | GitHub — publish | P1 | task not yet linked | tasks-github-publish-dialog, tasks-github-publish-labels | publish dialog carries its own label picker, separate from the task's own labels field |
+| T13 | GitHub — sync / report | P1 | task linked | tasks-github-menu-sync, tasks-github-report-dialog, tasks-github-report-row-${…} | report dialog is read-only, per-row copy action |
+| T14 | GitHub — banner | P2 | credential missing or expired | tasks-github-banner, tasks-github-banner-dismiss, tasks-github-banner-report | dismiss is per-session, not permanent |
+
+## Automations
+
+_No spec exists (`(none)` — the plan's brief). The surface is large (~55 component files under
+`features/automations/`) and entirely untested end to end; rows below cover the top-level routing and
+the shape of each section, not full depth._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| AU1 | Section routing | P0 | panel open | automations-section-run, -editor, -describe, -details, -library | one body switch with a fixed precedence: run > editor > describe > details > library — e.g. an open run always wins over a pending editor target |
+| AU2 | Library list | P0 | panel opens with no nav state | automations-library, automations-library-row-${…}, automations-library-new | three sub-states share the `automations-library` testid: loading, error (with retry), and the populated list — a spec must disambiguate by the child testid |
+| AU3 | Library — toggle / run / edit | P1 | ≥1 automation defined | automations-library-toggle-${…}, automations-library-run-${…}, automations-library-edit-${…} | per-row actions; toggle flips enabled state without opening the editor |
+| AU4 | Describe (build-from-prompt) | P1 | library empty, "Build" clicked from the blank state | automations-describe-input, automations-describe-open-editor, automations-describe-retry | reachable only from the empty-library `BlankState`; "Open editor" hands the drafted definition to the step editor |
+| AU5 | Step editor | P0 | editor target set | automations-editor-name, automations-editor-save, automations-step-${…}, automations-step-config-${…} | steps are reorderable (`automations-step-grip-${…}`); `automations-editor-issues` surfaces validation problems inline rather than blocking save silently |
+| AU6 | Trigger / condition builder | P1 | editor open | automations-trigger-${…}, automations-if-add-condition-${…}, automations-if-match-all, automations-if-match-any | match-all vs. match-any is a per-branch toggle, not global to the automation |
+| AU7 | Run view | P0 | a run id is active | automations-run-view, automations-run-timeline, automations-run-again, automations-run-cancel | timeline renders step-by-step; "Run again" re-invokes with the same inputs; cancel is only available while the run is in-flight |
+| AU8 | Run — interactive step forms | P1 | a step needs input mid-run | automations-run-form-ix-1 | pending-interaction count surfaces in the header (`automations-title-count`, "N need you") across every section, not just Run |
+| AU9 | Details | P1 | library row clicked | automations-details-tab-${…}, automations-details-runs, automations-details-step-${…} | tabbed overview/steps/runs; `automations-details-not-found` covers a deleted-automation deep link |
+
+## Viewers & preview
+
+_Specs: `viewers.spec.ts`, `preview.spec.ts` — thorough; rows below name the state-machine edges._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| V1 | Image viewer zoom | P1 | image file open | viewer-image-zoom-in, viewer-image-zoom-out | opens in Fit mode with zoom controls disabled; switching to 100% enables them |
+| V2 | SVG preview/code toggle | P1 | svg file open | viewer-svg-source | opens in Preview mode by default; Code toggle shows the raw source |
+| V3 | CSV table | P1 | csv file open | viewer-csv-filter, viewer-csv-header-${…} | filter narrows rows and shows an empty-filter row when unmatched; clicking a column header cycles sort asc → desc → off |
+| V4 | Unsupported file | P2 | file type with no viewer | viewer-unsupported, viewer-unsupported-open, viewer-unsupported-reveal | offers open-externally and reveal-in-tree instead of a preview |
+| V5 | Reveal in tree | P1 | any viewer open | viewer-shell-reveal | highlights the open file in the Files panel (see WS5) |
+| P1 | Launch state machine | P0 | launch config exists | preview-body-starting, preview-body-running, preview-body-stopped, preview-body-failed | toolbar controls stay locked through Starting; unlock only once Running; a nonexistent executable reaches Failed, not a silent hang |
+| P2 | Device toggle | P2 | preview running | preview-device-desktop, preview-device-mobile | switches the frame between the desktop and a 390×844 mobile frame |
+| P3 | Inspect | P0 | preview running | preview-toolbar-inspect, preview-inspect-active-indicator | toggles its own active indicator as local UI state — there is no native element pick without a live webview |
+| P4 | Screenshot / region capture | P0 | preview running | preview-toolbar-capture, preview-toolbar-region | both open the annotation popover on completion; both need the native `webview.capture`/region-select bridge to produce a real result |
+| P5 | Stop / restart | P0 | preview running | preview-run-stop, preview-run-restart | Stop returns the body to the stopped CTA and re-locks the toolbar; clicking the stopped-body CTA restarts back to running |
+| P6 | URL bar | P1 | preview running | preview-url-input | normalizes valid input; flags invalid input inline |
+
+## Daemon picker & connection
+
+_Spec: `daemon-picker.spec.ts` — comprehensive across add/pair/remove/unreachable flows._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| D1 | Open picker | P0 | app running | daemon-footer-trigger, daemon-picker | footer trigger opens the picker; local daemon row always shows the active check and a connected status dot |
+| D2 | Add remote — URL to pairing | P0 | picker open | daemon-add-url, daemon-add-verify, daemon-add-device | walks URL step → device step; back navigation returns without pairing; an unreachable URL shows an error state with retry |
+| D3 | Complete pairing | P0 | valid remote URL verified | daemon-pair-code | adds a remote daemon row and auto-switches the active daemon, showing a "Paired" confirmation |
+| D4 | Unreachable overlay | P0 | active daemon connection drops | daemon-unreachable, daemon-unreachable-switchlocal | switch-to-local recovers without losing the picker's other rows |
+| D5 | Manage remote row | P1 | ≥1 remote daemon | daemon-dialog-confirm | rename updates the row label; remove needs confirm before the row disappears |
+
+## Settings, skills & tour
+
+_Specs: `settings.spec.ts`, `sidebar-chrome.spec.ts` for Settings; no dedicated spec for the tour. Skills
+has no standalone UI of its own — the browsing surface lives in the Session panel's Context section
+(see SP9); `features/skills` contributes only data hooks, no testids._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| SE1 | Open / close | P0 | app running | settings-dialog, settings-dialog-close | ⌘, opens via global hotkey; Esc and the close button both work; five tabs render — there is no keybindings tab |
+| SE2 | Appearance | P1 | General tab | — | a token change applies live and persists across reload |
+| SE3 | Worktree dir | P1 | General tab | settings-worktree-dir-input, settings-worktree-dir-save | Save button shown only while dirty; value persists on reopen |
+| SE4 | Notification toggles | P1 | Notifications tab | settings-notify-${…}-toggle | a flipped toggle persists across reopen; a failed PATCH reverts it via resync (leaf-patch with resync-on-failure), not an optimistic-forever state |
+| SE5 | Providers | P1 | Providers tab | settings-nav-provider-${…}, settings-pane-provider-${…} | lists the claude adapter; executable path commits on blur; default session mode / model / system-prompt / plan-mode all persist on reopen |
+| SE6 | About | P2 | About tab | settings-pane-about | version and author come from the host bridge; no check-for-updates button in this build |
+| SE7 | Remote Access — named tunnel | P0 | Remote Access tab, no config | named-tunnel-token-input, named-tunnel-url-input, named-tunnel-save | Save disabled until both fields are filled |
+| SE8 | Remote Access — quick tunnel | P1 | no named config | quick-tunnel-toggle | present and enabled; starting it is out of scope for a mocked-CLI spec |
+| SE9 | Remote Access — pairing | P1 | tunnel ready | pairing-generate-code, pairing-code-copy | 5-minute countdown, gated on tunnel verification |
+| SE10 | Sidebar rail collapse | P1 | app running | sidebar-collapse | ⌘B toggles from anywhere; the rail button and the shortcut are two paths to the same store flag |
+| SE11 | Sidebar → Tasks / Workflows | P0 | app running | sidebar-tasks, sidebar-workflows | opens the tasks board / automations panel respectively |
+| SK1 | Skills in Context | P1 | session panel Context section open | session-panel-skill-${…}, session-panel-skills-manage | see Session panel SP9 — this is the only skills-browsing surface |
+| TR1 | Tour steps | P1 | first launch, tutorial not completed | tour-overlay, tour-spotlight, tour-next-btn, tour-back-btn, tour-skip-btn, tour-step-dot-${…} | fully button-driven (no auto-advancing steps); four steps anchor on `[data-tut]` targets (sessions, composer, model, workspace) measured via `getBoundingClientRect`, so it survives any CSS transform on the anchor |
+
+## Terminal, run & URL tabs
+
+_No dedicated spec (the plan's `(none)`). These render inside workspace tabs — see Workspace surface
+WS1/WS7 for how a tab of each kind is created._
+
+| # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
+|---|------|-----|---------------|--------------|---------------|
+| RT1 | Terminal tab | P1 | terminal tab active | run-terminal-${…} | PTY instance; only the active tab in a pane is visible, mounted lazily like every other file/process tab |
+| RT2 | Console drawer | P1 | process tab with log output | run-console-drawer-toggle, run-console-clear | clear button hidden when the log is empty (`count === 0` → renders nothing); drawer resize is draggable and its height persists |
+| RT3 | URL tab body states | P1 | url tab active | url-tab-body-loaded, url-tab-body-failed, url-tab-body-invalid, url-tab-body-pending, url-tab-body-rejected, url-tab-body-stopped | a corrupt persisted tab with no URL resolves to the `invalid` state, never a placeholder; retry is available from the failed state |
+| RT4 | URL tab toolbar | P2 | url tab active | url-tab-toolbar | controls that need a process (reload/clear-cache) are hidden rather than disabled — a URL tab has no process behind it |
+| RT5 | URL tab inspect | P2 | url tab active, preview-style inspect available | url-tab-inspect-active-indicator | same local-state toggle pattern as the preview surface's Inspect (see Viewers & preview P3) |
 
 ## Recommended authoring order
 
-1. **Repair** stale specs first so the suite is honest: the 19 dead testid selectors plus the
-   role/text-based ones flagged in the gap report (`right-panel`, zone tabs as `role="tab"`,
-   `line-comment-popover`). Drop fixture IDs from the denominator.
-2. **P0 flows**, surface by surface:
-   - Todos (T1,T2,T3,T7) → Chat cards (C1,C2,C4,C5,C7) → Composer (M1,M2) → Sandbox (S1,S6,S7,S8) → Branch (B1,B4,B6,B10)
-   - Sessions (SP1,SP2,SP3,SP10) → Tool cards in thread (TH8,TH9,TH12,TH13) → Files/Editor/Review (F1,F2,F3,F5,F7,F9,F10,F11,F12)
-   - Thread (TH1) → Navigation (NL1) → Settings/Chrome (SE1,SE2,SE11,SE15)
-3. **P1**, then **P2**.
-4. Feed each flow row to the `test-scenarios` skill for a QA-ready scenario, then translate to a
-   Playwright spec using the existing `fixtures/` + `.locator('[data-testid=...]')` conventions;
-   audit with `e2e-reviewer`.
+1. **The five starred surfaces already have deep specs** (session panel, session tabs, workspace +
+   Files, spotlight, gates) — the highest-value remaining gap is **Automations**, which has none.
+2. Within Automations, start with the P0 rows: section routing (AU1), the library's three
+   sub-states (AU2), the step editor's save path (AU5), and the run timeline (AU7) — those four cover
+   the whole navigation shell and the one flow (build → save → run) that exercises the daemon contract.
+3. **Terminal/Run/URL tabs** are the next gap without a spec — RT2's log-empty hidden-button case and
+   RT3's `invalid` fallback are the two edges most likely to regress silently.
+4. For every other surface, prefer extending the existing spec file over adding a new one — the rows
+   above exist to keep preconditions and disabled/hidden states visible to whoever picks up the next
+   case, not to imply the surface is untested.
+5. Feed each flow row to the `test-scenarios` skill for a QA-ready scenario, then translate to a
+   Playwright spec using the existing `fixtures/` + `.locator('[data-testid=...]')` conventions; audit
+   with `e2e-reviewer`.
