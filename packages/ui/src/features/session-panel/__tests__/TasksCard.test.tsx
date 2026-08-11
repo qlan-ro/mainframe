@@ -128,10 +128,12 @@ describe('TasksCard — no active project', () => {
 });
 
 describe('TasksCard — empty project', () => {
-  it('keeps the New task row and shows the empty row', async () => {
+  it('keeps the quick-add input and shows the empty row', async () => {
     await renderLoaded([]);
     await waitFor(() => expect(screen.getByTestId('session-panel-tasks-empty')).toHaveTextContent('No active tasks'));
-    expect(screen.getByTestId('session-panel-tasks-new')).toHaveTextContent('New task');
+    const input = screen.getByTestId('session-panel-tasks-new');
+    expect(input.tagName).toBe('INPUT');
+    expect(input).toHaveAttribute('placeholder', 'New task');
   });
 
   it('shows no count badge with nothing active', async () => {
@@ -170,11 +172,29 @@ describe('TasksCard — the edit modal', () => {
     expect(screen.queryByTestId('task-edit-modal-stub')).toBeNull();
   });
 
-  it('opens the create form from the New task row', async () => {
+  it('creates a title-only task on Enter and clears the input for the next one', async () => {
     await renderLoaded([OPEN_TODO]);
     await waitFor(() => expect(screen.getByTestId('session-panel-tasks-new')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('session-panel-tasks-new'));
-    expect(screen.getByTestId('task-edit-modal-stub')).toHaveAttribute('data-todo', 'new');
+    const input = screen.getByTestId('session-panel-tasks-new');
+
+    fireEvent.change(input, { target: { value: '  Ship the panel  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(todosApi.createTodo).toHaveBeenCalledWith(31415, { title: 'Ship the panel', projectId: 'proj-1' }),
+    );
+    await waitFor(() => expect(input).toHaveValue(''));
+  });
+
+  it('creates nothing on Enter with a blank draft', async () => {
+    await renderLoaded([OPEN_TODO]);
+    await waitFor(() => expect(screen.getByTestId('session-panel-tasks-new')).toBeInTheDocument());
+    const input = screen.getByTestId('session-panel-tasks-new');
+
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(todosApi.createTodo).not.toHaveBeenCalled();
   });
 
   it('opens on the todo whose row was clicked', async () => {
