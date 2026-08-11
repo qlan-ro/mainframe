@@ -118,6 +118,15 @@ export function useSessionTabsSync(): void {
     // re-running on list ticks would re-preview a session the user just closed.
   }, [mainThreadId, ensureTab]);
 
+  // Splitting is a "keep this open" signal: a preview tab that becomes a zone
+  // member is promoted to pinned. Otherwise opening another session would
+  // evict its tab while the chat is still visibly on screen.
+  const zonesPair = useZonesStore((s) => s.zones);
+  useEffect(() => {
+    if (zonesPair == null || previewId == null) return;
+    if (zonesPair.includes(previewId)) useSessionTabsStore.getState().pinTab(previewId);
+  }, [zonesPair, previewId]);
+
   useEffect(() => {
     reconcile(
       (ids) => reconcileTabIds(ids, items, mainThreadId),
@@ -128,7 +137,6 @@ export function useSessionTabsSync(): void {
   // `items` changes identity on every stream tick (title/status updates), so
   // this effect runs hot while a chat is running — skip the write unless the
   // MAPPED id set actually changed.
-  const zonesPair = useZonesStore((s) => s.zones);
   const lastWrittenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated) return;

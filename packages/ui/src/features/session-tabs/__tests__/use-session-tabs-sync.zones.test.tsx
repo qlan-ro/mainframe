@@ -108,6 +108,37 @@ describe('writing the open split', () => {
   });
 });
 
+describe('a preview tab entering the split', () => {
+  it('is promoted to pinned — a split member is never temporary', () => {
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: 'chat-b', hydrated: true });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    act(() => {
+      useZonesStore.getState().openSplit('chat-a', 'chat-b');
+    });
+    rerender();
+
+    expect(useSessionTabsStore.getState().previewId).toBeNull();
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('stays a preview when it is not a zone member', () => {
+    settledList([SESSION_A, SESSION_B, { id: 'chat-c', status: 'regular', custom: {}, title: 'Third' }]);
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a', 'chat-b'], previewId: 'chat-c', hydrated: true });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    act(() => {
+      useZonesStore.getState().openSplit('chat-a', 'chat-b');
+    });
+    rerender();
+
+    expect(useSessionTabsStore.getState().previewId).toBe('chat-c');
+  });
+});
+
 describe('restoring the split across a boot', () => {
   const V3_PAIR = JSON.stringify({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'] });
 
