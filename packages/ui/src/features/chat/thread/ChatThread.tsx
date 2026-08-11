@@ -154,7 +154,10 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             data-mf-chat-thread
             className="relative flex flex-1 flex-col overflow-y-auto"
           >
-            <div className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
+            {/* Width cap: 48rem, minus the rail block (54px) MIRRORED on both
+                sides — in a narrow zone the transcript clears the floating
+                rail instead of running under it, with a symmetric left inset. */}
+            <div className="mx-auto w-full max-w-[min(48rem,100%-108px)] flex-1 px-5 py-4">
               <LoadErrorBanner />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
@@ -181,7 +184,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </Button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-3xl px-5 pb-4">
+              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-[min(48rem,100%-108px)] px-5 pb-4">
                 <WorktreeSwitchBanner />
                 <ThreadFooterInput />
               </div>

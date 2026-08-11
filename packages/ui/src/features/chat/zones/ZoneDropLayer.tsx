@@ -40,14 +40,19 @@ function DropTarget({
       onPointerLeave={() => setHovered(false)}
       onPointerUp={onDrop}
       className={cn(
-        'pointer-events-auto flex items-center justify-center rounded-lg border-2 border-dashed',
-        'border-primary/50 bg-primary/10 text-sm font-medium text-muted-foreground',
-        'transition-all duration-100',
-        hovered && 'border-solid border-primary bg-primary/25 text-foreground shadow-lg',
+        'pointer-events-auto flex items-center justify-center rounded-md border-2 border-dashed',
+        'border-primary/40 bg-primary/5 transition-all duration-100',
+        hovered && 'border-solid border-primary bg-primary/15',
         className,
       )}
     >
-      <span className="pointer-events-none flex items-center gap-1.5">
+      {/* Solid chip, legible over whatever zone furniture sits behind. */}
+      <span
+        className={cn(
+          'pointer-events-none flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium shadow-md',
+          hovered ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-popover text-foreground',
+        )}
+      >
         <Columns2 className="size-3.5" aria-hidden />
         {label}
       </span>
@@ -76,11 +81,16 @@ export function ZoneDropLayer() {
     if (store.focusedIndex === index) aui.threads.switchToThread(draggingId);
   };
 
+  // Near-full-bleed halves: a hairline 2px inset keeps the rectangles off the
+  // zone edges without reading as floating boxes over the furniture behind
+  // them (user-tuned; a dim+blur scrim round was rejected).
+  const LAYER = 'pointer-events-none absolute inset-0 z-40 flex gap-0.5 p-0.5';
+
   // Only a VISIBLE split offers per-zone targets — a parked pair is off
   // screen, and the drop below rebuilds the pair around the current chat.
   if (splitVisible(zones, mainThreadId)) {
     return (
-      <div className="pointer-events-none absolute inset-0 z-40 flex gap-2 p-3">
+      <div className={LAYER}>
         <DropTarget testId="zone-drop-left" label="Show here" className="flex-1" onDrop={() => dropOnZone(0)} />
         <DropTarget testId="zone-drop-right" label="Show here" className="flex-1" onDrop={() => dropOnZone(1)} />
       </div>
@@ -91,7 +101,7 @@ export function ZoneDropLayer() {
   if (mainThreadId == null || draggingId === mainThreadId || mainThreadId.startsWith('__LOCALID_')) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-40 flex gap-2 p-3">
+    <div className={LAYER}>
       <DropTarget
         testId="zone-drop-split-left"
         label="Split left"
