@@ -421,3 +421,14 @@ must be spiked before anything else is built.
    arbitrate (Cursor's Tiled Layout)?
 8. **Split persistence.** Does an open split survive a reload — a second entry in
    `mf:session-tabs`, or is split always transient?
+
+---
+
+## Decisions settled after review (2026-08-11, user)
+
+- **Open decision 3 (workspace coexistence): auto-move with freedom.** Starting a
+  split while the workspace occupies the top row moves it to the bottom strip
+  automatically (tabs/weights preserved); the user may drag it back beside the
+  split, which clears the system-moved flag; ending the split restores the
+  workspace to its prior slot only when that flag is still set — a manual
+  rearrangement is never overridden.
