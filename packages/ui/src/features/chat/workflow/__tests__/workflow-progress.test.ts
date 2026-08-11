@@ -10,8 +10,9 @@
  *  - formatRunTokens: <1000 → "N tok"; else → "X.Xk tok".
  *  - formatRunDuration: <1 minute → "<1m"; <60 minutes → "Nm"; else "NhMm".
  *  - outcomeDot: {tone,pulse} — green/no-pulse on a clean completion, amber/no-pulse
- *    on a completion with a failed agent, red/no-pulse on failed, amber/pulse while
- *    running, hollow/no-pulse for stopped, paused and unavailable.
+ *    on a completion with a failed agent, red/no-pulse on failed, accent/pulse while
+ *    running (the app's working hue — amber is reserved for "completed, with
+ *    failures"), hollow/no-pulse for stopped, paused and unavailable.
  *  - statusChipLabel: exactly one of Running|Completed|Failed|Stopped|Paused|Unavailable.
  *  - summarizeRun: "Phase <index> · <title> — X of Y done[, N running][, N failed][, N unknown]",
  *    naming the deepest phase (highest phaseIndex) that has spawned an agent; when no
@@ -142,9 +143,9 @@ describe('outcomeDot', () => {
     expect(outcomeDot(r, NOW)).toEqual({ tone: 'red', pulse: false });
   });
 
-  it('reads pulsing amber while running', () => {
+  it("reads pulsing accent while running — the app's working hue, not amber", () => {
     const r = run({ status: 'running' });
-    expect(outcomeDot(r, NOW)).toEqual({ tone: 'amber', pulse: true });
+    expect(outcomeDot(r, NOW)).toEqual({ tone: 'accent', pulse: true });
   });
 
   it('reads hollow with no pulse when stopped', () => {

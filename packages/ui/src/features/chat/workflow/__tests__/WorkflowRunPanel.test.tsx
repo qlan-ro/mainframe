@@ -1,10 +1,29 @@
 /**
  * Behavior tests for WorkflowRunPanel — the run detail panel (AC 7-11, 16, 18, 19).
  * Fixed run fixtures, hardcoded expected DOM — nothing here recomputes the panel's
- * own neutralization, chip or summary logic.
+ * own neutralization, chip or timeline logic.
+ *
+ * DOM contract pinned by these tests (documented once here, not re-derived):
+ *  - Header: the workflow name, a status pill (`chat-workflow-status-pill`), a
+ *    segmented rail (`chat-workflow-rail`, one `data-status` segment per seeded
+ *    phase), the current-phase line, and one meta span reading
+ *    "<done>/<total> · <tokens> · <duration>". The old agent-count summary line is
+ *    gone whenever the run has phases.
+ *  - Timeline: only phases up to the deepest agent-bearing one render as
+ *    `chat-workflow-phase-<index>` sections (each with a
+ *    `chat-workflow-phase-toggle-<index>` button). The trailing tail collapses into
+ *    one `chat-workflow-upnext` row reading "Up next · <titles>" plus its count —
+ *    no phase says "not started" any more. A phase opens itself only while running
+ *    or failed; anything else expands on click.
+ *  - Agent rows: `chat-workflow-agent-<agentId>` keeps its `data-state` and `title`.
+ *    Its detail is a disclosure — stale and error notes open themselves into
+ *    `chat-workflow-agent-note-<agentId>`, result and tool notes wait for a click on
+ *    `chat-workflow-agent-toggle-<agentId>`. Status is a pip carrying `data-status`;
+ *    a neutralized agent reads `unknown` and nothing in its row pulses.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ClaudeWorkflowAgent, ClaudeWorkflowPhase, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { WorkflowRunPanel } from '../WorkflowRunPanel';
 
@@ -42,35 +61,75 @@ function run(overrides: Partial<ClaudeWorkflowRun> = {}): ClaudeWorkflowRun {
 }
 
 describe('WorkflowRunPanel — header (AC 7)', () => {
-  it('shows the workflow name, status chip, and right-aligned run tokens/duration', () => {
-    render(<WorkflowRunPanel run={run({ status: 'completed', totalTokens: 500, durationMs: 90_000 })} />);
+  it('shows the workflow name, the status pill and one done/total · tokens · duration meta line', () => {
+    render(
+      <WorkflowRunPanel
+        run={run({
+          status: 'completed',
+          totalTokens: 500,
+          durationMs: 90_000,
+          phases: [phase({ index: 0, title: 'Plan' }), phase({ index: 1, title: 'Build' })],
+          agents: [agent({ agentId: 'a-1', phaseIndex: 0, state: 'done' })],
+        })}
+      />,
+    );
     const panel = screen.getByTestId('chat-workflow-panel-run_1');
     expect(panel.textContent).toContain('deploy');
-    expect(panel.textContent).toContain('Completed');
-    expect(panel.textContent).toContain('500 tok');
-    expect(panel.textContent).toContain('1m');
+    expect(screen.getByTestId('chat-workflow-status-pill').textContent).toContain('Completed');
+    expect(panel.textContent).toContain('1/2 · 500 tok · 1m');
+    expect(panel.textContent).toContain('All phases complete');
+    // The old agent-count summary is gone once a run has phases to count instead.
+    expect(panel.textContent).not.toContain('1 of 1 done');
+  });
+
+  it('charts one rail segment per seeded phase, each carrying its status', () => {
+    render(
+      <WorkflowRunPanel
+        run={run({
+          status: 'running',
+          phases: [phase({ index: 0, title: 'Plan' }), phase({ index: 1, title: 'Build' }), phase({ index: 2 })],
+          agents: [
+            agent({ agentId: 'a-1', phaseIndex: 0, state: 'done' }),
+            agent({ agentId: 'a-2', phaseIndex: 1, state: 'progress' }),
+          ],
+        })}
+      />,
+    );
+    const segments = screen.getByTestId('chat-workflow-rail').querySelectorAll('[data-status]');
+    expect([...segments].map((segment) => segment.getAttribute('data-status'))).toEqual(['done', 'running', 'pending']);
   });
 });
 
 describe('WorkflowRunPanel — phases (AC 9)', () => {
-  it('renders every seeded phase in index order', () => {
-    render(
-      <WorkflowRunPanel
-        run={run({
-          phases: [phase({ index: 0, title: 'Plan' }), phase({ index: 1, title: 'Build' })],
-          agents: [agent({ phaseIndex: 0 })],
-        })}
-      />,
-    );
-    const phase0 = screen.getByTestId('chat-workflow-phase-0');
-    const phase1 = screen.getByTestId('chat-workflow-phase-1');
-    expect(phase0.textContent).toContain('Plan');
-    expect(phase1.textContent).toContain('Build');
+  const reached = run({
+    phases: [
+      phase({ index: 0, title: 'Plan' }),
+      phase({ index: 1, title: 'Build' }),
+      phase({ index: 2, title: 'Review' }),
+      phase({ index: 3, title: 'QA' }),
+    ],
+    agents: [
+      agent({ agentId: 'a-1', phaseIndex: 0, state: 'done' }),
+      agent({ agentId: 'a-2', phaseIndex: 1, state: 'progress' }),
+    ],
   });
 
-  it('a phase with no agents reads "not started"', () => {
-    render(<WorkflowRunPanel run={run({ phases: [phase({ index: 0, title: 'Plan' })], agents: [] })} />);
-    expect(screen.getByTestId('chat-workflow-phase-0').textContent).toContain('not started');
+  it('renders phases up to the deepest agent-bearing one, in index order, and no further', () => {
+    render(<WorkflowRunPanel run={reached} />);
+    expect(screen.getByTestId('chat-workflow-phase-0').textContent).toContain('Plan');
+    expect(screen.getByTestId('chat-workflow-phase-1').textContent).toContain('Build');
+    expect(screen.getByTestId('chat-workflow-phase-toggle-0')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-workflow-phase-toggle-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-workflow-phase-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chat-workflow-phase-3')).not.toBeInTheDocument();
+  });
+
+  it('collapses the phases nothing has reached into one "Up next" row naming them', () => {
+    render(<WorkflowRunPanel run={reached} />);
+    const upNext = screen.getByTestId('chat-workflow-upnext');
+    expect(upNext.textContent).toContain('Up next · Review, QA');
+    expect(screen.getByTestId('chat-workflow-upnext-toggle').textContent).toContain('2');
+    expect(screen.getByTestId('chat-workflow-panel-run_1').textContent).not.toContain('not started');
   });
 });
 
@@ -113,10 +172,27 @@ describe('WorkflowRunPanel — agent rows (AC 10, D19)', () => {
     // The visible row text carries no tool-call count (D19) — only tokens/duration metrics.
     expect(row.textContent).not.toContain('7 tool');
   });
+
+  it('keeps a result note behind the chevron until the row is clicked', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkflowRunPanel
+        run={run({
+          phases: [phase({ index: 0 })],
+          agents: [agent({ agentId: 'a-1', state: 'done', resultPreview: 'Reviewed 3 files, no issues found' })],
+        })}
+      />,
+    );
+    expect(screen.queryByTestId('chat-workflow-agent-note-a-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('chat-workflow-agent-toggle-a-1'));
+
+    expect(screen.getByTestId('chat-workflow-agent-note-a-1').textContent).toBe('Reviewed 3 files, no issues found');
+  });
 });
 
 describe('WorkflowRunPanel — error-state agent (AC 11)', () => {
-  it("shows the agent's error text as the single detail line", () => {
+  it("opens the agent's error text by itself as the single note", () => {
     render(
       <WorkflowRunPanel
         run={run({
@@ -125,13 +201,14 @@ describe('WorkflowRunPanel — error-state agent (AC 11)', () => {
         })}
       />,
     );
-    const row = screen.getByTestId('chat-workflow-agent-a-1');
-    expect(row.textContent).toContain('workflow script exited 1');
+    expect(screen.getByTestId('chat-workflow-agent-note-a-1').textContent).toBe('workflow script exited 1');
+    expect(screen.getByTestId('chat-workflow-agent-a-1')).toHaveAttribute('data-state', 'error');
   });
 });
 
 describe('WorkflowRunPanel — stopped run (AC 18)', () => {
-  it('renders hollow-ring unknown rows, a "before the run stopped" note, and a banner naming the count', () => {
+  it('opens a "before the run stopped" note on a hollow unknown row, under a banner naming the count', async () => {
+    const user = userEvent.setup();
     render(
       <WorkflowRunPanel
         run={run({
@@ -145,18 +222,26 @@ describe('WorkflowRunPanel — stopped run (AC 18)', () => {
         })}
       />,
     );
-    const staleRow = screen.getByTestId('chat-workflow-agent-a-1');
-    expect(staleRow.textContent).toContain('before the run stopped');
-    // Neutralized rows render a hollow ring — border-muted-foreground, per Task 37's contract.
-    expect(staleRow.querySelector('.border-muted-foreground')).not.toBeNull();
-
     const banner = screen.getByTestId('chat-workflow-stale-banner-run_1');
     expect(banner.textContent).toContain('1');
+    // A phase that is neither running nor failed keeps its steps folded away.
+    expect(screen.queryByTestId('chat-workflow-agent-a-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('chat-workflow-phase-toggle-0'));
+
+    const staleRow = screen.getByTestId('chat-workflow-agent-a-1');
+    expect(staleRow).toHaveAttribute('data-state', 'unknown');
+    expect(screen.getByTestId('chat-workflow-agent-note-a-1').textContent).toBe(
+      'Last observed 10s before the run stopped',
+    );
+    // Neutralized rows carry the hollow pip — the shared shape language's `unknown`.
+    expect(staleRow.querySelector('[data-status]')).toHaveAttribute('data-status', 'unknown');
   });
 });
 
 describe('WorkflowRunPanel — completed/failed run with an unreadable record (AC 16, A9)', () => {
-  it('a completed run with lingering progress agents neutralizes them with no banner and no pulsing dot', () => {
+  it('a completed run with lingering progress agents neutralizes them with no banner and no pulsing pip', async () => {
+    const user = userEvent.setup();
     render(
       <WorkflowRunPanel
         run={run({
@@ -167,14 +252,19 @@ describe('WorkflowRunPanel — completed/failed run with an unreadable record (A
         })}
       />,
     );
+    await user.click(screen.getByTestId('chat-workflow-phase-toggle-0'));
+
     const row = screen.getByTestId('chat-workflow-agent-a-1');
-    expect(row.textContent).toContain('before the run ended');
-    expect(row.querySelector('.border-muted-foreground')).not.toBeNull();
-    expect(row.querySelector('.animate-pulse')).toBeNull();
+    expect(screen.getByTestId('chat-workflow-agent-note-a-1').textContent).toBe(
+      'Last observed 10s before the run ended',
+    );
+    expect(row.querySelector('[data-status]')).toHaveAttribute('data-status', 'unknown');
+    expect(row.querySelector('[class*="animate-pulse"]')).toBeNull();
     expect(screen.queryByTestId('chat-workflow-stale-banner-run_1')).not.toBeInTheDocument();
   });
 
-  it('a failed run with lingering progress agents neutralizes them the same way, with no banner', () => {
+  it('a failed run with lingering progress agents neutralizes them the same way, with no banner', async () => {
+    const user = userEvent.setup();
     render(
       <WorkflowRunPanel
         run={run({
@@ -185,8 +275,12 @@ describe('WorkflowRunPanel — completed/failed run with an unreadable record (A
         })}
       />,
     );
-    const row = screen.getByTestId('chat-workflow-agent-a-1');
-    expect(row.textContent).toContain('before the run ended');
+    await user.click(screen.getByTestId('chat-workflow-phase-toggle-0'));
+
+    expect(screen.getByTestId('chat-workflow-agent-a-1')).toHaveAttribute('data-state', 'unknown');
+    expect(screen.getByTestId('chat-workflow-agent-note-a-1').textContent).toBe(
+      'Last observed 10s before the run ended',
+    );
     expect(screen.queryByTestId('chat-workflow-stale-banner-run_1')).not.toBeInTheDocument();
   });
 });

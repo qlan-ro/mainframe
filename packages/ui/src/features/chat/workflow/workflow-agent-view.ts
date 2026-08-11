@@ -9,7 +9,7 @@
  * (D14, AC 16, AC 18, A9). Their observed tokens and duration survive verbatim.
  */
 import type { ClaudeWorkflowAgent, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
-import { isTerminalRunStatus, type OutcomeTone } from './workflow-progress';
+import { isTerminalRunStatus } from './workflow-progress';
 
 export interface ViewAgent extends ClaudeWorkflowAgent {
   /** Set only on a neutralized agent — the row's first-precedence detail line. */
@@ -73,23 +73,6 @@ export function agentDetailLine(agent: ViewAgent, _run: ClaudeWorkflowRun): stri
     default:
       return null;
   }
-}
-
-export function agentDotTone(agent: ViewAgent): OutcomeTone {
-  switch (agent.state) {
-    case 'done':
-      return 'green';
-    case 'error':
-      return 'red';
-    case 'unknown':
-      return 'hollow';
-    default:
-      return 'amber';
-  }
-}
-
-export function agentDotPulse(agent: ViewAgent): boolean {
-  return agent.state === 'start' || agent.state === 'progress';
 }
 
 /** Secondary facts kept off the row itself (D19) and surfaced through its `title`. */
