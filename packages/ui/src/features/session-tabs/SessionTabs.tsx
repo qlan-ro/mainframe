@@ -86,6 +86,17 @@ export function SessionTabs() {
   };
 
   const handleClose = (id: string) => {
+    // Closing a zone member's tab closes that zone: the split collapses to the
+    // other chat (VS Code's close-last-tab-closes-the-group). Without this the
+    // strip would drop the tab while the chat stayed visibly on screen.
+    const zonesStore = useZonesStore.getState();
+    if (zonesStore.zones?.includes(id)) {
+      const other = zonesStore.zones[0] === id ? zonesStore.zones[1] : zonesStore.zones[0];
+      zonesStore.closeSplit();
+      closeTab(id);
+      if (other !== activeTabId) aui.threads.switchToThread(other);
+      return;
+    }
     const next = nextActiveAfterClose(displayIds, id, activeTabId);
     closeTab(id);
     if (next === null) newSession();

@@ -118,13 +118,18 @@ export function useSessionTabsSync(): void {
     // re-running on list ticks would re-preview a session the user just closed.
   }, [mainThreadId, ensureTab]);
 
-  // Splitting is a "keep this open" signal: a preview tab that becomes a zone
-  // member is promoted to pinned. Otherwise opening another session would
-  // evict its tab while the chat is still visibly on screen.
+  // Zones ⊆ pinned tabs, always: splitting is a "keep this open" signal, so a
+  // zone member's preview tab is promoted, and a member with no tab at all (a
+  // restore whose tab was closed pre-reboot) gets one. Otherwise the strip and
+  // the split disagree about what is open.
   const zonesPair = useZonesStore((s) => s.zones);
   useEffect(() => {
-    if (zonesPair == null || previewId == null) return;
-    if (zonesPair.includes(previewId)) useSessionTabsStore.getState().pinTab(previewId);
+    if (zonesPair == null) return;
+    const store = useSessionTabsStore.getState();
+    for (const id of zonesPair) {
+      store.ensureTab(id, { pin: true });
+      store.pinTab(id); // ensureTab won't promote an existing preview
+    }
   }, [zonesPair, previewId]);
 
   useEffect(() => {

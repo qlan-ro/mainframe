@@ -89,7 +89,9 @@ describe('writing the open split', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: null, zones: ['chat-a', 'chat-b'] });
+    // `ids` gains chat-b too: zones ⊆ pinned tabs, so the membership effect
+    // pinned the tab-less zone member — both persist remote-keyed.
+    expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a', 'chat-b'], preview: null, zones: ['chat-a', 'chat-b'] });
   });
 
   it('empties the stored pair when the user closes the split', () => {

@@ -181,3 +181,40 @@ describe('plain click', () => {
     expect(zones()).toEqual(['chat-a', 'chat-b']);
   });
 });
+
+describe('closing a zone tab', () => {
+  it("collapses the split to the other chat when the FOCUSED zone's tab closes", () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    fireEvent.click(screen.getByTestId('session-tab-close-chat-a'));
+
+    expect(zones()).toBeNull();
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-b']);
+    expect(switchToThread).toHaveBeenCalledWith('chat-b');
+  });
+
+  it("collapses without a focus switch when the UNFOCUSED zone's tab closes", () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    fireEvent.click(screen.getByTestId('session-tab-close-chat-b'));
+
+    expect(zones()).toBeNull();
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
+    expect(switchToThread).not.toHaveBeenCalled();
+  });
+
+  it('closes a non-zone tab normally while split — the pair survives', () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    fireEvent.click(screen.getByTestId('session-tab-close-chat-p'));
+
+    expect(zones()).toEqual(['chat-a', 'chat-b']);
+    expect(useSessionTabsStore.getState().previewId).toBeNull();
+  });
+});
