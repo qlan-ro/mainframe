@@ -46,23 +46,12 @@ async function readFiles(paths) {
   return Promise.all(paths.map(async (filePath) => ({ path: filePath, text: await readFile(filePath, 'utf8') })));
 }
 
-// A `* data-testid="…"` line inside a JSDoc comment reads as a real definition
-// to extract.mjs's regex scan; blanking comment lines before analysis keeps
-// prose like TaskColumn.tsx's usage note from minting a bogus static entry.
-function stripCommentLines(text) {
-  return text
-    .split('\n')
-    .map((line) => (/^\s*(?:\*|\/\/)/.test(line) ? '' : line))
-    .join('\n');
-}
-
 async function loadReport() {
   const sourcePaths = await collectFiles(UI_SRC_DIR, ['.ts', '.tsx'], isExcludedSourcePath);
   const specPathLists = await Promise.all(
     SPEC_DIRS.map((dir) => collectFiles(dir, ['.ts'], isExcludedSpecPath)),
   );
-  const rawSourceFiles = await readFiles(sourcePaths);
-  const sourceFiles = rawSourceFiles.map(({ path, text }) => ({ path, text: stripCommentLines(text) }));
+  const sourceFiles = await readFiles(sourcePaths);
   const specFiles = await readFiles(specPathLists.flat());
   return analyze({ sourceFiles, specFiles });
 }

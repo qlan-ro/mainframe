@@ -60,6 +60,71 @@ test('collectDefinitions returns entries in order of appearance and may repeat',
   ]);
 });
 
+test('collectDefinitions finds a testid object key in a menu descriptor', () => {
+  const lines = ['const items = [', "  { label: 'Checkout', testid: 'git-submenu-checkout' },", '];'];
+  assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'git-submenu-checkout', templated: false }]);
+});
+
+test('collectDefinitions finds both arms of a ternary data-testid', () => {
+  const src = "<div data-testid={loading ? 'search-palette-loading' : 'search-palette-empty'} />;";
+  assert.deepEqual(collectDefinitions(src), [
+    { prefix: 'search-palette-loading', templated: false },
+    { prefix: 'search-palette-empty', templated: false },
+  ]);
+});
+
+test('collectDefinitions skips a non-id operand inside a braced expression', () => {
+  const src = "<div data-testid={mode === 'compact' ? 'sessions-row-compact' : undefined} />;";
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'sessions-row-compact', templated: false }]);
+});
+
+test('collectDefinitions finds a triggerId prop', () => {
+  const src = '<CollapsibleCardShell testId="chat-write-card" triggerId="chat-write-trigger" />;';
+  assert.deepEqual(collectDefinitions(src), [
+    { prefix: 'chat-write-card', templated: false },
+    { prefix: 'chat-write-trigger', templated: false },
+  ]);
+});
+
+test('collectDefinitions keeps a templated id whose prefix ends in an uppercase letter', () => {
+  const src = 'const el = <div data-testid={`chat-user-review-comment-L${item.start}`} />;';
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'chat-user-review-comment-L', templated: true }]);
+});
+
+test('collectDefinitions ignores a data-testid written inside a comment', () => {
+  const lines = ['// renders data-testid="chat-doc-only-id" on the root', '<div data-testid="chat-real-id" />;'];
+  assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'chat-real-id', templated: false }]);
+});
+
+test('collectReferences survives an apostrophe in a block comment', () => {
+  const lines = [
+    '/**',
+    " * so the modal menu's pointer-events never leak into the next test.",
+    ' */',
+    "await page.getByTestId('tasks-board-new').click();",
+  ];
+  const refs = collectReferences(lines.join('\n'));
+  assert.ok(refs.broad.includes('tasks-board-new'));
+  assert.ok(refs.strict.some((d) => d.prefix === 'tasks-board-new'));
+});
+
+test('collectReferences survives an apostrophe inside a double-quoted string', () => {
+  const lines = ['const label = "the card\'s title";', "await page.getByTestId('sessions-meta-card').click();"];
+  assert.ok(collectReferences(lines.join('\n')).broad.includes('sessions-meta-card'));
+});
+
+test('collectReferences reads the id nested inside an attribute-selector literal', () => {
+  const src = "await page.locator('[data-testid=\"zone-tab-files\"]').click();";
+  assert.ok(collectReferences(src).broad.includes('zone-tab-files'));
+});
+
+test('collectReferences ignores a locator written inside a trailing line comment', () => {
+  const src = "await click(page); // was getByTestId('sessions-legacy-row')";
+  const refs = collectReferences(src);
+  assert.ok(!refs.broad.includes('sessions-legacy-row'));
+  assert.ok(!refs.strict.some((d) => d.prefix === 'sessions-legacy-row'));
+});
+
 test('collectReferences puts a bare helper argument in broad but not strict', () => {
   const src = "openZone(page, 'zone-rail-button-files', 'files-root-toggle');";
   const refs = collectReferences(src);
