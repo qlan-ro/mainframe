@@ -8,14 +8,14 @@
  * centred, so each gutter is half of whatever the surface has left over.
  *
  * The states:
- *   gutter fits, not collapsed  → `inline`  — the card floats in the gutter, alone
- *   gutter fits, collapsed      → `rail`    — a rail click takes it back inline
- *   gutter short                → `rail`    — the rail floats at the surface edge
- *   gutter short, asked for it  → `overlay` — the same card, over the transcript
+ *   gutter fits                 → `inline`  — open panels stack in the gutter
+ *   gutter short                → `rail`    — the rail alone at the surface edge
+ *   gutter short, asked for it  → `overlay` — the same stack, over the transcript
  *   unmeasured (width 0)        → `hidden`  — nothing flashes before the first measure
  *
- * The rail has no minimum width: it is the session's one constant handle, so at
- * narrow widths it floats over the transcript rather than disappearing.
+ * The rail has no minimum width and renders in every measured state: it is the
+ * session's one constant handle. Which panels the stack holds is the ui-prefs
+ * store's business, not the mode's — an empty stack simply renders nothing.
  */
 
 /** ChatThread's message column: `max-w-3xl`, border-box, so its `px-5` is inside. */
@@ -51,8 +51,6 @@ export type PanelMode = 'inline' | 'rail' | 'overlay' | 'hidden';
 export interface PanelModeInput {
   /** Width of the host row the panel floats over. */
   surfaceWidth: number;
-  /** The persisted "I collapsed it" preference — only meaningful when it fits. */
-  userCollapsed: boolean;
   overlayOpen: boolean;
 }
 
@@ -61,11 +59,11 @@ export function gutterFitsPanel(surfaceWidth: number): boolean {
   return surfaceWidth >= INLINE_MIN_WIDTH;
 }
 
-export function derivePanelMode({ surfaceWidth, userCollapsed, overlayOpen }: PanelModeInput): PanelMode {
+export function derivePanelMode({ surfaceWidth, overlayOpen }: PanelModeInput): PanelMode {
   // Pre-measurement only — the panel never flashes before the first measure.
   if (surfaceWidth <= 0) return 'hidden';
-  // Room wins: a gutter that fits shows the card outright, or the rail the user
-  // asked for — never the overlay, which exists only to borrow the transcript.
-  if (gutterFitsPanel(surfaceWidth)) return userCollapsed ? 'rail' : 'inline';
+  // Room wins: a gutter that fits shows the stack outright — never the overlay,
+  // which exists only to borrow the transcript.
+  if (gutterFitsPanel(surfaceWidth)) return 'inline';
   return overlayOpen ? 'overlay' : 'rail';
 }

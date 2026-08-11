@@ -1,6 +1,6 @@
 /**
- * ActivitySection — the live background work of this session: subagents,
- * background bash tasks, and workflow runs.
+ * ActivityCard — the live background work of this session: subagents,
+ * background bash tasks, and workflow runs, as its own stacked panel.
  *
  * The daemon ships only running work (there is no status field on
  * `BackgroundActivityTask` — see background-task.ts), so every row reads as
@@ -16,9 +16,8 @@
  * The section stays mounted across a session switch, so the drill-in is reset
  * on `chatId` explicitly; the popover got that free from Radix unmounting.
  *
- * Empty keeps the header and one muted row: the rail's Activity button is a
- * fixed affordance, and a scroll target that vanishes when work finishes is
- * worse than a placeholder.
+ * Empty keeps one muted row: the rail's Activity button is a fixed affordance,
+ * and a panel that vanishes when work finishes is worse than a placeholder.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -30,7 +29,7 @@ import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
 import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';
 import { runKey } from '@/features/chat/workflow/workflow-progress';
 import { runningCount } from './activity-view';
-import { PanelSection } from './PanelSection';
+import { PanelCard } from './PanelCard';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 const ELAPSED = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
@@ -143,13 +142,7 @@ function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () =
   );
 }
 
-interface ActivitySectionProps {
-  open: boolean;
-  onToggle: () => void;
-  sectionRef?: (el: HTMLElement | null) => void;
-}
-
-export function ActivitySection({ open, onToggle, sectionRef }: ActivitySectionProps) {
+export function ActivityCard({ onClose }: { onClose: () => void }) {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId;
   const backgroundTasks = extras?.state.backgroundTasks;
@@ -162,30 +155,30 @@ export function ActivitySection({ open, onToggle, sectionRef }: ActivitySectionP
   useEffect(() => setDrillTaskId(null), [chatId]);
 
   return (
-    <PanelSection
+    <PanelCard
       id="activity"
       label="Background Activity"
       icon={Activity}
       count={running > 0 ? running : undefined}
-      open={open}
-      onToggle={onToggle}
-      sectionRef={sectionRef}
+      onClose={onClose}
     >
-      {drillRun ? (
-        <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
-      ) : tasks.length === 0 ? (
-        <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
-          Nothing running
-        </div>
-      ) : (
-        tasks.map((task) =>
-          task.kind === 'workflow' ? (
-            <WorkflowRow key={task.id} task={task} now={now} onOpen={setDrillTaskId} />
-          ) : (
-            <TaskRow key={task.id} task={task} now={now} />
-          ),
-        )
-      )}
-    </PanelSection>
+      <div className="flex flex-col gap-0.5 p-2">
+        {drillRun ? (
+          <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
+        ) : tasks.length === 0 ? (
+          <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
+            Nothing running
+          </div>
+        ) : (
+          tasks.map((task) =>
+            task.kind === 'workflow' ? (
+              <WorkflowRow key={task.id} task={task} now={now} onOpen={setDrillTaskId} />
+            ) : (
+              <TaskRow key={task.id} task={task} now={now} />
+            ),
+          )
+        )}
+      </div>
+    </PanelCard>
   );
 }

@@ -1,11 +1,10 @@
 /**
- * LaunchSection — every launch configuration in the project, with its live
- * state and a one-click run/stop.
+ * LaunchCard — every launch configuration in the project, with its live state
+ * and a one-click run/stop, as its own stacked panel.
  *
- * This is where config SELECTION lives: the rail's quick action runs whatever
- * `deriveLaunchRunControl` targets, and starting a config here stamps it as the
- * selection, so the rail follows what you last ran. There is deliberately no
- * select-without-starting — selection follows the run.
+ * This is where config SELECTION lives: starting a config here stamps it as
+ * the selection. There is deliberately no select-without-starting — selection
+ * follows the run.
  *
  * `chatId` is mandatory on both calls: the daemon derives the effective
  * worktree path from it, and the scope key is itself chatId-dependent, so a
@@ -18,7 +17,7 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { NO_CONFIGS_LABEL } from '@/features/run/derive-launch-control';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRows, type LaunchRow } from './launch-view';
-import { PanelSection } from './PanelSection';
+import { PanelCard } from './PanelCard';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
 
@@ -71,14 +70,7 @@ function LaunchConfigRow({
   );
 }
 
-interface LaunchSectionProps {
-  port: number;
-  open: boolean;
-  onToggle: () => void;
-  sectionRef?: (el: HTMLElement | null) => void;
-}
-
-export function LaunchSection({ port, open, onToggle, sectionRef }: LaunchSectionProps) {
+export function LaunchCard({ port, onClose }: { port: number; onClose: () => void }) {
   const { projectId, chatId } = useActiveIdentity();
   const { configs, scopeStatuses, selectedConfigName, handleLaunch, handleStop } = useLaunchActions(
     port,
@@ -96,22 +88,18 @@ export function LaunchSection({ port, open, onToggle, sectionRef }: LaunchSectio
   };
 
   return (
-    <PanelSection
-      id="launch"
-      label="Launch"
-      icon={Rocket}
-      count={liveCount > 0 ? liveCount : undefined}
-      open={open}
-      onToggle={onToggle}
-      sectionRef={sectionRef}
-    >
-      {rows.length === 0 ? (
-        <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
-          {NO_CONFIGS_LABEL}
-        </div>
-      ) : (
-        rows.map((row) => <LaunchConfigRow key={row.name} row={row} disabled={chatId == null} onActivate={activate} />)
-      )}
-    </PanelSection>
+    <PanelCard id="launch" label="Launch" icon={Rocket} count={liveCount > 0 ? liveCount : undefined} onClose={onClose}>
+      <div className="flex flex-col gap-0.5 p-2">
+        {rows.length === 0 ? (
+          <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
+            {NO_CONFIGS_LABEL}
+          </div>
+        ) : (
+          rows.map((row) => (
+            <LaunchConfigRow key={row.name} row={row} disabled={chatId == null} onActivate={activate} />
+          ))
+        )}
+      </div>
+    </PanelCard>
   );
 }

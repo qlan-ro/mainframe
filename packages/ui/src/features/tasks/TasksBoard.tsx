@@ -4,9 +4,10 @@
  * Header: checklist glyph + "Tasks" + active/done chip + List/Board switch + New.
  * Body: TasksFilterBar + TaskListView or TaskBoardView.
  *
- * SINGLE loader owner: the sidebar Tasks section (TasksSidebarSection/TasksSidebarList)
- * owns the project-scoped useTodosStore.load() effect. TasksBoard does NOT install
- * its own load effect; it reuses the already-cached store state.
+ * Loads the todos store itself: the always-mounted sidebar section that used to
+ * own the load effect is gone (Tasks moved to the session-panel rail), and the
+ * rail's TasksCard mounts only while its panel is open. The store's sequence
+ * guard makes the two loaders safe, not racy.
  *
  * data-testid="tasks-board-modal".
  */
@@ -40,16 +41,15 @@ interface Props {
 }
 
 export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
-  const { todos, loading, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
+  const { todos, loading, load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
   const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
 
-  // The GitHub sync store has no other loader owner — unlike the todos store,
-  // which the sidebar section loads.
   React.useEffect(() => {
+    void load(port, projectId);
     initSync(port, projectId);
     void loadSync();
-  }, [port, projectId, initSync, loadSync]);
+  }, [port, projectId, load, initSync, loadSync]);
 
   const allLabels = extractAllLabels(todos);
   const filtered = sortTodos(

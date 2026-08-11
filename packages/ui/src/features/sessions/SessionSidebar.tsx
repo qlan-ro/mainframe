@@ -35,7 +35,6 @@ import { UpdatePill } from '@/layout/UpdatePill';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
 import { QuotaFooter } from '../quota/QuotaFooter';
-import { TasksSidebarSection } from '../tasks/sidebar/TasksSidebarSection';
 import { ProjectSection } from './ProjectSection';
 import { SessionsSection } from './SessionsSection';
 import { TagFilterBar } from './TagFilterBar';
@@ -168,7 +167,6 @@ export function SessionSidebar({ className }: { className?: string }) {
           draft={draft}
           hasFilters={hasFilters}
         />
-        <TasksSidebarSection />
       </SidebarScrollRegion>
 
       {/* The rule is load-bearing, not decoration: the footer butts straight up

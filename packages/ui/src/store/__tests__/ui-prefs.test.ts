@@ -1,17 +1,11 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import { useUiPrefs, isSidebarSectionCollapsed, isSessionPanelSectionOpen } from '../ui-prefs';
+import { useUiPrefs, isSidebarSectionCollapsed, isSessionPanelOpen, isSessionPanelSectionOpen } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
-/** Fresh module + fresh initial state, hydrated from whatever is in localStorage right now. */
-async function reloadStore() {
-  vi.resetModules();
-  const mod = await import('../ui-prefs');
-  await mod.useUiPrefs.persist.rehydrate();
-  return mod.useUiPrefs;
-}
+// The persisted-payload migrations live in ui-prefs-migration.test.ts.
 
 beforeEach(() => {
   localStorage.clear();
@@ -22,8 +16,8 @@ beforeEach(() => {
     rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
     collapsedSidebarSections: {},
+    sessionPanelOpen: {},
     sessionPanelSections: {},
-    sessionPanelCollapsed: false,
   });
 });
 
@@ -35,16 +29,28 @@ describe('useUiPrefs defaults', () => {
     expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.collapsedSidebarSections).toEqual({});
+    expect(s.sessionPanelOpen).toEqual({});
     expect(s.sessionPanelSections).toEqual({});
-    expect(s.sessionPanelCollapsed).toBe(false);
+  });
+});
+
+describe('isSessionPanelOpen', () => {
+  it('opens the session card alone on first run', () => {
+    expect(isSessionPanelOpen({}, 'session')).toBe(true);
+    expect(isSessionPanelOpen({}, 'activity')).toBe(false);
+    expect(isSessionPanelOpen({}, 'launch')).toBe(false);
+    expect(isSessionPanelOpen({}, 'tasks')).toBe(false);
+  });
+
+  it('returns the recorded value when present', () => {
+    expect(isSessionPanelOpen({ session: false }, 'session')).toBe(false);
+    expect(isSessionPanelOpen({ tasks: true }, 'tasks')).toBe(true);
   });
 });
 
 describe('isSessionPanelSectionOpen', () => {
   it('applies the per-section defaults when nothing is recorded', () => {
     expect(isSessionPanelSectionOpen({}, 'plan')).toBe(false);
-    expect(isSessionPanelSectionOpen({}, 'activity')).toBe(false);
-    expect(isSessionPanelSectionOpen({}, 'launch')).toBe(false);
     expect(isSessionPanelSectionOpen({}, 'context')).toBe(true);
   });
 
@@ -54,7 +60,48 @@ describe('isSessionPanelSectionOpen', () => {
   });
 });
 
-describe('session-panel section actions', () => {
+describe('stacked panel actions', () => {
+  it('toggleSessionPanel closes the session card first — it defaults to open', () => {
+    useUiPrefs.getState().toggleSessionPanel('session');
+    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(false);
+    useUiPrefs.getState().toggleSessionPanel('session');
+    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(true);
+  });
+
+  it('toggleSessionPanel opens a closed panel and closes it again', () => {
+    useUiPrefs.getState().toggleSessionPanel('tasks');
+    expect(useUiPrefs.getState().sessionPanelOpen.tasks).toBe(true);
+    useUiPrefs.getState().toggleSessionPanel('tasks');
+    expect(useUiPrefs.getState().sessionPanelOpen.tasks).toBe(false);
+  });
+
+  it('toggleSessionPanel leaves its siblings alone — the panels are independent', () => {
+    useUiPrefs.getState().toggleSessionPanel('activity');
+    expect(useUiPrefs.getState().sessionPanelOpen).toEqual({ activity: true });
+  });
+
+  it('openSessionPanel is idempotent — twice on an open panel leaves it open', () => {
+    useUiPrefs.getState().openSessionPanel('launch');
+    expect(useUiPrefs.getState().sessionPanelOpen.launch).toBe(true);
+    useUiPrefs.getState().openSessionPanel('launch');
+    expect(useUiPrefs.getState().sessionPanelOpen.launch).toBe(true);
+  });
+
+  it('openSessionPanel re-opens a panel the user closed', () => {
+    useUiPrefs.getState().toggleSessionPanel('session');
+    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(false);
+    useUiPrefs.getState().openSessionPanel('session');
+    expect(useUiPrefs.getState().sessionPanelOpen.session).toBe(true);
+  });
+
+  it('persists the open map to localStorage', () => {
+    useUiPrefs.getState().openSessionPanel('tasks');
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.sessionPanelOpen).toEqual({ tasks: true });
+  });
+});
+
+describe('session-card section actions', () => {
   it('toggleSessionPanelSection opens a collapsed section and closes it again', () => {
     useUiPrefs.getState().toggleSessionPanelSection('plan');
     expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
@@ -68,10 +115,10 @@ describe('session-panel section actions', () => {
   });
 
   it('expandSessionPanelSection is idempotent — twice on an open section leaves it open', () => {
-    useUiPrefs.getState().expandSessionPanelSection('launch');
-    expect(useUiPrefs.getState().sessionPanelSections.launch).toBe(true);
-    useUiPrefs.getState().expandSessionPanelSection('launch');
-    expect(useUiPrefs.getState().sessionPanelSections.launch).toBe(true);
+    useUiPrefs.getState().expandSessionPanelSection('plan');
+    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
+    useUiPrefs.getState().expandSessionPanelSection('plan');
+    expect(useUiPrefs.getState().sessionPanelSections.plan).toBe(true);
   });
 
   it('expandSessionPanelSection re-opens a section the user collapsed', () => {
@@ -85,15 +132,6 @@ describe('session-panel section actions', () => {
     useUiPrefs.getState().expandSessionPanelSection('plan');
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.sessionPanelSections).toEqual({ plan: true });
-  });
-
-  it('setSessionPanelCollapsed records the panel collapse, and persists it', () => {
-    useUiPrefs.getState().setSessionPanelCollapsed(true);
-    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(true);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state.sessionPanelCollapsed).toBe(true);
-
-    useUiPrefs.getState().setSessionPanelCollapsed(false);
-    expect(useUiPrefs.getState().sessionPanelCollapsed).toBe(false);
   });
 });
 
@@ -161,7 +199,7 @@ describe('useUiPrefs persistence', () => {
         'collapsedSidebarSections',
         'dontWarnOnTuningChange',
         'rightClickHintDismissed',
-        'sessionPanelCollapsed',
+        'sessionPanelOpen',
         'sessionPanelSections',
         'sidebarVisible',
         'sidebarWidth',
@@ -169,89 +207,5 @@ describe('useUiPrefs persistence', () => {
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
-  });
-});
-
-describe('useUiPrefs v2 → v4 migration', () => {
-  it('strips the retired inspector/files keys from an old payload', async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        state: { sidebarWidth: 300, inspectorVisible: true, workspaceFilesCollapsed: true },
-        version: 2,
-      }),
-    );
-    const fresh = await reloadStore();
-    // Proves hydration actually ran, so the next assertions aren't vacuous.
-    expect(fresh.getState().sidebarWidth).toBe(300);
-    // v3 retired the right InspectorPane; v4 retired the docked Files sidebar —
-    // the tree is a transient floating panel now, so neither flag survives.
-    const state = fresh.getState() as unknown as Record<string, unknown>;
-    expect(state.inspectorVisible).toBeUndefined();
-    expect(state.workspaceFilesCollapsed).toBeUndefined();
-    // ...and neither gets written back out on the next persist.
-    fresh.getState().setSidebarWidth(320);
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(parsed.state.inspectorVisible).toBeUndefined();
-    expect(parsed.state.workspaceFilesCollapsed).toBeUndefined();
-  });
-});
-
-describe('useUiPrefs v1 → v2 migration', () => {
-  it('strips the bottom-panel keys from a v1 payload', async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        state: { sidebarWidth: 300, bottomPanelTab: 'skills', bottomPanelHeight: 420 },
-        version: 1,
-      }),
-    );
-    const fresh = await reloadStore();
-    // Proves hydration actually ran, so the next assertions aren't vacuous.
-    expect(fresh.getState().sidebarWidth).toBe(300);
-    // Stripped by migrate, so they never reach the store...
-    const state = fresh.getState() as unknown as Record<string, unknown>;
-    expect(state.bottomPanelTab).toBeUndefined();
-    expect(state.bottomPanelHeight).toBeUndefined();
-    // ...nor get written back out on the next persist.
-    fresh.getState().setSidebarWidth(320);
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(parsed.state.bottomPanelTab).toBeUndefined();
-    expect(parsed.state.bottomPanelHeight).toBeUndefined();
-  });
-
-  it('leaves a v1 payload without bottom-panel keys otherwise intact', async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        state: { sidebarVisible: false, sessionPanelSections: { launch: true } },
-        version: 1,
-      }),
-    );
-    const fresh = await reloadStore();
-    expect(fresh.getState().sidebarVisible).toBe(false);
-    expect(fresh.getState().sessionPanelSections).toEqual({ launch: true });
-  });
-});
-
-describe('useUiPrefs rehydration: dontWarnOnTuningChange', () => {
-  it('fills the default when a legacy payload predates the key', async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { sidebarWidth: 300 }, version: 1 }));
-    const fresh = await reloadStore();
-    // Proves hydration actually ran, so the next assertion isn't vacuous.
-    expect(fresh.getState().sidebarWidth).toBe(300);
-    expect(fresh.getState().dontWarnOnTuningChange).toBe(false);
-  });
-
-  it('a persisted true survives a reload', async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        state: { sidebarWidth: 300, dontWarnOnTuningChange: true },
-        version: 1,
-      }),
-    );
-    const fresh = await reloadStore();
-    expect(fresh.getState().dontWarnOnTuningChange).toBe(true);
   });
 });

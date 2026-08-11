@@ -18,19 +18,34 @@ const SIDEBAR_DEFAULT_WIDTH = 256;
  *  Sessions/Tasks scroll as one region and Tags lives in the footer now. */
 export type SidebarSection = 'projects';
 
-/** The session panel's sections, in render order. Declared here rather than in
- *  `features/session-panel/` because this store persists their open-state and
- *  `store/` must not import from `features/`. */
-export type SessionPanelSectionId = 'summary' | 'plan' | 'activity' | 'launch' | 'context';
+/** The rail's independent stacked panels, in render order. Declared here rather
+ *  than in `features/session-panel/` because this store persists their
+ *  open-state and `store/` must not import from `features/`. */
+export type SessionPanelId = 'session' | 'activity' | 'launch' | 'tasks';
 
-/** Summary is never collapsible, so it has no open-state to persist. */
-export type SessionPanelOpenSectionId = Exclude<SessionPanelSectionId, 'summary'>;
-
-/** Open on first run: the panel stays dense, and Context is the reference material you scan. */
-const SESSION_PANEL_SECTION_DEFAULTS: Record<SessionPanelOpenSectionId, boolean> = {
-  plan: false,
+/** Open on first run: the session card alone — the other panels are opt-in. */
+const SESSION_PANEL_DEFAULTS: Record<SessionPanelId, boolean> = {
+  session: true,
   activity: false,
   launch: false,
+  tasks: false,
+};
+
+export type SessionPanelOpen = Partial<Record<SessionPanelId, boolean>>;
+
+/** Selector helper: a panel with no recorded state falls back to its default. */
+export function isSessionPanelOpen(open: SessionPanelOpen, id: SessionPanelId): boolean {
+  return open[id] ?? SESSION_PANEL_DEFAULTS[id];
+}
+
+/** The session card's collapsible sections (Summary is never collapsible). */
+export type SessionPanelSectionId = 'summary' | 'plan' | 'context';
+
+export type SessionPanelOpenSectionId = Exclude<SessionPanelSectionId, 'summary'>;
+
+/** Context is the reference material you scan, so it starts open. */
+const SESSION_PANEL_SECTION_DEFAULTS: Record<SessionPanelOpenSectionId, boolean> = {
+  plan: false,
   context: true,
 };
 
@@ -51,24 +66,24 @@ interface UiPrefsState {
   /** Per-section collapse state for the left sidebar's four root sections.
    *  Absent keys read as expanded (false) — see isSidebarSectionCollapsed. */
   collapsedSidebarSections: Partial<Record<SidebarSection, boolean>>;
-  /** Per-section open state for the right session panel. This store is the sole
-   *  owner — the panel keeps no set of its own. Absent keys read as the
+  /** Which stacked panels are open. This store is the sole owner — absent keys
+   *  read as the panel's default; see isSessionPanelOpen. */
+  sessionPanelOpen: SessionPanelOpen;
+  /** Per-section open state inside the session card. Absent keys read as the
    *  section's default; see isSessionPanelSectionOpen. */
   sessionPanelSections: SessionPanelSections;
-  /** The right session panel's own collapse. Only reachable on a surface wide
-   *  enough to hold the panel — a narrow one collapses it regardless. */
-  sessionPanelCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
   dismissRightClickHint: () => void;
   dismissTuningChangeWarning: () => void;
   toggleSidebarSection: (section: SidebarSection) => void;
+  toggleSessionPanel: (id: SessionPanelId) => void;
+  /** Idempotent open — for controls that navigate to a panel's content. */
+  openSessionPanel: (id: SessionPanelId) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
-  /** Idempotent open — a rail click that navigates to an already-open section
-   *  must scroll to it, never collapse it. */
+  /** Idempotent open — navigating to an already-open section must not collapse it. */
   expandSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
-  setSessionPanelCollapsed: (collapsed: boolean) => void;
 }
 
 /** Selector helper: a section with no recorded state is expanded by default. */
@@ -87,8 +102,8 @@ function partializeUiPrefs(s: UiPrefsState) {
     rightClickHintDismissed: s.rightClickHintDismissed,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
     collapsedSidebarSections: s.collapsedSidebarSections,
+    sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
-    sessionPanelCollapsed: s.sessionPanelCollapsed,
   };
 }
 
@@ -102,8 +117,8 @@ export const useUiPrefs = create<UiPrefsState>()(
       rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
       collapsedSidebarSections: {},
+      sessionPanelOpen: {},
       sessionPanelSections: {},
-      sessionPanelCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -116,6 +131,11 @@ export const useUiPrefs = create<UiPrefsState>()(
             [section]: !isSidebarSectionCollapsed(s.collapsedSidebarSections, section),
           },
         })),
+      toggleSessionPanel: (id) =>
+        set((s) => ({
+          sessionPanelOpen: { ...s.sessionPanelOpen, [id]: !isSessionPanelOpen(s.sessionPanelOpen, id) },
+        })),
+      openSessionPanel: (id) => set((s) => ({ sessionPanelOpen: { ...s.sessionPanelOpen, [id]: true } })),
       toggleSessionPanelSection: (id) =>
         set((s) => ({
           sessionPanelSections: {
@@ -125,14 +145,13 @@ export const useUiPrefs = create<UiPrefsState>()(
         })),
       expandSessionPanelSection: (id) =>
         set((s) => ({ sessionPanelSections: { ...s.sessionPanelSections, [id]: true } })),
-      setSessionPanelCollapsed: (collapsed) => set({ sessionPanelCollapsed: collapsed }),
     }),
     {
       name: 'mf:ui-prefs',
-      version: 4,
+      version: 5,
       partialize: partializeUiPrefs,
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 4 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 5 || persisted === null || typeof persisted !== 'object') {
           return persisted as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
@@ -142,11 +161,26 @@ export const useUiPrefs = create<UiPrefsState>()(
           delete next.bottomPanelTab;
           delete next.bottomPanelHeight;
         }
-        // v3 retired the right InspectorPane; v4 retired its short-lived docked
-        // successor — the Files tree is a transient floating panel now
-        // (store/workspace-files-panel), so neither flag persists.
-        delete next.inspectorVisible;
-        delete next.workspaceFilesCollapsed;
+        if (version < 4) {
+          // v3 retired the right InspectorPane; v4 retired its short-lived docked
+          // successor — the Files tree is a transient floating panel now
+          // (store/workspace-files-panel), so neither flag persists.
+          delete next.inspectorVisible;
+          delete next.workspaceFilesCollapsed;
+        }
+        // v5 split Activity/Launch out of the session card into stacked panels:
+        // their old section bits become panel bits, and the whole-card collapse
+        // becomes the session panel's own open bit.
+        const sections = { ...(next.sessionPanelSections as Record<string, unknown> | undefined) };
+        next.sessionPanelOpen = {
+          ...(typeof sections.activity === 'boolean' ? { activity: sections.activity } : {}),
+          ...(typeof sections.launch === 'boolean' ? { launch: sections.launch } : {}),
+          ...(next.sessionPanelCollapsed === true ? { session: false } : {}),
+        };
+        delete sections.activity;
+        delete sections.launch;
+        next.sessionPanelSections = sections;
+        delete next.sessionPanelCollapsed;
         return next as PersistedUiPrefs;
       },
     },

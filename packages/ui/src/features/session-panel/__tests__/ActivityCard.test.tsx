@@ -1,16 +1,17 @@
 /**
- * ActivitySection — unit tests.
+ * ActivityCard — unit tests.
  *
  * Two-level coverage ported from `chat/composer/__tests__/BackgroundActivityBar.test.tsx`
  * (deleted in T5.1): the row list, the workflow drill-in and its way back, and
  * the chat-switch reset — which the popover got for free from Radix unmounting
- * its content, and this always-mounted section must do itself.
+ * its content, and this always-mounted card must do itself.
  *
  * Behaviors covered:
- *  - the empty state keeps the header and shows one muted placeholder row, with
- *    no count badge (D6)
+ *  - the empty state keeps the card header and shows one muted placeholder row,
+ *    with no count badge (D6)
  *  - one row per live task, with its description, elapsed time and working dot
  *  - the count badge appears only while work is running
+ *  - the header X closes the panel
  *  - a live workflow row drills into its run panel; the breadcrumb comes back
  *  - agent/bash rows are inert
  *  - switching chats resets the drill-in
@@ -33,7 +34,7 @@ vi.mock('@/features/chat/workflow/use-workflow-run', () => ({
   useWorkflowRun: (taskId: string | undefined) => (taskId ? mockRuns[taskId] : undefined),
 }));
 
-const { ActivitySection } = await import('../ActivitySection');
+const { ActivityCard } = await import('../ActivityCard');
 
 const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: TooltipProvider });
 
@@ -71,8 +72,9 @@ function workflowRun(overrides: Partial<ClaudeWorkflowRun> = {}): ClaudeWorkflow
   };
 }
 
-const onToggle = vi.fn();
-const section = () => <ActivitySection open onToggle={onToggle} />;
+const onClose = vi.fn();
+const card = () => <ActivityCard onClose={onClose} />;
+const badge = () => screen.getByTestId('session-panel-card-activity').querySelector('[data-slot="badge"]');
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -80,33 +82,46 @@ beforeEach(() => {
   mockTasks = {};
   mockRuns = {};
   mockChatId = 'chat-1';
-  onToggle.mockReset();
+  onClose.mockReset();
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('ActivitySection — empty (D6)', () => {
-  it('keeps the header and shows one muted placeholder row', () => {
-    render(section());
-    expect(screen.getByTestId('session-panel-section-activity')).toBeInTheDocument();
+describe('ActivityCard — empty (D6)', () => {
+  it('keeps the card and shows one muted placeholder row', () => {
+    render(card());
+    expect(screen.getByTestId('session-panel-card-activity')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-activity-empty')).toHaveTextContent('Nothing running');
   });
 
   it('shows no count badge with nothing running', () => {
-    render(section());
-    expect(screen.getByTestId('session-panel-section-toggle-activity').textContent).not.toContain('0');
+    render(card());
+    expect(badge()).toBeNull();
   });
 });
 
-describe('ActivitySection — task rows', () => {
+describe('ActivityCard — card chrome', () => {
+  it('titles the card Background Activity', () => {
+    render(card());
+    expect(screen.getByTestId('session-panel-card-activity')).toHaveTextContent('Background Activity');
+  });
+
+  it('closes the panel from the header X', () => {
+    render(card());
+    fireEvent.click(screen.getByTestId('session-panel-card-close-activity'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ActivityCard — task rows', () => {
   it('renders one row per live task with its description and elapsed time', () => {
     mockTasks = {
       'a-1': task('a-1', 'agent', 'reviewer subagent', 5 * 60_000), // started 5m ago
       'b-1': task('b-1', 'bash', 'pnpm dev', 10 * 60_000 - 20_000), // started 20s ago
     };
-    render(section());
+    render(card());
 
     expect(screen.getByTestId('session-panel-task-a-1')).toHaveTextContent('reviewer subagent');
     expect(screen.getByTestId('session-panel-task-a-1')).toHaveTextContent('5m');
@@ -115,15 +130,15 @@ describe('ActivitySection — task rows', () => {
     expect(screen.queryByTestId('session-panel-activity-empty')).toBeNull();
   });
 
-  it('counts the running work in the header badge', () => {
+  it('counts the running work in the card badge', () => {
     mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
-    render(section());
-    expect(screen.getByTestId('session-panel-section-toggle-activity')).toHaveTextContent('2');
+    render(card());
+    expect(badge()).toHaveTextContent('2');
   });
 
   it('marks every row as working with the pulse dot — the daemon ships no other status', () => {
     mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer'), 'b-1': task('b-1', 'bash', 'pnpm dev') };
-    render(section());
+    render(card());
 
     expect(within(screen.getByTestId('session-panel-task-a-1')).getByTestId('session-panel-working-dot')).toHaveClass(
       'animate-pulse',
@@ -133,19 +148,19 @@ describe('ActivitySection — task rows', () => {
 
   it('leaves agent and bash rows inert — there is nothing to drill into', () => {
     mockTasks = { 'a-1': task('a-1', 'agent', 'reviewer subagent') };
-    render(section());
+    render(card());
     expect(screen.getByTestId('session-panel-task-a-1').tagName).not.toBe('BUTTON');
   });
 });
 
-describe('ActivitySection — workflow drill-in', () => {
+describe('ActivityCard — workflow drill-in', () => {
   beforeEach(() => {
     mockTasks = { 'w-1': workflowTask('w-1', 'run_1', 'deploy'), 'a-1': task('a-1', 'agent', 'reviewer subagent') };
     mockRuns = { 'w-1': workflowRun() };
   });
 
   it('lists a live workflow as a clickable row carrying its name and agent count', () => {
-    render(section());
+    render(card());
     const row = screen.getByTestId('session-panel-workflow-run_1');
     expect(row.tagName).toBe('BUTTON');
     expect(row).toHaveTextContent('deploy');
@@ -154,13 +169,13 @@ describe('ActivitySection — workflow drill-in', () => {
 
   it('falls back to a plain task row while the run is unknown', () => {
     mockRuns = {};
-    render(section());
+    render(card());
     expect(screen.queryByTestId('session-panel-workflow-run_1')).toBeNull();
     expect(screen.getByTestId('session-panel-task-w-1')).toHaveTextContent('deploy');
   });
 
   it('opens the run panel, and the breadcrumb returns to the list', () => {
-    render(section());
+    render(card());
     fireEvent.click(screen.getByTestId('session-panel-workflow-run_1'));
 
     expect(screen.getByTestId('chat-workflow-panel-run_1')).toBeInTheDocument();
@@ -173,12 +188,12 @@ describe('ActivitySection — workflow drill-in', () => {
   });
 
   it('resets the drill-in when the chat id changes (M6)', () => {
-    const { rerender } = render(section());
+    const { rerender } = render(card());
     fireEvent.click(screen.getByTestId('session-panel-workflow-run_1'));
     expect(screen.getByTestId('chat-workflow-panel-run_1')).toBeInTheDocument();
 
     mockChatId = 'chat-2';
-    rerender(section());
+    rerender(card());
 
     expect(screen.queryByTestId('chat-workflow-panel-run_1')).toBeNull();
     expect(screen.getByTestId('session-panel-workflow-run_1')).toBeInTheDocument();

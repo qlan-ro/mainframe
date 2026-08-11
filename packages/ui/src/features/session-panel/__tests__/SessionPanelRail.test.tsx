@@ -1,26 +1,24 @@
 /**
  * SessionPanelRail — unit tests.
  *
+ * The rail is the switchboard for the stacked panels: every button TOGGLES its
+ * panel, and reads engaged only while that panel is actually showing.
+ *
  * Behaviors covered:
- *  - the four buttons render, top-down: panel · activity · context · launch
- *  - the live dot appears only while background work is running, and the
- *    activity tooltip/name carries the running count
- *  - a rail click selects its section; the button reads engaged only while the
- *    panel it opened is floating
- *  - the context meter renders the percentage, and vanishes when the percentage
- *    is unknown
- *  - the launch quick action starts when idle and stops when live
- *  - the launch button is disabled with no configs, and with no chatId — the
- *    daemon resolves the worktree path from the chat, so a call without one
- *    would act on the wrong tree
- *  - right-clicking the launch button opens the Launch section instead of acting
- *  - todo #206, ported from ToolbarLaunchControls.test.tsx (:246, :270): a
- *    running NON-selected config still offers STOP, stops THAT config, and the
- *    label follows the running config
+ *  - the five controls render, top-down: session · activity · context · tasks ·
+ *    launch
+ *  - each button toggles its own panel id
+ *  - `aria-pressed` follows isPanelVisible, not the raw open bit
+ *  - the activity dot appears only while background work is running, and the
+ *    button's name carries the running count
+ *  - the launch glyph is a Rocket, with a dot when a config is live — the old
+ *    one-click run/stop moved into the Launch panel's rows
+ *  - the context meter renders the percentage, vanishes when it is unknown, and
+ *    NAVIGATES (opens the session card, expands Context) rather than toggling
  *
  * Mocked dependencies:
  *  - ./use-context-percent — the resolved context fill
- *  - @/features/run/use-launch-actions — configs, statuses, start/stop
+ *  - @/features/run/use-launch-actions — configs and statuses
  *  - @/features/sessions/use-active-identity — projectId / chatId
  *  - @/features/chat/runtime/use-chat-thread-runtime — background tasks
  */
@@ -28,8 +26,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import type { BackgroundActivityTask, LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { SessionPanelId } from '@/store/ui-prefs';
 import type { SessionPanelState } from '../use-session-panel-state';
-import type { PanelMode } from '../panel-mode';
 
 // v2 Hint/Tooltip require the v2 TooltipProvider (app-root concern live).
 const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper: TooltipProvider });
@@ -41,23 +39,20 @@ vi.mock('../use-context-percent', () => ({ useContextPercent: () => mockPercent 
 let mockConfigs: LaunchConfiguration[] = [];
 let mockStatuses: Record<string, LaunchProcessStatus> = {};
 let mockSelected: string | null = null;
-const handleLaunch = vi.fn();
-const handleStop = vi.fn();
 
 vi.mock('@/features/run/use-launch-actions', () => ({
   useLaunchActions: () => ({
     configs: mockConfigs,
     scopeStatuses: mockStatuses,
     selectedConfigName: mockSelected,
-    handleLaunch,
-    handleStop,
+    handleLaunch: vi.fn(),
+    handleStop: vi.fn(),
     refetch: vi.fn(),
   }),
 }));
 
-let mockChatId: string | undefined = 'chat-9';
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({ projectName: 'repo', projectId: 'proj-1', chatId: mockChatId, isWorktree: false }),
+  useActiveIdentity: () => ({ projectName: 'repo', projectId: 'proj-1', chatId: 'chat-9', isWorktree: false }),
 }));
 
 let mockTasks: Record<string, BackgroundActivityTask> = {};
@@ -82,181 +77,171 @@ const configs: LaunchConfiguration[] = [
 
 const task = (id: string): BackgroundActivityTask => ({ id, kind: 'agent', description: `work ${id}`, startedAt: 0 });
 
-const selectSection = vi.fn();
+const togglePanel = vi.fn();
+const openPanel = vi.fn();
+const expandSection = vi.fn();
 
-function panelState(mode: PanelMode, focusId?: SessionPanelState['focusRequest'] extends null ? never : string) {
+/** `visible` lists the panels the stack is currently showing. */
+function panelState(visible: SessionPanelId[] = []): SessionPanelState {
   return {
-    hostRef: { current: null },
+    hostRef: () => {},
     rootRef: { current: null },
-    surfaceWidth: mode === 'inline' ? 1200 : 800,
-    mode,
-    focusRequest: focusId ? { id: focusId as 'summary', seq: 1 } : null,
+    surfaceWidth: 1600,
+    mode: 'inline',
+    isPanelOpen: (id: SessionPanelId) => visible.includes(id),
+    isPanelVisible: (id: SessionPanelId) => visible.includes(id),
+    togglePanel,
+    openPanel,
     isSectionOpen: () => true,
     toggleSection: vi.fn(),
-    selectSection,
+    expandSection,
     closeOverlay: vi.fn(),
-    registerSection: () => () => {},
   } as unknown as SessionPanelState;
 }
+
+const rail = (visible: SessionPanelId[] = []) => <SessionPanelRail state={panelState(visible)} port={31415} />;
 
 beforeEach(() => {
   mockPercent = 42;
   mockConfigs = configs;
   mockStatuses = {};
   mockSelected = null;
-  mockChatId = 'chat-9';
   mockTasks = {};
-  handleLaunch.mockReset();
-  handleStop.mockReset();
-  selectSection.mockReset();
+  togglePanel.mockReset();
+  openPanel.mockReset();
+  expandSection.mockReset();
 });
 
 describe('SessionPanelRail — shape', () => {
-  it('renders the panel, activity, context and launch buttons', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+  it('renders the session, activity, context, tasks and launch controls', () => {
+    render(rail());
     expect(screen.getByTestId('session-panel-rail')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-rail-open')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-rail-activity')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-rail-context')).toBeInTheDocument();
+    expect(screen.getByTestId('session-panel-rail-tasks')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-rail-launch')).toBeInTheDocument();
   });
 
   it('renders the context percentage', () => {
     mockPercent = 73;
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+    render(rail());
     expect(screen.getByTestId('session-panel-rail-context')).toHaveTextContent('73%');
   });
 
   it('drops the context meter when the percentage is unknown', () => {
     mockPercent = null;
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+    render(rail());
     expect(screen.queryByTestId('session-panel-rail-context')).toBeNull();
+  });
+});
+
+describe('SessionPanelRail — toggling panels', () => {
+  it('toggles the session card from the session button', () => {
+    render(rail());
+    fireEvent.click(screen.getByTestId('session-panel-rail-open'));
+    expect(togglePanel).toHaveBeenCalledWith('session');
+  });
+
+  it('toggles the activity panel from the activity button', () => {
+    render(rail());
+    fireEvent.click(screen.getByTestId('session-panel-rail-activity'));
+    expect(togglePanel).toHaveBeenCalledWith('activity');
+  });
+
+  it('toggles the tasks panel from the tasks button', () => {
+    render(rail());
+    fireEvent.click(screen.getByTestId('session-panel-rail-tasks'));
+    expect(togglePanel).toHaveBeenCalledWith('tasks');
+  });
+
+  it('toggles the launch panel from the launch button — it no longer runs anything', () => {
+    render(rail());
+    fireEvent.click(screen.getByTestId('session-panel-rail-launch'));
+    expect(togglePanel).toHaveBeenCalledWith('launch');
+    expect(openPanel).not.toHaveBeenCalled();
+  });
+
+  it('reads engaged only for the panels that are showing', () => {
+    render(rail(['activity', 'tasks']));
+    expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('session-panel-rail-tasks')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('session-panel-rail-open')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('session-panel-rail-launch')).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('SessionPanelRail — the context meter navigates', () => {
+  it('opens the session card and expands Context, without toggling', () => {
+    render(rail());
+    fireEvent.click(screen.getByTestId('session-panel-rail-context'));
+    expect(openPanel).toHaveBeenCalledWith('session');
+    expect(expandSection).toHaveBeenCalledWith('context');
+    expect(togglePanel).not.toHaveBeenCalled();
+  });
+
+  it('still expands Context when the session card is already showing', () => {
+    render(rail(['session']));
+    fireEvent.click(screen.getByTestId('session-panel-rail-context'));
+    expect(openPanel).toHaveBeenCalledWith('session');
+    expect(expandSection).toHaveBeenCalledWith('context');
   });
 });
 
 describe('SessionPanelRail — background activity', () => {
   it('shows no live dot when nothing is running', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+    render(rail());
     expect(screen.queryByTestId('session-panel-rail-activity-dot')).toBeNull();
     expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', 'Background Activity');
   });
 
   it('shows the live dot and the running count once work is running', () => {
     mockTasks = { a: task('a'), b: task('b'), c: task('c') };
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+    render(rail());
     expect(screen.getByTestId('session-panel-rail-activity-dot')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', '3 tasks running');
   });
 
   it('says "1 task running" in the singular', () => {
     mockTasks = { a: task('a') };
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+    render(rail());
     expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', '1 task running');
   });
 });
 
-describe('SessionPanelRail — section selection', () => {
-  it('selects the summary section from the panel button', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    fireEvent.click(screen.getByTestId('session-panel-rail-open'));
-    expect(selectSection).toHaveBeenCalledWith('summary');
-  });
-
-  it('selects the activity section from the activity button', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    fireEvent.click(screen.getByTestId('session-panel-rail-activity'));
-    expect(selectSection).toHaveBeenCalledWith('activity');
-  });
-
-  it('selects the summary section from the context meter', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    fireEvent.click(screen.getByTestId('session-panel-rail-context'));
-    expect(selectSection).toHaveBeenCalledWith('summary');
-  });
-
-  it('reads engaged only while the panel it opened is floating', () => {
-    const { rerender } = render(<SessionPanelRail state={panelState('overlay', 'activity')} port={31415} />);
-    expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('session-panel-rail-open')).toHaveAttribute('aria-pressed', 'false');
-    // Same target, but the panel is inline — nothing was opened by this button.
-    rerender(<SessionPanelRail state={panelState('inline', 'activity')} port={31415} />);
-    expect(screen.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-pressed', 'false');
-  });
-});
-
-describe('SessionPanelRail — launch quick action', () => {
-  it('starts the selected config when nothing is live', () => {
-    mockSelected = 'preview-app';
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    expect(screen.getByTestId('session-panel-rail-launch')).toHaveAttribute('aria-label', 'Start preview-app');
-    fireEvent.click(screen.getByTestId('session-panel-rail-launch'));
-    expect(handleLaunch).toHaveBeenCalledWith(configs[1]);
-    expect(handleStop).not.toHaveBeenCalled();
-  });
-
-  it('stops the config when it is running', () => {
-    mockSelected = 'dev server';
-    mockStatuses = { 'dev server': 'running' };
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    expect(screen.getByTestId('session-panel-rail-launch')).toHaveAttribute('aria-label', 'Stop dev server');
-    fireEvent.click(screen.getByTestId('session-panel-rail-launch'));
-    expect(handleStop).toHaveBeenCalledWith(configs[0]);
-    expect(handleLaunch).not.toHaveBeenCalled();
-  });
-
-  it('is disabled when there are no launch configs', () => {
-    mockConfigs = [];
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+describe('SessionPanelRail — the launch glyph', () => {
+  it('is a Rocket, not a run control', () => {
+    render(rail());
     const launch = screen.getByTestId('session-panel-rail-launch');
-    expect(launch).toBeDisabled();
-    fireEvent.click(launch);
-    expect(handleLaunch).not.toHaveBeenCalled();
+    expect(launch.querySelector('.lucide-rocket')).toBeTruthy();
+    expect(launch.querySelector('.lucide-play')).toBeNull();
+    expect(launch.querySelector('.lucide-square')).toBeNull();
   });
 
-  it('is disabled without a chatId — the daemon resolves the worktree from it', () => {
-    mockChatId = undefined;
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    const launch = screen.getByTestId('session-panel-rail-launch');
-    expect(launch).toBeDisabled();
-    fireEvent.click(launch);
-    expect(handleLaunch).not.toHaveBeenCalled();
+  it('carries no dot while every config is stopped', () => {
+    render(rail());
+    expect(screen.queryByTestId('session-panel-rail-launch-dot')).toBeNull();
   });
 
-  it('right-click opens the Launch section instead of acting', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    fireEvent.contextMenu(screen.getByTestId('session-panel-rail-launch'));
-    expect(selectSection).toHaveBeenCalledWith('launch');
-    expect(handleLaunch).not.toHaveBeenCalled();
-    expect(handleStop).not.toHaveBeenCalled();
+  it('dots the glyph while a config is live — the run signal survived the move', () => {
+    mockStatuses = { 'preview-app': 'running' };
+    render(rail());
+    expect(screen.getByTestId('session-panel-rail-launch-dot')).toBeInTheDocument();
   });
-});
 
-// ── todo #206, ported from ToolbarLaunchControls.test.tsx (:246, :270) ────────
-// The selection is "dev server" (stopped) while "preview-app" is live. The
-// quick action must still reach the live process, and say so.
-
-describe('SessionPanelRail — a running NON-selected config (#206)', () => {
-  beforeEach(() => {
+  it('dots the glyph for a live NON-selected config too (#206)', () => {
     mockSelected = 'dev server';
     mockStatuses = { 'preview-app': 'running' };
+    render(rail());
+    expect(screen.getByTestId('session-panel-rail-launch-dot')).toBeInTheDocument();
   });
 
-  it('stops THAT config rather than the selected one', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
+  it('carries no dot when the project has no launch configs at all', () => {
+    mockConfigs = [];
+    render(rail());
+    expect(screen.queryByTestId('session-panel-rail-launch-dot')).toBeNull();
+    // …and the button still toggles the panel, so the empty state is reachable.
     fireEvent.click(screen.getByTestId('session-panel-rail-launch'));
-    expect(handleStop).toHaveBeenCalledWith(configs[1]);
-    expect(handleLaunch).not.toHaveBeenCalled();
-  });
-
-  it('labels the button with the running config, not the selected one', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    expect(screen.getByTestId('session-panel-rail-launch')).toHaveAttribute('aria-label', 'Stop preview-app');
-  });
-
-  it('renders a STOP square, not a play triangle', () => {
-    render(<SessionPanelRail state={panelState('rail')} port={31415} />);
-    const launch = screen.getByTestId('session-panel-rail-launch');
-    expect(launch.querySelector('.lucide-square')).toBeTruthy();
-    expect(launch.querySelector('.lucide-play')).toBeNull();
+    expect(togglePanel).toHaveBeenCalledWith('launch');
   });
 });
