@@ -121,6 +121,7 @@ export interface ChatThreadState {
 
 export type ChatStateEvent =
   | { type: 'history.loading' }
+  | { type: 'history.refresh.refused' }
   | {
       type: 'history.loaded';
       messages: DisplayMessage[];
@@ -259,6 +260,12 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
   switch (event.type) {
     case 'history.loading':
       return { ...state, loadState: { type: 'loading' } };
+
+    // A background re-seed came back empty for a thread that holds messages, and
+    // was refused (see the controller). Only the load state settles — the
+    // transcript is deliberately left alone.
+    case 'history.refresh.refused':
+      return { ...state, loadState: { type: 'ready' } };
 
     case 'history.loaded': {
       const messagesById: Record<string, DisplayMessage> = {};

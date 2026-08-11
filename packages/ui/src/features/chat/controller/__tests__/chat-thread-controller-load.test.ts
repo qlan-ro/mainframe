@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
+import type { DisplayMessage } from '@qlan-ro/mainframe-types';
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -196,6 +197,71 @@ describe('ChatThreadController.load — seeds once per controller', () => {
     await ctrl.load();
 
     expect(getChatMessages).toHaveBeenCalledTimes(2);
+    expect(ctrl.getState().loadState.type).toBe('ready');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. An empty BACKGROUND re-seed must not blank a populated transcript (todo #320)
+// ---------------------------------------------------------------------------
+
+describe('ChatThreadController.refresh — an empty re-seed of a populated thread', () => {
+  const message: DisplayMessage = {
+    id: 'msg-1',
+    chatId: CHAT_ID,
+    role: 'user',
+    content: 'hello',
+    timestamp: new Date(0).toISOString(),
+  } as unknown as DisplayMessage;
+
+  it('keeps the transcript when a forced refresh comes back empty', async () => {
+    vi.mocked(getChatMessages).mockResolvedValueOnce({
+      messages: [message],
+      transcriptMissing: false,
+      workflowRuns: [],
+    });
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false, workflowRuns: [] });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+    expect(ctrl.getState().messageOrder).toEqual(['msg-1']);
+
+    await ctrl.refresh();
+
+    // The daemon returning [] means "I have nothing for you" (it has no history
+    // session for this chat yet), not "this thread is empty".
+    expect(ctrl.getState().messageOrder).toEqual(['msg-1']);
+  });
+
+  it('settles loadState back to ready after refusing the empty re-seed', async () => {
+    vi.mocked(getChatMessages).mockResolvedValueOnce({
+      messages: [message],
+      transcriptMissing: false,
+      workflowRuns: [],
+    });
+    vi.mocked(getChatMessages).mockResolvedValueOnce({ messages: [], transcriptMissing: false, workflowRuns: [] });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+    await ctrl.refresh();
+
+    // Refusing must not strand the thread on a spinner.
+    expect(ctrl.getState().loadState.type).toBe('ready');
+  });
+
+  it('still renders a genuinely empty thread — the FIRST load is never refused', async () => {
+    vi.mocked(getChatMessages).mockResolvedValue({ messages: [], transcriptMissing: false, workflowRuns: [] });
+
+    const ctrl = new ChatThreadController(CHAT_ID, PORT, makeFakeWs());
+    ctrl.subscribeLive();
+
+    await ctrl.load();
+
+    expect(ctrl.getState().messageOrder).toEqual([]);
     expect(ctrl.getState().loadState.type).toBe('ready');
   });
 });
