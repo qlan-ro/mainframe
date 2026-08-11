@@ -96,6 +96,26 @@ test('collectDefinitions ignores a data-testid written inside a comment', () => 
   assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'chat-real-id', templated: false }]);
 });
 
+test('collectDefinitions finds a lowercase testid JSX prop', () => {
+  const src = '<PickerRow testid="workspace-picker-open-file" icon={icon} label="Open file…" />;';
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'workspace-picker-open-file', templated: false }]);
+});
+
+test('collectDefinitions finds a testId default-parameter assignment', () => {
+  const lines = ['function ConnectionOverlay({', "  testId = 'connection-overlay',", '  children,', '}) {'];
+  assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'connection-overlay', templated: false }]);
+});
+
+test('collectDefinitions finds a camelCase testId object-literal property', () => {
+  const lines = ['const rows = [', "  { label: 'Version', testId: 'settings-about-version' },", '];'];
+  assert.deepEqual(collectDefinitions(lines.join('\n')), [{ prefix: 'settings-about-version', templated: false }]);
+});
+
+test('collectDefinitions finds an itemTestIdPrefix object-literal property', () => {
+  const src = "const config = { itemTestIdPrefix: 'automations-skill-item' };";
+  assert.deepEqual(collectDefinitions(src), [{ prefix: 'automations-skill-item', templated: false }]);
+});
+
 test('collectReferences survives an apostrophe in a block comment', () => {
   const lines = [
     '/**',
@@ -150,6 +170,24 @@ test('collectReferences puts a data-testid attribute selector in strict', () => 
   const src = 'await expect(page.locator(\'[data-testid="zone-tab-files"]\')).toBeVisible();';
   const refs = collectReferences(src);
   assert.ok(refs.strict.some((d) => d.prefix === 'zone-tab-files' && d.templated === false));
+});
+
+test('collectReferences drops a fully-interpolated attribute-selector value instead of keeping the raw ${…} text', () => {
+  const src = 'const sel = `[data-testid="${T.sessionRow}"]`;';
+  const refs = collectReferences(src);
+  assert.ok(!refs.strict.some((d) => d.prefix.includes('${')));
+});
+
+test('collectReferences routes an attribute-selector value with a real prefix through toDefinition', () => {
+  const src = 'const sel = `[data-testid="daemon-row-${id}"]`;';
+  const refs = collectReferences(src);
+  assert.ok(refs.strict.some((d) => d.prefix === 'daemon-row-' && d.templated === true));
+});
+
+test('collectReferences drops an attribute-selector value where the template variable precedes a suffix', () => {
+  const src = 'const sel = `[data-testid="${x}-row"]`;';
+  const refs = collectReferences(src);
+  assert.ok(!refs.strict.some((d) => d.prefix.includes('${')));
 });
 
 test('collectReferences drops tokens shorter than 4 characters from broad', () => {

@@ -16,13 +16,10 @@ read in both directions._
 | Defined | 956 |
 | Referenced | 544 |
 | Unused | 412 |
-| Dead selectors | 26 |
+| Dead selectors | 23 |
 
 ## Dead selectors
 
-- `${T.sessionRow}` — referenced by: page-objects.ts
-- `${contentTestid}` — referenced by: zones.ts
-- `${railButtonTestid}` — referenced by: zones.ts
 - `ask-question-card` — referenced by: wait.ts
 - `changes-panel` — referenced by: files-tree.spec.ts
 - `chat-composer-worktree-missing` — referenced by: composer.spec.ts
@@ -45,7 +42,7 @@ read in both directions._
 - `sessions-section-jump` — referenced by: sessions-filters.spec.ts, sessions-rows.spec.ts
 - `tool-card` — referenced by: wait.ts
 - `zone-button-tab-dropdown` — referenced by: zones.ts
-- `zone-tab-dropdown-option-${mode}` — referenced by: zones.ts
+- `zone-tab-dropdown-option-${…}` — referenced by: zones.ts
 
 ## Per-spec health
 
@@ -70,7 +67,7 @@ read in both directions._
 | global-setup.ts | 0 | 0 |
 | layout.spec.ts | 53 | 0 |
 | menus.ts | 0 | 0 |
-| page-objects.ts | 20 | 1 |
+| page-objects.ts | 20 | 0 |
 | preview.spec.ts | 49 | 0 |
 | review-panel.spec.ts | 65 | 0 |
 | session-panel.spec.ts | 94 | 6 |
@@ -95,7 +92,7 @@ read in both directions._
 | window-states.spec.ts | 34 | 0 |
 | workspace-surface.spec.ts | 54 | 0 |
 | ws-control.ts | 0 | 0 |
-| zones.ts | 0 | 4 |
+| zones.ts | 0 | 2 |
 
 ## Untested surfaces, ranked
 

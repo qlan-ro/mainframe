@@ -165,7 +165,8 @@ export function collectReferences(specText) {
     if (definition) strict.push(definition);
   }
   for (const match of code.matchAll(ATTR_SELECTOR_RE)) {
-    strict.push({ prefix: match[1] ?? match[2], templated: false });
+    const definition = toDefinition(match[1] ?? match[2]);
+    if (definition) strict.push(definition);
   }
   return { broad, strict };
 }
