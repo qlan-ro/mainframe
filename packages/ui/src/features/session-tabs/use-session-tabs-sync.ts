@@ -3,7 +3,9 @@
  *
  * Inserting a tab for whatever thread becomes active covers every activation
  * path at once — sidebar click, palette, toast deep-link, boot auto-select,
- * archived-active fallback — without touching any of those call sites.
+ * archived-active fallback — without touching any of those call sites. An
+ * activation lands in the PREVIEW slot (editor-style: the next one replaces
+ * it); only a just-created draft pins immediately — see `shouldPinOnOpen`.
  *
  * Also owns reconciliation and persistence: restore once a real `list()` has
  * SETTLED carrying at least one session (merging with tabs the boot already
@@ -23,19 +25,36 @@ import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
-import { SESSION_TABS_STORAGE_KEY, canRestoreTabs, persistTabIds, reconcileTabIds, restoreTabIds } from './tabs-model';
+import {
+  SESSION_TABS_STORAGE_KEY,
+  canRestoreTabs,
+  persistTabIds,
+  reconcilePreviewId,
+  reconcileTabIds,
+  restoreTabIds,
+  shouldPinOnOpen,
+} from './tabs-model';
 
-function readPersisted(): string[] {
+interface PersistedTabs {
+  ids: string[];
+  preview: string | null;
+}
+
+function readPersisted(): PersistedTabs {
   try {
     const raw = localStorage.getItem(SESSION_TABS_STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) return { ids: [], preview: null };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return [];
-    const ids = (parsed as { ids?: unknown }).ids;
-    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null };
+    const { ids, preview } = parsed as { ids?: unknown; preview?: unknown };
+    return {
+      ids: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
+      // v1 payloads carry no preview — every restored tab was pinned.
+      preview: typeof preview === 'string' ? preview : null,
+    };
   } catch {
     /* expected — corrupt storage reads as no persisted tabs */
-    return [];
+    return { ids: [], preview: null };
   }
 }
 
@@ -46,21 +65,31 @@ export function useSessionTabsSync(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const hydrated = useSessionTabsStore((s) => s.hydrated);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
+  const previewId = useSessionTabsStore((s) => s.previewId);
   const hydrate = useSessionTabsStore((s) => s.hydrate);
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
 
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
-    hydrate(restoreTabIds(readPersisted(), items));
+    const persisted = readPersisted();
+    hydrate(
+      restoreTabIds(persisted.ids, items),
+      persisted.preview === null ? null : (restoreTabIds([persisted.preview], items)[0] ?? null),
+    );
   }, [hydrated, items, isListLoading, listLoaded, hydrate]);
 
   useEffect(() => {
-    if (mainThreadId) ensureTab(mainThreadId);
+    if (mainThreadId) ensureTab(mainThreadId, { pin: shouldPinOnOpen(mainThreadId, items) });
+    // `items` is deliberately not a dep: membership reacts to ACTIVATION, and
+    // re-running on list ticks would re-preview a session the user just closed.
   }, [mainThreadId, ensureTab]);
 
   useEffect(() => {
-    reconcile((ids) => reconcileTabIds(ids, items, mainThreadId));
+    reconcile(
+      (ids) => reconcileTabIds(ids, items, mainThreadId),
+      (id) => reconcilePreviewId(id, items, mainThreadId),
+    );
   }, [items, mainThreadId, reconcile]);
 
   // `items` changes identity on every stream tick (title/status updates), so
@@ -70,13 +99,14 @@ export function useSessionTabsSync(): void {
   useEffect(() => {
     if (!hydrated) return;
     const ids = persistTabIds(tabIds, items);
-    const key = ids.join('\0');
+    const preview = previewId === null ? null : (persistTabIds([previewId], items)[0] ?? null);
+    const key = `${ids.join('\0')}\0\0${preview ?? ''}`;
     if (key === lastWrittenRef.current) return;
     try {
-      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 1, ids }));
+      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 2, ids, preview }));
       lastWrittenRef.current = key;
     } catch {
       /* expected — storage may be unavailable; tabs simply don't survive the boot */
     }
-  }, [hydrated, tabIds, items]);
+  }, [hydrated, tabIds, previewId, items]);
 }

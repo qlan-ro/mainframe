@@ -24,7 +24,12 @@ import { useSessionTabsStore } from './store';
 import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
-function toTabEntry(id: string, items: readonly ThreadListEntry[], activeId: string | null): SessionTabEntry {
+function toTabEntry(
+  id: string,
+  items: readonly ThreadListEntry[],
+  activeId: string | null,
+  preview: boolean,
+): SessionTabEntry {
   const entry = items.find((t) => t.id === id);
   const isDraft = entry == null || entry.status === 'new';
   return {
@@ -32,6 +37,7 @@ function toTabEntry(id: string, items: readonly ThreadListEntry[], activeId: str
     title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
     projectId: (entry?.custom as { projectId?: string } | undefined)?.projectId,
     active: id === activeId,
+    preview,
   };
 }
 
@@ -41,7 +47,9 @@ export function SessionTabs() {
   const items = useAuiState((s) => s.threads.threadItems);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
+  const previewId = useSessionTabsStore((s) => s.previewId);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
+  const pinTab = useSessionTabsStore((s) => s.pinTab);
   const newSession = useNewChatHotkeyHandler(aui);
 
   // Between the chat.created reload and the router's handover the active
@@ -50,14 +58,16 @@ export function SessionTabs() {
   // in that window. aui switches on either id, so clicks pass the tab id.
   const activeTabId = canonicalTabId(mainThreadId, items);
 
-  const tabs = tabIds.map((id) => toTabEntry(id, items, activeTabId));
+  // Pinned tabs in order; the preview slot renders last (editor-style).
+  const displayIds = previewId === null ? tabIds : [...tabIds, previewId];
+  const tabs = displayIds.map((id) => toTabEntry(id, items, activeTabId, id === previewId));
 
   const handleActivate = (id: string) => {
     if (id !== activeTabId) aui.threads.switchToThread(id);
   };
 
   const handleClose = (id: string) => {
-    const next = nextActiveAfterClose(tabIds, id, activeTabId);
+    const next = nextActiveAfterClose(displayIds, id, activeTabId);
     closeTab(id);
     if (next === null) newSession();
     else if (next !== activeTabId) aui.threads.switchToThread(next);
@@ -70,7 +80,7 @@ export function SessionTabs() {
         className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
       >
         {tabs.map((tab) => (
-          <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} />
+          <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} onPin={pinTab} />
         ))}
       </div>
       <Hint label="New session">

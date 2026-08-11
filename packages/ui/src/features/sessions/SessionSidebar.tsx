@@ -7,13 +7,15 @@
  * rebuild, so every non-visual module is imported from `@/features/sessions`.
  */
 import { useMemo } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { ListTodoIcon, SettingsIcon, ZapIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { pickProjectSession } from '@/features/sessions/view-model/initial-session';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { attentionCount } from '@/features/sessions/view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
@@ -92,12 +94,26 @@ function HeaderActions() {
 }
 
 export function SessionSidebar({ className }: { className?: string }) {
+  const aui = useAui();
   const threadItems = useAuiState((s) => s.threads.threadItems);
+  const { projectId: activeProjectId } = useActiveIdentity();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
   const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
+
+  // Selecting a project the active session does not belong to also activates
+  // that project's most recent session, so dependent context (todos scope,
+  // session panel) follows the selection. The filter is set FIRST: the
+  // cross-project-activate reconciliation clears the filter only when the
+  // activated chat's project differs from it, and here they match.
+  const handleSelectProject = (id: string | null) => {
+    setFilterProjectId(id);
+    if (id === null || id === activeProjectId) return;
+    const target = pickProjectSession(allItems, id);
+    if (target !== null) aui.threads.switchToThread(target);
+  };
   const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
   const registry = useTagRegistry(useDaemonPort());
@@ -151,7 +167,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           projects={sortedProjects}
           attention={attention}
           activeId={filterProjectId}
-          onSelect={setFilterProjectId}
+          onSelect={handleSelectProject}
           onRemoveProject={onRemoveProject}
           onAddProject={() => void onAddProject()}
         />

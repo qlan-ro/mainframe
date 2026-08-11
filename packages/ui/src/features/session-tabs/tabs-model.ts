@@ -142,3 +142,26 @@ export function reconcileTabIds(
   }
   return next;
 }
+
+/** The preview slot's reconcile: same canonicalisation and validity as a pinned
+ *  tab, collapsed to a single nullable id. */
+export function reconcilePreviewId(
+  previewId: string | null,
+  items: readonly ThreadListEntry[],
+  activeId: string | null,
+): string | null {
+  if (previewId === null) return null;
+  const valid = validTabIds(items, activeId === null ? null : canonicalTabId(activeId, items));
+  const canonical = canonicalTabId(previewId, items);
+  return valid.has(canonical) ? canonical : null;
+}
+
+/** Whether an activated thread should open PINNED rather than as a preview: a
+ *  draft the user just created is a deliberate tab, not a peek at history.
+ *  Judged by the ENTRY's status, not the id shape — a session created this run
+ *  keeps its `__LOCALID_*` id for life, and re-opening it later must preview
+ *  like any other session. A local id with no entry yet is a brand-new draft. */
+export function shouldPinOnOpen(id: string, items: readonly ThreadListEntry[]): boolean {
+  const entry = items.find((t) => t.id === id);
+  return entry == null ? isLocalId(id) : entry.status === 'new';
+}
