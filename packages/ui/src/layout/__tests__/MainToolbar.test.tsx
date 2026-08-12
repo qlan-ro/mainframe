@@ -88,6 +88,16 @@ describe('MainToolbar — theme toggle', () => {
 
     expect(useTheme.getState().mode).toBe('dark');
   });
+
+  it('uses the resolved System appearance for its icon and fixed override', () => {
+    useTheme.setState({ mode: 'system', resolvedMode: 'dark' });
+    renderToolbar();
+
+    expect(screen.getByTestId('main-toolbar-theme').querySelector('.lucide-sun')).not.toBeNull();
+    fireEvent.click(screen.getByTestId('main-toolbar-theme'));
+
+    expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'light' });
+  });
 });
 
 describe('MainToolbar — files toggle is GONE', () => {

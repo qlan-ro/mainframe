@@ -10,11 +10,21 @@ import { getHost } from '@/lib/host';
  * nothing.
  */
 export function ThemeEffect() {
-  const mode = useTheme((s) => s.mode);
+  const resolvedMode = useTheme((s) => s.resolvedMode);
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', mode === 'dark');
+    document.documentElement.classList.toggle('dark', resolvedMode === 'dark');
     invalidateShikiTheme();
-  }, [mode]);
+  }, [resolvedMode]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const sync = (matchesDark: boolean) => useTheme.getState().syncSystemMode(matchesDark);
+    const onChange = (event: MediaQueryListEvent) => sync(event.matches);
+    sync(mediaQuery.matches);
+    mediaQuery.addEventListener('change', onChange);
+    return () => mediaQuery.removeEventListener('change', onChange);
+  }, []);
 
   const uiScale = useTheme((s) => s.uiScale);
   useEffect(() => {

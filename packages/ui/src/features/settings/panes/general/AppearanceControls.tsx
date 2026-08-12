@@ -2,6 +2,7 @@ import { useTheme, type ThemeMode, type UiScale } from '../../../../store/theme'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 const MODES: { id: ThemeMode; label: string }[] = [
+  { id: 'system', label: 'System' },
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
 ];
