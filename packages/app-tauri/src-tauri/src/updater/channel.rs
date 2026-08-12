@@ -90,6 +90,9 @@ fn select_latest_json_url(releases_json: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::thread;
 
     fn release(draft: bool, prerelease: bool, assets: &str) -> String {
         format!(
@@ -99,6 +102,28 @@ mod tests {
 
     fn asset(name: &str, url: &str) -> String {
         format!(r#"{{"name":"{name}","browser_download_url":"{url}"}}"#)
+    }
+
+    #[test]
+    fn https_agent_uses_a_tls_backend() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = stream.write_all(b"not a tls handshake");
+        });
+
+        let error = ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_millis(500))
+            .timeout_read(Duration::from_millis(500))
+            .build()
+            .get(&format!("https://{address}"))
+            .call()
+            .unwrap_err()
+            .to_string();
+        server.join().unwrap();
+
+        assert!(!error.contains("no TLS backend"), "{error}");
     }
 
     #[test]
