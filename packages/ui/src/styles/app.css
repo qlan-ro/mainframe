@@ -56,8 +56,7 @@ code {
   -webkit-user-select: text;
 }
 
-/* WebKit delegates standard scrollbar track painting to macOS, which can ignore
-   transparent track colors. Keep the WebKit and standards paths exclusive. */
+/* WebKit needs direct track painting because its native track can ignore scrollbar-color. */
 @layer base {
   @supports selector(*::-webkit-scrollbar) {
     *::-webkit-scrollbar {

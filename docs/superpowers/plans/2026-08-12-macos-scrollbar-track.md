@@ -4,7 +4,7 @@
 
 **Goal:** Keep scrollbar tracks transparent when macOS WKWebView expands its native scrollbar.
 
-**Architecture:** Select one scrollbar styling API per engine capability. WebKit/Blink engines receive pseudo-element rules that directly paint the track; other engines retain the standard CSS Scrollbars rules.
+**Architecture:** Select one scrollbar styling API per Tauri webview capability. Webviews exposing WebKit scrollbar parts receive pseudo-element rules that directly paint the track; other webviews retain the standard CSS Scrollbars rules.
 
 **Tech Stack:** CSS, Tailwind CSS v4 layers, Vitest, Tauri 2/WKWebView
 

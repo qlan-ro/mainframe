@@ -8,11 +8,11 @@ Mainframe uses the standard `scrollbar-color` property for a transparent track. 
 
 1. Keep the standards-only rule. This preserves the current source but leaves the WebKit failure unresolved.
 2. Add WebKit pseudo-elements beside non-default standard properties. CSS Scrollbars requires WebKit/Blink engines to ignore the pseudo-elements when a standard scrollbar property has a non-default value, so this combination is unreliable.
-3. Select one styling path per engine capability. Use `::-webkit-scrollbar` pseudo-elements in engines that expose them and retain `scrollbar-width`/`scrollbar-color` as the fallback. This avoids conflicting APIs and directly controls the native track. This is the selected approach.
+3. Select one styling path per Tauri webview capability. Use `::-webkit-scrollbar` pseudo-elements when the webview exposes them and retain `scrollbar-width`/`scrollbar-color` as the fallback. This avoids conflicting APIs and directly controls the native track. This is the selected approach.
 
 ## Design
 
-Keep the scrollbar rules in `packages/ui/src/styles/app.css` and inside `@layer base`, preserving Tailwind utility precedence. A `@supports selector(*::-webkit-scrollbar)` branch will set an 8-pixel scrollbar, keep the track transparent, hide the thumb at rest, and reveal the existing `--border` thumb on hover. A mutually exclusive `@supports not selector(*::-webkit-scrollbar)` branch will retain the current standards-based behavior.
+Keep the scrollbar rules in `packages/ui/src/styles/app.css` and inside `@layer base`, preserving Tailwind utility precedence. A `@supports selector(*::-webkit-scrollbar)` branch will set an 8-pixel scrollbar, keep the track transparent, hide the thumb at rest, and reveal the existing `--border` thumb on hover. A mutually exclusive negated branch will retain the current standards-based behavior when those parts are unavailable.
 
 The fix changes no component structure, tokens, or interaction model. Scrollbar opt-outs that set `scrollbar-width: none` remain utilities and continue to outrank the base layer.
 
