@@ -36,7 +36,7 @@ export function SidebarActions({ filterProjectId }: { filterProjectId: string | 
         <SidebarMenuItem>
           <SidebarMenuButton size="sm" data-testid="sidebar-action-new-thread" onClick={newThread}>
             <SquarePen className="text-muted-foreground" />
-            <span>New Thread</span>
+            <span className="text-muted-foreground">New Thread</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
@@ -48,13 +48,13 @@ export function SidebarActions({ filterProjectId }: { filterProjectId: string | 
             onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
           >
             <SquareKanban className="text-muted-foreground" />
-            <span>Kanban</span>
+            <span className="text-muted-foreground">Kanban</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton size="sm" data-testid="sidebar-action-automations" onClick={openAutomations}>
             <Zap className="text-muted-foreground" />
-            <span>Automations</span>
+            <span className="text-muted-foreground">Automations</span>
             {pendingAutomations > 0 && (
               <span
                 data-testid="sidebar-action-automations-pending"
