@@ -13,6 +13,7 @@ import { type ReactNode, useState } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useChatExtras } from '../runtime/use-chat-thread-runtime';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';
@@ -130,16 +131,17 @@ export function DegradedChatCard() {
           </Button>
         )}
         {worktreeMissing && (
-          <Button
-            data-testid="chat-degraded-project-root"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => run(() => continueChatInProjectRoot(port, chatId))}
-            title="The agent will run in the main checkout; uncommitted worktree work is not recovered."
-          >
-            Continue in project root
-          </Button>
+          <Hint label="The agent will run in the main checkout; uncommitted worktree work is not recovered.">
+            <Button
+              data-testid="chat-degraded-project-root"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => run(() => continueChatInProjectRoot(port, chatId))}
+            >
+              Continue in project root
+            </Button>
+          </Hint>
         )}
         <Button
           data-testid="chat-degraded-delete"

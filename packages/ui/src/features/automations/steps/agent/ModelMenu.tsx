@@ -16,6 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { useAdapters } from '@/store/adapters';
 import type { AskAgentStep } from '../../contract';
 import { ChipButton } from './ChipButton';
@@ -41,27 +42,32 @@ export function ModelMenu({ adapterId, model, onChange, testId }: ModelMenuProps
   const activeAdapter = resolveAdapter(adapters, adapterId);
   const activeModel = resolveModel(activeAdapter, model);
 
+  // A disabled button swallows pointer events, so the hint wraps the chip rather than triggering on it.
   if (!activeAdapter || !activeModel) {
     return (
-      <ChipButton icon={Sparkles} label="No agent providers installed" testId={`${testId}-model`} disabled>
-        No agents
-      </ChipButton>
+      <Hint label="No agent providers installed">
+        <span className="inline-flex shrink-0">
+          <ChipButton icon={Sparkles} label="No agent providers installed" testId={`${testId}-model`} disabled>
+            No agents
+          </ChipButton>
+        </span>
+      </Hint>
     );
   }
 
+  const label = `Model: ${activeAdapter.name} · ${activeModel.label}`;
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <ChipButton
-          icon={Sparkles}
-          label={`Model: ${activeAdapter.name} · ${activeModel.label}`}
-          testId={`${testId}-model`}
-          chevron
-          className="min-w-0"
-        >
-          <span className="truncate">{activeModel.label}</span>
-        </ChipButton>
-      </DropdownMenuTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the menu's own ref and onClick. */}
+      <Hint label={label}>
+        <DropdownMenuTrigger asChild>
+          <ChipButton icon={Sparkles} label={label} testId={`${testId}-model`} chevron className="min-w-0">
+            <span className="truncate">{activeModel.label}</span>
+          </ChipButton>
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent
         data-testid={`${testId}-model-menu`}
         align="start"

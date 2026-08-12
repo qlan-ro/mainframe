@@ -121,17 +121,16 @@ describe('WebhookTriggerCard — unregistered', () => {
 
   it('disables Register on an unsaved automation and says why', () => {
     render(<WebhookTriggerCard trigger={TRIGGER} onChange={vi.fn()} testId="trig" />);
-    const button = screen.getByTestId('trig-webhook-register');
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Save the automation first');
+    expect(screen.getByTestId('trig-webhook-register')).toBeDisabled();
+    expect(screen.getByTestId('trig-webhook')).toHaveTextContent(
+      'Save the automation first — the daemon registers hooks from the saved definition.',
+    );
   });
 
   it('disables Register when the trigger is not in the saved definition and says why', () => {
     seedDefinitions([savedAutomation([])]);
     render(<WebhookTriggerCard trigger={TRIGGER} onChange={vi.fn()} automationId="auto-1" testId="trig" />);
-    const button = screen.getByTestId('trig-webhook-register');
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Save the automation first');
+    expect(screen.getByTestId('trig-webhook-register')).toBeDisabled();
     expect(screen.getByTestId('trig-webhook')).toHaveTextContent(
       'Save the automation first — the daemon registers hooks from the saved definition.',
     );
@@ -309,13 +308,16 @@ describe('WebhookTriggerCard — signing secret', () => {
     expect(screen.getByTestId('trig-webhook-reveal-secret')).toBeEnabled();
   });
 
-  it('disables Reveal when the trigger is not in the saved definition and says why', () => {
+  it('disables Reveal when the trigger is not in the saved definition and says why', async () => {
+    const user = userEvent.setup();
     seedDefinitions([savedAutomation([])]);
     render(<WebhookTriggerCard trigger={registered()} onChange={vi.fn()} automationId="auto-1" testId="trig" />);
 
     const button = screen.getByTestId('trig-webhook-reveal-secret');
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Save the automation first');
+    // The hint wraps the button — a disabled button never emits the hover itself.
+    await user.hover(button.parentElement!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Save the automation first');
   });
 
   it('says the secret is shown once and can be revealed again', async () => {

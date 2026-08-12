@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useSessionFilters } from '@/store/session-filters';
@@ -33,18 +34,21 @@ export function SessionsMoreMenu() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            data-testid="sessions-more-button"
-            aria-label="More session actions"
-            title="More session actions"
-            className="size-6"
-          >
-            <MoreHorizontalIcon />
-          </Button>
-        </DropdownMenuTrigger>
+        {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+            swallow the menu's own ref and onClick. */}
+        <Hint label="More session actions">
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="sessions-more-button"
+              aria-label="More session actions"
+              className="size-6"
+            >
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+        </Hint>
         <DropdownMenuContent data-testid="sessions-more-menu" align="end" sideOffset={6} className="w-52">
           <DropdownMenuItem data-testid="sessions-more-archived" onSelect={() => setArchivedOpen(true)}>
             <ArchiveIcon />

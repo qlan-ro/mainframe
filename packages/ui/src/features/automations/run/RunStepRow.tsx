@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import type {
   ActionCatalogEntry,
   AutomationInteractionSummary,
@@ -106,13 +107,14 @@ export function RunStepRow({
             {label}
           </span>
           {keptGoing && (
-            <span
-              data-testid={`${testId}-kept-going`}
-              title="This step failed but the automation kept going"
-              className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-warning/15 px-[8px] text-xs font-semibold text-muted-foreground"
-            >
-              Kept going
-            </span>
+            <Hint label="This step failed but the automation kept going">
+              <span
+                data-testid={`${testId}-kept-going`}
+                className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-warning/15 px-[8px] text-xs font-semibold text-muted-foreground"
+              >
+                Kept going
+              </span>
+            </Hint>
           )}
           {duration && <span className="font-mono text-xs text-muted-foreground">{duration}</span>}
           {hasDisclosure && (

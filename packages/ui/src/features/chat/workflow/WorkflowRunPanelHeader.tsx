@@ -7,6 +7,7 @@
  */
 import type { ClaudeWorkflowRunStatus } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import type { ViewRun } from './workflow-agent-view';
 import { formatRunDuration, formatRunTokens, runKey, statusChipLabel, summarizeRun } from './workflow-progress';
 import { currentPhase, donePhaseCount, runTimeline, type PhaseStatus, type RunTimeline } from './workflow-phase-view';
@@ -51,12 +52,12 @@ function ProgressRail({ timeline }: { timeline: RunTimeline }) {
   return (
     <div data-testid="chat-workflow-rail" className="mt-1.5 flex gap-0.5">
       {timeline.all.map((view) => (
-        <span
-          key={view.phase.index}
-          title={view.phase.title}
-          data-status={view.status}
-          className={cn('h-[3px] min-w-0 flex-1 rounded-full', RAIL_FILL[view.status])}
-        />
+        <Hint key={view.phase.index} label={view.phase.title}>
+          <span
+            data-status={view.status}
+            className={cn('h-[3px] min-w-0 flex-1 rounded-full', RAIL_FILL[view.status])}
+          />
+        </Hint>
       ))}
     </div>
   );
