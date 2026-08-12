@@ -18,11 +18,12 @@ import { Plus } from 'lucide-react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
 import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
@@ -76,6 +77,9 @@ export function SessionTabs() {
   const zones = useZonesStore((s) => s.zones);
   const zoneMembers = zones == null ? [] : zones.filter((id) => displayIds.includes(id));
   const grouped = zoneMembers.length === 2;
+  // A PARKED pair still renders its container — the two sessions are still a
+  // pair — but the split isn't what you're looking at, so its underline is dark.
+  const splitOnScreen = splitVisible(zones, mainThreadId);
   const ordered = grouped
     ? (() => {
         const firstAt = displayIds.findIndex((id) => zoneMembers.includes(id));
@@ -135,10 +139,17 @@ export function SessionTabs() {
                   onPin={pinTab}
                 />
               ))}
-            {/* The split pair reads as ONE unit: shared underline across both. */}
+            {/* The split pair reads as ONE unit: one underline spanning both,
+                lit on exactly the terms a lone tab's is — the split is ON
+                SCREEN. So the line only ever means "this is live", and a parked
+                pair leaves the strip unmarked rather than claiming focus it
+                doesn't have. Adjacency is what says "these two go together". */}
             <div
               data-testid="session-tabs-zone-group"
-              className="relative flex h-full shrink items-center rounded-t-sm bg-foreground/4 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground"
+              className={cn(
+                'relative flex h-full shrink items-center after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:transition-opacity',
+                splitOnScreen ? 'after:opacity-100' : 'after:opacity-0',
+              )}
             >
               {tabs
                 .filter((tab) => zoneMembers.includes(tab.id))
