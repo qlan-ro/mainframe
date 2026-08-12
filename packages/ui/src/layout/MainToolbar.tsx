@@ -31,9 +31,9 @@ interface MainToolbarProps {
  * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  */
 export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, projectId }: MainToolbarProps) {
-  const mode = useTheme((s) => s.mode);
+  const resolvedMode = useTheme((s) => s.resolvedMode);
   const toggleTheme = useTheme((s) => s.toggle);
-  const isDark = mode === 'dark';
+  const isDark = resolvedMode === 'dark';
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
 
   return (

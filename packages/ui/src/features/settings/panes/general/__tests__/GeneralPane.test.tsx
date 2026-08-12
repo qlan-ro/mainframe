@@ -35,10 +35,17 @@ describe('GeneralPane', () => {
     expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { worktreeDir: 'wt' });
   });
   it('mode toggle writes useTheme without any PUT', () => {
-    useTheme.setState({ mode: 'light' });
+    useTheme.setState({ mode: 'light', resolvedMode: 'light' });
     render(<GeneralPane port={31415} />);
     fireEvent.click(screen.getByTestId('settings-appearance-mode-dark'));
     expect(useTheme.getState().mode).toBe('dark');
+    expect(updateGeneralSettings).not.toHaveBeenCalled();
+  });
+  it('System mode writes useTheme without any PUT', () => {
+    useTheme.setState({ mode: 'light', resolvedMode: 'light' });
+    render(<GeneralPane port={31415} />);
+    fireEvent.click(screen.getByTestId('settings-appearance-mode-system'));
+    expect(useTheme.getState().mode).toBe('system');
     expect(updateGeneralSettings).not.toHaveBeenCalled();
   });
   it('UI size picker writes useTheme.uiScale', () => {

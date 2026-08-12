@@ -10,10 +10,11 @@
  * jsdom stubs for CM6 Range measurement live in src/__tests__/setup.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import type { EditorView } from '@codemirror/view';
+import { act, render, screen } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
 import { CmDiffEditor } from '../CmDiffEditor';
 import { buildCommentGutter } from '../inline-comments/comment-gutter';
+import { useTheme } from '@/store/theme';
 
 describe('CmDiffEditor', () => {
   it('renders the editor-diff root with .mf-editor-selectable', () => {
@@ -67,6 +68,22 @@ describe('CmDiffEditor', () => {
     const editors = root.querySelectorAll('.cm-editor');
     // MergeView creates two EditorView instances (a + b)
     expect(editors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('reconfigures both panes when System resolves differently after mount', () => {
+    act(() => useTheme.setState({ mode: 'system', resolvedMode: 'light' }));
+    render(<CmDiffEditor original="before\n" modified="after\n" language="plaintext" path="/test/theme.txt" />);
+
+    const paneViews = Array.from(screen.getByTestId('editor-diff').querySelectorAll<HTMLElement>('.cm-editor'))
+      .map((element) => EditorView.findFromDOM(element))
+      .filter((view): view is EditorView => view !== null);
+    expect(paneViews).toHaveLength(2);
+    expect(paneViews.every((view) => view.state.facet(EditorView.darkTheme) === false)).toBe(true);
+
+    act(() => useTheme.setState({ resolvedMode: 'dark' }));
+
+    expect(paneViews.every((view) => view.state.facet(EditorView.darkTheme) === true)).toBe(true);
+    expect(useTheme.getState().mode).toBe('system');
   });
 
   it('renders the line-number gutter in both panes (custom extensions reach the MergeView)', () => {
