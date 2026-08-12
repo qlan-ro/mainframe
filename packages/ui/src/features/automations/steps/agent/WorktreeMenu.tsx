@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
+import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { BranchSelect } from '@/features/git/BranchSelect';
@@ -42,11 +43,15 @@ export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMen
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <ChipButton icon={GitBranch} label={`Worktree: ${summary}`} testId={`${testId}-worktree`} className="min-w-0">
-          <span className={branchName ? 'max-w-40 truncate font-mono text-xs' : 'max-w-40 truncate'}>{summary}</span>
-        </ChipButton>
-      </PopoverTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the popover's own ref and onClick. */}
+      <Hint label={`Worktree: ${summary}`}>
+        <PopoverTrigger asChild>
+          <ChipButton icon={GitBranch} label={`Worktree: ${summary}`} testId={`${testId}-worktree`} className="min-w-0">
+            <span className={branchName ? 'max-w-40 truncate font-mono text-xs' : 'max-w-40 truncate'}>{summary}</span>
+          </ChipButton>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent
         data-testid={`${testId}-worktree-menu`}
         align="start"

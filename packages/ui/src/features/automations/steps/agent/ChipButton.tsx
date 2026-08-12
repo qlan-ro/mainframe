@@ -4,8 +4,10 @@
  * same control.
  *
  * A chip shows only its *value*; the field it configures is carried on
- * `title`/`aria-label`. At 20px there is no room for "Model: Sonnet 5", and
- * the icon already names the field for sighted users.
+ * `aria-label`. At 20px there is no room for "Model: Sonnet 5", and the icon
+ * already names the field for sighted users. The visible hover hint is a
+ * `Hint` at the call site — it has to wrap the menu trigger, which is outside
+ * this component.
  */
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { ChevronDown, type LucideIcon } from 'lucide-react';
@@ -38,7 +40,6 @@ export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(functio
       ref={ref}
       type={type ?? 'button'}
       data-testid={testId}
-      title={label}
       aria-label={label}
       className={cn(CHIP_BASE, destructive ? 'text-destructive' : 'text-muted-foreground', className)}
       {...props}

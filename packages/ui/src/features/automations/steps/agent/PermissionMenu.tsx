@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import type { AskAgentStep } from '../../contract';
 import { EXECUTION_MODES } from '../../contract';
 import { ChipButton } from './ChipButton';
@@ -40,16 +41,20 @@ export function PermissionMenu({ value, onChange, testId }: PermissionMenuProps)
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <ChipButton
-          icon={Shield}
-          label={`Permission: ${label}`}
-          testId={`${testId}-permission`}
-          destructive={active === 'yolo'}
-        >
-          {label}
-        </ChipButton>
-      </DropdownMenuTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the menu's own ref and onClick. */}
+      <Hint label={`Permission: ${label}`}>
+        <DropdownMenuTrigger asChild>
+          <ChipButton
+            icon={Shield}
+            label={`Permission: ${label}`}
+            testId={`${testId}-permission`}
+            destructive={active === 'yolo'}
+          >
+            {label}
+          </ChipButton>
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent data-testid={`${testId}-permission-menu`} align="start" sideOffset={6} className="min-w-44">
         {EXECUTION_MODES.map((mode) => (
           <DropdownMenuItem

@@ -163,7 +163,6 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
           type="button"
           data-testid={`automations-library-run-${automation.id}`}
           disabled={running}
-          title="Run now"
           onClick={stopAnd(() => void handleRun())}
           className="inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] border-border bg-transparent px-[11px] text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-card hover:bg-card disabled:cursor-not-allowed disabled:opacity-45"
         >

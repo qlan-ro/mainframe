@@ -197,16 +197,14 @@ describe('instruction chip — prose and inline code', () => {
 });
 
 describe('instruction chip — controls', () => {
-  it('labels both buttons with matching title and aria-label', () => {
+  it('names both buttons for assistive tech', () => {
     renderMarkdown('Run /domain-modeling first');
 
-    const appendButton = screen.getByTestId('smart-action-instruction-append');
-    expect(appendButton).toHaveAttribute('title', 'Add to composer');
-    expect(appendButton).toHaveAttribute('aria-label', 'Add to composer');
-
-    const newSessionButton = screen.getByTestId('smart-action-instruction-new-session');
-    expect(newSessionButton).toHaveAttribute('title', 'Run in a new session');
-    expect(newSessionButton).toHaveAttribute('aria-label', 'Run in a new session');
+    expect(screen.getByTestId('smart-action-instruction-append')).toHaveAttribute('aria-label', 'Add to composer');
+    expect(screen.getByTestId('smart-action-instruction-new-session')).toHaveAttribute(
+      'aria-label',
+      'Run in a new session',
+    );
   });
 });
 

@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { SESSION_SORTS, type SortMode } from '@/features/sessions/view-model/group-sessions';
 
 interface SessionSortMenuProps {
@@ -25,18 +26,21 @@ interface SessionSortMenuProps {
 export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          data-testid="sessions-sort-button"
-          aria-label="Sort sessions"
-          title="Sort sessions"
-          className="size-6"
-        >
-          <ArrowUpDownIcon />
-        </Button>
-      </DropdownMenuTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the menu's own ref and onClick. */}
+      <Hint label="Sort sessions">
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            data-testid="sessions-sort-button"
+            aria-label="Sort sessions"
+            className="size-6"
+          >
+            <ArrowUpDownIcon />
+          </Button>
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44">
         <DropdownMenuLabel className="text-muted-foreground">Sort by</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onChange(value as SortMode)}>

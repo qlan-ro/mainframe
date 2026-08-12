@@ -125,12 +125,12 @@ function UnregisteredWebhook({ testId, persisted, registering, onRegister }: Unr
           ? 'The daemon hasn’t registered this hook yet — there is no URL to call.'
           : 'Save the automation first — the daemon registers hooks from the saved definition.'}
       </div>
+      {/* No hint here: the line above already says why the button is dead. */}
       <button
         type="button"
         data-testid={`${testId}-webhook-register`}
         onClick={onRegister}
         disabled={!persisted || registering}
-        title={persisted ? undefined : SAVE_FIRST}
         className="h-[24px] rounded-sm border-[0.5px] border-border px-2 text-xs font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
       >
         {registering ? 'Registering…' : 'Register'}
@@ -179,16 +179,20 @@ function RegisteredWebhook({ testId, registration, secret, persisted, registerin
           </div>
         </>
       ) : null}
-      <button
-        type="button"
-        data-testid={`${testId}-webhook-reveal-secret`}
-        onClick={onReveal}
-        disabled={!persisted || registering}
-        title={persisted ? undefined : SAVE_FIRST}
-        className="h-[24px] self-start rounded-sm border-[0.5px] border-border px-2 text-xs font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        {registering ? 'Revealing…' : secret ? 'Reveal again' : 'Reveal signing secret'}
-      </button>
+      {/* The hint wraps the button rather than triggering on it: a disabled button swallows pointer events. */}
+      <Hint label={persisted ? undefined : SAVE_FIRST}>
+        <span className="inline-flex self-start">
+          <button
+            type="button"
+            data-testid={`${testId}-webhook-reveal-secret`}
+            onClick={onReveal}
+            disabled={!persisted || registering}
+            className="h-[24px] rounded-sm border-[0.5px] border-border px-2 text-xs font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {registering ? 'Revealing…' : secret ? 'Reveal again' : 'Reveal signing secret'}
+          </button>
+        </span>
+      </Hint>
       <div data-testid={`${testId}-webhook-delivery`} className="text-xs text-muted-foreground">
         {deliveryLine(registration.lastDeliveryAt)}
       </div>

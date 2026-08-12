@@ -11,6 +11,7 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
@@ -48,16 +49,20 @@ function HeaderActions() {
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-testid="sidebar-settings"
-        title="Settings · ⌘,"
-        onClick={() => openSettings()}
-      >
-        <SettingsIcon />
-      </Button>
-      <SidebarTrigger data-testid="sidebar-collapse" title="Hide sidebar" />
+      <Hint label="Settings · ⌘,">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid="sidebar-settings"
+          aria-label="Settings"
+          onClick={() => openSettings()}
+        >
+          <SettingsIcon />
+        </Button>
+      </Hint>
+      <Hint label="Hide sidebar">
+        <SidebarTrigger data-testid="sidebar-collapse" />
+      </Hint>
     </div>
   );
 }

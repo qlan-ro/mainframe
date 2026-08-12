@@ -7,6 +7,7 @@
  * a sibling.
  */
 import { GripVertical, X } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -59,14 +60,16 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
             ))}
           </SelectContent>
         </Select>
-        <label className="flex shrink-0 items-center gap-1.5" title="Required">
-          <span className="text-xs font-medium text-muted-foreground">Req</span>
-          <Switch
-            data-testid={`${testId}-required`}
-            checked={!!field.required}
-            onCheckedChange={(required) => onPatch({ required })}
-          />
-        </label>
+        <Hint label="Required">
+          <label className="flex shrink-0 items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Req</span>
+            <Switch
+              data-testid={`${testId}-required`}
+              checked={!!field.required}
+              onCheckedChange={(required) => onPatch({ required })}
+            />
+          </label>
+        </Hint>
         <button
           type="button"
           data-testid={`${testId}-remove`}

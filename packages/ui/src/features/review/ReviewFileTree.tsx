@@ -11,6 +11,7 @@
  * badge on a file nobody classified, or a flat meter on a file nobody counted,
  * both state something the payload never said.
  */
+import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { KIND_LABEL } from '@/lib/git-status-kind';
 import type { ReviewFile } from './git-status-to-files';
 import type { WorkingChangeFile } from './use-working-changes';
@@ -89,12 +90,11 @@ export function ReviewFileTree({ files, selectedFile, onSelectFile, viewedFiles 
                   </span>
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span
-                    title={f.path}
-                    className={`truncate font-mono text-xs text-foreground ${isSelected ? 'font-semibold' : 'font-medium'} ${isViewed ? 'line-through' : ''}`}
-                  >
-                    {fileName}
-                  </span>
+                  <TruncatedWithTooltip
+                    text={fileName}
+                    tooltip={f.path}
+                    className={`font-mono text-xs text-foreground ${isSelected ? 'font-semibold' : 'font-medium'} ${isViewed ? 'line-through' : ''}`}
+                  />
                   {dirPath && <span className="truncate text-xs text-muted-foreground">{dirPath}</span>}
                 </span>
                 {f.additions !== undefined && f.deletions !== undefined && (

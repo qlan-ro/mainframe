@@ -115,7 +115,6 @@ describe('UrlChip — local daemon', () => {
   it('opens the localhost URL directly and never mentions tunnelling', async () => {
     const { container } = renderChip();
 
-    expect(openButton()).toHaveAttribute('title', 'Open');
     expect(openButton()).toHaveAttribute('aria-label', 'Open');
     expect(openButton()).toBeEnabled();
     expect(screen.queryByTestId('smart-action-url-stop-tunnel')).toBeNull();
@@ -133,7 +132,7 @@ describe('UrlChip — local daemon', () => {
 
     expect(screen.queryByText('tunnelled')).toBeNull();
     expect(screen.queryByTestId('smart-action-url-stop-tunnel')).toBeNull();
-    expect(openButton()).toHaveAttribute('title', 'Open');
+    expect(openButton()).toHaveAttribute('aria-label', 'Open');
   });
 
   it('carries the port on the chip root', () => {
@@ -147,7 +146,7 @@ describe('UrlChip — remote daemon, first open', () => {
     pendingStart();
     renderChip();
 
-    expect(openButton()).toHaveAttribute('title', 'Tunnel and open');
+    expect(openButton()).toHaveAttribute('aria-label', 'Tunnel and open');
     await openInBrowser();
 
     expect(startPortTunnel).toHaveBeenCalledTimes(1);
@@ -172,7 +171,7 @@ describe('UrlChip — remote daemon, first open', () => {
     expect(openExternal).toHaveBeenCalledTimes(1);
     expect(openExternal).toHaveBeenCalledWith(TUNNEL_URL);
     expect(openButton()).toBeEnabled();
-    expect(openButton()).toHaveAttribute('title', 'Reopen tunnel URL');
+    expect(openButton()).toHaveAttribute('aria-label', 'Reopen tunnel URL');
   });
 
   it('warns that the link is public exactly once', async () => {
@@ -255,7 +254,6 @@ describe('UrlChip — stop control', () => {
   it('is available while the tunnel is starting', () => {
     renderChip();
     emit({ state: 'starting', label: 'port:5173' });
-    expect(screen.getByTestId('smart-action-url-stop-tunnel')).toHaveAttribute('title', 'Stop tunnel');
     expect(screen.getByTestId('smart-action-url-stop-tunnel')).toHaveAttribute('aria-label', 'Stop tunnel');
   });
 
@@ -273,7 +271,7 @@ describe('UrlChip — stop control', () => {
 
     expect(screen.queryByText('tunnelled')).toBeNull();
     expect(screen.queryByTestId('smart-action-url-stop-tunnel')).toBeNull();
-    expect(openButton()).toHaveAttribute('title', 'Tunnel and open');
+    expect(openButton()).toHaveAttribute('aria-label', 'Tunnel and open');
   });
 
   it('reports a failed stop', async () => {
@@ -311,7 +309,7 @@ describe('UrlChip — failed start', () => {
       description: 'cloudflared is not installed',
     });
     expect(openButton()).toBeEnabled();
-    expect(openButton()).toHaveAttribute('title', 'Tunnel and open');
+    expect(openButton()).toHaveAttribute('aria-label', 'Tunnel and open');
     expect(openExternal).not.toHaveBeenCalled();
 
     // The daemon's own error event for the same failure must not double-toast.

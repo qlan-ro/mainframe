@@ -72,9 +72,12 @@ describe('TokenPicker', () => {
 
     await user.click(screen.getByTestId('picker'));
 
-    expect(screen.getByTestId('picker-option-pick-feature-result')).toHaveAttribute('title', AGENT_RESULT.description);
+    await user.hover(screen.getByTestId('picker-option-pick-feature-result'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(AGENT_RESULT.description!);
+
     // A token with no description carries no hint at all.
-    expect(screen.getByTestId('picker-option-builtin-today')).not.toHaveAttribute('title');
+    await user.hover(screen.getByTestId('picker-option-builtin-today'));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
   it('clicking a leaf token inserts its ref and closes the menu', async () => {

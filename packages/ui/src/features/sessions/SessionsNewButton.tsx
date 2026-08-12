@@ -10,6 +10,7 @@
 import { PlusIcon } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { resetNewThreadDraft } from './new-thread/reset-new-thread-draft';
 import { useOpenDraft } from './use-open-draft';
 
@@ -33,19 +34,20 @@ export function SessionsNewButton({ filterProjectId, filterProjectName }: Sessio
 
   const label = filterProjectName != null ? `New session in ${filterProjectName}` : 'New session';
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      data-testid="sessions-new-button"
-      // TutorialOverlay's first step anchors here; without it the step is
-      // unanchorable and the auto-skip drops "Start a session" entirely.
-      data-tut="sessions"
-      aria-label={label}
-      title={label}
-      className="size-6"
-      onClick={open}
-    >
-      <PlusIcon />
-    </Button>
+    <Hint label={label}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        data-testid="sessions-new-button"
+        // TutorialOverlay's first step anchors here; without it the step is
+        // unanchorable and the auto-skip drops "Start a session" entirely.
+        data-tut="sessions"
+        aria-label={label}
+        className="size-6"
+        onClick={open}
+      >
+        <PlusIcon />
+      </Button>
+    </Hint>
   );
 }
