@@ -66,6 +66,13 @@ seed over REST
     already ran with that same project id)
 → click sidebar-action-automations
 → wait for automations-library to be visible
+→ wait for automations-library-loading to reach count 0
+   (the loading branch renders the SAME automations-library container with zero rows inside, so
+    "visible" alone does not mean the fetch landed — a `toHaveCount(0)` row assertion would pass
+    on the loading render. After the reload `definitions` starts empty and `loadAll` sets
+    `loading: true` synchronously, so the loading node is present whenever a fetch is in flight.
+    Treat this as a no-fetch-in-flight guard, not proof that a fetch ran: a scenario that asserts
+    an EMPTY view still needs a positive anchor row, as T3 and T6 do.)
 ```
 
 Closing the host between scenarios is `automations-close`.
@@ -84,6 +91,13 @@ do not re-derive them.
   `packages/ui/src/features/automations/AutomationsHost.tsx:41-44`.
 - `LibraryList` has no mount-time fetch; it renders whatever the store holds — the file contains no
   `useEffect` at all: `packages/ui/src/features/automations/library/LibraryList.tsx:1-115`.
+- **`automations-library` is also the loading container.** The `definitions.length === 0 && loading`
+  branch renders the same `data-testid="automations-library"` div wrapping an
+  `automations-library-loading` node and no rows:
+  `packages/ui/src/features/automations/library/LibraryList.tsx:43-55`. `loadAll` sets
+  `loading: true` synchronously before it awaits
+  (`packages/ui/src/features/automations/data/use-automations-store.ts:71-73`), so the loading node
+  is present for as long as a fetch is in flight — and absent once one has landed.
 - `listAutomations(null)` omits `?projectId=` entirely: `packages/ui/src/lib/api/automations.ts:29-30`.
 - The daemon returns everything when the param is absent, and the selected project's automations
   **plus** every unscoped (`project_id` null) one when it is present:
@@ -158,7 +172,7 @@ Add an exported async function that POSTs a minimal automation and returns its i
   test runs in `E2E_MODE=mock` and never sends a message (so **no** `recordingKey`), the full testid
   reference (`sidebar-action-automations`, `automations-host`, `automations-view`,
   `automations-close`, `automations-section-library`, `automations-library`,
-  `automations-library-row-<id>`, `automations-library-delete-<id>`,
+  `automations-library-loading`, `automations-library-row-<id>`, `automations-library-delete-<id>`,
   `automations-library-project-<id>`, `automations-delete-confirm`,
   `automations-delete-confirm-confirm`, `automations-delete-confirm-cancel`,
   `sidebar-project-<projectId>`), and a short paragraph restating ambiguity resolutions 1–3 —
@@ -171,7 +185,9 @@ Add an exported async function that POSTs a minimal automation and returns its i
   survive it).
 - Local helper `openLibraryFor(page, chatId)` implementing the refresh recipe verbatim — keyed by
   the target project's seeded chat id, so the active session (and therefore the library's scope) is
-  pinned deterministically — and `closeLibrary(page)` clicking `automations-close` and asserting
+  pinned deterministically. It must not return until `automations-library-loading` has reached
+  count 0; returning on `automations-library` visibility alone lets a row-absence assertion pass
+  against the loading render — and `closeLibrary(page)` clicking `automations-close` and asserting
   `automations-host` reaches count 0. Keep `chatIdA`/`chatIdB` in describe scope beside the two
   projects.
 - No tests yet beyond a placeholder that opens and closes the library for project A, so the
@@ -188,13 +204,19 @@ This test is first on purpose: the confirm dialog is a Radix `AlertDialog` raise
 modal automations `Dialog`, and that nesting is the spec's one real technical risk. Prove it here
 before building on it.
 
-- Seed a project-A-scoped automation with a name unique to this test, then `openLibraryFor(chatIdA)`.
-- Assert `automations-library-row-<id>` is visible; click `automations-library-delete-<id>`.
-- Assert `automations-delete-confirm` is visible and contains the automation's name.
+- Seed **two** project-A-scoped automations with names unique to this test: the *target* to delete
+  and an *anchor* that is never deleted. The anchor is what makes the re-fetch assertion real — the
+  target is otherwise the only row, so a post-delete library is empty and `toHaveCount(0)` would be
+  satisfied by any view that never fetched. Then `openLibraryFor(chatIdA)`.
+- Assert `automations-library-row-<targetId>` is visible; click `automations-library-delete-<targetId>`.
+- Assert `automations-delete-confirm` is visible and contains the target's name.
 - Click `automations-delete-confirm-confirm`; assert the dialog reaches count 0 and
-  `automations-library-row-<id>` reaches count 0.
-- Close the library, run `openLibraryFor(chatIdA)` again, and assert the row is still count 0 — the
-  deletion survives a real re-fetch, not just the local `removeDefinition` patch.
+  `automations-library-row-<targetId>` reaches count 0.
+- Close the library and run `openLibraryFor(chatIdA)` again. Assert **in this order**: the anchor
+  row `automations-library-row-<anchorId>` IS visible, then `automations-library-row-<targetId>` is
+  count 0. After the reload `definitions` starts empty, so the anchor can only appear from a landed
+  re-fetch — it proves the view under test is the server's, and only then does the target's absence
+  mean the deletion survived rather than that nothing loaded.
 
 **Do not** reach for `click({ force: true })` or keyboard-only interaction if the confirm button is
 not clickable. A forced click hides exactly the defect it would be masking. If the dialog is
@@ -207,7 +229,7 @@ point the locator at a wrong id.
 
 **File:** `packages/e2e/tests-tauri/automations-library.spec.ts`.
 
-- Seed a second project-A-scoped automation with its own name; `openLibraryFor(chatIdA)`.
+- Seed another project-A-scoped automation with its own name; `openLibraryFor(chatIdA)`.
 - Click its delete action, assert `automations-delete-confirm` is visible, click
   `automations-delete-confirm-cancel`.
 - Assert the dialog reaches count 0 and `automations-library-row-<id>` is still visible.
@@ -272,8 +294,12 @@ names the direction.
   is raised from a popover, not a modal). T3 front-loads the risk. If it fails, report a product
   bug rather than forcing the click.
 - **Boot-fetch timing.** After `page.reload()` the library fetch races the project list and the
-  active-session resolution. `openLibraryFor` must wait for `automations-library` to be visible and
-  assert on rows with Playwright's auto-retrying `expect`, never a fixed sleep.
+  active-session resolution, and the loading render reuses the `automations-library` testid. So
+  `openLibraryFor` must wait for `automations-library` to be visible **and** for
+  `automations-library-loading` to reach count 0, then assert on rows with Playwright's
+  auto-retrying `expect`, never a fixed sleep. Any test whose expected view is empty needs a
+  positive anchor row on top of that (T3, T6).
 - **Order coupling inside the describe.** Tests share one app and run in file order. Seeding a
   distinct automation per concern keeps them independent; do not reuse one automation across the
-  delete and badge tests.
+  delete and badge tests. T3's anchor automation survives into T4–T6 by design and is harmless:
+  every later assertion is keyed to that test's own automation id, and no test asserts a row total.
