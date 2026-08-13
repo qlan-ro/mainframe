@@ -915,6 +915,7 @@ starts (raise a blocker if you need it sooner; do not add it locally).
 | `tempfile` | **dev-dependency only** — temp dirs/files in db/git/fs tests | in workspace |
 | `flate2`, `brotli` | **dev-dependency only** — decode compressed responses in the server compression tests | in workspace |
 | `qrcode` | pairing QR in the daemon `pair` subcommand | in workspace |
+| `rustix` (`process`) | safe `getuid(2)` for the Claude CLI spool root (`libc`'s binding is an unsafe extern; every crate is `forbid(unsafe_code)`) | in workspace |
 | `anyhow` | **binary crate top level only** (verify gate exempts the `mainframe-daemon` crate, forbids it elsewhere) | in workspace |
 | `serde_yaml`, `cron`, `jsonata-rs` | workflow engine | **deferred indefinitely** — the TS workflows feature is not stable; `mainframe-workflows` stays an empty crate and `/api/workflows*` is a documented gap until it stabilizes |
 | `futures` | stream/select combinators | deferred (added with the first crate that needs it) |
