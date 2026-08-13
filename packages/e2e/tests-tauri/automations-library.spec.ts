@@ -161,4 +161,29 @@ test.describe('§automations-library', () => {
     await expect(page.getByTestId(`automations-library-row-${anchorId}`)).toBeVisible();
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toHaveCount(0);
   });
+
+  test('delete, cancelled: dismissing the confirm dialog leaves the row intact after a re-fetch', async () => {
+    const { page } = app;
+    const targetId = await createTauriAutomation({ name: 'delete-cancelled target', projectId: projectA.projectId });
+
+    await openLibraryFor(page, chatIdA);
+
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
+    await page.getByTestId(`automations-library-delete-${targetId}`).click();
+
+    const confirmDialog = page.getByTestId('automations-delete-confirm');
+    await expect(confirmDialog).toBeVisible();
+
+    await page.getByTestId('automations-delete-confirm-cancel').click();
+    await expect(confirmDialog).toHaveCount(0);
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
+
+    await closeLibrary(page);
+    await openLibraryFor(page, chatIdA);
+
+    // The automation was never deleted server-side, so the row survives a
+    // landed re-fetch too, not just the un-refreshed DOM from before the
+    // cancel.
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
+  });
 });
