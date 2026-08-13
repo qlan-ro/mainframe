@@ -45,6 +45,7 @@
  *    below, never a bare wait.
  */
 
+import path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import {
@@ -185,5 +186,51 @@ test.describe('§automations-library', () => {
     // landed re-fetch too, not just the un-refreshed DOM from before the
     // cancel.
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
+  });
+
+  test('badge, scoped: a project-scoped automation shows its project name', async () => {
+    const { page } = app;
+    const targetId = await createTauriAutomation({ name: 'badge scoped target', projectId: projectA.projectId });
+
+    await openLibraryFor(page, chatIdA);
+
+    await expect(page.getByTestId(`automations-library-project-${targetId}`)).toHaveText(
+      path.basename(projectA.projectPath),
+    );
+  });
+
+  test('badge, unscoped: an automation with no project scope reads "All projects"', async () => {
+    const { page } = app;
+    const targetId = await createTauriAutomation({ name: 'badge unscoped target' });
+
+    await openLibraryFor(page, chatIdA);
+
+    await expect(page.getByTestId(`automations-library-project-${targetId}`)).toHaveText('All projects');
+  });
+
+  test('scoping, negative: an automation scoped to project A is absent from project B', async () => {
+    const { page } = app;
+    const scopedId = await createTauriAutomation({ name: 'scoping negative scoped', projectId: projectA.projectId });
+    const unscopedId = await createTauriAutomation({ name: 'scoping negative unscoped' });
+
+    await openLibraryFor(page, chatIdB);
+
+    // Guard against an empty-library false pass: the library must actually be
+    // showing rows (the unscoped automation) for the scoped row's absence to
+    // mean "filtered out" rather than "nothing loaded".
+    await expect(page.getByTestId('automations-library')).toBeVisible();
+    await expect(page.getByTestId(`automations-library-row-${unscopedId}`)).toBeVisible();
+    await expect(page.getByTestId(`automations-library-row-${scopedId}`)).toHaveCount(0);
+  });
+
+  test('scoping, positive: an unscoped automation is visible from both projects', async () => {
+    const { page } = app;
+    const unscopedId = await createTauriAutomation({ name: 'scoping positive unscoped' });
+
+    await openLibraryFor(page, chatIdB);
+    await expect(page.getByTestId(`automations-library-row-${unscopedId}`)).toBeVisible();
+
+    await openLibraryFor(page, chatIdA);
+    await expect(page.getByTestId(`automations-library-row-${unscopedId}`)).toBeVisible();
   });
 });
