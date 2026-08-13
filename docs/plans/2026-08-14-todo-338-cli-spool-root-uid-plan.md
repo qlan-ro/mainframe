@@ -159,6 +159,15 @@ already a normal dependency of both `mainframe-adapter-claude` and `mainframe-se
 **Shared test conventions for all three tasks:**
 
 - Gate each new file with `#![cfg(unix)]` — every assertion is about the unix uid segment.
+- Add `#![allow(clippy::unwrap_used, clippy::expect_used)]` under it. `packages/core-rs/Cargo.toml`
+  declares `[workspace.lints.clippy] unwrap_used = "deny"` / `expect_used = "deny"` and every crate
+  carries `[lints] workspace = true`, which reaches integration-test targets too — the crate-level
+  `#![cfg_attr(test, allow(…))]` in `lib.rs` covers only that crate's own unit tests. The conventions
+  below (`Command::new("id")`, `parse::<u32>()`, `TempDir::new_in`, `DirBuilder::create`) all produce
+  unwrap-shaped code, so without this attribute Task 4's and Task 13's
+  `cargo clippy --all-targets -- -D warnings` gate fails. Every existing integration test carries it —
+  see `crates/mainframe-server/tests/routes_projects.rs:4` and
+  `crates/mainframe-adapter-claude/tests/workflow_task_events.rs:7`.
 - Get the uid from an **independent oracle**, never from `rustix`: run
   `std::process::Command::new("id").arg("-u")`, trim, `parse::<u32>()`. Asserting rustix against
   rustix proves nothing.
@@ -354,9 +363,14 @@ Rewrite the module:
   `cfg(unix)`-gated dep, literal `/tmp` base on unix per the CLI).
 
 **Verify:** `cargo test -p mainframe-background-tasks --lib spool_root` passes;
-`cargo test -p mainframe-background-tasks --test spool_root_default_uid` now GREEN;
-`grep -n "unwrap_or(0)\|TODO(port)" crates/mainframe-background-tasks/src/spool_root.rs` prints
-nothing.
+`cargo test -p mainframe-background-tasks --test spool_root_default_uid spool_root_uses_the_real_uid`
+is now GREEN; `grep -n "unwrap_or(0)\|TODO(port)" crates/mainframe-background-tasks/src/spool_root.rs`
+prints nothing.
+
+The binary's other test, `default_validator_accepts_the_real_uid_root_and_rejects_claude_0`, **stays
+red until Task 7** — it builds the production-default validator with `getuid: None`, which still
+routes through `spool_validator.rs:108`'s `unwrap_or(0)`. That line is Task 7's edit, not Task 6's.
+Do not chase it here.
 
 ### Task 7 — Give the validator a real production default (fail closed, no `0`)
 
@@ -402,7 +416,10 @@ nothing.
 
 **Verify:** `cargo test -p mainframe-background-tasks --lib` and
 `cargo test -p mainframe-background-tasks --test spool_root_default_uid` are GREEN;
-`grep -rn "unwrap_or(0)" crates/mainframe-background-tasks/src/` prints nothing.
+`grep -n "unwrap_or(0)" crates/mainframe-background-tasks/src/spool_root.rs
+crates/mainframe-background-tasks/src/spool_validator.rs` prints nothing. Scope the grep to those two
+files: `liveness.rs:41` (miss-count default) and `reconcile.rs:173` (the `#[cfg(not(unix))]`
+timestamp fallback) hold correct, unrelated `unwrap_or(0)` calls this todo does not own.
 
 ### Task 8 — Move `spool_validator`'s inline tests out (300-line limit, Decision D5)
 
@@ -433,7 +450,10 @@ tests. Do not change a single assertion.
 
 **Verify:**
 `grep -rn "TODO(port)" packages/core-rs/crates/ | grep -i "uid\|spool\|validator"` prints nothing;
-`grep -rn "allowlist" packages/core-rs/crates/mainframe-background-tasks/` prints nothing.
+`grep -n "allowlist" packages/core-rs/crates/mainframe-background-tasks/src/spool_root.rs
+packages/core-rs/crates/mainframe-background-tasks/src/reconcile.rs` prints nothing. Scope the grep
+to those two files: `kill.rs:3` and `kill.rs:925` document a different missing crate (`tree-kill`,
+not `getuid`), are correct, and are not this todo's to edit.
 
 ### Task 10 — Update the consumed-surface checklist and the dependency allowlist
 
@@ -518,13 +538,18 @@ bash tools/verify-gate.sh
 Plus a final grep sweep proving no marker survived:
 
 ```
-grep -rn "unwrap_or(0)" packages/core-rs/crates/mainframe-background-tasks/
+grep -n "unwrap_or(0)" packages/core-rs/crates/mainframe-background-tasks/src/spool_root.rs \
+                       packages/core-rs/crates/mainframe-background-tasks/src/spool_validator.rs
 grep -rn "TODO(port)" packages/core-rs/crates/ | grep -i "uid\|spool\|validator"
 grep -rni "claude-0" packages/core-rs/crates/ docs/adapters/claude/CONSUMED-SURFACE.md
 ```
 
 The first two must print nothing. The third must print only the deliberate *rejection* assertions in
 `tests/spool_root_default_uid.rs`.
+
+The first grep names the two edited files rather than sweeping the crate: `liveness.rs:41` and
+`reconcile.rs:173` carry correct `unwrap_or(0)` calls that are out of scope, so a crate-wide sweep
+could never clear and would push an implementer into deleting behaviour this todo does not own.
 
 **Verify:** everything above exits 0 (or prints nothing, as specified). Then push the branch —
 unpushed worktree work is lost when the worktree is removed.
