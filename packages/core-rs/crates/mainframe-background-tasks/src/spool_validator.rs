@@ -105,7 +105,17 @@ impl SpoolValidator for MadeSpoolValidator {
             let temp_dir_name = if platform == Platform::Win32 {
                 "claude".to_string()
             } else {
-                format!("claude-{}", self.getuid.as_ref().map(|f| f()).unwrap_or(0))
+                match &self.getuid {
+                    Some(f) => format!("claude-{}", f()),
+                    None => {
+                        tracing::warn!(
+                            target: "background-tasks:spool",
+                            %output_path,
+                            "no uid source for a POSIX spool path; rejecting"
+                        );
+                        return false;
+                    }
+                }
             };
 
             // realpath failure (ENOENT, EACCES) = path does not exist / not readable.
@@ -128,7 +138,18 @@ impl SpoolValidator for MadeSpoolValidator {
     }
 }
 
+#[cfg(unix)]
+fn default_getuid() -> Option<Arc<dyn Fn() -> u32 + Send + Sync>> {
+    Some(Arc::new(crate::spool_root::current_uid))
+}
+
+#[cfg(windows)]
+fn default_getuid() -> Option<Arc<dyn Fn() -> u32 + Send + Sync>> {
+    None // Windows spool paths carry no uid segment.
+}
+
 pub fn make_spool_validator(deps: SpoolValidatorDeps) -> impl SpoolValidator {
+    let getuid = deps.getuid.or_else(default_getuid);
     let realpath = deps.realpath.unwrap_or_else(|| {
         Arc::new(|p: String| {
             Box::pin(async move {
@@ -143,7 +164,7 @@ pub fn make_spool_validator(deps: SpoolValidatorDeps) -> impl SpoolValidator {
         .unwrap_or_else(|| Arc::new(|| std::env::temp_dir().to_string_lossy().into_owned()));
     MadeSpoolValidator {
         platform: deps.platform,
-        getuid: deps.getuid,
+        getuid,
         env: deps.env,
         realpath,
         tmpdir,
@@ -351,7 +372,10 @@ mod tests {
 // todos: 0
 // notes: `path.win32`/`path.posix` simulation → local sep/basename/join keyed on
 // the SIMULATED Platform (host std::path can't parse `C:\\…`). deps.realpath /
-// deps.tmpdir / deps.getuid are injectable closures; validator returned as a
-// boxed-future trait object (SpoolValidator) so reconcile can inject test
+// deps.tmpdir / deps.getuid are injectable closures — the seam stays for tests
+// that need to pin a uid without depending on the CI user; make_spool_validator
+// now fills an absent deps.getuid with the real uid on unix (None on Windows,
+// where POSIX paths simply have no uid segment to match). validator returned as
+// a boxed-future trait object (SpoolValidator) so reconcile can inject test
 // doubles. All 8 spool-validator.test.ts cases translated (linux/darwin/win32/
 // env-override). deps.env kept as a HashMap to mirror `deps.env[...]` lookups.
