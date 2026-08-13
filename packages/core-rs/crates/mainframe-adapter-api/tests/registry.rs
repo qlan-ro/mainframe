@@ -341,7 +341,7 @@ async fn bumps_revision_flips_catalog_source_and_emits_after_allow_refresh() {
                 models: probed.clone(),
                 models_revision: 2,
                 // The client's only correction when the boot snapshot said false.
-                installed: true,
+                installed: Some(true),
             })
     );
     assert_eq!(a.probe_args(), vec![Some("/abs/claude".to_string())]);

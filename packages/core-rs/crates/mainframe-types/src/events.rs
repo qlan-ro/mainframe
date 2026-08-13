@@ -308,7 +308,10 @@ pub enum DaemonEvent {
         /// The probe's install verdict. Boot serves `/api/adapters` from the
         /// static seed (`installed: false`) when the probe outruns the 2s cap,
         /// so this event is a client's only correction until it reconnects.
-        installed: bool,
+        /// Optional on the wire: a client may be talking to a daemon older
+        /// than the field, and then keeps the flag it already has.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        installed: Option<bool>,
     },
     #[serde(rename = "provider.quota.updated")]
     ProviderQuotaUpdated {

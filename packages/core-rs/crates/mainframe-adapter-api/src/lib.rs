@@ -404,7 +404,7 @@ impl AdapterRegistry {
                 adapter_id: adapter_id.to_string(),
                 models,
                 models_revision: rev,
-                installed,
+                installed: Some(installed),
             });
         }
     }
