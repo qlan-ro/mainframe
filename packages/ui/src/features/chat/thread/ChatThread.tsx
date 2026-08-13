@@ -138,7 +138,11 @@ function ThreadFooterInput() {
 
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   useFindHotkey();
-  const { viewportRef, contentRef } = useThreadBottomPin();
+  // The ITEM id, not mainThreadId: a split zone renders a thread that is not the
+  // main one, and its rebound item is the identity whose change means "different
+  // session in this viewport".
+  const threadId = useAuiState((s) => s.threadListItem?.id ?? null);
+  const { viewportRef, contentRef } = useThreadBottomPin(threadId);
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   return (
     <ComposerEditProvider>

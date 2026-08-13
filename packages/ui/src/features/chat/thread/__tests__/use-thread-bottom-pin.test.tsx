@@ -82,7 +82,7 @@ function notifyResize() {
 it('restores a pinned transcript to the bottom after its content shrinks and regrows', () => {
   const viewport = createViewport();
   const content = document.createElement('div');
-  const { result } = renderHook(() => useThreadBottomPin());
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
 
   act(() => {
     result.current.viewportRef(viewport.element);
@@ -98,7 +98,7 @@ it('restores a pinned transcript to the bottom after its content shrinks and reg
 it('preserves the reading position when the user has scrolled up', () => {
   const viewport = createViewport();
   const content = document.createElement('div');
-  const { result } = renderHook(() => useThreadBottomPin());
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
 
   act(() => {
     result.current.viewportRef(viewport.element);
@@ -114,7 +114,7 @@ it('preserves the reading position when the user has scrolled up', () => {
 it('pins again after the user returns to the bottom', () => {
   const viewport = createViewport();
   const content = document.createElement('div');
-  const { result } = renderHook(() => useThreadBottomPin());
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
 
   act(() => {
     result.current.viewportRef(viewport.element);
@@ -126,4 +126,74 @@ it('pins again after the user returns to the bottom', () => {
   });
 
   expect(viewport.element.scrollTop).toBe(1_100);
+});
+
+// ── Switching sessions ───────────────────────────────────────────────────────
+// The viewport is ONE element shared by every session in the single-thread
+// surface, so its scrollTop survives a switch. assistant-ui's own
+// switch-scroll (`threadListItem.switchedTo`) never reaches it in our tree,
+// which left a switched-into session parked at the previous one's offset.
+
+it('returns to the bottom when the active session changes, even after the user scrolled up', () => {
+  const viewport = createViewport();
+  const content = document.createElement('div');
+  const { result, rerender } = renderHook(({ threadId }) => useThreadBottomPin(threadId), {
+    initialProps: { threadId: 'chat-1' },
+  });
+
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(content);
+    viewport.scrollTo(250);
+  });
+
+  act(() => {
+    rerender({ threadId: 'chat-2' });
+  });
+
+  expect(viewport.element.scrollTop).toBe(900);
+});
+
+it('follows content that only arrives after the switch', () => {
+  const viewport = createViewport();
+  const content = document.createElement('div');
+  const { result, rerender } = renderHook(({ threadId }) => useThreadBottomPin(threadId), {
+    initialProps: { threadId: 'chat-1' },
+  });
+
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(content);
+    viewport.scrollTo(250);
+  });
+
+  act(() => {
+    rerender({ threadId: 'chat-2' });
+    // The switched-into session's history lands a beat later (async load,
+    // lazy code blocks, images) — the pin must follow it down.
+    viewport.resize(3_000);
+    notifyResize();
+  });
+
+  expect(viewport.element.scrollTop).toBe(2_900);
+});
+
+it('leaves the reading position alone when the session has not changed', () => {
+  const viewport = createViewport();
+  const content = document.createElement('div');
+  const { result, rerender } = renderHook(({ threadId }) => useThreadBottomPin(threadId), {
+    initialProps: { threadId: 'chat-1' },
+  });
+
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(content);
+    viewport.scrollTo(250);
+  });
+
+  act(() => {
+    rerender({ threadId: 'chat-1' });
+  });
+
+  expect(viewport.element.scrollTop).toBe(250);
 });
