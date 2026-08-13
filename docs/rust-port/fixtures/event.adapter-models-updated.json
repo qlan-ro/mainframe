@@ -33,6 +33,7 @@
         "supportsPersonality": false
       }
     ],
-    "modelsRevision": 2
+    "modelsRevision": 2,
+    "installed": true
   }
 }

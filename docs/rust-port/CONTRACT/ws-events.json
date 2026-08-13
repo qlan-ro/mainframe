@@ -347,6 +347,11 @@
           "name": "modelsRevision",
           "optional": false,
           "type": "number"
+        },
+        {
+          "name": "installed",
+          "optional": true,
+          "type": "boolean"
         }
       ]
     },

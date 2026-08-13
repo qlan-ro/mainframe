@@ -33,11 +33,11 @@ import {
   installAdapterModelsSubscriber,
 } from '../adapters.js';
 
-const info = (id: string, rev: number, models: any[]) => ({
+const info = (id: string, rev: number, models: any[], installed = true) => ({
   id,
   name: id,
   description: '',
-  installed: true,
+  installed,
   models,
   modelsRevision: rev,
   catalogSource: 'fallback' as const,
@@ -79,6 +79,39 @@ describe('ui adapters store', () => {
     seedAdapters([info('codex', 1, [{ id: 'old', label: 'O' }])]); // identity fills, newer models kept
     expect(useAdaptersStore.getState().byId.codex!.name).toBe('codex');
     expect(useAdaptersStore.getState().byId.codex!.models[0]!.id).toBe('m');
+  });
+
+  // The daemon serves /api/adapters from a static seed (installed:false) whenever the probe
+  // outruns its 2s cap, so the WS event is the only correction before a reconnect. A stale
+  // flag left the provider tab disabled with a padlock for the whole session.
+  it('corrects a stale installed:false from the WS event', () => {
+    seedAdapters([info('codex', 1, [{ id: 'a', label: 'A' }], false)]);
+    const unsub = installAdapterModelsSubscriber();
+    handlers.forEach((h) =>
+      h({
+        type: 'adapter.models.updated',
+        adapterId: 'codex',
+        models: [{ id: 'x', label: 'X' }],
+        modelsRevision: 2,
+        installed: true,
+      }),
+    );
+    expect(useAdaptersStore.getState().byId.codex!.installed).toBe(true);
+    expect(useAdaptersStore.getState().byId.codex!.models[0]!.id).toBe('x');
+    unsub();
+  });
+
+  it('applies installed even when the revision guard rejects the models', () => {
+    seedAdapters([info('codex', 5, [{ id: 'a', label: 'A' }], false)]);
+    applyAdapterModels('codex', [{ id: 'x', label: 'X' }], 3, true);
+    expect(useAdaptersStore.getState().byId.codex!.installed).toBe(true);
+    expect(useAdaptersStore.getState().byId.codex!.models[0]!.id).toBe('a'); // stale models still ignored
+  });
+
+  it('keeps the known flag when the daemon omits installed', () => {
+    seedAdapters([info('codex', 1, [], true)]);
+    applyAdapterModels('codex', [{ id: 'x', label: 'X' }], 2);
+    expect(useAdaptersStore.getState().byId.codex!.installed).toBe(true);
   });
 
   it('reset clears the store', () => {
