@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
+import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
@@ -96,6 +96,24 @@ export function SessionTabs() {
     if (id !== activeTabId) aui.threads.switchToThread(id);
   };
 
+  // The context-menu twin of ⌘-click. The gesture guard lives in
+  // `canOpenInSplit`, so a menu item is enabled exactly when acting would work.
+  const handleOpenInSplit = (id: string) => {
+    openInSplit(activeTabId, id);
+  };
+
+  // The context-menu twin of ⌘\. Dissolving from a tab's own menu leaves you on
+  // THAT session — the one you pointed at — rather than ⌘\'s "other zone wins",
+  // which has no tab to aim at. A parked pair dissolves without moving focus,
+  // the same rule `handleClose` follows.
+  const handleCloseSplit = (id: string) => {
+    const zonesStore = useZonesStore.getState();
+    if (zonesStore.zones == null) return;
+    const visible = splitVisible(zonesStore.zones, activeTabId);
+    zonesStore.closeSplit();
+    if (visible && id !== activeTabId) aui.threads.switchToThread(id);
+  };
+
   const handleClose = (id: string) => {
     // Closing a zone member's tab dissolves the pair: the split collapses to
     // the other chat (VS Code's close-last-tab-closes-the-group). Focus only
@@ -137,6 +155,9 @@ export function SessionTabs() {
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
+                  canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                  onOpenInSplit={handleOpenInSplit}
+                  onCloseSplit={handleCloseSplit}
                 />
               ))}
             {/* The split pair reads as ONE unit: one underline spanning both,
@@ -161,6 +182,9 @@ export function SessionTabs() {
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onPin={pinTab}
+                    canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                    onOpenInSplit={handleOpenInSplit}
+                    onCloseSplit={handleCloseSplit}
                   />
                 ))}
             </div>
@@ -174,12 +198,24 @@ export function SessionTabs() {
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
+                  canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                  onOpenInSplit={handleOpenInSplit}
+                  onCloseSplit={handleCloseSplit}
                 />
               ))}
           </>
         ) : (
           tabs.map((tab) => (
-            <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} onPin={pinTab} />
+            <SessionTabPill
+              key={tab.id}
+              tab={tab}
+              onActivate={handleActivate}
+              onClose={handleClose}
+              onPin={pinTab}
+              canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+              onOpenInSplit={handleOpenInSplit}
+              onCloseSplit={handleCloseSplit}
+            />
           ))
         )}
       </div>

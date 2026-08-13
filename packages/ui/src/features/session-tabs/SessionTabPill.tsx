@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import { ProjectAvatar } from '@/features/sessions/ProjectAvatar';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+import { SessionTabContextMenu } from './SessionTabContextMenu';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
 const DRAG_THRESHOLD = 6;
@@ -48,9 +49,22 @@ interface SessionTabPillProps {
   onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
+  /** The open-in-split gesture has somewhere to go from this tab. */
+  canOpenInSplit: boolean;
+  onOpenInSplit: (id: string) => void;
+  onCloseSplit: (id: string) => void;
 }
 
-export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPin }: SessionTabPillProps) {
+export function SessionTabPill({
+  tab,
+  grouped = false,
+  onActivate,
+  onClose,
+  onPin,
+  canOpenInSplit,
+  onOpenInSplit,
+  onCloseSplit,
+}: SessionTabPillProps) {
   // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
   // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
   // The flag swallows the click that follows a drag's pointerup. While the
@@ -85,79 +99,89 @@ export function SessionTabPill({ tab, grouped = false, onActivate, onClose, onPi
   };
 
   return (
-    <div
-      data-testid={`session-tab-${tab.id}`}
-      role="tab"
-      aria-selected={tab.active}
-      data-preview={tab.preview ? 'true' : 'false'}
-      data-dragging={dragging || undefined}
-      // preventDefault at MOUSEDOWN, not at the drag threshold: WebKit anchors
-      // a native text selection on mousedown, and once that gesture starts no
-      // later user-select/removeAllRanges stops it from painting the
-      // transcript as the pointer crosses it.
-      onMouseDown={(event) => event.preventDefault()}
-      onPointerDown={onPointerDown}
-      onClick={(event) => {
-        if (draggedRef.current) {
-          draggedRef.current = false;
-          return;
-        }
-        onActivate(tab.id, event.metaKey);
-      }}
-      onDoubleClick={() => {
-        if (tab.preview) onPin(tab.id);
-      }}
-      className={cn(
-        // h-full puts the underline on the toolbar's bottom hairline and the
-        // label on the toolbar midline — one alignment for every tab state.
-        'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
-        // The dragged pill ghosts so the cursor + drop targets read as the live thing.
-        dragging && 'opacity-40',
-        !grouped &&
-          'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
-        tab.active
-          ? cn('font-semibold text-foreground', !grouped && 'after:opacity-100')
-          : 'font-medium text-muted-foreground hover:text-foreground',
-      )}
+    <SessionTabContextMenu
+      inSplit={grouped}
+      canOpenInSplit={canOpenInSplit}
+      preview={tab.preview}
+      onOpenInSplit={() => onOpenInSplit(tab.id)}
+      onCloseSplit={() => onCloseSplit(tab.id)}
+      onKeepOpen={() => onPin(tab.id)}
+      onClose={() => onClose(tab.id)}
     >
-      {tab.projectId != null ? (
-        <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
-      ) : (
-        <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
-      )}
-      <span className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}>{tab.title}</span>
-      {tab.preview && (
-        <Hint label="Keep open">
+      <div
+        data-testid={`session-tab-${tab.id}`}
+        role="tab"
+        aria-selected={tab.active}
+        data-preview={tab.preview ? 'true' : 'false'}
+        data-dragging={dragging || undefined}
+        // preventDefault at MOUSEDOWN, not at the drag threshold: WebKit anchors
+        // a native text selection on mousedown, and once that gesture starts no
+        // later user-select/removeAllRanges stops it from painting the
+        // transcript as the pointer crosses it.
+        onMouseDown={(event) => event.preventDefault()}
+        onPointerDown={onPointerDown}
+        onClick={(event) => {
+          if (draggedRef.current) {
+            draggedRef.current = false;
+            return;
+          }
+          onActivate(tab.id, event.metaKey);
+        }}
+        onDoubleClick={() => {
+          if (tab.preview) onPin(tab.id);
+        }}
+        className={cn(
+          // h-full puts the underline on the toolbar's bottom hairline and the
+          // label on the toolbar midline — one alignment for every tab state.
+          'group relative flex h-full w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 px-2 text-xs select-none',
+          // The dragged pill ghosts so the cursor + drop targets read as the live thing.
+          dragging && 'opacity-40',
+          !grouped &&
+            'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:opacity-0 after:transition-opacity',
+          tab.active
+            ? cn('font-semibold text-foreground', !grouped && 'after:opacity-100')
+            : 'font-medium text-muted-foreground hover:text-foreground',
+        )}
+      >
+        {tab.projectId != null ? (
+          <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
+        ) : (
+          <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+        )}
+        <span className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}>{tab.title}</span>
+        {tab.preview && (
+          <Hint label="Keep open">
+            <Button
+              data-testid={`session-tab-pin-${tab.id}`}
+              variant="ghost"
+              size="icon-2xs"
+              className={cn('opacity-0 group-hover:opacity-100', tab.active && 'opacity-60')}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPin(tab.id);
+              }}
+            >
+              <Pin />
+            </Button>
+          </Hint>
+        )}
+        <Hint label={`Close ${tab.title}`}>
           <Button
-            data-testid={`session-tab-pin-${tab.id}`}
+            data-testid={`session-tab-close-${tab.id}`}
             variant="ghost"
             size="icon-2xs"
-            className={cn('opacity-0 group-hover:opacity-100', tab.active && 'opacity-60')}
+            // Grouped (split) tabs are both ON SCREEN, so both keep the resting
+            // ✕ the active tab gets — it closes the zone, not a hidden session.
+            className={cn('opacity-0 group-hover:opacity-100', (tab.active || grouped) && 'opacity-60')}
             onClick={(e) => {
               e.stopPropagation();
-              onPin(tab.id);
+              onClose(tab.id);
             }}
           >
-            <Pin />
+            <X />
           </Button>
         </Hint>
-      )}
-      <Hint label={`Close ${tab.title}`}>
-        <Button
-          data-testid={`session-tab-close-${tab.id}`}
-          variant="ghost"
-          size="icon-2xs"
-          // Grouped (split) tabs are both ON SCREEN, so both keep the resting
-          // ✕ the active tab gets — it closes the zone, not a hidden session.
-          className={cn('opacity-0 group-hover:opacity-100', (tab.active || grouped) && 'opacity-60')}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose(tab.id);
-          }}
-        >
-          <X />
-        </Button>
-      </Hint>
-    </div>
+      </div>
+    </SessionTabContextMenu>
   );
 }
