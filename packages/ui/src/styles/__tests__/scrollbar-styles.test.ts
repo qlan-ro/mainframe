@@ -26,14 +26,14 @@ describe('scrollbar styling paths', () => {
   const base = blockAfter(sheet, '@layer base');
   const webkitQuery = 'selector(*::-webkit-scrollbar)';
 
-  it('directly paints a transparent track in WebKit without conflicting standard properties', () => {
+  it('keeps the WebKit thumb visible on a transparent track', () => {
     const webkit = blockAfter(base, `@supports ${webkitQuery}`);
 
     expect(webkit).toMatch(
       /\*::-webkit-scrollbar-track,\s*\*::-webkit-scrollbar-corner\s*{\s*background:\s*transparent/,
     );
-    expect(webkit).toMatch(/\*::-webkit-scrollbar-thumb\s*{\s*background:\s*transparent/);
-    expect(webkit).toMatch(/\*:hover::-webkit-scrollbar-thumb\s*{\s*background:\s*var\(--border\)/);
+    expect(webkit).toMatch(/\*::-webkit-scrollbar-thumb\s*{\s*background:\s*var\(--border\)/);
+    expect(webkit).not.toContain('*:hover::-webkit-scrollbar-thumb');
     expect(webkit).not.toMatch(/scrollbar-(?:color|width)\s*:/);
   });
 
