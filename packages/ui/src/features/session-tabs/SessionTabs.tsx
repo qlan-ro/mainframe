@@ -3,11 +3,11 @@
  * session is whichever tab is focused; there is ONE chat surface and tabs
  * switch its content (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  *
- * The open set lives in `store.ts`; membership + persistence in
- * `useSessionTabsSync` (mounted here — the strip is the feature's one
- * always-rendered component). Closing removes from the set only — it never
- * archives. Closing the last tab falls back to the new-session flow, the same
- * behavior as the sidebar "+" / ⌘N.
+ * The open set lives in `store.ts` — pinned tabs, one peek, one unsent draft,
+ * rendered in that order; membership + persistence in `useSessionTabsSync`
+ * (mounted here — the strip is the feature's one always-rendered component).
+ * Closing removes from the set only — it never archives. Closing the last tab
+ * falls back to the new-session flow, the same behavior as the sidebar "+" / ⌘N.
  *
  * Overflow: pills shrink from w-45 to min-w-24, then the row scrolls
  * horizontally (no scrollbar — the app's opt-out idiom). The trailing spacer
@@ -55,6 +55,7 @@ export function SessionTabs() {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const previewId = useSessionTabsStore((s) => s.previewId);
+  const draftId = useSessionTabsStore((s) => s.draftId);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const pinTab = useSessionTabsStore((s) => s.pinTab);
   const newSession = useNewChatHotkeyHandler(aui);
@@ -67,8 +68,9 @@ export function SessionTabs() {
   // in that window. aui switches on either id, so clicks pass the tab id.
   const activeTabId = canonicalTabId(mainThreadId, items);
 
-  // Pinned tabs in order; the preview slot renders last (editor-style).
-  const displayIds = previewId === null ? tabIds : [...tabIds, previewId];
+  // Pinned tabs in order, then the peek, then the unsent draft — whichever
+  // session was just created is always the last tab in the strip.
+  const displayIds = [...tabIds, previewId, draftId].filter((id): id is string => id !== null);
 
   // While split, the two zone tabs regroup ADJACENT (in zone order, at the
   // first member's position) so the strip mirrors the surface — a visual

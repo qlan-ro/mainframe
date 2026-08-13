@@ -3,7 +3,9 @@
  * dot, the session title, and a hover close (×).
  *
  * A PREVIEW tab (editor-style temporary slot) renders its title italic and
- * grows a hover pin; double-click also pins. Pinned tabs are the plain form.
+ * grows a hover pin; double-click also pins. Pinned tabs are the plain form —
+ * and so is an unsent draft, which is kept open until its first send demotes
+ * it into the preview slot.
  *
  * Styled as the v2 Tabs primitive's `line` variant (verdict after trying the
  * boxed and Chrome-filled treatments): transparent pills, the active tab
