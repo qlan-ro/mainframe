@@ -17,6 +17,9 @@ chrono = { workspace = true }
 dashmap = { workspace = true }
 mainframe-types = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
