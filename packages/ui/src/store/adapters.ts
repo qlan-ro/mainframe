@@ -48,14 +48,27 @@ export function seedAdapters(list: AdapterInfo[]): void {
   });
 }
 
-export function applyAdapterModels(adapterId: string, models: AdapterModel[], modelsRevision: number): void {
+/** `installed` is the probe's verdict, applied OUTSIDE the revision guard — that guard gates the
+ *  model list only. The boot snapshot reads `installed:false` whenever the probe outruns the
+ *  daemon's 2s list cap, and this event is the only correction before a reconnect. */
+export function applyAdapterModels(
+  adapterId: string,
+  models: AdapterModel[],
+  modelsRevision: number,
+  installed?: boolean,
+): void {
   useAdaptersStore.setState((s) => {
     const cur = s.byId[adapterId];
     if (cur) {
-      if (!isNewer(cur.modelsRevision, modelsRevision)) return s;
-      return { byId: { ...s.byId, [adapterId]: { ...cur, models, modelsRevision, catalogSource: 'probed' } } };
+      const withInstall = installed === undefined || installed === cur.installed ? cur : { ...cur, installed };
+      if (!isNewer(cur.modelsRevision, modelsRevision)) {
+        return withInstall === cur ? s : { byId: { ...s.byId, [adapterId]: withInstall } };
+      }
+      return {
+        byId: { ...s.byId, [adapterId]: { ...withInstall, models, modelsRevision, catalogSource: 'probed' } },
+      };
     }
-    // Placeholder identity (installed:true / planMode:false / id-as-name) that BRIEFLY lies until
+    // Placeholder identity (planMode:false / id-as-name) that BRIEFLY lies until
     // the seed that follows reset-on-connect refreshes it via seedAdapters (blocker #11). The
     // ordering guarantee: seedAdaptersFor always fires getAdapters right after resetRevisionBaseline,
     // so the real snapshot overwrites identity within a few ms.
@@ -63,7 +76,7 @@ export function applyAdapterModels(adapterId: string, models: AdapterModel[], mo
       id: adapterId,
       name: adapterId,
       description: '',
-      installed: true,
+      installed: installed ?? true,
       models,
       modelsRevision,
       catalogSource: 'probed',
@@ -92,6 +105,6 @@ export function resetAdapters(): void {
 export function installAdapterModelsSubscriber(): () => void {
   return daemonWs.onEvent((event) => {
     if (event.type !== 'adapter.models.updated') return;
-    applyAdapterModels(event.adapterId, event.models, event.modelsRevision);
+    applyAdapterModels(event.adapterId, event.models, event.modelsRevision, event.installed);
   });
 }

@@ -709,6 +709,7 @@ fn build_connect_replay_events(
                     adapter_id: s.id.clone(),
                     models: s.models.clone(),
                     models_revision,
+                    installed: s.installed,
                 })
             }
             _ => None,
