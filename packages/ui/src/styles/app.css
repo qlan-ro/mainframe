@@ -68,11 +68,8 @@ code {
       background: transparent;
     }
     *::-webkit-scrollbar-thumb {
-      background: transparent;
-      border-radius: 999px;
-    }
-    *:hover::-webkit-scrollbar-thumb {
       background: var(--border);
+      border-radius: 999px;
     }
   }
 
