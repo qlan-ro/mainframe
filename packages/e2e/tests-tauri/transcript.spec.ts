@@ -41,12 +41,16 @@
  *
  * The `thread` recording now carries three turns: the long-text turn, the Bash-tool
  * turn, and (todo #298) a third short turn whose send is the long-unbreakable-token
- * containment probe below.
+ * containment probe below. `thread.1.ndjson` duplicates it for a SECOND chat: the
+ * mock adapter keys fixtures by chat index, and the session-switch describe needs
+ * both sides of the switch to have a history that survives a re-seed (without it
+ * the second chat re-seeds empty and its transcript can't overflow).
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 
 /** A single sentence repeated 12x (803 chars) — comfortably over ReadMoreBubble's
  *  600-char CHAR_THRESHOLD, and "deliberately" appears in it exactly 12 times
@@ -329,6 +333,83 @@ test.describe('§transcript — compaction pill', () => {
     await expect(pill).toContainText('Context compacted');
 
     await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── §11 Transcript — scroll position across a session switch ─────────────────
+
+/**
+ * The single-thread surface reuses ONE viewport element for every session, so a
+ * switch swaps the content under a scroll offset that survives it. assistant-ui's
+ * own switch-scroll never fires here (its `threadListItem.switchedTo` subscriber
+ * sits inside the per-item subtree; our Viewport is mounted outside it), so the
+ * re-pin in `useThreadBottomPin` is the only thing returning a switched-into
+ * session to its tail. Regression: reading back in ANY session left every session
+ * switched into afterwards parked mid-history.
+ *
+ * Both transcripts must overflow the viewport — a switch between two short chats
+ * cannot tell a working pin from a no-op.
+ */
+test.describe('§transcript — scroll on session switch', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+  let chatA: string;
+  let chatB: string;
+
+  const TAIL_GAP_PX = 4;
+  const gapToTail = (page: Page): Promise<number> =>
+    page.getByTestId('chat-thread-viewport').evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+  /** A transcript that fits its viewport is at the tail no matter what the pin
+   *  does, so each side of the switch has to be proven scrollable first. */
+  const overflow = (page: Page): Promise<number> =>
+    page.getByTestId('chat-thread-viewport').evaluate((el) => el.scrollHeight - el.clientHeight);
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'thread' });
+    project = await createTauriProject(app.page);
+
+    chatA = await createTauriChat(app.page, project.projectId, 'default');
+    for (let turn = 0; turn < 3; turn++) {
+      await sendMessage(
+        app.page,
+        `Session A, turn ${turn}. ${'Filler sentence to build transcript height. '.repeat(12)}`,
+      );
+      await waitForIdle(app.page);
+    }
+
+    chatB = await createTauriChat(app.page, project.projectId, 'default');
+    for (let turn = 0; turn < 3; turn++) {
+      await sendMessage(
+        app.page,
+        `Session B, turn ${turn}. ${'Filler sentence to build transcript height. '.repeat(12)}`,
+      );
+      await waitForIdle(app.page);
+    }
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('switching sessions lands at the tail, even after reading back in the previous one', async () => {
+    const { page } = app;
+    const sidebar = sessionsSidebar(page);
+
+    await sidebar.row(chatA).click();
+    await expect.poll(() => overflow(page), { timeout: 10_000 }).toBeGreaterThan(200);
+    await expect.poll(() => gapToTail(page), { timeout: 10_000 }).toBeLessThan(TAIL_GAP_PX);
+
+    // Read back — the state that used to leak into every later switch.
+    await scrollViewportToTop(page);
+    await expect.poll(() => gapToTail(page), { timeout: 5_000 }).toBeGreaterThan(100);
+
+    await sidebar.row(chatB).click();
+    await expect.poll(() => overflow(page), { timeout: 10_000 }).toBeGreaterThan(200);
+    await expect.poll(() => gapToTail(page), { timeout: 10_000 }).toBeLessThan(TAIL_GAP_PX);
+
+    await sidebar.row(chatA).click();
+    await expect.poll(() => gapToTail(page), { timeout: 10_000 }).toBeLessThan(TAIL_GAP_PX);
   });
 });
 
