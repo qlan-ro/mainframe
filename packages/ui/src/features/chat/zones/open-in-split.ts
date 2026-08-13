@@ -15,15 +15,29 @@
  */
 import { splitVisible, useZonesStore } from './zones-store';
 
-export function openInSplit(activeId: string | null | undefined, id: string): boolean {
+/**
+ * Whether the gesture has anywhere to go — the same question `openInSplit`
+ * answers by returning false, asked WITHOUT performing it. A menu offering the
+ * action reads its disabled state from here, so the offer and the gesture can
+ * never disagree about what is splittable.
+ */
+export function canOpenInSplit(
+  zones: [string, string] | null,
+  activeId: string | null | undefined,
+  id: string,
+): boolean {
   if (activeId == null || id === activeId || id.startsWith('__LOCALID_')) return false;
+  if (!splitVisible(zones, activeId)) return !activeId.startsWith('__LOCALID_');
+  return zones != null && !zones.includes(id);
+}
+
+export function openInSplit(activeId: string | null | undefined, id: string): boolean {
   const store = useZonesStore.getState();
+  if (!canOpenInSplit(store.zones, activeId, id) || activeId == null) return false;
   if (!splitVisible(store.zones, activeId)) {
-    if (activeId.startsWith('__LOCALID_')) return false;
     store.openSplit(activeId, id);
     return true;
   }
-  if (store.zones != null && store.zones.includes(id)) return false;
   store.replaceZone(store.focusedIndex === 0 ? 1 : 0, id);
   return true;
 }
