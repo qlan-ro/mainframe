@@ -52,7 +52,7 @@ beforeEach(() => {
   isLoadingValue = true;
   mainThreadIdValue = null;
   localStorage.clear();
-  useSessionTabsStore.setState({ tabIds: [], hydrated: false });
+  useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
   useSessionListLoadState.setState({ loaded: false });
 });
 
@@ -151,9 +151,11 @@ it('keeps the payload through a failed load, a first send, and a deep-link fetch
   listSucceeded();
   rerender();
 
+  // The sent draft left no tab of its own: it was never protected (the list had
+  // not loaded when it was activated), so the deep-link peek replaced it.
   const state = useSessionTabsStore.getState();
   expect(state.hydrated).toBe(true);
-  expect(state.tabIds).toEqual(['chat-a', 'chat-b', '__LOCALID_1']);
+  expect(state.tabIds).toEqual(['chat-a', 'chat-b']);
 });
 
 it('boots clean on a genuinely session-less install', () => {
@@ -164,8 +166,11 @@ it('boots clean on a genuinely session-less install', () => {
 
   renderHook(() => useSessionTabsSync());
 
+  // The list DID load, so this draft is the user's own — it holds the protected
+  // slot, and nothing persists until it becomes a session.
   const state = useSessionTabsStore.getState();
-  expect(state.tabIds).toEqual(['__LOCALID_1']);
+  expect(state.draftId).toBe('__LOCALID_1');
+  expect(state.tabIds).toEqual([]);
   expect(state.hydrated).toBe(false);
   expect(localStorage.getItem(SESSION_TABS_STORAGE_KEY)).toBeNull();
 });
@@ -182,7 +187,7 @@ it('boots clean on a genuinely session-less install', () => {
  * pruning — the pre-existing #312 cases above must stay green throughout.
  */
 describe('first-send identity handoff', () => {
-  it('collapses the orphaned draft onto the canonical session, in place, across repeated sessions', () => {
+  it('collapses the orphaned draft onto ONE canonical tab, session after session', () => {
     useSessionTabsStore.setState({ tabIds: ['chat-a'] });
     itemsValue = [
       { id: 'chat-a', status: 'regular', custom: {} },
@@ -193,11 +198,11 @@ describe('first-send identity handoff', () => {
     listSucceeded();
     const { rerender } = renderHook(() => useSessionTabsSync());
 
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', '__LOCALID_9']);
+    expect(useSessionTabsStore.getState().draftId).toBe('__LOCALID_9');
 
     // First send + chat.created reload: the local entry is remoteId-stamped and
     // a second, canonical entry lands — but the router has not handed the
-    // active thread over yet.
+    // active thread over yet. The draft demotes onto the canonical id, once.
     itemsValue = [
       { id: 'chat-a', status: 'regular', custom: {} },
       { id: '__LOCALID_9', status: 'regular', remoteId: 'chat-new' },
@@ -205,21 +210,31 @@ describe('first-send identity handoff', () => {
     ];
     rerender();
 
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new']);
+    expect(useSessionTabsStore.getState()).toMatchObject({
+      tabIds: ['chat-a'],
+      previewId: 'chat-new',
+      draftId: null,
+    });
 
-    // The router's handover lands; nothing changes — the seam appends the
-    // canonical id, and reconciliation collapses it in the same flush.
+    // The router's handover lands; nothing changes — the seam finds the
+    // canonical id already open.
     mainThreadIdValue = 'chat-new';
     rerender();
 
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new']);
+    expect(useSessionTabsStore.getState()).toMatchObject({ tabIds: ['chat-a'], previewId: 'chat-new' });
 
-    // A second session runs the same dance: N sessions leaves N tabs, not 2N.
+    // Kept open, it leaves the temporary slot free for the next session.
+    useSessionTabsStore.getState().pinTab('chat-new');
+
+    // A second session runs the same dance: N sessions leave N tabs, not 2N.
     itemsValue = [...itemsValue, { id: '__LOCALID_10', status: 'new' }];
     mainThreadIdValue = '__LOCALID_10';
     rerender();
 
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new', '__LOCALID_10']);
+    expect(useSessionTabsStore.getState()).toMatchObject({
+      tabIds: ['chat-a', 'chat-new'],
+      draftId: '__LOCALID_10',
+    });
 
     itemsValue = [
       { id: 'chat-a', status: 'regular', custom: {} },
@@ -231,8 +246,12 @@ describe('first-send identity handoff', () => {
     mainThreadIdValue = 'chat-two';
     rerender();
 
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-new', 'chat-two']);
-    expect(readPersistedIds()).toEqual(['chat-a', 'chat-new', 'chat-two']);
+    expect(useSessionTabsStore.getState()).toMatchObject({
+      tabIds: ['chat-a', 'chat-new'],
+      previewId: 'chat-two',
+      draftId: null,
+    });
+    expect(readPersistedIds()).toEqual(['chat-a', 'chat-new']);
   });
 
   it('collapses an already-open ghost without waiting for hydration', () => {

@@ -1,8 +1,8 @@
 /**
  * SessionTabs — the strip's rendering and its three affordances over the
- * pinned-plus-preview model: the preview always renders LAST, pinning promotes
- * it in place, and closing resolves the next active over the DISPLAYED order
- * (so a pinned tab's right neighbor can be the preview).
+ * pinned-preview-draft model: the peek and then the unsent draft render LAST,
+ * pinning promotes the peek in place, and closing resolves the next active over
+ * the DISPLAYED order (so a pinned tab's right neighbor can be the preview).
  *
  * The membership seam is mocked away: `useSessionTabsSync` would open a tab for
  * whatever thread is active and rewrite the state each test seeds. It has its
@@ -64,7 +64,39 @@ const tabOrder = () =>
 beforeEach(() => {
   switchToThread.mockReset();
   newSession.mockReset();
-  useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: false });
+  useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
+});
+
+describe('the draft tab', () => {
+  /** The seeded strip plus the unsent draft the user just created. */
+  function seedWithDraft(): void {
+    seed('__LOCALID_1');
+    itemsValue = [...SESSIONS, { id: '__LOCALID_1', status: 'new' }];
+    useSessionTabsStore.setState({ draftId: '__LOCALID_1' });
+  }
+
+  it('renders last, after the preview — a new session is always the end tab', () => {
+    seedWithDraft();
+
+    render();
+
+    expect(tabOrder()).toEqual([
+      'session-tab-chat-a',
+      'session-tab-chat-b',
+      'session-tab-chat-p',
+      'session-tab-__LOCALID_1',
+    ]);
+  });
+
+  it('reads as kept open, not as a peek: no italic title, no pin button', () => {
+    seedWithDraft();
+
+    render();
+
+    expect(screen.getByText('New Session').className).not.toContain('italic');
+    expect(screen.queryByTestId('session-tab-pin-__LOCALID_1')).toBeNull();
+    expect(screen.getByTestId('session-tab-close-__LOCALID_1')).toBeDefined();
+  });
 });
 
 describe('rendering', () => {

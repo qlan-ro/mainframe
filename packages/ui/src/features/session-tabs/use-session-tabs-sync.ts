@@ -5,7 +5,8 @@
  * path at once — sidebar click, palette, toast deep-link, boot auto-select,
  * archived-active fallback — without touching any of those call sites. An
  * activation lands in the PREVIEW slot (editor-style: the next one replaces
- * it); only a just-created draft pins immediately — see `shouldPinOnOpen`.
+ * it); an unsent draft lands in the protected DRAFT slot instead, and stays
+ * there until its first send demotes it to preview (`reconcileTabs`).
  *
  * Also owns reconciliation and persistence: restore once a real `list()` has
  * SETTLED carrying at least one session (merging with tabs the boot already
@@ -29,11 +30,10 @@ import { useSessionTabsStore } from './store';
 import {
   SESSION_TABS_STORAGE_KEY,
   canRestoreTabs,
+  isDraftThread,
   persistTabIds,
-  reconcilePreviewId,
-  reconcileTabIds,
+  reconcileTabs,
   restoreTabIds,
-  shouldPinOnOpen,
 } from './tabs-model';
 
 interface PersistedTabs {
@@ -81,11 +81,18 @@ export function useSessionTabsSync(): void {
   const previewId = useSessionTabsStore((s) => s.previewId);
   const hydrate = useSessionTabsStore((s) => s.hydrate);
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
+  const closeTab = useSessionTabsStore((s) => s.closeTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
 
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
     const persisted = readPersisted();
+    // A live peek outranks the persisted one — but the boot draft is not a
+    // peek. It holds the slot only because nothing real is on screen yet, and
+    // auto-select is about to replace it, so it must not cost the user the
+    // preview they left behind.
+    const live = useSessionTabsStore.getState().previewId;
+    if (live !== null && isDraftThread(live, items)) closeTab(live);
     hydrate(
       restoreTabIds(persisted.ids, items),
       persisted.preview === null ? null : (restoreTabIds([persisted.preview], items)[0] ?? null),
@@ -102,12 +109,19 @@ export function useSessionTabsSync(): void {
       useZonesStore.getState().openSplit(left, right);
       if (persisted.zonesFrac != null) useZonesStore.getState().setFrac(persisted.zonesFrac);
     }
-  }, [hydrated, items, isListLoading, listLoaded, hydrate]);
+  }, [hydrated, items, isListLoading, listLoaded, hydrate, closeTab]);
 
   useEffect(() => {
-    if (mainThreadId) ensureTab(mainThreadId, { pin: shouldPinOnOpen(mainThreadId, items) });
-    // `items` is deliberately not a dep: membership reacts to ACTIVATION, and
-    // re-running on list ticks would re-preview a session the user just closed.
+    if (!mainThreadId) return;
+    // The runtime's transient boot draft and the user's "+" draft are the same
+    // state; only WHEN they are activated tells them apart. A draft active
+    // before `list()` ever returned is the boot one — it peeks, so auto-select
+    // replaces it instead of leaving a "New Session" tab behind.
+    const protect = isDraftThread(mainThreadId, items) && listLoaded;
+    ensureTab(mainThreadId, protect ? 'draft' : 'preview');
+    // `items` and `listLoaded` are deliberately not deps: membership reacts to
+    // ACTIVATION and reads both as of that moment, and re-running on list ticks
+    // would re-preview a session the user just closed.
   }, [mainThreadId, ensureTab]);
 
   // Zones ⊆ pinned tabs, always: splitting is a "keep this open" signal, so a
@@ -120,16 +134,13 @@ export function useSessionTabsSync(): void {
     if (zonesPair == null) return;
     const store = useSessionTabsStore.getState();
     for (const id of zonesPair) {
-      store.ensureTab(id, { pin: true });
-      store.pinTab(id); // ensureTab won't promote an existing preview
+      store.ensureTab(id, 'pinned');
+      store.pinTab(id); // ensureTab won't promote a tab that is already open
     }
   }, [zonesPair, previewId]);
 
   useEffect(() => {
-    reconcile(
-      (ids) => reconcileTabIds(ids, items, mainThreadId),
-      (id) => reconcilePreviewId(id, items, mainThreadId),
-    );
+    reconcile((state) => reconcileTabs(state, items, mainThreadId));
   }, [items, mainThreadId, reconcile]);
 
   // `items` changes identity on every stream tick (title/status updates), so
