@@ -1366,6 +1366,8 @@ name = "mainframe-adapter-mock"
 version = "0.0.0"
 dependencies = [
  "mainframe-adapter-api",
+ "mainframe-background-tasks",
+ "mainframe-claude-workflows",
  "mainframe-types",
  "serde",
  "serde_json",
