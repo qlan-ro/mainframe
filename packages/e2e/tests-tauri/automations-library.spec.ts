@@ -47,7 +47,13 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import {
+  createTauriProject,
+  createTauriChat,
+  createTauriAutomation,
+  cleanupTauriProject,
+  type TauriProject,
+} from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
@@ -122,5 +128,37 @@ test.describe('§automations-library', () => {
     await openLibraryFor(page, chatIdA);
     await expect(page.getByTestId('automations-section-library')).toBeVisible();
     await closeLibrary(page);
+  });
+
+  test('delete, confirmed: accepting the confirm dialog removes the row and it stays gone after a re-fetch', async () => {
+    const { page } = app;
+    // Two automations: the anchor is never deleted, so the post-delete
+    // re-fetch assertion is real — without it, a view that never fetched
+    // anything would also show zero rows for the (otherwise sole) target.
+    const anchorId = await createTauriAutomation({ name: 'delete-confirmed anchor', projectId: projectA.projectId });
+    const targetId = await createTauriAutomation({ name: 'delete-confirmed target', projectId: projectA.projectId });
+
+    await openLibraryFor(page, chatIdA);
+
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
+    await page.getByTestId(`automations-library-delete-${targetId}`).click();
+
+    const confirmDialog = page.getByTestId('automations-delete-confirm');
+    await expect(confirmDialog).toBeVisible();
+    await expect(confirmDialog).toContainText('delete-confirmed target');
+
+    await page.getByTestId('automations-delete-confirm-confirm').click();
+    await expect(confirmDialog).toHaveCount(0);
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toHaveCount(0);
+
+    await closeLibrary(page);
+    await openLibraryFor(page, chatIdA);
+
+    // Order matters: the anchor row can only appear from a landed re-fetch
+    // (definitions starts empty after the reload), which is what makes the
+    // target's absence next mean "deleted server-side" rather than "nothing
+    // loaded yet".
+    await expect(page.getByTestId(`automations-library-row-${anchorId}`)).toBeVisible();
+    await expect(page.getByTestId(`automations-library-row-${targetId}`)).toHaveCount(0);
   });
 });
