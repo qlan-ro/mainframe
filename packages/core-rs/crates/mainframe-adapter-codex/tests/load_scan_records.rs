@@ -108,10 +108,11 @@ async fn load_scan_records_reconstructs_a_pr_create_pair_from_the_rollout() {
         .await
         .expect("load_scan_records should not error");
 
-    let tool_use_msg = history
+    let tool_use_idx = history
         .iter()
-        .find(|m| m.r#type == ChatMessageType::Assistant)
+        .position(|m| m.r#type == ChatMessageType::Assistant)
         .unwrap_or_else(|| panic!("expected an Assistant message, got {history:?}"));
+    let tool_use_msg = &history[tool_use_idx];
     let has_bash_create = tool_use_msg.content.iter().any(|c| {
         matches!(
             c,
@@ -126,10 +127,11 @@ async fn load_scan_records_reconstructs_a_pr_create_pair_from_the_rollout() {
         "expected a Bash tool_use for the PR-create command, got {tool_use_msg:?}"
     );
 
-    let tool_result_msg = history
+    let tool_result_idx = history
         .iter()
-        .find(|m| m.r#type == ChatMessageType::ToolResult)
+        .position(|m| m.r#type == ChatMessageType::ToolResult)
         .unwrap_or_else(|| panic!("expected a ToolResult message, got {history:?}"));
+    let tool_result_msg = &history[tool_result_idx];
     let has_pr_url = tool_result_msg.content.iter().any(|c| {
         matches!(
             c,
@@ -140,6 +142,13 @@ async fn load_scan_records_reconstructs_a_pr_create_pair_from_the_rollout() {
     assert!(
         has_pr_url,
         "expected the tool result to carry the PR URL, got {tool_result_msg:?}"
+    );
+    assert!(
+        tool_use_idx < tool_result_idx,
+        "the ToolResult must follow its Assistant tool_use — a reversed pair \
+         would classify a PR-create as `mentioned` instead of `created` \
+         (scan_history_for_prs registers the pending create from the \
+         tool_use first), got tool_use at {tool_use_idx}, tool_result at {tool_result_idx}"
     );
 }
 
