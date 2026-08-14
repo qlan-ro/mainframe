@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { arrangeSessions, SESSION_SORTS } from '../group-sessions';
+import type { SortMode, SessionGroupResult } from '../group-sessions';
 
 // ---------------------------------------------------------------------------
 // Fixed reference clock — 2026-06-07T12:00:00 local time.
@@ -296,4 +297,75 @@ describe("arrangeSessions mode 'status'", () => {
     const groups = arrangeSessions(items, 'status', NOW);
     expect(idsOf(groups, 'Pinned')).toEqual(['p-new', 'p-old']);
   });
+});
+
+// ---------------------------------------------------------------------------
+// arrangeSessions is independent of input order (shuffle invariance)
+// ---------------------------------------------------------------------------
+
+/** Deterministic PRNG (no Math.random, so a failing seed reproduces). */
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Decorate-sort-undecorate shuffle — no indexed swaps, which noUncheckedIndexedAccess rejects. */
+function seededShuffle(items: SessionItem[], seed: number): SessionItem[] {
+  const rand = mulberry32(seed);
+  return items
+    .map((it) => ({ it, k: rand() }))
+    .sort((a, b) => a.k - b.k)
+    .map((e) => e.it);
+}
+
+function serialize(groups: SessionGroupResult[]): [string, string[]][] {
+  return groups.map((g) => [g.label, g.items.map((i) => i.id)]);
+}
+
+describe('arrangeSessions is independent of input order', () => {
+  const PROJECTS = [
+    { id: 'proj-a', name: 'Alpha' },
+    { id: 'proj-b', name: 'Beta' },
+  ];
+
+  const fixture: SessionItem[] = [
+    item('p1', { projectId: 'proj-a', pinned: true, updatedAt: TODAY_1100, displayStatus: 'working', title: 'Zulu' }),
+    item('p2', {
+      projectId: 'proj-b',
+      pinned: true,
+      updatedAt: YESTERDAY_1000,
+      displayStatus: 'idle',
+      title: 'Yankee',
+    }),
+    item('a1', { projectId: 'proj-a', updatedAt: TODAY_0900, displayStatus: 'working', title: 'Bravo' }),
+    item('a2', { projectId: 'proj-a', updatedAt: EARLIER_MON, displayStatus: 'waiting', title: 'Echo' }),
+    // a2/a3 share updatedAt (planted tie).
+    item('a3', { projectId: 'proj-a', updatedAt: EARLIER_MON, displayStatus: 'idle', title: 'Foxtrot' }),
+    item('b1', { projectId: 'proj-b', updatedAt: TODAY_1100, displayStatus: 'idle', title: 'Same Title' }),
+    // b1/b2 share a title (planted tie).
+    item('b2', { projectId: 'proj-b', updatedAt: YESTERDAY_1000, displayStatus: 'working', title: 'Same Title' }),
+    item('g1', { projectId: 'proj-ghost1', updatedAt: TODAY_0900, displayStatus: 'waiting', title: 'Golf' }),
+    item('g2', { projectId: 'proj-ghost2', updatedAt: EARLIER_MON, displayStatus: 'working', title: 'Hotel' }),
+    item('g3', { projectId: 'proj-ghost1', updatedAt: EARLIER_MON, displayStatus: 'idle', title: 'India' }),
+  ];
+
+  const MODES: SortMode[] = ['recent', 'name', 'status', 'project'];
+  const SEEDS = [1, 2, 3, 7, 42];
+
+  for (const mode of MODES) {
+    for (const seed of SEEDS) {
+      it(`mode '${mode}' seed ${seed}: shuffled input yields identical output`, () => {
+        const expected = serialize(arrangeSessions(fixture, mode, NOW, PROJECTS));
+        const shuffled = seededShuffle(fixture, seed);
+        const actual = serialize(arrangeSessions(shuffled, mode, NOW, PROJECTS));
+        expect(actual).toEqual(expected);
+      });
+    }
+  }
 });
