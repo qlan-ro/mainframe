@@ -1,7 +1,9 @@
 /**
  * TasksBoard — the Tasks full-view modal shell.
  *
- * Header: checklist glyph + "Tasks" + active/done chip + List/Board switch + New.
+ * Header: checklist glyph + "Tasks" + the project picker + active/done chip +
+ * List/Board switch + New. The picker re-scopes this open of the modal only —
+ * the host owns the scope, and the sidebar filter is never written.
  * Body: TasksFilterBar + TaskListView or TaskBoardView.
  *
  * Loads the todos store itself: the always-mounted sidebar section that used to
