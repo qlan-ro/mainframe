@@ -149,7 +149,7 @@ fn a_bash_pr_create_and_its_result_persist_and_emit_through_the_wired_sink() {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .as_slice(),
-        [expected.clone()]
+        std::slice::from_ref(&expected)
     );
     // The real sink also emits ChatUpdated/MessageAdded for the underlying
     // tool_use/tool_result traffic (SessionSinkImpl's own job); this asserts
