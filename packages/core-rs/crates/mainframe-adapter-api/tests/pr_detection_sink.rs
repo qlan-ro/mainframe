@@ -325,3 +325,29 @@ fn codex_shaped_input_produces_the_same_pr_as_claude_shaped_input_for_the_same_u
         }]
     );
 }
+
+// --- Task 8: tool-meta eviction ------------------------------------------
+
+#[test]
+fn tool_result_reusing_a_consumed_tool_use_id_emits_nothing_the_second_time() {
+    let inner = Arc::new(RecordingSink::default());
+    let sink = PrDetectionSink::new(inner.clone());
+
+    sink.on_message(vec![bash_tool_use("tu1", "gh pr create --title x")], None);
+    sink.on_tool_result(vec![tool_result(
+        "tu1",
+        "Created https://github.com/acme/repo/pull/7",
+        false,
+    )]);
+    assert_eq!(inner.prs().len(), 1);
+
+    // Same tool_use_id, no matching on_message this time — the meta from the
+    // first result was evicted (mirrors user_event.rs:465-467).
+    sink.on_tool_result(vec![tool_result(
+        "tu1",
+        "Created https://github.com/acme/repo/pull/99",
+        false,
+    )]);
+
+    assert_eq!(inner.prs().len(), 1);
+}
