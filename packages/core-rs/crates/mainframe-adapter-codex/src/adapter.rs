@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, ExternalSessionPage, SessionOptions,
@@ -71,20 +72,28 @@ pub struct CodexAdapter {
     /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
     /// `enrichPath` env mutation).
     resolved_path: ResolvedPath,
+    /// Shared with every other adapter (todo #327) so a Codex sub-agent's
+    /// activity row lands in the same chat-scoped live set a Claude sub-agent's
+    /// does.
+    background_tasks: Arc<BackgroundTaskTracker>,
 }
 
 impl Default for CodexAdapter {
     fn default() -> Self {
-        Self::new(ResolvedPath::from_value("/usr/bin:/bin"))
+        Self::new(
+            Arc::new(BackgroundTaskTracker::new()),
+            ResolvedPath::from_value("/usr/bin:/bin"),
+        )
     }
 }
 
 impl CodexAdapter {
-    pub fn new(resolved_path: ResolvedPath) -> Self {
+    pub fn new(background_tasks: Arc<BackgroundTaskTracker>, resolved_path: ResolvedPath) -> Self {
         Self {
             sessions: Arc::new(Mutex::new(Vec::new())),
             cached_models: Arc::new(Mutex::new(None)),
             resolved_path,
+            background_tasks,
         }
     }
 
@@ -270,7 +279,12 @@ impl Adapter for CodexAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(CodexSession::new(options, None, self.resolved_path.clone()));
+        let session = Arc::new(CodexSession::new(
+            options,
+            None,
+            self.resolved_path.clone(),
+            Arc::clone(&self.background_tasks),
+        ));
         let sessions = self.sessions.clone();
         let id = session.id().to_string();
         session.set_on_exit(Box::new(move || {

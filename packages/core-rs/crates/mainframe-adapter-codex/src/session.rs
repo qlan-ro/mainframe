@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 
 use mainframe_adapter_api::{
@@ -125,7 +126,13 @@ impl CodexSession {
         options: SessionOptions,
         on_exit: Option<Box<dyn FnOnce() + Send>>,
         resolved_path: ResolvedPath,
+        background_tasks: Arc<BackgroundTaskTracker>,
     ) -> Self {
+        let state = CodexSessionState {
+            mainframe_chat_id: options.mainframe_chat_id.clone(),
+            background_tasks: Some(background_tasks),
+            ..CodexSessionState::default()
+        };
         Self {
             id: nanoid!(),
             project_path: options.project_path,
@@ -134,7 +141,7 @@ impl CodexSession {
             client: Arc::new(Mutex::new(None)),
             approval_handler: Arc::new(Mutex::new(None)),
             sink: Arc::new(Mutex::new(null_sink())),
-            state: Arc::new(Mutex::new(CodexSessionState::default())),
+            state: Arc::new(Mutex::new(state)),
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
