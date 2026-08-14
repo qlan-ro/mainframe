@@ -179,6 +179,64 @@ describe("arrangeSessions mode 'project'", () => {
   it('returns an empty array for no items', () => {
     expect(arrangeSessions([], 'project', NOW, PROJECTS)).toEqual([]);
   });
+
+  it('orders a project section by updatedAt, newest first', () => {
+    const items = [
+      item('a-old', { projectId: 'proj-a', updatedAt: EARLIER_MON }),
+      item('a-new', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+      item('a-mid', { projectId: 'proj-a', updatedAt: YESTERDAY_1000 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Alpha')).toEqual(['a-new', 'a-mid', 'a-old']);
+  });
+
+  it('orders the unknown-project fallback section by updatedAt, newest first', () => {
+    const items = [
+      item('g-old', { projectId: 'proj-ghost', updatedAt: EARLIER_MON }),
+      item('g-new', { projectId: 'proj-ghost', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'proj-ghost')).toEqual(['g-new', 'g-old']);
+  });
+
+  it('orders multiple ghost-project sections by their newest session, after every known-project section', () => {
+    const items = [
+      item('a1', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+      item('gh1-old', { projectId: 'proj-ghost1', updatedAt: EARLIER_MON }),
+      item('gh2-new', { projectId: 'proj-ghost2', updatedAt: TODAY_0900 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Alpha', 'proj-ghost2', 'proj-ghost1']);
+  });
+
+  it('tiebreaks ghost sections with identical newest activity by projectId ascending', () => {
+    const items = [
+      item('ghz1', { projectId: 'proj-ghost-z', updatedAt: TODAY_1100 }),
+      item('ghy1', { projectId: 'proj-ghost-y', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['proj-ghost-y', 'proj-ghost-z']);
+  });
+
+  it('lifts a pinned session out of its project section and still orders the remainder by recency', () => {
+    const items = [
+      item('a-old', { projectId: 'proj-a', updatedAt: EARLIER_MON }),
+      item('a-pin', { projectId: 'proj-a', pinned: true, updatedAt: YESTERDAY_1000 }),
+      item('a-new', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Pinned')).toEqual(['a-pin']);
+    expect(idsOf(groups, 'Alpha')).toEqual(['a-new', 'a-old']);
+  });
+
+  it('orders a multi-session Pinned group by recency in project mode (regression guard)', () => {
+    const items = [
+      item('pin-old', { projectId: 'proj-a', pinned: true, updatedAt: EARLIER_MON }),
+      item('pin-new', { projectId: 'proj-b', pinned: true, updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Pinned')).toEqual(['pin-new', 'pin-old']);
+  });
 });
 
 describe("arrangeSessions mode 'status'", () => {
