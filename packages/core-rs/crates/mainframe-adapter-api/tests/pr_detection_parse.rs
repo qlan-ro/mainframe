@@ -1,6 +1,7 @@
 //! Ported assertion-for-assertion from `mainframe-adapter-claude::pr_detection`'s
 //! `mod tests` (todo #339 task 2) — the pure parser now lives in
 //! `mainframe-adapter-api::pr_detection`.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use mainframe_adapter_api::pr_detection::*;
 
