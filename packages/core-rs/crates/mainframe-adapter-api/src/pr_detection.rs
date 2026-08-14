@@ -11,6 +11,7 @@
 
 pub mod command;
 pub mod history;
+pub mod live;
 pub mod parse;
 mod text;
 
@@ -19,6 +20,7 @@ pub use command::{
     should_scan_tool_result_for_pr,
 };
 pub use history::scan_history_for_prs;
+pub use live::LivePrScanner;
 pub use parse::{
     extract_pr_from_tool_result, parse_azure_pr_url, parse_gitlab_mr_url, parse_pr_url,
 };
