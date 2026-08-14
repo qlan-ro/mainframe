@@ -26,6 +26,7 @@ use tokio::sync::Notify;
 
 pub mod adapter;
 pub mod plan_mode_actions;
+pub mod pr_detection;
 pub mod resolve_executable;
 pub mod title;
 

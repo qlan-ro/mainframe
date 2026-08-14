@@ -13,4 +13,5 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 dashmap = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 mainframe-types = { workspace = true }
