@@ -67,7 +67,7 @@ async fn mock_adapter_output_is_detected_through_the_shared_sink_decorator() {
     // The fixture deliberately contains no `onPrDetected` event: the decorator
     // delegates that call straight through, so a recorded one would satisfy
     // the assertion below without any detection actually happening.
-    let lines = vec![
+    let lines = [
         serde_json::json!({
             "dir": "in",
             "method": "sendMessage",
