@@ -3,6 +3,9 @@
 //! unchanged.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 
 use crate::thread_registry::ThreadRegistryDeps;
 
@@ -53,6 +56,16 @@ pub struct CodexSessionState {
     pub compaction_emitted: bool,
     /// Registry DB override — `None` in production, `Some` in tests.
     pub registry_deps: Option<ThreadRegistryDeps>,
+    /// The Mainframe chat id this session belongs to — the key
+    /// `BackgroundTaskTracker` uses, not the CLI's own thread id.
+    pub mainframe_chat_id: String,
+    /// `None` when the session was built without a tracker (every existing test
+    /// state, and the history/reload paths, which build their own states) — every
+    /// activity hook then no-ops, which is also what keeps a resumed session from
+    /// rehydrating rows for its sub-agents.
+    pub background_tasks: Option<Arc<BackgroundTaskTracker>>,
+    /// child thread id → its live tracker task id. Presence means "a row is live".
+    pub agent_task_ids: HashMap<String, String>,
 }
 
 impl CodexSessionState {
