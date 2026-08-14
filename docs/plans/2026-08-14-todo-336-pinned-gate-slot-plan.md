@@ -52,8 +52,14 @@ re-deriving them.
    (`packages/ui/src/features/chat/zones/ChatZone.tsx:75-120`). Per-zone containment is therefore automatic.
 7. The stock shadcn card in this repo already ships the Tailwind v4 `has-data-[slot=…]:` variant
    (`packages/ui/src/components/ui/card.tsx:19`), so a parent can react to a child slot's presence with no JS.
-8. Scrollbars are styled globally for every element (`*::-webkit-scrollbar` under an `@supports` guard,
-   `packages/ui/src/styles/app.css:59-81`), so a new internal scroll container needs no scrollbar class.
+8. Scrollbars are styled globally for every element (`*::-webkit-scrollbar { width: 8px }` under an `@supports`
+   guard, `packages/ui/src/styles/app.css:59-73`). Styling `::-webkit-scrollbar` at all makes Chromium and WebKit
+   paint a **classic, layout-consuming** scrollbar: 8px comes out of the scroll container's content box, so any
+   block child of a new scroll container is 8px narrower than the container's padding box while it overflows.
+   The repo's opt-out is `[scrollbar-width:none]` — the standards property, which suppresses the webkit custom
+   scrollbar and reserves no space. Three shipped call sites:
+   `packages/ui/src/components/ui/attachment.tsx:161-162` (which names it "app.css's opt-out idiom"),
+   `packages/ui/src/layout/WorkspaceTabStrip.tsx:47`, `packages/ui/src/features/session-tabs/SessionTabs.tsx:143`.
 9. The composer's own growth is capped at `max-h-48` (192px) on its scroll wrapper
    (`packages/ui/src/features/chat/composer/Composer.tsx:167-168`), and the plan gate already caps its markdown body at
    `max-h-[300px]` with internal scrolling (`packages/ui/src/features/chat/gates/PlanGate.tsx:36`) — nested scrolling
@@ -67,6 +73,12 @@ re-deriving them.
 12. `packages/ui/src/features/chat/thread/__tests__/ChatThread-degraded-placement.test.tsx:79-120` is the shipped
     precedent for asserting footer placement in jsdom (`card.closest('[data-testid="chat-thread-footer"]')` plus a
     "not inside `tp-messages`" counter-assertion). The new placement test mirrors it.
+13. Gate/composer width parity survives today only because the sticky footer sits **inside** the scrolling viewport
+    (`ChatThread.tsx:158-198`): the transcript column and `chat-thread-footer` carry the same
+    `mx-auto w-full max-w-[min(48rem,100%-116px)] px-5` recipe *inside the same scroll container*, so the viewport's
+    8px scrollbar narrows both equally and the edges still coincide. The pinned slot is the first scroll container
+    that would narrow only the gate's side of that pair — which is why fact 8 is load-bearing here and was not
+    before.
 
 ## Decisions
 
@@ -89,6 +101,22 @@ re-deriving them.
 - **The slot needs 4px of internal padding with a matching negative margin** (`-mx-1 px-1 py-1`). `overflow-y-auto`
   makes the other axis compute to `auto` as well, which would clip the card's `ring-3` accent; the padding gives the
   ring room while the negative margin keeps the card's own edges aligned with the composer (fact 5's e2e assertion).
+- **The slot suppresses its own scrollbar with `[scrollbar-width:none]`.** This is the finding that sent the plan back
+  for revision, so the geometry is written out. A scrolling slot paints the global 8px classic scrollbar (fact 8),
+  which comes out of its content box: with `-mx-1 px-1` the card's left edge stays at `wrapper.left`
+  (`−4px` margin + `4px` padding) while its right edge lands at `wrapper.right + 4 − 8 − 4 = wrapper.right − 8`.
+  That 8px delta breaks `expectGateMatchesComposerWidth` (`packages/e2e/tests-tauri/gates.spec.ts:31-40`, tolerance
+  1px on **both** edges) exactly when the AC requires the slot to scroll — including in the *existing*
+  `§permission gate details` test, whose second parity call (`gates.spec.ts:81`) runs with Details expanded and the
+  workspace open, a card of roughly 250px against a slot budget of roughly 210-240px. `[scrollbar-width:none]`
+  removes the cost instead of compensating for it: the content box equals the padding box in **both** the scrolling
+  and the resting state, so one symmetric `-mx-1 px-1` keeps parity exact and no assertion tolerance moves.
+  Cost: the slot scrolls with no visible scrollbar. Accepted — the collapsed card does not overflow at all, the
+  action row stays reachable by scrolling (wheel, trackpad, keyboard), and Task 7 case 1 verifies reachability.
+  *Fallbacks, in order:* (a) if WKWebView still paints a scrollbar (a macOS below Safari 18.2 has no
+  `scrollbar-width` support), add `[&::-webkit-scrollbar]:w-0` — the repo has no arbitrary-pseudo-variant precedent,
+  so this is a fallback, not the opener; (b) if the cut edge reads as the end of the card, add a bottom fade mask
+  (`mask-image` linear-gradient) to the slot — it costs no layout width, so parity is unaffected either way.
 - **No entrance animation, no transcript marker, no auto-scroll on gate arrival.** All three are the brief's
   recommendations and all three are already satisfied by doing nothing (fact 3).
 - **`use-thread-bottom-pin.ts` is not touched** (fact 4).
@@ -119,9 +147,10 @@ Add cases:
   (fact 11);
 - a front that clears and then returns (the delayed re-read restoring a dropped reply) re-mounts the slot with the
   same gate — rerender with `front: entry → undefined → same entry`;
-- the slot element carries the classes the cap depends on: `data-slot="chat-gate-slot"`, `overflow-y-auto`,
-  `min-h-0`, `flex-1`. State in a comment that this is a class-string regression check only — the real geometry is
-  verified in Tasks 7 and 8.
+- the slot element carries the classes the cap and the width parity depend on: `data-slot="chat-gate-slot"`,
+  `overflow-y-auto`, `[scrollbar-width:none]`, `min-h-0`, `flex-1`. State in a comment that this is a class-string
+  regression check only — the real geometry is verified in Tasks 7 and 9 — and that dropping
+  `[scrollbar-width:none]` costs 8px of card width whenever the slot scrolls (fact 8).
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/gates/__tests__/ChatGateMount.test.tsx`
 **fails** on the new cases and **passes** every pre-existing case.
 
@@ -135,7 +164,7 @@ Below the existing `if (!front) return null` guard, wrap the dispatched card in:
 <div
   data-testid="chat-thread-gate-slot"
   data-slot="chat-gate-slot"
-  className="-mx-1 mb-2 min-h-0 flex-1 overflow-y-auto px-1 py-1"
+  className="-mx-1 mb-2 min-h-0 flex-1 overflow-y-auto px-1 py-1 [scrollbar-width:none]"
 >
   {card}
 </div>
@@ -144,7 +173,8 @@ Below the existing `if (!front) return null` guard, wrap the dispatched card in:
 Keep the dispatch table, the adapter lookup, the `reply` passthrough, and every existing testid untouched. Refactor
 the three `return` branches into a single `card` value so the wrapper is written once. Update the component's
 docstring: it no longer renders "inline at the thread tail" — say where it renders now and why the padding/negative
-margin pair exists (ring clipping), one line each.
+margin pair exists (ring clipping), one line each. Add one line for `[scrollbar-width:none]`: an 8px classic
+scrollbar would come out of the card's width and break the composer parity the gates e2e asserts.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/gates/__tests__/ChatGateMount.test.tsx`
 passes, including Task 2's new cases; file stays under 300 lines.
 
@@ -183,14 +213,19 @@ No file. Run `pnpm tauri:dev` from `packages/app-tauri` in the background with o
 throwaway `MAINFRAME_DATA_DIR` and a non-31415 `DAEMON_PORT` (never hijack the production daemon). Check, with the
 window resized to roughly 1200×600:
 1. a permission gate with its Details disclosure expanded — the slot scrolls internally, the composer stays put, the
-   transcript keeps its majority of the pane;
+   transcript keeps its majority of the pane. Three extra checks here, because this is the case the width-parity
+   finding turns on: **no scrollbar renders inside the slot** (WKWebView is the engine `[scrollbar-width:none]` is
+   unproven on — Playwright's Chromium is covered by Task 9); the card's left and right edges still line up with the
+   composer's *while the slot is scrolled*; and the action row (`Deny` / `Allow once`) is reachable by scrolling the
+   slot. If a scrollbar renders, take fallback (a); if the cut edge reads as the end of the card, take fallback (b);
+   both are spelled out under Decisions;
 2. a long plan gate — same, and the card's tinted ring is not clipped on any edge;
 3. scroll the transcript to the top, raise a gate, confirm the transcript does not move and the gate is fully visible;
 4. answer it, confirm the slot disappears and the transcript reclaims the space;
 5. open the split view, raise a gate in one zone, and confirm it pins in that zone only — the other zone's footer is
    unchanged (fact 6 predicts this; this is the acceptance criterion's verification step).
 If the cap does not engage, fall back in the order given under Decisions and note which fallback shipped.
-Verify: record the four observations in the completion note; attach a screenshot for cases 1 and 2.
+Verify: record the five observations in the completion note; attach a screenshot for cases 1 and 2.
 
 **Task 8 — typecheck.**
 Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck` is clean.
@@ -212,12 +247,26 @@ Recipe:
   (`scrollHeight - clientHeight > 8` via `page.getByTestId('chat-thread-viewport').evaluate(...)`) — this is a
   precondition, and it must be an assertion, not an `if`. If it does not hold with one turn, answer gate 1 first and
   run the checks against gate 2, whose transcript is longer.
-- Scroll the viewport to the top with the `scrollViewportToTop` recipe from
-  `packages/e2e/tests-tauri/transcript.spec.ts:77-82`, then assert: `chat-permission-gate` is
-  `toBeInViewport()`, `chat-permission-allow-once` is `toBeInViewport()` and clickable, and the viewport's `scrollTop`
-  is still 0 after a short settle (the transcript offset was not moved).
+- **With the card collapsed** (Details closed, so the slot does not overflow), scroll the viewport to the top with
+  the `scrollViewportToTop` recipe from `packages/e2e/tests-tauri/transcript.spec.ts:77-82`, then assert:
+  `chat-permission-gate` is `toBeInViewport()`, `chat-permission-allow-once` is `toBeInViewport()` and clickable, and
+  the viewport's `scrollTop` is still 0 after a short settle (the transcript offset was not moved). Order matters:
+  run these before expanding Details. An expanded card can push the action row below the slot's fold, which would
+  fail `toBeInViewport()` for a reason this phase is not testing.
+- **Then force the slot to overflow and re-check parity** — this is the phase that guards the scrollbar suppression
+  (Decisions; fact 8). Click `chat-permission-details-toggle`, wait for `chat-permission-details-pre`, and assert the
+  **slot** actually scrolls — `page.getByTestId('chat-thread-gate-slot').evaluate((el) => el.scrollHeight - el.clientHeight > 0)`.
+  This is a precondition and must be an assertion, not an `if`: without it the parity check that follows passes
+  vacuously. If one turn does not overflow the slot at 1200×600, shrink the window height further or open the
+  workspace strip (`surface-rail-workspace`, the narrowing trick `gates.spec.ts:79-85` already uses) rather than
+  dropping the check. Then call `expectGateMatchesComposerWidth` in that scrolling state.
 - Answer the gate and `waitForIdle`, so the block leaves the app idle like every neighbouring describe.
-- Keep `expectGateMatchesComposerWidth` in the block — it now also guards the negative-margin trick.
+- Keep `expectGateMatchesComposerWidth` in the block. It now guards two things at once: the negative-margin/padding
+  pair, and `[scrollbar-width:none]` — dropping the latter costs 8px on the right edge against a 1px tolerance, and
+  only the overflowing phase above catches it. Note in the block's comment that the pre-existing
+  `§permission gate details` test (`gates.spec.ts:59-90`) now exercises the same contract incidentally: its second
+  parity call at `:81` runs with Details expanded and the workspace open, where the slot may already be scrolling.
+  That coverage is intended, not luck — do not "simplify" it away.
 Verify: `pnpm test:e2e -- gates.spec.ts` green (batch the e2e run at the end of the series, per house practice).
 
 ## Risks
@@ -228,4 +277,14 @@ Verify: `pnpm test:e2e -- gates.spec.ts` green (batch the e2e run at the end of 
 - **`overflow-y-auto` clipping the accent ring** is the most likely cosmetic surprise; the padding/negative-margin
   pair is specified, and both the e2e width assertion and Task 7's case 2 catch a mistake.
 - **E2E overflow is environment-sensitive.** The precondition assertion makes a non-overflowing window fail loudly
-  rather than pass vacuously.
+  rather than pass vacuously. The slot's own overflow is the marginal one — the expanded permission card clears the
+  cap by only tens of pixels — so Task 9 asserts `scrollHeight > clientHeight` on the slot itself rather than
+  inferring it from the viewport.
+- **`scrollbar-width` support differs by engine.** Chromium honors it over `::-webkit-scrollbar` (and is what the
+  e2e runs on, so Task 9's overflowing-phase parity check guards it); WKWebView needs Safari 18.2 or newer. The three
+  shipped call sites in fact 8 are the in-app precedent, Task 7 case 1 is the explicit check, and fallback (a) is one
+  class.
+- **A scrolling slot has no visible scroll affordance.** The action row can sit below the fold on a tall gate with
+  nothing pointing at it. Task 7 case 1 checks reachability; fallback (b) is a bottom fade mask. If it turns out to
+  bite in practice, the larger follow-up — pinning the card's head and actions and scrolling only its body — is a
+  separate change to `GateShell` plus all three gates, deliberately out of this plan's scope.
