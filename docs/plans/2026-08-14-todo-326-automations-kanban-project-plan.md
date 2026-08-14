@@ -167,7 +167,10 @@ Create `packages/ui/src/features/project-scope/__tests__/use-modal-project-scope
 (e) closing and reopening re-seeds from the filter's current value, discarding the override
 (spec AC7);
 (f) opening while `useProjects()` is still returning `[]`, then having it resolve, seeds once from
-the resolved list and does not re-seed again afterwards (fact 14).
+the resolved list and does not re-seed again afterwards (fact 14);
+(g) rendering with `open=true` on the **first** render seeds immediately — a mount that is already
+open is a rising edge, not a steady state (several existing suites render their host with the modal
+already open).
 Verify: same single-file vitest command — fails on the missing module.
 
 ### Group B — the shared project-scope seam
@@ -183,7 +186,10 @@ Create `packages/ui/src/features/project-scope/use-modal-project-scope.ts`. It r
 `useSessionFilters((s) => s.filterProjectId)`, `useActiveIdentity().projectId` and
 `useProjects().projects`, and holds `useState<string | null>`. Seed on the **rising edge of `open`
 only**, tracked with a `useRef<boolean>` of the previous `open` (fact 17 — do not key the effect on
-the filter). One extra guard: if the rising-edge seed ran while `projects` was empty, seed once
+the filter). **Initialize that ref to `false`**, so a component that mounts with `open` already
+`true` counts as a rising edge and seeds on its first effect; several suites render their host that
+way, and a ref seeded from the current `open` would leave those mounts unscoped forever. One extra
+guard: if the rising-edge seed ran while `projects` was empty, seed once
 more when a non-empty list first arrives, then stop (a `useRef` "seeded" latch). Reset to `null` on
 the falling edge so a reopen cannot show a stale override before its effect runs. `setProjectId`
 writes local state and nothing else — no store, no localStorage. The hook returns only
@@ -396,8 +402,25 @@ be empty at the instant the modal opens, and a rising-edge-only wiring would lea
 `useAutomationToasts()` and `useAutomationEvents()` unconditional and ahead of any early return.
 Rewrite the store field's doc comment now that it is true: `scopeProjectId` is the open modal's
 scope and is `null` whenever the modal is closed.
-Rewrite the two tests in `packages/ui/src/features/automations/__tests__/AutomationsHost.test.tsx`
-that pin the deleted effect, in this task:
+Rewrite the three tests in `packages/ui/src/features/automations/__tests__/AutomationsHost.test.tsx`
+that this change breaks, in this task:
+- `'renders the view once opened, and loads automations from the gateway'` (lines 50-62) asserts
+  `definitions.length === AUTOMATION_FIXTURES.length` after opening. That count is unreachable once
+  the host has a resolved scope: this file's seed resolves to `'proj-1'` (real `useSessionFilters`
+  with empty `localStorage` → `filterProjectId` null; mocked `useActiveIdentity` → no project;
+  mocked `useProjects` → the single project `proj-1`, so `seedProjectScope`'s sole-project branch
+  fires), and `loadLibrary('proj-1')` reaches the fixture gateway's strict filter
+  (`fixtures/fixture-gateway.ts:70-73`) while every fixture is unscoped
+  (`packages/types/fixtures/automations/*.json` carry no `projectId` — the file's own comment at
+  lines 91-93 already records this), so the list comes back empty. Rewrite it as **"renders the view
+  once opened and loads the seeded project's library"**: install a spy gateway with
+  `useAutomationsStore.getState().setGateway(...)` that delegates to `createFixtureGateway()` and
+  records `listAutomations` arguments, then assert `automations-view` renders, `listAutomations` was
+  called with `'proj-1'`, and `definitions` settles empty because no fixture carries that project.
+  Assert the call, not just the empty list — an empty list alone cannot tell a scoped load from a
+  load that never ran. **Reset the gateway in this file's `beforeEach`**
+  (`setGateway(createFixtureGateway())`): the store is module-global, so a spy left installed leaks
+  into every later test in the file.
 - `'resolves the active project via useActiveIdentity into the store, scoping the library to it'`
   (lines 78-94) renders with `open: false` and waits for `scopeProjectId === 'proj-1'`, which no
   longer happens. Replace it with the new contract: with the modal closed, `scopeProjectId` stays
@@ -473,8 +496,20 @@ board's pick (spec decision 11 and its edge case).
 Verify: single-file vitest run passes.
 
 **Task 20 — Automations scope behavior test.**
-Create `packages/ui/src/features/automations/__tests__/AutomationsScope.test.tsx` against the
-fixture gateway. Assert: session in A + filter on B lists B's automations plus the unscoped ones
+Create `packages/ui/src/features/automations/__tests__/AutomationsScope.test.tsx`.
+**Instrument: this test installs its own stub gateway** through
+`useAutomationsStore.getState().setGateway(...)` in `beforeEach`, and restores
+`createFixtureGateway()` in `afterEach`. It must not run against the fixture gateway as shipped:
+that gateway filters by strict equality (`fixtures/fixture-gateway.ts:70-73`) while all seven
+fixtures are unscoped, so `listAutomations('B')` returns `[]` and AC2's expectation is unreachable
+through it. Teaching the fixture gateway fact 1's semantics is **not** in this plan — the JSON
+fixtures are Node-owned and single-authored (`fixtures/fixtures.ts:1-15`), and no task here owns a
+production change to them. The stub therefore **delegates to `createFixtureGateway()` and overrides
+`listAutomations` only**, applying fact 1's filter (`d.projectId === projectId || d.projectId ===
+null`, everything when the argument is null) over a hand-built set: at least one definition scoped
+to A, one to B, and one unscoped. Delegating keeps `createAutomation` (AC10) and `listInteractions`
+(AC14) working without re-implementing them.
+Assert: session in A + filter on B lists B's automations plus the unscoped ones
 and names B (AC2, using fact 1's semantics); the picker re-scopes and reloads (AC3, AC4); it leaves
 the sidebar filter untouched (AC5); after an override in the Kanban modal the Automations modal
 still opens on the filter's project (AC6 — drive both hosts in one render); the picker is
@@ -504,6 +539,11 @@ and the five touched suites pass.
   Group C keeps the failure mode legible.
 - **`TasksBoard.tsx` is at 207 lines and gains a picker plus two props.** If it crosses 300, the
   header band extracts to a sibling `TasksBoardHeader.tsx` rather than the picker growing inline.
+- **The fixture gateway does not implement fact 1, and this plan leaves it that way.** Its
+  `listAutomations` filters by strict equality while the daemon includes unscoped automations, and
+  all seven fixtures are unscoped — so any scoped read against fixtures shows an empty library. That
+  divergence only bites the fixture-backed demo path, tasks 15 and 20 work around it explicitly, and
+  closing it would mean editing Node-owned fixture JSON. Worth a follow-up todo; not this branch.
 - **Two `useModalProjectScope` instances in one host** (board and quick-add) each subscribe to
   `useProjects()`, which fetches per hook. That is two `getProjects` calls on mount. Acceptable —
   `useProjects` is already called this way across the sidebar — but worth watching if the projects
