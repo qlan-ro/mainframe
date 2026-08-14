@@ -10,6 +10,7 @@
  *  - permission.requested (notify: true)  → onMarkUnread called with chatId; onReload not called
  *  - permission.requested (notify: false) → onMarkUnread called with chatId
  *  - permission.resolved  → neither mock called
+ *  - chat.prDetected (source: 'created' | 'mentioned') → onReload called once; onMarkUnread not called
  *  - background_task.started|updated|ended → onReload called; onMarkUnread not called
  *  - dispose() unsubscribes; subsequent dispatched events are ignored
  *  - Unrelated event type (display.message.added) → no-op
@@ -19,7 +20,7 @@
  * mocks so assertions are trivial.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { BackgroundTask, Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { BackgroundTask, Chat, DaemonEvent, DetectedPr } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 import { SessionListRouter } from '../session-list-router';
 
@@ -297,6 +298,40 @@ describe('session-list-router — permission.resolved calls neither mock', () =>
     dispatch({ type: 'permission.resolved', chatId: 'c5', requestId: 'r1' });
 
     expect(onReload).not.toHaveBeenCalled();
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chat.prDetected → reload
+// ---------------------------------------------------------------------------
+
+describe('session-list-router — chat.prDetected triggers reload', () => {
+  it('calls onReload exactly once and does not call onMarkUnread for a created PR', () => {
+    const pr: DetectedPr = {
+      url: 'https://github.com/o/r/pull/7',
+      owner: 'o',
+      repo: 'r',
+      number: 7,
+      source: 'created',
+    };
+    dispatch({ type: 'chat.prDetected', chatId: 'c7', pr });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+
+  it('calls onReload exactly once and does not call onMarkUnread for a mentioned PR', () => {
+    const pr: DetectedPr = {
+      url: 'https://github.com/o/r/pull/7',
+      owner: 'o',
+      repo: 'r',
+      number: 7,
+      source: 'mentioned',
+    };
+    dispatch({ type: 'chat.prDetected', chatId: 'c7', pr });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,11 @@
  *   ordering stays drift-free (spec §11). chat.updated reloads rather than
  *   surgically patching custom because @assistant-ui/react@0.14.14 exposes no
  *   mutate-one-thread API (D6 deviation — see plan Phase 7 header).
+ * chat.prDetected → reload. The Summary PR row, the session-row PR glyph and
+ *   the "has PR" filter all read custom.detectedPrs off the list projection, so
+ *   only a reload makes a live-detected PR visible. The event is subscriber-
+ *   gated — it arrives only for the chat the user has open — so background
+ *   sessions keep relying on the daemon's rescan when their chat is loaded.
  * chat.notification / permission.requested / waiting-or-terminal chat.updated
  * → markUnread. A chat.notification carrying kind 'attention_request' (Claude's
  *   PushNotification tool) additionally raises an OS notification via onOsNotify;
@@ -67,6 +72,10 @@ export class SessionListRouter {
     switch (event.type) {
       case 'chat.created':
       case 'chat.ended':
+        this.deps.onReload();
+        return;
+
+      case 'chat.prDetected':
         this.deps.onReload();
         return;
 

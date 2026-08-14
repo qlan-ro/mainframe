@@ -19,8 +19,10 @@
  *  - active thread change → restores that session's persisted workspace layout
  *  - activating a never-visited session → seeds it with INITIAL_LAYOUT
  *  - activating the __LOCALID_* draft thread → does not touch the layout store
+ *  - a burst of onReload() calls coalesces into a leading reload plus at most
+ *    one trailing reload per 200ms window, not one reload per event
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '../../../../store/layout';
@@ -204,6 +206,44 @@ it('calls markUnreadSpy with "c3" when capturedDeps.onMarkUnread("c3") is invoke
 
   expect(markUnreadSpy).toHaveBeenCalledTimes(1);
   expect(markUnreadSpy).toHaveBeenCalledWith('c3');
+});
+
+// ---------------------------------------------------------------------------
+// onReload coalescing: a burst of events must not become a refetch storm.
+// capturedDeps.onReload IS the hook's live scheduleReload closure (the mocked
+// createSessionListRouter factory captures the real deps object), so this
+// drives the actual debounce with no extra mocking.
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — onReload coalesces a burst into leading + one trailing reload', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('collapses three synchronous calls into a leading reload, then one trailing reload after 200ms, then none', () => {
+    renderHook(() => useSessionListRouter());
+
+    act(() => {
+      capturedDeps.onReload();
+      capturedDeps.onReload();
+      capturedDeps.onReload();
+    });
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(reloadSpy).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(reloadSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
