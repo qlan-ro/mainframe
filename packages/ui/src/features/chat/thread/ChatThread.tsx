@@ -178,9 +178,12 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             </div>
 
             {/* Sticky footer — its height is measured into the scroll inset, so
-                the pinned gate is inset for free. The cap engages only while a
-                gate is mounted: it must never squeeze a tall composer draft. */}
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex min-h-0 flex-col bg-background has-data-[slot=chat-gate-slot]:max-h-[55%]">
+                the pinned gate is inset for free. `shrink-0` because the
+                transcript above it refuses to shrink below its own min-content:
+                a shrinkable footer hands a tall gate 0px and paints it off the
+                bottom of the window. The cap engages only while a gate is
+                mounted: it must never squeeze a tall composer draft. */}
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex shrink-0 flex-col bg-background has-data-[slot=chat-gate-slot]:max-h-[55%]">
               <ThreadPrimitive.ScrollToBottom asChild>
                 <Button
                   data-testid="chat-scroll-to-bottom"
