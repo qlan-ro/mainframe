@@ -147,7 +147,8 @@ impl DaemonChatDeps {
     /// re-derives a session from the same chat row `doLoadChat` already read
     /// rather than reusing the live one — both are stateless reads over the
     /// on-disk transcript, so results match; the cost is a second file read
-    /// (Claude) or a second temp app-server spawn (Codex).
+    /// (Claude) or a second registry + rollout read (Codex, via
+    /// `load_scan_records` — no app-server spawn since todo #339).
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
         let claude_session_id = chat.claude_session_id.clone()?;
@@ -542,8 +543,12 @@ impl ChatManagerDeps for DaemonChatDeps {
             let Some(session) = self.session_for_scan(chat_id) else {
                 return;
             };
-            let Ok(history) = session.load_history().await else {
-                return;
+            let history = match session.load_scan_records().await {
+                Ok(history) => history,
+                Err(err) => {
+                    tracing::warn!(%err, chat_id, "load_scan_records failed");
+                    return;
+                }
             };
             if !history.is_empty() {
                 self.scan_and_persist_prs(chat_id, &history);
