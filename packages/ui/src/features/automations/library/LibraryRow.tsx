@@ -6,7 +6,7 @@
  * history to browse, or to Overview if it's never run.
  *
  * The project badge names the automation's own project. The daemon list is
- * scoped to the active project PLUS unscoped (projectId null) automations,
+ * scoped to the modal's project PLUS unscoped (projectId null) automations,
  * so the badge is what distinguishes "yours" from "everywhere".
  *
  * Owns its own async gateway calls (toggle/run), mirroring the v1

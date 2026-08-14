@@ -6,13 +6,12 @@
  * is exercised indirectly via the footer's error count and the Save
  * button's disabled state.
  *
- * Project scoping (todo #234 bullet 1): the scope toggle is gone — every
- * automation saves to `store.scopeProjectId` (resolved upstream by
- * `AutomationsHost` via `useActiveIdentity`, fed into the store directly so
- * this test doesn't need the assistant-ui runtime provider).
+ * Project scoping: the scope toggle is gone — every automation saves to
+ * `store.scopeProjectId`, the project the open modal is showing. These tests
+ * write that field directly rather than driving the host's picker.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiRequestError } from '@/lib/api/http';
 import type { AutomationCreateInput, AutomationStep, AutomationSummary } from '../../contract';
@@ -59,7 +58,22 @@ describe('AutomationEditor — new automation', () => {
     expect(save).toBeDisabled();
   });
 
-  it('enables Save once a name, a step, and an active project all exist', async () => {
+  it('says where to pick the project when the modal is showing all of them, and drops the issue once one is picked', () => {
+    useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
+    const { rerender } = render(<AutomationEditor />);
+    expect(screen.getByTestId('automations-editor-issues')).toHaveTextContent(
+      'Pick a project in the library header to save this automation.',
+    );
+
+    act(() => {
+      useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
+    });
+    rerender(<AutomationEditor />);
+
+    expect(screen.getByTestId('automations-editor-issues')).not.toHaveTextContent('Pick a project');
+  });
+
+  it('enables Save once a name, a step, and a scoped project all exist', async () => {
     const user = userEvent.setup();
     useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
@@ -68,7 +82,7 @@ describe('AutomationEditor — new automation', () => {
     expect(screen.getByTestId('automations-editor-save')).toBeEnabled();
   });
 
-  it('keeps Save disabled with no active project, even once name and step are valid', async () => {
+  it('keeps Save disabled with no project scoped, even once name and step are valid', async () => {
     const user = userEvent.setup();
     useAutomationsNav.setState({ editorTarget: { mode: 'new' } });
     render(<AutomationEditor />);
@@ -102,7 +116,7 @@ describe('AutomationEditor — new automation', () => {
     expect(screen.getByTestId('automations-step-q')).toBeInTheDocument();
   });
 
-  it('saving always sends scope "project" and the resolved active projectId, regardless of a draft\'s prior scope', async () => {
+  it('saving always sends scope "project" and the modal\'s scoped projectId, regardless of a draft\'s prior scope', async () => {
     const user = userEvent.setup();
     let sent: AutomationCreateInput | undefined;
     useAutomationsStore.setState({
