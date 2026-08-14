@@ -105,6 +105,13 @@ reviewers should trust these instead of re-deriving them.
   `TasksBoard` loads on mount and Radix unmounts `DialogContent` on close — the host effect was
   already redundant for the full modal (its own comment says so) and quick-add gets an explicit
   load in its place.
+- **The automations rename lands first, alone, and complete.** Renaming the store's project field is
+  a package-wide edit: it breaks four source readers and eight test files at once. Any ordering that
+  repairs those in later tasks leaves the renaming task's own typecheck gate red, because typecheck
+  here covers test files too. Doing the rename as a standalone behavior-neutral task ahead of every
+  behavioral change in Group D closes that window and lets tasks 14-17 be written against the final
+  names. The same reasoning makes task 14 carry the `loadAll` split together with both of its call
+  sites and all three affected test files.
 - **Quick-add names its project but does not get a full picker.** The spec requires it to seed by
   the same rule, to show a surface always, and to name the project it will write to; it does not
   require in-dialog re-scoping. A `ProjectChip` in its header plus the shared pick-a-project state
@@ -235,8 +242,14 @@ Update `packages/ui/src/features/tasks/TasksBoard.tsx` and
 their own project id. Update the store-shape `setState` calls in
 `packages/ui/src/features/session-panel/__tests__/TasksCard.test.tsx` and
 `packages/ui/src/features/tasks/__tests__/TasksModalHost.test.tsx` so they still compile.
-Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-panel/__tests__/TasksCard.test.tsx`;
-`typecheck`.
+**In the same task, update `packages/ui/src/features/tasks/__tests__/TasksBoard.test.tsx`:** it
+factory-mocks the whole store module (`vi.mock('../use-todos-store', () => ({ useTodosStore: … }))`,
+lines 29-43), so a factory that does not also export `selectProjectTodos` resolves that import to
+`undefined` and every test in the file throws `selectProjectTodos is not a function` the moment
+`TasksBoard` imports it. Add `selectProjectTodos` to the factory, returning an entry built from the
+file's existing `mockTodos`/`mockLoading` locals so the current assertions keep their meaning.
+Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-panel/__tests__/TasksCard.test.tsx`
+and `… src/features/tasks/__tests__/TasksBoard.test.tsx`; `typecheck`.
 
 **Task 10 — per-open scope in the Kanban host.**
 Rewrite `packages/ui/src/features/tasks/TasksModalHost.tsx`:
@@ -261,59 +274,157 @@ Verify: `typecheck`; manual reasoning against spec AC11.
 Update `packages/ui/src/features/tasks/TasksBoard.tsx`: add
 `projects: Project[]` and `onProjectChange: (id: string) => void` props, and render
 `<ModalProjectPicker surface="tasks-board" allowAllProjects={false} …/>` in the header band next to
-the "Tasks" label. Wire the picker to `onProjectChange`, which the host routes into its board
-scope. The existing mount-effect `load(port, projectId)` already reloads on a project change, and
+the "Tasks" label. Both props are required, so `TasksModalHost.tsx` passes them in this same task:
+`projects` from its `useProjects()` call and `onProjectChange` from the board scope's
+`setProjectId`. The existing mount-effect `load(port, projectId)` already reloads on a project change, and
 task 8 guarantees the previous project's rows are not on screen (spec AC4) because the board reads
 its own bucket. Reset `editTodo` to `undefined` when `projectId` changes so an open edit modal
 cannot survive a re-scope.
+**In the same task, update `packages/ui/src/features/tasks/__tests__/TasksBoard.test.tsx`:** its
+`renderBoard` helper (line 88-90) renders `<TasksBoard port projectId onStartSession onClose />`
+with no `projects` and no `onProjectChange`, which stops typechecking the moment the props become
+required. Pass a two-project list and a `vi.fn()` through the helper, and add one assertion that the
+header renders `tasks-board-project-picker` naming the current project.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/tasks/__tests__/TasksBoard.test.tsx`;
 `typecheck`.
 
 **Task 12 — name quick-add's project and rewrite the host's tests.**
 Add a `ProjectChip` naming the target project to `QuickTaskDialog`'s header
 (`packages/ui/src/features/tasks/QuickTaskDialog.tsx`, testid `tasks-quick-project`) — it already
-receives `projectId`; it needs `projectName` from the caller. Add a mount-time
-`load(port, projectId)` there to replace the host effect this plan drops. Then rewrite
+receives `projectId`; it needs `projectName` from the caller, so `TasksModalHost.tsx` resolves the
+name from its `useProjects()` list and passes it in this same task. Add a mount-time
+`load(port, projectId)` to the dialog to replace the host effect this plan drops. Then rewrite
 `packages/ui/src/features/tasks/__tests__/TasksModalHost.test.tsx`: its `useActiveIdentity` mock and
 its boot-load assertion both describe the old design. Keep the todo #225 intent by asserting that
 each open (board and quick-add) issues a `listTodos` for the scoped project.
+**Also update `packages/ui/src/features/tasks/__tests__/QuickTaskDialog.test.tsx` in this task** —
+both of the dialog's changes break it. Its factory mock (lines 27-32) builds the store state as
+`{ create: mockCreate }` with no `load`, so the new mount effect calls `undefined`; add a stable
+`mockLoad` to that state and assert it fires once per open with `(port, projectId)`. Its
+`renderDialog` helper (lines 44-53) passes no `projectName`, which stops typechecking once the prop
+is required; give it a default and assert the header renders `tasks-quick-project` with that name.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/tasks/__tests__/TasksModalHost.test.tsx`
 and `… src/features/tasks/__tests__/QuickTaskDialog.test.tsx`; `typecheck`.
 
 ### Group D — the Automations library
 
-**Task 13 — split the automations store's project answer.**
-Update `packages/ui/src/features/automations/data/use-automations-store.ts`:
-- rename `activeProjectId` → `scopeProjectId` and `setActiveProjectId` → `setScopeProjectId` (the
-  field now means "the open modal's scope", not "the active session's project");
-- replace `loadAll()` with `loadInteractions(): Promise<void>` (interactions only, feeding the
-  badge) and `loadLibrary(projectId: string | null): Promise<void>` (definitions + their runs +
-  catalog + credentials, taking the project **as a parameter** rather than reading state — fact 6);
-- give each its own sequence guard so a slow response for the previous project never replaces the
-  newly picked one (spec's mid-load edge);
-- update the doc comment: the field no longer tracks the session.
-Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/data/__tests__/use-automations-store.test.ts`;
-`typecheck`.
+**Atomicity contract for this group (unlike Group A, there is no red window).** Every task here
+lands typecheck-green and leaves the suites it touches passing. That forces the two package-wide
+edits — the store field rename and the `loadAll` split — to travel with *all* their call sites and
+test fixups inside one task each, because both break source files and test files that later tasks
+would otherwise own. A "rename now, repair the tests last" shape is not available: beyond eight test
+files, the rename breaks four source readers (`AutomationsHost.tsx`, `AutomationEditor.tsx`,
+`use-automation-trigger-sources.ts`, `WorktreeMenu.tsx`), so folding the repairs into the *following*
+tasks still leaves the renaming task's own typecheck gate red. The rename therefore goes **first**,
+alone and complete, and every later task in the group writes against the final names. The `loadAll`
+split has the same shape at smaller scale — two source call sites (`AutomationsHost.tsx`,
+`LibraryList.tsx`) and three test files — so it is one task too.
 
-**Task 14 — per-open scope in the Automations host.**
+**Task 13 — rename the store's project field, complete and behavior-neutral.**
+Mechanical rename only; no behavior changes, no signature changes. In
+`packages/ui/src/features/automations/data/use-automations-store.ts`, `activeProjectId` →
+`scopeProjectId` and `setActiveProjectId` → `setScopeProjectId`. Carry it through **every reader of
+that store field**, in the same commit:
+- source: `features/automations/AutomationsHost.tsx` (lines 26, 38-44),
+  `features/automations/editor/AutomationEditor.tsx` (73, 105-109, 119, 126-127),
+  `features/automations/fields/use-automation-trigger-sources.ts` (100-122),
+  `features/automations/steps/agent/WorktreeMenu.tsx` (38-39);
+- tests: `automations/data/__tests__/use-automations-store.test.ts`,
+  `automations/__tests__/AutomationsHost.test.tsx`,
+  `automations/editor/__tests__/AutomationEditor.test.tsx`,
+  `automations/steps/__tests__/AgentConfig.test.tsx`,
+  `automations/steps/agent/__tests__/WorktreeMenu.test.tsx`,
+  `automations/fields/__tests__/TriggerTextField.test.tsx`,
+  `automations/fields/__tests__/use-automation-trigger-sources.test.ts`,
+  `components/trigger-engine/__tests__/trigger-popover-placement.test.tsx` — each passes the field
+  in a `setState`, an excess property against the renamed state type;
+- doc comments that name the identifier: `use-automations-store.ts:7`,
+  `steps/use-project-branches.ts:5`, `steps/agent/WorktreeMenu.tsx:9`,
+  `fields/use-automation-trigger-sources.ts:7`, `editor/AutomationEditor.tsx:10`, and the header of
+  `editor/__tests__/AutomationEditor.test.tsx`.
+Rename the identifier in those comments only. The prose still says the field tracks the active
+session — that stays true until task 15 and is rewritten there, not here.
+**Do not touch `features/sessions/SessionSidebar.tsx:73`.** Its `activeProjectId` is a local
+destructured from `useActiveIdentity()`, a different symbol with no relation to this store.
+Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean, and all eight test files above pass
+under their own single-file vitest runs — unchanged assertions, since nothing but a name moved.
+
+**Task 14 — split the loader, and move its call sites and their tests with it.**
+In `packages/ui/src/features/automations/data/use-automations-store.ts`, replace `loadAll()` with
+`loadInteractions(): Promise<void>` (interactions only, feeding the badge) and
+`loadLibrary(projectId: string | null): Promise<void>` (definitions + their runs + catalog +
+credentials, taking the project **as a parameter** rather than reading state — fact 6). Give each
+its own sequence guard so a slow response for the previous project never replaces the newly picked
+one (spec's mid-load edge). `loadAll` is deleted, not kept as an alias. Both call sites move in this
+task:
+- `features/automations/AutomationsHost.tsx`: a mount effect calls `loadInteractions()` (badge from
+  boot, spec AC14); the existing session-following effect keeps its trigger for now but its body
+  becomes `setScopeProjectId(id)` then `loadLibrary(id)`. Task 15 replaces the trigger.
+- `features/automations/library/LibraryList.tsx`: both retry affordances (lines 67 and 95) call
+  `loadLibrary(scopeProjectId)` instead of `loadAll()`. Nothing else in the list changes — the
+  per-row project badge already covers the "All projects" view (spec decision 6).
+Three test files change with them, in this task:
+- `automations/data/__tests__/use-automations-store.test.ts`: its four `loadAll` cases (lines 30-45,
+  47-83, 85-98, 100-127) describe the combined loader. Rewrite them against the split — the
+  pass-through case asserts `loadLibrary('proj-9')` reaches `gateway.listAutomations('proj-9')`
+  without any prior `setScopeProjectId`, the populate case drops its interactions claim and keeps
+  definitions/runs/catalog/credentials, and both error cases target `loadLibrary`. Add a
+  `loadInteractions` case (populates `interactions`, leaves `definitions` untouched) and one
+  sequence-guard case per function (a slow earlier response never overwrites a newer one).
+- `automations/library/__tests__/LibraryList.test.tsx`: `DEFAULT_LOAD_ALL` (line 18) and the
+  `loadAll` restore (line 45), stub (line 109) and `loadAllSpy` assertion (lines 154-168) all name
+  the deleted function. Retarget each at `loadLibrary`, and assert the retry passes the store's
+  current `scopeProjectId`.
+- `automations/__tests__/AutomationsHost.test.tsx`: `'loads automations even while closed…'` (lines
+  36-48) waits for `definitions.length === AUTOMATION_FIXTURES.length` off the boot load, which now
+  fetches interactions only. Rewrite it as "loads interactions even while closed, so the sidebar
+  badge is populated on boot", asserting `interactions` rather than `definitions`. **Do not assert
+  that `definitions` stays empty while closed** — the session-following effect still runs in this
+  task's intermediate state and calls `loadLibrary(null)`, which by fact 1 returns everything. That
+  assertion belongs to task 15.
+Verify: those three test files under their own single-file vitest runs; `typecheck`.
+
+**Task 15 — per-open scope in the Automations host.**
 Update `packages/ui/src/features/automations/AutomationsHost.tsx`: delete the session-following
-effect (fact 5). Instead, call `loadInteractions()` once on mount (badge from boot, spec AC14).
-Take the scope from `useModalProjectScope(open)` and sync it into the store from an effect keyed on
-**the hook's `projectId` while `open`** — not on the rising edge of `open` alone: that effect must
-also fire for the picker's change and for the late seed of task 4's latch (fact 14 — the projects
-list can still be empty at the instant the modal opens, and a rising-edge-only wiring would leave
-the store on `null` while the header names the seeded project). The effect calls
-`setScopeProjectId(id)` then `loadLibrary(id)`, in that order. On close, clear the store scope to
-`null`. Keep `useAutomationToasts()` and `useAutomationEvents()` unconditional and ahead of any
-early return.
+effect (fact 5); the mount `loadInteractions()` from task 14 stays. Take the scope from
+`useModalProjectScope(open)` and sync it into the store from an effect keyed on **the hook's
+`projectId` while `open`** — not on the rising edge of `open` alone: that effect must also fire for
+the picker's change and for the late seed of task 4's latch (fact 14 — the projects list can still
+be empty at the instant the modal opens, and a rising-edge-only wiring would leave the store on
+`null` while the header names the seeded project). The effect calls `setScopeProjectId(id)` then
+`loadLibrary(id)`, in that order. On close, clear the store scope to `null`. Keep
+`useAutomationToasts()` and `useAutomationEvents()` unconditional and ahead of any early return.
+Rewrite the store field's doc comment now that it is true: `scopeProjectId` is the open modal's
+scope and is `null` whenever the modal is closed.
+Rewrite the two tests in `packages/ui/src/features/automations/__tests__/AutomationsHost.test.tsx`
+that pin the deleted effect, in this task:
+- `'resolves the active project via useActiveIdentity into the store, scoping the library to it'`
+  (lines 78-94) renders with `open: false` and waits for `scopeProjectId === 'proj-1'`, which no
+  longer happens. Replace it with the new contract: with the modal closed, `scopeProjectId` stays
+  `null` and `definitions` stays empty however the mocked active identity moves; opening with the
+  mocked scope resolving to `proj-1` sets `scopeProjectId` to `proj-1` and loads that project's
+  library.
+- The file's `useActiveIdentity` mock (lines 10-14, 21-24) no longer describes how the host gets its
+  project. Drive the scope through the `useModalProjectScope` seam instead, and keep the mock only
+  where a test still needs an active session to seed from.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/__tests__/AutomationsHost.test.tsx`;
 `typecheck`.
 
-**Task 15 — name and change the library's project.**
+**Task 16 — name and change the library's project.**
 Update `packages/ui/src/features/automations/AutomationsView.tsx`: render
 `<ModalProjectPicker surface="automations" allowAllProjects />` in the header band beside the
-"Workflows" label, fed by the host's scope. Selecting a project (or "All projects") calls the
-host's `setProjectId`, which sets `scopeProjectId` and calls `loadLibrary(id)`. Pass
+"Workflows" label, fed by the host's scope. The scope state lives in the host's
+`useModalProjectScope`, so the view takes it as props —
+`{ projectId: string | null; onProjectChange: (id: string | null) => void }` — rather than writing
+`setScopeProjectId` directly, which task 15's effect would immediately revert. Selecting a project
+(or "All projects") calls the host's `setProjectId`, and task 15's effect turns that into
+`setScopeProjectId(id)` + `loadLibrary(id)`. Three files move together in this task, because the
+props are required: `AutomationsView.tsx` declares them, `AutomationsHost.tsx` passes them at line
+75 (it renders `<AutomationsView />` bare today), and
+`packages/ui/src/features/automations/__tests__/AutomationsView.test.tsx` passes them at all six of
+its `render(<AutomationsView />)` call sites (lines 22, 47, 56, 66, 74, 101) — extract a
+`renderView(overrides)` helper there rather than editing six literals, and add one case asserting
+the header renders `automations-project-picker` naming the scoped project. Pass
 `disabled={runId != null || editorTarget != null || describeOpen || detailsAutomationId != null}`
 so the picker is inoperable while a sub-view is open and operable again on return (spec AC13). The
 `automations-title-count` "N need you" figure stays wired to `selectPendingInteractionCount` —
@@ -321,41 +432,27 @@ global, unaffected by scope (spec's "counts that stay global").
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/__tests__/AutomationsView.test.tsx`;
 `typecheck`.
 
-**Task 16 — library list under the new loader.**
-Update `packages/ui/src/features/automations/library/LibraryList.tsx`: both retry affordances call
-`loadLibrary(scopeProjectId)` instead of `loadAll()`. Nothing else in the list changes — the
-per-row project badge already covers the "All projects" view (spec decision 6).
-Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/library/__tests__/LibraryList.test.tsx`;
-`typecheck`.
-
-**Task 17 — editor and pickers follow the modal scope.**
-Point the three project-scoped consumers at `scopeProjectId`:
-`packages/ui/src/features/automations/editor/AutomationEditor.tsx` (fact 7 — save target and the
-validation issue), `packages/ui/src/features/automations/fields/use-automation-trigger-sources.ts`
-(skills and file search, fact 8) and
-`packages/ui/src/features/automations/steps/agent/WorktreeMenu.tsx` (branches, fact 8). Change the
-editor's blocking message from "Pick an active project first." to "Pick a project in the header to
-save this automation." — the scope is now something the user can change without leaving the modal
-(spec: "Creating an automation is unavailable until a single project is picked, and the editor
-says so").
+**Task 17 — the editor says what the user can now do about it.**
+`packages/ui/src/features/automations/editor/AutomationEditor.tsx` already reads `scopeProjectId`
+after task 13, so the save target and the pickers follow the modal scope with no further wiring
+(facts 7 and 8; `fields/use-automation-trigger-sources.ts` and `steps/agent/WorktreeMenu.tsx` are
+likewise already pointed at it). What is left is the copy and the comment. Change the blocking
+validation issue at line 107 from "Pick an active project first." to "Pick a project in the header
+to save this automation." — the scope is now something the user can change without leaving the modal
+(spec: "Creating an automation is unavailable until a single project is picked, and the editor says
+so"). Rewrite the file header comment (line 10), which still says the project is resolved upstream
+from the session. Add the assertion the suite is missing:
+`packages/ui/src/features/automations/editor/__tests__/AutomationEditor.test.tsx` never checks this
+message today (its `scopeProjectId: null` case only checks that saving is blocked), so add one case
+asserting the new copy is shown when the scope is null and gone once a project is picked.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/editor/__tests__/AutomationEditor.test.tsx`;
 `typecheck`.
-
-**Task 18 — carry the rename through the existing automations tests.**
-Mechanical `activeProjectId` → `scopeProjectId` in every `setState`/assertion across
-`features/automations/**/__tests__/`, `features/automations/steps/agent/__tests__/WorktreeMenu.test.tsx`,
-`features/automations/fields/__tests__/*` and
-`components/trigger-engine/__tests__/trigger-popover-placement.test.tsx`, plus any `loadAll` call
-sites in those files. This lands with Group D so the rename never leaves the suite red for another
-agent.
-Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck` clean, and each touched test file passes
-under its own single-file vitest run.
 
 ### Group E — surface behavior tests and the changeset
 
 Only **new** files here, so this group collides with nothing.
 
-**Task 19 — Kanban scope behavior test.**
+**Task 18 — Kanban scope behavior test.**
 Create `packages/ui/src/features/tasks/__tests__/TasksModalHost.scope.test.tsx` against the real
 `useSessionFilters`, `useModalProjectScope` and `useTodosStore` with `@/lib/api/todos` mocked.
 Assert: session in A + filter on B opens the board on B and the header names B (AC1); the in-modal
@@ -368,14 +465,14 @@ filter unset, clicking Kanban renders either the board or `tasks-board-project-p
 nothing (AC11).
 Verify: single-file vitest run passes.
 
-**Task 20 — quick-add reachability test.**
+**Task 19 — quick-add reachability test.**
 Create `packages/ui/src/features/tasks/__tests__/QuickTaskDialog.scope.test.tsx`. Assert the ⌘⇧T
 path always produces a dialog: scoped and naming its project when one resolves, and rendering
 `tasks-quick-project-pick` otherwise (AC12); and that quick-add's scope is independent of an open
 board's pick (spec decision 11 and its edge case).
 Verify: single-file vitest run passes.
 
-**Task 21 — Automations scope behavior test.**
+**Task 20 — Automations scope behavior test.**
 Create `packages/ui/src/features/automations/__tests__/AutomationsScope.test.tsx` against the
 fixture gateway. Assert: session in A + filter on B lists B's automations plus the unscoped ones
 and names B (AC2, using fact 1's semantics); the picker re-scopes and reloads (AC3, AC4); it leaves
@@ -387,8 +484,8 @@ editor's skills/files/branch sources are queried for it (AC10); and the sidebar'
 present after mount with the modal never opened and unchanged by a scope change (AC14).
 Verify: single-file vitest run passes.
 
-**Task 22 — testid audit and changeset.**
-Grep the diff for every element added by tasks 5, 6, 11, 12 and 15 and confirm each carries a
+**Task 21 — testid audit and changeset.**
+Grep the diff for every element added by tasks 5, 6, 11, 12 and 16 and confirm each carries a
 `<surface>-<element>` testid keyed by project id where per-row (AC15). Then
 `pnpm changeset` — patch bump for `@qlan-ro/mainframe-ui`, one line describing the per-open project
 scope for both sidebar modals.
@@ -398,9 +495,13 @@ and the five touched suites pass.
 ## Risks
 
 - **The todos store rewrite (tasks 7-9) is the largest blast radius in this plan.** Eight files
-  import `useTodosStore`; only three read its server state, but the `setState` shape appears in
-  three test files. Landing tasks 7-9 as one reviewable step before anything else in Group C keeps
-  the failure mode legible.
+  import `useTodosStore`; only three read its server state, but the store's shape reaches four test
+  files — two by `setState` (`TasksCard.test.tsx`, `TasksModalHost.test.tsx`) and two by whole-module
+  factory mocks (`TasksBoard.test.tsx`, `QuickTaskDialog.test.tsx`). Factory mocks are the sharper
+  edge: they replace the module wholesale, so a new export the component imports resolves to
+  `undefined` at runtime with nothing failing at typecheck. Tasks 9, 11 and 12 each carry the mock
+  fixups for the change they make. Landing tasks 7-9 as one reviewable step before anything else in
+  Group C keeps the failure mode legible.
 - **`TasksBoard.tsx` is at 207 lines and gains a picker plus two props.** If it crosses 300, the
   header band extracts to a sibling `TasksBoardHeader.tsx` rather than the picker growing inline.
 - **Two `useModalProjectScope` instances in one host** (board and quick-add) each subscribe to
