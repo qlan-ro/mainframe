@@ -22,8 +22,8 @@
  *  3. Picking inside the modal never writes the sidebar filter (AC5).
  *  4. An override made in the Kanban board does not leak into a later
  *     Automations open, which still seeds from the sidebar filter (AC6).
- *  5. The picker is inoperable while a sub-view (the editor) is open, and
- *     operable again on return (AC13).
+ *  5. The picker is inoperable while any sub-view (editor, run, describe,
+ *     details) owns the modal, and operable again on return (AC13).
  *  6. A created automation carries the scoped project id (AC10) — the
  *     editor's skills/files/branch pickers reading the same
  *     `store.scopeProjectId` field are covered by their own suites (facts 7,
@@ -238,6 +238,22 @@ describe('AutomationsHost — a sub-view is open', () => {
     act(() => useAutomationsNav.getState().closeEditor());
     await screen.findByTestId('automations-section-library');
     expect(screen.getByTestId('automations-project-picker')).not.toBeDisabled();
+  });
+
+  it.each([
+    ['a run', { runId: 'r1' }],
+    ['describe', { describeOpen: true }],
+    ['details', { detailsAutomationId: 'auto-b' }],
+  ])('stays disabled while %s owns the modal', async (_label, nav) => {
+    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useAutomationsNav.setState({ open: true });
+
+    renderHost();
+    await screen.findByTestId('automations-library-row-auto-b');
+
+    act(() => useAutomationsNav.setState(nav));
+
+    expect(screen.getByTestId('automations-project-picker')).toBeDisabled();
   });
 });
 

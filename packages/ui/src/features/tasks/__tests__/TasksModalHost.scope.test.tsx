@@ -129,13 +129,12 @@ beforeEach(() => {
 // Radix DropdownMenu needs pointerdown+up before the click it opens on
 // ---------------------------------------------------------------------------
 
-async function openPicker(user: ReturnType<typeof userEvent.setup>, testId: string) {
+async function openPicker(testId: string) {
   const trigger = screen.getByTestId(testId);
   await act(async () => {
     trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
     trigger.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
   });
-  void user;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +167,7 @@ describe('TasksModalHost — the in-modal picker', () => {
     act(() => useTasksModal.getState().openModal());
     expect(await screen.findByText('B task')).toBeInTheDocument();
 
-    await openPicker(user, 'tasks-board-project-picker');
+    await openPicker('tasks-board-project-picker');
     await user.click(await screen.findByTestId('tasks-board-project-proj-1'));
 
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-1'));
@@ -224,7 +223,7 @@ describe('TasksModalHost — close and reopen after an in-modal override', () =>
     act(() => useTasksModal.getState().openModal());
     expect(await screen.findByText('B task')).toBeInTheDocument();
 
-    await openPicker(user, 'tasks-board-project-picker');
+    await openPicker('tasks-board-project-picker');
     await user.click(await screen.findByTestId('tasks-board-project-proj-1'));
     expect(await screen.findByText('A task')).toBeInTheDocument();
 
