@@ -94,6 +94,18 @@ function ComposerInputField({
   // level Escape listener gated on `!event.defaultPrevented`, and React's
   // synthetic handler (attached below `document`) would otherwise stand them
   // down before that listener runs.
+  //
+  // `cancelOnEscape={false}` below turns off aui's OWN document-level Escape
+  // handler (`useEscapeKeydown` in ComposerPrimitive.Input), which calls the
+  // runtime's onCancel whenever `composer.canCancel` is true — and aui's
+  // "cancel" capability is `onCancel !== undefined`, a static flag for
+  // "the app supports cancelling", not `isRunning` (verified against
+  // ExternalStoreThreadRuntimeCore's capabilities.cancel). So it fires on
+  // every idle-chat Escape too: our onCancel calls controller.cancel(), which
+  // optimistically marks the run cancelling; on a chat with nothing to
+  // interrupt the daemon never broadcasts a stop, and the client-side
+  // "Working…" indicator strands running. Escape stays focus-park only; the
+  // Stop button is the one real way to cancel a run.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
@@ -109,6 +121,7 @@ function ComposerInputField({
       data-testid="chat-composer-input"
       data-mf-composer-input
       data-noring
+      cancelOnEscape={false}
       onKeyDown={handleKeyDown}
       placeholder={placeholder}
       rows={1}

@@ -102,7 +102,14 @@ vi.mock('@assistant-ui/react', () => ({
     AttachmentDropzone: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
       <div {...rest}>{children}</div>
     ),
-    Input: ({ children, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+    // `cancelOnEscape` is an aui-only prop (real ComposerPrimitive.Input
+    // wires it to its own Escape-cancel handling) — drop it before spreading
+    // onto the DOM textarea, or React warns about an unrecognized attribute.
+    Input: ({
+      children,
+      cancelOnEscape: _cancelOnEscape,
+      ...rest
+    }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { cancelOnEscape?: boolean }) => (
       <textarea {...rest}>{children}</textarea>
     ),
     Cancel: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
