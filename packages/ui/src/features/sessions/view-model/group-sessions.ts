@@ -81,11 +81,21 @@ export interface ProjectRef {
   name: string;
 }
 
+/** Sections for projectIds absent from the project list: newest bucket first, then by projectId. */
+function ghostSections(buckets: Map<string, SessionItem[]>): SessionGroupResult[] {
+  const sections = [...buckets].map(([projectId, items]) => ({ label: projectId, items: items.sort(byRecency) }));
+  return sections.sort(
+    (a, b) =>
+      (b.items[0]?.custom.updatedAt ?? 0) - (a.items[0]?.custom.updatedAt ?? 0) ||
+      (a.label < b.label ? -1 : a.label > b.label ? 1 : 0),
+  );
+}
+
 /**
- * One section per project, ordered by the given project list. Sessions whose
- * `projectId` isn't in `projects` (a removed/unknown project) still get a
- * trailing section keyed by that id, in order of first appearance — grouping
- * never silently drops a session.
+ * One section per project, ordered by the given project list, each listing its
+ * sessions newest-activity first. Sessions whose `projectId` isn't in `projects`
+ * (a removed/unknown project) still get a trailing section keyed by that id —
+ * grouping never silently drops a session.
  */
 function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: ProjectRef[]): SessionGroupResult[] {
   const byProject = new Map<string, SessionItem[]>();
@@ -101,14 +111,11 @@ function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: 
   for (const project of projects) {
     const bucket = byProject.get(project.id);
     if (bucket) {
-      out.push({ label: project.name, items: bucket });
+      out.push({ label: project.name, items: bucket.sort(byRecency) });
       byProject.delete(project.id);
     }
   }
-  // Remaining buckets: projectIds absent from the given list, kept in first-seen order.
-  for (const [projectId, bucket] of byProject) {
-    out.push({ label: projectId, items: bucket });
-  }
+  out.push(...ghostSections(byProject));
   return out;
 }
 
