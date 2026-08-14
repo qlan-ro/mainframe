@@ -146,7 +146,13 @@ export function Composer() {
           e.preventDefault();
           submit();
         }}
-        className="min-w-60 rounded-xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+        // `min-h-0 overflow-y-auto`: the thread footer shrinks this element,
+        // not just its wrapper, when an expanded gate and a tall draft
+        // compete for the same pane (#336) — without `min-h-0` a flex item's
+        // automatic minimum is its content size, so it would overflow the
+        // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
+        // that content rather than letting it paint past the card's border.
+        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-border bg-card shadow-sm transition-colors [scrollbar-width:none] focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"

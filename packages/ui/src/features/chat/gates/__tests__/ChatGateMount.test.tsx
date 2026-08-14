@@ -27,6 +27,12 @@
  *  8. The plan gate's Auto exec-mode segment follows the chat adapter's
  *     `capabilities.autoMode` — present for an adapter that advertises it,
  *     absent for one that does not.
+ *  9. The pinned-slot wrapper (`chat-thread-gate-slot`): present and wrapping
+ *     each of the three card variants when a front exists; absent (and the
+ *     container still empty) when front is undefined; re-mounted with the
+ *     same gate after a front clears and returns (the delayed-re-read
+ *     restore path); carries the class contract the height cap and the
+ *     composer width parity depend on.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -221,5 +227,91 @@ describe('ChatGateMount', () => {
 
     expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-execmode-auto')).toBeNull();
+  });
+
+  // --- Behavior 9: the pinned-slot wrapper ---
+
+  it('wraps a permission gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-permission-gate'));
+  });
+
+  it('wraps an AskUserQuestion gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: askEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-question-gate'));
+  });
+
+  it('wraps a plan gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: planEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-plan-gate'));
+  });
+
+  it('renders no slot and an empty container when front is undefined', () => {
+    mockFront.mockReturnValue({ front: undefined, reply });
+    const { container } = wrap(<ChatGateMount />);
+
+    expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('re-mounts the slot with the same gate after the front clears and returns', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    const { rerender } = wrap(<ChatGateMount />);
+    expect(screen.getByTestId('chat-thread-gate-slot')).toContainElement(screen.getByTestId('chat-permission-gate'));
+
+    mockFront.mockReturnValue({ front: undefined, reply });
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
+
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId('chat-thread-gate-slot')).toContainElement(screen.getByTestId('chat-permission-gate'));
+  });
+
+  // Class-string regression check only: this pins the tokens the height cap
+  // and the composer width parity depend on. `max-h-[45cqh]` is the slot's
+  // preferred cap; `min-h-24` is the floor it shrinks to (no lower) once the
+  // footer's own `max-h-[calc(100cqh-2rem)]` (ChatThread.tsx) squeezes it
+  // below that — `overflow-y-auto` zeroes flexbox's automatic minimum, so
+  // without an explicit floor the slot would compress to 0px under a tall
+  // composer draft. `shrink-[100]` gives the slot first claim on any
+  // shrinkage the footer needs, ahead of the composer wrapper's plain
+  // default (#336 round 3) — without it, a squeeze shrinks both
+  // proportionally instead of the composer only compressing once the slot
+  // is already pinned at its floor. Neither cap is pinnable in full here
+  // because the thread tests stub `ThreadPrimitive` entirely — the real
+  // geometry (both caps engaging against a live container, the edges
+  // lining up while the slot scrolls, and the composer's bottom edge never
+  // painting past the pane) is verified live by the Playwright assertions
+  // in gates.spec.ts. Dropping `[scrollbar-width:none]` costs 8px of card
+  // width off the composer's edge whenever the slot actually scrolls (see
+  // the plan's fact 8).
+  it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toHaveClass('overflow-y-auto');
+    expect(slot).toHaveClass('[scrollbar-width:none]');
+    expect(slot).toHaveClass('max-h-[45cqh]');
+    expect(slot).toHaveClass('min-h-24');
+    expect(slot).toHaveClass('shrink-[100]');
   });
 });
