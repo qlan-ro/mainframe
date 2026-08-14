@@ -6,8 +6,8 @@
  * comment: "BlankState when empty").
  *
  * Loading and error are distinct from "empty": `AutomationsHost` kicks off
- * `loadAll()` on mount, so an empty `definitions` array is ambiguous between
- * "still fetching," "the fetch failed," and "genuinely no automations yet."
+ * `loadLibrary()` for the scoped project, so an empty `definitions` array is
+ * ambiguous between "still fetching," "the fetch failed," and "genuinely none."
  * BlankState only renders once loading has finished without an error.
  */
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,8 @@ export function LibraryList(): React.ReactElement {
   const runs = useAutomationsStore((s) => s.runs);
   const loading = useAutomationsStore((s) => s.loading);
   const error = useAutomationsStore((s) => s.error);
-  const loadAll = useAutomationsStore((s) => s.loadAll);
+  const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
+  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openDescribe = useAutomationsNav((s) => s.openDescribe);
 
@@ -64,7 +65,12 @@ export function LibraryList(): React.ReactElement {
           <TriangleAlert size={20} className="text-destructive" aria-hidden />
           <span className="text-sm font-semibold text-foreground">Couldn't load your automations</span>
           <span className="max-w-[360px] text-xs text-muted-foreground">{error}</span>
-          <Button size="sm" data-testid="automations-library-retry" onClick={() => void loadAll()} className="mt-1">
+          <Button
+            size="sm"
+            data-testid="automations-library-retry"
+            onClick={() => void loadLibrary(scopeProjectId)}
+            className="mt-1"
+          >
             Retry
           </Button>
         </div>
@@ -92,7 +98,7 @@ export function LibraryList(): React.ReactElement {
           <button
             type="button"
             data-testid="automations-library-error-retry"
-            onClick={() => void loadAll()}
+            onClick={() => void loadLibrary(scopeProjectId)}
             className="shrink-0 text-xs font-semibold text-destructive hover:underline"
           >
             Retry

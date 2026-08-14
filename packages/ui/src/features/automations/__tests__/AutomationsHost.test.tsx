@@ -33,8 +33,8 @@ it('renders nothing while closed', () => {
   expect(container).toBeEmptyDOMElement();
 });
 
-it('loads automations even while closed, so the sidebar badge reflects pending interactions on boot', async () => {
-  useAutomationsStore.setState({ definitions: [] });
+it('loads interactions even while closed, so the sidebar badge is populated on boot', async () => {
+  useAutomationsStore.setState({ interactions: [] });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -43,7 +43,7 @@ it('loads automations even while closed, so the sidebar badge reflects pending i
   );
 
   await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
+    expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0);
   });
 });
 

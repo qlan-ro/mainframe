@@ -22,7 +22,8 @@ export function AutomationsHost(): React.ReactElement | null {
   const open = useAutomationsNav((s) => s.open);
   const openHost = useAutomationsNav((s) => s.openHost);
   const close = useAutomationsNav((s) => s.close);
-  const loadAll = useAutomationsStore((s) => s.loadAll);
+  const loadInteractions = useAutomationsStore((s) => s.loadInteractions);
+  const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
   const setScopeProjectId = useAutomationsStore((s) => s.setScopeProjectId);
   const { projectId } = useActiveIdentity();
 
@@ -31,17 +32,20 @@ export function AutomationsHost(): React.ReactElement | null {
   useAutomationToasts();
   useAutomationEvents();
 
-  // Resolves + (re)loads on mount AND on every active-project change (not
-  // gated by `open`) — the sidebar's pending-interaction badge
-  // (`selectPendingInteractionCount`) needs real data from app boot, and
-  // automations are project-scoped non-configurably (todo #234 bullet 1), so
-  // switching projects must re-scope the list. `setScopeProjectId` runs
-  // first so `loadAll`'s `get().scopeProjectId` read sees the fresh value.
-  // WS events keep things fresh thereafter via useAutomationEvents above.
+  // The sidebar's pending-interaction badge (`selectPendingInteractionCount`)
+  // is alive whether or not this modal ever opens, so its load runs from boot
+  // and fetches nothing else.
   useEffect(() => {
-    setScopeProjectId(projectId ?? null);
-    void loadAll();
-  }, [projectId, setScopeProjectId, loadAll]);
+    void loadInteractions();
+  }, [loadInteractions]);
+
+  // Still follows the active session while the per-open modal scope is being
+  // built; the next commit replaces this trigger.
+  useEffect(() => {
+    const scope = projectId ?? null;
+    setScopeProjectId(scope);
+    void loadLibrary(scope);
+  }, [projectId, setScopeProjectId, loadLibrary]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;

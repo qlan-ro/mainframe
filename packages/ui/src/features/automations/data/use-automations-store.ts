@@ -4,7 +4,12 @@
  * to the in-memory fixture gateway so every phase through Phase 5 works with
  * no live daemon routes; `setGateway` is how Phase 6 swaps in the real
  * `http-gateway.ts` at the entry-point boundary, mirroring
- * `use-workflows-store.ts`'s `loadAll` stale-response guard.
+ * `use-workflows-store.ts`'s stale-response guard.
+ *
+ * Two loaders, because two consumers disagree about scope: `loadInteractions`
+ * feeds the sidebar's pending badge and runs from app boot whether or not the
+ * modal is open, while `loadLibrary` fetches one project's automations for the
+ * open modal.
  */
 import { create } from 'zustand';
 import type {
@@ -16,7 +21,8 @@ import type {
 import { createFixtureGateway } from '../fixtures/fixture-gateway';
 import type { AutomationsGateway } from './gateway';
 
-let loadSeq = 0;
+let librarySeq = 0;
+let interactionsSeq = 0;
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<AutomationRunSummary['status']> = new Set([
   'succeeded',
@@ -43,7 +49,10 @@ interface AutomationsState {
   error: string | null;
   setGateway: (gateway: AutomationsGateway) => void;
   setScopeProjectId: (projectId: string | null) => void;
-  loadAll: () => Promise<void>;
+  /** Pending interactions only — the sidebar badge's load, and never the library's. */
+  loadInteractions: () => Promise<void>;
+  /** The open modal's library: that project's automations plus their runs, the action catalog and the credential labels. */
+  loadLibrary: (projectId: string | null) => Promise<void>;
   patchDefinition: (definition: AutomationSummary) => void;
   removeDefinition: (id: string) => void;
   patchRun: (run: AutomationRunSummary) => void;
@@ -68,20 +77,32 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   setGateway: (gateway) => set({ gateway }),
   setScopeProjectId: (scopeProjectId) => set({ scopeProjectId }),
 
-  loadAll: async () => {
-    const seqAtStart = ++loadSeq;
-    set({ loading: true, error: null });
-    const { gateway, scopeProjectId } = get();
+  loadInteractions: async () => {
+    const seqAtStart = ++interactionsSeq;
     try {
-      const [definitions, interactions, catalog, credentials] = await Promise.all([
-        gateway.listAutomations(scopeProjectId),
-        gateway.listInteractions(),
+      const interactions = await get().gateway.listInteractions();
+      if (seqAtStart !== interactionsSeq) return;
+      set({ interactions });
+    } catch (err) {
+      // The badge is ambient — a failure here must not paint the library's
+      // error screen, which belongs to the load the user asked for.
+      console.warn('[automations/use-automations-store] failed to load pending interactions', err);
+    }
+  },
+
+  loadLibrary: async (projectId) => {
+    const seqAtStart = ++librarySeq;
+    set({ loading: true, error: null });
+    const { gateway } = get();
+    try {
+      const [definitions, catalog, credentials] = await Promise.all([
+        gateway.listAutomations(projectId),
         gateway.listActions(),
         gateway.listCredentialLabels(),
       ]);
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       const runResults = await Promise.allSettled(definitions.map((d) => gateway.listRuns(d.id)));
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       const runs: AutomationRunSummary[] = [];
       let runsError: string | null = null;
       for (const result of runResults) {
@@ -89,9 +110,9 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
         else runsError = result.reason instanceof Error ? result.reason.message : 'Failed to load run history';
       }
       runs.sort((a, b) => b.startedAt - a.startedAt);
-      set({ definitions, interactions, catalog, credentials, runs, loading: false, error: runsError });
+      set({ definitions, catalog, credentials, runs, loading: false, error: runsError });
     } catch (err) {
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       set({ loading: false, error: err instanceof Error ? err.message : 'Failed to load automations' });
     }
   },

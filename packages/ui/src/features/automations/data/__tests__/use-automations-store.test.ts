@@ -27,9 +27,8 @@ describe('useAutomationsStore', () => {
     expect(useAutomationsStore.getState().scopeProjectId).toBe('proj-9');
   });
 
-  it('loadAll passes the active projectId through to gateway.listAutomations', async () => {
+  it('loadLibrary passes the project it is given to gateway.listAutomations, without reading the store', async () => {
     let received: string | null | undefined = 'unset';
-    useAutomationsStore.getState().setScopeProjectId('proj-9');
     useAutomationsStore.getState().setGateway(
       fakeGateway({
         listAutomations: async (projectId) => {
@@ -39,12 +38,13 @@ describe('useAutomationsStore', () => {
       }),
     );
 
-    await useAutomationsStore.getState().loadAll();
+    await useAutomationsStore.getState().loadLibrary('proj-9');
 
     expect(received).toBe('proj-9');
+    expect(useAutomationsStore.getState().scopeProjectId).toBeNull();
   });
 
-  it('loadAll populates definitions/interactions/catalog/credentials/runs from the gateway', async () => {
+  it('loadLibrary populates definitions/catalog/credentials/runs from the gateway', async () => {
     useAutomationsStore.getState().setGateway(
       fakeGateway({
         listAutomations: async () => [
@@ -73,7 +73,7 @@ describe('useAutomationsStore', () => {
       }),
     );
 
-    await useAutomationsStore.getState().loadAll();
+    await useAutomationsStore.getState().loadLibrary(null);
 
     const state = useAutomationsStore.getState();
     expect(state.definitions).toHaveLength(1);
@@ -82,7 +82,7 @@ describe('useAutomationsStore', () => {
     expect(state.error).toBeNull();
   });
 
-  it('loadAll sets error on gateway failure', async () => {
+  it('loadLibrary sets error on gateway failure', async () => {
     useAutomationsStore.getState().setGateway(
       fakeGateway({
         listAutomations: async () => {
@@ -91,13 +91,13 @@ describe('useAutomationsStore', () => {
       }),
     );
 
-    await useAutomationsStore.getState().loadAll();
+    await useAutomationsStore.getState().loadLibrary(null);
 
     expect(useAutomationsStore.getState().error).toBe('boom');
     expect(useAutomationsStore.getState().loading).toBe(false);
   });
 
-  it('loadAll surfaces a run-history fetch failure via the error field instead of silently rendering an empty history', async () => {
+  it('loadLibrary surfaces a run-history fetch failure via the error field instead of silently rendering an empty history', async () => {
     useAutomationsStore.getState().setGateway(
       fakeGateway({
         listAutomations: async () => [
@@ -118,12 +118,100 @@ describe('useAutomationsStore', () => {
       }),
     );
 
-    await useAutomationsStore.getState().loadAll();
+    await useAutomationsStore.getState().loadLibrary(null);
 
     const state = useAutomationsStore.getState();
     expect(state.definitions).toHaveLength(1);
     expect(state.loading).toBe(false);
     expect(state.error).toBe('run history unavailable');
+  });
+
+  it('loadInteractions fills the badge without touching the library', async () => {
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listInteractions: async () => [
+          {
+            id: 'i1',
+            runId: 'r1',
+            stepRef: 's1',
+            title: 'Answer',
+            fields: [],
+            status: 'pending' as const,
+            createdAt: 1,
+            resolvedAt: null,
+          },
+        ],
+        listAutomations: async () => {
+          throw new Error('the badge load must not fetch definitions');
+        },
+      }),
+    );
+
+    await useAutomationsStore.getState().loadInteractions();
+
+    const state = useAutomationsStore.getState();
+    expect(state.interactions).toHaveLength(1);
+    expect(state.definitions).toEqual([]);
+    expect(state.error).toBeNull();
+  });
+
+  it('loadLibrary drops a slow response for a project the user has already moved off', async () => {
+    const definitionFor = (id: string) => ({
+      id,
+      name: id,
+      scope: 'global' as const,
+      projectId: null,
+      enabled: true,
+      definition: { triggers: [], steps: [] },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listAutomations: async (projectId) => {
+          if (projectId === 'slow') await new Promise((resolve) => setTimeout(resolve, 20));
+          return [definitionFor(projectId ?? 'none')];
+        },
+      }),
+    );
+
+    const stale = useAutomationsStore.getState().loadLibrary('slow');
+    await useAutomationsStore.getState().loadLibrary('fresh');
+    await stale;
+
+    expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['fresh']);
+  });
+
+  it('loadInteractions drops a slow response overtaken by a newer one', async () => {
+    const interactionFor = (id: string) => ({
+      id,
+      runId: 'r1',
+      stepRef: 's1',
+      title: id,
+      fields: [],
+      status: 'pending' as const,
+      createdAt: 1,
+      resolvedAt: null,
+    });
+    let call = 0;
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listInteractions: async () => {
+          call += 1;
+          if (call === 1) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            return [interactionFor('stale')];
+          }
+          return [interactionFor('fresh')];
+        },
+      }),
+    );
+
+    const stale = useAutomationsStore.getState().loadInteractions();
+    await useAutomationsStore.getState().loadInteractions();
+    await stale;
+
+    expect(useAutomationsStore.getState().interactions.map((i) => i.id)).toEqual(['fresh']);
   });
 
   it('patchDefinition upserts by id', () => {
