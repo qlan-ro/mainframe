@@ -106,3 +106,62 @@ in its own right — it is reported only in the Defects table below.
 
 Both defects were reproduced against the live app during this run; neither
 was fixed here (QA-only pass, no code changes made).
+
+## Re-run at `bcd225a8` (2026-08-14, autonomous)
+
+Both defects above were fixed after the first pass: `c053c1f2` (case-insensitive
+`isMacPlatform()`) and `bcd225a8` (`cancelOnEscape={false}` + an idle guard on
+`ChatThreadController.cancel`). This is a fresh live re-verification at HEAD
+(`bcd225a8`), not a rerun of the same process — every scenario was re-driven
+from scratch, since both fixes change chord resolution and Escape handling
+globally and neither prior PASS carries over.
+
+**Result: 12/12 PASS.**
+
+### Environment
+
+Same as the first pass: `browser` target, `DAEMON_PORT=32136`,
+`VITE_PORT=5737`, `MAINFRAME_DATA_DIR=~/.mainframe_dev`, `playwright-cli`
+headed Chromium against `http://localhost:5737`. Fixtures: a throwaway
+project (`todo-324-qa-rerun`, id `QuXogTnSlr5jTJFssS1hq`, path
+`/tmp/todo-324-qa-project`) and four empty `claude`-adapter chats (no message
+sent). Four tabs were pinned open via the tab strip's pin control to exercise
+tab-index/cycle/split scenarios. Both the project (cascade-deleting its
+chats) and the isolated daemon/Vite pair were torn down after the run;
+production (`:31415`, `~/.mainframe`) was untouched throughout.
+`9539889f` (an e2e-only `ControlOrMeta` fix) has no live surface and was not
+re-tested — CI covers it.
+
+Confirmed live before scenarios: `navigator.userAgentData.platform` on this
+Mac's Chromium reports `"macOS"` (same condition that broke the first pass).
+
+### Scenarios
+
+| # | Scenario | Class | Mode | Status | Evidence |
+|---|---|---|---|---|---|
+| S1 | Cheat sheet opens via documented ⌘/ | happy | ui | PASS | `Meta+/` opened `[data-testid=shortcuts-cheat-sheet]` |
+| S2 | Cheat sheet closes on Escape | happy | ui | PASS | dialog removed from DOM after `Escape` |
+| S3 | Cheat sheet lists 16 entries grouped (Sessions/Chat/Workspace/App), dev-only (`app.automations`) excluded, rows keyed by shortcut id | happy | ui | PASS | 16 `shortcuts-cheat-sheet-row-<id>` rows, correct grouping, `app.automations` absent, glyphs render ⌘/⌃/⌥ (see screenshot below) |
+| S4 | Switch to session tab N via documented ⌃1..⌃9 | happy | ui | PASS | `Control+Digit1` → tab index 0 selected; `Control+Digit4` → index 3 |
+| S5 | Cycle tabs via ⌃Tab / ⌃⇧Tab | happy | ui | PASS | `Control+Tab` wraps index 3→0; `Control+Shift+Tab` returns 0→3 |
+| S6 | Open session in split via documented ⌘⇧\\, same pairing as the tab context menu | happy | ui | PASS | `Meta+Shift+Backslash` → `localStorage['mf:session-tabs'].zones` = the active + partner ids |
+| S7 | Focus composer via documented ⌘L | happy | ui | PASS | `Meta+l` → `document.activeElement` = `chat-composer-input` |
+| S8 | Escape from composer returns focus to the transcript, and does not strand the chat on "Working…" | edge | ui+api | PASS | `document.activeElement` → `chat-thread-viewport` after `Escape`; daemon `isRunning:false` immediately and again 35s later, `Working` text absent from the DOM both times (second-defect regression) |
+| S9 | Existing ⌘1/⌘2 Chat/Workspace surface toggle regression | regression | ui | PASS | `Meta+2` mounts `workspace-surface`; `Meta+1` unmounts `chat-thread-viewport` while workspace stays the floor; `Meta+1` again restores chat |
+| S10 | Existing ⌘\\ close-split, ⌘B sidebar toggle, ⌘F find-in-chat regressions | regression | ui | PASS | `Meta+\` clears `zones`; `Meta+b` flips `[data-slot=sidebar]` `data-state` expanded→collapsed→expanded; `Meta+f` shows `find-bar`, `Escape` closes it |
+| S11 | Platform-flip negative check: the previously-working wrong chord (`Control+n`) now no-ops | regression | ui | PASS | tab count unchanged (4) after `Control+n` — proves the fix flipped resolution rather than matching both branches |
+| S12 | Text-input eligibility: typing the bare letter of a bound chord into the composer does not fire it | edge | ui | PASS | typed `n` into `chat-composer-input`; tab count unchanged (4), no new session opened |
+
+Surface check on the cheat-sheet dialog (S1/S3): screenshot
+`docs/qa/assets/2026-08-14-todo-324/cheat-sheet-rerun.png` — clean render,
+correct grouping and glyphs, no overlap or clipping.
+
+### Defects
+
+No surface defects found in this re-run. Both defects from the first pass
+are confirmed fixed:
+
+| Defect | Status |
+|---|---|
+| `isMacPlatform()` case-sensitive regex vs. Chromium's lowercase `"macOS"` | FIXED (`c053c1f2`) — every mod-based chord and every cheat-sheet glyph resolved correctly on the same Mac/Chromium combination that reproduced the bug |
+| Phantom "Working…" after composer Escape on an idle chat | FIXED (`bcd225a8`) — confirmed absent immediately and 35s after the trigger (prior repro window was 29s–4m50s) |
