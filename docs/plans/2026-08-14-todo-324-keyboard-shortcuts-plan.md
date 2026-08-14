@@ -273,11 +273,11 @@ File: `packages/ui/src/features/shortcuts/render-chord.ts`.
 Verify: Task 2's file passes.
 
 **Task 8 — eligibility.**
-File: `packages/ui/src/features/shortcuts/eligibility.ts`. Move the `.cm-editor` `closest()` check out
-of `should-open-find.ts` and generalize it; **delete**
-`packages/ui/src/features/chat/find/should-open-find.ts` and its test file in the same task (no
-leftovers) after re-pointing any importer.
-Verify: Task 3's file passes; `grep -rn "should-open-find" packages/ui/src` returns nothing.
+File: `packages/ui/src/features/shortcuts/eligibility.ts`. Generalize the `.cm-editor` `closest()`
+check that `should-open-find.ts` performs today into the eligibility rule. This task ADDS the new
+module only; `should-open-find.ts` dies in Task 15 alongside its one importer, `use-find-hotkey.ts`,
+so this group touches no file the migration group also touches.
+Verify: Task 3's file passes.
 
 **Task 9 — the registry and the conflict checker.**
 Files: `packages/ui/src/features/shortcuts/registry.ts`,
@@ -316,7 +316,7 @@ Add `displayedTabIds`, `tabAtIndex`, `nextTabId`, `nextSplitPartner`. `nextSplit
 Verify: Task 5's file passes; `tabs-model.ts` stays under 300 lines (it is 202 today — split into a
 `tabs-keyboard-model.ts` sibling if the additions push it past the cap).
 
-**Task 10a — cheat-sheet store.**
+**Task 11 — cheat-sheet store.**
 File: `packages/ui/src/features/shortcuts/cheat-sheet-store.ts`.
 `open`, `setOpen`, and `toggleCheatSheet()` implementing the spec's three-way rule: open → close;
 closed and `document.querySelector('[data-slot="dialog-content"], [data-slot="alert-dialog-content"]')`
@@ -327,7 +327,7 @@ Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
 ### Group C — dispatcher and migration (`dispatcher-and-migration`)
 
-**Task 11 — action store and dispatcher.**
+**Task 12 — action store and dispatcher.**
 Files: `packages/ui/src/features/shortcuts/action-store.ts`,
 `packages/ui/src/features/shortcuts/use-shortcut-dispatcher.ts`.
 The dispatcher: one `window` keydown listener; for each visible entry (dev-filtered at this one
@@ -337,14 +337,14 @@ index. No handler → no `preventDefault`, no dispatch. `useShortcutAction(id, f
 and removes on unmount, holding the callback in a ref so re-renders do not re-register.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
-**Task 12 — mount the dispatcher and register the app-root actions.**
+**Task 13 — mount the dispatcher and register the app-root actions.**
 Files: `packages/ui/src/features/shortcuts/use-app-shortcut-actions.ts` (new),
 `packages/ui/src/app/AppShell.tsx`.
 `RuntimeBody` calls `useShortcutDispatcher()` and `useAppShortcutActions(...)`. Registered here:
 `sessions.new` → the existing `useNewChatHotkeyHandler(aui)` callback; `app.search-palette` /
 `app.review` / `app.settings` → the same `emitSurfaceIntent` calls the deleted hooks made;
 `sessions.toggle-sidebar` → `emitSurfaceIntent({ type: 'toggle-sidebar' })` (fact 13);
-`app.cheat-sheet` → `toggleCheatSheet()` from Task 10a.
+`app.cheat-sheet` → `toggleCheatSheet()` from Task 11.
 Delete from `AppShell.tsx`: the ⌘, `useEffect` (`:84-93`), the `useNewChatHotkey` import and call,
 the `useGlobalOverlayHotkeys` import and call. Delete the files
 `packages/ui/src/app/use-global-overlay-hotkeys.ts` and
@@ -352,7 +352,7 @@ the `useGlobalOverlayHotkeys` import and call. Delete the files
 Verify: typecheck; `grep -rn "use-new-chat-hotkey\b\|use-global-overlay-hotkeys" packages/ui/src`
 returns nothing (the `use-new-chat-hotkey-handler` module stays — different file).
 
-**Task 13 — migrate the four host listeners.**
+**Task 14 — migrate the four host listeners.**
 Files: `packages/ui/src/layout/SurfaceHost.tsx`,
 `packages/ui/src/features/tasks/TasksModalHost.tsx`,
 `packages/ui/src/features/automations/AutomationsHost.tsx`,
@@ -370,13 +370,15 @@ Verify: typecheck; `grep -rn "addEventListener('keydown'" packages/ui/src/layout
 packages/ui/src/features/tasks packages/ui/src/features/automations
 packages/ui/src/components/ui/sidebar` returns nothing.
 
-**Task 14 — migrate the chat-scoped listeners and add the chat actions.**
+**Task 15 — migrate the chat-scoped listeners and add the chat actions.**
 Files: `packages/ui/src/features/chat/thread/ChatThread.tsx`,
 `packages/ui/src/features/chat/zones/use-zone-shortcut-actions.ts` (new, replacing
 `use-zone-hotkeys.ts`), `packages/ui/src/features/sessions/new-thread/ChatSurface.tsx`.
 - `ChatThread`: replace `useFindHotkey()` with `useShortcutAction('chat.find', () =>
-  useFindInChatStore.getState().open())`; delete `use-find-hotkey.ts` and its test; add
-  `tabIndex={-1}` to `ThreadPrimitive.Viewport` (fact 12).
+  useFindInChatStore.getState().open())`; delete `use-find-hotkey.ts` and its test, and — now that its
+  only importer is gone — `packages/ui/src/features/chat/find/should-open-find.ts` and its test too
+  (its rule lives in `eligibility.ts` from Task 8; no leftovers); add `tabIndex={-1}` to
+  `ThreadPrimitive.Viewport` (fact 12).
 - `use-zone-shortcut-actions.ts`: registers `sessions.close-split` with the exact body of today's
   `use-zone-hotkeys.ts:17-27` (guard → `closeSplit()` → `switchToThread(survivor)`), and
   `sessions.open-in-split` → resolve the partner via `nextSplitPartner(displayedTabIds(...),
@@ -385,9 +387,10 @@ Files: `packages/ui/src/features/chat/thread/ChatThread.tsx`,
 - `ChatSurface`: swap `useZoneHotkeys(aui)` for the new hook; register `chat.focus-composer` →
   focus `document.querySelector('[data-focused="true"] [data-mf-composer-input]') ??
   document.querySelector('[data-mf-composer-input]')` (facts 10/11), a no-op when neither exists.
-Verify: typecheck; `grep -rn "use-find-hotkey\|use-zone-hotkeys" packages/ui/src` returns nothing.
+Verify: typecheck; `grep -rn "use-find-hotkey\|use-zone-hotkeys\|should-open-find" packages/ui/src`
+returns nothing.
 
-**Task 15 — session-tab keyboard actions.**
+**Task 16 — session-tab keyboard actions.**
 File: `packages/ui/src/features/session-tabs/SessionTabs.tsx`.
 Replace the inline `displayIds` / `ordered` computation (`:74`, `:85-91`) with a call to
 `displayedTabIds` from Task 10 — the strip and the shortcuts must read the same function, not two
@@ -397,7 +400,7 @@ copies. Register `sessions.tab-by-index` → `tabAtIndex(ordered, chordIndex)` t
 Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
 src/features/session-tabs/__tests__` stays green; `SessionTabs.tsx` stays under 300 lines.
 
-**Task 16 — Escape returns focus from the composer to the transcript.**
+**Task 17 — Escape returns focus from the composer to the transcript.**
 File: `packages/ui/src/features/chat/composer/Composer.tsx`.
 Extend `handleInputKeyDown` (`:121-133`): on `Escape` with no trigger menu open and not in edit mode,
 `preventDefault()` and focus the nearest `[data-mf-chat-thread]` viewport. The trigger popover and
@@ -408,7 +411,7 @@ Verify: typecheck; the composer's existing test files stay green;
 
 ### Group D — cheat sheet and hint de-drift (`cheat-sheet`)
 
-**Task 17 — the dialog.**
+**Task 18 — the dialog.**
 Files: `packages/ui/src/features/shortcuts/ShortcutsCheatSheet.tsx`,
 `packages/ui/src/app/AppShell.tsx` (mount it alongside the other app-wide outlets at `:117-131`).
 Props: `entries?: readonly ShortcutDescriptor[]` (defaults to `visibleShortcuts(SHORTCUTS, { dev:
@@ -422,7 +425,7 @@ and mirror `QuickTaskDialog` (D6) before writing class names.
 Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
 src/__tests__/design-token-audit.test.ts`.
 
-**Task 18 — palette command and hint de-drift.**
+**Task 19 — palette command and hint de-drift.**
 Files: `packages/ui/src/features/palette/palette-commands.ts`,
 `packages/ui/src/layout/MainToolbar.tsx`, `packages/ui/src/features/sessions/SessionSidebar.tsx`,
 `packages/ui/src/layout/WorkspaceAddMenu.tsx`.
@@ -434,13 +437,17 @@ Files: `packages/ui/src/features/palette/palette-commands.ts`,
 - `SessionSidebar.tsx:52`: derive the `⌘,` hint from `app.settings`.
 - `WorkspaceAddMenu.tsx:70`: delete the phantom `⌘P` `RowHint` (D5); drop `RowHint` from the import
   if it becomes unused in that file.
+Also add the AC 18 assertions to
+`packages/ui/src/features/palette/__tests__/palette-commands.test.ts` (create it if absent — pure
+function, node env): `getPaletteCommands()` contains a `keyboard-shortcuts` command labelled
+"Keyboard Shortcuts", and the `sidebar` command's hint renders as `⌘B` on macOS, not `⌘\`.
 Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/palette/__tests__`.
 
 ### Group E — behavioral tests and release hygiene (`integration-tests`)
 
 These verify code Groups B–D produce, so they run after them.
 
-**Task 19 — parity and guard-rail dispatcher tests.**
+**Task 20 — parity and guard-rail dispatcher tests.**
 File: `packages/ui/src/features/shortcuts/__tests__/use-shortcut-dispatcher.test.tsx` (jsdom).
 Mount a harness that installs the dispatcher plus spy handlers for every id, then dispatch synthetic
 `KeyboardEvent`s on `window` and on specific targets (fact 6 guarantees `code` survives).
@@ -453,7 +460,7 @@ terminal container fire), AC 7 (⌘⇧N/⌘⇧O/⌘⇧F/⌘⇧, fire nothing), A
 id with no registered handler is inert and leaves the default intact.
 Verify: file green.
 
-**Task 20 — session-tab and split shortcut tests.**
+**Task 21 — session-tab and split shortcut tests.**
 File: `packages/ui/src/features/session-tabs/__tests__/SessionTabs.keyboard.test.tsx` (jsdom).
 Against the existing session-tabs test harness: three tabs open → ⌃1 activates the first, ⌃3 the
 third in displayed order, ⌃5 leaves the active tab unchanged (AC 10); ⌃Tab from the last activates
@@ -464,7 +471,7 @@ sessions already split, and with the active session an unsent draft, the zones s
 (AC 12).
 Verify: file green.
 
-**Task 21 — focus-composer and composer-Escape tests.**
+**Task 22 — focus-composer and composer-Escape tests.**
 File: `packages/ui/src/features/chat/composer/__tests__/focus-composer.test.tsx` (jsdom).
 ⌘L from the transcript moves focus to `[data-mf-composer-input]`; with a split rendered, ⌘L targets
 the `[data-focused="true"]` zone's composer; Escape in a plain composer moves focus off the input and
@@ -472,7 +479,7 @@ onto `[data-mf-chat-thread]`; Escape with a trigger menu open closes the menu an
 composer (AC 13).
 Verify: file green.
 
-**Task 22 — cheat-sheet tests.**
+**Task 23 — cheat-sheet tests.**
 File: `packages/ui/src/features/shortcuts/__tests__/ShortcutsCheatSheet.test.tsx` (jsdom).
 ⌘/ opens the dialog and a second ⌘/ closes it; Escape closes it; with another `Dialog` already
 rendered, ⌘/ opens nothing (AC 14); rendering with a fixture set containing an entry the app does not
@@ -482,7 +489,7 @@ ship shows that entry with no per-shortcut props (AC 15); a `dev: true` fixture 
 order.
 Verify: file green.
 
-**Task 23 — changeset and full-suite gate.**
+**Task 24 — changeset and full-suite gate.**
 Files: `.changeset/<name>.md` (new).
 Run `pnpm changeset` selecting `@qlan-ro/mainframe-ui` with a **minor** bump (new user-visible
 bindings and a new dialog), describing the change in one plain sentence.
@@ -498,7 +505,7 @@ outside `features/shortcuts/` (AC 1).
   which may print another letter. The spec chose physical-key matching deliberately (its
   `hard-to-reverse` decision) because shifted chords like ⌘⇧\ are otherwise unmatched; noted here so
   the tradeoff is not rediscovered as a bug.
-- **`SessionTabs.tsx` is already 240 lines** and Task 15 adds registration code. If it passes 300,
+- **`SessionTabs.tsx` is already 240 lines** and Task 16 adds registration code. If it passes 300,
   extract the action registrations into a `use-session-tab-shortcuts.ts` sibling rather than trimming
   comments.
 - **The Windows/Linux chord variants ship unexercised** — the spec says so, and the release pipeline
