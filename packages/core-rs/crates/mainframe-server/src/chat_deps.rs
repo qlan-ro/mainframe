@@ -1442,6 +1442,160 @@ mod scan_loaded_history_tests {
         }
     }
 
+    /// Codex's canonical shape for a PR-create turn: an assistant `Bash`
+    /// tool_use whose command is `gh pr create …`, followed by a `ToolResult`
+    /// carrying the PR URL — the same pair `load_scan_records` reconstructs
+    /// from the rollout (todo #339). Acceptance criterion 1.
+    #[test]
+    fn scan_and_persist_prs_persists_a_codex_shaped_create_as_created_and_emits_event() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let history = vec![
+            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m2", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &history);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            persisted,
+            vec![DetectedPr {
+                url: "https://github.com/acme/repo/pull/7".to_string(),
+                owner: "acme".to_string(),
+                repo: "repo".to_string(),
+                number: 7,
+                source: DetectedPrSource::Created,
+            }]
+        );
+
+        let event = rx.try_recv().expect("chat.prDetected should be emitted");
+        match event {
+            DaemonEvent::ChatPrDetected { chat_id, pr } => {
+                assert_eq!(chat_id, chat.id);
+                assert_eq!(pr.source, DetectedPrSource::Created);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// Acceptance criterion 2 (no-duplicate half): rescanning the same
+    /// transcript a second time must not add a second row or emit a second
+    /// event — `add_detected_prs` dedupes by URL.
+    #[test]
+    fn scan_and_persist_prs_run_twice_persists_no_duplicate_and_emits_no_second_event() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let history = vec![
+            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m2", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &history);
+        rx.try_recv().expect("first scan should emit");
+
+        deps.scan_and_persist_prs(&chat.id, &history);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(persisted.len(), 1, "no duplicate row on rescan");
+        assert!(
+            rx.try_recv().is_err(),
+            "no second chat.prDetected on rescan"
+        );
+    }
+
+    /// Acceptance criterion 2 (upgrade half): a URL first seen as `mentioned`
+    /// is upgraded in place to `created` when a later scan matches it to a
+    /// pending create — never duplicated, never downgraded.
+    #[test]
+    fn scan_and_persist_prs_upgrades_a_mentioned_pr_to_created_for_the_same_url() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let mentioned_only = vec![tool_result_msg(
+            "m1",
+            "tu-unrelated",
+            "https://github.com/acme/repo/pull/7",
+        )];
+        deps.scan_and_persist_prs(&chat.id, &mentioned_only);
+        let after_mention = rx.try_recv().expect("mention scan should emit");
+        match after_mention {
+            DaemonEvent::ChatPrDetected { pr, .. } => {
+                assert_eq!(pr.source, DetectedPrSource::Mentioned);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+
+        let with_create = vec![
+            tool_use_msg("m2", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m3", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &with_create);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            persisted,
+            vec![DetectedPr {
+                url: "https://github.com/acme/repo/pull/7".to_string(),
+                owner: "acme".to_string(),
+                repo: "repo".to_string(),
+                number: 7,
+                source: DetectedPrSource::Created,
+            }],
+            "upgraded in place, not duplicated"
+        );
+
+        let after_create = rx.try_recv().expect("upgrade scan should emit");
+        match after_create {
+            DaemonEvent::ChatPrDetected { pr, .. } => {
+                assert_eq!(pr.source, DetectedPrSource::Created);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
     struct PlanSkillSession {
         plan_paths: Vec<String>,
         skill_paths: Vec<SkillFileEntry>,
