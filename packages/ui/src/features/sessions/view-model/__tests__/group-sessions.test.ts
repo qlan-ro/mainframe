@@ -128,6 +128,25 @@ describe("arrangeSessions mode 'name'", () => {
     expect(labels(groups)).toEqual(['A–Z']);
     expect(idsOf(groups, 'A–Z')).toEqual(['a', 'b']);
   });
+
+  it('resolves identical titles by updatedAt descending while distinct titles stay alphabetical', () => {
+    const items = [
+      item('c', { title: 'Charlie' }),
+      item('a-old', { title: 'Alpha', updatedAt: EARLIER_MON }),
+      item('a-new', { title: 'Alpha', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(idsOf(groups, 'A–Z')).toEqual(['a-new', 'a-old', 'c']);
+  });
+
+  it('orders a multi-session Pinned group by recency in name mode', () => {
+    const items = [
+      item('p-old', { pinned: true, updatedAt: EARLIER_MON, title: 'B' }),
+      item('p-new', { pinned: true, updatedAt: TODAY_1100, title: 'A' }),
+    ];
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(idsOf(groups, 'Pinned')).toEqual(['p-new', 'p-old']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -257,5 +276,24 @@ describe("arrangeSessions mode 'status'", () => {
     expect(labels(groups)).toEqual(['Pinned', 'By status']);
     expect(idsOf(groups, 'Pinned')).toEqual(['pin1']);
     expect(idsOf(groups, 'By status')).toEqual(['idle1']);
+  });
+
+  it('resolves same-status ties by updatedAt descending while rank order stays working/waiting/idle', () => {
+    const items = [
+      item('w1', { displayStatus: 'working', updatedAt: TODAY_0900 }),
+      item('i-old', { displayStatus: 'idle', updatedAt: EARLIER_MON }),
+      item('i-new', { displayStatus: 'idle', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(idsOf(groups, 'By status')).toEqual(['w1', 'i-new', 'i-old']);
+  });
+
+  it('orders a multi-session Pinned group by recency in status mode', () => {
+    const items = [
+      item('p-old', { pinned: true, updatedAt: EARLIER_MON, displayStatus: 'idle' }),
+      item('p-new', { pinned: true, updatedAt: TODAY_1100, displayStatus: 'idle' }),
+    ];
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(idsOf(groups, 'Pinned')).toEqual(['p-new', 'p-old']);
   });
 });
