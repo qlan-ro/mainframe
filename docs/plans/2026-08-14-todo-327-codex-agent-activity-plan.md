@@ -177,12 +177,11 @@ written and observed failing before group B exists.
 **Task 1. Test dependency and local helper.**
 Files: `packages/core-rs/crates/mainframe-adapter-codex/Cargo.toml`, new
 `packages/core-rs/crates/mainframe-adapter-codex/tests/collab_activity.rs`.
-Add `mainframe-background-tasks = { workspace = true }` to `[dev-dependencies]` (task 4
-promotes it to `[dependencies]`; keeping the dev entry until then is what makes the red
-phase runnable). Put the helper **inside the new test file, not in
-`tests/common/mod.rs`** — every codex test binary does `mod common;`, so a helper that
-references fields task 3 has not added yet would red the whole suite instead of this one
-binary. Helper: `fn state_with_tracker(rows: &[RegistryRow<'_>]) -> (tempfile::TempDir,
+Add `mainframe-background-tasks = { workspace = true }` to `[dev-dependencies]` (task 3
+promotes it to `[dependencies]`, which tests read just as well). Put the helper **inside
+the new test file, not in `tests/common/mod.rs`** — every codex test binary does
+`mod common;`, so a helper that references fields task 4 has not added yet would red the
+whole suite instead of this one binary. Helper: `fn state_with_tracker(rows: &[RegistryRow<'_>]) -> (tempfile::TempDir,
 Arc<BackgroundTaskTracker>, CodexSessionState)`, building `common::temp_registry(rows)`,
 a fresh `Arc<BackgroundTaskTracker>`, and a `CodexSessionState` with `registry_deps`,
 `mainframe_chat_id: "chat-327"`, `background_tasks: Some(tracker.clone())`.
@@ -231,7 +230,21 @@ the red observation, then stop — group B makes it pass.
 
 ### Group B — Codex adapter writes to the tracker
 
-**Task 3. State fields.**
+**Task 3. Crate dependency.**
+File: `packages/core-rs/crates/mainframe-adapter-codex/Cargo.toml`. Move
+`mainframe-background-tasks = { workspace = true }` from `[dev-dependencies]` (task 1)
+into `[dependencies]` (fact 14); a crate must not list the same path dependency twice.
+This move comes **before** the state fields because `[dev-dependencies]` reach only
+tests, examples and benches — never the lib target — so a `background_tasks` field in
+`src/session_state.rs` would fail `cargo check` with E0433 `failed to resolve: use of
+undeclared crate or module 'mainframe_background_tasks'`. The now-unused `[dependencies]`
+entry compiles clean: the workspace lint set is `clippy::unwrap_used`/`expect_used` only
+(`packages/core-rs/Cargo.toml`, `[workspace.lints.clippy]`), with no
+`unused_crate_dependencies`. Task 1-2's red phase stays runnable — integration tests read
+regular `[dependencies]` too.
+Verify: `cargo check -p mainframe-adapter-codex`.
+
+**Task 4. State fields.**
 File: `packages/core-rs/crates/mainframe-adapter-codex/src/session_state.rs`. Add the
 three fields from the design section with doc comments. Add
 `#[derive(Debug)]` to `BackgroundTaskTracker`
@@ -240,12 +253,6 @@ three fields from the design section with doc comments. Add
 rejected, implement `Debug` for `CodexSessionState` by hand and skip the tracker field
 instead.
 Verify: `cargo check -p mainframe-adapter-codex && cargo test -p mainframe-background-tasks`.
-
-**Task 4. Crate dependency.**
-File: `packages/core-rs/crates/mainframe-adapter-codex/Cargo.toml`. Move
-`mainframe-background-tasks = { workspace = true }` from `[dev-dependencies]` (task 1)
-into `[dependencies]` (fact 14); a crate must not list the same path dependency twice.
-Verify: `cargo check -p mainframe-adapter-codex`.
 
 **Task 5. The activity module.**
 New file: `packages/core-rs/crates/mainframe-adapter-codex/src/collab_activity.rs`
@@ -301,7 +308,7 @@ Files: `packages/core-rs/crates/mainframe-adapter-codex/src/session.rs`,
   `CodexSession::new(SessionOptions {..}, None, ResolvedPath::from_value("/usr/bin:/bin"))`
   — to pass a fourth argument `Arc::new(BackgroundTaskTracker::new())`, the same
   construction this task gives `CodexAdapter::default()`. The crate dependency is in
-  `[dependencies]` after task 4, so the tests can name the type without a further manifest
+  `[dependencies]` after task 3, so the tests can name the type without a further manifest
   change. `src/adapter.rs:270` is the only other `CodexSession::new` call site, and
   `CodexAdapter::default()` at `tests/list_models.rs:38` is covered by the `Default` arm
   above. Skipping this leaves task 7's own verify command failing to compile with "this
