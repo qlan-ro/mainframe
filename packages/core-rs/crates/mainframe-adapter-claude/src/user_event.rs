@@ -9,15 +9,15 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
+use mainframe_adapter_api::pr_detection::{
+    ToolUseMeta, extract_pr_from_tool_result, should_scan_tool_result_for_pr,
+};
 use mainframe_adapter_api::{LoadedSkill, SessionSink};
 use mainframe_types::adapter::DetectedPrSource;
 use mainframe_types::context::SkillFileEntry;
 
 use crate::assistant_event::blocks_to_message_content;
 use crate::history_tool_result::{build_tool_result_blocks, extract_tool_result_content};
-use crate::pr_detection::{
-    ToolUseMeta, extract_pr_from_tool_result, should_scan_tool_result_for_pr,
-};
 use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::{read_skill_content, resolve_existing_skill_path, resolve_skill_path};
 

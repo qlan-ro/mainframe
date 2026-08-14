@@ -29,6 +29,7 @@ use nanoid::nanoid;
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc};
 
+use mainframe_adapter_api::pr_detection::DetectedPrCore;
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
     StopBackgroundTaskResult,
@@ -48,7 +49,6 @@ use crate::cliproxy::{self, CliProxyEnv};
 use crate::constants::MAINFRAME_SYSTEM_PROMPT_APPEND;
 use crate::context_files::collect_claude_context_files;
 use crate::events::{handle_stderr, handle_stdout};
-use crate::pr_detection::DetectedPrCore;
 use crate::session_control::{ControlRequestChannel, SendAwaitingOpts, StdinTx};
 use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
