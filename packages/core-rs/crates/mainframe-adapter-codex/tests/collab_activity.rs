@@ -190,8 +190,13 @@ fn a_late_nickname_does_not_rename_the_entry() {
         &mut state,
     );
 
+    // Opened via `open_via_sub_agent_activity`, whose fixed `agentPath` humanizes
+    // to "compute sum" with no registry metadata (see
+    // `card_title_falls_back_to_humanized_path_when_no_metadata` in
+    // collab_identity.rs) — the row must keep that title, not fall back to
+    // "Sub-agent" or pick up the now-available "Maxwell" nickname.
     let live = tracker.list_live(CHAT_ID);
-    assert_eq!(live[0].description, "Sub-agent");
+    assert_eq!(live[0].description, "compute sum");
 }
 
 #[test]
