@@ -104,3 +104,63 @@ happy path: `backdrop-filter` is markedly attenuated (quantified above) under a 
 Task 7 should leave `SessionPanel.tsx`'s `stackChrome` unmasked and fade only `PanelCard.tsx`'s card
 body, per the fallback the task itself describes. (d) confirms the primary scroll-timeline path is
 what this engine takes today, not the static-fallback branch.
+
+## Addendum (review pass, same day): `scroll-fade-sticky` and the engine floor
+
+Three review findings reopened this probe: `@utility scroll-fade-sticky`
+(`packages/ui/src/styles/globals.css`) was never in the original candidate list above and had
+never been rendered in any engine; the net line count in production UI source was positive, not
+negative; and the fallback for engines below the `animation-timeline: scroll()` floor pinned a
+permanent both-edges dim with that floor unconfirmed.
+
+**Engine floor — resolved by not needing the number.** This machine can only observe one WebKit
+build (macOS 26.4.1, same as above), so the actual lower-bound macOS version was not established.
+Rather than assert one, `globals.css` now carries an app-level
+`@supports not (animation-timeline: scroll())` block that drops `mask-image` on `.scroll-fade-y`
+and `.scroll-fade-x` entirely, so engines below whatever the real floor is fall back to the
+pre-adoption clip instead of shadcn's permanent dim. Confirmed reaching the shipped bundle: after
+`pnpm --filter @qlan-ro/mainframe-ui build`, `packages/ui/dist/assets/index-*.css` contains
+`.scroll-fade-y,.scroll-fade-x{-webkit-mask-image:none;mask-image:none}` inside the `@supports not`
+block (2 occurrences of `mask-image:none`, one prefixed).
+
+**Net line count — recorded.** `git diff --numstat 789ba08b..HEAD -- 'packages/ui/src/**/*.ts'
+'packages/ui/src/**/*.tsx' 'packages/ui/src/styles/globals.css'
+':(glob,exclude)packages/ui/src/**/__tests__/**'` (the plan's own pathspec silently excluded
+nothing under `**` without the `:(glob)` magic; this is the corrected form) gives **134 added, 138
+deleted, net −4** after this pass's comment trims — negative, as the acceptance criterion requires.
+
+**`scroll-fade-sticky` — rendered.** A new fixture drove the built `packages/ui/dist/assets/index-*.css`
+bundle (the actual shipped output, not a re-derived candidate list) in a `WKWebView`, three scenarios
+side by side at `docs/qa/assets/2026-08-14-todo-333/checkpoint-e-sticky-header-fixture.png`:
+
+- **Sticky header at top, content overflowing, `--scroll-fade-inset-t: 40px`.** Scrolled 150px past
+  the top so the top ramp is genuinely mid-fade rather than collapsed-opaque at rest. The header
+  stays fully opaque; the row content fades in below it, exactly the "headers stay opaque while a
+  fade is active below them" criterion.
+- **Short content, `--scroll-fade-inset-t: 40px` set, nothing overflows.** No fade at either edge —
+  the coincident-stop collapse the review flagged as untested composes correctly with a non-zero
+  inset when there is nothing to fade against.
+- **Fractional inset, `--scroll-fade-inset-t: 40.5px`, content overflowing.** The hairline-seam
+  concern: a zoomed, 2×-upscaled crop of the header/ramp boundary is
+  `docs/qa/assets/2026-08-14-todo-333/checkpoint-e-seam-crop.png`. Pixel-sampled down a column
+  clear of glyphs and the scrollbar (`x=1650`, device pixels): solid header fill through y≈240,
+  then a monotonic blend from the page background toward opaque white over the next ~20 CSS px
+  (`--scroll-fade-size`), settling to pure white by y≈280 — no reversal, no single-row discontinuity
+  darker or lighter than the surrounding trend. No hairline seam at the boundary.
+- The same fixture's badge confirms `animation-timeline: scroll()` still evaluates `true` in this
+  WebView (consistent with checkpoint (d) above), so all three scenarios exercised the primary
+  scroll-timeline path, not the `@supports not` fallback added this pass.
+
+Method note: the original `screencapture -o -l<windowID>` path was unusable this session — the
+window reported `window occluded 1` to WebKit (`isViewVisible()` in the unified log), which freezes
+the remote layer tree and renders nothing regardless of what `screencapture` captures (verified with
+a plain red "HELLO WORLD" page: still blank). `WKWebView.takeSnapshot` renders independent of window
+occlusion; the original probe rejected it only because it doesn't composite `backdrop-filter`
+(checkpoint b), which this fixture doesn't use, so it was safe here.
+
+**Not covered — handed to QA.** Virtuoso's windowing recycling DOM nodes under a live scroll can't
+be exercised by a static fixture; `useStickyInsets`'s `ResizeObserver` path (which is what keeps the
+inset correct as windowing changes the header stack) is unit-tested in
+`packages/ui/src/features/shared/__tests__/sticky-insets.test.ts`, but the end-to-end "scroll the
+real sidebar past a screen of virtualized rows and watch the mask" needs the dev app, ideally with
+`MAINFRAME_DATA_DIR`/`DAEMON_PORT` overridden per the plan's Task 12 step 7.
