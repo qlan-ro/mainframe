@@ -237,7 +237,8 @@ TDD ordering: every pure module gets its red test file first (Group A), then the
 one whole-package gate runs alone at the end (Group F). No task in Groups A, B or E verifies with a
 package-wide `typecheck` or `test` run: `packages/ui/tsconfig.json` has `"include": ["src"]`, so those
 runs also compile the sibling test files still in flight and fail for reasons the task cannot fix.
-Group C and D tasks do typecheck, which is safe only because Groups A and B are green by then.
+Group C and D tasks do typecheck, which is safe only because Groups A and B are green by then **and
+because Groups B, C and D run their tasks strictly in numbered order** (see each group's header).
 
 ### Group A — red-phase pure tests (`shortcut-core-tests`)
 
@@ -301,6 +302,10 @@ the only two sessions) — AC 12.
 Verify: the file fails on unresolved import.
 
 ### Group B — pure core (`shortcut-core`)
+
+**Tasks run in numbered order — this group is not parallel-safe.** Tasks 7, 8 and 9 import
+`shortcut-types.ts`, which Task 6 creates; run concurrently they fail their own single-file verifies
+on `Cannot find module './shortcut-types'`.
 
 **Task 6 — chord module.**
 Files: `packages/ui/src/features/shortcuts/shortcut-types.ts`,
@@ -389,6 +394,11 @@ imports through no fault of this task. The package-wide typecheck and test gates
 
 ### Group C — dispatcher and migration (`dispatcher-and-migration`)
 
+**Tasks run in numbered order — this group is not parallel-safe.** Tasks 13–16 all call
+`useShortcutAction`, and Task 13 also calls `useShortcutDispatcher()`, both of which Task 12 creates.
+Every task here verifies with the package-wide `pnpm --filter @qlan-ro/mainframe-ui typecheck`, which
+under concurrency compiles siblings' half-written edits and fails for reasons the task cannot fix.
+
 **Task 12 — action store and dispatcher.**
 Files: `packages/ui/src/features/shortcuts/action-store.ts`,
 `packages/ui/src/features/shortcuts/use-shortcut-dispatcher.ts`.
@@ -417,9 +427,10 @@ action being **exactly** what the listener it replaces did:
 `app.cheat-sheet` → `toggleCheatSheet()` from Task 11.
 Delete from `AppShell.tsx`: the ⌘, `useEffect` (`:84-93`), the `useNewChatHotkey` import and call,
 the `useGlobalOverlayHotkeys` import and call. Delete the files
-`packages/ui/src/app/use-global-overlay-hotkeys.ts` and
-`packages/ui/src/features/sessions/use-new-chat-hotkey.ts`, and the
-`use-new-chat-hotkey.test.tsx` file if one exists.
+`packages/ui/src/app/use-global-overlay-hotkeys.ts`,
+`packages/ui/src/features/sessions/use-new-chat-hotkey.ts` and
+`packages/ui/src/features/sessions/__tests__/use-new-chat-hotkey.test.tsx` (it exists today and
+imports the deleted module, so the verify grep below fails until it goes).
 
 **Do not delete `AppShell.hotkeys.test.tsx` — rewrite it.** It is today the only test asserting that
 ⌘O emits `{ type: 'open-search-palette' }` and ⌘⇧R emits `{ type: 'open-review' }`, and the todo's AC
@@ -428,9 +439,11 @@ demands the action, not just the id, stay covered. Point it at the new registrat
 mocked as it already is, and keep the ⌘O, Ctrl+O and ⌘⇧R assertions verbatim, plus one each for ⌘,
 → `useSettingsStore` opens and ⌘B → `{ type: 'toggle-sidebar' }`.
 Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
-src/app/__tests__/AppShell.hotkeys.test.tsx`; `grep -rn
-"use-new-chat-hotkey\b\|use-global-overlay-hotkeys" packages/ui/src` returns nothing (the
-`use-new-chat-hotkey-handler` module stays — different file).
+src/app/__tests__/AppShell.hotkeys.test.tsx`; `grep -rnE "use-new-chat-hotkey['\"]|
+use-global-overlay-hotkeys" packages/ui/src` returns nothing (written on one line). The pattern is
+anchored on the closing quote on purpose: `use-new-chat-hotkey\b` also matches the
+`use-new-chat-hotkey-handler` module, which survives this task by design (`-` is a non-word
+character, so `\b` matches there).
 
 **Task 14 — migrate the four host listeners.**
 Files: `packages/ui/src/layout/SurfaceHost.tsx`,
@@ -448,19 +461,36 @@ Files: `packages/ui/src/layout/SurfaceHost.tsx`,
   consumers before removing). The primitive returns to passthrough.
 Verify: typecheck; `grep -rn "addEventListener('keydown'" packages/ui/src/layout
 packages/ui/src/features/tasks packages/ui/src/features/automations
-packages/ui/src/components/ui/sidebar` returns nothing.
+packages/ui/src/components/ui/sidebar` returns **exactly two** hits, both expected residue:
+`features/tasks/DependencyPicker.tsx` (Escape-only) and `features/tasks/sidebar/AttachmentLightbox.tsx`
+(ArrowLeft/ArrowRight). Both are overlay-local handlers that spec AC 1 exempts — **do not delete them
+to make the grep empty.** What must be gone is every hit in `SurfaceHost.tsx`,
+`TasksModalHost.tsx`, `AutomationsHost.tsx` and `components/ui/sidebar/context.tsx`: zero app-chord
+listeners remain in those four files.
 
 **Task 15 — migrate the chat-scoped listeners and add the chat actions.**
 Files: `packages/ui/src/features/chat/thread/ChatThread.tsx`,
 `packages/ui/src/features/chat/zones/use-zone-shortcut-actions.ts` (new, replacing
 `use-zone-hotkeys.ts`), `packages/ui/src/features/chat/zones/__tests__/use-zone-shortcut-actions.test.tsx`
 (new, replacing `use-zone-hotkeys.test.tsx`),
-`packages/ui/src/features/sessions/new-thread/ChatSurface.tsx`.
+`packages/ui/src/features/sessions/new-thread/ChatSurface.tsx`,
+`packages/ui/src/features/chat/thread/__tests__/ChatThread.test.tsx`,
+`packages/ui/src/features/chat/thread/__tests__/ChatThread-degraded-placement.test.tsx`,
+`packages/ui/src/features/chat/thread/__tests__/ChatThread-composer-gate.test.tsx`,
+`packages/ui/src/features/chat/thread/__tests__/ChatThread-compacting.test.tsx`.
 - `ChatThread`: replace `useFindHotkey()` with `useShortcutAction('chat.find', () =>
   useFindInChatStore.getState().open())`; delete `use-find-hotkey.ts` and its test, and — now that its
   only importer is gone — `packages/ui/src/features/chat/find/should-open-find.ts` and its test too
   (its rule lives in `eligibility.ts` from Task 8; no leftovers); add `tabIndex={-1}` to
   `ThreadPrimitive.Viewport` (fact 12).
+- **The four ChatThread suites mock the module this task deletes.** `ChatThread.test.tsx:47`,
+  `ChatThread-degraded-placement.test.tsx:54`, `ChatThread-composer-gate.test.tsx:51` and
+  `ChatThread-compacting.test.tsx:46` each carry
+  `vi.mock('../../find/use-find-hotkey', () => ({ useFindHotkey: () => {} }));`. **Delete that one
+  line from each file — do not write a replacement mock.** After this task `ChatThread` registers
+  through `useShortcutAction`, which is inert without a mounted dispatcher, so these suites need no
+  stub at all. Left in place, the mock points at a deleted module and the task's own grep gate below
+  can never return empty.
 - `use-zone-shortcut-actions.ts`: registers `sessions.close-split` with the exact body of today's
   `use-zone-hotkeys.ts:17-27` (guard → `closeSplit()` → `switchToThread(survivor)`), and
   `sessions.open-in-split` → resolve the partner via `nextSplitPartner(displayedTabIds(...),
@@ -504,6 +534,9 @@ Verify: typecheck; the composer's existing test files stay green;
 `handleInputKeyDown` stays under 50 lines (extract a helper if not).
 
 ### Group D — cheat sheet and hint de-drift (`cheat-sheet`)
+
+**Tasks run in numbered order — this group is not parallel-safe.** Task 19's package-wide typecheck
+would otherwise compile Task 18's in-flight `AppShell.tsx` edit.
 
 **Task 18 — the dialog.**
 Files: `packages/ui/src/features/shortcuts/ShortcutsCheatSheet.tsx`,
