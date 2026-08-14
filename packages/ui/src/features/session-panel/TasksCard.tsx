@@ -21,7 +21,7 @@ import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useTodosStore } from '@/features/tasks/use-todos-store';
 import { useStartTodoSession } from '@/features/tasks/use-start-todo-session';
-import { extractAllLabels } from '@/features/tasks/todos-filters';
+import { extractAllLabels, orderByStatusThenRecency } from '@/features/tasks/todos-filters';
 import { TaskEditModal } from '@/features/tasks/sidebar/TaskEditModal';
 import { readBase64, rejectFile, type PendingAttachment } from '@/features/tasks/sidebar/use-task-attachments';
 import { PanelCard } from './PanelCard';
@@ -166,7 +166,7 @@ export function TasksCard({ onClose }: { onClose: () => void }) {
   // ActivityCard resets its drill-in on chatId).
   useEffect(() => setEditTodo(undefined), [projectId]);
 
-  const active = todos.filter((t) => t.status !== 'done');
+  const active = orderByStatusThenRecency(todos.filter((t) => t.status !== 'done'));
 
   return (
     <PanelCard
