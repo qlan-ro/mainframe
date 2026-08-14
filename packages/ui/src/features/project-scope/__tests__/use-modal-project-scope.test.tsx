@@ -233,3 +233,51 @@ describe('useModalProjectScope — mounting with open already true', () => {
     expect(result.current.projectId).toBe('proj-a');
   });
 });
+
+// ---------------------------------------------------------------------------
+// (h) a local pick survives a project list that arrives after it
+// ---------------------------------------------------------------------------
+
+describe('useModalProjectScope — a local pick made before the project list refreshes', () => {
+  it('is not overwritten once the fresher list arrives', () => {
+    useSessionFilters.getState().setFilterProjectId('proj-a');
+    const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
+      initialProps: { open: true },
+    });
+    expect(result.current.projectId).toBe('proj-a');
+
+    act(() => result.current.setProjectId('proj-b'));
+    expect(result.current.projectId).toBe('proj-b');
+
+    // A new list reference — the shape a resolved reload would hand back —
+    // must not re-run the seed over the user's own pick (AC5's fetch-window
+    // hazard: the open's own rising-edge reload can resolve after the pick).
+    fakeProjects = [...fakeProjects];
+    act(() => rerender({ open: true }));
+
+    expect(result.current.projectId).toBe('proj-b');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (i) a background filter change during the reseed window is ignored
+// ---------------------------------------------------------------------------
+
+describe('useModalProjectScope — the sidebar filter changes before a pending reseed resolves', () => {
+  it('reseeds against the values captured at open, not the live ones', () => {
+    useSessionFilters.getState().setFilterProjectId('proj-a');
+    fakeProjects = [];
+    const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
+      initialProps: { open: true },
+    });
+    expect(result.current.projectId).toBeNull();
+
+    // Sidebar filter moves to B in the background — a live re-read here would
+    // leak it into an open modal, violating AC8.
+    useSessionFilters.getState().setFilterProjectId('proj-b');
+    fakeProjects = [makeProject('proj-a'), makeProject('proj-b')];
+    act(() => rerender({ open: true }));
+
+    expect(result.current.projectId).toBe('proj-a');
+  });
+});

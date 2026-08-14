@@ -77,12 +77,10 @@ it('renders the view once opened and loads the seeded project’s library', asyn
 
   expect(screen.getByTestId('automations-host')).toBeInTheDocument();
   expect(await screen.findByTestId('automations-view')).toBeInTheDocument();
-  // The call, not just the empty list: an empty library cannot tell a scoped
-  // load from a load that never ran.
-  // `[null, 'proj-1']`: the hook seeds in its own effect, so the opening render
-  // still carries a null scope. The store's sequence guard drops that first
-  // result before it reaches the list.
-  await vi.waitFor(() => expect(calls[calls.length - 1]).toBe('proj-1'));
+  // Exactly one call, for the seeded project: the hook now seeds during
+  // render, so the opening commit already carries the resolved scope — no
+  // wasted unscoped `listAutomations(null)` before it.
+  await vi.waitFor(() => expect(calls).toEqual(['proj-1']));
   // No fixture carries a project, so the scoped read comes back empty.
   await vi.waitFor(() => expect(useAutomationsStore.getState().definitions).toEqual([]));
 });
