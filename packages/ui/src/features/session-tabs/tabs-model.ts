@@ -228,6 +228,17 @@ export function tabAtIndex(displayed: readonly string[], index: number): string 
   return displayed[index] ?? null;
 }
 
+/** `sessions.tab-by-index` binds nine chords, so the tenth tab onward has no
+ *  number to advertise. */
+export const MAX_TAB_HINT = 9;
+
+/** The 1-based number ⌃N answers to for a session, or null when the session is
+ *  not an open tab — the inverse of `tabAtIndex`, and what the hint badges read. */
+export function tabHintIndex(displayed: readonly string[], id: string): number | null {
+  const index = displayed.indexOf(id);
+  return index === -1 || index >= MAX_TAB_HINT ? null : index + 1;
+}
+
 /** The next/previous tab in the displayed order, wrapping around; the same
  *  id back with only one tab open (AC 11). */
 export function nextTabId(displayed: readonly string[], activeId: string, direction: 1 | -1): string {

@@ -26,8 +26,16 @@ import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
-import { canonicalTabId, displayedTabIds, nextActiveAfterClose, nextTabId, tabAtIndex } from './tabs-model';
+import {
+  canonicalTabId,
+  displayedTabIds,
+  nextActiveAfterClose,
+  nextTabId,
+  tabAtIndex,
+  tabHintIndex,
+} from './tabs-model';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
 function toTabEntry(
@@ -95,6 +103,11 @@ export function SessionTabs() {
     if (id != null && id !== activeTabId) aui.threads.switchToThread(id);
   };
   useShortcutAction('sessions.tab-by-index', (chordIndex) => switchTo(tabAtIndex(ordered, chordIndex)));
+
+  // Holding the chord's modifier paints each pill with the number that reaches
+  // it — read off the same `ordered` the chord resolves against.
+  const hintsRevealed = useIndexHintsStore((s) => s.revealed);
+  const hintOf = (id: string) => (hintsRevealed ? tabHintIndex(ordered, id) : null);
   useShortcutAction('sessions.tab-next', () => switchTo(nextTabId(ordered, activeTabId, 1)));
   useShortcutAction('sessions.tab-prev', () => switchTo(nextTabId(ordered, activeTabId, -1)));
 
@@ -161,6 +174,7 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
@@ -188,6 +202,7 @@ export function SessionTabs() {
                     key={tab.id}
                     tab={tab}
                     grouped
+                    hintIndex={hintOf(tab.id)}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onPin={pinTab}
@@ -204,6 +219,7 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
@@ -218,6 +234,7 @@ export function SessionTabs() {
             <SessionTabPill
               key={tab.id}
               tab={tab}
+              hintIndex={hintOf(tab.id)}
               onActivate={handleActivate}
               onClose={handleClose}
               onPin={pinTab}

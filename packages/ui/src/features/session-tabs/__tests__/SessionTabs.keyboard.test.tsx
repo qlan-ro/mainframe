@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AssistantClient } from '@assistant-ui/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsStore } from '../store';
 
 let itemsValue: Array<{ id: string; status?: string; custom?: unknown; remoteId?: string; title?: string }>;
@@ -93,6 +94,7 @@ beforeEach(() => {
   newSession.mockReset();
   useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
   useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  useIndexHintsStore.setState({ revealed: false });
 });
 
 describe('⌃1…⌃9 — activate the Nth displayed tab (AC 10)', () => {
@@ -211,5 +213,53 @@ describe('⌘⇧\\ — open the active session in a split from the keyboard (AC 
     pressOpenInSplit();
 
     expect(zones()).toBeNull();
+  });
+});
+
+describe('⌃N hint badges', () => {
+  // These pin the WIRING, not the reveal timing (index-hints.test.ts owns that):
+  // the strip renders pills from four separate call sites, and a prop missing
+  // from the plain non-split one shipped badges that appeared only while split.
+  const hints = () =>
+    screen
+      .queryAllByTestId(/^session-tab-hint-/)
+      .map((el) => el.textContent)
+      .join('');
+
+  it('shows no badge while the modifier is not held', () => {
+    seedThreeTabs('chat-a');
+    render();
+
+    expect(hints()).toBe('');
+  });
+
+  it('numbers every tab on the plain strip once revealed', () => {
+    seedThreeTabs('chat-a');
+    useIndexHintsStore.setState({ revealed: true });
+    render();
+
+    expect(hints()).toBe('123');
+  });
+
+  it('numbers the regrouped order while split, so the badge matches what ⌃N opens', () => {
+    seedThreeTabs('chat-a');
+    // a and c pair up and regroup adjacently, making c the second tab.
+    useZonesStore.setState({ zones: ['chat-a', 'chat-c'], focusedIndex: 0 });
+    useIndexHintsStore.setState({ revealed: true });
+    render();
+
+    expect(hints()).toBe('123');
+    expect(screen.getByTestId('session-tab-hint-chat-c').textContent).toBe('2');
+    expect(screen.getByTestId('session-tab-hint-chat-b').textContent).toBe('3');
+  });
+
+  it('badges the tab that ⌃2 actually switches to', () => {
+    seedThreeTabs('chat-a');
+    useIndexHintsStore.setState({ revealed: true });
+    render();
+
+    expect(screen.getByTestId('session-tab-hint-chat-b').textContent).toBe('2');
+    pressTabIndex(2);
+    expect(switchToThread).toHaveBeenCalledWith('chat-b');
   });
 });

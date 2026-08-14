@@ -28,6 +28,8 @@ import { SessionRowItemScope } from '@/features/sessions/SessionRowItemScope';
 import { pinChat } from '@/lib/api/chats';
 import { formatCompactTime } from './compact-time';
 import { RowHoverActions } from './SessionRowHoverActions';
+import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
+import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { SessionContextMenu } from './SessionContextMenu';
 import { SessionMetaCard } from './SessionMetaCard';
 import { SessionRowMetaLine } from './SessionRowMetaLine';
@@ -89,6 +91,7 @@ interface RowBodyProps {
  */
 function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, actionsSlot }: RowBodyProps) {
   const { custom } = item;
+  const hintIndex = useTabHintIndex(item.id);
   return (
     <>
       <StatusDot badge={badge} adapterId={custom.adapterId} />
@@ -110,12 +113,19 @@ function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, 
           {/* Actions sit in front of the time, which stays put — the truncating
               title is the only thing that gives way on hover. */}
           {actionsSlot}
-          <span
-            data-testid="sessions-row-relative-time"
-            className="shrink-0 text-xs tabular-nums text-muted-foreground"
-          >
-            {formatCompactTime(custom.updatedAt, Date.now())}
-          </span>
+          {/* While the hints show, the row trades its timestamp for the ⌃N that
+              reaches it — same trailing slot, so nothing below shifts. A row
+              whose session has no open tab has no number and keeps the time. */}
+          {hintIndex != null ? (
+            <ShortcutIndexBadge index={hintIndex} data-testid="sessions-row-hint" />
+          ) : (
+            <span
+              data-testid="sessions-row-relative-time"
+              className="shrink-0 text-xs tabular-nums text-muted-foreground"
+            >
+              {formatCompactTime(custom.updatedAt, Date.now())}
+            </span>
+          )}
         </span>
         <SessionRowMetaLine
           projectName={projectName}

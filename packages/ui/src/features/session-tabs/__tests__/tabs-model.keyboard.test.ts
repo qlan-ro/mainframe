@@ -6,7 +6,7 @@
  * tab strip's ⌘-click and the context menu (fact 18, AC 12).
  */
 import { describe, expect, it } from 'vitest';
-import { displayedTabIds, nextSplitPartner, nextTabId, tabAtIndex, type TabsState } from '../tabs-model';
+import { displayedTabIds, nextSplitPartner, nextTabId, tabAtIndex, tabHintIndex, type TabsState } from '../tabs-model';
 
 describe('displayedTabIds — fact 17', () => {
   it('concatenates pinned tabs, the preview, then the draft when there is no split', () => {
@@ -101,5 +101,43 @@ describe('nextSplitPartner — AC 12, shares canOpenInSplit (fact 18)', () => {
 
   it('wraps past the end to find a qualifying partner', () => {
     expect(nextSplitPartner(['a', 'b', 'c'], 'b', ['b', 'c'])).toBe('a');
+  });
+});
+
+describe('tabHintIndex', () => {
+  it('numbers the displayed order from 1', () => {
+    expect(tabHintIndex(['a', 'b', 'c'], 'a')).toBe(1);
+    expect(tabHintIndex(['a', 'b', 'c'], 'c')).toBe(3);
+  });
+
+  it('returns null for a session that is not an open tab', () => {
+    expect(tabHintIndex(['a', 'b'], 'zzz')).toBeNull();
+  });
+
+  it('returns null past the ninth tab, which no chord reaches', () => {
+    const displayed = ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10'];
+
+    expect(tabHintIndex(displayed, 't9')).toBe(9);
+    expect(tabHintIndex(displayed, 't10')).toBeNull();
+  });
+
+  it('agrees with tabAtIndex — the number shown is the tab the chord opens', () => {
+    const displayed = ['a', 'b', 'c'];
+
+    for (const id of displayed) {
+      const shown = tabHintIndex(displayed, id);
+      expect(shown).not.toBeNull();
+      expect(tabAtIndex(displayed, (shown as number) - 1)).toBe(id);
+    }
+  });
+
+  it('follows the regrouped split order rather than the pin order', () => {
+    const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: null, draftId: null };
+    // 'c' joins 'a' at the front when the two are split, so it becomes ⌃2.
+    const displayed = displayedTabIds(state, ['a', 'c'], 'a');
+
+    expect(displayed).toEqual(['a', 'c', 'b']);
+    expect(tabHintIndex(displayed, 'c')).toBe(2);
+    expect(tabHintIndex(displayed, 'b')).toBe(3);
   });
 });
