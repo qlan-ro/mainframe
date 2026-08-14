@@ -287,7 +287,8 @@ Verify: `cargo test -p mainframe-adapter-codex --test collab_activity` and
 
 **Task 7. Session and adapter wiring.**
 Files: `packages/core-rs/crates/mainframe-adapter-codex/src/session.rs`,
-`.../src/adapter.rs`, `packages/core-rs/crates/mainframe-daemon/src/main.rs`.
+`.../src/adapter.rs`, `packages/core-rs/crates/mainframe-daemon/src/main.rs`,
+`.../tests/turn_start_model.rs`, `.../tests/send_message_input.rs`.
 - `CodexSession::new` takes `background_tasks: Arc<BackgroundTaskTracker>` and seeds the
   state with it plus `options.mainframe_chat_id` (fact 2) instead of
   `CodexSessionState::default()`.
@@ -295,6 +296,16 @@ Files: `packages/core-rs/crates/mainframe-adapter-codex/src/session.rs`,
   and `Default` (which builds its own `Arc::new(BackgroundTaskTracker::new())`, as
   `ClaudeAdapter` does at `adapter.rs:110`); `create_session` passes it down.
 - `main.rs:209`: `CodexAdapter::new(Arc::clone(&background_tasks), resolved_path.clone())`.
+- Update the two existing test call sites of the 3-arg form — `tests/turn_start_model.rs:129`
+  and `tests/send_message_input.rs:60`, both
+  `CodexSession::new(SessionOptions {..}, None, ResolvedPath::from_value("/usr/bin:/bin"))`
+  — to pass a fourth argument `Arc::new(BackgroundTaskTracker::new())`, the same
+  construction this task gives `CodexAdapter::default()`. The crate dependency is in
+  `[dependencies]` after task 4, so the tests can name the type without a further manifest
+  change. `src/adapter.rs:270` is the only other `CodexSession::new` call site, and
+  `CodexAdapter::default()` at `tests/list_models.rs:38` is covered by the `Default` arm
+  above. Skipping this leaves task 7's own verify command failing to compile with "this
+  function takes 4 arguments but 3 arguments were supplied".
 - Do not touch `stop_background_task` — Codex keeps answering unsupported (fact 18).
 Verify: `cargo check -p mainframe-daemon && cargo test -p mainframe-adapter-codex` and
 `cargo test -p mainframe-server --test chat_background_activity` (AC 12: no shape drift).
