@@ -1,6 +1,6 @@
 /**
- * `stickyInset` — pure function lifted from the surviving half of
- * `use-scroll-edges.ts`'s `insetAt` (see
+ * `stickyInset` — pure function lifted from the surviving half of the
+ * scroll-edge hook this change replaced (see
  * docs/plans/2026-08-14-todo-333-scroll-fade-plan.md, Task 2). It measures
  * how deep the sticky header stack parked at one edge of a scroller runs, so
  * a fade mask can start below the headers instead of dissolving them.

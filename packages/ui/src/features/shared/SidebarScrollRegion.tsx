@@ -12,37 +12,16 @@
  * virtualized — `GroupedVirtuoso` needs it as its `customScrollParent` to keep
  * windowing rows against a scroller it does not own.
  *
- * Content fades in and out at both edges instead of being clipped, matching the
- * `truncate-fade` ramp the row labels use.
+ * Content fades in and out at both edges instead of being clipped. The fade is
+ * the shadcn `scroll-fade` utility, which drives its depth off a scroll
+ * timeline, so an edge with nothing past it is not dimmed. All this component
+ * adds is how far the sticky headers parked at each edge reach, which the
+ * `scroll-fade-sticky` shape starts its ramps below.
  */
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { SidebarContent } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { useScrollEdges, type ScrollEdges } from './use-scroll-edges';
-
-/** Depth of the ramp, in px — long enough to read as a fade, short enough not to eat a row. */
-const FADE = 20;
-
-/**
- * The edge fades, as a mask on the scroller.
- *
- * The complication is that the section headers are sticky children of this same
- * scroller, so they sit exactly where the ramps want to be and a plain
- * top/bottom fade would dissolve them first. Each ramp therefore starts below
- * the measured header stack, with a hard stop holding full opacity across it.
- */
-function edgeMask({ top, bottom, topInset, bottomInset }: ScrollEdges): string | undefined {
-  if (!top && !bottom) return undefined;
-
-  const stops = [`#000 0`, `#000 ${topInset}px`];
-  if (top) stops.push(`transparent ${topInset}px`, `#000 ${topInset + FADE}px`);
-  if (bottom) {
-    stops.push(`#000 calc(100% - ${bottomInset + FADE}px)`, `transparent calc(100% - ${bottomInset}px)`);
-  }
-  stops.push(`#000 calc(100% - ${bottomInset}px)`, `#000 100%`);
-
-  return `linear-gradient(to bottom, ${stops.join(', ')})`;
-}
+import { useStickyInsets } from './use-sticky-insets';
 
 const ScrollRegionContext = createContext<HTMLDivElement | null>(null);
 
@@ -53,7 +32,7 @@ export function useScrollRegion(): HTMLDivElement | null {
 
 export function SidebarScrollRegion({ children, className }: { children: ReactNode; className?: string }) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
-  const edges = useScrollEdges(viewport);
+  const insets = useStickyInsets(viewport);
 
   return (
     <SidebarContent
@@ -67,9 +46,15 @@ export function SidebarScrollRegion({ children, className }: { children: ReactNo
         // The panel is the whole surface; chaining a scroll out of it to the
         // window would move something the user cannot see.
         'overscroll-contain',
+        'scroll-fade-y scroll-fade-sticky',
         className,
       )}
-      style={{ maskImage: edgeMask(edges) }}
+      style={
+        {
+          '--scroll-fade-inset-t': `${insets.top}px`,
+          '--scroll-fade-inset-b': `${insets.bottom}px`,
+        } as CSSProperties
+      }
     >
       <ScrollRegionContext.Provider value={viewport}>{children}</ScrollRegionContext.Provider>
     </SidebarContent>
