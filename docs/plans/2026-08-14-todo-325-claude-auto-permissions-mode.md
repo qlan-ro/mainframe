@@ -160,11 +160,15 @@ adapters advertise the CLI's native `auto` mode). Then set it at all nine constr
 `mainframe-server/tests/chat_default_model_catalog.rs:55`,
 `mainframe-server/tests/transcript_presence_support/mod.rs:66`, and both sites in
 `mainframe-server/src/routes/session_transcripts.rs:154, 198`.
+Then add `ExecutionMode::Auto => "auto"` to `execution_mode_cli` at
+`packages/core-rs/crates/mainframe-adapter-claude/src/session.rs:235-240`. That arm belongs to this
+task, not to Task 4: it is the workspace's only exhaustive `match` on `ExecutionMode` (Codex's
+`map_permission_mode` is an `if`/`else`; every other site constructs a variant or derives serde), so
+without it this task's workspace check fails with `error[E0004]: non-exhaustive patterns:
+`ExecutionMode::Auto` not covered`. Task 7 is what pins the arm's value.
 *Verify:* `cargo check --workspace --all-targets` from `packages/core-rs` is green.
 
-**Task 4.** Adapter mode mappings.
-- `packages/core-rs/crates/mainframe-adapter-claude/src/session.rs:235-240` — add
-  `ExecutionMode::Auto => "auto"` to `execution_mode_cli`.
+**Task 4.** Codex mode mapping.
 - `packages/core-rs/crates/mainframe-adapter-codex/src/session.rs:163-169` — replace the
   `if mode == ExecutionMode::Yolo { … } else { … }` body of `map_permission_mode` with a delegation
   to a new free function `fn permission_mode_policy(mode: ExecutionMode) -> (String, String)` in the
@@ -353,16 +357,39 @@ false or omitted, sits between Auto-edits and Unattended, and when selected carr
 while a selected Unattended still carries `text-destructive`.
 *Verify:* fails.
 
-**Task 22 (green).** `packages/ui/src/features/chat/gates/PlanExecModeControl.tsx` — add an
-`autoAllowed?: boolean` prop and a fourth `EXEC_MODE_OPTIONS` entry
-(`{ id: 'auto', label: 'Auto', Icon: SparklesIcon, desc: 'Claude decides which actions need approval' }`)
-placed third, filtered out unless `autoAllowed`; extend the two-way selected tint (lines 50-51) to a
-three-way one so a selected `auto` reads `bg-background text-warning shadow-sm`.
-`packages/ui/src/features/chat/gates/PlanGate.tsx` — resolve the chat's adapter from
-`useChatExtras()?.state.chatConfig?.adapterId` plus `useAdapters()` and pass
-`autoAllowed={adapter?.capabilities.autoMode === true}` down through `ControlsPanel` to the control.
-Leave the `useState<ExecutionMode>('default')` seed on line 136 untouched (decision 3).
-*Verify:* Task 21 tests pass; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/gates/__tests__/PlanGate.test.tsx src/features/chat/gates/__tests__/PlanExecModeControl.test.tsx` green.
+**Task 22 (green).** The adapter is resolved in `ChatGateMount`, not in `PlanGate`. `PlanGate`
+documents itself as "fully prop-driven: no hooks, no context beyond TooltipProvider" and its suite
+(`__tests__/PlanGate.test.tsx:1-31`) renders it bare under a `TooltipProvider`; `ChatGateMount` is
+already runtime-coupled and already mocks that module. Threading a prop keeps both suites' strategies
+intact.
+
+- `packages/ui/src/features/chat/gates/PlanExecModeControl.tsx` — add an `autoAllowed?: boolean` prop
+  and a fourth `EXEC_MODE_OPTIONS` entry
+  (`{ id: 'auto', label: 'Auto', Icon: SparklesIcon, desc: 'Claude decides which actions need approval' }`)
+  placed third, filtered out unless `autoAllowed`; extend the two-way selected tint (lines 50-51) to a
+  three-way one so a selected `auto` reads `bg-background text-warning shadow-sm`.
+- `packages/ui/src/features/chat/gates/PlanGate.tsx` — add `autoAllowed?: boolean` to `PlanGateProps`
+  (line 23) and pass it through `ControlsPanel` (line 46) to `PlanExecModeControl` (line 59). Add no
+  hooks. Omitted means no Auto segment, so the existing `PlanGate.test.tsx` cases and the file's
+  prop-driven header stay correct and untouched. Leave the `useState<ExecutionMode>('default')` seed on
+  line 136 alone (decision 3).
+- `packages/ui/src/features/chat/gates/ChatGateMount.tsx` — call `useChatExtras()` and `useAdapters()`
+  **above** the `if (!front) return null` early return (hooks must not sit behind it), match the
+  adapter by `extras?.state.chatConfig?.adapterId`, and pass
+  `autoAllowed={adapter?.capabilities.autoMode === true}` on the `PlanGate` branch only.
+- `packages/ui/src/features/chat/gates/__tests__/ChatGateMount.test.tsx` — the `vi.mock` factory on
+  lines 31-33 exports **only** `useChatPermissionFront`, so the moment `ChatGateMount` imports
+  `useChatExtras` from that module the import resolves to `undefined` and behaviors 3, 6 and 7 throw
+  `useChatExtras is not a function`. Add `useChatExtras: vi.fn()` to that factory (its `undefined`
+  default keeps every existing case green) and correct the strategy header, which claims only
+  `useChatPermissionFront` is mocked. Then add one positive case: `resetAdapters()` in `beforeEach`,
+  `seedAdapters([...])` with a `claude` adapter carrying `capabilities.autoMode: true`, `useChatExtras`
+  returning extras whose `state.chatConfig.adapterId` is `'claude'`, an ExitPlanMode front → the plan
+  gate shows `chat-plan-execmode-auto`; with `autoMode` absent it does not. The suite renders the real
+  gates, so this reaches the segment end to end. Follow the `resetAdapters`/`seedAdapters` pattern in
+  `packages/ui/src/features/settings/__tests__/SettingsSidebar.test.tsx:38-41`.
+
+*Verify:* Task 21 tests pass; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/gates/__tests__/PlanExecModeControl.test.tsx src/features/chat/gates/__tests__/PlanGate.test.tsx src/features/chat/gates/__tests__/ChatGateMount.test.tsx` all green (run as separate files per the batch-`React.act` caveat).
 
 ---
 
@@ -404,10 +431,13 @@ check these claims rather than look for a missing task.
   construction — there is no encoder to test. Task 13 nevertheless asserts the picker renders
   `data-testid="composer-permission-mode-select-option-auto"`, which fails if the constant carries any
   other spelling. The Rust round-trip test (Task 1) is the real serialization guard.
-- **AC11, gate invariance.** No task touches the gate because nothing in the gate path reads the
-  permission mode: `ChatGateMount` dispatches on `ControlRequest.toolName`, and `PermissionGate` /
-  `AskUserQuestionGate` / `PlanGate` receive only the request entry and the reply function. A tool use
-  the CLI auto-allows never produces a `control_request` at all, so it cannot reach them. The existing
+- **AC11, gate invariance.** No permission mode ever decides whether a gate appears or what it can
+  answer: `ChatGateMount` dispatches purely on `ControlRequest.toolName`, and `PermissionGate` /
+  `AskUserQuestionGate` receive only the request entry and the reply function. A tool use the CLI
+  auto-allows never produces a `control_request` at all, so it cannot reach them. Task 22 does edit
+  this path, but only to widen a choice: `PlanGate` gains a display-only `autoAllowed` prop and
+  `ChatGateMount` resolves it from the chat's adapter. Neither reads the chat's *current* mode nor
+  changes any reply payload the gates already send. The existing
   `packages/ui/src/features/chat/gates/__tests__/PermissionGate.test.tsx` suite therefore covers AC11
   unchanged; run it in the Group G verification pass and record that it is green.
 - **AC12, the inheritance leg.** A new chat with no explicit mode inherits the provider default as a
