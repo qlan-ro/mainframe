@@ -9,12 +9,14 @@ import { PlanGate } from './PlanGate';
  * sticky footer above the composer, dispatched by `ControlRequest.toolName`.
  *
  * The slot is pinned so a gate never scrolls out of reach: a user reading back
- * through the transcript still sees what is blocking the run (#336). Its own
- * `max-h-[45cqh]` caps it against `ThreadPrimitive.Root`'s `[container-type:size]`
- * — capping the slot itself, not the footer it shares with the composer, so a
- * tall composer draft can never squeeze the gate toward 0 (a cap on the shared
- * parent let visible overflow push the composer below the pane). It scrolls
- * internally past that cap.
+ * through the transcript still sees what is blocking the run (#336). `max-h-[45cqh]`
+ * is its *preferred* cap against `ThreadPrimitive.Root`'s `[container-type:size]` —
+ * capping the slot itself, not the footer it shares with the composer, so a tall
+ * composer draft can never squeeze the gate toward 0 by growing the shared parent
+ * unbounded. But the footer as a whole is ALSO bounded to `100cqh` (ChatThread.tsx),
+ * and within that budget this slot is the one flex child allowed to shrink — a
+ * `min-h-24` floor (below `overflow-y-auto`'s automatic zero-min) stops it short of
+ * unreadable, and it scrolls internally past whichever cap is currently binding.
  *
  * `px-1` with a matching `-mx-1` gives the card's accent ring room inside a
  * scroll container (`overflow-y-auto` computes the other axis to `auto` too)
@@ -54,7 +56,7 @@ export function ChatGateMount() {
   return (
     <div
       data-testid="chat-thread-gate-slot"
-      className="-mx-1 mb-2 max-h-[45cqh] overflow-y-auto px-1 py-1 [scrollbar-width:none]"
+      className="-mx-1 mb-2 min-h-24 max-h-[45cqh] overflow-y-auto px-1 py-1 [scrollbar-width:none]"
     >
       {card}
     </div>

@@ -25,9 +25,15 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { writeFileSync } from 'fs';
+import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+
+// Minimal 1x1 red PNG — valid image, tiny payload (mirrors composer.spec.ts's fixture).
+const TINY_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
 /** The gate card and the composer sit in two wrappers with identical geometry
  *  (`mx-auto w-full max-w-[min(48rem,100%-116px)] px-5`), so their outer edges must coincide. */
@@ -413,10 +419,13 @@ test.describe('§gate pinned slot', () => {
 test.describe('§gate slot cap under a tall composer draft', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let testImagePath: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'permissions-no-suggestions' });
     project = await createTauriProject(app.page);
+    testImagePath = path.join(project.projectPath, 'test-image.png');
+    writeFileSync(testImagePath, Buffer.from(TINY_PNG_BASE64, 'base64'));
     await createTauriChat(app.page, project.projectId, 'default');
     // The Tauri window's minimum is 800x600 (tauri.conf.json) — 1200x600 is the
     // shortest window that still forces the footer's two blocks to compete for space.
@@ -428,47 +437,79 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     await closeTauriApp(app);
   });
 
-  // Regression guard for the review finding: capping the SHARED footer instead of the
-  // gate slot let a tall queued draft take the whole 55% budget, collapsing the slot
-  // toward 0px and pushing the composer's own bottom edge past the pane. The slot now
-  // caps itself (`max-h-[45cqh]` against the thread root's `[container-type:size]`), so
-  // the two invariants below must hold independently of composer height.
-  test('a tall queued draft leaves the gate reachable and the composer inside the pane', async () => {
+  // Regression guard for a round-2 review finding: capping only the gate slot
+  // (`max-h-[45cqh]`) bounds the slot itself but not the footer that shares its
+  // budget with the composer — the footer's sticky-bottom-0 positioning only pins
+  // correctly while the footer's OWN box is no taller than the pane. This test drives
+  // BOTH blocks toward their caps at once (Details expanded on the gate, a tall queued
+  // draft on the composer) and scrolls to the top before asserting, because a sticky
+  // box taller than its scrollport pins to the TOP and overflows past the bottom —
+  // exactly the position the original guard never checked.
+  test('an expanded gate and a tall queued draft compete for the footer without pushing the composer past the pane', async () => {
     const { page } = app;
     await sendMessage(page, 'Run `whoami` to check the current user');
 
     const gate = page.locator('[data-testid="chat-permission-gate"]');
     await gate.waitFor({ timeout: 45_000 });
 
-    // Queue a multi-line draft while the run is in flight — enough lines to clear the
-    // composer's own 192px (`max-h-48`) scroll wrapper, which is the tall-composer case
-    // the finding traces the clipping to.
+    // Collapsed-and-uncontested phase, before either block is driven toward its cap:
+    // the action row is reachable in place. Asserted here, not after the squeeze below —
+    // an expanded gate at floor height can legitimately push its own action row below
+    // the slot's internal scroll fold, which is a different contract (internal
+    // scrolling) than this test is guarding.
+    const allowOnce = page.locator('[data-testid="chat-permission-allow-once"]');
+    await expect(allowOnce).toBeInViewport();
+    await expect(allowOnce).toBeEnabled();
+
+    // Drive the gate toward its cap: the Details disclosure is the only way this
+    // recording's card grows past its resting ~130px.
+    await page.locator('[data-testid="chat-permission-details-toggle"]').click();
+    await page.locator('[data-testid="chat-permission-details-pre"]').waitFor({ timeout: 5_000 });
+
+    // Drive the composer toward its own cap with a multi-line queued draft — enough
+    // lines to clear the composer's 192px (`max-h-48`) scroll wrapper — plus an
+    // attachment tile row. The draft alone maxes out around 236px (the scroll
+    // wrapper stops growing once its own cap is hit), which at this window size
+    // sits just under the footer's break-even point; the attachment row is what
+    // the finding's own reachability argument names as the extra weight ("before
+    // any attachment, quote segment, or worktree banner") that pushes the footer
+    // over.
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-attachment').click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(testImagePath);
+    await page.locator('[data-testid="composer-attachment-tile"]').waitFor({ timeout: 5_000 });
+
     const tallDraft = Array.from({ length: 15 }, (_, i) => `Queued draft line ${i + 1} of a long message.`).join('\n');
     await page.getByTestId('chat-composer-input').fill(tallDraft);
     await expect(page.getByTestId('chat-composer-input')).toHaveValue(tallDraft);
 
-    // Precondition, asserted not assumed: the draft must actually have grown the
-    // composer past its resting height, or both invariants below pass vacuously.
+    // Precondition, asserted not assumed: the draft + attachment must actually have
+    // grown the composer past the point the finding traces the regression to, or
+    // the invariants below pass vacuously.
     const composerHeightAfterDraft = await page
       .getByTestId('chat-composer')
       .evaluate((el) => el.getBoundingClientRect().height);
-    expect(composerHeightAfterDraft).toBeGreaterThan(200);
+    expect(composerHeightAfterDraft).toBeGreaterThan(260);
 
-    // Invariant 1: the gate's action button stays reachable and clickable in place —
-    // not just present somewhere off the fold.
-    const allowOnce = page.locator('[data-testid="chat-permission-allow-once"]');
-    await expect(allowOnce).toBeInViewport();
-    await expect(allowOnce).toBeEnabled();
-    const gateBox = await gate.boundingBox();
-    expect(gateBox, 'gate card must be mounted').not.toBeNull();
-    expect(gateBox!.height).toBeGreaterThan(60);
+    // The failure this guards against is scroll-position-specific (sticky-bottom's
+    // top-pin-and-overflow behavior only shows at scroll-top), so scroll there before
+    // asserting either invariant.
+    await scrollViewportToTop(page);
 
-    // Invariant 2: the composer never paints below the thread pane's bottom edge.
+    // Invariant (b): the composer's bottom edge stays inside the pane.
     const paneBox = await page.getByTestId('chat-thread-viewport').boundingBox();
     const composerBox = await page.getByTestId('chat-composer').boundingBox();
     expect(paneBox, 'thread viewport must be mounted').not.toBeNull();
     expect(composerBox, 'composer must be mounted').not.toBeNull();
     expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(paneBox!.y + paneBox!.height + 1);
+
+    // Invariant (a): the gate slot keeps a readable floor rather than collapsing
+    // toward 0px under the composer's competing demand. `min-h-24` (96px) is the
+    // floor in ChatGateMount.tsx — a few px of tolerance for border/rounding.
+    const slotBox = await page.getByTestId('chat-thread-gate-slot').boundingBox();
+    expect(slotBox, 'gate slot must be mounted').not.toBeNull();
+    expect(slotBox!.height).toBeGreaterThanOrEqual(90);
 
     await page.locator('[data-testid="chat-permission-deny"]').click();
     await waitForIdle(page, 60_000);

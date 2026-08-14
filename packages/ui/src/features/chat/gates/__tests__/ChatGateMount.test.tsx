@@ -286,15 +286,18 @@ describe('ChatGateMount', () => {
   });
 
   // Class-string regression check only: this pins the tokens the height cap
-  // and the composer width parity depend on. `max-h-[45cqh]` is one half of
-  // the cap — the other half, `[container-type:size]` on `ThreadPrimitive.Root`,
-  // isn't pinnable here because the thread tests stub `ThreadPrimitive`
-  // entirely. The real geometry — the cap engaging against a live container,
-  // the edges lining up while the slot scrolls, and the composer's bottom
-  // edge never painting past the pane — is verified live in the plan's Task 7
-  // and by the Playwright assertions in Task 9. Dropping
-  // `[scrollbar-width:none]` costs 8px of card width off the composer's edge
-  // whenever the slot actually scrolls (see the plan's fact 8).
+  // and the composer width parity depend on. `max-h-[45cqh]` is the slot's
+  // preferred cap; `min-h-24` is the floor it shrinks to (no lower) once the
+  // footer's own `max-h-[100cqh]` (ChatThread.tsx) squeezes it below that —
+  // `overflow-y-auto` zeroes flexbox's automatic minimum, so without an
+  // explicit floor the slot would compress to 0px under a tall composer
+  // draft. Neither cap is pinnable in full here because the thread tests
+  // stub `ThreadPrimitive` entirely — the real geometry (both caps engaging
+  // against a live container, the edges lining up while the slot scrolls,
+  // and the composer's bottom edge never painting past the pane) is verified
+  // live in the plan's Task 7 and by the Playwright assertions in gates.spec.ts.
+  // Dropping `[scrollbar-width:none]` costs 8px of card width off the
+  // composer's edge whenever the slot actually scrolls (see the plan's fact 8).
   it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
     mockFront.mockReturnValue({ front: permissionEntry, reply });
     wrap(<ChatGateMount />);
@@ -303,5 +306,6 @@ describe('ChatGateMount', () => {
     expect(slot).toHaveClass('overflow-y-auto');
     expect(slot).toHaveClass('[scrollbar-width:none]');
     expect(slot).toHaveClass('max-h-[45cqh]');
+    expect(slot).toHaveClass('min-h-24');
   });
 });
