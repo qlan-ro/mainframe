@@ -5,12 +5,44 @@ use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
 use mainframe_types::display::ToolCategories;
 
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
+use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+
 use crate::session::{ReplayCache, ReplaySession};
+use crate::task_bridge::TaskBridge;
 
 #[derive(Default)]
 pub struct MockCliAdapter {
     indexes: Mutex<HashMap<String, usize>>,
     cache: Arc<ReplayCache>,
+    /// Present only when the daemon wired its tracker in. Without it the replay
+    /// behaves exactly as before: transcripts, but no background-task events.
+    tracker: Option<Arc<BackgroundTaskTracker>>,
+    workflows: Option<Arc<ClaudeWorkflowStore>>,
+}
+
+impl MockCliAdapter {
+    /// Build an adapter that reports replayed subagent / background-bash work to
+    /// the daemon's background-task tracker, the way the Claude adapter reports
+    /// the CLI's own task notifications.
+    pub fn with_tracker(
+        tracker: Arc<BackgroundTaskTracker>,
+        workflows: Arc<ClaudeWorkflowStore>,
+    ) -> Self {
+        Self {
+            tracker: Some(tracker),
+            workflows: Some(workflows),
+            ..Self::default()
+        }
+    }
+
+    fn bridge(&self) -> Option<Arc<TaskBridge>> {
+        let tracker = self.tracker.as_ref()?;
+        Some(Arc::new(TaskBridge::new(
+            Arc::clone(tracker),
+            self.workflows.clone(),
+        )))
+    }
 }
 
 pub fn sanitize_key(key: &str) -> String {
@@ -109,7 +141,7 @@ impl Adapter for MockCliAdapter {
         if let Some(session_id) = options.chat_id.as_deref()
             && let Some(events) = self.cache.lookup(session_id)
         {
-            return Arc::new(ReplaySession::new(options, events));
+            return Arc::new(ReplaySession::new(options, events).with_bridge(self.bridge()));
         }
         let recordings_dir = match std::env::var("E2E_RECORDINGS_DIR") {
             Ok(dir) => dir,
@@ -129,11 +161,10 @@ impl Adapter for MockCliAdapter {
         };
         let path = std::path::Path::new(&recordings_dir)
             .join(format!("{}.{index}.ndjson", sanitize_key(&key)));
-        Arc::new(ReplaySession::from_fixture(
-            options,
-            path,
-            self.cache.clone(),
-        ))
+        Arc::new(
+            ReplaySession::from_fixture(options, path, self.cache.clone())
+                .with_bridge(self.bridge()),
+        )
     }
 
     fn kill_all(&self) {}

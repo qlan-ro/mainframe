@@ -7,6 +7,7 @@ mod fixture;
 mod history;
 mod session;
 mod session_trait;
+mod task_bridge;
 
 pub mod skills;
 

@@ -10,6 +10,7 @@ use mainframe_types::adapter::{AdapterProcess, AdapterProcessStatus, SessionOpti
 use crate::dispatch::emit_event;
 use crate::fixture::{EventDirection, RecordedEvent, ReplayState};
 use crate::history::recorded_session_id;
+use crate::task_bridge::TaskBridge;
 
 const MAX_DELAY_MS: u64 = 120;
 
@@ -75,6 +76,9 @@ enum ReplaySource {
 
 pub struct ReplaySession {
     pub(crate) id: String,
+    /// Reports replayed subagent / background-bash work to the daemon's tracker.
+    /// `None` outside the daemon (unit tests, and any caller that wires no tracker).
+    pub(crate) task_bridge: Option<Arc<TaskBridge>>,
     pub(crate) project_path: String,
     pub(crate) spawned: AtomicBool,
     pub(crate) sink: Arc<Mutex<Option<Arc<dyn SessionSink>>>>,
@@ -86,6 +90,7 @@ impl ReplaySession {
     pub fn new(options: SessionOptions, events: Vec<RecordedEvent>) -> Self {
         Self {
             id: options.mainframe_chat_id,
+            task_bridge: None,
             project_path: options.project_path,
             spawned: AtomicBool::new(false),
             sink: Arc::new(Mutex::new(None)),
@@ -95,6 +100,13 @@ impl ReplaySession {
             })),
             source: tokio::sync::Mutex::new(ReplaySource::Ready),
         }
+    }
+
+    /// Attach the background-task bridge. Builder-style so the three constructors
+    /// keep their signatures.
+    pub(crate) fn with_bridge(mut self, bridge: Option<Arc<TaskBridge>>) -> Self {
+        self.task_bridge = bridge;
+        self
     }
 
     pub(crate) fn from_fixture(
@@ -211,6 +223,8 @@ impl ReplaySession {
             return;
         };
         let delay_ceiling = max_delay_ms();
+        let bridge = self.task_bridge.clone();
+        let chat_id = self.id.clone();
         tokio::spawn(async move {
             let started_at = tokio::time::Instant::now();
             for event in outputs {
@@ -219,6 +233,11 @@ impl ReplaySession {
                 );
                 if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
                     tokio::time::sleep(remaining).await;
+                }
+                // Start/end the task BEFORE the message lands, so the Activity
+                // panel and the transcript card appear on the same frame.
+                if let Some(bridge) = bridge.as_ref() {
+                    bridge.observe(&chat_id, &event);
                 }
                 emit_event(sink.clone(), event);
             }
