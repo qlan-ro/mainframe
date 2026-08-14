@@ -240,9 +240,14 @@ Add, after the imports and near the existing `truncate-fade` utility (`globals.c
 The utility sets only a custom property, so it composes with `scroll-fade-y` regardless of emission
 order.
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui build` succeeds (Tailwind rejects malformed
-`@utility` at build time). Grep the produced CSS bundle under `packages/ui/dist/` for
-`scroll-fade-sticky` and for `--scroll-fade-size:20px` — both present.
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui build` succeeds — the script is
+`tsc && vite build` (`packages/ui/package.json:8`) and Vite runs `@tailwindcss/vite`, so a malformed
+`@utility` fails the build. Then `rg -n -- '--scroll-fade-size' packages/ui/dist/assets/*.css` finds
+the `:root` declaration (a base-layer rule, always emitted; the bundle is minified per
+`packages/ui/vite.config.ts:33`, so match the token, not the formatting).
+
+Do **not** try to grep `.scroll-fade-sticky` here: Tailwind v4 emits an `@utility` only when a
+scanned source file uses the class, and no file does until Task 5. That check lives in Task 12.
 
 ---
 
@@ -396,7 +401,10 @@ Run, in order:
 2. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/shared/__tests__/sticky-insets.test.ts`
 3. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/__tests__/design-token-audit.test.ts`
 4. `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/chat/composer/attachments/__tests__/ComposerAttachmentStrip.test.tsx`
-5. `rg -n 'maskImage' packages/ui/src` → no hits.
+5. `rg -n 'maskImage' packages/ui/src` → no hits. And after
+   `pnpm --filter @qlan-ro/mainframe-ui build`,
+   `rg -n 'scroll-fade-sticky|scroll-fade-y|scroll-fade-x' packages/ui/dist/assets/*.css` → all
+   three present, proving the utilities really reached the shipped bundle.
 6. Net line count in production UI source goes down:
    `git diff --numstat origin/main..HEAD -- 'packages/ui/src/**/*.ts' 'packages/ui/src/**/*.tsx' 'packages/ui/src/styles/globals.css' ':!packages/ui/src/**/__tests__/**'`
    — added minus deleted must be negative. Record the number.
