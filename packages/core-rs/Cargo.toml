@@ -39,6 +39,9 @@ qrcode = "0.14"
 croner = "3"
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
+# Safe `getuid(2)` for the Claude CLI's per-user spool root (`/tmp/claude-<uid>`);
+# libc's binding is an unsafe extern and every crate here is `forbid(unsafe_code)`.
+rustix = { version = "1", features = ["process"] }
 # Test-only: named timezones for the scheduler DST-edge tests (croner runs
 # in local time in prod; tests need a deterministic tz - use as a dev-dependency).
 chrono-tz = "0.10"

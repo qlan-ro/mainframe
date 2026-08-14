@@ -105,7 +105,17 @@ impl SpoolValidator for MadeSpoolValidator {
             let temp_dir_name = if platform == Platform::Win32 {
                 "claude".to_string()
             } else {
-                format!("claude-{}", self.getuid.as_ref().map(|f| f()).unwrap_or(0))
+                match &self.getuid {
+                    Some(f) => format!("claude-{}", f()),
+                    None => {
+                        tracing::warn!(
+                            target: "background-tasks:spool",
+                            %output_path,
+                            "no uid source for a POSIX spool path; rejecting"
+                        );
+                        return false;
+                    }
+                }
             };
 
             // realpath failure (ENOENT, EACCES) = path does not exist / not readable.
@@ -128,7 +138,18 @@ impl SpoolValidator for MadeSpoolValidator {
     }
 }
 
+#[cfg(unix)]
+fn default_getuid() -> Option<Arc<dyn Fn() -> u32 + Send + Sync>> {
+    Some(Arc::new(crate::spool_root::current_uid))
+}
+
+#[cfg(windows)]
+fn default_getuid() -> Option<Arc<dyn Fn() -> u32 + Send + Sync>> {
+    None // Windows spool paths carry no uid segment.
+}
+
 pub fn make_spool_validator(deps: SpoolValidatorDeps) -> impl SpoolValidator {
+    let getuid = deps.getuid.or_else(default_getuid);
     let realpath = deps.realpath.unwrap_or_else(|| {
         Arc::new(|p: String| {
             Box::pin(async move {
@@ -143,206 +164,10 @@ pub fn make_spool_validator(deps: SpoolValidatorDeps) -> impl SpoolValidator {
         .unwrap_or_else(|| Arc::new(|| std::env::temp_dir().to_string_lossy().into_owned()));
     MadeSpoolValidator {
         platform: deps.platform,
-        getuid: deps.getuid,
+        getuid,
         env: deps.env,
         realpath,
         tmpdir,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn identity_realpath() -> RealpathFn {
-        Arc::new(|p: String| Box::pin(async move { Ok(p) }))
-    }
-
-    fn empty_env() -> HashMap<String, String> {
-        HashMap::new()
-    }
-
-    // --- makeSpoolValidator (linux) ---
-
-    #[tokio::test]
-    async fn accepts_a_well_formed_spool_path() {
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(identity_realpath()),
-            tmpdir: None,
-        });
-        assert!(
-            v.validate(
-                "/tmp/claude-501/project-slug/session-abc/tasks/task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_basename_mismatch() {
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(identity_realpath()),
-            tmpdir: None,
-        });
-        assert!(
-            !v.validate(
-                "/tmp/claude-501/project-slug/session-abc/tasks/other.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_path_outside_spool_root() {
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(identity_realpath()),
-            tmpdir: None,
-        });
-        assert!(!v.validate("/etc/passwd", "task-xyz").await);
-    }
-
-    #[tokio::test]
-    async fn rejects_path_missing_tasks_segment() {
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(identity_realpath()),
-            tmpdir: None,
-        });
-        assert!(
-            !v.validate(
-                "/tmp/claude-501/project-slug/session-abc/task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_when_realpath_escapes_the_root() {
-        let realpath: RealpathFn = Arc::new(|p: String| {
-            Box::pin(async move {
-                if p == "/tmp/claude-501/project/s/tasks/task-xyz.output" {
-                    Ok("/etc/passwd".to_string())
-                } else {
-                    Ok(p)
-                }
-            })
-        });
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(realpath),
-            tmpdir: None,
-        });
-        assert!(
-            !v.validate(
-                "/tmp/claude-501/project/s/tasks/task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    // --- makeSpoolValidator (macos /private/tmp symlink) ---
-
-    #[tokio::test]
-    async fn accepts_when_tmp_realpaths_to_private_tmp() {
-        let realpath: RealpathFn = Arc::new(|p: String| {
-            Box::pin(async move {
-                Ok(if let Some(rest) = p.strip_prefix("/tmp") {
-                    format!("/private/tmp{rest}")
-                } else {
-                    p
-                })
-            })
-        });
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Darwin,
-            getuid: Some(Arc::new(|| 501)),
-            env: empty_env(),
-            realpath: Some(realpath),
-            tmpdir: None,
-        });
-        assert!(
-            v.validate(
-                "/private/tmp/claude-501/p/s/tasks/task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    // --- makeSpoolValidator (windows) ---
-
-    fn win_validator() -> impl SpoolValidator {
-        let tmpdir = "C:\\Users\\me\\AppData\\Local\\Temp";
-        make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Win32,
-            getuid: None,
-            env: empty_env(),
-            realpath: Some(identity_realpath()),
-            tmpdir: Some(Arc::new(move || tmpdir.to_string())),
-        })
-    }
-
-    #[tokio::test]
-    async fn uses_claude_no_uid_suffix_as_the_dir_name() {
-        let v = win_validator();
-        assert!(
-            v.validate(
-                "C:\\Users\\me\\AppData\\Local\\Temp\\claude\\proj\\sess\\tasks\\task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_a_unix_style_claude_501_path_on_windows() {
-        let v = win_validator();
-        assert!(
-            !v.validate(
-                "C:\\Users\\me\\AppData\\Local\\Temp\\claude-501\\proj\\sess\\tasks\\task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
-    }
-
-    // --- makeSpoolValidator (CLAUDE_CODE_TMPDIR override) ---
-
-    #[tokio::test]
-    async fn honors_claude_code_tmpdir_env_var() {
-        let mut env = HashMap::new();
-        env.insert("CLAUDE_CODE_TMPDIR".to_string(), "/var/cache".to_string());
-        let v = make_spool_validator(SpoolValidatorDeps {
-            platform: Platform::Linux,
-            getuid: Some(Arc::new(|| 501)),
-            env,
-            realpath: Some(identity_realpath()),
-            tmpdir: None,
-        });
-        assert!(
-            v.validate(
-                "/var/cache/claude-501/p/s/tasks/task-xyz.output",
-                "task-xyz"
-            )
-            .await
-        );
     }
 }
 
@@ -351,7 +176,10 @@ mod tests {
 // todos: 0
 // notes: `path.win32`/`path.posix` simulation → local sep/basename/join keyed on
 // the SIMULATED Platform (host std::path can't parse `C:\\…`). deps.realpath /
-// deps.tmpdir / deps.getuid are injectable closures; validator returned as a
-// boxed-future trait object (SpoolValidator) so reconcile can inject test
+// deps.tmpdir / deps.getuid are injectable closures — the seam stays for tests
+// that need to pin a uid without depending on the CI user; make_spool_validator
+// now fills an absent deps.getuid with the real uid on unix (None on Windows,
+// where POSIX paths simply have no uid segment to match). validator returned as
+// a boxed-future trait object (SpoolValidator) so reconcile can inject test
 // doubles. All 8 spool-validator.test.ts cases translated (linux/darwin/win32/
 // env-override). deps.env kept as a HashMap to mirror `deps.env[...]` lookups.

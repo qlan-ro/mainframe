@@ -2,15 +2,38 @@
 
 use std::path::PathBuf;
 
-/// Best-effort current-user uid, mirroring `process.getuid()`.
-///
-/// `getuid(2)` is only reachable through `libc`/`rustix`, neither of which is on
-/// the workspace allowlist, so this returns `None` until that dependency is
-/// added (see the crate blocker). Every test path injects an explicit
-/// `spoolRoot`, so only the production default below is affected.
-fn current_uid() -> Option<u32> {
-    // TODO(port): getuid() needs libc/rustix (not in the workspace allowlist).
-    None
+/// Real uid of this process — the value `process.getuid()` returns inside the
+/// CLI, which names its per-user temp dir `claude-<uid>`. `getuid(2)` cannot fail.
+#[cfg(unix)]
+pub fn current_uid() -> u32 {
+    rustix::process::getuid().as_raw()
+}
+
+#[cfg(unix)]
+fn claude_dir_name() -> String {
+    format!("claude-{}", current_uid())
+}
+
+#[cfg(windows)]
+fn claude_dir_name() -> String {
+    "claude".to_string()
+}
+
+#[cfg(unix)]
+fn default_tmp_base() -> String {
+    "/tmp".to_string()
+}
+
+#[cfg(windows)]
+fn default_tmp_base() -> String {
+    std::env::temp_dir().to_string_lossy().into_owned()
+}
+
+// `std::env::set_var` is unsafe under edition 2024 and this crate forbids
+// unsafe, so tests can't pin `CLAUDE_CODE_TMPDIR` — the override is threaded
+// through this inner function instead.
+fn spool_root_with(tmpdir_override: Option<String>) -> PathBuf {
+    PathBuf::from(tmpdir_override.unwrap_or_else(default_tmp_base)).join(claude_dir_name())
 }
 
 /// Absolute path of the Claude CLI's per-user spool root.
@@ -18,26 +41,51 @@ fn current_uid() -> Option<u32> {
 ///  - Win: `%TEMP%/claude`
 ///  - `CLAUDE_CODE_TMPDIR` overrides the base.
 pub fn spool_root() -> PathBuf {
-    let tmpdir = std::env::var("CLAUDE_CODE_TMPDIR").ok().unwrap_or_else(|| {
-        if cfg!(windows) {
-            std::env::temp_dir().to_string_lossy().into_owned()
-        } else {
-            "/tmp".to_string()
-        }
-    });
-    let uid_part = if cfg!(windows) {
-        "claude".to_string()
-    } else {
-        format!("claude-{}", current_uid().unwrap_or(0))
-    };
-    PathBuf::from(tmpdir).join(uid_part)
+    spool_root_with(std::env::var("CLAUDE_CODE_TMPDIR").ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn honors_claude_code_tmpdir_override() {
+        let root = spool_root_with(Some("/var/cache".into()));
+        assert_eq!(root, PathBuf::from("/var/cache").join(claude_dir_name()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn defaults_to_the_literal_tmp_on_unix() {
+        let root = spool_root_with(None);
+        assert!(root.to_string_lossy().starts_with("/tmp/claude-"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dir_name_carries_the_real_uid() {
+        let output = std::process::Command::new("id").arg("-u").output().unwrap();
+        let oracle_uid: u32 = String::from_utf8(output.stdout)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert_eq!(claude_dir_name(), format!("claude-{oracle_uid}"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dir_name_has_no_uid_segment() {
+        assert_eq!(claude_dir_name(), "claude");
+    }
 }
 
 // PORT STATUS: src/background-tasks/spool-root.ts (15 lines)
-// confidence: medium
-// todos: 1
-// notes: BLOCKER — `process.getuid()` has no allowlisted Rust equivalent (needs
-// libc/rustix). `current_uid()` returns None → the production default falls back
-// to `claude-0`, which is WRONG on a non-root macOS/Linux daemon. Not exercised
-// by any test (reconcile/kill inject spoolRoot); flagged for the phase that adds
-// libc. `os.tmpdir()` → `std::env::temp_dir()`; win32 branch mirrors `claude`.
+// confidence: high
+// todos: 0
+// notes: `process.getuid()` -> `rustix::process::getuid().as_raw()`, a safe call
+// behind `#[cfg(unix)]`; the crate's `forbid(unsafe_code)` ruled out `libc`,
+// whose binding needs an unsafe `extern` block. Windows keeps the bare `claude`
+// dir name and `std::env::temp_dir()` base, unchanged. `os.tmpdir()` on unix
+// stays the literal `/tmp`, matching the shipping CLI (never the process temp
+// dir). No fallback uid: `getuid(2)` cannot fail on unix.
