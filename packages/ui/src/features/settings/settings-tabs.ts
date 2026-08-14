@@ -17,12 +17,19 @@ export const MODE_OPTIONS: {
   label: string;
   description: string;
   danger?: boolean;
+  caution?: boolean;
 }[] = [
   { id: 'default', label: 'Interactive', description: 'Prompts for everything' },
   {
     id: 'acceptEdits',
     label: 'Auto-Accept Edits',
     description: 'Silently applies file edits, still prompts for bash',
+  },
+  {
+    id: 'auto',
+    label: 'Auto',
+    description: 'Claude decides which actions need approval',
+    caution: true,
   },
   {
     id: 'yolo',
