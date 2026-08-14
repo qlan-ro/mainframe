@@ -179,10 +179,9 @@ only**, tracked with a `useRef<boolean>` of the previous `open` (fact 17 — do 
 the filter). One extra guard: if the rising-edge seed ran while `projects` was empty, seed once
 more when a non-empty list first arrives, then stop (a `useRef` "seeded" latch). Reset to `null` on
 the falling edge so a reopen cannot show a stale override before its effect runs. `setProjectId`
-writes local state and nothing else — no store, no localStorage.
-Also export `useModalProjectScopeWithProjects(open)` returning `{ projectId, setProjectId, projects }`
-if the consumers need the list; otherwise consumers call `useProjects()` themselves. Keep the file
-under 100 lines.
+writes local state and nothing else — no store, no localStorage. The hook returns only
+`{ projectId, setProjectId }`; consumers that need the project list call `useProjects()`
+themselves. Keep the file under 100 lines.
 Verify: task 2's test file passes; `typecheck`.
 
 **Task 5 — the in-header project picker.**
@@ -298,10 +297,15 @@ Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automa
 
 **Task 14 — per-open scope in the Automations host.**
 Update `packages/ui/src/features/automations/AutomationsHost.tsx`: delete the session-following
-effect (fact 5). Instead, call `loadInteractions()` once on mount (badge from boot, spec AC14), and
-on the rising edge of `open` set `setScopeProjectId(seed)` from `useModalProjectScope(open)` and
-call `loadLibrary(seed)`. On close, clear the store scope to `null`. Keep `useAutomationToasts()`
-and `useAutomationEvents()` unconditional and ahead of any early return.
+effect (fact 5). Instead, call `loadInteractions()` once on mount (badge from boot, spec AC14).
+Take the scope from `useModalProjectScope(open)` and sync it into the store from an effect keyed on
+**the hook's `projectId` while `open`** — not on the rising edge of `open` alone: that effect must
+also fire for the picker's change and for the late seed of task 4's latch (fact 14 — the projects
+list can still be empty at the instant the modal opens, and a rising-edge-only wiring would leave
+the store on `null` while the header names the seeded project). The effect calls
+`setScopeProjectId(id)` then `loadLibrary(id)`, in that order. On close, clear the store scope to
+`null`. Keep `useAutomationToasts()` and `useAutomationEvents()` unconditional and ahead of any
+early return.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/automations/__tests__/AutomationsHost.test.tsx`;
 `typecheck`.
 
