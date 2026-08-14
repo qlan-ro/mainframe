@@ -26,6 +26,26 @@ use crate::rollout_reconstruct::{
     handle_function_call_output,
 };
 
+/// `custom_tool_call_output.output` on every record kind except the modern
+/// "unified exec" tool is a plain string; unified exec writes an array of
+/// `{"type":"input_text","text":…}` blocks instead. `#[serde(untagged)]` picks
+/// whichever shape the payload actually has.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum RolloutOutput {
+    Text(String),
+    Blocks(Vec<RolloutContent>),
+}
+
+impl RolloutOutput {
+    pub(crate) fn as_text(&self) -> String {
+        match self {
+            RolloutOutput::Text(s) => s.clone(),
+            RolloutOutput::Blocks(blocks) => blocks.iter().filter_map(|b| b.text.clone()).collect(),
+        }
+    }
+}
+
 /// Only paths inside `~/.codex/sessions` are allowed — `rollout_path` comes from an
 /// externally-owned SQLite DB so we treat it as untrusted input.
 fn default_sessions_root() -> Option<PathBuf> {
@@ -40,7 +60,7 @@ pub struct RolloutReaderDeps {
 }
 
 #[derive(Debug, Deserialize)]
-struct RolloutContent {
+pub(crate) struct RolloutContent {
     #[serde(rename = "type", default)]
     kind: Option<String>,
     #[serde(default)]
@@ -62,7 +82,7 @@ pub(crate) struct RolloutPayload {
     #[serde(default)]
     pub(crate) call_id: Option<String>,
     #[serde(default)]
-    pub(crate) output: Option<String>,
+    pub(crate) output: Option<RolloutOutput>,
     #[serde(default)]
     summary: Option<Vec<RolloutContent>>,
     /// Present on MCP `function_call` records (e.g. `"mcp__testserver"`); absent
@@ -163,6 +183,7 @@ fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut pending_exec: HashMap<String, String> = HashMap::new();
     let mut pending_mcp: HashMap<String, PendingMcp> = HashMap::new();
     let mut pending_patch: HashMap<String, String> = HashMap::new();
+    let mut pending_unified_exec: HashMap<String, String> = HashMap::new();
     let mut counter = 0usize;
 
     let lines: Vec<&str> = raw.split('\n').collect();
@@ -185,6 +206,7 @@ fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
             &mut pending_exec,
             &mut pending_mcp,
             &mut pending_patch,
+            &mut pending_unified_exec,
             &mut items,
         );
     }
@@ -198,6 +220,7 @@ fn apply_rollout_payload(
     pending_exec: &mut HashMap<String, String>,
     pending_mcp: &mut HashMap<String, PendingMcp>,
     pending_patch: &mut HashMap<String, String>,
+    pending_unified_exec: &mut HashMap<String, String>,
     items: &mut Vec<ThreadItem>,
 ) {
     match p.kind.as_deref() {
@@ -207,9 +230,9 @@ fn apply_rollout_payload(
         Some("function_call_output") => {
             handle_function_call_output(p, pending_exec, pending_mcp, items);
         }
-        Some("custom_tool_call") => handle_custom_tool_call(p, pending_patch),
+        Some("custom_tool_call") => handle_custom_tool_call(p, pending_patch, pending_unified_exec),
         Some("custom_tool_call_output") => {
-            handle_custom_tool_call_output(p, pending_patch, items);
+            handle_custom_tool_call_output(p, pending_patch, pending_unified_exec, items);
         }
         _ => {}
     }
