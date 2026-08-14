@@ -147,12 +147,12 @@ describe("arrangeSessions mode 'project'", () => {
   it('emits one section per project, labeled by project name, in project-list order', () => {
     const items = [
       item('a1', { projectId: 'proj-a' }),
-      item('b1', { projectId: 'proj-b' }),
-      item('b2', { projectId: 'proj-b' }),
+      item('b1', { projectId: 'proj-b', updatedAt: YESTERDAY_1000 }),
+      item('b2', { projectId: 'proj-b', updatedAt: TODAY_1100 }),
     ];
     const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
     expect(labels(groups)).toEqual(['Beta', 'Alpha']);
-    expect(idsOf(groups, 'Beta')).toEqual(['b1', 'b2']);
+    expect(idsOf(groups, 'Beta')).toEqual(['b2', 'b1']);
     expect(idsOf(groups, 'Alpha')).toEqual(['a1']);
   });
 
