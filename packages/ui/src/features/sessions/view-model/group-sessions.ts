@@ -38,8 +38,14 @@ function dayKey(ts: number): number {
   return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
 }
 
-function byUpdatedDesc(a: SessionItem, b: SessionItem): number {
-  return b.custom.updatedAt - a.custom.updatedAt;
+/** Code-unit order, not `localeCompare`, so the result cannot vary with the host locale. */
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Newest first; id breaks ties because incoming array order is only "when this client first saw it". */
+function byRecency(a: SessionItem, b: SessionItem): number {
+  return b.custom.updatedAt - a.custom.updatedAt || compareStrings(a.id, b.id);
 }
 
 function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number): SessionGroupResult[] {
@@ -57,16 +63,16 @@ function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number):
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byUpdatedDesc) });
-  if (today.length > 0) out.push({ label: 'Today', items: today.sort(byUpdatedDesc) });
-  if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byUpdatedDesc) });
-  if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byUpdatedDesc) });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
+  if (today.length > 0) out.push({ label: 'Today', items: today.sort(byRecency) });
+  if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byRecency) });
+  if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byRecency) });
   return out;
 }
 
 function arrangeFlat(pinned: SessionItem[], rest: SessionItem[], label: string): SessionGroupResult[] {
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: pinned });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
   out.push({ label, items: rest });
   return out;
 }
@@ -76,11 +82,20 @@ export interface ProjectRef {
   name: string;
 }
 
+/** Sections for projectIds absent from the project list: newest bucket first, then by projectId. */
+function ghostSections(buckets: Map<string, SessionItem[]>): SessionGroupResult[] {
+  const sections = [...buckets].map(([projectId, items]) => ({ label: projectId, items: items.sort(byRecency) }));
+  return sections.sort(
+    (a, b) =>
+      (b.items[0]?.custom.updatedAt ?? 0) - (a.items[0]?.custom.updatedAt ?? 0) || compareStrings(a.label, b.label),
+  );
+}
+
 /**
- * One section per project, ordered by the given project list. Sessions whose
- * `projectId` isn't in `projects` (a removed/unknown project) still get a
- * trailing section keyed by that id, in order of first appearance — grouping
- * never silently drops a session.
+ * One section per project, ordered by the given project list, each listing its
+ * sessions newest-activity first. Sessions whose `projectId` isn't in `projects`
+ * (a removed/unknown project) still get a trailing section keyed by that id —
+ * grouping never silently drops a session.
  */
 function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: ProjectRef[]): SessionGroupResult[] {
   const byProject = new Map<string, SessionItem[]>();
@@ -91,19 +106,16 @@ function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: 
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byUpdatedDesc) });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
 
   for (const project of projects) {
     const bucket = byProject.get(project.id);
     if (bucket) {
-      out.push({ label: project.name, items: bucket });
+      out.push({ label: project.name, items: bucket.sort(byRecency) });
       byProject.delete(project.id);
     }
   }
-  // Remaining buckets: projectIds absent from the given list, kept in first-seen order.
-  for (const [projectId, bucket] of byProject) {
-    out.push({ label: projectId, items: bucket });
-  }
+  out.push(...ghostSections(byProject));
   return out;
 }
 
@@ -121,13 +133,15 @@ export function arrangeSessions(
   const rest = items.filter((i) => !i.custom.pinned);
 
   if (mode === 'name') {
-    const sorted = [...rest].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    const sorted = [...rest].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '') || byRecency(a, b));
     return arrangeFlat(pinned, sorted, 'A–Z');
   }
 
   if (mode === 'status') {
     const sorted = [...rest].sort(
-      (a, b) => (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3),
+      (a, b) =>
+        (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3) ||
+        byRecency(a, b),
     );
     return arrangeFlat(pinned, sorted, 'By status');
   }
