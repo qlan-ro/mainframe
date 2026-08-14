@@ -93,11 +93,21 @@ Notes on specs the prior session flagged:
 
 ## Cleanup
 
-Verified after the sweep: no leftover `playwright`, `mainframe-daemon`, or
-`vite` processes from the run — one stray `vite preview --port 4317` process
-was found and killed by port. Production (`/Applications/Mainframe.app`,
-`:31415`, pid unrelated to the sweep) was confirmed alive and untouched
-before and after (`GET /health` → `200`) throughout.
+Verified after the sweep: no leftover `playwright` or `mainframe-daemon`
+processes. One leftover `vite preview --port 4317` process remained from the
+last spec file; killed by port (`lsof -ti :4317 | xargs kill`), then
+reverified no listener on that port. Production
+(`/Applications/Mainframe.app`, `:31415`, pid unrelated to the sweep) was
+confirmed alive and untouched before and after (`GET /health` → `200`)
+throughout.
+
+The prior interrupted session reported a suite total of 422 tests (from a
+`pnpm test:e2e` run cut short at 323/422); this complete per-spec sweep
+accounts for 431 (395 passed + 36 skipped) across all 34 spec files, with
+zero failures. The two totals aren't reconciled here — differences in
+per-run conditional skip counts or "did not run" bookkeeping between the
+two invocation styles are plausible but unverified; reporting both numbers
+as observed rather than guessing at the gap.
 
 ## Conclusion
 
