@@ -6,6 +6,7 @@ use std::sync::Arc;
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::adapter::{MessageUsage, SessionResult};
 
+use crate::collab_activity::end_all_activity;
 use crate::collab_card;
 use crate::event_mapper::{Owner, resolve_owner};
 use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
@@ -60,6 +61,9 @@ pub(crate) fn handle_turn_completed(
     // A card the child never resolved itself (no `wait`, no own `turn/completed`)
     // closes here so it does not stay open forever once the parent moves on.
     collab_card::resolve_open_cards_on_parent_turn_end(sink, state);
+    // Backstop (P2): a row whose card was already resolved by another route can
+    // never survive the turn (AC 8).
+    end_all_activity(state);
 
     state.current_turn_plan = None;
     state.current_turn_id = None;
