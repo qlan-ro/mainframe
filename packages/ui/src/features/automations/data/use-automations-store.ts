@@ -34,10 +34,15 @@ function isTerminalRunStatus(status: AutomationRunSummary['status']): boolean {
   return TERMINAL_RUN_STATUSES.has(status);
 }
 
+/** Sentinel for "loadLibrary has never run" — distinct from `null`, which is a real project id: "All projects". */
+const NEVER_LOADED = Symbol('never-loaded');
+
 interface AutomationsState {
   gateway: AutomationsGateway;
   /** The project the open Automations modal is showing — the editor's save target and its project-scoped pickers read it too. `null` whenever the modal is closed, and while it is open when the user is on "All projects". */
   scopeProjectId: string | null;
+  /** The project `definitions`/`runs` were last fetched for — lets `loadLibrary` tell a project change (clear the stale rows) from a same-project retry (keep them, so the Retry buttons don't blank the list). */
+  loadedProjectId: string | null | typeof NEVER_LOADED;
   definitions: AutomationSummary[];
   runs: AutomationRunSummary[];
   /** Bumped by `patchRun` on every applied update — lets a run view refetch on every `automation.run.updated` for its run id, not just status changes (a run can emit one per step transition). */
@@ -65,6 +70,7 @@ interface AutomationsState {
 export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   gateway: createFixtureGateway(),
   scopeProjectId: null,
+  loadedProjectId: NEVER_LOADED,
   definitions: [],
   runs: [],
   runRevisions: {},
@@ -92,8 +98,17 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
 
   loadLibrary: async (projectId) => {
     const seqAtStart = ++librarySeq;
-    set({ loading: true, error: null });
-    const { gateway } = get();
+    const { gateway, loadedProjectId } = get();
+    // Only a project CHANGE clears the list — a same-project retry (the
+    // library's own Retry buttons) must keep the prior rows on screen while
+    // it refetches, per the existing error-banner-over-stale-rows UX.
+    const isProjectChange = loadedProjectId !== NEVER_LOADED && loadedProjectId !== projectId;
+    set({
+      loading: true,
+      error: null,
+      loadedProjectId: projectId,
+      ...(isProjectChange ? { definitions: [], runs: [] } : {}),
+    });
     try {
       const [definitions, catalog, credentials] = await Promise.all([
         gateway.listAutomations(projectId),

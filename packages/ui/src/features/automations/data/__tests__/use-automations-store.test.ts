@@ -182,6 +182,73 @@ describe('useAutomationsStore', () => {
     expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['fresh']);
   });
 
+  it('loadLibrary clears the previous project’s rows as soon as it is called for a different project', async () => {
+    const definitionFor = (id: string) => ({
+      id,
+      name: id,
+      scope: 'global' as const,
+      projectId: null,
+      enabled: true,
+      definition: { triggers: [], steps: [] },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    useAutomationsStore
+      .getState()
+      .setGateway(fakeGateway({ listAutomations: async (id) => [definitionFor(id ?? 'none')] }));
+    await useAutomationsStore.getState().loadLibrary('proj-a');
+    expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['proj-a']);
+
+    // A stale row must be gone before the new project's fetch even resolves —
+    // otherwise it stays clickable, and the editor it opens can save back into
+    // the new project (finding: todo #326 review).
+    let clearedDuringFetch = false;
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listAutomations: async (id) => {
+          clearedDuringFetch = useAutomationsStore.getState().definitions.length === 0;
+          return [definitionFor(id ?? 'none')];
+        },
+      }),
+    );
+    await useAutomationsStore.getState().loadLibrary('proj-b');
+
+    expect(clearedDuringFetch).toBe(true);
+    expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['proj-b']);
+  });
+
+  it('loadLibrary keeps the previous rows on screen when retried for the same project', async () => {
+    const definitionFor = (id: string) => ({
+      id,
+      name: id,
+      scope: 'global' as const,
+      projectId: null,
+      enabled: true,
+      definition: { triggers: [], steps: [] },
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    useAutomationsStore
+      .getState()
+      .setGateway(fakeGateway({ listAutomations: async (id) => [definitionFor(id ?? 'none')] }));
+    await useAutomationsStore.getState().loadLibrary('proj-a');
+    expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['proj-a']);
+
+    let clearedDuringRetry = false;
+    useAutomationsStore.getState().setGateway(
+      fakeGateway({
+        listAutomations: async () => {
+          clearedDuringRetry = useAutomationsStore.getState().definitions.length === 0;
+          throw new Error('retry boom');
+        },
+      }),
+    );
+    await useAutomationsStore.getState().loadLibrary('proj-a');
+
+    expect(clearedDuringRetry).toBe(false);
+    expect(useAutomationsStore.getState().definitions.map((d) => d.id)).toEqual(['proj-a']);
+  });
+
   it('loadInteractions drops a slow response overtaken by a newer one', async () => {
     const interactionFor = (id: string) => ({
       id,
