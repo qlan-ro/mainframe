@@ -161,7 +161,25 @@ describe('Escape in the composer (AC 13)', () => {
 
     expect(document.activeElement).not.toBe(input);
     expect(document.activeElement).toHaveAttribute('data-mf-chat-thread');
-    expect(event).toBe(false); // prevented — the composer took the keystroke
+    expect(event).toBe(true); // not prevented — overlays' document-level Escape listeners still fire
+  });
+
+  it('does not stop propagation, so a document-level Escape listener still sees the keystroke', () => {
+    renderComposerInTranscript();
+    const input = screen.getByTestId('chat-composer-input');
+    input.focus();
+
+    const seenEvents: KeyboardEvent[] = [];
+    const documentListener = vi.fn((event: KeyboardEvent) => {
+      seenEvents.push(event);
+    });
+    document.addEventListener('keydown', documentListener);
+
+    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+
+    document.removeEventListener('keydown', documentListener);
+    expect(documentListener).toHaveBeenCalledTimes(1);
+    expect(seenEvents[0]?.defaultPrevented).toBe(false);
   });
 
   it('leaves focus in the composer while the trigger menu is open', () => {

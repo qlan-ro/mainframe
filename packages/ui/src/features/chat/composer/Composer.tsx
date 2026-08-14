@@ -89,11 +89,14 @@ function ComposerInputField({
   const triggerAria = useTriggerFieldAria();
   // Escape leaves the composer and parks focus on the transcript (⌘L brings it
   // back). The `/` and `@` trigger menu owns Escape while it is open — closing
-  // the menu must not also throw the caret out of the field.
+  // the menu must not also throw the caret out of the field. No preventDefault
+  // here: the session panel and files panel dismiss themselves on a document-
+  // level Escape listener gated on `!event.defaultPrevented`, and React's
+  // synthetic handler (attached below `document`) would otherwise stand them
+  // down before that listener runs.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
-        e.preventDefault();
         return;
       }
       onKeyDown(e);
