@@ -1,6 +1,6 @@
 import type { EffortLevel } from './adapter.js';
 
-export const EXECUTION_MODES = ['default', 'acceptEdits', 'yolo'] as const;
+export const EXECUTION_MODES = ['default', 'acceptEdits', 'auto', 'yolo'] as const;
 export type ExecutionMode = (typeof EXECUTION_MODES)[number];
 export type PermissionMode = ExecutionMode | 'plan';
 
