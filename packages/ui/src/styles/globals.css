@@ -212,6 +212,44 @@
   mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
 }
 
+/**
+ * Ramp depth for every `scroll-fade*` scroller, set once so the surfaces that
+ * adopt it read alike. Stock is `min(12%, 40px)` — a percentage, so it deepens
+ * with the panel, and at its cap twice the 20px ramp this app already fades a
+ * clipped label with above.
+ */
+@layer base {
+  :root {
+    --scroll-fade-size: 20px;
+  }
+}
+
+/**
+ * The `scroll-fade-y` shape for a scroller whose section headers are sticky
+ * children of it — the sessions/tasks sidebar. The stock ramp starts at the
+ * scroller's own edge, which is exactly where a parked header sits, so it
+ * dissolves the header instead of the rows beneath it. Each ramp here starts
+ * below the header stack the component measures for it.
+ *
+ * Depth still comes from the utility's scroll-driven `--scroll-fade-t/-b`, so an
+ * edge with nothing past it collapses both transparent stops onto their
+ * neighbours and the mask stays opaque. Sets only the shape override that
+ * `scroll-fade-y`'s `mask-image` already reads, so the two compose in any order.
+ */
+@utility scroll-fade-sticky {
+  --scroll-fade-mask: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--scroll-fade-inset-t, 0px),
+    transparent var(--scroll-fade-inset-t, 0px),
+    #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px) - var(--scroll-fade-b, 0px)),
+    transparent calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 100%
+  );
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
