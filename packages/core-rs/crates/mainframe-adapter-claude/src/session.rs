@@ -1349,6 +1349,12 @@ mod tests {
     }
 
     #[test]
+    fn auto_mode_passes_permission_mode_auto() {
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None);
+        assert_eq!(mode_arg(&args), "auto");
+    }
+
+    #[test]
     fn yolo_mode_passes_permission_mode_bypass_permissions() {
         let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None);
         assert_eq!(mode_arg(&args), "bypassPermissions");
