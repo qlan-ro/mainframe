@@ -9,6 +9,7 @@ use mainframe_db::schema::initialize_schema;
 use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::{ChatStatus, TodoItem, TodoStatus};
+use mainframe_types::settings::ExecutionMode;
 
 fn setup_with_conn() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
     let conn = Connection::open_in_memory().unwrap();
@@ -327,4 +328,34 @@ fn chat_effort_reads_back_none_for_a_bogus_stored_value() {
 
     let fetched = chats.get(&chat.id).unwrap().unwrap();
     assert_eq!(fetched.effort, None);
+}
+
+#[test]
+fn permission_mode_auto_survives_a_reopen() {
+    let (chats, projects, conn) = setup_with_conn();
+    let p = projects.create("/project/mode-auto", None).unwrap();
+    let chat = chats
+        .create(&p.id, "claude", None, Some("auto"), None)
+        .unwrap();
+
+    // A second repository over the same connection stands in for a daemon
+    // restart re-opening the same on-disk database.
+    let reopened = ChatsRepository::new(Rc::clone(&conn), None);
+    let fetched = reopened.get(&chat.id).unwrap().unwrap();
+    assert_eq!(fetched.permission_mode, Some(ExecutionMode::Auto));
+}
+
+#[test]
+fn permission_mode_reads_back_none_for_a_bogus_stored_value() {
+    let (chats, projects, conn) = setup_with_conn();
+    let p = projects.create("/project/mode-bogus", None).unwrap();
+    let chat = chats.create(&p.id, "claude", None, None, None).unwrap();
+    conn.execute(
+        "UPDATE chats SET permission_mode = 'turbo' WHERE id = ?",
+        rusqlite::params![chat.id],
+    )
+    .unwrap();
+
+    let fetched = chats.get(&chat.id).unwrap().unwrap();
+    assert_eq!(fetched.permission_mode, None);
 }
