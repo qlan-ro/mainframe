@@ -288,16 +288,21 @@ describe('ChatGateMount', () => {
   // Class-string regression check only: this pins the tokens the height cap
   // and the composer width parity depend on. `max-h-[45cqh]` is the slot's
   // preferred cap; `min-h-24` is the floor it shrinks to (no lower) once the
-  // footer's own `max-h-[100cqh]` (ChatThread.tsx) squeezes it below that —
-  // `overflow-y-auto` zeroes flexbox's automatic minimum, so without an
-  // explicit floor the slot would compress to 0px under a tall composer
-  // draft. Neither cap is pinnable in full here because the thread tests
-  // stub `ThreadPrimitive` entirely — the real geometry (both caps engaging
-  // against a live container, the edges lining up while the slot scrolls,
-  // and the composer's bottom edge never painting past the pane) is verified
-  // live in the plan's Task 7 and by the Playwright assertions in gates.spec.ts.
-  // Dropping `[scrollbar-width:none]` costs 8px of card width off the
-  // composer's edge whenever the slot actually scrolls (see the plan's fact 8).
+  // footer's own `max-h-[calc(100cqh-2rem)]` (ChatThread.tsx) squeezes it
+  // below that — `overflow-y-auto` zeroes flexbox's automatic minimum, so
+  // without an explicit floor the slot would compress to 0px under a tall
+  // composer draft. `shrink-[100]` gives the slot first claim on any
+  // shrinkage the footer needs, ahead of the composer wrapper's plain
+  // default (#336 round 3) — without it, a squeeze shrinks both
+  // proportionally instead of the composer only compressing once the slot
+  // is already pinned at its floor. Neither cap is pinnable in full here
+  // because the thread tests stub `ThreadPrimitive` entirely — the real
+  // geometry (both caps engaging against a live container, the edges
+  // lining up while the slot scrolls, and the composer's bottom edge never
+  // painting past the pane) is verified live by the Playwright assertions
+  // in gates.spec.ts. Dropping `[scrollbar-width:none]` costs 8px of card
+  // width off the composer's edge whenever the slot actually scrolls (see
+  // the plan's fact 8).
   it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
     mockFront.mockReturnValue({ front: permissionEntry, reply });
     wrap(<ChatGateMount />);
@@ -307,5 +312,6 @@ describe('ChatGateMount', () => {
     expect(slot).toHaveClass('[scrollbar-width:none]');
     expect(slot).toHaveClass('max-h-[45cqh]');
     expect(slot).toHaveClass('min-h-24');
+    expect(slot).toHaveClass('shrink-[100]');
   });
 });
