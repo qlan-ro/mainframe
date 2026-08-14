@@ -447,6 +447,13 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     await page.getByTestId('chat-composer-input').fill(tallDraft);
     await expect(page.getByTestId('chat-composer-input')).toHaveValue(tallDraft);
 
+    // Precondition, asserted not assumed: the draft must actually have grown the
+    // composer past its resting height, or both invariants below pass vacuously.
+    const composerHeightAfterDraft = await page
+      .getByTestId('chat-composer')
+      .evaluate((el) => el.getBoundingClientRect().height);
+    expect(composerHeightAfterDraft).toBeGreaterThan(200);
+
     // Invariant 1: the gate's action button stays reachable and clickable in place —
     // not just present somewhere off the fold.
     const allowOnce = page.locator('[data-testid="chat-permission-allow-once"]');
