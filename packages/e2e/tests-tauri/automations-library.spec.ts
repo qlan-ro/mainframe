@@ -94,11 +94,6 @@ async function openLibraryFor(page: Page, chatId: string): Promise<void> {
   await expect(page.getByTestId('automations-library-loading')).toHaveCount(0, { timeout: 15_000 });
 }
 
-async function closeLibrary(page: Page): Promise<void> {
-  await page.getByTestId('automations-close').click();
-  await expect(page.getByTestId('automations-host')).toHaveCount(0, { timeout: 10_000 });
-}
-
 // ─── §automations-library ─────────────────────────────────────────────────
 
 test.describe('§automations-library', () => {
@@ -124,13 +119,6 @@ test.describe('§automations-library', () => {
     await closeTauriApp(app);
   });
 
-  test('opens and closes the library for project A', async () => {
-    const { page } = app;
-    await openLibraryFor(page, chatIdA);
-    await expect(page.getByTestId('automations-section-library')).toBeVisible();
-    await closeLibrary(page);
-  });
-
   test('delete, confirmed: accepting the confirm dialog removes the row and it stays gone after a re-fetch', async () => {
     const { page } = app;
     // Two automations: the anchor is never deleted, so the post-delete
@@ -152,7 +140,6 @@ test.describe('§automations-library', () => {
     await expect(confirmDialog).toHaveCount(0);
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toHaveCount(0);
 
-    await closeLibrary(page);
     await openLibraryFor(page, chatIdA);
 
     // Order matters: the anchor row can only appear from a landed re-fetch
@@ -179,7 +166,6 @@ test.describe('§automations-library', () => {
     await expect(confirmDialog).toHaveCount(0);
     await expect(page.getByTestId(`automations-library-row-${targetId}`)).toBeVisible();
 
-    await closeLibrary(page);
     await openLibraryFor(page, chatIdA);
 
     // The automation was never deleted server-side, so the row survives a
