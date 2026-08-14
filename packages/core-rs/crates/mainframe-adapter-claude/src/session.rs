@@ -1447,6 +1447,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_permission_mode_sends_auto_verbatim() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        let payload = read_json(&mut rx);
+        assert_eq!(payload["request"]["subtype"], "set_permission_mode");
+        assert_eq!(payload["request"]["mode"], "auto");
+    }
+
+    #[tokio::test]
+    async fn leaving_plan_mode_restores_auto() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
+
+        s.set_plan_mode(true).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "plan");
+
+        s.set_plan_mode(false).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
+    }
+
+    #[tokio::test]
     async fn set_plan_mode_true_sends_plan() {
         let s = session();
         let mut rx = spawned_with_stdin(&s);
