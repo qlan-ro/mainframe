@@ -12,6 +12,10 @@ vi.mock('@/features/session-tabs/SessionTabs', () => ({
   SessionTabs: () => <div data-testid="mock-session-tabs" />,
 }));
 
+// The search chip renders off the live platform; pin macOS so the glyph
+// assertion below reads ⌘O rather than jsdom's Ctrl+O.
+vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
+
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { TooltipProvider } from '@/components/ui/tooltip';

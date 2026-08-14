@@ -13,6 +13,7 @@ import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
+import { chordHint } from '@/features/shortcuts/chord-hint';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { pickProjectSession } from '@/features/sessions/view-model/initial-session';
@@ -49,7 +50,7 @@ function HeaderActions() {
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Hint label="Settings · ⌘,">
+      <Hint label={`Settings · ${chordHint('app.settings')}`}>
         <Button
           variant="ghost"
           size="icon-sm"
