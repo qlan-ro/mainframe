@@ -23,7 +23,7 @@ export function AutomationsHost(): React.ReactElement | null {
   const openHost = useAutomationsNav((s) => s.openHost);
   const close = useAutomationsNav((s) => s.close);
   const loadAll = useAutomationsStore((s) => s.loadAll);
-  const setActiveProjectId = useAutomationsStore((s) => s.setActiveProjectId);
+  const setScopeProjectId = useAutomationsStore((s) => s.setScopeProjectId);
   const { projectId } = useActiveIdentity();
 
   // Both unconditional (before the `!open` early return): toasts fire, and
@@ -35,13 +35,13 @@ export function AutomationsHost(): React.ReactElement | null {
   // gated by `open`) — the sidebar's pending-interaction badge
   // (`selectPendingInteractionCount`) needs real data from app boot, and
   // automations are project-scoped non-configurably (todo #234 bullet 1), so
-  // switching projects must re-scope the list. `setActiveProjectId` runs
-  // first so `loadAll`'s `get().activeProjectId` read sees the fresh value.
+  // switching projects must re-scope the list. `setScopeProjectId` runs
+  // first so `loadAll`'s `get().scopeProjectId` read sees the fresh value.
   // WS events keep things fresh thereafter via useAutomationEvents above.
   useEffect(() => {
-    setActiveProjectId(projectId ?? null);
+    setScopeProjectId(projectId ?? null);
     void loadAll();
-  }, [projectId, setActiveProjectId, loadAll]);
+  }, [projectId, setScopeProjectId, loadAll]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;

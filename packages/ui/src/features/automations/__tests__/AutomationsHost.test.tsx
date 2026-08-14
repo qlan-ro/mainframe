@@ -20,7 +20,7 @@ vi.mock('@/features/sessions/use-projects', () => ({
 
 beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: undefined } as ReturnType<typeof useActiveIdentity>);
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
 });
 
 it('renders nothing while closed', () => {
@@ -86,7 +86,7 @@ it('resolves the active project via useActiveIdentity into the store, scoping th
   );
 
   await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().activeProjectId).toBe('proj-1');
+    expect(useAutomationsStore.getState().scopeProjectId).toBe('proj-1');
   });
   // None of the seeded fixtures belong to 'proj-1' — the scoped load should
   // resolve to an empty list rather than every automation in the workspace.

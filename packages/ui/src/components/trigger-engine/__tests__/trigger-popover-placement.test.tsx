@@ -96,7 +96,7 @@ function ComposerHarness() {
 beforeEach(() => {
   vi.clearAllMocks();
   resetAdapters();
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
   __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
 });
 

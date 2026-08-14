@@ -31,7 +31,7 @@ function isTerminalRunStatus(status: AutomationRunSummary['status']): boolean {
 interface AutomationsState {
   gateway: AutomationsGateway;
   /** The current session's active project — resolved once, at the `AutomationsHost` mount boundary, via `useActiveIdentity()` (todo #234 bullet 1: automations are project-scoped non-configurably, mirroring Todos). `null` before an active project resolves. */
-  activeProjectId: string | null;
+  scopeProjectId: string | null;
   definitions: AutomationSummary[];
   runs: AutomationRunSummary[];
   /** Bumped by `patchRun` on every applied update — lets a run view refetch on every `automation.run.updated` for its run id, not just status changes (a run can emit one per step transition). */
@@ -42,7 +42,7 @@ interface AutomationsState {
   loading: boolean;
   error: string | null;
   setGateway: (gateway: AutomationsGateway) => void;
-  setActiveProjectId: (projectId: string | null) => void;
+  setScopeProjectId: (projectId: string | null) => void;
   loadAll: () => Promise<void>;
   patchDefinition: (definition: AutomationSummary) => void;
   removeDefinition: (id: string) => void;
@@ -55,7 +55,7 @@ interface AutomationsState {
 
 export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   gateway: createFixtureGateway(),
-  activeProjectId: null,
+  scopeProjectId: null,
   definitions: [],
   runs: [],
   runRevisions: {},
@@ -66,15 +66,15 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   error: null,
 
   setGateway: (gateway) => set({ gateway }),
-  setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
+  setScopeProjectId: (scopeProjectId) => set({ scopeProjectId }),
 
   loadAll: async () => {
     const seqAtStart = ++loadSeq;
     set({ loading: true, error: null });
-    const { gateway, activeProjectId } = get();
+    const { gateway, scopeProjectId } = get();
     try {
       const [definitions, interactions, catalog, credentials] = await Promise.all([
-        gateway.listAutomations(activeProjectId),
+        gateway.listAutomations(scopeProjectId),
         gateway.listInteractions(),
         gateway.listActions(),
         gateway.listCredentialLabels(),

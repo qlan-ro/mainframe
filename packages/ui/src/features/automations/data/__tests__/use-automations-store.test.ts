@@ -13,7 +13,7 @@ describe('useAutomationsStore', () => {
       credentials: [],
       loading: false,
       error: null,
-      activeProjectId: null,
+      scopeProjectId: null,
     });
   });
 
@@ -22,14 +22,14 @@ describe('useAutomationsStore', () => {
     expect(definitions.length).toBe(7);
   });
 
-  it('setActiveProjectId updates the field', () => {
-    useAutomationsStore.getState().setActiveProjectId('proj-9');
-    expect(useAutomationsStore.getState().activeProjectId).toBe('proj-9');
+  it('setScopeProjectId updates the field', () => {
+    useAutomationsStore.getState().setScopeProjectId('proj-9');
+    expect(useAutomationsStore.getState().scopeProjectId).toBe('proj-9');
   });
 
   it('loadAll passes the active projectId through to gateway.listAutomations', async () => {
     let received: string | null | undefined = 'unset';
-    useAutomationsStore.getState().setActiveProjectId('proj-9');
+    useAutomationsStore.getState().setScopeProjectId('proj-9');
     useAutomationsStore.getState().setGateway(
       fakeGateway({
         listAutomations: async (projectId) => {
