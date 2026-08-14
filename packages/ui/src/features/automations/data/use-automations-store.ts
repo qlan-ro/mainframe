@@ -36,7 +36,7 @@ function isTerminalRunStatus(status: AutomationRunSummary['status']): boolean {
 
 interface AutomationsState {
   gateway: AutomationsGateway;
-  /** The current session's active project — resolved once, at the `AutomationsHost` mount boundary, via `useActiveIdentity()` (todo #234 bullet 1: automations are project-scoped non-configurably, mirroring Todos). `null` before an active project resolves. */
+  /** The project the open Automations modal is showing — the editor's save target and its project-scoped pickers read it too. `null` whenever the modal is closed, and while it is open when the user is on "All projects". */
   scopeProjectId: string | null;
   definitions: AutomationSummary[];
   runs: AutomationRunSummary[];
