@@ -62,7 +62,12 @@ export function ComposerToolbar() {
         setEffort={setEffort}
         setFeature={setFeature}
       />
-      <PermissionSelect chat={chat} setPermissionMode={setPermissionMode} providerDefaults={providerDefaults} />
+      <PermissionSelect
+        chat={chat}
+        adapter={adapter}
+        setPermissionMode={setPermissionMode}
+        providerDefaults={providerDefaults}
+      />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
       <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
       <TuningWarningDialog
