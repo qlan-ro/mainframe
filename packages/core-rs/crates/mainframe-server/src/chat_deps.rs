@@ -17,7 +17,6 @@
 //!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
 //!      routing each call back through `Db::call_blocking`.
 
-use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::pr_detection::scan_history_for_prs;
@@ -59,12 +58,12 @@ use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
-    AdapterModel, DetectedPr, DetectedPrSource, ExternalSessionPage, ProviderQuota, SessionOptions,
+    AdapterModel, DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, MessageContentNode, Project,
-    ResolvedTuning, TodoItem,
+    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, Project, ResolvedTuning,
+    TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
@@ -1149,8 +1148,11 @@ mod scan_loaded_history_tests {
     use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
     use mainframe_claude_workflows::store::ProgressUsage;
     use mainframe_db::DatabaseManager;
-    use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+    use mainframe_types::adapter::{
+        AdapterProcess, ControlResponse, DetectedPrSource, SessionSpawnOptions,
+    };
     use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
+    use mainframe_types::chat::MessageContentNode;
     use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;
     use mainframe_types::context::MentionKind;
 
