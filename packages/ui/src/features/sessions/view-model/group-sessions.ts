@@ -126,13 +126,15 @@ export function arrangeSessions(
   const rest = items.filter((i) => !i.custom.pinned);
 
   if (mode === 'name') {
-    const sorted = [...rest].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    const sorted = [...rest].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '') || byRecency(a, b));
     return arrangeFlat(pinned, sorted, 'A–Z');
   }
 
   if (mode === 'status') {
     const sorted = [...rest].sort(
-      (a, b) => (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3),
+      (a, b) =>
+        (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3) ||
+        byRecency(a, b),
     );
     return arrangeFlat(pinned, sorted, 'By status');
   }
