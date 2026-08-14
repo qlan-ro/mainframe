@@ -63,7 +63,10 @@ impl Adapter for StubAdapter {
         &self.adapter_id
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: false }
+        AdapterCapabilities {
+            plan_mode: false,
+            auto_mode: false,
+        }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         Box::pin(async { Ok(true) })

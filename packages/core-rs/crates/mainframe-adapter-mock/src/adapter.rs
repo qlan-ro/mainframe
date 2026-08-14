@@ -90,7 +90,10 @@ impl Adapter for MockCliAdapter {
         "Mock CLI"
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: true }
+        AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+        }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         Box::pin(async { Ok(true) })

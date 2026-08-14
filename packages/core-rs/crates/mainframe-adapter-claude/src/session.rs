@@ -236,6 +236,7 @@ fn execution_mode_cli(mode: ExecutionMode) -> &'static str {
     match mode {
         ExecutionMode::Default => "default",
         ExecutionMode::AcceptEdits => "acceptEdits",
+        ExecutionMode::Auto => "auto",
         ExecutionMode::Yolo => "bypassPermissions",
     }
 }
