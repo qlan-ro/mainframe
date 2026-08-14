@@ -71,7 +71,7 @@ function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number):
 
 function arrangeFlat(pinned: SessionItem[], rest: SessionItem[], label: string): SessionGroupResult[] {
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: pinned });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
   out.push({ label, items: rest });
   return out;
 }
