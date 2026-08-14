@@ -5,6 +5,7 @@
 //! lazy thread/start vs thread/resume, turn/start config, and the loadHistory
 //! temp-app-server + thread/read recursion are copied from the TS.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -29,8 +30,11 @@ use serde_json::{Map, Value, json};
 
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
+use crate::history_convert::convert_thread_items;
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
+use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
+use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
@@ -102,6 +106,15 @@ impl Default for PendingConfig {
     }
 }
 
+/// Test seam for `load_scan_records`: redirects the Codex state DB and the
+/// rollout containment root, neither of which the production entry points
+/// (`lookup_agent_metadata`, `read_rollout_items(.., None)`) can override.
+#[derive(Debug, Clone, Default)]
+pub struct CodexScanDeps {
+    pub registry: ThreadRegistryDeps,
+    pub rollout: RolloutReaderDeps,
+}
+
 pub struct CodexSession {
     id: String,
     project_path: String,
@@ -118,6 +131,9 @@ pub struct CodexSession {
     /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
     /// `enrichPath` env mutation).
     resolved_path: ResolvedPath,
+    /// Test seam only — `None` in production, which routes `load_scan_records`
+    /// through the real `~/.codex/state_5.sqlite` and `~/.codex/sessions`.
+    scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
 }
 
 impl CodexSession {
@@ -139,7 +155,14 @@ impl CodexSession {
             pid: AtomicI64::new(0),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
             resolved_path,
+            scan_deps: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Test-only override for `load_scan_records`'s registry DB and rollout
+    /// containment root.
+    pub fn set_scan_deps(&self, deps: CodexScanDeps) {
+        *self.scan_deps.lock().unwrap_or_else(|e| e.into_inner()) = Some(deps);
     }
 
     /// Set the one-shot on-exit callback (used by `CodexAdapter::create_session` to
@@ -329,6 +352,31 @@ pub(crate) async fn spawn_temp_app_server(
         .map_err(|e| AdapterError::Message(e.0))?;
     client.notify("initialized", None);
     Ok(client)
+}
+
+/// The rollout half of `CodexSession::load_scan_records`: looks up the
+/// thread's rollout path in the registry DB, re-derives its
+/// `commandExecution`/`fileChange`/`mcpToolCall` items, and converts them to
+/// canonical `ChatMessage`s. Returns `None` when there is no registry row, no
+/// rollout path, or the rollout yields no items — the caller falls back to
+/// `load_history` in that case.
+async fn rollout_scan_records(
+    thread_id: &str,
+    deps: Option<&CodexScanDeps>,
+) -> Option<Vec<ChatMessage>> {
+    let thread_ids = [thread_id.to_string()];
+    let meta = lookup_agent_metadata_with(&thread_ids, deps.map(|d| &d.registry));
+    let rollout_path = meta.get(thread_id)?.rollout_path.clone()?;
+    let items = read_rollout_items(&rollout_path, Some(thread_id), deps.map(|d| &d.rollout)).await;
+    if items.is_empty() {
+        return None;
+    }
+    Some(convert_thread_items(
+        &items,
+        thread_id,
+        &HashMap::new(),
+        &HashMap::new(),
+    ))
 }
 
 impl AdapterSession for CodexSession {
@@ -749,6 +797,35 @@ impl AdapterSession for CodexSession {
                 Err(err) => {
                     tracing::warn!(module = "codex:session", err = %err, thread_id = %resume_thread_id, "codex: failed to load history");
                     Ok(Vec::new())
+                }
+            }
+        })
+    }
+
+    /// PR-detection scan source (todo #339): `thread/read` never returns
+    /// `commandExecution` items on codex-cli 0.147.0, so `load_history`'s
+    /// output has nothing for the PR scan to see. Read the rollout JSONL
+    /// instead — offline, no app-server spawn — and fall back to
+    /// `load_history` only if there is no registry row or no rollout items.
+    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        Box::pin(async move {
+            let Some(thread_id) = self.resume_thread_id.clone() else {
+                return Ok(Vec::new());
+            };
+            let deps = self
+                .scan_deps
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            match rollout_scan_records(&thread_id, deps.as_ref()).await {
+                Some(records) => Ok(records),
+                None => {
+                    tracing::debug!(
+                        module = "codex:session",
+                        thread_id,
+                        "no rollout for PR scan; falling back to thread/read"
+                    );
+                    self.load_history().await
                 }
             }
         })
