@@ -34,21 +34,39 @@ vi.mock('../use-todos-store', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
+import type { Project } from '@qlan-ro/mainframe-types';
 import { QuickTaskDialog } from '../QuickTaskDialog';
 
 // ---------------------------------------------------------------------------
 // Render helper
 // ---------------------------------------------------------------------------
 
+const PROJECTS: Project[] = [
+  { id: 'proj-abc', name: 'Mainframe', path: '/repos/mainframe' } as Project,
+  { id: 'proj-other', name: 'Sidecar', path: '/repos/sidecar' } as Project,
+];
+
 interface RenderOpts {
   open?: boolean;
-  projectId?: string;
+  /** null — no project resolved, the dialog offers the picker instead. */
+  projectId?: string | null;
 }
 
 function renderDialog({ open = true, projectId = 'proj-abc' }: RenderOpts = {}) {
   const onClose = vi.fn();
-  render(<QuickTaskDialog port={31415} projectId={projectId} open={open} onClose={onClose} />);
-  return { onClose };
+  const onSelectProject = vi.fn();
+  render(
+    <QuickTaskDialog
+      port={31415}
+      projectId={projectId}
+      projects={PROJECTS}
+      filterProjectId={null}
+      onSelectProject={onSelectProject}
+      open={open}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onSelectProject };
 }
 
 // ---------------------------------------------------------------------------

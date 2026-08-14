@@ -11,6 +11,8 @@ import React, { lazy, Suspense } from 'react';
 import { X, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
+import { useProjects } from '@/features/sessions/use-projects';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore, selectPendingInteractionCount } from './data/use-automations-store';
 import { DescribeFlow } from './describe/DescribeFlow';
@@ -26,7 +28,13 @@ function SectionFallback(): React.ReactElement {
   return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>;
 }
 
-export function AutomationsView(): React.ReactElement {
+interface AutomationsViewProps {
+  /** The open modal's scope, owned by `AutomationsHost`'s `useModalProjectScope`. */
+  projectId: string | null;
+  onProjectChange: (id: string | null) => void;
+}
+
+export function AutomationsView({ projectId, onProjectChange }: AutomationsViewProps): React.ReactElement {
   const close = useAutomationsNav((s) => s.close);
   const editorTarget = useAutomationsNav((s) => s.editorTarget);
   const runId = useAutomationsNav((s) => s.runId);
@@ -34,6 +42,10 @@ export function AutomationsView(): React.ReactElement {
   const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
   const definitions = useAutomationsStore((s) => s.definitions);
   const pending = useAutomationsStore(selectPendingInteractionCount);
+  const { projects } = useProjects();
+  // A sub-view has its own project already baked into what it is showing —
+  // re-scoping underneath it would strand the user's work.
+  const inSubView = runId != null || editorTarget != null || describeOpen || detailsAutomationId != null;
 
   return (
     <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-card font-sans">
@@ -42,6 +54,14 @@ export function AutomationsView(): React.ReactElement {
       <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
         <Zap size={16} className="text-primary" aria-hidden />
         <span className="text-base font-semibold text-foreground">Workflows</span>
+        <ModalProjectPicker
+          surface="automations"
+          projectId={projectId}
+          projects={projects}
+          onSelect={onProjectChange}
+          allowAllProjects
+          disabled={inSubView}
+        />
         <span data-testid="automations-title-count" className="text-xs text-muted-foreground">
           {definitions.length} automation{definitions.length === 1 ? '' : 's'}
           {pending > 0 ? ` · ${pending} need you` : ''}

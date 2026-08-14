@@ -29,7 +29,7 @@ export function AutomationsHost(): React.ReactElement | null {
   const loadInteractions = useAutomationsStore((s) => s.loadInteractions);
   const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
   const setScopeProjectId = useAutomationsStore((s) => s.setScopeProjectId);
-  const { projectId } = useModalProjectScope(open);
+  const { projectId, setProjectId } = useModalProjectScope(open);
 
   // Both unconditional (before the `!open` early return): toasts fire, and
   // the WS-driven store patches apply, even while the panel is closed.
@@ -85,7 +85,7 @@ export function AutomationsHost(): React.ReactElement | null {
             <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>
           }
         >
-          <AutomationsView />
+          <AutomationsView projectId={projectId} onProjectChange={setProjectId} />
         </Suspense>
       </DialogContent>
     </Dialog>
