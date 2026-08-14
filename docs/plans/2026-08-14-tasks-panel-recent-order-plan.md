@@ -72,7 +72,11 @@ Not touched: the todos plugin (`packages/core-rs/crates/mainframe-plugins/src/to
 
 ## Tasks
 
+Implementation is split into ordered groups because Task 4 imports the export Task 3 adds, and Task 6 verifies the combined output of Tasks 3 and 4. Only Tasks 1 and 2 (disjoint files, no shared output) and Task 5 (a standalone changeset) may run concurrently with anything.
+
 ### Group A — red-phase unit tests
+
+Tasks 1 and 2. They touch disjoint files and may run concurrently. Both run before any implementation group.
 
 These tests are written first and must be observed failing before any implementation exists.
 
@@ -102,7 +106,9 @@ Do not change the existing cases in that file beyond the fixture timestamps; the
 
 Verification: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-panel/__tests__/TasksCard.test.tsx` — the two new cases fail on the order assertion, every pre-existing case in the file still passes.
 
-### Group B — implementation
+### Group B — ordering helper
+
+Task 3. Runs after Group A.
 
 **Task 3 — the ordering helper.**
 File: `packages/ui/src/features/tasks/todos-filters.ts`.
@@ -116,6 +122,10 @@ Extend the module docstring's first paragraph to name the panel as the second co
 
 Verification: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/tasks/__tests__/todos-filters.test.ts` is fully green, including every pre-existing `sortTodos` block.
 
+### Group C — panel wiring
+
+Task 4. Runs after Group B: it imports `orderByStatusThenRecency`, which does not exist until Task 3 lands, and its gate runs the test file Task 2 wrote.
+
 **Task 4 — wire the panel.**
 File: `packages/ui/src/features/session-panel/TasksCard.tsx`.
 Extend the existing import from `@/features/tasks/todos-filters` (line 24) to bring in `orderByStatusThenRecency`, and change line 169 to wrap the filter:
@@ -128,11 +138,19 @@ Nothing else changes: the count badge keeps reading `active.length`, the empty s
 
 Verification: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-panel/__tests__/TasksCard.test.tsx` is fully green, new cases included.
 
+### Group D — changeset
+
+Task 5. No ordering constraint: it touches a file no other task reads.
+
 **Task 5 — changeset.**
 File: `.changeset/tasks-panel-recent-order.md`.
 A patch bump for `@qlan-ro/mainframe-ui` with a one-line summary in the user's voice, e.g. "The session rail's Tasks panel now lists recently touched tasks first, with in-progress tasks above open ones."
 
 Verification: the file exists with valid frontmatter (`'@qlan-ro/mainframe-ui': patch`) and the repo's other changesets parse the same way.
+
+### Group E — verification sweep
+
+Task 6. Runs last, after Groups B and C: it verifies their combined output, so starting it while either is still being written reports failures that mean nothing.
 
 **Task 6 — typecheck and full-file test sweep.**
 Run `pnpm --filter @qlan-ro/mainframe-ui typecheck` (it covers test files, unlike the build) and re-run both touched test files individually. Do not run the whole UI suite in one batch — large multi-suite runs hit the known cross-file `React.act` failure.
