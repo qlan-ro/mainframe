@@ -145,14 +145,35 @@ The Design direction delegates the visual calls to this lane. These are the call
 
 ---
 
+## Ordering constraint — the red-test window
+
+`packages/ui` has one `tsconfig.json` with `include: ["src"]` and no test-excluding variant, and both
+`"typecheck": "tsc --noEmit"` and `"build": "tsc && vite build"` (`packages/ui/package.json:8-9`) use
+it. Verified: `node_modules/.bin/tsc --noEmit --listFiles` lists 659 paths under `__tests__`. So a
+whole-package `tsc` compiles the test files too.
+
+Task 2 creates a test importing `./use-sticky-insets`, a module Task 4 creates. Between those two
+tasks **every whole-package `tsc` fails on TS2307**, whatever its own subject. Therefore:
+
+- No task scheduled between Task 2 and Task 4 may verify with `typecheck` or `build`. Task 3 is the
+  one that would have; its verification runs `vite build` directly instead (`tsc` is not part of the
+  claim it checks).
+- Every task that does verify with `typecheck` — 5, 7, 8, 9, 12 — must run **after** Task 4. The
+  extracted group graph carries this as an edge from `faded-surfaces` to `sidebar-hybrid`.
+- Task 1's scratch page must not live under `packages/ui/src`. Keep it as a standalone HTML file
+  outside the package (a temp dir served over `file://`); a `.tsx` scratch route inside `src` would
+  reach the same `tsc` and the same failure.
+
 ## Tasks
 
 ### Task 1 — Probe the shipping WebView for the three engine behaviors
 
 **Kind:** verification. **Files:** creates `docs/qa/2026-08-14-todo-333-scroll-fade-webview-probe.md`.
 
-Build a scratch HTML page and load it in the Tauri WebView (simplest route: a temporary route or a
-`file://` page opened from the dev app; do NOT commit the scratch page). It must contain:
+Build a scratch HTML page **outside `packages/ui/src`** (a temp dir opened over `file://` from the
+dev app) and load it in the Tauri WebView; do NOT commit the scratch page. Keeping it out of `src`
+matters: a `.tsx` scratch route inside the package would be compiled by every whole-package `tsc`
+gate, and during the Task 2–4 red-test window those already fail. It must contain:
 
 1. A `overflow-y-auto` box with `scroll-fade-y` whose content **fits** (no overflow), and a second
    identical box whose content **overflows**.
@@ -206,6 +227,9 @@ Semantics to assert (lifted from the surviving half of
 `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/shared/__tests__/sticky-insets.test.ts`
 fails with a module-not-found / undefined-export error. That failure is the deliverable of this task.
 
+This task also breaks whole-package `tsc` until Task 4 lands — see "Ordering constraint" above. Do
+not run `typecheck` or `build` as a gate for anything until Task 4 is green.
+
 ---
 
 ### Task 3 — Fade tokens and the sticky-header mask utility
@@ -240,11 +264,16 @@ Add, after the imports and near the existing `truncate-fade` utility (`globals.c
 The utility sets only a custom property, so it composes with `scroll-fade-y` regardless of emission
 order.
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui build` succeeds — the script is
-`tsc && vite build` (`packages/ui/package.json:8`) and Vite runs `@tailwindcss/vite`, so a malformed
-`@utility` fails the build. Then `rg -n -- '--scroll-fade-size' packages/ui/dist/assets/*.css` finds
-the `:root` declaration (a base-layer rule, always emitted; the bundle is minified per
-`packages/ui/vite.config.ts:33`, so match the token, not the formatting).
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui exec vite build` succeeds — Vite runs
+`@tailwindcss/vite`, so a malformed `@utility` fails the build. Then
+`rg -n -- '--scroll-fade-size' packages/ui/dist/assets/*.css` finds the `:root` declaration (a
+base-layer rule, always emitted; the bundle is minified per `packages/ui/vite.config.ts:33`, so match
+the token, not the formatting).
+
+Run `vite build` directly, **not** `pnpm --filter … build`: that script is `tsc && vite build`
+(`packages/ui/package.json:8`), and during the Task 2–4 red-test window its `tsc` half aborts before
+Vite ever runs, so the CSS check would never execute (see "Ordering constraint"). Typechecking is not
+part of this task's claim — nothing here touches TypeScript.
 
 Do **not** try to grep `.scroll-fade-sticky` here: Tailwind v4 emits an `@utility` only when a
 scanned source file uses the class, and no file does until Task 5. That check lives in Task 12.
@@ -272,8 +301,11 @@ scanned source file uses the class, and no file does until Task 5. That check li
 
 **Verification:**
 `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/shared/__tests__/sticky-insets.test.ts`
-passes (Task 2's red test goes green). `rg 'use-scroll-edges|useScrollEdges|ScrollEdges' packages/ui/src`
-returns nothing.
+passes (Task 2's red test goes green).
+
+Do **not** grep for the old symbols here. `SidebarScrollRegion.tsx` still imports and calls them at
+`:21`, `:34`, and `:56` until Task 5 rewrites it, so the file is legitimately broken at this task's
+boundary and the grep cannot come back empty. That check lives in Task 5.
 
 ---
 
@@ -296,8 +328,10 @@ returns nothing.
 - Rewrite the file docstring's fade paragraph: the fade is now the shadcn utility, scroll-aware by
   construction; the component contributes only the sticky-header insets.
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes.
-`rg 'maskImage' packages/ui/src` returns nothing.
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes (the first task after Task 4
+where it can — see "Ordering constraint"). `rg 'maskImage' packages/ui/src` returns nothing, and
+`rg 'use-scroll-edges|useScrollEdges|ScrollEdges' packages/ui/src` returns nothing — this task
+rewrites the last three references (`SidebarScrollRegion.tsx:21,34,56`).
 
 ---
 
@@ -327,7 +361,9 @@ passes — proving the `#000` literals really are gone from the component.
   unchanged and add a one-line comment above it: masking the stack flattens each card's
   `backdrop-blur`, so the fade lives on the card bodies instead.
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes. In the dev app, open two
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes — this task must run after
+Task 4, or the typecheck dies on Task 2's test import instead of on anything here (see "Ordering
+constraint"). In the dev app, open two
 session panels tall enough to overflow their caps: the card bodies fade at the edge with content
 past it and show no fade when their content fits. Cards still read as glass.
 
@@ -339,7 +375,8 @@ past it and show no fade when their content fits. Cards still read as glass.
 
 Add `scroll-fade-x` to the `overflow-x-auto` strip at `:143`, keeping `[scrollbar-width:none]`.
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes, and
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes (after Task 4 — see
+"Ordering constraint"), and
 `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/session-tabs` stays green. In the
 dev app: with enough tabs to overflow, the strip fades at the end you can still scroll toward; with
 three tabs, no fade.
@@ -354,8 +391,9 @@ Add `scroll-fade-x` to the `overflow-x-auto` strip at `:47`. Lane decision (Deci
 brief names only the session-tab strip; record the reason in the changeset body, not in a code
 comment (the class is self-explanatory).
 
-**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes. In the dev app with many
-workspace tabs open, the strip fades; with two tabs, it does not.
+**Verification:** `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes (after Task 4 — see
+"Ordering constraint"). In the dev app with many workspace tabs open, the strip fades; with two tabs,
+it does not.
 
 ---
 
