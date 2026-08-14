@@ -6,7 +6,7 @@
  * composer (#214). We mock the assistant-ui primitives + heavy children down to
  * identifiable stubs so we can assert the DOM region the indicator lands in.
  */
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ReactNode } from 'react';
 
@@ -44,10 +44,15 @@ vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../find/FindBar', () => ({ FindBar: () => null }));
-vi.mock('../../find/use-find-hotkey', () => ({ useFindHotkey: () => {} }));
 vi.mock('../../tools/register-cards', () => ({}));
 
+// jsdom reports a Linux-ish platform, so `mod` would resolve to Ctrl and the ⌘F
+// case below would miss. The dispatcher reads this once at mount.
+vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
+
 import { ChatThread } from '../ChatThread';
+import { useFindInChatStore } from '../../find/find-in-chat-store';
+import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
 
 describe('ChatThread — thinking indicator placement (#214)', () => {
   it('renders the running indicator while a run is active', () => {
@@ -94,5 +99,42 @@ describe('ChatThread — running indicator elapsed readout', () => {
 
     act(() => void vi.advanceTimersByTime(64_000));
     expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('1m 05s');
+  });
+});
+
+/**
+ * ⌘F is a registry entry now, so the thread registers the ACTION and the app's
+ * one dispatcher delivers the chord. The chord stays inert while no thread is
+ * mounted, which is what keeps Find chat-scoped.
+ */
+describe('ChatThread — the ⌘F Find registration', () => {
+  function Dispatcher() {
+    useShortcutDispatcher();
+    return null;
+  }
+
+  beforeEach(() => {
+    useFindInChatStore.getState().close();
+  });
+
+  it('opens the Find bar on ⌘F while the thread is mounted', () => {
+    render(
+      <>
+        <Dispatcher />
+        <ChatThread />
+      </>,
+    );
+
+    fireEvent.keyDown(window, { key: 'f', code: 'KeyF', metaKey: true });
+
+    expect(useFindInChatStore.getState().isOpen).toBe(true);
+  });
+
+  it('leaves ⌘F inert with no thread mounted — Find belongs to the chat surface', () => {
+    render(<Dispatcher />);
+
+    fireEvent.keyDown(window, { key: 'f', code: 'KeyF', metaKey: true });
+
+    expect(useFindInChatStore.getState().isOpen).toBe(false);
   });
 });

@@ -51,7 +51,6 @@ vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../find/FindBar', () => ({ FindBar: () => null }));
-vi.mock('../../find/use-find-hotkey', () => ({ useFindHotkey: () => {} }));
 vi.mock('../../tools/register-cards', () => ({}));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/lib/api/chats', () => ({
