@@ -5,7 +5,10 @@
  * render through MessagePrimitive.GroupedParts + the tool-card registry inside a
  * centered, max-width column. The composer sits in a `ViewportFooter` so its
  * height registers as scroll inset (the last message never hides behind it);
- * the recovery card takes that slot when the working directory is gone.
+ * the recovery card takes that slot when the working directory is gone. An
+ * unanswered gate shares that footer above the composer, capped at 55% of the
+ * viewport and scrolling inside its own slot, so it never scrolls out of reach
+ * and never swallows the transcript (#336).
  */
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
@@ -172,11 +175,12 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                   not pinned above the composer (#214). */}
               <GeneratingIndicator />
               <CompactingIndicator />
-              <ChatGateMount />
             </div>
 
-            {/* Sticky footer — its height is measured into the scroll inset. */}
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
+            {/* Sticky footer — its height is measured into the scroll inset, so
+                the pinned gate is inset for free. The cap engages only while a
+                gate is mounted: it must never squeeze a tall composer draft. */}
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex min-h-0 flex-col bg-background has-data-[slot=chat-gate-slot]:max-h-[55%]">
               <ThreadPrimitive.ScrollToBottom asChild>
                 <Button
                   data-testid="chat-scroll-to-bottom"
@@ -191,9 +195,17 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </Button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-[min(48rem,100%-116px)] px-5 pb-4">
-                <WorktreeSwitchBanner />
-                <ThreadFooterInput />
+              <div
+                data-testid="chat-thread-footer"
+                className="mx-auto flex w-full max-w-[min(48rem,100%-116px)] min-h-0 flex-col px-5 pb-4"
+              >
+                <ChatGateMount />
+                {/* Only the gate slot gives ground when the cap engages — the
+                    banner and the composer keep their natural height. */}
+                <div className="shrink-0">
+                  <WorktreeSwitchBanner />
+                  <ThreadFooterInput />
+                </div>
               </div>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>
