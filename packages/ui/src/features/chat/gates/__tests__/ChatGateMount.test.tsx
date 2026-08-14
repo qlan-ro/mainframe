@@ -286,21 +286,22 @@ describe('ChatGateMount', () => {
   });
 
   // Class-string regression check only: this pins the tokens the height cap
-  // (`has-data-[slot=chat-gate-slot]:`) and the composer width parity depend
-  // on. The real geometry — the cap engaging, the edges lining up while the
-  // slot scrolls — is verified live in the plan's Task 7 and by the Playwright
-  // assertions in Task 9. Dropping `[scrollbar-width:none]` costs 8px of card
-  // width off the composer's edge whenever the slot actually scrolls (see the
-  // plan's fact 8).
-  it('carries the slot/scroll/shrink class contract the cap and width parity depend on', () => {
+  // and the composer width parity depend on. `max-h-[45cqh]` is one half of
+  // the cap — the other half, `[container-type:size]` on `ThreadPrimitive.Root`,
+  // isn't pinnable here because the thread tests stub `ThreadPrimitive`
+  // entirely. The real geometry — the cap engaging against a live container,
+  // the edges lining up while the slot scrolls, and the composer's bottom
+  // edge never painting past the pane — is verified live in the plan's Task 7
+  // and by the Playwright assertions in Task 9. Dropping
+  // `[scrollbar-width:none]` costs 8px of card width off the composer's edge
+  // whenever the slot actually scrolls (see the plan's fact 8).
+  it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
     mockFront.mockReturnValue({ front: permissionEntry, reply });
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
-    expect(slot).toHaveAttribute('data-slot', 'chat-gate-slot');
     expect(slot).toHaveClass('overflow-y-auto');
     expect(slot).toHaveClass('[scrollbar-width:none]');
-    expect(slot).toHaveClass('min-h-0');
-    expect(slot).toHaveClass('flex-1');
+    expect(slot).toHaveClass('max-h-[45cqh]');
   });
 });

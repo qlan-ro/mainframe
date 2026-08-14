@@ -6,9 +6,10 @@
  * centered, max-width column. The composer sits in a `ViewportFooter` so its
  * height registers as scroll inset (the last message never hides behind it);
  * the recovery card takes that slot when the working directory is gone. An
- * unanswered gate shares that footer above the composer, capped at 55% of the
- * viewport and scrolling inside its own slot, so it never scrolls out of reach
- * and never swallows the transcript (#336).
+ * unanswered gate shares that footer above the composer, in its own slot
+ * capped at 45% of the thread pane (a container query against the root's
+ * `[container-type:size]`) and scrolling internally, so it never scrolls out
+ * of reach and a tall composer draft can never squeeze it away (#336).
  */
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
@@ -152,7 +153,10 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
       <SkillsProvider>
         <ThreadPrimitive.Root
           data-testid="chat-thread"
-          className="flex h-full flex-col overflow-hidden bg-background text-foreground"
+          // `[container-type:size]` gives the gate slot's `cqh` cap a definite
+          // reference — this element already has `h-full` + `overflow-hidden`,
+          // so it's a safe query container (#336).
+          className="flex h-full flex-col overflow-hidden bg-background text-foreground [container-type:size]"
         >
           {/* In-chat Find bar (Cmd/Ctrl+F) — sticky above the scrolling viewport. */}
           <FindBar />
@@ -181,9 +185,13 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 the pinned gate is inset for free. `shrink-0` because the
                 transcript above it refuses to shrink below its own min-content:
                 a shrinkable footer hands a tall gate 0px and paints it off the
-                bottom of the window. The cap engages only while a gate is
-                mounted: it must never squeeze a tall composer draft. */}
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex shrink-0 flex-col bg-background has-data-[slot=chat-gate-slot]:max-h-[55%]">
+                bottom of the window. No height cap here — a cap on this shared
+                parent let the composer's uncapped, non-shrinking block overflow
+                past the box and paint below the pane. The gate slot caps
+                itself instead (ChatGateMount), so the footer just sizes to
+                its children and this element's own `sticky bottom-0` keeps
+                the composer's bottom edge pinned at the pane's bottom. */}
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex shrink-0 flex-col bg-background">
               <ThreadPrimitive.ScrollToBottom asChild>
                 <Button
                   data-testid="chat-scroll-to-bottom"
@@ -198,17 +206,10 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </Button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div
-                data-testid="chat-thread-footer"
-                className="mx-auto flex w-full max-w-[min(48rem,100%-116px)] min-h-0 flex-col px-5 pb-4"
-              >
+              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-[min(48rem,100%-116px)] px-5 pb-4">
                 <ChatGateMount />
-                {/* Only the gate slot gives ground when the cap engages — the
-                    banner and the composer keep their natural height. */}
-                <div className="shrink-0">
-                  <WorktreeSwitchBanner />
-                  <ThreadFooterInput />
-                </div>
+                <WorktreeSwitchBanner />
+                <ThreadFooterInput />
               </div>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>

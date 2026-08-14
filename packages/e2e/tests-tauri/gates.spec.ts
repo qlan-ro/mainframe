@@ -407,3 +407,63 @@ test.describe('§gate pinned slot', () => {
     await waitForIdle(page, 60_000);
   });
 });
+
+// ─── Gate — a tall queued draft never starves the slot or clips the composer ─
+
+test.describe('§gate slot cap under a tall composer draft', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-no-suggestions' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+    // The Tauri window's minimum is 800x600 (tauri.conf.json) — 1200x600 is the
+    // shortest window that still forces the footer's two blocks to compete for space.
+    await app.page.setViewportSize({ width: 1200, height: 600 });
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // Regression guard for the review finding: capping the SHARED footer instead of the
+  // gate slot let a tall queued draft take the whole 55% budget, collapsing the slot
+  // toward 0px and pushing the composer's own bottom edge past the pane. The slot now
+  // caps itself (`max-h-[45cqh]` against the thread root's `[container-type:size]`), so
+  // the two invariants below must hold independently of composer height.
+  test('a tall queued draft leaves the gate reachable and the composer inside the pane', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Run `whoami` to check the current user');
+
+    const gate = page.locator('[data-testid="chat-permission-gate"]');
+    await gate.waitFor({ timeout: 45_000 });
+
+    // Queue a multi-line draft while the run is in flight — enough lines to clear the
+    // composer's own 192px (`max-h-48`) scroll wrapper, which is the tall-composer case
+    // the finding traces the clipping to.
+    const tallDraft = Array.from({ length: 15 }, (_, i) => `Queued draft line ${i + 1} of a long message.`).join('\n');
+    await page.getByTestId('chat-composer-input').fill(tallDraft);
+    await expect(page.getByTestId('chat-composer-input')).toHaveValue(tallDraft);
+
+    // Invariant 1: the gate's action button stays reachable and clickable in place —
+    // not just present somewhere off the fold.
+    const allowOnce = page.locator('[data-testid="chat-permission-allow-once"]');
+    await expect(allowOnce).toBeInViewport();
+    await expect(allowOnce).toBeEnabled();
+    const gateBox = await gate.boundingBox();
+    expect(gateBox, 'gate card must be mounted').not.toBeNull();
+    expect(gateBox!.height).toBeGreaterThan(60);
+
+    // Invariant 2: the composer never paints below the thread pane's bottom edge.
+    const paneBox = await page.getByTestId('chat-thread-viewport').boundingBox();
+    const composerBox = await page.getByTestId('chat-composer').boundingBox();
+    expect(paneBox, 'thread viewport must be mounted').not.toBeNull();
+    expect(composerBox, 'composer must be mounted').not.toBeNull();
+    expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(paneBox!.y + paneBox!.height + 1);
+
+    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await waitForIdle(page, 60_000);
+  });
+});
