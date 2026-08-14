@@ -185,11 +185,10 @@ async fn unified_exec_malformed_input_is_skipped_without_panicking_and_neighbour
     let path = write_rollout(&root, "thread_unified_3", &lines);
     let items = read_rollout_items(&path, Some("thread_unified_3"), Some(&deps(&root))).await;
 
-    assert!(
-        items
-            .iter()
-            .all(|i| !matches!(i, ThreadItem::CommandExecution(_))),
-        "malformed unified-exec input must not produce a CommandExecution, got {items:?}"
+    assert_eq!(
+        items.len(),
+        2,
+        "expected only the two neighboring messages, no phantom item for the malformed pair, got {items:?}"
     );
     assert!(matches!(&items[0], ThreadItem::AgentMessage(m) if m.text == "before the bad call"));
     assert!(
