@@ -140,7 +140,7 @@ export function SessionTabs() {
     <div data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
       <div
         data-no-drag
-        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
+        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] scroll-fade-x"
       >
         {grouped ? (
           <>
