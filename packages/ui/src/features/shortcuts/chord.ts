@@ -45,3 +45,9 @@ export function matchesChord(event: MatchableKeydown, resolved: ResolvedChord): 
 export function chordList(entry: ShortcutDescriptor): readonly PlatformChord[] {
   return Array.isArray(entry.chord) ? entry.chord : [entry.chord as PlatformChord];
 }
+
+/** A resolved chord's identity for conflict detection and dispatch lookup —
+ *  two chords collide iff they share this key. */
+export function chordKey(resolved: ResolvedChord): string {
+  return `${resolved.code}|${resolved.meta}|${resolved.ctrl}|${resolved.alt}|${resolved.shift}`;
+}
