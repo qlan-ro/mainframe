@@ -5,13 +5,17 @@
  *
  * A dev-only affordance (Cmd/Ctrl+Shift+A, `import.meta.env.DEV` only) still
  * opens it directly, alongside the production SidebarHeader entry point.
+ *
+ * The host owns the library's project scope for exactly as long as it is open:
+ * seeded from the sidebar filter on each open, changed only by the header
+ * picker, and dropped on close.
  */
 import React, { Suspense, useEffect } from 'react';
 // Radix replaces the v1 hand-rolled overlay — focus trap, scroll lock and
 // layering come with it, and Escape now closes in production too (the old
 // manual handler was dev-only).
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { useActiveIdentity } from '../sessions/use-active-identity';
+import { useModalProjectScope } from '@/features/project-scope/use-modal-project-scope';
 import { useAutomationsNav } from './data/use-automations-nav';
 import { useAutomationsStore } from './data/use-automations-store';
 import { useAutomationToasts } from './data/use-automation-toasts';
@@ -22,26 +26,35 @@ export function AutomationsHost(): React.ReactElement | null {
   const open = useAutomationsNav((s) => s.open);
   const openHost = useAutomationsNav((s) => s.openHost);
   const close = useAutomationsNav((s) => s.close);
-  const loadAll = useAutomationsStore((s) => s.loadAll);
-  const setActiveProjectId = useAutomationsStore((s) => s.setActiveProjectId);
-  const { projectId } = useActiveIdentity();
+  const loadInteractions = useAutomationsStore((s) => s.loadInteractions);
+  const loadLibrary = useAutomationsStore((s) => s.loadLibrary);
+  const setScopeProjectId = useAutomationsStore((s) => s.setScopeProjectId);
+  const { projectId, setProjectId } = useModalProjectScope(open);
 
   // Both unconditional (before the `!open` early return): toasts fire, and
   // the WS-driven store patches apply, even while the panel is closed.
   useAutomationToasts();
   useAutomationEvents();
 
-  // Resolves + (re)loads on mount AND on every active-project change (not
-  // gated by `open`) — the sidebar's pending-interaction badge
-  // (`selectPendingInteractionCount`) needs real data from app boot, and
-  // automations are project-scoped non-configurably (todo #234 bullet 1), so
-  // switching projects must re-scope the list. `setActiveProjectId` runs
-  // first so `loadAll`'s `get().activeProjectId` read sees the fresh value.
-  // WS events keep things fresh thereafter via useAutomationEvents above.
+  // The sidebar's pending-interaction badge (`selectPendingInteractionCount`)
+  // is alive whether or not this modal ever opens, so its load runs from boot
+  // and fetches nothing else.
   useEffect(() => {
-    setActiveProjectId(projectId ?? null);
-    void loadAll();
-  }, [projectId, setActiveProjectId, loadAll]);
+    void loadInteractions();
+  }, [loadInteractions]);
+
+  // Keyed on the scope itself, not on the rising edge of `open`: the seed can
+  // land a render late (the projects list arrives after the modal), and the
+  // header picker changes it mid-open. While closed the store holds no scope —
+  // a load with a null project would fetch every project's automations.
+  useEffect(() => {
+    if (!open) {
+      setScopeProjectId(null);
+      return;
+    }
+    setScopeProjectId(projectId);
+    void loadLibrary(projectId);
+  }, [open, projectId, setScopeProjectId, loadLibrary]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -72,7 +85,7 @@ export function AutomationsHost(): React.ReactElement | null {
             <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading…</div>
           }
         >
-          <AutomationsView />
+          <AutomationsView projectId={projectId} onProjectChange={setProjectId} />
         </Suspense>
       </DialogContent>
     </Dialog>

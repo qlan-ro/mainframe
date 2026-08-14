@@ -8,6 +8,8 @@
  *  3.  Clicking the close button calls the onClose prop.
  *  4.  Renders tasks-view-list / tasks-view-board segmented switch.
  *  5.  Renders tasks-board-new button.
+ *  6.  Header names the scoped project through tasks-board-project-picker, and
+ *      picking another one re-scopes the modal.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -27,20 +29,25 @@ let mockTodos: import('@/lib/api/todos').Todo[] = [];
 let mockLoading = false;
 
 vi.mock('../use-todos-store', () => ({
-  useTodosStore: vi.fn(() => ({
-    todos: mockTodos,
-    loading: mockLoading,
-    // The board owns the load effect now (the sidebar section that used to is gone).
-    load: mockLoad,
-    filters: { types: [], priorities: [], labels: [], search: '' },
-    sort: { key: 'priority', dir: 'asc' },
-    view: 'list',
-    move: vi.fn(),
-    remove: vi.fn(),
-    setFilters: mockSetFilters,
-    setSort: mockSetSort,
-    setView: mockSetView,
-  })),
+  useTodosStore: vi.fn((selector?: (s: unknown) => unknown) => {
+    const state = {
+      entries: {},
+      // The board owns the load effect now (the sidebar section that used to is gone).
+      load: mockLoad,
+      filters: { types: [], priorities: [], labels: [], search: '' },
+      sort: { key: 'priority', dir: 'asc' },
+      view: 'list',
+      move: vi.fn(),
+      remove: vi.fn(),
+      setFilters: mockSetFilters,
+      setSort: mockSetSort,
+      setView: mockSetView,
+    };
+    return selector ? selector(state) : state;
+  }),
+  // The board reads its own project's bucket through this; a factory that omits
+  // it resolves the import to undefined and every case here throws on render.
+  selectProjectTodos: () => () => ({ todos: mockTodos, loading: mockLoading, error: null }),
 }));
 
 // Stub the heavy child views — this file exercises TasksBoard's own header only.
@@ -55,6 +62,7 @@ vi.mock('../TaskBoardView', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
+import type { Project } from '@qlan-ro/mainframe-types';
 import { TasksBoard } from '../TasksBoard';
 import type { Todo } from '@/lib/api/todos';
 
@@ -85,9 +93,24 @@ function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): To
 // Render helper
 // ---------------------------------------------------------------------------
 
+const PROJECTS: Project[] = [
+  { id: 'proj-1', name: 'Mainframe', path: '/repos/mainframe' } as Project,
+  { id: 'proj-2', name: 'Sidecar', path: '/repos/sidecar' } as Project,
+];
+
 function renderBoard(onClose = vi.fn()) {
-  render(<TasksBoard port={31415} projectId="proj-1" onStartSession={vi.fn()} onClose={onClose} />);
-  return { onClose };
+  const onProjectChange = vi.fn();
+  render(
+    <TasksBoard
+      port={31415}
+      projectId="proj-1"
+      projects={PROJECTS}
+      onProjectChange={onProjectChange}
+      onStartSession={vi.fn()}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onProjectChange };
 }
 
 beforeEach(() => {
@@ -149,5 +172,21 @@ describe('TasksBoard — loading does not blank the board on refetch (todo #225)
     renderBoard();
     expect(screen.queryByTestId('tasks-board-loading')).toBeNull();
     expect(screen.getByTestId('task-list-view-stub')).toBeTruthy();
+  });
+});
+
+describe('TasksBoard — the header names its project and can change it', () => {
+  it('renders the picker naming the scoped project', () => {
+    renderBoard();
+    expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Mainframe');
+  });
+
+  it('re-scopes the modal when another project is picked', async () => {
+    const { onProjectChange } = renderBoard();
+
+    await userEvent.click(screen.getByTestId('tasks-board-project-picker'));
+    await userEvent.click(await screen.findByTestId('tasks-board-project-proj-2'));
+
+    expect(onProjectChange).toHaveBeenCalledWith('proj-2');
   });
 });

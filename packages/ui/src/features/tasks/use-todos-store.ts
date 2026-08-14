@@ -1,18 +1,21 @@
 /**
  * Zustand store for the Tasks/Todos surface.
  *
- * Holds server state for the active project + view/filter UI state.
+ * Server state is bucketed by project: the Kanban modal follows its own
+ * per-open scope while the session panel's card follows the active session, so
+ * the two routinely hold different projects and a single flat list would let
+ * whichever loaded last blank the other. View/filter/sort state stays global —
+ * it belongs to the user, not to a project.
+ *
  * Mutations call lib/api/todos then refresh (refetch-on-mutation;
  * single-window, no WS event for todos).
  *
  * The `port` and `projectId` are passed into load/mutation actions —
- * not held as store state — so the caller threads them from
- * useActiveIdentity() + the port prop.
+ * not held as store state — so the caller threads them from its own scope.
  *
- * Stale-completion guard: a module-level counter (`_loadSeq`) increments
- * on every `load()` call. When the async result resolves, it is discarded
- * if a newer call has been issued since — preventing earlier slow responses
- * from overwriting the state set by a faster, more-recent call.
+ * Stale-completion guard: a sequence counter per project id. A result is
+ * discarded when a newer load for that same project has been issued since,
+ * which keeps a slow response for one project from landing in another's bucket.
  */
 import { create } from 'zustand';
 import {
@@ -33,14 +36,22 @@ const DEFAULT_FILTERS: TodoFilters = { types: [], priorities: [], labels: [], se
 // critical=0, see finding 9.9 + the rank flip in todos-filters.ts, 9.4).
 const DEFAULT_SORT: TodoSort = { key: 'priority', dir: 'asc' };
 
-// Monotonic counter — lives outside React/Zustand so it persists across renders.
-let _loadSeq = 0;
-
-interface TodosState {
+/** One project's server state. */
+export interface TodosEntry {
   todos: Todo[];
   loading: boolean;
   error: string | null;
-  loadedProjectId: string | null;
+}
+
+// One shared instance for every unloaded project: a fresh object per read would
+// hand useSyncExternalStore a new snapshot on every render.
+const EMPTY_ENTRY: TodosEntry = Object.freeze({ todos: [] as Todo[], loading: false, error: null });
+
+// Monotonic per project — lives outside React/Zustand so it persists across renders.
+const _loadSeq = new Map<string, number>();
+
+interface TodosState {
+  entries: Record<string, TodosEntry>;
   filters: TodoFilters;
   sort: TodoSort;
   view: 'list' | 'board';
@@ -55,26 +66,36 @@ interface TodosState {
   resetFilters: () => void;
 }
 
+/** Read one project's bucket. `null` — no scope picked yet — reads as empty. */
+export function selectProjectTodos(projectId: string | null): (state: TodosState) => TodosEntry {
+  return (state) => (projectId === null ? EMPTY_ENTRY : (state.entries[projectId] ?? EMPTY_ENTRY));
+}
+
 export const useTodosStore = create<TodosState>((set, get) => ({
-  todos: [],
-  loading: false,
-  error: null,
-  loadedProjectId: null,
+  entries: {},
   filters: DEFAULT_FILTERS,
   sort: DEFAULT_SORT,
   view: 'list',
 
   load: async (port, projectId) => {
-    const seq = ++_loadSeq;
-    set({ loading: true, error: null });
+    const seq = (_loadSeq.get(projectId) ?? 0) + 1;
+    _loadSeq.set(projectId, seq);
+    const patch = (entry: TodosEntry) => set((state) => ({ entries: { ...state.entries, [projectId]: entry } }));
+    const current = (): TodosEntry => get().entries[projectId] ?? EMPTY_ENTRY;
+
+    patch({ ...current(), loading: true, error: null });
     try {
       const todos = await listTodos(port, projectId);
-      // Drop stale result if a newer load has started.
-      if (seq !== _loadSeq) return;
-      set({ todos, loading: false, loadedProjectId: projectId });
+      // Drop stale result if a newer load for this project has started.
+      if (seq !== _loadSeq.get(projectId)) return;
+      patch({ todos, loading: false, error: null });
     } catch (err) {
-      if (seq !== _loadSeq) return;
-      set({ loading: false, error: err instanceof Error ? err.message : 'Failed to load tasks' });
+      if (seq !== _loadSeq.get(projectId)) return;
+      patch({
+        ...current(),
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to load tasks',
+      });
     }
   },
 

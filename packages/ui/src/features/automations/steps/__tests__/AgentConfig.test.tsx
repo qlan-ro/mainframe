@@ -103,14 +103,14 @@ const CODEX = adapter('codex', 'Codex', [{ id: 'gpt-5', label: 'GPT-5', isDefaul
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+  useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
   resetAdapters();
   seedAdapters([CLAUDE, CODEX]);
 });
 
 afterEach(() => {
   resetAdapters();
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
 });
 
 describe('AgentConfig — card', () => {

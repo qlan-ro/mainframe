@@ -6,12 +6,10 @@
  * taking props — `AutomationsView` only decides WHETHER to mount this, not
  * what to pass it.
  *
- * Project scoping (todo #234 bullet 1): there is no scope picker. Every
- * automation saves non-configurably to `store.activeProjectId` — the
- * session's current project, resolved once at `AutomationsHost`'s mount
- * boundary via `useActiveIdentity()` and mirrored into the store — exactly
- * like Todos (`TasksModalHost`'s `useActiveIdentity()`). Saving is blocked
- * until a project has resolved. `definitionToSave` also runs every `ask_agent`
+ * Project scoping: the editor has no picker of its own. Every automation saves
+ * to `store.scopeProjectId` — the project the open modal is showing, chosen in
+ * the library header. Saving is blocked while that scope is "All projects",
+ * because an automation belongs to one project. `definitionToSave` also runs every `ask_agent`
  * step through `stampAgentProjectId` (bullet 4) so the step's own
  * `projectId` — which the daemon engine actually reads at run time — always
  * matches, rather than falling back to an arbitrary "first project in the
@@ -70,7 +68,7 @@ export function AutomationEditor() {
   const catalog = useAutomationsStore((s) => s.catalog);
   const gateway = useAutomationsStore((s) => s.gateway);
   const patchDefinition = useAutomationsStore((s) => s.patchDefinition);
-  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
+  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
 
   const existing =
     editorTarget?.mode === 'edit' ? definitions.find((d) => d.id === editorTarget.automationId) : undefined;
@@ -102,11 +100,18 @@ export function AutomationEditor() {
 
   const issues = useMemo(() => {
     const base = validate(draft.name, draft.definition, catalog);
-    const withProject = activeProjectId
+    const withProject = scopeProjectId
       ? base
-      : [{ stepId: null, level: 'error' as const, msg: 'Pick an active project first.' }, ...base];
+      : [
+          {
+            stepId: null,
+            level: 'error' as const,
+            msg: 'Pick a project in the library header to save this automation.',
+          },
+          ...base,
+        ];
     return [...withProject, ...saveIssues];
-  }, [draft.name, draft.definition, catalog, activeProjectId, saveIssues]);
+  }, [draft.name, draft.definition, catalog, scopeProjectId, saveIssues]);
   const errors = issues.filter((i) => i.level === 'error');
   const ok = errors.length === 0;
 
@@ -116,15 +121,15 @@ export function AutomationEditor() {
   );
 
   async function handleSave() {
-    if (!ok || saving || !activeProjectId) return;
+    if (!ok || saving || !scopeProjectId) return;
     setSaving(true);
     try {
       const input: AutomationCreateInput = {
         name: draft.name,
         description: draft.description || undefined,
         scope: 'project',
-        projectId: activeProjectId,
-        definition: definitionToSave(draft.definition, catalog, activeProjectId),
+        projectId: scopeProjectId,
+        definition: definitionToSave(draft.definition, catalog, scopeProjectId),
       };
       const result =
         editorTarget?.mode === 'edit'

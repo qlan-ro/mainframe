@@ -137,7 +137,7 @@ beforeEach(() => {
   mockProjectId = 'proj-1';
   vi.mocked(todosApi.listTodos).mockResolvedValue([]);
   // The store is a module-level singleton — a previous case's rows would leak.
-  useTodosStore.setState({ todos: [], loading: false, error: null, loadedProjectId: null });
+  useTodosStore.setState({ entries: {} });
 });
 
 describe('TasksCard — no active project', () => {
