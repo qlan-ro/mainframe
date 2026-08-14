@@ -15,13 +15,15 @@
  * paint the wrong surface for a frame before the effect catches up. Seeding
  * during render resolves it before anything downstream ever sees the gap.
  *
- * The project list can still be behind at that instant (a fetch in flight),
- * so a follow-up effect reseeds once against a fresher list. It replays the
- * filter/session values CAPTURED at the rising edge, not the live ones —
- * reading live values would let a background filter change that lands inside
- * the fetch window leak into an open modal. A local pick from the modal's own
- * picker latches out that follow-up entirely: a list that resolves after the
- * user has already chosen must not override the choice.
+ * The project list can still be behind at that instant — a fetch in flight,
+ * or this open's own reload below (a project added while the modal was
+ * closed only reaches the seed once its list is refreshed) — so a follow-up
+ * effect reseeds once against a fresher list. It replays the filter/session
+ * values CAPTURED at the rising edge, not the live ones — reading live values
+ * would let a background filter change that lands inside the fetch window
+ * leak into an open modal. A local pick from the modal's own picker latches
+ * out that follow-up entirely: the reload this hook starts on open must not
+ * resolve out from under a choice the user already made.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useSessionFilters } from '@/store/session-filters';
@@ -44,7 +46,12 @@ interface SeedRecord {
 export function useModalProjectScope(open: boolean): ModalProjectScope {
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const sessionProjectId = useActiveIdentity().projectId ?? null;
-  const { projects } = useProjects();
+  const { projects, reloadProjects } = useProjects();
+  // `reloadProjects` is a fresh function every render — a ref keeps the
+  // rising-edge effect below off the render-time deps list without calling a
+  // stale closure.
+  const reloadProjectsRef = useRef(reloadProjects);
+  reloadProjectsRef.current = reloadProjects;
 
   const [projectId, setProjectId] = useState<string | null>(null);
   // `false` even when the first render is already open: a mount in the open
@@ -82,6 +89,16 @@ export function useModalProjectScope(open: boolean): ModalProjectScope {
       }),
     );
   }, [projects]);
+
+  // Refreshes the project list on the rising edge, so a project added while
+  // the modal was closed is seedable on THIS open rather than requiring a
+  // second one — the outstanding gap behind todo #326's Kanban blocker
+  // (an added project stayed unreachable until the app restarted).
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) void reloadProjectsRef.current();
+    wasOpen.current = open;
+  }, [open]);
 
   return {
     projectId,

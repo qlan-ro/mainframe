@@ -9,7 +9,13 @@
  * of the board, so the sidebar entry and ⌘⇧T can no longer be dead clicks.
  *
  * Registers ⌘⇧T → openQuick(). Listens for `mf:open-tasks` (dispatched by
- * SidebarHeader TasksBtn). Mounted once in AppShell's outlet block.
+ * SidebarHeader TasksBtn). Mounted once in AppShell's outlet block — so unlike
+ * `useModalProjectScope`'s own internal instance (reloaded per hook, per
+ * open), this component's top-level `useProjects()` never remounts and never
+ * refetches on its own. Without an explicit reload here, a project added
+ * after boot stays permanently absent from `projects` below: `known()` keeps
+ * rejecting it and the pick list never lists it, however many times the modal
+ * reopens. Reloading on the rising edge of either dialog keeps it current.
  */
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -30,11 +36,22 @@ interface Props {
 
 export function TasksModalHost({ port }: Props): React.ReactElement {
   const { open, quickOpen, closeModal, openModal, openQuick, closeQuick } = useTasksModal();
-  const { projects } = useProjects();
+  const { projects, reloadProjects } = useProjects();
   const filterProjectId = useSessionFilters((s) => s.filterProjectId);
   const board = useModalProjectScope(open);
   const quick = useModalProjectScope(quickOpen);
   const view = useTodosStore((s) => s.view);
+
+  // Rising edge of EITHER dialog — this instance's own list, not the scope
+  // hook's internal one, is what `known()`/the pick list/the board below read.
+  const reloadProjectsRef = React.useRef(reloadProjects);
+  reloadProjectsRef.current = reloadProjects;
+  const anyOpenRef = React.useRef(false);
+  useEffect(() => {
+    const anyOpen = open || quickOpen;
+    if (anyOpen && !anyOpenRef.current) void reloadProjectsRef.current();
+    anyOpenRef.current = anyOpen;
+  }, [open, quickOpen]);
 
   // A project deleted while a modal is open leaves its scope pointing at
   // nothing; falling back to the pick list keeps the surface honest without an

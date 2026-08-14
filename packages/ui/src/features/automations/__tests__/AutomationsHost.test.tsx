@@ -18,7 +18,7 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 // Feeds both the library row's project annotation and the scope hook's seed —
 // one project, so `seedProjectScope`'s sole-project branch resolves 'proj-1'.
 vi.mock('@/features/sessions/use-projects', () => ({
-  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }], reloadProjects: vi.fn() }),
 }));
 
 /** Records every project the library load asks for, real gateway behind it. */

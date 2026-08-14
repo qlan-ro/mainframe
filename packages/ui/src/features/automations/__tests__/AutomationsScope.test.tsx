@@ -55,6 +55,7 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({
+    reloadProjects: vi.fn(),
     projects: [
       { id: 'proj-1', name: 'Mainframe' },
       { id: 'proj-2', name: 'Sidecar' },

@@ -41,11 +41,14 @@ function makeProject(id: string): Project {
   };
 }
 
+// A shared spy, not a fresh `vi.fn()` per call, so a test can assert it fired.
+const reloadProjectsSpy = vi.fn();
+
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({
     projects: fakeProjects,
     loading: false,
-    reloadProjects: vi.fn(),
+    reloadProjects: reloadProjectsSpy,
     removeProjectFromList: vi.fn(),
   }),
 }));
@@ -78,6 +81,7 @@ beforeEach(() => {
   localStorage.removeItem(SCOPED_KEY);
   fakeProjects = [makeProject('proj-a'), makeProject('proj-b')];
   fakeSessionProjectId = null;
+  reloadProjectsSpy.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -279,5 +283,35 @@ describe('useModalProjectScope — the sidebar filter changes before a pending r
     act(() => rerender({ open: true }));
 
     expect(result.current.projectId).toBe('proj-a');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (j) the rising edge refreshes the project list
+// ---------------------------------------------------------------------------
+
+describe('useModalProjectScope — the rising edge of open', () => {
+  it('reloads the project list once, and a project added while closed is seedable on the next open', () => {
+    useSessionFilters.getState().setFilterProjectId('proj-c');
+    // The seed filter points at a project this open's list doesn't know
+    // about yet — the todo #326 Kanban blocker: added mid-session, invisible
+    // until reloadProjects catches it up.
+    const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
+      initialProps: { open: true },
+    });
+    expect(reloadProjectsSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.projectId).toBeNull();
+
+    fakeProjects = [...fakeProjects, makeProject('proj-c')];
+    act(() => rerender({ open: true }));
+    expect(result.current.projectId).toBe('proj-c');
+
+    // Staying open must not reload again.
+    act(() => rerender({ open: true }));
+    expect(reloadProjectsSpy).toHaveBeenCalledTimes(1);
+
+    act(() => rerender({ open: false }));
+    act(() => rerender({ open: true }));
+    expect(reloadProjectsSpy).toHaveBeenCalledTimes(2);
   });
 });

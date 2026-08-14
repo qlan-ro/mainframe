@@ -23,11 +23,15 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 // Mocks BEFORE importing the store-backed component
 // ---------------------------------------------------------------------------
 
-const { PROJECTS } = vi.hoisted(() => ({
+const { PROJECTS, RELOAD_PROJECTS } = vi.hoisted(() => ({
   PROJECTS: [
     { id: 'proj-1', name: 'Mainframe', path: '/repos/mainframe' },
     { id: 'proj-2', name: 'Sidecar', path: '/repos/sidecar' },
   ],
+  // Shared, not a fresh `vi.fn()` per `useProjects()` call, so a test can
+  // assert it fired — this host owns its own instance on top of the one
+  // `useModalProjectScope` reloads internally, so both call it.
+  RELOAD_PROJECTS: vi.fn(),
 }));
 
 vi.mock('@/lib/api/todos', () => ({
@@ -46,7 +50,7 @@ vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({
     projects: PROJECTS,
     loading: false,
-    reloadProjects: vi.fn(),
+    reloadProjects: RELOAD_PROJECTS,
     removeProjectFromList: vi.fn(),
   }),
 }));
@@ -179,6 +183,28 @@ describe('TasksModalHost — closed', () => {
 
     await waitFor(() => expect(screen.queryByTestId('tasks-board-modal')).toBeNull());
     expect(todosApi.listTodos).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The host's own project list is stale after boot — a project added
+// mid-session must not stay permanently unreachable (todo #326 review finding 2)
+// ---------------------------------------------------------------------------
+
+describe('TasksModalHost — a project added after boot', () => {
+  it('reloads this host’s own project list on the rising edge of either dialog', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([]);
+
+    render(<TasksModalHost port={PORT} />);
+    expect(RELOAD_PROJECTS).not.toHaveBeenCalled();
+
+    act(() => useTasksModal.getState().openModal());
+    await waitFor(() => expect(RELOAD_PROJECTS).toHaveBeenCalled());
+
+    RELOAD_PROJECTS.mockClear();
+    act(() => useTasksModal.getState().closeModal());
+    act(() => useTasksModal.getState().openQuick());
+    await waitFor(() => expect(RELOAD_PROJECTS).toHaveBeenCalled());
   });
 });
 
