@@ -141,7 +141,7 @@ test.describe('§settings', () => {
   test('⌘, opens the dialog via the global hotkey', async () => {
     const { page } = app;
     await expect(page.getByTestId('settings-dialog')).toHaveCount(0);
-    await page.keyboard.press('Meta+,');
+    await page.keyboard.press('ControlOrMeta+,');
     await expect(page.getByTestId('settings-dialog')).toBeVisible({ timeout: 5_000 });
     await closeSettings(page);
   });

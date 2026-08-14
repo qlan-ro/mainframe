@@ -118,7 +118,7 @@ test.describe('§spotlight', () => {
   test('⌘O opens the palette via the global hotkey', async () => {
     const { page } = app;
     await expect(page.getByTestId('search-palette')).toHaveCount(0);
-    await page.keyboard.press('Meta+o');
+    await page.keyboard.press('ControlOrMeta+o');
     await expect(page.getByTestId('search-palette')).toBeVisible({ timeout: 5_000 });
     await closePaletteIfOpen(page);
   });
