@@ -38,13 +38,14 @@ function dayKey(ts: number): number {
   return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
 }
 
-function compareIds(a: SessionItem, b: SessionItem): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+/** Code-unit order, not `localeCompare`, so the result cannot vary with the host locale. */
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** Newest first; id breaks ties because incoming array order is only "when this client first saw it". */
 function byRecency(a: SessionItem, b: SessionItem): number {
-  return b.custom.updatedAt - a.custom.updatedAt || compareIds(a, b);
+  return b.custom.updatedAt - a.custom.updatedAt || compareStrings(a.id, b.id);
 }
 
 function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number): SessionGroupResult[] {
@@ -86,8 +87,7 @@ function ghostSections(buckets: Map<string, SessionItem[]>): SessionGroupResult[
   const sections = [...buckets].map(([projectId, items]) => ({ label: projectId, items: items.sort(byRecency) }));
   return sections.sort(
     (a, b) =>
-      (b.items[0]?.custom.updatedAt ?? 0) - (a.items[0]?.custom.updatedAt ?? 0) ||
-      (a.label < b.label ? -1 : a.label > b.label ? 1 : 0),
+      (b.items[0]?.custom.updatedAt ?? 0) - (a.items[0]?.custom.updatedAt ?? 0) || compareStrings(a.label, b.label),
   );
 }
 
