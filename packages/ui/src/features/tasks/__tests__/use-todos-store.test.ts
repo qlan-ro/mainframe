@@ -3,8 +3,8 @@
  * use-todos-store.test.ts
  *
  * Behaviors covered:
- *  1.  load success — todos state is set to the returned list, loading becomes false, error is null.
- *  2.  load error — loading becomes false, error is set to the error message, todos stays [].
+ *  1.  load success — the project's bucket holds the returned list, loading becomes false, error is null.
+ *  2.  load error — loading becomes false, error is set to the error message, the bucket's todos stays [].
  *  3.  load error with non-Error throws — sets error to the fallback string.
  *  4.  create — calls api.createTodo then refetches (load is called with same port+projectId).
  *  5.  update — calls api.updateTodo then refetches.
@@ -13,6 +13,11 @@
  *  8.  setFilters — updates filters in state.
  *  9.  setSort — updates sort in state.
  *  10. resetFilters — resets both filters and sort to defaults.
+ *  11. two projects — loading A then B leaves both readable side by side.
+ *  12. per-project sequence guard — a slow load for A never lands in B's bucket,
+ *      and a superseded load for B is dropped.
+ *  13. mutations refetch only the project they were handed.
+ *  14. selectProjectTodos — stable empty entry for null and for unseen projects.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -29,7 +34,7 @@ vi.mock('@/lib/api/todos', () => ({
   deleteTodo: vi.fn(),
 }));
 
-import { useTodosStore } from '../use-todos-store';
+import { useTodosStore, selectProjectTodos } from '../use-todos-store';
 import * as todosApi from '@/lib/api/todos';
 import type { Todo } from '@/lib/api/todos';
 
@@ -39,6 +44,12 @@ import type { Todo } from '@/lib/api/todos';
 
 const PORT = 31415;
 const PROJECT_ID = 'proj-abc';
+const PROJECT_B = 'proj-xyz';
+
+/** The bucket a project's server state lives in, read the way components read it. */
+function entry(projectId: string | null) {
+  return selectProjectTodos(projectId)(useTodosStore.getState());
+}
 
 function makeTodo(overrides: Partial<Todo> & { id: string }): Todo {
   return {
@@ -71,10 +82,7 @@ beforeEach(() => {
   // Reset the zustand store to initial state
   act(() => {
     useTodosStore.setState({
-      todos: [],
-      loading: false,
-      error: null,
-      loadedProjectId: null,
+      entries: {},
       filters: { types: [], priorities: [], labels: [], search: '' },
       sort: { key: 'number', dir: 'desc' },
       view: 'list',
@@ -88,7 +96,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('useTodosStore.load — success', () => {
-  it('sets todos to the fetched list, loading to false, error to null', async () => {
+  it('sets the bucket todos to the fetched list, loading to false, error to null', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([TODO_A, TODO_B]);
 
     const { result } = renderHook(() => useTodosStore());
@@ -97,9 +105,9 @@ describe('useTodosStore.load — success', () => {
       await result.current.load(PORT, PROJECT_ID);
     });
 
-    expect(result.current.todos).toEqual([TODO_A, TODO_B]);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeNull();
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A, TODO_B]);
+    expect(entry(PROJECT_ID).loading).toBe(false);
+    expect(entry(PROJECT_ID).error).toBeNull();
   });
 
   it('calls listTodos with the correct port and projectId', async () => {
@@ -115,7 +123,7 @@ describe('useTodosStore.load — success', () => {
     expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, PROJECT_ID);
   });
 
-  it('sets loadedProjectId to the projectId after a successful load', async () => {
+  it('files the fetched list under the project it was loaded for, leaving others untouched', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([TODO_A]);
 
     const { result } = renderHook(() => useTodosStore());
@@ -124,7 +132,8 @@ describe('useTodosStore.load — success', () => {
       await result.current.load(PORT, PROJECT_ID);
     });
 
-    expect(result.current.loadedProjectId).toBe(PROJECT_ID);
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A]);
+    expect(entry(PROJECT_B).todos).toEqual([]);
   });
 });
 
@@ -133,7 +142,7 @@ describe('useTodosStore.load — success', () => {
 // ---------------------------------------------------------------------------
 
 describe('useTodosStore.load — stale-completion guard', () => {
-  it('drops result from an earlier load when a newer load has started', async () => {
+  it('drops the result of an earlier load for a project when a newer load for it has started', async () => {
     let resolve1!: (v: Todo[]) => void;
     const slowPromise = new Promise<Todo[]>((res) => {
       resolve1 = res;
@@ -162,7 +171,75 @@ describe('useTodosStore.load — stale-completion guard', () => {
     });
 
     // Store must hold TODO_B (load 2 result), not TODO_A (stale load 1 result)
-    expect(result.current.todos).toEqual([TODO_B]);
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_B]);
+  });
+
+  it('lets a slow load for one project land after a load for another — the guard is per project', async () => {
+    let resolveA!: (v: Todo[]) => void;
+    const slowA = new Promise<Todo[]>((res) => {
+      resolveA = res;
+    });
+    vi.mocked(todosApi.listTodos)
+      .mockImplementationOnce(() => slowA)
+      .mockResolvedValueOnce([TODO_B]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    let pendingA!: Promise<void>;
+    act(() => {
+      pendingA = result.current.load(PORT, PROJECT_ID);
+    });
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_B);
+    });
+
+    await act(async () => {
+      resolveA([TODO_A]);
+      await pendingA;
+    });
+
+    // A's late response belongs in A's bucket and must not touch B's.
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A]);
+    expect(entry(PROJECT_B).todos).toEqual([TODO_B]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1c. load — two projects side by side
+// ---------------------------------------------------------------------------
+
+describe('useTodosStore.load — two projects', () => {
+  it('keeps both projects readable at once, so the board and the session panel can differ', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValueOnce([TODO_A]).mockResolvedValueOnce([TODO_B]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+      await result.current.load(PORT, PROJECT_B);
+    });
+
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A]);
+    expect(entry(PROJECT_B).todos).toEqual([TODO_B]);
+  });
+
+  it('marks only the loading project as loading', async () => {
+    vi.mocked(todosApi.listTodos)
+      .mockResolvedValueOnce([TODO_A])
+      .mockImplementationOnce(() => new Promise<Todo[]>(() => {}));
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+    act(() => {
+      void result.current.load(PORT, PROJECT_B);
+    });
+
+    expect(entry(PROJECT_B).loading).toBe(true);
+    expect(entry(PROJECT_ID).loading).toBe(false);
   });
 });
 
@@ -180,9 +257,9 @@ describe('useTodosStore.load — error', () => {
       await result.current.load(PORT, PROJECT_ID);
     });
 
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('db unavailable');
-    expect(result.current.todos).toEqual([]);
+    expect(entry(PROJECT_ID).loading).toBe(false);
+    expect(entry(PROJECT_ID).error).toBe('db unavailable');
+    expect(entry(PROJECT_ID).todos).toEqual([]);
   });
 
   it('sets error to the fallback string when the thrown value is not an Error instance', async () => {
@@ -194,7 +271,22 @@ describe('useTodosStore.load — error', () => {
       await result.current.load(PORT, PROJECT_ID);
     });
 
-    expect(result.current.error).toBe('Failed to load tasks');
+    expect(entry(PROJECT_ID).error).toBe('Failed to load tasks');
+  });
+
+  it('leaves the other bucket alone when one project fails to load', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValueOnce([TODO_B]).mockRejectedValueOnce(new Error('db unavailable'));
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_B);
+      await result.current.load(PORT, PROJECT_ID);
+    });
+
+    expect(entry(PROJECT_ID).error).toBe('db unavailable');
+    expect(entry(PROJECT_B).error).toBeNull();
+    expect(entry(PROJECT_B).todos).toEqual([TODO_B]);
   });
 });
 
@@ -304,6 +396,86 @@ describe('useTodosStore.remove', () => {
 
     expect(todosApi.listTodos).toHaveBeenCalledOnce();
     expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, PROJECT_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6b. mutations refetch only the project they were handed
+// ---------------------------------------------------------------------------
+
+describe('useTodosStore mutations — project scoping', () => {
+  beforeEach(() => {
+    vi.mocked(todosApi.createTodo).mockResolvedValue(TODO_B);
+    vi.mocked(todosApi.updateTodo).mockResolvedValue(TODO_B);
+    vi.mocked(todosApi.moveTodo).mockResolvedValue(TODO_B);
+    vi.mocked(todosApi.deleteTodo).mockResolvedValue(undefined);
+  });
+
+  it('refetches only the mutated project, leaving the other bucket as it was', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValueOnce([TODO_A]).mockResolvedValue([TODO_B]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+    await act(async () => {
+      await result.current.create(PORT, { title: 'Todo B' }, PROJECT_B);
+    });
+
+    expect(todosApi.listTodos).toHaveBeenLastCalledWith(PORT, PROJECT_B);
+    expect(entry(PROJECT_B).todos).toEqual([TODO_B]);
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A]);
+  });
+
+  it.each([
+    ['update', (s: ReturnType<typeof useTodosStore.getState>) => s.update(PORT, 'todo-b', { title: 'x' }, PROJECT_B)],
+    ['move', (s: ReturnType<typeof useTodosStore.getState>) => s.move(PORT, 'todo-b', 'done', PROJECT_B)],
+    ['remove', (s: ReturnType<typeof useTodosStore.getState>) => s.remove(PORT, 'todo-b', PROJECT_B)],
+  ])('%s refetches its own project only', async (_name, run) => {
+    vi.mocked(todosApi.listTodos).mockResolvedValueOnce([TODO_A]).mockResolvedValue([TODO_B]);
+
+    const { result } = renderHook(() => useTodosStore());
+
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+    await act(async () => {
+      await run(result.current);
+    });
+
+    expect(todosApi.listTodos).toHaveBeenLastCalledWith(PORT, PROJECT_B);
+    expect(entry(PROJECT_ID).todos).toEqual([TODO_A]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6c. selectProjectTodos — the read seam
+// ---------------------------------------------------------------------------
+
+describe('selectProjectTodos', () => {
+  it('returns the same empty entry for a null project and for one never loaded', () => {
+    const state = useTodosStore.getState();
+    const unscoped = selectProjectTodos(null)(state);
+    const unseen = selectProjectTodos('never-loaded')(state);
+
+    expect(unscoped.todos).toEqual([]);
+    expect(unscoped.loading).toBe(false);
+    expect(unscoped.error).toBeNull();
+    // One shared instance: a fresh object per read would make the selector
+    // return a new snapshot every render and loop useSyncExternalStore.
+    expect(unseen).toBe(unscoped);
+  });
+
+  it('returns a stable reference across reads while the bucket is unchanged', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([TODO_A]);
+
+    const { result } = renderHook(() => useTodosStore());
+    await act(async () => {
+      await result.current.load(PORT, PROJECT_ID);
+    });
+
+    expect(entry(PROJECT_ID)).toBe(entry(PROJECT_ID));
   });
 });
 
