@@ -24,3 +24,4 @@ mainframe-display = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+mainframe-background-tasks = { workspace = true }
