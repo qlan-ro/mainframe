@@ -646,7 +646,7 @@ mod tests {
             "description": "",
             "installed": true,
             "models": models,
-            "capabilities": { "planMode": true },
+            "capabilities": { "planMode": true, "autoMode": false },
         }))
         .unwrap()
     }
