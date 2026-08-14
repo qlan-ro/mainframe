@@ -8,14 +8,12 @@
  * they read only adapterId/model/permissionMode/planMode/effort + the feature
  * flags. The non-config fields are inert placeholders the controls never read.
  */
-import type { Chat } from '@qlan-ro/mainframe-types';
+import { EXECUTION_MODES, type Chat } from '@qlan-ro/mainframe-types';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
-
-const EXEC_MODES = ['default', 'acceptEdits', 'yolo'] as const;
 
 export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
   const permissionMode: Chat['permissionMode'] =
-    d.permissionMode !== undefined && (EXEC_MODES as readonly string[]).includes(d.permissionMode)
+    d.permissionMode !== undefined && (EXECUTION_MODES as readonly string[]).includes(d.permissionMode)
       ? (d.permissionMode as Chat['permissionMode'])
       : d.permissionMode === 'plan'
         ? 'default'

@@ -236,6 +236,7 @@ fn execution_mode_cli(mode: ExecutionMode) -> &'static str {
     match mode {
         ExecutionMode::Default => "default",
         ExecutionMode::AcceptEdits => "acceptEdits",
+        ExecutionMode::Auto => "auto",
         ExecutionMode::Yolo => "bypassPermissions",
     }
 }
@@ -1348,6 +1349,12 @@ mod tests {
     }
 
     #[test]
+    fn auto_mode_passes_permission_mode_auto() {
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None);
+        assert_eq!(mode_arg(&args), "auto");
+    }
+
+    #[test]
     fn yolo_mode_passes_permission_mode_bypass_permissions() {
         let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None);
         assert_eq!(mode_arg(&args), "bypassPermissions");
@@ -1437,6 +1444,30 @@ mod tests {
         let mut rx = spawned_with_stdin(&s);
         s.set_permission_mode(ExecutionMode::Yolo).await.unwrap();
         assert_eq!(read_json(&mut rx)["request"]["mode"], "bypassPermissions");
+    }
+
+    #[tokio::test]
+    async fn set_permission_mode_sends_auto_verbatim() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        let payload = read_json(&mut rx);
+        assert_eq!(payload["request"]["subtype"], "set_permission_mode");
+        assert_eq!(payload["request"]["mode"], "auto");
+    }
+
+    #[tokio::test]
+    async fn leaving_plan_mode_restores_auto() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
+
+        s.set_plan_mode(true).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "plan");
+
+        s.set_plan_mode(false).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
     }
 
     #[tokio::test]

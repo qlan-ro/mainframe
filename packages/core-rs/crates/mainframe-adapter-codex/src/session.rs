@@ -161,11 +161,7 @@ impl CodexSession {
     }
 
     fn map_permission_mode(&self, mode: ExecutionMode) -> (String, String) {
-        if mode == ExecutionMode::Yolo {
-            ("never".to_string(), "danger-full-access".to_string())
-        } else {
-            ("on-request".to_string(), "workspace-write".to_string())
-        }
+        permission_mode_policy(mode)
     }
 
     fn map_sandbox_policy(&self, sandbox: &str) -> Value {
@@ -243,6 +239,25 @@ impl CodexSession {
             .clone()
             .on_init(&new_thread_id);
         Ok(())
+    }
+}
+
+/// Codex has no CLI-native `auto` mode, so it coerces to the same
+/// (`on-request`, `workspace-write`) pair as Interactive rather than falling
+/// through to the danger pair meant for Yolo. A free function so the mapping
+/// is unit-testable without constructing a `CodexSession`.
+fn permission_mode_policy(mode: ExecutionMode) -> (String, String) {
+    match mode {
+        ExecutionMode::Yolo => ("never".to_string(), "danger-full-access".to_string()),
+        ExecutionMode::Default | ExecutionMode::AcceptEdits => {
+            ("on-request".to_string(), "workspace-write".to_string())
+        }
+        ExecutionMode::Auto => {
+            tracing::warn!(
+                "chat is set to the Claude-only `auto` permission mode; Codex runs it as Interactive"
+            );
+            ("on-request".to_string(), "workspace-write".to_string())
+        }
     }
 }
 
@@ -841,6 +856,20 @@ mod tests {
             .and_then(|(_, v)| v)
             .map(|v| v.to_string_lossy().into_owned());
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
+    }
+
+    /// Codex has no `auto` mode of its own; a chat carrying it (spawned on
+    /// Claude, then switched to a Codex step) must coerce to the same policy
+    /// as Interactive rather than falling through to the danger pair.
+    #[test]
+    fn permission_mode_policy_coerces_auto_to_interactive() {
+        let interactive = ("on-request".to_string(), "workspace-write".to_string());
+        assert_eq!(permission_mode_policy(ExecutionMode::Default), interactive);
+        assert_eq!(permission_mode_policy(ExecutionMode::Auto), interactive);
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::Yolo),
+            ("never".to_string(), "danger-full-access".to_string())
+        );
     }
 }
 

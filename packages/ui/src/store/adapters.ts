@@ -68,7 +68,9 @@ export function applyAdapterModels(
         byId: { ...s.byId, [adapterId]: { ...withInstall, models, modelsRevision, catalogSource: 'probed' } },
       };
     }
-    // Placeholder identity (planMode:false / id-as-name) that BRIEFLY lies until
+    // Placeholder identity that under-reports on purpose (every capability false,
+    // id-as-name), so a capability-gated control hides rather than offers a mode the
+    // real adapter may not support. It BRIEFLY lies until
     // the seed that follows reset-on-connect refreshes it via seedAdapters (blocker #11). The
     // ordering guarantee: seedAdaptersFor always fires getAdapters right after resetRevisionBaseline,
     // so the real snapshot overwrites identity within a few ms.
@@ -80,7 +82,7 @@ export function applyAdapterModels(
       models,
       modelsRevision,
       catalogSource: 'probed',
-      capabilities: { planMode: false },
+      capabilities: { planMode: false, autoMode: false },
     };
     return { byId: { ...s.byId, [adapterId]: partial } };
   });

@@ -136,7 +136,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
         <CodexTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
       )}
 
-      <SessionModeRadio adapterId={adapterId} config={config} onChange={update} />
+      <SessionModeRadio adapterId={adapterId} adapter={adapter} config={config} onChange={update} />
 
       {adapterId === 'claude' && (
         <CliProxyStatus adapterId={adapterId} models={adapter.models} config={config} onChange={update} />

@@ -162,7 +162,10 @@ impl Adapter for CodexAdapter {
         "Codex"
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: true }
+        AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+        }
     }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

@@ -2,9 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const EXECUTION_MODES: [ExecutionMode; 3] = [
+pub const EXECUTION_MODES: [ExecutionMode; 4] = [
     ExecutionMode::Default,
     ExecutionMode::AcceptEdits,
+    ExecutionMode::Auto,
     ExecutionMode::Yolo,
 ];
 
@@ -13,6 +14,7 @@ pub const EXECUTION_MODES: [ExecutionMode; 3] = [
 pub enum ExecutionMode {
     Default,
     AcceptEdits,
+    Auto,
     Yolo,
 }
 
@@ -23,6 +25,7 @@ pub enum ExecutionMode {
 pub enum PermissionMode {
     Default,
     AcceptEdits,
+    Auto,
     Yolo,
     Plan,
 }
@@ -230,6 +233,39 @@ mod tests {
             serde_json::to_string(&ExecutionMode::Yolo).unwrap(),
             "\"yolo\""
         );
+        assert_eq!(
+            serde_json::to_string(&ExecutionMode::Auto).unwrap(),
+            "\"auto\""
+        );
+    }
+
+    #[test]
+    fn permission_mode_auto_serializes_as_auto() {
+        assert_eq!(
+            serde_json::to_string(&PermissionMode::Auto).unwrap(),
+            "\"auto\""
+        );
+    }
+
+    #[test]
+    fn execution_mode_auto_round_trips() {
+        assert_eq!(
+            serde_json::from_str::<ExecutionMode>("\"auto\"").unwrap(),
+            ExecutionMode::Auto
+        );
+    }
+
+    #[test]
+    fn execution_modes_constant_lists_four_modes_in_permissiveness_order() {
+        assert_eq!(
+            EXECUTION_MODES,
+            [
+                ExecutionMode::Default,
+                ExecutionMode::AcceptEdits,
+                ExecutionMode::Auto,
+                ExecutionMode::Yolo,
+            ]
+        );
     }
 
     #[test]
@@ -323,3 +359,6 @@ mod tests {
 // `defaultAdapterId: string | null`) has no skip_serializing_if, so it always
 // serializes (as `null` when unset) — matches the TS route always including the
 // key via the GENERAL_DEFAULTS spread.
+// catch-up (#325): ExecutionMode and PermissionMode gained a fourth/fifth variant,
+// Auto, mirroring the Claude CLI's native `auto` permission mode. EXECUTION_MODES
+// is now `[Default, AcceptEdits, Auto, Yolo]`.

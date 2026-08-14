@@ -23,6 +23,8 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 export interface PlanGateProps {
   entry: ChatPermissionEntry;
   reply: ReplyFn;
+  /** Resolved by the mount from the chat's adapter; omitted means no Auto segment. */
+  autoAllowed?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,15 +50,17 @@ function ControlsPanel({
   setExecMode,
   clearContext,
   setClearContext,
+  autoAllowed,
 }: {
   execMode: ExecutionMode;
   setExecMode: (m: ExecutionMode) => void;
   clearContext: boolean;
   setClearContext: (v: boolean) => void;
+  autoAllowed?: boolean;
 }) {
   return (
     <div className="mx-4 my-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2.5">
-      <PlanExecModeControl value={execMode} onChange={setExecMode} />
+      <PlanExecModeControl value={execMode} onChange={setExecMode} autoAllowed={autoAllowed} />
       <div className="flex-1" />
       <PlanClearContextCheck checked={clearContext} onChange={setClearContext} />
     </div>
@@ -132,7 +136,7 @@ function ReviseRow({
 // PlanGate
 // ---------------------------------------------------------------------------
 
-export function PlanGate({ entry, reply }: PlanGateProps) {
+export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
   const [execMode, setExecMode] = useState<ExecutionMode>('default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
@@ -168,6 +172,7 @@ export function PlanGate({ entry, reply }: PlanGateProps) {
           setExecMode={setExecMode}
           clearContext={clearContext}
           setClearContext={setClearContext}
+          autoAllowed={autoAllowed}
         />
         {revising ? (
           <ReviseRow

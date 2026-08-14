@@ -7,9 +7,11 @@
  *
  * Behaviors covered:
  *  1. toolbar renders nothing when chat is null
+ *  2. the resolved adapter reaches PermissionSelect, so a Claude-only mode is
+ *     offered on an adapter that advertises it (todo #325)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -148,5 +150,32 @@ describe('ComposerToolbar — no render when chat is null', () => {
     const { container } = renderToolbar();
 
     expect(container.firstChild).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. the resolved adapter reaches PermissionSelect (todo #325)
+// ---------------------------------------------------------------------------
+
+describe('ComposerToolbar — adapter capabilities reach the permission picker', () => {
+  it('offers Auto when the resolved adapter advertises capabilities.autoMode', async () => {
+    const composerTuningMod = await import('../use-composer-tuning');
+    const base = vi.mocked(composerTuningMod.useComposerTuning).getMockImplementation();
+    vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({
+      ...base!([]),
+      adapter: {
+        id: 'claude',
+        name: 'Claude',
+        description: '',
+        installed: true,
+        models: [],
+        capabilities: { planMode: true, autoMode: true },
+      },
+    });
+
+    renderToolbar();
+    fireEvent.pointerDown(screen.getByTestId('composer-permission-mode-select'), { button: 0 });
+
+    expect(await screen.findByTestId('composer-permission-mode-select-option-auto')).toBeTruthy();
   });
 });

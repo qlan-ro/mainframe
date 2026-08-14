@@ -199,7 +199,10 @@ impl Adapter for FakeAdapter {
         &self.name
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: true }
+        AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+        }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         self.is_installed_calls.fetch_add(1, Ordering::SeqCst);

@@ -2,10 +2,11 @@
  * ChatGateMount — behavior tests.
  *
  * Strategy:
- *  - Only `useChatPermissionFront` is mocked — the real gate components are
- *    used so that routing decisions are verified through observable DOM state
- *    (data-testids), not through inspecting which JSX branch the component
- *    chose.
+ *  - The runtime module is mocked for its two hooks (`useChatPermissionFront`
+ *    and `useChatExtras`) — the real gate components are used so that routing
+ *    decisions are verified through observable DOM state (data-testids), not
+ *    through inspecting which JSX branch the component chose.
+ *  - The adapters store is the real one, seeded per case.
  *  - All expected values are hardcoded; no logic mirrors the dispatch table
  *    inside ChatGateMount.
  *
@@ -23,19 +24,27 @@
  *  6. An answered plan gate unmounts when the queue front clears — nothing is
  *     retained past the answer.
  *  7. Routing keeps working after a plan gate was answered.
+ *  8. The plan gate's Auto exec-mode segment follows the chat adapter's
+ *     `capabilities.autoMode` — present for an adapter that advertises it,
+ *     absent for one that does not.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { resetAdapters, seedAdapters } from '@/store/adapters';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
+import type { ChatRuntimeExtras } from '../../runtime/use-chat-thread-runtime';
 
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useChatPermissionFront: vi.fn(),
+  useChatExtras: vi.fn(),
 }));
-import { useChatPermissionFront } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatPermissionFront } from '../../runtime/use-chat-thread-runtime';
 import { ChatGateMount } from '../ChatGateMount';
 
 const mockFront = vi.mocked(useChatPermissionFront);
+const mockExtras = vi.mocked(useChatExtras);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -49,6 +58,14 @@ function entry(toolName: string, input: Record<string, unknown>): ChatPermission
     askedAt: 1,
     request: { requestId: 'r1', toolName, toolUseId: 'tu1', input, suggestions: [] },
   };
+}
+
+function adapter(id: string, capabilities: AdapterInfo['capabilities']): AdapterInfo {
+  return { id, name: id, description: '', installed: true, models: [], capabilities };
+}
+
+function extrasWithAdapter(adapterId: string): ChatRuntimeExtras {
+  return { state: { chatConfig: { adapterId } } } as unknown as ChatRuntimeExtras;
 }
 
 const permissionEntry = entry('Bash', { command: 'ls' });
@@ -70,6 +87,9 @@ function wrap(ui: React.ReactElement) {
 describe('ChatGateMount', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks does not drop a mockReturnValue, so each case restates it.
+    mockExtras.mockReturnValue(undefined);
+    resetAdapters();
   });
 
   // --- Behavior 1: front undefined → renders nothing ---
@@ -178,5 +198,28 @@ describe('ChatGateMount', () => {
     );
     expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
+  });
+
+  // --- Behavior 8: the plan gate's Auto segment follows the chat adapter ---
+
+  it('offers the Auto exec-mode segment when the chat adapter advertises autoMode', () => {
+    seedAdapters([adapter('claude', { planMode: true, autoMode: true })]);
+    mockExtras.mockReturnValue(extrasWithAdapter('claude'));
+    mockFront.mockReturnValue({ front: planEntry, reply });
+
+    wrap(<ChatGateMount />);
+
+    expect(screen.getByTestId('chat-plan-execmode-auto')).toBeInTheDocument();
+  });
+
+  it('omits the Auto exec-mode segment when the chat adapter does not advertise autoMode', () => {
+    seedAdapters([adapter('codex', { planMode: true })]);
+    mockExtras.mockReturnValue(extrasWithAdapter('codex'));
+    mockFront.mockReturnValue({ front: planEntry, reply });
+
+    wrap(<ChatGateMount />);
+
+    expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-plan-execmode-auto')).toBeNull();
   });
 });

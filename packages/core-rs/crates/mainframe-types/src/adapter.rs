@@ -300,6 +300,8 @@ pub enum CatalogSource {
 #[serde(rename_all = "camelCase")]
 pub struct AdapterCapabilities {
     pub plan_mode: bool,
+    /// Whether this adapter supports the CLI's native `auto` permission mode.
+    pub auto_mode: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
