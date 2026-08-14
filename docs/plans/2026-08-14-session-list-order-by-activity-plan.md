@@ -30,6 +30,10 @@ sidebar destroys it by design (see Established facts), so a daemon-side change c
 - Pure logic stays in the view-model module, not in a React component or hook body. `arrangeSessions` keeps its
   `now`-injected signature so tests stay deterministic.
 - `noUncheckedIndexedAccess: true` (`packages/ui/tsconfig.json:19`) — avoid raw index reads in test helpers.
+- `noUnusedLocals` / `noUnusedParameters: true` (`packages/ui/tsconfig.json:16-17`) and `"include": ["src"]` (`:26`),
+  which covers `__tests__`. **Every helper, constant, and function must land in the same task as its first
+  consumer** — an intermediate commit that adds an unused module-scope declaration fails `typecheck` with TS6133,
+  and the same rule kills any "introduce it now, wire it up next task" split on the implementation side.
 - A changeset is required before commit; the pre-push hook rejects without one.
 - No `@ts-ignore`, no dead code, no deferred cleanups.
 
@@ -135,53 +139,62 @@ from `/Users/doruchiulan/Projects/qlan/mainframe/.worktrees/todo-331-session-lis
 - `docs/plans/` is gitignored, so this plan is committed with `git add -f`. Receipt: `.gitignore:53`.
 - The UI package compiles with `noUncheckedIndexedAccess: true`, so a test helper must not read array slots by
   index without a guard. Receipt: `packages/ui/tsconfig.json:19`.
+- The same options block sets `noUnusedLocals`/`noUnusedParameters: true` (`:16-17`) and `"include": ["src"]` (`:26`),
+  so the test file is typechecked and **any** unused top-level declaration — `const` fixtures included, not only
+  functions — is a hard error. Receipt: dropping a throwaway file with one unused `const` and one unused function
+  into `src/features/sessions/view-model/__tests__/` and running the repo's own `packages/ui/node_modules/.bin/tsc
+  --noEmit` reported `error TS6133: 'UNUSED_CONST' is declared but its value is never read.` and the same for the
+  function. This is why the task list has no "add helpers" step of its own.
+- Only one pre-existing assertion orders two sessions that share the default `updatedAt` (`TODAY_1100` from the
+  `item()` helper): `group-sessions.test.ts:155` (`idsOf(groups, 'Beta')` → `['b1','b2']`). Every other multi-item
+  assertion uses distinct timestamps, titles, or statuses, so the new `id` tiebreak cannot silently flip them.
+  Receipts: `group-sessions.test.ts:88,122,129,155,193`.
+- `arrangeByProject` already sorts the Pinned group (`group-sessions.ts:94`), so project-mode Pinned ordering is a
+  regression guard, not a red test. `arrangeFlat` (`:69`) does not, so name-mode and status-mode Pinned ordering
+  does start red.
 
 ## Tasks
 
 ### Group: tests (red phase)
 
-All five tasks edit **one** file:
+All four tasks edit **one** file:
 `packages/ui/src/features/sessions/view-model/__tests__/group-sessions.test.ts`.
 Run with `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/sessions/view-model/__tests__/group-sessions.test.ts`.
 
 These tests must be written and observed **failing** before `group-sessions.ts` changes. Do not touch
 `group-sessions.ts` in this group.
 
-**Task 1 — Add the deterministic shuffle helper and tie-carrying fixtures.**
-Add to the existing helper block at the top of the file:
-- A `mulberry32(seed: number): () => number` PRNG (no `Math.random`, so failures reproduce).
-- `seededShuffle(items: SessionItem[], seed: number): SessionItem[]` implemented as a decorate–sort–undecorate
-  (`items.map((it) => ({ it, k: rand() })).sort((a, b) => a.k - b.k).map((e) => e.it)`) — no indexed swaps, which
-  `noUncheckedIndexedAccess` rejects.
-- A `serialize(groups)` helper returning `groups.map((g) => [g.label, g.items.map((i) => i.id)])` for whole-output
-  comparison.
-- Timestamp constants for a multi-project fixture with **deliberate ties**: at least one pair of sessions sharing
-  an identical `updatedAt`, one pair sharing an identical `title`, and several sharing `displayStatus`.
+There is deliberately **no "add the helpers" task**. `noUnusedLocals` (see Constraints) makes an unused helper a
+typecheck error, so each helper and fixture constant is introduced by the task that first uses it.
 
-*Verification:* the file still typechecks (`pnpm --filter @qlan-ro/mainframe-ui typecheck`) and the pre-existing
-tests still run. New helpers may be unused at this point.
-
-**Task 2 — Update the existing project-mode assertion that reads as array order.**
+**Task 1 — Update the existing project-mode assertion that reads as array order.**
 The test at `group-sessions.test.ts:147-157` ("emits one section per project…") builds `b1`/`b2` with the fixture's
 default `updatedAt`, so `expect(idsOf(groups, 'Beta')).toEqual(['b1', 'b2'])` asserts nothing about ordering. Give
-`b1` an *older* `updatedAt` than `b2` and assert `['b2', 'b1']`.
+`b1` an *older* `updatedAt` than `b2` and assert `['b2', 'b1']`. This is the only pre-existing assertion that
+orders same-timestamp sessions (see Established facts), so no other existing test needs a fixture change.
 
-*Verification:* that test fails against today's implementation with `['b1','b2']` received.
+*Verification:* that test fails against today's implementation with `['b1','b2']` received; every other test in the
+file still passes.
 
-**Task 3 — Add project-mode ordering tests.**
-In the `arrangeSessions mode 'project'` describe block:
+**Task 2 — Add project-mode ordering tests.**
+In the `arrangeSessions mode 'project'` describe block. Introduce the timestamp constants these fixtures need in
+this task (at least one pair of sessions sharing an identical `updatedAt`, for the ghost-tiebreak case):
 - Sessions inside a project section are ordered newest-activity first (≥3 sessions, distinct timestamps,
   inserted in a non-recency input order).
 - The unknown-project fallback section is ordered by the same rule.
 - With **two** ghost projects, the ghost sections themselves are ordered by their newest session's activity,
   descending, and still trail every known-project section.
 - Two ghost buckets whose newest activity is identical are ordered by `projectId` ascending.
-- Pinned interaction: a pinned session is lifted out of its project section (that section still renders its
-  remaining sessions in recency order), and a multi-session Pinned group is itself recency-ordered.
+- Pinned interaction: a pinned session is lifted out of its project section and that section still renders its
+  remaining sessions in recency order.
+- Regression guard (**passes today**): a multi-session Pinned group in project mode is recency-ordered.
+  `arrangeByProject` already sorts Pinned at `group-sessions.ts:94`; this assertion exists so Tasks 5 and 8,
+  which both rewrite that function, cannot regress it.
 
-*Verification:* every new assertion in this task fails against today's implementation; record which.
+*Verification:* every assertion above **except** the last one fails against today's implementation; the
+regression guard passes from the moment it is written. Record the observed failures.
 
-**Task 4 — Add name-mode and status-mode tie tests.**
+**Task 3 — Add name-mode and status-mode tie tests.**
 - `name`: two sessions with the identical title resolve by `updatedAt` descending; the overall A–Z ordering is
   unchanged for distinct titles.
 - `name`: the Pinned group with ≥2 pinned sessions is ordered by `updatedAt` descending.
@@ -189,13 +202,23 @@ In the `arrangeSessions mode 'project'` describe block:
   working → waiting → idle rank order is unchanged.
 - `status`: the Pinned group with ≥2 pinned sessions is ordered by `updatedAt` descending.
 
-*Verification:* the four new assertions fail today (unsorted pinned; ties in incoming order).
+*Verification:* the four new assertions fail today — `arrangeFlat` (`group-sessions.ts:69`) pushes Pinned
+unsorted, and both rest sorts leave ties in incoming order.
 
-**Task 5 — Add the shuffle-invariance property test.**
-One `describe('arrangeSessions is independent of input order')` block:
+**Task 4 — Add the shuffle-invariance property test, with its helpers.**
+One `describe('arrangeSessions is independent of input order')` block. Add the helpers it consumes in this same
+task — they have no other consumer, and adding them earlier would fail `typecheck` under `noUnusedLocals`:
+- A `mulberry32(seed: number): () => number` PRNG (no `Math.random`, so failures reproduce).
+- `seededShuffle(items: SessionItem[], seed: number): SessionItem[]` implemented as a decorate–sort–undecorate
+  (`items.map((it) => ({ it, k: rand() })).sort((a, b) => a.k - b.k).map((e) => e.it)`) — no indexed swaps, which
+  `noUncheckedIndexedAccess` rejects.
+- A `serialize(groups)` helper returning `groups.map((g) => [g.label, g.items.map((i) => i.id)])` for whole-output
+  comparison.
+
+The test body:
 - Build one fixture of ~10 sessions spanning: 2 known projects (`PROJECTS`), 2 ghost projects, ≥2 pinned
-  sessions, all three `displayStatus` values, sessions in today/yesterday/earlier buckets, **and** the planted
-  ties from Task 1 (equal `updatedAt`, equal titles).
+  sessions, all three `displayStatus` values, sessions in today/yesterday/earlier buckets, and **planted ties** —
+  an equal-`updatedAt` pair and an equal-`title` pair.
 - For each mode in `['recent', 'name', 'status', 'project']` and each seed in a fixed list (e.g. `[1, 2, 3, 7, 42]`),
   assert `serialize(arrangeSessions(seededShuffle(fixture, seed), mode, NOW, PROJECTS))` equals
   `serialize(arrangeSessions(fixture, mode, NOW, PROJECTS))`.
@@ -207,31 +230,35 @@ re-break it.
 
 ### Group: impl
 
-Tasks 6–9 edit **one** file: `packages/ui/src/features/sessions/view-model/group-sessions.ts`.
-Task 10 adds one new changeset file. Task 11 is the verification gate.
+Tasks 5–8 edit **one** file: `packages/ui/src/features/sessions/view-model/group-sessions.ts`.
+Task 9 adds one new changeset file. Task 10 is the verification gate.
 
-**Task 6 — Introduce the total comparator.**
+**Task 5 — Replace `byUpdatedDesc` with the total comparator.**
 In `group-sessions.ts`, replace `byUpdatedDesc` (`:41-43`) with `byRecency` per the Design section, plus a
-module-private `compareIds`. One short comment on `byRecency` explaining *why* the id tiebreak exists (the
-incoming array order is not a trustworthy fallback). Delete `byUpdatedDesc`; leave no alias behind.
+module-private `compareIds`, **and switch all three existing call sites in the same edit** — `arrangeRecent`
+(`:60-63`, four sorts) and `arrangeByProject` (`:94`). Deleting the old function without its callers leaves the
+file uncompilable, and introducing the new one without callers trips `noUnusedLocals`. One short comment on
+`byRecency` explaining *why* the id tiebreak exists (the incoming array order is not a trustworthy fallback).
+Leave no alias behind.
 
-*Verification:* `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes; no reference to `byUpdatedDesc` remains
-(`grep -Rn byUpdatedDesc packages/ui/src` is empty).
+*Verification:* `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes; `grep -Rn byUpdatedDesc packages/ui/src`
+is empty; the test run introduces **no new failures** — the `recent`-mode tests and the Task 2 regression guard
+stay green, and the red tests from Tasks 1–4 stay red except where recency ties in already-sorted groups now
+resolve.
 
-**Task 7 — Sort every group in the `recent` and flat paths.**
-- `arrangeRecent` (`:45-65`): the three buckets and the Pinned group all sort with `byRecency`.
-- `arrangeFlat` (`:67-72`): the Pinned group is sorted with `byRecency` instead of being pushed as received.
-  Sort a copy; never mutate the caller's array.
+**Task 6 — Sort the Pinned group on the flat paths.**
+`arrangeFlat` (`:67-72`) pushes `pinned` as received; sort it with `byRecency`. Sort a copy; never mutate the
+caller's array.
 
-*Verification:* the `recent` mode tests and the two new Pinned tests from Task 4 pass.
+*Verification:* the two new Pinned tests from Task 3 pass.
 
-**Task 8 — Give `name` and `status` deterministic tiebreaks.**
+**Task 7 — Give `name` and `status` deterministic tiebreaks.**
 - `name` (`:123-126`): `(a.title ?? '').localeCompare(b.title ?? '') || byRecency(a, b)`.
 - `status` (`:128-133`): `(rankA - rankB) || byRecency(a, b)`, keeping the existing `?? 3` unknown-status rank.
 
-*Verification:* the Task 4 tests pass; the pre-existing name/status tests still pass.
+*Verification:* the Task 3 tests pass; the pre-existing name/status tests still pass.
 
-**Task 9 — Order project sections' contents and the ghost run.**
+**Task 8 — Order project sections' contents and the ghost run.**
 In `arrangeByProject` (`:85-108`):
 - Sort each known-project section's items with `byRecency` before pushing.
 - Collect the leftover ghost buckets, sort their items with `byRecency`, and emit the sections ordered by each
@@ -240,9 +267,9 @@ In `arrangeByProject` (`:85-108`):
   replaces.
 Keep the function under 50 lines; extract a small `ghostSections(...)` helper if it would exceed that.
 
-*Verification:* every project-mode test (Tasks 2, 3) and the shuffle test (Task 5) passes.
+*Verification:* every project-mode test (Tasks 1, 2) and the shuffle test (Task 4) passes.
 
-**Task 10 — Add the changeset.**
+**Task 9 — Add the changeset.**
 Create `.changeset/session-list-order-by-activity.md` with front matter `'@qlan-ro/mainframe-ui': patch` and a
 one-paragraph, user-facing description: grouping sessions by project now lists each project's sessions
 most-recently-active first, and every sort mode resolves ties the same way instead of falling back to whatever
@@ -251,7 +278,7 @@ order the app happened to receive.
 *Verification:* the file exists and its YAML front matter parses (matches the shape of any existing
 `.changeset/*.md`).
 
-**Task 11 — Full verification gate.**
+**Task 10 — Full verification gate.**
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/sessions/view-model/__tests__/group-sessions.test.ts` — all green.
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/sessions/view-model/__tests__/project-activity.test.ts src/features/sessions/view-model/__tests__/archived-sessions.test.ts` — unchanged neighbours still green.
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck` — clean (it includes test files).
@@ -262,11 +289,11 @@ order the app happened to receive.
 
 | Criterion | Covered by |
 |---|---|
-| Project sections list sessions newest-activity first | Tasks 3, 9 |
-| The unknown-project fallback section follows the same rule | Tasks 3, 9 |
-| Section order unchanged; Pinned still leads | Tasks 3, 9 (assertions), `project-activity.ts` untouched |
-| A send moves the session to the top of its section, no restart | Task 3 + the reload receipt in Established facts |
-| Shuffled input yields identical output, every mode | Tasks 5, 6–9 |
-| Name and status ties resolve by last activity descending | Tasks 4, 8 |
-| Existing array-order assertions updated to recency | Task 2 |
-| Unit tests cover buckets, fallback, pinned, shuffle invariance | Tasks 2–5 |
+| Project sections list sessions newest-activity first | Tasks 2, 8 |
+| The unknown-project fallback section follows the same rule | Tasks 2, 8 |
+| Section order unchanged; Pinned still leads | Tasks 2, 8 (assertions), `project-activity.ts` untouched |
+| A send moves the session to the top of its section, no restart | Task 2 + the reload receipt in Established facts |
+| Shuffled input yields identical output, every mode | Tasks 4, 5–8 |
+| Name and status ties resolve by last activity descending | Tasks 3, 7 |
+| Existing array-order assertions updated to recency | Task 1 |
+| Unit tests cover buckets, fallback, pinned, shuffle invariance | Tasks 1–4 |
