@@ -27,6 +27,12 @@
  *  8. The plan gate's Auto exec-mode segment follows the chat adapter's
  *     `capabilities.autoMode` — present for an adapter that advertises it,
  *     absent for one that does not.
+ *  9. The pinned-slot wrapper (`chat-thread-gate-slot`): present and wrapping
+ *     each of the three card variants when a front exists; absent (and the
+ *     container still empty) when front is undefined; re-mounted with the
+ *     same gate after a front clears and returns (the delayed-re-read
+ *     restore path); carries the class contract the height cap and the
+ *     composer width parity depend on.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -221,5 +227,80 @@ describe('ChatGateMount', () => {
 
     expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-execmode-auto')).toBeNull();
+  });
+
+  // --- Behavior 9: the pinned-slot wrapper ---
+
+  it('wraps a permission gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-permission-gate'));
+  });
+
+  it('wraps an AskUserQuestion gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: askEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-question-gate'));
+  });
+
+  it('wraps a plan gate in the chat-thread-gate-slot', () => {
+    mockFront.mockReturnValue({ front: planEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toContainElement(screen.getByTestId('chat-plan-gate'));
+  });
+
+  it('renders no slot and an empty container when front is undefined', () => {
+    mockFront.mockReturnValue({ front: undefined, reply });
+    const { container } = wrap(<ChatGateMount />);
+
+    expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('re-mounts the slot with the same gate after the front clears and returns', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    const { rerender } = wrap(<ChatGateMount />);
+    expect(screen.getByTestId('chat-thread-gate-slot')).toContainElement(screen.getByTestId('chat-permission-gate'));
+
+    mockFront.mockReturnValue({ front: undefined, reply });
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
+
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+    expect(screen.getByTestId('chat-thread-gate-slot')).toContainElement(screen.getByTestId('chat-permission-gate'));
+  });
+
+  // Class-string regression check only: this pins the tokens the height cap
+  // (`has-data-[slot=chat-gate-slot]:`) and the composer width parity depend
+  // on. The real geometry — the cap engaging, the edges lining up while the
+  // slot scrolls — is verified live in the plan's Task 7 and by the Playwright
+  // assertions in Task 9. Dropping `[scrollbar-width:none]` costs 8px of card
+  // width off the composer's edge whenever the slot actually scrolls (see the
+  // plan's fact 8).
+  it('carries the slot/scroll/shrink class contract the cap and width parity depend on', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    wrap(<ChatGateMount />);
+
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toHaveAttribute('data-slot', 'chat-gate-slot');
+    expect(slot).toHaveClass('overflow-y-auto');
+    expect(slot).toHaveClass('[scrollbar-width:none]');
+    expect(slot).toHaveClass('min-h-0');
+    expect(slot).toHaveClass('flex-1');
   });
 });
