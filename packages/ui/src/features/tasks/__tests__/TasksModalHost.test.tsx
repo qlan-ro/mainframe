@@ -1,23 +1,34 @@
 /**
  * TasksModalHost.test.tsx
  *
- * Regression coverage for todo #225: the Tasks modal showed boot-time todos
- * forever because opening it never refetched. These tests exercise the real
- * useTodosStore + useTasksModal against a mocked lib/api/todos, so a fresh
- * listTodos call on open (and quick-add open) is observable end-to-end.
+ * Regression coverage for todo #225 — the Tasks modal showed boot-time todos
+ * forever because opening it never refetched — carried onto the per-open scope
+ * of todo #326: the host no longer loads on mount, so each open must issue its
+ * own listTodos for the project that open resolved to.
+ *
+ * These tests exercise the real useTodosStore + useTasksModal +
+ * useModalProjectScope against a mocked lib/api/todos.
  *
  * Behaviors covered:
- *  1.  Opening the full modal after an external change refetches (listTodos
- *      called again) and renders the fresh statuses.
- *  2.  Opening the quick-add dialog refetches.
- *  3.  Closing then re-opening the modal refetches each time (rising edge).
+ *  1.  Opening the full modal loads the scoped project and renders fresh statuses.
+ *  2.  Closing and re-opening loads again (rising edge, not once).
+ *  3.  Opening the quick-add dialog loads its own scoped project.
+ *  4.  Nothing loads while both dialogs are closed.
+ *  5.  The sidebar filter wins over the active session when both resolve.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
-// Mock lib/api/todos BEFORE importing the store-backed component
+// Mocks BEFORE importing the store-backed component
 // ---------------------------------------------------------------------------
+
+const { PROJECTS } = vi.hoisted(() => ({
+  PROJECTS: [
+    { id: 'proj-1', name: 'Mainframe', path: '/repos/mainframe' },
+    { id: 'proj-2', name: 'Sidecar', path: '/repos/sidecar' },
+  ],
+}));
 
 vi.mock('@/lib/api/todos', () => ({
   listTodos: vi.fn(),
@@ -26,6 +37,18 @@ vi.mock('@/lib/api/todos', () => ({
   moveTodo: vi.fn(),
   deleteTodo: vi.fn(),
   uploadAttachment: vi.fn(),
+}));
+
+// The seeding rule validates the active session's project against this list, so
+// an unmocked useProjects (which also needs a DaemonPortProvider) would leave
+// every scope null and every dialog on its picker.
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({
+    projects: PROJECTS,
+    loading: false,
+    reloadProjects: vi.fn(),
+    removeProjectFromList: vi.fn(),
+  }),
 }));
 
 // Identity + session spawn are out of scope here.
@@ -51,6 +74,7 @@ vi.mock('../TaskBoardView', () => ({
 import { TasksModalHost } from '../TasksModalHost';
 import { useTasksModal } from '../use-tasks-modal';
 import { useTodosStore } from '../use-todos-store';
+import { useSessionFilters } from '@/store/session-filters';
 import * as todosApi from '@/lib/api/todos';
 import type { Todo } from '@/lib/api/todos';
 
@@ -88,64 +112,89 @@ const DONE_TODO = makeTodo({ id: 'todo-1', number: 1, status: 'done' });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The filter is persisted and the store is a module singleton — an id left
+  // over from a previous case would decide the seed.
+  localStorage.clear();
   act(() => {
     useTasksModal.setState({ open: false, quickOpen: false });
+    useSessionFilters.setState({ filterProjectId: null });
     useTodosStore.setState({ entries: {} });
   });
 });
 
 // ---------------------------------------------------------------------------
-// 1. Opening the modal refetches + renders fresh statuses
+// 1-2. Opening the modal loads its scope, every time
 // ---------------------------------------------------------------------------
 
-describe('TasksModalHost — refetch on modal open (todo #225)', () => {
-  it('refetches and renders fresh statuses when the modal opens after an external change', async () => {
-    vi.mocked(todosApi.listTodos)
-      .mockResolvedValueOnce([OPEN_TODO]) // boot load
-      .mockResolvedValueOnce([DONE_TODO]); // external change picked up on open
+describe('TasksModalHost — the board loads its scope on open (todo #225)', () => {
+  it('loads on open and renders the fetched statuses', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([DONE_TODO]);
 
     render(<TasksModalHost port={PORT} />);
-
-    // Boot load fires once so the first open has data.
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(1));
 
     act(() => {
       useTasksModal.getState().openModal();
     });
 
-    // Opening the modal issues a fresh listTodos call…
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(2));
-    // …and the board reflects the refetched (done) status.
+    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-1'));
     expect(await screen.findByText('0 active · 1 done')).toBeTruthy();
   });
 
-  it('refetches again on every re-open (rising edge, not once)', async () => {
+  it('loads again on every re-open (rising edge, not once)', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([OPEN_TODO]);
 
     render(<TasksModalHost port={PORT} />);
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(1));
 
     act(() => useTasksModal.getState().openModal());
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(1));
 
     act(() => useTasksModal.getState().closeModal());
     act(() => useTasksModal.getState().openModal());
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(2));
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Opening the quick-add dialog refetches
+// 3-4. Quick-add carries its own scope; a closed host fetches nothing
 // ---------------------------------------------------------------------------
 
-describe('TasksModalHost — refetch on quick-add open', () => {
-  it('refetches when the quick-add dialog opens', async () => {
+describe('TasksModalHost — quick-add', () => {
+  it('loads its own scoped project when it opens', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([OPEN_TODO]);
 
     render(<TasksModalHost port={PORT} />);
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(1));
 
     act(() => useTasksModal.getState().openQuick());
-    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledTimes(2));
+
+    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-1'));
+    expect(screen.getByTestId('tasks-quick-project')).toHaveTextContent('Mainframe');
+  });
+});
+
+describe('TasksModalHost — closed', () => {
+  it('fetches nothing while both dialogs are closed', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([OPEN_TODO]);
+
+    render(<TasksModalHost port={PORT} />);
+
+    await waitFor(() => expect(screen.queryByTestId('tasks-board-modal')).toBeNull());
+    expect(todosApi.listTodos).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. The seed comes from the sidebar filter first
+// ---------------------------------------------------------------------------
+
+describe('TasksModalHost — seeding', () => {
+  it('opens on the sidebar filter, not on the active session, when the two differ', async () => {
+    vi.mocked(todosApi.listTodos).mockResolvedValue([]);
+    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+
+    render(<TasksModalHost port={PORT} />);
+    act(() => useTasksModal.getState().openModal());
+
+    await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-2'));
+    expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Sidecar');
   });
 });

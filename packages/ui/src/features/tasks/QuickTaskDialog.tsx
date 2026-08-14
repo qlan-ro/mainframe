@@ -13,6 +13,7 @@
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ProjectChip } from '@/components/ui/project-chip';
 import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
 import { QuickTaskForm } from './QuickTaskForm';
 
@@ -28,6 +29,8 @@ interface Props {
 }
 
 export function QuickTaskDialog({ port, projectId, projects, filterProjectId, onSelectProject, open, onClose }: Props) {
+  const projectName = projects.find((project) => project.id === projectId)?.name ?? projectId ?? '';
+
   return (
     <Dialog
       open={open}
@@ -42,10 +45,15 @@ export function QuickTaskDialog({ port, projectId, projects, filterProjectId, on
       >
         {/* pr-12 clears the stock close button. */}
         <DialogHeader className={projectId === null ? undefined : 'shrink-0 border-b px-4 py-3 pr-12'}>
-          <DialogTitle className="flex items-center gap-1.5">
-            <Zap size={13} className="text-primary shrink-0" aria-hidden />
-            Quick Task
-          </DialogTitle>
+          <div className="flex min-w-0 items-center gap-2">
+            <DialogTitle className="flex shrink-0 items-center gap-1.5">
+              <Zap size={13} className="text-primary shrink-0" aria-hidden />
+              Quick Task
+            </DialogTitle>
+            {projectId !== null && (
+              <ProjectChip data-testid="tasks-quick-project" projectId={projectId} name={projectName} size={18} />
+            )}
+          </div>
           {projectId === null && <DialogDescription>Pick the project to add this task to.</DialogDescription>}
         </DialogHeader>
 

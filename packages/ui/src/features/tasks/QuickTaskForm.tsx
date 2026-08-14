@@ -39,6 +39,7 @@ interface Props {
 
 export function QuickTaskForm({ port, projectId, open, onClose }: Props) {
   const { create } = useTodosStore();
+  const load = useTodosStore((s) => s.load);
   const [taskType, setTaskType] = useState<QuickType>('feature');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -46,6 +47,14 @@ export function QuickTaskForm({ port, projectId, open, onClose }: Props) {
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  // Refetch on every open. The store has no WS event (single-window
+  // refetch-on-mutation), so a change made outside this window — agent
+  // sessions, another window, direct DB writes — would otherwise go unseen.
+  useEffect(() => {
+    if (!open) return;
+    void load(port, projectId);
+  }, [open, port, projectId, load]);
 
   // Reset form each time it opens
   useEffect(() => {
