@@ -10,6 +10,7 @@
 //! will decorate rather than inside one adapter crate.
 
 pub mod command;
+pub mod history;
 pub mod parse;
 mod text;
 
@@ -17,6 +18,7 @@ pub use command::{
     ToolUseMeta, is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
     should_scan_tool_result_for_pr,
 };
+pub use history::scan_history_for_prs;
 pub use parse::{
     extract_pr_from_tool_result, parse_azure_pr_url, parse_gitlab_mr_url, parse_pr_url,
 };
@@ -60,3 +62,5 @@ impl DetectedPrCore {
 // notes: moved from mainframe-adapter-claude::pr_detection to this adapter-neutral
 // notes: module for todo #339 (Codex PR detection); split into text/parse/command,
 // notes: unchanged matcher-for-matcher, to stay under the 300-line/file budget.
+// notes: history.rs is the daemon's cold-load rescan (moved verbatim from
+// notes: mainframe-server::chat_deps::scan_history_for_prs, task 4).

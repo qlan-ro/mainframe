@@ -20,7 +20,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, Weak};
 
-use mainframe_adapter_api::pr_detection::{extract_pr_from_tool_result, is_pr_create_command};
+use mainframe_adapter_api::pr_detection::scan_history_for_prs;
 use mainframe_adapter_api::{
     AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
@@ -1054,63 +1054,6 @@ fn scan_history_for_mentions(chat_id: &str, history: &[ChatMessage], ctx_db: &dy
     }
 }
 
-/// Walk messages in order: assistant `tool_use` blocks identify PR-create
-/// commands; subsequent `tool_result` blocks with PR URLs are classified as
-/// `created` (matching `toolUseId`) or `mentioned` (everything else).
-fn scan_history_for_prs(history: &[ChatMessage]) -> Vec<DetectedPr> {
-    let mut scanned = Vec::new();
-    let mut seen_prs = HashSet::new();
-    let mut pending_creates = HashSet::new();
-    for msg in history {
-        if msg.r#type == ChatMessageType::Assistant {
-            for block in &msg.content {
-                let MessageContent::Node(MessageContentNode::ToolUse {
-                    id, name, input, ..
-                }) = block
-                else {
-                    continue;
-                };
-                if name != "Bash" && name != "BashTool" {
-                    continue;
-                }
-                let Some(command) = input.get("command").and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                if is_pr_create_command(command) {
-                    pending_creates.insert(id.clone());
-                }
-            }
-        }
-        if msg.r#type != ChatMessageType::ToolResult {
-            continue;
-        }
-        for block in &msg.content {
-            let MessageContent::Node(MessageContentNode::ToolResult {
-                content,
-                tool_use_id,
-                ..
-            }) = block
-            else {
-                continue;
-            };
-            let Some(pr) = extract_pr_from_tool_result(content) else {
-                continue;
-            };
-            let key = format!("{}/{}/{}", pr.owner, pr.repo, pr.number);
-            if !seen_prs.insert(key) {
-                continue;
-            }
-            let source = if pending_creates.remove(tool_use_id) {
-                DetectedPrSource::Created
-            } else {
-                DetectedPrSource::Mentioned
-            };
-            scanned.push(pr.with_source(source));
-        }
-    }
-    scanned
-}
-
 /// Bridges `AttachmentStore::list` (returns `StoredAttachmentMeta`) to the
 /// context-tracker's `AttachmentLister` (wants `SessionAttachment`). The stored
 /// meta is a structural superset of `SessionAttachment` (drops `materializedPath`);
@@ -1270,61 +1213,8 @@ mod scan_loaded_history_tests {
         }
     }
 
-    // -- scan_history_for_prs --------------------------------------------
-
-    #[test]
-    fn scan_history_for_prs_marks_source_created_when_tool_use_id_matches_a_pending_gh_pr_create() {
-        let history = vec![
-            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
-            tool_result_msg("m2", "tu1", "Created https://github.com/acme/repo/pull/7"),
-        ];
-        let scanned = scan_history_for_prs(&history);
-        assert_eq!(
-            scanned,
-            vec![DetectedPr {
-                url: "https://github.com/acme/repo/pull/7".to_string(),
-                owner: "acme".to_string(),
-                repo: "repo".to_string(),
-                number: 7,
-                source: DetectedPrSource::Created,
-            }]
-        );
-    }
-
-    #[test]
-    fn scan_history_for_prs_marks_source_mentioned_without_a_matching_pending_create() {
-        let history = vec![tool_result_msg(
-            "m1",
-            "tu-unrelated",
-            "See https://github.com/acme/repo/pull/9 for context",
-        )];
-        let scanned = scan_history_for_prs(&history);
-        assert_eq!(
-            scanned,
-            vec![DetectedPr {
-                url: "https://github.com/acme/repo/pull/9".to_string(),
-                owner: "acme".to_string(),
-                repo: "repo".to_string(),
-                number: 9,
-                source: DetectedPrSource::Mentioned,
-            }]
-        );
-    }
-
-    #[test]
-    fn scan_history_for_prs_dedupes_the_same_pr_seen_in_two_tool_results() {
-        let history = vec![
-            tool_result_msg("m1", "tu1", "https://github.com/acme/repo/pull/3"),
-            tool_result_msg("m2", "tu2", "https://github.com/acme/repo/pull/3 again"),
-        ];
-        assert_eq!(scan_history_for_prs(&history).len(), 1);
-    }
-
-    #[test]
-    fn scan_history_for_prs_returns_empty_when_no_pr_url_present() {
-        let history = vec![tool_result_msg("m1", "tu1", "no PR here")];
-        assert!(scan_history_for_prs(&history).is_empty());
-    }
+    // -- scan_history_for_prs (moved to mainframe-adapter-api::pr_detection::history;
+    //    tests live in that crate's tests/pr_detection_history.rs, todo #339 task 4) --
 
     // -- scan_history_for_mentions ----------------------------------------
 
