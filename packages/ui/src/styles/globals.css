@@ -212,30 +212,14 @@
   mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
 }
 
-/**
- * Ramp depth for every `scroll-fade*` scroller, set once so the surfaces that
- * adopt it read alike. Stock is `min(12%, 40px)` — a percentage, so it deepens
- * with the panel, and at its cap twice the 20px ramp this app already fades a
- * clipped label with above.
- */
+/** Ramp depth for every `scroll-fade*` scroller — the app's existing ~20px reading, not stock's deeper percentage default. */
 @layer base {
   :root {
     --scroll-fade-size: 20px;
   }
 }
 
-/**
- * The `scroll-fade-y` shape for a scroller whose section headers are sticky
- * children of it — the sessions/tasks sidebar. The stock ramp starts at the
- * scroller's own edge, which is exactly where a parked header sits, so it
- * dissolves the header instead of the rows beneath it. Each ramp here starts
- * below the header stack the component measures for it.
- *
- * Depth still comes from the utility's scroll-driven `--scroll-fade-t/-b`, so an
- * edge with nothing past it collapses both transparent stops onto their
- * neighbours and the mask stays opaque. Sets only the shape override that
- * `scroll-fade-y`'s `mask-image` already reads, so the two compose in any order.
- */
+/** Starts `scroll-fade-y`'s ramps below the sidebar's parked sticky headers instead of dissolving them; overrides only the mask shape `scroll-fade-y` already reads. */
 @utility scroll-fade-sticky {
   --scroll-fade-mask: linear-gradient(
     to bottom,
@@ -248,6 +232,15 @@
     #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
     #000 100%
   );
+}
+
+/** Below the primary path's engine floor (unconfirmed — see the webview probe doc), shadcn's fallback pins both ramps open permanently; drop the mask so those engines clip like before this change. */
+@supports not (animation-timeline: scroll()) {
+  .scroll-fade-y,
+  .scroll-fade-x {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
 }
 
 @layer base {
