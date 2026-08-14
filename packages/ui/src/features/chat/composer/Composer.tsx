@@ -23,6 +23,7 @@ import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from '
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
+import { focusOwningTranscript } from './focus-composer';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
@@ -86,13 +87,26 @@ function ComposerInputField({
   placeholder: string;
 }) {
   const triggerAria = useTriggerFieldAria();
+  // Escape leaves the composer and parks focus on the transcript (⌘L brings it
+  // back). The `/` and `@` trigger menu owns Escape while it is open — closing
+  // the menu must not also throw the caret out of the field.
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
+        e.preventDefault();
+        return;
+      }
+      onKeyDown(e);
+    },
+    [onKeyDown, triggerAria],
+  );
   return (
     <ComposerPrimitive.Input
       ref={textareaRef}
       data-testid="chat-composer-input"
       data-mf-composer-input
       data-noring
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder}
       rows={1}
       autoFocus

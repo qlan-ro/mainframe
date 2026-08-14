@@ -14,3 +14,16 @@ export function focusVisibleComposer(): void {
     document.querySelector<HTMLElement>(FOCUSED_ZONE_COMPOSER) ?? document.querySelector<HTMLElement>(ANY_COMPOSER);
   input?.focus();
 }
+
+/**
+ * The other direction: Escape from the composer parks focus on the transcript
+ * it belongs to. Scoped through the input's own ancestors, so a split hands
+ * focus to THIS zone's viewport rather than the first one in the document.
+ * False when there is no transcript above it — nothing to hand focus to.
+ */
+export function focusOwningTranscript(from: HTMLElement): boolean {
+  const viewport = from.closest<HTMLElement>('[data-mf-chat-thread]');
+  if (viewport == null) return false;
+  viewport.focus();
+  return true;
+}
