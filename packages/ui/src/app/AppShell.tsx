@@ -37,6 +37,7 @@ import { MainToolbar } from '../layout/MainToolbar';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { setSessionNavigator } from '../lib/session-nav';
 import { useShortcutDispatcher } from '../features/shortcuts/use-shortcut-dispatcher';
+import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
 import { useAppShortcutActions } from './use-app-shortcut-actions';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
@@ -116,6 +117,7 @@ function RuntimeBody({ port }: { port: number }) {
       <SetupAdvisorHost />
       <ConfirmDialogHost />
       <SettingsDialog port={port} />
+      <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
     </SidebarProvider>
   );
