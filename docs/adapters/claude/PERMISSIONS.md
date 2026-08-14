@@ -210,7 +210,11 @@ rather than degrading to a prompt.
 | `plan` | Enforced by prompt, not the permission engine; only engine effect is the step-2a bypass when `isBypassPermissionsModeAvailable` |
 | `bypassPermissions` | Step-2a allow. Still stopped by: deny rules, tool denies, content-specific ask rules (1f), safetyCheck asks (1g) |
 | `dontAsk` | Every ask becomes a deny before the protocol — **no `can_use_tool` is ever emitted** |
-| `auto` | Leak: internal-only (ant `TRANSCRIPT_CLASSIFIER` builds). **2.1.220: present in `EXTERNAL_PERMISSION_MODES`** (binary: `["acceptEdits","auto","bypassPermissions","default","dontAsk","plan"]`), so `--permission-mode auto` and `setMode: auto` validate. Whether the LLM classifier actually runs in the public build is **unverified** — classifier scaffolding (`CLASSIFIER_UNAVAILABLE_REASON` etc.) is present, but its activation gate is not readable from strings |
+| `auto` | Leak: internal-only (ant `TRANSCRIPT_CLASSIFIER` builds). **2.1.220: present in `EXTERNAL_PERMISSION_MODES`** (binary: `["acceptEdits","auto","bypassPermissions","default","dontAsk","plan"]`), so `--permission-mode auto` and `setMode: auto` validate. **Classifier confirmed live on 2.1.224** (headless `-p` probe, 2026-08-14, one turn per mode): a file write was allowed with no prompt (vs. refused under `default`), a network `curl` was allowed with no prompt (vs. refused under `acceptEdits`), and `rm -rf <file>` ran with no prompt. Mainframe requires **CLI ≥ 2.1.220**, the version where `auto` entered `EXTERNAL_PERMISSION_MODES`, and now exposes the mode through the `autoMode` adapter capability |
+
+CLI 2.1.224 renamed the interactive mode to `manual` in `--permission-mode --help` output, but
+`default` still passes argument validation (`claude --permission-mode default -p ""` fails only
+later, on the missing prompt) — Mainframe's existing spawn path is unaffected by the rename.
 
 The bypass killswitch (`bypassPermissionsKillswitch.ts`) can demote a running
 `bypassPermissions` session via a remote gate — a long-lived Mainframe session
