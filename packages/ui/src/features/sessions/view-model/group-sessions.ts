@@ -38,8 +38,13 @@ function dayKey(ts: number): number {
   return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
 }
 
-function byUpdatedDesc(a: SessionItem, b: SessionItem): number {
-  return b.custom.updatedAt - a.custom.updatedAt;
+function compareIds(a: SessionItem, b: SessionItem): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** Newest first; id breaks ties because incoming array order is only "when this client first saw it". */
+function byRecency(a: SessionItem, b: SessionItem): number {
+  return b.custom.updatedAt - a.custom.updatedAt || compareIds(a, b);
 }
 
 function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number): SessionGroupResult[] {
@@ -57,10 +62,10 @@ function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number):
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byUpdatedDesc) });
-  if (today.length > 0) out.push({ label: 'Today', items: today.sort(byUpdatedDesc) });
-  if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byUpdatedDesc) });
-  if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byUpdatedDesc) });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
+  if (today.length > 0) out.push({ label: 'Today', items: today.sort(byRecency) });
+  if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byRecency) });
+  if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byRecency) });
   return out;
 }
 
@@ -91,7 +96,7 @@ function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: 
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byUpdatedDesc) });
+  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
 
   for (const project of projects) {
     const bucket = byProject.get(project.id);
