@@ -126,7 +126,12 @@ describe('useModalProjectScope — the sidebar filter changes while the modal is
 
 describe('useModalProjectScope — the active session project changes while the modal is open', () => {
   it('leaves the resolved projectId unchanged', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    // Filter unset so the seed comes from the session fallback — a re-seeding
+    // bug driven by identity would move the result to 'proj-b' and get caught.
+    // (Wiring the trap to the filter instead, as in case (b), can't discriminate
+    // here: with the filter set, a re-seed would still resolve to the same
+    // filter-backed value and the assertion would pass either way.)
+    fakeSessionProjectId = 'proj-a';
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
     });
