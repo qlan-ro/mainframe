@@ -163,6 +163,13 @@ pub trait AdapterSession: Send + Sync {
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;
+    /// Canonical tool-use/tool-result records for transcript scanning (PR
+    /// detection). Defaults to `load_history`; Codex overrides it because its
+    /// app-server's `thread/read` never returns `commandExecution` items
+    /// (codex-cli 0.147.0), so its loaded history carries no command output.
+    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        self.load_history()
+    }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>>;
     fn extract_skill_files(&self) -> BoxFuture<'_, Result<Vec<SkillFileEntry>, AdapterError>>;
 
