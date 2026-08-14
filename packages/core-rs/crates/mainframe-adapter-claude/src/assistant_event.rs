@@ -8,15 +8,12 @@
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_adapter_api::pr_detection::{
-    is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
-};
 use mainframe_services::todos::normalize::{TodoSource, normalize_todos};
 use mainframe_types::adapter::{MessageMetadata, MessageUsage};
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
 
-use crate::session::{ClaudeSession, ClaudeSessionState, ToolUseRegistryEntry};
+use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::resolve_skill_path;
 
 /// Deserialize loose content blocks into typed `MessageContent`, skipping (with a
@@ -141,34 +138,8 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
         }
 
         let id = block.get("id").and_then(Value::as_str).unwrap_or("");
-        if !id.is_empty() && !name.is_empty() {
-            let command = input
-                .and_then(|i| i.get("command"))
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            st.tool_use_registry.insert(
-                id.to_string(),
-                ToolUseRegistryEntry {
-                    name: name.to_string(),
-                    command,
-                },
-            );
-            if !st.mainframe_chat_id.is_empty() {
-                st.task_events.capture_tool_use(id, name, input);
-            }
-        }
-
-        if (name == "Bash" || name == "BashTool")
-            && let Some(command) = input.and_then(|i| i.get("command")).and_then(Value::as_str)
-        {
-            if is_pr_create_command(command) {
-                st.pending_pr_creates.insert(id.to_string());
-            }
-            if is_pr_mutation_command(command)
-                && let Some(pr) = parse_pr_identifier_from_args(command)
-            {
-                st.pending_pr_mutations.insert(id.to_string(), pr);
-            }
+        if !id.is_empty() && !name.is_empty() && !st.mainframe_chat_id.is_empty() {
+            st.task_events.capture_tool_use(id, name, input);
         }
 
         if name == "Skill" {

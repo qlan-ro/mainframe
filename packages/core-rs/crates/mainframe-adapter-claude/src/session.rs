@@ -20,7 +20,7 @@
 //! updates keep the destination the CLI declared instead of being rewritten,
 //! and a `setMode` update is always forced session-scoped (#283).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
@@ -29,7 +29,6 @@ use nanoid::nanoid;
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc};
 
-use mainframe_adapter_api::pr_detection::DetectedPrCore;
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
     StopBackgroundTaskResult,
@@ -155,12 +154,6 @@ pub struct ActiveTask {
     pub command: Option<String>,
 }
 
-/// tool_use_id → originating tool name (+ Bash command). Gates Path-A PR scan.
-pub struct ToolUseRegistryEntry {
-    pub name: String,
-    pub command: Option<String>,
-}
-
 /// Cross-task read surface (CONCURRENCY.tsv 88): atomics for pid/status/last-activity.
 struct SharedSurface {
     pid: AtomicU32,
@@ -206,9 +199,6 @@ pub struct ClaudeSessionState {
     pub child: Option<ChildHandle>,
     pub active_tasks: HashMap<String, ActiveTask>,
     pub interrupt_timer: Option<tokio::task::JoinHandle<()>>,
-    pub pending_pr_creates: HashSet<String>,
-    pub pending_pr_mutations: HashMap<String, DetectedPrCore>,
-    pub tool_use_registry: HashMap<String, ToolUseRegistryEntry>,
     pub skill_path_cache: HashMap<String, String>,
     pub task_v2_events: Vec<Value>,
     pub task_events: ClaudeTaskEvents,
@@ -374,9 +364,6 @@ impl ClaudeSession {
                 child: None,
                 active_tasks: HashMap::new(),
                 interrupt_timer: None,
-                pending_pr_creates: HashSet::new(),
-                pending_pr_mutations: HashMap::new(),
-                tool_use_registry: HashMap::new(),
                 skill_path_cache: HashMap::new(),
                 task_v2_events: Vec::new(),
                 task_events: ClaudeTaskEvents::new(background_tasks, workflow_store),
