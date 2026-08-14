@@ -24,13 +24,12 @@ describe('SidebarProvider', () => {
     expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'collapsed');
   });
 
-  it('toggles on meta+b', async () => {
+  it('ignores ⌘B — the chord belongs to the shortcut registry, not the primitive', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
     await user.keyboard('{Meta>}b{/Meta}');
-    expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'collapsed');
-    await user.keyboard('{Meta>}b{/Meta}');
+
     expect(screen.getByTestId('panel')).toHaveAttribute('data-state', 'expanded');
   });
 
