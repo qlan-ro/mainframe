@@ -4,7 +4,6 @@ export {
   clampSidebarWidth,
   SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_ICON,
-  SIDEBAR_KEYBOARD_SHORTCUT,
   type SidebarState,
 } from './context';
 export { Sidebar, SidebarTrigger, SidebarRail, SidebarInset } from './sidebar';

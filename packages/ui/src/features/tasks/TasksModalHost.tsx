@@ -2,7 +2,7 @@
  * TasksModalHost — single app-root host for the Tasks full-view modal and
  * the QuickTaskDialog. Driven by useTasksModal (zustand store).
  *
- * Resolves projectId from useActiveIdentity(). Registers ⌘⇧T → openQuick().
+ * Resolves projectId from useActiveIdentity(). Registers the ⌘⇧T shortcut's action.
  * Listens for `mf:open-tasks` custom event (dispatched by SidebarHeader TasksBtn).
  * Loads on mount (so the first open has data) and refetches on the
  * open/quick-add rising edge (so externally-made changes are reflected — the
@@ -13,6 +13,7 @@ import React, { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useTasksModal } from './use-tasks-modal';
 import { useStartTodoSession } from './use-start-todo-session';
 import { useTodosStore } from './use-todos-store';
@@ -49,17 +50,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement | null {
     if (justOpened) void load(port, projectId);
   }, [quickOpen, projectId, port, load]);
 
-  // ⌘⇧T → open quick-add dialog
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        openQuick();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openQuick]);
+  useShortcutAction('app.quick-task', openQuick);
 
   // mf:open-tasks custom event (dispatched by SidebarHeader TasksBtn)
   useEffect(() => {
