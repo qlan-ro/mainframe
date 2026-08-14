@@ -13,6 +13,7 @@ pub mod command;
 pub mod history;
 pub mod live;
 pub mod parse;
+mod sink;
 mod text;
 
 pub use command::{
@@ -24,6 +25,7 @@ pub use live::LivePrScanner;
 pub use parse::{
     extract_pr_from_tool_result, parse_azure_pr_url, parse_gitlab_mr_url, parse_pr_url,
 };
+pub use sink::PrDetectionSink;
 
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource};
 
