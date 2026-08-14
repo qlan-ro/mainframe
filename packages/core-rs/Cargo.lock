@@ -1312,6 +1312,7 @@ dependencies = [
  "dashmap",
  "mainframe-types",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
