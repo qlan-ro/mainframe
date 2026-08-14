@@ -355,10 +355,11 @@ test.describe('§gate pinned slot', () => {
     await closeTauriApp(app);
   });
 
-  // Also covers the incidental parity assertion in "§permission gate details" above
-  // (:81, Details expanded + workspace open): that call already exercises the same
-  // scrollbar-suppression contract this test verifies deliberately. Intended overlap,
-  // not redundant — keep both.
+  // Also covers the incidental parity assertion in "§permission gate details" above —
+  // its second `expectGateMatchesComposerWidth` call, with Details expanded and the
+  // workspace open, already exercises the same scrollbar-suppression contract this
+  // test verifies deliberately. Intended overlap, not redundant — keep both. Named,
+  // not line-numbered (this file's own plan-gate describe explains why).
   test('the gate is mounted in the pinned footer slot, stays visible while the transcript is scrolled away, and keeps composer width parity while the slot itself scrolls', async () => {
     const { page } = app;
     await sendMessage(page, 'Write /tmp/mf-e2e-stacked.txt then run `ls -la /tmp` to confirm it');
