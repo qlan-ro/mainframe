@@ -20,6 +20,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, Weak};
 
+use mainframe_adapter_api::pr_detection::{extract_pr_from_tool_result, is_pr_create_command};
 use mainframe_adapter_api::{
     AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
@@ -29,7 +30,6 @@ use mainframe_adapter_claude::external_session_cache::{
 use mainframe_adapter_claude::external_sessions::ExternalSessionListOpts;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::messages::message_parsing::strip_mainframe_command_tags;
-use mainframe_adapter_claude::pr_detection::{extract_pr_from_tool_result, is_pr_create_command};
 use mainframe_background_tasks::kill::{
     KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
 };

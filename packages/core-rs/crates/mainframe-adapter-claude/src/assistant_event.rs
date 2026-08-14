@@ -8,14 +8,14 @@
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
+use mainframe_adapter_api::pr_detection::{
+    is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
+};
 use mainframe_services::todos::normalize::{TodoSource, normalize_todos};
 use mainframe_types::adapter::{MessageMetadata, MessageUsage};
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
 
-use crate::pr_detection::{
-    is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
-};
 use crate::session::{ClaudeSession, ClaudeSessionState, ToolUseRegistryEntry};
 use crate::skill_path::resolve_skill_path;
 
