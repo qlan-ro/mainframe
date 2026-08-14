@@ -41,17 +41,43 @@ fade against yet, and content below the bottom edge) — the scroll-driven timel
 overflow, not a static both-ends ramp. Screenshot:
 `docs/qa/assets/2026-08-14-todo-333/checkpoint-a-fits-vs-overflow.png`.
 
-**(b) Does `backdrop-filter` survive under a masked ancestor? Yes.**
+**(b) Does `backdrop-filter` survive under a masked ancestor? No — it is significantly attenuated.**
 
 A `scroll-fade-y` scroller containing a `backdrop-filter: blur(16px)` glass child over a
-high-contrast diamond pattern, next to an unmasked control with the same child. Both glass cards
-blur the pattern behind them to the same degree — the masked ancestor does not flatten the
-`backdrop-filter` compositing layer. Screenshot:
-`docs/qa/assets/2026-08-14-todo-333/checkpoint-b-backdrop-filter.png` (full window, uncropped, for
-side-by-side contrast: `docs/qa/assets/2026-08-14-todo-333/full-window.png`).
+high-contrast diamond pattern, next to an unmasked control with the same child. By eye the two looked
+close enough to be a judgment call, so the claim was quantified instead of eyeballed (the `takeSnapshot`
+miss above is exactly why): grayscale standard deviation of the card interior (a band clear of the
+label text and the rounded border, sampled from the committed `full-window.png`, two independent band
+placements to rule out a one-off crop) —
 
-This clears Task 7's conditional: `SessionPanel.tsx`'s `stackChrome` may take `scroll-fade-y`
-directly: no fallback comment is needed.
+| sample                              | mean  | stddev |
+|--------------------------------------|-------|--------|
+| masked card interior (band 1)        | 115.4 | 25.75  |
+| masked card interior (band 2)        | 108.1 | 25.74  |
+| masked card interior (alt band)      | 107.3 | 26.02  |
+| unmasked control interior (band 1)   | 112.1 | 0.38   |
+| unmasked control interior (band 2)   | 112.1 | 3.48   |
+| unmasked control interior (alt band) | 112.1 | 0.35   |
+| sharp diamond background (unblurred) | 28.0  | 0.00 †|
+
+† low stddev here is a flat run of one background tile at the crop origin, not a blur signal — included
+only to show the sampling method also produces near-zero stddev on genuinely flat input, which the
+control matches and the masked card does not.
+
+The control is blurred nearly flat (stddev 0.3–3.5, matching a real 16px Gaussian blur over a 20px-tile
+pattern). The masked card is not: stddev ~26, an order of magnitude higher, with individual diamonds
+still visually distinguishable in `checkpoint-b-backdrop-filter.png`. `mask-image` on the ancestor does
+not kill `backdrop-filter` outright, but it does not let it "survive" either — it is compositing a
+markedly weaker blur, plausibly because the mask forces the ancestor into its own compositing layer
+that the backdrop filter samples through differently. This is the plan's own named risk
+("A masked element plausibly forms a backdrop root, which would flatten the card's `backdrop-blur-xl`
+to nothing") landing as a partial rather than total flatten. Screenshot:
+`docs/qa/assets/2026-08-14-todo-333/checkpoint-b-backdrop-filter.png` (full window, uncropped:
+`docs/qa/assets/2026-08-14-todo-333/full-window.png`).
+
+Task 7's conditional reads "only if Task 1's checkpoint (b) showed `backdrop-filter` surviving a masked
+ancestor" — it did not. `SessionPanel.tsx`'s `stackChrome` should stay unmasked, with the one-line
+comment the task's own fallback branch specifies; the fade belongs on `PanelCard.tsx`'s card body only.
 
 **(c) Does the horizontal rail whose items fit dim them? No.**
 
@@ -71,8 +97,10 @@ did not.
 ## Conclusion
 
 None of the three plan-halting conditions fired: (a) and (c) both show no fade on fitting content,
-so the change's premise (the utility is genuinely scroll-aware, not a static ramp) holds. (b) shows
-`backdrop-filter` surviving a masked ancestor, so Task 7 does not need the outer-stack fallback its
-own conditional describes — `SessionPanel.tsx`'s `stackChrome` can take the fade unconditionally, same
-as `PanelCard.tsx`'s card body. (d) confirms the primary scroll-timeline path is what this engine
-takes today, not the fallback.
+so the change's premise (the utility is genuinely scroll-aware, not a static ramp) holds — the halt
+condition on those checkpoints is not triggered. (b) is not a halt condition either way (the plan
+scopes it to Task 7's own conditional, not a stop), but the answer is the fallback branch, not the
+happy path: `backdrop-filter` is markedly attenuated (quantified above) under a masked ancestor, so
+Task 7 should leave `SessionPanel.tsx`'s `stackChrome` unmasked and fade only `PanelCard.tsx`'s card
+body, per the fallback the task itself describes. (d) confirms the primary scroll-timeline path is
+what this engine takes today, not the static-fallback branch.
