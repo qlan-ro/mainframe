@@ -106,6 +106,8 @@ export function TasksModalHost({ port }: Props): React.ReactElement {
               <TasksBoard
                 port={port}
                 projectId={boardProjectId}
+                projects={projects}
+                onProjectChange={board.setProjectId}
                 onClose={closeModal}
                 onStartSession={(todo) => {
                   closeModal();

@@ -12,7 +12,9 @@
  * data-testid="tasks-board-modal".
  */
 import React, { useState } from 'react';
+import type { Project } from '@qlan-ro/mainframe-types';
 import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
+import { ModalProjectPicker } from '@/features/project-scope/ModalProjectPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,11 +38,21 @@ import type { Todo } from '@/lib/api/todos';
 interface Props {
   port: number;
   projectId: string;
+  projects: Project[];
+  /** Re-scopes this open of the modal; the sidebar filter is never written. */
+  onProjectChange: (projectId: string) => void;
   onStartSession: (todo: Todo) => void;
   onClose: () => void;
 }
 
-export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
+export function TasksBoard({
+  port,
+  projectId,
+  projects,
+  onProjectChange,
+  onStartSession,
+  onClose,
+}: Props): React.ReactElement {
   const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
   const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
@@ -51,6 +63,10 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
     initSync(port, projectId);
     void loadSync();
   }, [port, projectId, load, initSync, loadSync]);
+
+  // An edit modal must not survive a re-scope holding the previous project's
+  // todo (the same reason TasksCard resets on the active project).
+  React.useEffect(() => setEditTodo(undefined), [projectId]);
 
   const allLabels = extractAllLabels(todos);
   const filtered = sortTodos(
@@ -97,6 +113,14 @@ export function TasksBoard({ port, projectId, onStartSession, onClose }: Props):
       <div className="flex h-[52px] shrink-0 items-center gap-4 border-b px-4">
         <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
         <span className="text-base font-semibold text-foreground">Tasks</span>
+        <ModalProjectPicker
+          surface="tasks-board"
+          projectId={projectId}
+          projects={projects}
+          onSelect={(id) => {
+            if (id !== null) onProjectChange(id);
+          }}
+        />
         <Badge variant="secondary" className="font-mono text-xs font-normal text-muted-foreground">
           {activeCount} active · {doneCount} done
         </Badge>

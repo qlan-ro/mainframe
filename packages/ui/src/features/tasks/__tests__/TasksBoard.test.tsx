@@ -8,6 +8,8 @@
  *  3.  Clicking the close button calls the onClose prop.
  *  4.  Renders tasks-view-list / tasks-view-board segmented switch.
  *  5.  Renders tasks-board-new button.
+ *  6.  Header names the scoped project through tasks-board-project-picker, and
+ *      picking another one re-scopes the modal.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -60,6 +62,7 @@ vi.mock('../TaskBoardView', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
+import type { Project } from '@qlan-ro/mainframe-types';
 import { TasksBoard } from '../TasksBoard';
 import type { Todo } from '@/lib/api/todos';
 
@@ -90,9 +93,24 @@ function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): To
 // Render helper
 // ---------------------------------------------------------------------------
 
+const PROJECTS: Project[] = [
+  { id: 'proj-1', name: 'Mainframe', path: '/repos/mainframe' } as Project,
+  { id: 'proj-2', name: 'Sidecar', path: '/repos/sidecar' } as Project,
+];
+
 function renderBoard(onClose = vi.fn()) {
-  render(<TasksBoard port={31415} projectId="proj-1" onStartSession={vi.fn()} onClose={onClose} />);
-  return { onClose };
+  const onProjectChange = vi.fn();
+  render(
+    <TasksBoard
+      port={31415}
+      projectId="proj-1"
+      projects={PROJECTS}
+      onProjectChange={onProjectChange}
+      onStartSession={vi.fn()}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onProjectChange };
 }
 
 beforeEach(() => {
@@ -154,5 +172,21 @@ describe('TasksBoard — loading does not blank the board on refetch (todo #225)
     renderBoard();
     expect(screen.queryByTestId('tasks-board-loading')).toBeNull();
     expect(screen.getByTestId('task-list-view-stub')).toBeTruthy();
+  });
+});
+
+describe('TasksBoard — the header names its project and can change it', () => {
+  it('renders the picker naming the scoped project', () => {
+    renderBoard();
+    expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Mainframe');
+  });
+
+  it('re-scopes the modal when another project is picked', async () => {
+    const { onProjectChange } = renderBoard();
+
+    await userEvent.click(screen.getByTestId('tasks-board-project-picker'));
+    await userEvent.click(await screen.findByTestId('tasks-board-project-proj-2'));
+
+    expect(onProjectChange).toHaveBeenCalledWith('proj-2');
   });
 });
