@@ -27,20 +27,25 @@ let mockTodos: import('@/lib/api/todos').Todo[] = [];
 let mockLoading = false;
 
 vi.mock('../use-todos-store', () => ({
-  useTodosStore: vi.fn(() => ({
-    todos: mockTodos,
-    loading: mockLoading,
-    // The board owns the load effect now (the sidebar section that used to is gone).
-    load: mockLoad,
-    filters: { types: [], priorities: [], labels: [], search: '' },
-    sort: { key: 'priority', dir: 'asc' },
-    view: 'list',
-    move: vi.fn(),
-    remove: vi.fn(),
-    setFilters: mockSetFilters,
-    setSort: mockSetSort,
-    setView: mockSetView,
-  })),
+  useTodosStore: vi.fn((selector?: (s: unknown) => unknown) => {
+    const state = {
+      entries: {},
+      // The board owns the load effect now (the sidebar section that used to is gone).
+      load: mockLoad,
+      filters: { types: [], priorities: [], labels: [], search: '' },
+      sort: { key: 'priority', dir: 'asc' },
+      view: 'list',
+      move: vi.fn(),
+      remove: vi.fn(),
+      setFilters: mockSetFilters,
+      setSort: mockSetSort,
+      setView: mockSetView,
+    };
+    return selector ? selector(state) : state;
+  }),
+  // The board reads its own project's bucket through this; a factory that omits
+  // it resolves the import to undefined and every case here throws on render.
+  selectProjectTodos: () => () => ({ todos: mockTodos, loading: mockLoading, error: null }),
 }));
 
 // Stub the heavy child views — this file exercises TasksBoard's own header only.

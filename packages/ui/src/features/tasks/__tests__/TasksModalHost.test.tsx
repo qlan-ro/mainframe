@@ -90,7 +90,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   act(() => {
     useTasksModal.setState({ open: false, quickOpen: false });
-    useTodosStore.setState({ todos: [], loading: false, error: null, loadedProjectId: null });
+    useTodosStore.setState({ entries: {} });
   });
 });
 

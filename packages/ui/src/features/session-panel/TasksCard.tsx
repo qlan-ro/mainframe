@@ -19,7 +19,7 @@ import { mfToast } from '@/lib/toast';
 import { uploadAttachment, type Todo } from '@/lib/api/todos';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { useTodosStore } from '@/features/tasks/use-todos-store';
+import { useTodosStore, selectProjectTodos } from '@/features/tasks/use-todos-store';
 import { useStartTodoSession } from '@/features/tasks/use-start-todo-session';
 import { extractAllLabels } from '@/features/tasks/todos-filters';
 import { TaskEditModal } from '@/features/tasks/sidebar/TaskEditModal';
@@ -153,7 +153,10 @@ function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
 export function TasksCard({ onClose }: { onClose: () => void }) {
   const { projectId } = useActiveIdentity();
   const port = useDaemonPort();
-  const { load, todos } = useTodosStore();
+  const load = useTodosStore((s) => s.load);
+  // The card follows the active session while the Kanban modal follows its own
+  // scope, so it reads its project's bucket rather than a shared list.
+  const { todos } = useTodosStore(selectProjectTodos(projectId ?? null));
   const startTodoSession = useStartTodoSession(port, projectId);
   const [editTodo, setEditTodo] = useState<Todo | undefined>(undefined);
 

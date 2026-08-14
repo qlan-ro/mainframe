@@ -16,7 +16,7 @@ import { LayoutList, LayoutGrid, Plus, ListChecks, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useTodosStore } from './use-todos-store';
+import { useTodosStore, selectProjectTodos } from './use-todos-store';
 import { matchesFilters, sortTodos, extractAllLabels } from './todos-filters';
 import type { TodoFilters } from './todos-filters';
 import { TasksFilterBar } from './TasksFilterBar';
@@ -41,7 +41,8 @@ interface Props {
 }
 
 export function TasksBoard({ port, projectId, onStartSession, onClose }: Props): React.ReactElement {
-  const { todos, loading, load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
+  const { todos, loading } = useTodosStore(selectProjectTodos(projectId));
+  const { load, filters, sort, view, move, remove, setFilters, setSort, setView } = useTodosStore();
   const { init: initSync, load: loadSync, dialog: syncDialog } = useGitHubSyncStore();
   const [editTodo, setEditTodo] = useState<Todo | null | undefined>(undefined);
 
