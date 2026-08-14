@@ -102,6 +102,15 @@ of re-deriving them.
     context menu can never disagree about what is splittable.
 19. **`docs/plans/` is gitignored.** Receipt: `git check-ignore -v docs/plans/x.md` →
     `.gitignore:53:docs/plans/`. Committing a plan needs `git add -f`.
+20. **Both resting focus targets in this app are text fields.** The composer renders
+    `ComposerPrimitive.Input` as an **autoFocus'd `<textarea>`** — receipt:
+    `packages/ui/src/features/chat/composer/Composer.tsx:90-99` (`ComposerPrimitive.Input` with
+    `autoFocus`, `rows={1}`, `data-mf-composer-input`). The terminal focuses a hidden textarea —
+    receipt: `node_modules/@xterm/xterm/lib/xterm.js:1` (minified),
+    `document.createElement("textarea");this.textarea.classList.add("xterm-helper-textarea")`. So the
+    text-field eligibility rule is not an edge case: it governs the app's default state and the
+    terminal, and any rule that suppresses ⌃Tab / ⌃1 in a textarea ships those shortcuts dead. See
+    Decision D7.
 
 ## Decisions taken in-lane
 
@@ -137,6 +146,18 @@ of re-deriving them.
   the same `Dialog`/`DialogHeader`/`DialogTitle` shell and the same `kbd` chip recipe. Load the
   `mainframe-design-system` skill before writing the markup and mirror that component rather than
   inventing a treatment.
+- **D7 — the text-field rule keys on "carries any non-Shift modifier", evaluated on the RESOLVED
+  chord.** The spec's rule is "a shortcut with no ⌘/Ctrl modifier does not fire while a text field,
+  textarea or contenteditable has focus. No shortcut ships in that shape today." On macOS ⌃ *is*
+  Ctrl, so ⌃Tab, ⌃⇧Tab and ⌃1…⌃9 all carry a modifier and must fire from a text field — which fact 20
+  makes mandatory, since the composer textarea holds focus in the app's resting state and the terminal
+  focuses a hidden textarea. A predicate keyed on the descriptor's `mod` flag alone would kill all
+  three new session-tab shortcuts everywhere they matter and contradict the spec's "⌃Tab and ⌃⇧Tab …
+  work from anywhere". The predicate is therefore `meta || ctrl || alt` on the **resolved** chord
+  (after platform resolution), never on the descriptor's fields: that one expression covers the
+  mac-`ctrl`/other-`alt` variants of `sessions.tab-by-index` with no per-platform branch. Shift alone
+  does not count — a bare shifted letter is a typed character. AC 3's cases (`n`/`f`/`o`/`l`/`1`/`2`/
+  `b`/`\`) carry no modifier at all, so they stay suppressed.
 
 ## Module map
 
@@ -148,8 +169,8 @@ New directory `packages/ui/src/features/shortcuts/`:
 | `platform.ts` | `isMacPlatform()` — the one `navigator` read, injectable in tests |
 | `chord.ts` | `resolveChord(chord, isMac)`, `chordList(entry)`, `matchesChord(event, resolved)`, `chordKey(resolved)` |
 | `render-chord.ts` | `renderChord(chord, isMac)`, `renderEntryChord(entry, isMac)` (range form) |
-| `eligibility.ts` | `isEligibleTarget(target, entry)` — editor yield + modifier-less text-field rule |
-| `registry.ts` | `SHORTCUTS`, `shortcutById(id)`, `visibleShortcuts(entries, { dev })` |
+| `eligibility.ts` | `isEligibleTarget(target, entry, resolved)` — editor yield + the D7 text-field rule, read off the resolved chord |
+| `registry.ts` | `SHORTCUTS` (`as const satisfies`), `ShortcutId`, `shortcutById(id)`, `visibleShortcuts(entries, { dev })` |
 | `conflicts.ts` | `findChordConflicts(entries, isMac): string[][]` |
 | `action-store.ts` | id → handler map + `useShortcutAction(id, fn)` |
 | `use-shortcut-dispatcher.ts` | the single mounted window keydown listener |
@@ -183,6 +204,7 @@ export type PlatformChord = Chord | { mac: Chord; other: Chord };
 export type ShortcutGroup = 'Sessions' | 'Chat' | 'Workspace' | 'App';
 
 export interface ShortcutDescriptor {
+  /** Stays `string` so a test can pass a fixture entry the app does not ship (AC 15). */
   id: string;
   chord: PlatformChord | readonly PlatformChord[];
   label: string;
@@ -195,16 +217,27 @@ export interface ShortcutDescriptor {
 
 /** `chordIndex` is the position of the matched chord in a multi-chord entry (D3). */
 export type ShortcutAction = (chordIndex: number) => void;
+
+/** Derived from the const registry, NOT declared by hand — see Task 9. */
+export type ShortcutId = (typeof SHORTCUTS)[number]['id'];
+
+/** The id is compile-checked: a typo or a renamed entry is a type error, not a dead chord. */
+export function useShortcutAction(id: ShortcutId, fn: ShortcutAction): void;
 ```
 
 Resolution rule: on macOS `mod → metaKey`, off macOS `mod → ctrlKey`; `ctrl → ctrlKey` on both. A
 resolved chord is `{ code, meta, ctrl, alt, shift }` and matching is **exact on all four flags**, so a
-chord without `shift` never fires while Shift is held.
+chord without `shift` never fires while Shift is held. Eligibility reads the same resolved chord:
+`meta || ctrl || alt` is the "carries a modifier" predicate of D7.
 
 ## Tasks
 
 TDD ordering: every pure module gets its red test file first (Group A), then the implementation
-(Group B). Component/integration tests that verify already-written code come last (Group E).
+(Group B). Component/integration tests that verify already-written code come next (Group E), and the
+one whole-package gate runs alone at the end (Group F). No task in Groups A, B or E verifies with a
+package-wide `typecheck` or `test` run: `packages/ui/tsconfig.json` has `"include": ["src"]`, so those
+runs also compile the sibling test files still in flight and fail for reasons the task cannot fix.
+Group C and D tasks do typecheck, which is safe only because Groups A and B are green by then.
 
 ### Group A — red-phase pure tests (`shortcut-core-tests`)
 
@@ -231,11 +264,17 @@ Verify: the file fails on unresolved import.
 **Task 3 — eligibility tests.**
 File: `packages/ui/src/features/shortcuts/__tests__/eligibility.test.ts` with a
 `// @vitest-environment jsdom` pragma (it builds real elements).
+Signature under test: `isEligibleTarget(target, entry, resolved)`, where `resolved` is the
+`{ code, meta, ctrl, alt, shift }` the dispatcher already holds (D7).
 Cover: an `editorYielding` entry is ineligible when the target is inside `.cm-editor` and eligible
-otherwise (AC 5); a non-yielding entry is eligible from inside `.cm-editor` (⌘N — AC 5); every entry
-is eligible from inside the terminal container (AC 6); a chord **without** `mod` is ineligible when
-the target is an `<input>`, `<textarea>` or `[contenteditable]`, and a chord **with** `mod` is
-eligible there (AC 3/AC 4); a non-Element target (e.g. `window`) is eligible.
+otherwise (AC 5); a non-yielding entry is eligible from inside `.cm-editor` (⌘N — AC 5); the text-field
+rule of D7 — with the target an `<input>`, `<textarea>` or `[contenteditable]`, a resolved chord with
+**no** `meta`/`ctrl`/`alt` is ineligible (bare `n`, and `shift`-only, which is a typed character —
+AC 3), while a chord with `meta` (⌘N), with `ctrl` (⌃Tab, ⌃1, ⌃⇧Tab) or with `alt` (Alt+1, the
+non-macOS `sessions.tab-by-index` variant) is eligible (AC 4, and the three new session-tab entries of
+fact 20); the same modifier-carrying chords are eligible when the target is a `<textarea>` **inside**
+the terminal container — the real xterm DOM per fact 20, which is how AC 6 is actually exercised; a
+non-Element target (e.g. `window`) is eligible.
 Verify: the file fails on unresolved import.
 
 **Task 4 — registry conflict + visibility tests.**
@@ -244,7 +283,9 @@ Cover (AC 9, AC 16): `findChordConflicts(SHORTCUTS, true)` and `findChordConflic
 both return `[]`; a fixture set with a deliberate duplicate returns that pair (so the guard itself is
 proven, not just the current set); `visibleShortcuts(SHORTCUTS, { dev: false })` excludes the
 `dev: true` entry and `{ dev: true }` includes it; ids are unique; every group value is one of the
-four; every declared entry has a non-empty label.
+four; every declared entry has a non-empty label. Add the compile-time guard too: a
+`// @ts-expect-error unknown shortcut id` line above `shortcutById('app.nope')` — it fails typecheck
+if `ShortcutId` ever collapses back to `string`, which is the failure mode Task 9 exists to prevent.
 Verify: the file fails on unresolved import.
 
 **Task 5 — tab-order and split-partner tests.**
@@ -273,8 +314,13 @@ File: `packages/ui/src/features/shortcuts/render-chord.ts`.
 Verify: Task 2's file passes.
 
 **Task 8 — eligibility.**
-File: `packages/ui/src/features/shortcuts/eligibility.ts`. Generalize the `.cm-editor` `closest()`
-check that `should-open-find.ts` performs today into the eligibility rule. This task ADDS the new
+File: `packages/ui/src/features/shortcuts/eligibility.ts`. Export
+`isEligibleTarget(target: EventTarget | null, entry: ShortcutDescriptor, resolved: ResolvedChord)`.
+Two rules: (a) `entry.editorYielding` and `target.closest('.cm-editor')` non-null → ineligible —
+generalize the `closest()` check `should-open-find.ts` performs today; (b) target is an `<input>`,
+`<textarea>` or `[contenteditable]` **and** the resolved chord has none of `meta`/`ctrl`/`alt` →
+ineligible (D7). The modifier flags come from the resolved chord the dispatcher passes in, never from
+`entry.chord` — reading the descriptor's `mod` flag is the bug D7 exists to prevent. This task ADDS the new
 module only; `should-open-find.ts` dies in Task 15 alongside its one importer, `use-find-hotkey.ts`,
 so this group touches no file the migration group also touches.
 Verify: Task 3's file passes.
@@ -306,7 +352,14 @@ Declare exactly the spec's set, ids namespaced by group:
 
 Carry the ⌘1/⌘2-vs-⌃1..⌃9 rationale as a one-line `why` comment on `sessions.tab-by-index` so the
 next person does not re-litigate it (the todo brief asks for this explicitly).
-Verify: Task 4's file passes.
+
+Declare the array as `export const SHORTCUTS = [ … ] as const satisfies readonly
+ShortcutDescriptor[];` and derive `export type ShortcutId = (typeof SHORTCUTS)[number]['id'];`. **A
+bare `: ShortcutDescriptor[]` annotation collapses the union to `string`** and silently disarms every
+id check downstream — `satisfies` keeps the literal types while still failing the build on a malformed
+entry. `shortcutById` takes `ShortcutId`; `visibleShortcuts` keeps taking `readonly
+ShortcutDescriptor[]` so the AC 15 fixture seam still accepts entries the app does not ship.
+Verify: Task 4's file passes, including its `@ts-expect-error` line.
 
 **Task 10 — tab-order and split-partner helpers.**
 File: `packages/ui/src/features/session-tabs/tabs-model.ts` (additions).
@@ -317,13 +370,22 @@ Verify: Task 5's file passes; `tabs-model.ts` stays under 300 lines (it is 202 t
 `tabs-keyboard-model.ts` sibling if the additions push it past the cap).
 
 **Task 11 — cheat-sheet store.**
-File: `packages/ui/src/features/shortcuts/cheat-sheet-store.ts`.
-`open`, `setOpen`, and `toggleCheatSheet()` implementing the spec's three-way rule: open → close;
+Files: `packages/ui/src/features/shortcuts/__tests__/cheat-sheet-store.test.ts` (new, carrying a
+`// @vitest-environment jsdom` pragma — it reads `document`), then
+`packages/ui/src/features/shortcuts/cheat-sheet-store.ts`.
+Write the test red first, covering the three-way rule directly: open → close; closed with a
+`[data-slot="dialog-content"]` element in the document → stays closed; closed with nothing open →
+opens.
+The store exports `open`, `setOpen`, and `toggleCheatSheet()` implementing that rule — open → close;
 closed and `document.querySelector('[data-slot="dialog-content"], [data-slot="alert-dialog-content"]')`
 non-null → do nothing (facts 8/9); otherwise open. It lives in the core group, not with the dialog,
 so Task 12 can register the ⌘/ action without waiting on Group D — the dialog reads this store, never
 the other way round.
-Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
+Verify: `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
+src/features/shortcuts/__tests__/cheat-sheet-store.test.ts`. **Not** the package-wide typecheck: this
+task's siblings in Group B are in flight, and `packages/ui/tsconfig.json` has `"include": ["src"]`, so
+a whole-package typecheck also compiles Group A's still-red test files and fails on their unresolved
+imports through no fault of this task. The package-wide typecheck and test gates run once, in Task 24.
 
 ### Group C — dispatcher and migration (`dispatcher-and-migration`)
 
@@ -333,24 +395,42 @@ Files: `packages/ui/src/features/shortcuts/action-store.ts`,
 The dispatcher: one `window` keydown listener; for each visible entry (dev-filtered at this one
 mount site), for each of its chords, resolve for the live platform and match; on a match check
 `isEligibleTarget`, look up the handler, and if present `preventDefault()` and call it with the chord
-index. No handler → no `preventDefault`, no dispatch. `useShortcutAction(id, fn)` registers on mount
-and removes on unmount, holding the callback in a ref so re-renders do not re-register.
+index. No handler → no `preventDefault`, no dispatch. The dispatcher passes the **resolved** chord to
+`isEligibleTarget` (D7) — it is the only site that holds both the event target and the resolved flags.
+`useShortcutAction(id: ShortcutId, fn)` registers on mount and removes on unmount, holding the
+callback in a ref so re-renders do not re-register; the store's map is keyed by `ShortcutId`, so a
+mistyped or renamed id is a compile error rather than a permanently inert chord.
 Verify: `pnpm --filter @qlan-ro/mainframe-ui typecheck`.
 
 **Task 13 — mount the dispatcher and register the app-root actions.**
 Files: `packages/ui/src/features/shortcuts/use-app-shortcut-actions.ts` (new),
-`packages/ui/src/app/AppShell.tsx`.
-`RuntimeBody` calls `useShortcutDispatcher()` and `useAppShortcutActions(...)`. Registered here:
-`sessions.new` → the existing `useNewChatHotkeyHandler(aui)` callback; `app.search-palette` /
-`app.review` / `app.settings` → the same `emitSurfaceIntent` calls the deleted hooks made;
+`packages/ui/src/app/AppShell.tsx`, `packages/ui/src/app/__tests__/AppShell.hotkeys.test.tsx`
+(rewritten in place).
+`RuntimeBody` calls `useShortcutDispatcher()` and `useAppShortcutActions(...)`. Registered here, each
+action being **exactly** what the listener it replaces did:
+`sessions.new` → the existing `useNewChatHotkeyHandler(aui)` callback;
+`app.search-palette` → `emitSurfaceIntent({ type: 'open-search-palette' })`;
+`app.review` → `emitSurfaceIntent({ type: 'open-review' })`;
+`app.settings` → `useSettingsStore.getState().open()` — **not** an intent; receipt: the ⌘,
+`useEffect` at `AppShell.tsx:83-93`;
 `sessions.toggle-sidebar` → `emitSurfaceIntent({ type: 'toggle-sidebar' })` (fact 13);
 `app.cheat-sheet` → `toggleCheatSheet()` from Task 11.
 Delete from `AppShell.tsx`: the ⌘, `useEffect` (`:84-93`), the `useNewChatHotkey` import and call,
 the `useGlobalOverlayHotkeys` import and call. Delete the files
 `packages/ui/src/app/use-global-overlay-hotkeys.ts` and
-`packages/ui/src/features/sessions/use-new-chat-hotkey.ts` plus their tests.
-Verify: typecheck; `grep -rn "use-new-chat-hotkey\b\|use-global-overlay-hotkeys" packages/ui/src`
-returns nothing (the `use-new-chat-hotkey-handler` module stays — different file).
+`packages/ui/src/features/sessions/use-new-chat-hotkey.ts`, and the
+`use-new-chat-hotkey.test.tsx` file if one exists.
+
+**Do not delete `AppShell.hotkeys.test.tsx` — rewrite it.** It is today the only test asserting that
+⌘O emits `{ type: 'open-search-palette' }` and ⌘⇧R emits `{ type: 'open-review' }`, and the todo's AC
+demands the action, not just the id, stay covered. Point it at the new registration site: mount
+`useShortcutDispatcher()` + `useAppShortcutActions(...)` in a harness with `@/store/surface-intents`
+mocked as it already is, and keep the ⌘O, Ctrl+O and ⌘⇧R assertions verbatim, plus one each for ⌘,
+→ `useSettingsStore` opens and ⌘B → `{ type: 'toggle-sidebar' }`.
+Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
+src/app/__tests__/AppShell.hotkeys.test.tsx`; `grep -rn
+"use-new-chat-hotkey\b\|use-global-overlay-hotkeys" packages/ui/src` returns nothing (the
+`use-new-chat-hotkey-handler` module stays — different file).
 
 **Task 14 — migrate the four host listeners.**
 Files: `packages/ui/src/layout/SurfaceHost.tsx`,
@@ -373,7 +453,9 @@ packages/ui/src/components/ui/sidebar` returns nothing.
 **Task 15 — migrate the chat-scoped listeners and add the chat actions.**
 Files: `packages/ui/src/features/chat/thread/ChatThread.tsx`,
 `packages/ui/src/features/chat/zones/use-zone-shortcut-actions.ts` (new, replacing
-`use-zone-hotkeys.ts`), `packages/ui/src/features/sessions/new-thread/ChatSurface.tsx`.
+`use-zone-hotkeys.ts`), `packages/ui/src/features/chat/zones/__tests__/use-zone-shortcut-actions.test.tsx`
+(new, replacing `use-zone-hotkeys.test.tsx`),
+`packages/ui/src/features/sessions/new-thread/ChatSurface.tsx`.
 - `ChatThread`: replace `useFindHotkey()` with `useShortcutAction('chat.find', () =>
   useFindInChatStore.getState().open())`; delete `use-find-hotkey.ts` and its test, and — now that its
   only importer is gone — `packages/ui/src/features/chat/find/should-open-find.ts` and its test too
@@ -387,8 +469,20 @@ Files: `packages/ui/src/features/chat/thread/ChatThread.tsx`,
 - `ChatSurface`: swap `useZoneHotkeys(aui)` for the new hook; register `chat.focus-composer` →
   focus `document.querySelector('[data-focused="true"] [data-mf-composer-input]') ??
   document.querySelector('[data-mf-composer-input]')` (facts 10/11), a no-op when neither exists.
-Verify: typecheck; `grep -rn "use-find-hotkey\|use-zone-hotkeys\|should-open-find" packages/ui/src`
-returns nothing.
+- `use-zone-shortcut-actions.test.tsx`: the deleted `use-zone-hotkeys.test.tsx` is the only test
+  asserting ⌘\ *acts* — port its cases onto the new hook rather than losing them: ⌘\ with the left
+  zone focused closes the split and calls `switchToThread('chat-b')`, with the right zone focused
+  lands on `chat-a`, takes the keystroke away from the browser, answers Ctrl+\ the same way, and stays
+  inert with no split open and on a parked pair. Add one ⌘⇧\ case: with a splittable partner
+  available the zones state matches `openInSplit(active, partner)`, and it is inert when
+  `nextSplitPartner` returns null.
+- Port the find assertion too, since `use-find-hotkey.test.tsx` dies here and AC 2 covers ⌘F: assert
+  in the same file (or in Task 22's file if the harness is cheaper there) that a ⌘F keydown with
+  `ChatThread`'s registration mounted leaves `useFindInChatStore.getState().isOpen` true. The
+  editor-yield half of `should-open-find.test.ts` is already re-covered by Task 3.
+Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run
+src/features/chat/zones/__tests__/use-zone-shortcut-actions.test.tsx`; `grep -rn
+"use-find-hotkey\|use-zone-hotkeys\|should-open-find" packages/ui/src` returns nothing.
 
 **Task 16 — session-tab keyboard actions.**
 File: `packages/ui/src/features/session-tabs/SessionTabs.tsx`.
@@ -443,14 +537,19 @@ function, node env): `getPaletteCommands()` contains a `keyboard-shortcuts` comm
 "Keyboard Shortcuts", and the `sidebar` command's hint renders as `⌘B` on macOS, not `⌘\`.
 Verify: typecheck; `pnpm --filter @qlan-ro/mainframe-ui exec vitest run src/features/palette/__tests__`.
 
-### Group E — behavioral tests and release hygiene (`integration-tests`)
+### Group E — behavioral tests (`integration-tests`)
 
-These verify code Groups B–D produce, so they run after them.
+These verify code Groups B–D produce, so they run after them. Each task owns one new file and its
+verify is scoped to that file: the package-wide typecheck and test gates cannot pass while sibling
+test files are still being written, so they live alone in Group F.
 
 **Task 20 — parity and guard-rail dispatcher tests.**
 File: `packages/ui/src/features/shortcuts/__tests__/use-shortcut-dispatcher.test.tsx` (jsdom).
 Mount a harness that installs the dispatcher plus spy handlers for every id, then dispatch synthetic
-`KeyboardEvent`s on `window` and on specific targets (fact 6 guarantees `code` survives).
+`KeyboardEvent`s on `window` and on specific targets (fact 6 guarantees `code` survives). Coverage
+split, so nothing is left unproven: this file proves chord → id → `preventDefault`; the ported tests
+in Tasks 13 and 15 prove id → the real action, and `ShortcutId` (Task 9) proves the id spelling. All
+three are needed for the todo's AC "covered by tests that assert the action fires for the chord".
 Cover AC 2 (each of ⌘N, ⌘O, ⌘⇧R, ⌘F, ⌘,, ⌘1, ⌘2, ⌘B, ⌘⇧T, ⌘⇧A-in-dev, ⌘\ fires its handler exactly
 once and calls `preventDefault`), AC 3 (bare `n`/`f`/`o`/`l`/`1`/`2`/`b`/`\` from a focused textarea
 fire nothing and do not `preventDefault`), AC 4 (⌘N/⌘O/⌘,/⌘B/⌘1/⌘2/⌘L fire from a focused textarea),
@@ -458,6 +557,11 @@ AC 5 (⌘F and ⌘/ from inside a `.cm-editor` fire nothing; ⌘N does), AC 6 (�
 terminal container fire), AC 7 (⌘⇧N/⌘⇧O/⌘⇧F/⌘⇧, fire nothing), AC 8 (`code: 'Backslash'` with
 `key: '|'` + Shift fires open-in-split; `code: 'KeyT'` with `key: 'T'` fires quick-task), and that an
 id with no registered handler is inert and leaves the default intact.
+Add the D7 regression assertions explicitly, because they are the app's resting state (fact 20): from
+a **focused `<textarea>`**, ⌃Tab fires `sessions.tab-next`, ⌃⇧Tab fires `sessions.tab-prev`, and ⌃1
+fires `sessions.tab-by-index` with `chordIndex` 0 — each calling `preventDefault`. Repeat ⌃Tab and ⌃1
+from a `<textarea>` inside the terminal container. Keyed on the descriptor's `mod` flag these three
+would fire nowhere in the shipped app; this is the assertion that catches that.
 Verify: file green.
 
 **Task 21 — session-tab and split shortcut tests.**
@@ -488,6 +592,11 @@ ship shows that entry with no per-shortcut props (AC 15); a `dev: true` fixture 
 `data-testid` keyed by shortcut id (AC 19); grouped headings appear in Sessions/Chat/Workspace/App
 order.
 Verify: file green.
+
+### Group F — release gate (`release-gate`)
+
+One task, and it runs strictly last: it is the only whole-package gate in the plan, and it depends on
+every preceding group.
 
 **Task 24 — changeset and full-suite gate.**
 Files: `.changeset/<name>.md` (new).
