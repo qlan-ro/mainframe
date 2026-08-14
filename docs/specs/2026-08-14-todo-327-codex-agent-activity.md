@@ -23,9 +23,11 @@ and counting cards, and there is no answer at all to "how long has this one been
 
 **A row per live sub-agent.** When a Codex session delegates to a sub-agent, one row
 appears in that session's Activity panel, of kind agent — the same row shape, glyph and
-"Agent" label a Claude subagent produces. The row appears as soon as Codex names the child
-thread, whether that first arrives as the spawn delegation call, the sub-agent-started
-report, or a wait naming the child.
+"Agent" label a Claude subagent produces. The row appears at the moment the sub-agent's
+transcript card does: the sub-agent-started report, or a wait naming the child, whichever
+comes first. The spawn delegation call alone opens no row, so the panel never lists a
+sub-agent the transcript has not shown yet. The row's elapsed time runs from when the row
+appeared, not from the spawn call.
 
 **One live row per sub-agent.** However many delegation calls reference the same child
 while it works — send-input, resume, wait — the panel keeps one row for it, and its
@@ -35,6 +37,12 @@ doubles.
 **Row title.** The row reads with the same name the sub-agent's transcript card carries:
 its nickname, else its role, else its spawn path humanized, else the literal "Sub-agent".
 The title is never blank and is never a raw thread id.
+
+**A name that is not yet known stays "Sub-agent".** Codex publishes a sub-agent's nickname
+and role on its own schedule. If neither is known when the row opens, the row reads
+"Sub-agent" — and so does the card, which is named from the same lookup at the same moment.
+The title is settled when the row appears and never changes afterwards: a nickname Codex
+records later renames neither the row nor the card, so the two views cannot drift apart.
 
 **Elapsed.** The row's elapsed column ticks while the sub-agent runs, on the same clock as
 every other activity row.
@@ -46,7 +54,8 @@ result text.
 
 **Re-engaging a finished sub-agent.** If the parent sends new input to, or resumes, a
 sub-agent whose row has already ended, a fresh row appears for the new round, timed from
-that moment. Idle time between rounds is not counted as running time.
+that moment and carrying the name the sub-agent already had. Idle time between rounds is not
+counted as running time.
 
 **Nothing stays stuck.** When the parent's turn ends with sub-agents still tracked, their
 rows end. When the session process exits, every live row for that chat ends. After either,
@@ -87,6 +96,10 @@ MCP calls are foreground turn work and produce no rows.
 - An unrecognised sub-agent activity kind, or an unrecognised delegation tool name, opens
   no row and ends none — it must not leak a permanently running entry.
 - An interaction report for a child that was never registered opens no row.
+- A sub-agent that is spawned but never starts and is never waited on gets no row, matching
+  the transcript, which shows no card for it either.
+- A sub-agent whose nickname and role are still unknown when its row opens reads "Sub-agent"
+  in the panel and in the transcript, and keeps that name for the rest of the round.
 - A sub-agent whose child thread never reports completion is ended by the turn-end sweep,
   not left running.
 - A session that exits mid-delegation leaves no running rows for its chat.
@@ -95,46 +108,58 @@ MCP calls are foreground turn work and produce no rows.
 
 ## Acceptance criteria
 
-1. Given a Codex session that spawns one sub-agent, the chat's background activity contains
-   exactly one running entry of kind `agent`, whose description is the sub-agent's nickname,
-   role, humanized spawn path, or "Sub-agent", in that order of preference.
-2. Given a live sub-agent, further send-input, resume and wait calls naming the same child
+1. Given a Codex session whose sub-agent has started (or is named by a wait), the chat's
+   background activity contains exactly one running entry of kind `agent`, and its
+   `description` is character-for-character the title of that child's transcript card
+   (that title being nickname, else role, else humanized spawn path, else "Sub-agent").
+   The equality holds for every case below, including when the card reads "Sub-agent".
+2. A spawn delegation call for a child that has neither started nor been named by a wait adds
+   no entry: the chat's live set stays empty.
+3. A child whose nickname and role become known only after its entry opened keeps the
+   `description` it opened with, and so does its card.
+4. Given a live sub-agent, further send-input, resume and wait calls naming the same child
    add no entries and leave its `startedAt` unchanged.
-3. Each of completion, failure, interruption, and an explicit close by the parent removes
+5. Each of completion, failure, interruption, and an explicit close by the parent removes
    the entry: after any one of them the chat's live set contains no entry for that child.
-4. After a sub-agent's entry has ended, a send-input or resume against that same child adds
-   one new running entry whose `startedAt` is later than the ended entry's.
-5. In a Codex session with N live sub-agents, the Activity panel renders N rows carrying the
+6. After a sub-agent's entry has ended, a send-input or resume against that same child adds
+   one new running entry whose `startedAt` is later than the ended entry's and whose
+   `description` is unchanged from it.
+7. In a Codex session with N live sub-agents, the Activity panel renders N rows carrying the
    agent glyph (`session-panel-kind-agent`) with the detail line "Agent", and the rail's
    Activity button shows its live dot with the label "N tasks running".
-6. When the parent's turn completes with sub-agents still tracked, and when the session
+8. When the parent's turn completes with sub-agents still tracked, and when the session
    process exits with sub-agents still tracked, the chat's live set is empty afterwards and
    the panel shows "Nothing running".
-7. Adapter-level Rust tests cover the entry lifecycle driven from the collab vocabulary:
-   open on spawn call, open on started report, open on a wait naming an unknown child,
-   dedupe across all three, end on each of
+9. Adapter-level Rust tests cover the entry lifecycle driven from the collab vocabulary:
+   open on started report, open on a wait naming an unknown child, dedupe across both, a
+   spawn call opening no entry (it only stashes the prompt), title equality with the card
+   including the unresolved-identity case, end on each of
    completed / failed / interrupted / close, the turn-end sweep, and an unknown activity
    kind and unknown tool name opening no entry and leaking none.
-8. The e2e mock harness can drive an `agent` activity row from open to end, and the row is
-   asserted in the Activity panel.
-9. Existing Claude background-activity tests pass unchanged, and the renderer contains no
-   adapter-specific branch for activity rows (no reference to an adapter id in the Activity
-   panel or rail source).
-10. Every emitted activity entry validates against the existing background-activity schema
+10. The e2e mock harness can drive an `agent` activity row from open to end, and the row is
+    asserted in the Activity panel.
+11. Existing Claude background-activity tests pass unchanged, and the renderer contains no
+    adapter-specific branch for activity rows (no reference to an adapter id in the Activity
+    panel or rail source).
+12. Every emitted activity entry validates against the existing background-activity schema
     (`BackgroundActivityTaskSchema` / `BackgroundActivitySchema`), and the Rust daemon and
     the TypeScript types stay in parity — no shape change to `BackgroundTask`,
     `BackgroundActivityTask` or the started/updated/ended envelope.
-11. `docs/adapters/codex/CONSUMED-SURFACE.md` gains rows covering the sub-agent activity
+13. `docs/adapters/codex/CONSUMED-SURFACE.md` gains rows covering the sub-agent activity
     reports and delegation tool calls this feature depends on, each naming the consuming
     source and its test, so a CLI vocabulary change is caught.
 
 ## Decisions
 
-1. **A row opens on whichever route first names the child — the spawn delegation call, the
-   sub-agent-started report, or a wait — deduped by child thread id.** Every route already
-   names the child, and the
-   card engine's open path already no-ops on a child it knows — the row inherits that rule
-   rather than inventing a second one. `reversible`
+1. **A row opens exactly where the child's transcript card opens — the sub-agent-started
+   report or a wait naming the child, deduped by child thread id — and not on the spawn
+   call, so the row's clock starts at open rather than at spawn.** This overrides the brief,
+   which recommended opening on spawn too and timestamping there: spawn opens no card
+   (`collab_card.rs` routes `SpawnAgent` to stashing the prompt) and its item carries no
+   `agentPath`, so a spawn-opened row could read "Sub-agent" while the card for the same
+   child reads "Maxwell" — the exact divergence decision 4 exists to prevent. The cost is
+   that a spawned-but-never-started child gets no row, which is also what the transcript
+   shows. `reversible`
 2. **A row ends on completion, failure, interruption, or explicit close, with a turn-end
    sweep as backstop.** Mirrors the four card-resolution routes plus the existing
    parent-turn-end backstop, so a row can never outlive its card. `reversible`
@@ -163,3 +188,9 @@ MCP calls are foreground turn work and produce no rows.
 10. **The client-facing shapes stay as they are.** The activity payload carries id, kind,
     description and start time only, so an agent entry needs nothing the model lacks; changing
     the shape would touch every consumer for no user-visible gain. `reversible`
+11. **A row's title is settled when the row opens and never changes, so an identity Codex
+    has not published yet shows as "Sub-agent" for that whole round.** The card fixes its
+    title at open too, and Codex writes a child's nickname and role on its own schedule; a
+    row that renamed itself later would disagree with the card that did not. Renaming stays
+    available — the activity model already broadcasts updates — if the card ever learns to
+    re-title, and until then a stale "Sub-agent" is the accepted cost. `reversible`
