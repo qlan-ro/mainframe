@@ -285,3 +285,43 @@ fn azure_pr_json_payload_result_yields_the_right_owner_repo_number() {
         }]
     );
 }
+
+// --- Task 7: Codex-shaped parity ----------------------------------------
+
+/// Built the way `thread_item_render.rs::render_command_execution` builds it:
+/// one `Bash` tool_use carrying the raw shell command, then one tool_result
+/// carrying the aggregated output. Same shape the live Codex stream emits.
+#[test]
+fn codex_shaped_input_produces_the_same_pr_as_claude_shaped_input_for_the_same_url() {
+    let claude_prs = drive(
+        bash_tool_use("tu1", "gh pr create --title x"),
+        tool_result(
+            "tu1",
+            "Created https://github.com/qlan-ro/mainframe/pull/614",
+            false,
+        ),
+    );
+    let codex_prs = drive(
+        bash_tool_use(
+            "call_1",
+            "/bin/zsh -lc 'gh pr create --base main --head fix/x --title x --body y'",
+        ),
+        tool_result(
+            "call_1",
+            "Script completed\nOutput:\nhttps://github.com/qlan-ro/mainframe/pull/614\n",
+            false,
+        ),
+    );
+
+    assert_eq!(claude_prs, codex_prs);
+    assert_eq!(
+        codex_prs,
+        vec![DetectedPr {
+            url: "https://github.com/qlan-ro/mainframe/pull/614".to_string(),
+            owner: "qlan-ro".to_string(),
+            repo: "mainframe".to_string(),
+            number: 614,
+            source: DetectedPrSource::Created,
+        }]
+    );
+}
