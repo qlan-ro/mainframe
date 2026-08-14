@@ -146,6 +146,14 @@ Create, copying the bodies verbatim from
 - `.../pr_detection/command.rs` — `is_pr_create_command`, `is_pr_mutation_command`, `pr_relevant_bash`,
   `ToolUseMeta`, `should_scan_tool_result_for_pr`, `gh_compact_ref`, `parse_pr_identifier_from_args`.
 Declare `pub mod pr_detection;` in `packages/core-rs/crates/mainframe-adapter-api/src/lib.rs`.
+Also add `serde_json = { workspace = true }` to `[dependencies]` in
+`packages/core-rs/crates/mainframe-adapter-api/Cargo.toml`, which has no `serde_json` entry today. The
+crate needs it from task 10 on (`observe_tool_use` takes `&HashMap<String, serde_json::Value>`, the type
+`MessageContentNode::ToolUse.input` already carries) and every new test file under `tests/` needs it to
+build fixtures. One `[dependencies]` entry covers both: Cargo compiles integration tests against the
+crate's normal dependencies as well as its dev-dependencies — `mainframe-adapter-codex` lists `serde_json`
+only under `[dependencies]` and `tests/rollout_reader.rs` does `use serde_json::json;`. No
+`[dev-dependencies]` section is needed here.
 Do not change a single matcher. Keep the `PORT STATUS` footer on the `pr_detection.rs` module file,
 amended with a one-line note that it moved here from the Claude crate for todo #339.
 *Verify:* `cargo check -p mainframe-adapter-api`; each new file under 300 lines (`wc -l`).
@@ -171,12 +179,21 @@ declaration (`lib.rs:36`). Repoint:
 Move `scan_history_for_prs` (`chat_deps.rs:1060-1112`) verbatim to
 `packages/core-rs/crates/mainframe-adapter-api/src/pr_detection/history.rs` as
 `pub fn scan_history_for_prs(history: &[ChatMessage]) -> Vec<DetectedPr>`; `chat_deps.rs:175` calls the
-neutral function. Move its four tests plus the `text_msg`/`tool_use_msg`/`tool_result_msg` fixture
-builders (`chat_deps.rs:1219-1327`) into
-`packages/core-rs/crates/mainframe-adapter-api/tests/pr_detection_history.rs`. Leave the
-`scan_history_for_mentions` tests where they are — they are unrelated and stay in `chat_deps.rs`.
+neutral function. Move its four tests (`chat_deps.rs:1275-1327`) into
+`packages/core-rs/crates/mainframe-adapter-api/tests/pr_detection_history.rs` and **copy** — do not move —
+the `text_msg`/`tool_use_msg`/`tool_result_msg` fixture builders (`chat_deps.rs:1219-1274`) into that new
+file. The `chat_deps.rs` copies stay: tests this task leaves behind still call them
+(`text_msg` at `chat_deps.rs:1354,1370,1382` in `scan_history_for_mentions_*`, `tool_result_msg` at
+`chat_deps.rs:1513` in `scan_and_persist_prs_persists_a_new_pr_and_emits_chat_pr_detected`), and moving
+them stops `mainframe-server` compiling. Leave the `scan_history_for_mentions` tests where they are — they
+are unrelated.
+After this task `tool_use_msg` has no caller in `chat_deps.rs` until task 19 adds one in the same module.
+`dead_code` is a warning, not an error (`packages/core-rs/Cargo.toml` denies only `clippy::unwrap_used` /
+`expect_used`), so this task's verify still passes and task 20's `-D warnings` gate runs after task 19
+restores the caller. Do not delete the helper and do not silence the warning with `#[allow(dead_code)]`.
 *Verify:* `cargo test -p mainframe-adapter-api --test pr_detection_history` (4 tests pass);
-`cargo test -p mainframe-server --lib scan_loaded_history_tests` still green.
+`cargo test -p mainframe-server --lib scan_loaded_history_tests` still green (expect one `dead_code`
+warning on `tool_use_msg`).
 
 **Task 5 — add the `load_scan_records` seam.**
 In `packages/core-rs/crates/mainframe-adapter-api/src/adapter.rs`, next to `load_history` (line 165), add:
@@ -197,6 +214,10 @@ No call-site changes yet.
 New test files only. **These tests do not compile until Group C lands** (`PrDetectionSink` does not exist
 yet) — that is the intended red phase; record "does not compile / listed failures" as the expected
 verification output, and do not weaken the specs to make them build.
+
+Tasks 6, 7 and 8 all write `crates/mainframe-adapter-api/tests/pr_detection_sink.rs`, so **this group runs
+sequentially** (6 → 7 → 8); only task 9 touches a different file. Task 6 creates the file and its recording
+inner sink; tasks 7 and 8 append to it.
 
 **Task 6 — decorator behavior spec, Claude-shaped input.**
 `packages/core-rs/crates/mainframe-adapter-api/tests/pr_detection_sink.rs`: a recording inner sink, then
@@ -223,10 +244,26 @@ Same file: after a tool_result is consumed, a second tool_result reusing the sam
 different PR URL emits nothing (the meta was evicted, mirroring `user_event.rs:465-467`).
 
 **Task 9 — "any adapter inherits detection" spec.**
-`packages/core-rs/crates/mainframe-adapter-mock/tests/pr_detection_replay.rs`: dispatch recorded
-`onMessage` (Bash tool_use, `gh pr create`) and `onToolResult` (PR URL) events through the mock's
-`dispatch` into a `PrDetectionSink` wrapping a recording sink; assert one `created` PR. This is the
-brief's "asserted by a test driving the mock adapter".
+`packages/core-rs/crates/mainframe-adapter-mock/tests/pr_detection_replay.rs`, driving the crate's **public**
+surface — `dispatch` is private and `emit_event` is `pub(crate)` (`mock/src/dispatch.rs:23,29`), so the test
+must not name either. Follow `crates/mainframe-adapter-mock/tests/replay.rs` (the
+`preserves_fixture_order_when_delays_hit_the_cap` case): build the fixture lines inline with
+`serde_json::json!` — a `{"dir":"in","method":"sendMessage","args":[],"delayMs":0}` marker, then
+`{"dir":"out","method":"onMessage","args":[[<Bash tool_use block, command "gh pr create --title x", id
+"tu1">], null],"delayMs":0}` and `{"dir":"out","method":"onToolResult","args":[[<tool_result block for
+"tu1" containing https://github.com/acme/repo/pull/7>]],"delayMs":0}` — then
+`ReplaySession::new(options, parse_fixture(&lines.join("\n")).unwrap())`,
+`session.spawn(None, Some(Arc::new(PrDetectionSink::new(inner.clone())))).await`, `send_message`, a short
+sleep, and assert `inner` recorded exactly one `on_pr_detected` with `source: created`.
+The trailing `null` on the `onMessage` args is required, not cosmetic: `dispatch` reads
+`arg::<Option<MessageMetadata>>(event, 1)` and `arg()` errors on a missing index rather than defaulting to
+`None` (`mock/src/dispatch.rs:14-21,31-34`), so a one-element `args` makes `emit_event` drop the whole
+event and no tool_use ever registers. `tests/fixtures/replay.ndjson:4` is the shape to copy.
+`onToolResult` takes one argument.
+The fixture must
+contain **no** `onPrDetected` event: the decorator delegates that call straight through, so a recorded one
+would satisfy the assertion without any detection happening. This is the brief's "asserted by a test
+driving the mock adapter".
 *Verify (tasks 6-9):* `cargo test -p mainframe-adapter-api --test pr_detection_sink` and
 `cargo test -p mainframe-adapter-mock --test pr_detection_replay` — expected to fail to compile with
 "cannot find type `PrDetectionSink`" until Group C.
@@ -290,7 +327,10 @@ never asserted on PRs); `cargo clippy -p mainframe-adapter-claude -- -D warnings
 
 ### Group D — Codex scan-source specs, red phase (test)
 
-New test files only; they compile against Group A's `load_scan_records` default and fail on behavior.
+New test files only. Task 14 compiles today and fails on behavior. Task 15 does **not** compile until task
+17 lands — it names the `CodexScanDeps` test seam that task 17 introduces — so its red phase is a compile
+error, same contract as Group B. Record that as the expected verification output; do not weaken the spec
+to make it build.
 
 **Task 14 — unified-exec rollout reconstruction spec.**
 `packages/core-rs/crates/mainframe-adapter-codex/tests/rollout_unified_exec.rs`: write a fixture rollout
@@ -310,13 +350,38 @@ Note: `read_rollout_items` validates the path, so the fixture file must be named
 `expected_thread_id: None` where that suffices.
 
 **Task 15 — Codex `load_scan_records` spec.**
-`packages/core-rs/crates/mainframe-adapter-codex/tests/load_scan_records.rs`: with an injected
-`ThreadRegistryDeps { db_path }` pointing at a seeded `threads` table whose `rollout_path` is the task-14
-fixture, assert the returned `Vec<ChatMessage>` contains an `Assistant` message with a `Bash` tool_use
-carrying the command and a following `ToolResult` message carrying the PR URL. Second case: no row for
-the thread id ⇒ falls back (returns whatever `load_history` returns — with no app-server available that is
-an empty vec) and does not panic.
-*Verify (tasks 14-15):* `cargo test -p mainframe-adapter-codex --test rollout_unified_exec --test load_scan_records` — expected red.
+`packages/core-rs/crates/mainframe-adapter-codex/tests/load_scan_records.rs`. Build the session through the
+task-17 seam — the production entry points take no injection (`lookup_agent_metadata` hardcodes `None`
+deps, `thread_registry.rs:37-39`; `read_rollout_items` with `deps: None` enforces containment under the
+real `~/.codex/sessions`, `rollout_reader.rs:88-93,105-136`):
+
+```rust
+let (_db_dir, registry) = common::temp_registry(&[(thread_id, None, None, Some(&rollout_path))]);
+let session = CodexSession::new(options, None, ResolvedPath::from_value("/nonexistent-mf339"));
+session.set_scan_deps(CodexScanDeps {
+    registry,
+    rollout: RolloutReaderDeps { sessions_root: Some(root.path().to_path_buf()) },
+});
+```
+
+with `options.chat_id = Some(thread_id)` (that is what `CodexSession::new` stores as `resume_thread_id`).
+Seed the registry through the existing `mod common;` helper `temp_registry`
+(`crates/mainframe-adapter-codex/tests/common/mod.rs:185-204`), which creates the `threads` table with the
+four columns `read_metadata` selects (`id, agent_nickname, agent_role, rollout_path`) — hand-rolling the
+schema risks a column mismatch that surfaces as a silent fallback, not a failure.
+This test owns its own `tempfile::TempDir` and writes its own task-14-shaped rollout into it — separate
+test binary, no sharing with task 14 — named `rollout-<anything>-<threadId>.jsonl` so the filename embeds
+the thread id, under the injected `sessions_root`.
+Case 1: `load_scan_records()` returns a `Vec<ChatMessage>` containing an `Assistant` message with a `Bash`
+tool_use carrying the command and a following `ToolResult` message carrying the PR URL.
+Case 2: no row for the thread id ⇒ falls back to `load_history` and returns an empty vec without
+panicking. The nonexistent `ResolvedPath` is what keeps that offline: `load_history` spawns a real
+`codex app-server` via `spawn_temp_app_server` (`session.rs:724-745`) on any machine where `codex`
+resolves, and the spawn is given `resolved_path` as its `PATH`. Pin the same nonexistent `ResolvedPath` in
+**both** cases, so a happy-path regression can never reach a real `codex` either.
+*Verify (tasks 14-15):* `cargo test -p mainframe-adapter-codex --test rollout_unified_exec` — expected to
+fail on behavior; `cargo test -p mainframe-adapter-codex --test load_scan_records` — expected to fail to
+compile ("cannot find `CodexScanDeps`") until task 17.
 
 ### Group E — Codex scan source (core)
 
@@ -345,10 +410,27 @@ Keep the command extraction in its own helper under 50 lines; keep both files un
 extraction into a new `rollout_unified_exec.rs` if `rollout_reconstruct.rs` would overflow).
 *Verify:* `cargo test -p mainframe-adapter-codex --test rollout_unified_exec --test rollout_reader`.
 
-**Task 17 — implement `CodexSession::load_scan_records`.**
-`packages/core-rs/crates/mainframe-adapter-codex/src/session.rs` (next to `load_history`, line 724):
-override `load_scan_records` to (a) take `resume_thread_id` or return `Ok(vec![])`, (b)
-`lookup_agent_metadata(&[thread_id])` → `rollout_path`, (c) `read_rollout_items(&path, Some(&thread_id), None)`,
+**Task 17 — implement `CodexSession::load_scan_records`, with a test seam.**
+First add the seam task 15 constructs, in
+`packages/core-rs/crates/mainframe-adapter-codex/src/session.rs`:
+```rust
+/// Test seam for `load_scan_records`: redirects the Codex state DB and the
+/// rollout containment root, neither of which the production entry points
+/// (`lookup_agent_metadata`, `read_rollout_items(.., None)`) can override.
+#[derive(Debug, Clone, Default)]
+pub struct CodexScanDeps {
+    pub registry: ThreadRegistryDeps,
+    pub rollout: RolloutReaderDeps,
+}
+```
+plus a `scan_deps: Arc<Mutex<Option<CodexScanDeps>>>` field on `CodexSession` (initialized to `None` in
+`new`) and `pub fn set_scan_deps(&self, deps: CodexScanDeps)`. Re-export `CodexScanDeps` from `lib.rs`
+next to `pub use session::CodexSession;`. `ThreadRegistryDeps` and `RolloutReaderDeps` are already `pub`
+and both modules are already `pub mod`, so tests can name all three.
+Then, next to `load_history` (line 724): override `load_scan_records` to (a) take `resume_thread_id` or
+return `Ok(vec![])`, (b) `lookup_agent_metadata_with(&[thread_id], deps.as_ref().map(|d| &d.registry))` →
+`rollout_path` — `lookup_agent_metadata` itself takes no deps, so call the `_with` form, (c)
+`read_rollout_items(&path, Some(&thread_id), deps.as_ref().map(|d| &d.rollout))`,
 (d) `convert_thread_items(&items, &thread_id, &HashMap::new(), &HashMap::new())`. If there is no registry
 row, no `rollout_path`, or the read yields no items, log
 `tracing::debug!(module = "codex:session", thread_id, "no rollout for PR scan; falling back to thread/read")`
@@ -435,7 +517,9 @@ and note there that `thread/read` returns no `commandExecution` items.
   tool_result reaches `on_tool_result`. True for Claude (assistant event precedes the user event) and Codex
   (`render_command_execution` calls them back to back); a future adapter that violates it degrades to
   `mentioned`, never to a wrong PR.
-- **Group B is compile-red until Group C.** Expected; do not soften the specs to make them build.
+- **Group B is compile-red until Group C, and task 15 is compile-red until task 17.** Both name a type the
+  implementation task introduces (`PrDetectionSink`, `CodexScanDeps`). Expected; do not soften the specs to
+  make them build. Task 14 is the one red-phase spec that compiles and fails on behavior.
 - **Unified-exec command extraction is string surgery over a JS snippet.** It is defensive (parse failure
   skips the pair, logged at debug) and covered by a malformed-input test, but a future Codex change to the
   exec wrapper would silently stop reconstruction — the CONSUMED-SURFACE row added in task 22 is the
