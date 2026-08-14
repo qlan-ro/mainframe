@@ -21,6 +21,7 @@
  *   chat-plan-execmode-{default|acceptEdits|yolo} — plan gate exec-mode segmented control
  *   chat-plan-clear-context           — plan gate "Clear context" checkbox
  *   chat-gate-card                    — the shared gate card shell (width parity against chat-composer)
+ *   chat-thread-gate-slot             — the pinned, internally-scrolling slot the gate mounts in (#336)
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -29,7 +30,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
 /** The gate card and the composer sit in two wrappers with identical geometry
- *  (`mx-auto w-full max-w-3xl px-5`), so their outer edges must coincide. */
+ *  (`mx-auto w-full max-w-[min(48rem,100%-116px)] px-5`), so their outer edges must coincide. */
 async function expectGateMatchesComposerWidth(page: Page) {
   const gate = await page.getByTestId('chat-gate-card').boundingBox();
   const composer = await page.getByTestId('chat-composer').boundingBox();
@@ -37,6 +38,13 @@ async function expectGateMatchesComposerWidth(page: Page) {
   expect(composer, 'composer must be mounted').not.toBeNull();
   expect(Math.abs(gate!.x - composer!.x)).toBeLessThanOrEqual(1);
   expect(Math.abs(gate!.x + gate!.width - (composer!.x + composer!.width))).toBeLessThanOrEqual(1);
+}
+
+/** Mirrors transcript.spec.ts's `scrollViewportToTop` recipe (not exported there). */
+async function scrollViewportToTop(page: Page): Promise<void> {
+  await page.getByTestId('chat-thread-viewport').evaluate((el) => {
+    el.scrollTop = 0;
+  });
 }
 
 // ─── Permission gate — details disclosure + always-allow visibility ──────────
@@ -322,6 +330,78 @@ test.describe('§gate queue-front', () => {
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await expect(gate).toHaveCount(1);
 
+    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── Gate — pinned slot stays reachable while the transcript scrolls ─────────
+
+test.describe('§gate pinned slot', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-stacked' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+    // The Tauri window's minimum is 800x600 (tauri.conf.json) — 1200x600 is the
+    // shortest window that still forces a one-turn transcript to overflow.
+    await app.page.setViewportSize({ width: 1200, height: 600 });
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // Also covers the incidental parity assertion in "§permission gate details" above
+  // (:81, Details expanded + workspace open): that call already exercises the same
+  // scrollbar-suppression contract this test verifies deliberately. Intended overlap,
+  // not redundant — keep both.
+  test('the gate is mounted in the pinned footer slot, stays visible while the transcript is scrolled away, and keeps composer width parity while the slot itself scrolls', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Write /tmp/mf-e2e-stacked.txt then run `ls -la /tmp` to confirm it');
+
+    const gate = page.locator('[data-testid="chat-permission-gate"]');
+    await gate.waitFor({ timeout: 45_000 });
+
+    // The card mounts inside the pinned slot, which itself lives in the sticky footer —
+    // not inline in the scrolling transcript column.
+    const slot = page.getByTestId('chat-thread-gate-slot');
+    await expect(slot.locator('[data-testid="chat-permission-gate"]')).toBeVisible();
+    const slotInFooter = await slot.evaluate((el) => el.closest('[data-testid="chat-thread-footer"]') !== null);
+    expect(slotInFooter).toBe(true);
+
+    // Precondition, asserted not assumed: the recorded turn must actually overflow the
+    // viewport at this window size, or the scroll-away check below passes vacuously.
+    const overflowsBeforeExpand = await page
+      .getByTestId('chat-thread-viewport')
+      .evaluate((el) => el.scrollHeight - el.clientHeight > 8);
+    expect(overflowsBeforeExpand).toBe(true);
+
+    // Collapsed card: the slot does not overflow yet. Scroll the transcript to the top —
+    // the gate must stay put, fully visible, and the scroll position must not get pulled
+    // back down to it.
+    await scrollViewportToTop(page);
+    await expect(gate).toBeInViewport();
+    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeInViewport();
+    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeEnabled();
+    await page.waitForTimeout(300);
+    const scrollTopAfterSettle = await page.getByTestId('chat-thread-viewport').evaluate((el) => el.scrollTop);
+    expect(scrollTopAfterSettle).toBe(0);
+
+    // Force the slot itself to overflow (Decisions: `[scrollbar-width:none]` suppression is
+    // the load-bearing bit for width parity once this happens) and re-check parity.
+    await page.locator('[data-testid="chat-permission-details-toggle"]').click();
+    await page.locator('[data-testid="chat-permission-details-pre"]').waitFor({ timeout: 5_000 });
+    const slotOverflows = await slot.evaluate((el) => el.scrollHeight - el.clientHeight > 0);
+    expect(slotOverflows).toBe(true);
+    await expectGateMatchesComposerWidth(page);
+
+    // Drain the queue (this recording raises a second, Bash gate) and leave idle.
+    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-deny"]').click();
     await waitForIdle(page, 60_000);
   });
