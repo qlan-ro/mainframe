@@ -25,6 +25,7 @@ import { ChipButton } from './ChipButton';
 const MODE_COPY: Record<ExecutionMode, { label: string; hint: string }> = {
   default: { label: 'Interactive', hint: 'Approve every action' },
   acceptEdits: { label: 'Auto-Edits', hint: 'Edits auto-applied; commands ask' },
+  auto: { label: 'Auto', hint: 'Claude decides which actions need approval' },
   yolo: { label: 'Unattended', hint: 'Runs without prompts' },
 };
 

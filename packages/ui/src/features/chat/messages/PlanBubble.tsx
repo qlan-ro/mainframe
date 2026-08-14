@@ -26,6 +26,7 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 const EXEC_MODE_LABELS: Record<ExecutionMode, string> = {
   default: 'Interactive',
   acceptEdits: 'Auto-edits',
+  auto: 'Auto',
   yolo: 'Unattended',
 };
 
