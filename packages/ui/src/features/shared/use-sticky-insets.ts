@@ -20,14 +20,7 @@ const EPSILON = 1;
 /** Anything sticky at an edge is a header; nothing else in this scroller sticks. */
 const HEADER_SELECTOR = '[data-slot="sidebar-group-label"]';
 
-/**
- * Depth of the sticky headers stacked against one edge of `bounds`.
- *
- * They stack — a parked section header, then the group header of whichever
- * group you are inside — so the stack's depth changes as you scroll and cannot
- * be assumed from one header's height. An edge ramp that has to start below
- * them therefore has to read them from layout, not hardcode a height.
- */
+/** Headers stack (parked header, then whichever group you're in), so depth isn't one header's height — read it from layout instead. */
 export function stickyInset(bounds: Edges, headers: readonly Edges[], edge: 'top' | 'bottom'): number {
   let inset = 0;
 
@@ -41,13 +34,7 @@ export function stickyInset(bounds: Edges, headers: readonly Edges[], edge: 'top
   return inset;
 }
 
-/**
- * Tracks how deep the sticky headers parked at each edge of a scroller run, so
- * its `scroll-fade` ramps can start below them instead of dissolving them.
- *
- * Content height is watched as well as scroll position — the list is windowed,
- * so it grows and shrinks without any scroll event firing.
- */
+/** Depth of the sticky headers at each edge, re-measured on scroll and on resize — the list is windowed, so content height changes without a scroll event. */
 export function useStickyInsets(viewport: HTMLElement | null): StickyInsets {
   const [insets, setInsets] = useState<StickyInsets>(EMPTY);
 

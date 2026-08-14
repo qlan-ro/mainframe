@@ -1,13 +1,4 @@
-/**
- * `stickyInset` — pure function lifted from the surviving half of the
- * scroll-edge hook this change replaced (see
- * docs/plans/2026-08-14-todo-333-scroll-fade-plan.md, Task 2). It measures
- * how deep the sticky header stack parked at one edge of a scroller runs, so
- * a fade mask can start below the headers instead of dissolving them.
- *
- * Module under test does not exist yet — `use-sticky-insets.ts` is created by
- * Task 4. This file is the red half of that TDD pair.
- */
+/** `stickyInset` measures how deep the sticky header stack parked at one edge of a scroller runs, so a fade mask can start below the headers instead of dissolving them. */
 import { describe, it, expect } from 'vitest';
 import { stickyInset } from '../use-sticky-insets';
 
