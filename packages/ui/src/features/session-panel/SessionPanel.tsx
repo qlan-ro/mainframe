@@ -74,6 +74,9 @@ export function SessionPanel({ state }: { state: SessionPanelState }) {
 
   // The stack owns its pointer events (it scrolls); the 8px gaps between cards
   // are part of it. The area below the stack stays pass-through.
+  // No `scroll-fade-y` here: masking the stack attenuates each card's
+  // backdrop-blur (docs/qa/2026-08-14-todo-333-scroll-fade-webview-probe.md),
+  // so the fade lives on the card bodies instead.
   const stackChrome = 'pointer-events-auto flex w-72 flex-col gap-2 overflow-y-auto';
 
   return (

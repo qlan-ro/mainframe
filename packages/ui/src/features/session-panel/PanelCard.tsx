@@ -8,7 +8,9 @@
  * the card still reads if a webview declines to composite it.
  *
  * Every card caps its own height and scrolls internally, so a long stack
- * degrades card by card instead of pushing its siblings off the surface.
+ * degrades card by card instead of pushing its siblings off the surface. The
+ * body fades at whichever edge still has content past it, so a card at its cap
+ * reads as scrollable rather than cut off.
  */
 import type { ComponentType, ReactNode } from 'react';
 import { X } from 'lucide-react';
@@ -52,7 +54,7 @@ export function PanelCard({ id, label, icon: Icon, count, onClose, className, ch
           <X className="size-3" aria-hidden />
         </button>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-fade-y">{children}</div>
     </section>
   );
 }
