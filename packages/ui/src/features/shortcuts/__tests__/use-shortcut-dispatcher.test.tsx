@@ -17,13 +17,14 @@ vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => isMac }))
 import { useShortcutDispatcher } from '../use-shortcut-dispatcher';
 import { useShortcutAction } from '../action-store';
 import { SHORTCUTS, type ShortcutId } from '../registry';
+import type { ShortcutAction } from '../shortcut-types';
 
-type Spies = Record<ShortcutId, ReturnType<typeof vi.fn>>;
+type Spies = Record<ShortcutId, ReturnType<typeof vi.fn<ShortcutAction>>>;
 
 /** Registers a fresh spy for every registry entry except `exclude`, mounts the
  *  dispatcher alongside them, and hands back the spy map plus an unmounter. */
 function mountAllHandlers(exclude: readonly ShortcutId[] = []) {
-  const spies = Object.fromEntries(SHORTCUTS.map((entry) => [entry.id, vi.fn()])) as Spies;
+  const spies = Object.fromEntries(SHORTCUTS.map((entry) => [entry.id, vi.fn<ShortcutAction>()])) as Spies;
   const { unmount } = renderHook(() => {
     useShortcutDispatcher();
     for (const entry of SHORTCUTS) {
@@ -33,7 +34,7 @@ function mountAllHandlers(exclude: readonly ShortcutId[] = []) {
   return { spies, unmount };
 }
 
-function press(target: EventTarget, init: KeyboardEventInit): boolean {
+function press(target: Window | Document | Element, init: KeyboardEventInit): boolean {
   return fireEvent.keyDown(target, { cancelable: true, ...init });
 }
 
