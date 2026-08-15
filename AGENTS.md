@@ -2,11 +2,25 @@
 
 AI-native development environment for orchestrating agents.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet — created lazily by `/domain-modeling`). See `docs/agents/domain.md`.
+
 # Workflow
 
 - Before any new bug/feature work, pull latest main and start a new branch on it
-- Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs: [Claude `/clear`](docs/adapters/claude/CLEAR.md) and the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
+- Before any work, check needed skills to guide your development — see [Skills](#skills)
+- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/adapters/claude/`, verified against the 2026-03-31 source leak and CLI v2.1.220: [SESSIONS_JSONL](docs/adapters/claude/SESSIONS_JSONL.md) (transcript format, directory layout, worktree relocation), [HOOKS](docs/adapters/claude/HOOKS.md), [PERMISSIONS](docs/adapters/claude/PERMISSIONS.md), [SLASH_COMMANDS](docs/adapters/claude/SLASH_COMMANDS.md), [CLEAR](docs/adapters/claude/CLEAR.md). Two older docs are kept with staleness banners — read the five above first: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md) (v2.1.37; still the only coverage of the `--sdk-url` WebSocket transport) and [CLAUDE-JSONL-SCHEMA](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md) (v2.0.76–2.1.34 field frequencies, subordinate to SESSIONS_JSONL). For which fields Mainframe actually consumes, see the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)
@@ -26,7 +40,7 @@ AI-native development environment for orchestrating agents.
 - `pnpm --filter @qlan-ro/mainframe-types build` — Rebuild shared types after changing them
 - `pnpm --filter @qlan-ro/mainframe-ui test` — Test a specific package
 - `pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>` — Single test file (preferred; large multi-suite runs hit cross-file `React.act` failures)
-- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Core/types have no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-core exec tsc --noEmit`
+- `pnpm --filter @qlan-ro/mainframe-ui typecheck` — Typecheck the UI. Types has no `typecheck` script; use `pnpm --filter @qlan-ro/mainframe-types exec tsc --noEmit`
 - `pnpm tauri:dev` (from `packages/app-tauri`) — Tauri dev app; run in background with output to a log file
 - `cargo check` (from `packages/app-tauri/src-tauri`) — Fast Rust validation
 - `pnpm test:e2e` — Playwright E2E suite
@@ -36,10 +50,9 @@ AI-native development environment for orchestrating agents.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
-- **Monorepo Structure**: pnpm workspaces with six packages:
+- **Monorepo Structure**: pnpm workspaces with five packages (plus the mobile submodule):
     - `@qlan-ro/mainframe-types`: Shared TypeScript interfaces and domain models.
-    - `@qlan-ro/mainframe-core`: Orphaned TS daemon implementation (superseded by the Rust daemon; kept only for its `package.json` version, read by the release pipeline).
-    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell.
+    - `@qlan-ro/mainframe-ui`: The shared React renderer, consumed by the Tauri shell. Its `package.json` version is what the release pipeline tags from (the old TS daemon package that used to carry it is deleted).
     - `@qlan-ro/mainframe-app-tauri`: Tauri 2 desktop shell (Rust in `src-tauri/`). Ships the Rust daemon (`packages/core-rs`) as a bundled sidecar.
     - `@qlan-ro/mainframe-e2e`: Playwright end-to-end suite.
     - `@qlan-ro/mainframe-mobile`: Git submodule (separate repo — cross-cutting changes need their own PR there; don't bump the pointer in feature PRs).
@@ -60,7 +73,8 @@ Invoke the listed skill **before** taking the described action. No exceptions.
 | Multi-step implementation task, or after brainstorming approval | `writing-plans` |
 | Writing implementation code for any feature or bugfix | `test-driven-development` |
 | About to claim work is done, commit, or open a PR | `verification-before-completion` |
-| Building UI components, pages, or making visual design decisions | `ui-ux-pro-max` |
+| Writing any markup or class names in `packages/ui` | `mainframe-design-system` |
+| Open visual-design questions with no in-app template to mirror | `ui-ux-pro-max` |
 | Writing docs, commits, PRs, error messages, or UI copy | `writing-clearly-and-concisely` |
 | Checking whether new Claude Code / Codex releases affect Mainframe's adapters | `changelog-watch` |
 

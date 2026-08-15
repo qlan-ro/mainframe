@@ -2,6 +2,14 @@
 
 > System architecture reference for the Mainframe AI development environment
 
+> **Stale.** This document predates the Tauri/Rust rewrite: the Node daemon
+> (`@qlan-ro/mainframe-core`) and Electron shell (`@qlan-ro/mainframe-desktop`)
+> it describes were retired in the Rust daemon cutover (`docs/rust-port/CUTOVER.md`).
+> The daemon is now `packages/core-rs` (Rust, Axum) and the desktop shell is
+> `packages/app-tauri` (Tauri 2). Nothing below has been rewritten for the
+> current architecture — see the root [`CLAUDE.md`](../CLAUDE.md) Architecture
+> section for what's current. Treat everything below as historical only.
+
 ## System Overview
 
 Mainframe is a monorepo with five packages that form a layered architecture:

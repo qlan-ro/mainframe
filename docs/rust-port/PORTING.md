@@ -1,5 +1,10 @@
 # PORTING.md — the rule file for every Rust port agent
 
+> **Historical.** The Rust daemon port shipped 2026-07-24 (`CUTOVER.md`) — there
+> is nothing left to port. Kept as a record of the rules and patterns the port
+> followed; the per-field `CONCURRENCY.tsv` decision table referenced below was
+> pruned from the repo as a run artifact once the port completed.
+
 > Read this **before** translating any file. It is self-contained: it carries
 > the crate map, the type/idiom map, the wire-parity rules, the forbidden
 > patterns, the `PORT STATUS` trailer format, and the review protocol. You will

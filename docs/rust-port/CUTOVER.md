@@ -26,6 +26,10 @@ checklist.
 | Live soak (real claude CLI) | 3 scenarios; **no Rust-side structural divergence**; residual deltas are live-environment nondeterminism (quota broadcasts #480/#486, live-CLI interrupt race) | `SOAK-REPORT-phase4.md` |
 | Tauri canary | Shell boots the Rust daemon; **10/10** daemon checks (shell-spawned) + **10/10** (isolated PATH-enrichment daemon) | `CANARY-REPORT.md` |
 
+*The `DIFF-REPORT-phase5.md`, `SOAK-REPORT-phase4.md`, and `CANARY-REPORT.md`
+source reports cited above were pruned from the repo as internal run artifacts;
+the figures in this table are their retained summary.*
+
 **Baseline refresh (2026-07-24):** the quota features #480/#486 landed on both arms after
 the original baseline, so both daemons now live-probe provider quota at boot — quota
 `settings` rows and `provider.quota.updated` events are inherently nondeterministic

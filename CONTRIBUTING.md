@@ -1,13 +1,13 @@
 # Contributing to Mainframe
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-- Node.js 20+
+- Node.js 20+ (22 recommended)
 - pnpm (`npm install -g pnpm`)
+- Rust toolchain (`rustup`) — builds the daemon and the Tauri shell
+- Xcode Command Line Tools (macOS) or the platform build tools Tauri requires ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/))
 
-### Setup
+## Setup
 
 ```bash
 git clone https://github.com/qlan-ro/mainframe.git
@@ -16,158 +16,79 @@ pnpm install
 pnpm build
 ```
 
-### Development
+## Project Structure
+
+Mainframe is a pnpm workspace with a Cargo-based Rust daemon, plus a mobile companion app as a git submodule.
+
+| Package | Description |
+|---------|-------------|
+| `@qlan-ro/mainframe-types` | Shared TypeScript interfaces and domain models |
+| `@qlan-ro/mainframe-ui` | Shared React renderer consumed by the Tauri shell |
+| `@qlan-ro/mainframe-app-tauri` | Tauri 2 desktop shell (Rust in `src-tauri/`); bundles the Rust daemon as a sidecar |
+| `@qlan-ro/mainframe-e2e` | Playwright end-to-end suite |
+| `@qlan-ro/mainframe-mobile` | React Native companion app (git submodule — cross-cutting changes need their own PR there) |
+
+The daemon itself lives in `packages/core-rs` (Rust, Cargo workspace, not a pnpm package). It's an Axum HTTP + WebSocket server that the Tauri shell spawns and supervises. See the root [`CLAUDE.md`](CLAUDE.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
+
+## Development
 
 ```bash
+# Install dependencies
+pnpm install
+
 # Build all packages
 pnpm build
 
-# Build a specific package
-pnpm --filter @qlan-ro/mainframe-core build
+# Run the Tauri dev app (from packages/app-tauri)
+pnpm tauri:dev
 
-# Run tests
-pnpm --filter @qlan-ro/mainframe-core test
+# Fast Rust validation (from packages/app-tauri/src-tauri)
+cargo check
 
-# Dev mode
-pnpm --filter @qlan-ro/mainframe-core dev
+# Rebuild shared types after changing them
+pnpm --filter @qlan-ro/mainframe-types build
 ```
 
-### Monorepo Structure
+## Testing
 
-| Package | Description                                                    |
-|---------|----------------------------------------------------------------|
-| `@qlan-ro/mainframe-types` | Shared TypeScript contracts (interfaces, event types)          |
-| `@qlan-ro/mainframe-core` | Daemon process — chat orchestration, CLI adapters, persistence |
-| `@qlan-ro/mainframe-mobile` | [Private Repo] React Native companion app                      |
-| `@qlan-ro/mainframe-e2e` | Playwright end-to-end tests                                    |
+```bash
+# Test a specific package
+pnpm --filter @qlan-ro/mainframe-ui test
 
----
+# Run a single test file (preferred — large multi-suite runs hit cross-file React.act failures)
+pnpm --filter @qlan-ro/mainframe-ui exec vitest run <file>
 
-## Architecture Rules
+# Typecheck the UI (types has no dedicated script — use tsc directly)
+pnpm --filter @qlan-ro/mainframe-ui typecheck
+pnpm --filter @qlan-ro/mainframe-types exec tsc --noEmit
 
-### Domain Structure (`packages/core/src/`)
-
-| Directory | Responsibility |
-|-----------|---------------|
-| `chat/` | Session lifecycle, message routing, permissions, context tracking |
-| `attachment/` | File attachment storage and formatting |
-| `workspace/` | Git worktree management |
-| `adapters/` | Adapter registry (adapters are now implemented as plugins) |
-| `auth/` | JWT tokens and device pairing |
-| `cli/` | Daemon CLI subcommands (pair, status) |
-| `commands/` | Custom command registry and execution |
-| `db/` | SQLite persistence with repository pattern |
-| `launch/` | Dev server/sandbox process management |
-| `messages/` | Message parsing, grouping, and display pipeline |
-| `plugins/` | Plugin system — lifecycle, context, builtin plugins |
-| `push/` | Push notification delivery |
-| `server/` | HTTP REST + WebSocket transport (thin layer, no business logic) |
-| `tunnel/` | Cloudflare tunnel management |
-
-### Dependency Direction
-
-```
-server/ ──> chat/ ──> plugins/
-   │          │            │
-   │          ├──> db/     └──> @qlan-ro/mainframe-types
-   │          ├──> attachment/
-   │          └──> workspace/
-   │
-   ├──> db/
-   ├──> launch/
-   └──> auth/
+# Playwright end-to-end suite
+pnpm test:e2e
 ```
 
-- `server/` calls into `chat/` and `db/`, never the reverse
-- `chat/` depends on `plugins/`, `db/`, `attachment/`, `workspace/`
-- `plugins/` provides adapter implementations (Claude is a builtin plugin)
-- `launch/` manages dev servers and sandboxes
-- `auth/` handles device pairing for mobile companion
-- WebSocket/HTTP handlers must be thin transport — business logic belongs in `chat/` services
-
-### Decomposition Rules
-
-- No file over 300 lines — split when approaching this limit
-- No god objects — each class/module has a single clear responsibility
-- New adapter event handling goes in the adapter's plugin (e.g., `plugins/builtin/claude/events.ts`)
-- Permission logic goes in `permission-manager.ts`
-- ExitPlanMode flows go in `plan-mode-handler.ts`
-- `ChatManager` is a facade — it delegates, it doesn't implement
-
-### Barrel Exports
-
-- Each domain folder has an `index.ts` barrel
-- External consumers import from barrels, not internal files
-- Internal files within a domain can import each other directly
-
----
+Run typecheck after any series of code changes, and prefer a single test file over the full suite while iterating.
 
 ## Code Style
 
-- TypeScript strict mode, NodeNext module resolution
-- `.js` extensions in all relative imports (ESM requirement)
-- No comments explaining absent/removed functionality
-- Comments only for non-obvious behavior in present code
-- No function over 50 lines — extract helpers
-
----
+- TypeScript: strict mode, NodeNext module resolution
+- Max 300 lines per file, 50 lines per function — decompose instead of growing
+- No `@ts-ignore` — use `@ts-expect-error` with a reason
+- Comments explain non-obvious *why*, never *what*; remove dead code instead of commenting it out
+- Every interactive UI element needs a stable `data-testid` (`<surface>-<element>`, kebab-case)
 
 ## Commit & PR Process
 
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
-- One logical change per commit
-- PR description must explain *why*, not just *what*
-- All PRs must pass: `pnpm build` + `pnpm test`
+- Work on a feature or fix branch — never commit directly to `main`
+- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
+- One logical change per commit; PR descriptions explain *why*, not just *what*
+- Run `pnpm changeset` before committing and pick the affected packages and bump type. For changes that don't need a changelog entry (CI, docs typos), run `pnpm changeset --empty`. The pre-push hook and CI reject PRs without one.
+- All PRs must pass `pnpm build` and the relevant package's tests
 
----
+## Environment Variables
 
-## Testing Standards
-
-**Framework:** Vitest (`pnpm --filter @qlan-ro/mainframe-core test`)
-
-### Test File Location
-
-- Tests live in `packages/core/src/__tests__/`
-- Test file naming: `<feature>.test.ts`
-
-### What to Test
-
-- Every public method of every service class
-- Every business logic path (happy path + error cases)
-- Permission flows: approve, deny, YOLO auto-approve, ExitPlanMode (all three paths)
-- Adapter event handling: each event type (init, message, tool_result, permission, result, exit, error)
-- Edge cases: concurrent operations (dedup guards), missing data, process crashes
-
-### How to Test
-
-- Unit test services in isolation — mock their dependencies (DB, adapters, stores)
-- Use `vi.fn()` for mocks, `vi.spyOn()` for partial mocks
-- Each test should test ONE behavior — name it `should <verb> when <condition>`
-- No shared mutable state between tests — use `beforeEach` for fresh instances
-- Test through the public API, not private methods or internal state
-
-### Test Structure
-
-```typescript
-describe('ChatManager', () => {
-  describe('sendMessage', () => {
-    it('should lazy-start process if not running', async () => { ... });
-    it('should process attachments when attachmentIds provided', async () => { ... });
-    it('should extract mentions from message text', async () => { ... });
-  });
-});
-```
-
-### What NOT to Do
-
-- Don't test framework behavior (SQLite, Express, WebSocket library internals)
-- Don't write integration tests that require real filesystem, real CLI processes, or real APIs
-- Don't share test fixtures across test files — duplicate small helpers if needed
-- Don't assert on exact error message strings — assert on error type or behavior
-- Don't skip flaky tests — fix them or delete them
-
-### When to Write Tests
-
-- Every new service/module must have a corresponding test file
-- Every bug fix must include a regression test
-- Refactoring should verify existing tests still pass, not require new tests (unless coverage was missing)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DAEMON_PORT` | Daemon HTTP + WebSocket port | 31415 |
+| `VITE_PORT` | Vite dev server port | 5173 |
+| `MAINFRAME_DATA_DIR` | Data directory | `~/.mainframe` |
+| `LOG_LEVEL` | Logging verbosity | info |

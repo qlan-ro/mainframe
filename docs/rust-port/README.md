@@ -1,5 +1,12 @@
 # Rust port — wire-contract freeze
 
+> **Frozen, not regenerable.** The Node daemon (`@qlan-ro/mainframe-core`) that
+> `extract-contract.mjs` walked is retired, so the "Regenerate" and "Diff /
+> freeze check" commands below no longer run. `CONTRACT/*.json` stays as the
+> point-in-time snapshot the Rust types were ported against; `fixtures/` stays
+> live — `mainframe-types`' `golden_fixtures.rs` and `packages/types`'
+> `worktree-offer-events.test.ts` round-trip every file in it on every test run.
+
 This directory holds the machine-readable freeze of the Node daemon's wire
 contract (`@qlan-ro/mainframe-core`). The Rust port must serialize
 byte-compatibly with it. Treat `CONTRACT/*.json` as generated artifacts, not

@@ -2,6 +2,18 @@
 
 > Complete HTTP REST and WebSocket API documentation for `@qlan-ro/mainframe-core`
 
+> **Stale attribution, likely-accurate content.** `@qlan-ro/mainframe-core` (the
+> Node daemon this doc was written against) was retired in the Rust daemon
+> cutover (`docs/rust-port/CUTOVER.md`); the daemon is now `packages/core-rs`
+> (Rust, Axum), routed from `packages/core-rs/crates/mainframe-server/src/routes/`.
+> The Rust port targeted byte-compatible wire behavior, and the `ApiResponse<T>`
+> envelope below (`{success, data}` / `{success, error}`) still matches the
+> ported type (`packages/core-rs/crates/mainframe-types/src/api.rs`). The route
+> list and payload shapes have not been re-verified route-by-route against the
+> Rust source, so treat them as a likely-accurate starting point, not a
+> guarantee — confirm against the actual route handler before relying on a
+> specific field.
+
 **Base URL**: `http://127.0.0.1:31415`
 **WebSocket**: `ws://127.0.0.1:31415` (upgrades on the same HTTP port)
 
