@@ -89,6 +89,14 @@ export const SHORTCUTS = [
     label: 'New terminal',
     group: 'Workspace',
   },
+  {
+    id: 'workspace.new-url-tab',
+    // ⌘T is the platform's "new tab" and this opens a browser tab, so it takes
+    // the chord even though ⌘⇧T is Quick add task rather than its sibling.
+    chord: { code: 'KeyT', mod: true },
+    label: 'New browser tab',
+    group: 'Workspace',
+  },
   { id: 'app.search-palette', chord: { code: 'KeyO', mod: true }, label: 'Open command palette', group: 'App' },
   { id: 'app.review', chord: { code: 'KeyR', mod: true, shift: true }, label: 'Open review', group: 'App' },
   { id: 'app.settings', chord: { code: 'Comma', mod: true }, label: 'Open settings', group: 'App' },

@@ -84,6 +84,7 @@ describe('AC 2 — every shipped chord fires its id exactly once and prevents de
     { name: '⌘⇧C', id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
     { name: '⌘⇧W', id: 'workspace.toggle-workspace', init: { code: 'KeyW', metaKey: true, shiftKey: true } },
     { name: '⌘J', id: 'workspace.new-terminal', init: { code: 'KeyJ', metaKey: true } },
+    { name: '⌘T', id: 'workspace.new-url-tab', init: { code: 'KeyT', metaKey: true } },
     { name: '⌘B', id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { name: '⌘⇧T', id: 'app.quick-task', init: { code: 'KeyT', metaKey: true, shiftKey: true } },
     { name: '⌘⇧A in dev', id: 'app.automations', init: { code: 'KeyA', metaKey: true, shiftKey: true }, dev: true },

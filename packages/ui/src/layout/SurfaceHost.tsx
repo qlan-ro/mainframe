@@ -69,6 +69,7 @@ function SurfaceHostImpl() {
   // subscriber resolves the cwd, spawns the PTY and lights the surface, so the
   // chord and the picker row can never diverge.
   useShortcutAction('workspace.new-terminal', () => emitSurfaceIntent({ type: 'new-terminal' }));
+  useShortcutAction('workspace.new-url-tab', () => emitSurfaceIntent({ type: 'open-url-tab' }));
 
   const { top, bottom, topFlex, vFlex } = layout;
   const twoCol = top.length === 2;

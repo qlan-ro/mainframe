@@ -100,11 +100,13 @@ describe('UrlTabBodyState', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the invalid body with no mono URL line for an empty url, and no retry', () => {
+  it('renders the blank body for an empty url — a ⌘T tab, not a broken one', () => {
     renderBody({ kind: 'invalid', url: '' });
 
-    const body = screen.getByTestId('url-tab-body-invalid');
+    const body = screen.getByTestId('url-tab-body-blank');
     expect(body).toBeInTheDocument();
+    expect(body).toHaveTextContent('Type an address above to open a page');
+    expect(screen.queryByTestId('url-tab-body-invalid')).toBeNull();
     expect(body.querySelector('.font-mono')).toBeNull();
     expect(screen.queryByTestId('url-tab-retry')).toBeNull();
   });

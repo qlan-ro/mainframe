@@ -119,11 +119,20 @@ export function UrlTabBodyState({ target, device, inspectActive, anchorRef, onRe
     );
   }
 
-  // kind === 'invalid' — the address bar above is the only way out.
+  // kind === 'invalid' — the address bar above is the only way out. An EMPTY
+  // address is a blank tab someone just opened (⌘T), not a broken one, so it
+  // gets a prompt rather than a failure.
+  if (target.url === '') {
+    return (
+      <MessageBody testId="url-tab-body-blank">
+        <span className="text-xs text-muted-foreground">Type an address above to open a page</span>
+      </MessageBody>
+    );
+  }
   return (
     <MessageBody testId="url-tab-body-invalid">
       <FailureLine text="This tab’s saved address can’t be opened" />
-      {target.url !== '' && <span className="line-clamp-2 font-mono text-xs text-muted-foreground">{target.url}</span>}
+      <span className="line-clamp-2 font-mono text-xs text-muted-foreground">{target.url}</span>
     </MessageBody>
   );
 }
