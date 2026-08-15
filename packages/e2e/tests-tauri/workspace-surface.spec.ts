@@ -38,7 +38,7 @@
  * (non-zero exit — for the failed-state scenario).
  *
  * Testid reference (all verified against source):
- *   surface-rail-workspace                    — MainToolbar rail toggle (⌘2)
+ *   surface-rail-workspace                    — MainToolbar rail toggle (⌘⇧W)
  *   workspace-surface / workspace-empty-state — surface root / empty-state card
  *   workspace-picker-new-terminal / workspace-picker-launch-<name> — its rows
  *   WORKSPACE.pane / .tab / .strip / .add     — pane-id-keyed roots (helpers/tauri/testids.ts);
@@ -124,9 +124,14 @@ function seedLaunchConfigs(projectPath: string): void {
   writeFileSync(path.join(dir, 'launch.json'), JSON.stringify(config, null, 2));
 }
 
-/** Toggle the workspace surface on via its ⌘2 shortcut (⌘1 is chat). */
+/**
+ * Toggle the workspace surface on via its ⌘⇧W shortcut.
+ *
+ * The digit chords (⌘1…⌘9) moved to session-tab switching (registry.ts) — the
+ * surface toggles now live on ⌘⇧C (chat) / ⌘⇧W (workspace).
+ */
 async function turnWorkspaceOn(page: Page): Promise<void> {
-  await page.keyboard.press('ControlOrMeta+2');
+  await page.keyboard.press('ControlOrMeta+Shift+W');
   await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
 }
 
