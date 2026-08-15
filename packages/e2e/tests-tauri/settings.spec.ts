@@ -167,10 +167,7 @@ test.describe('§settings', () => {
     const tabs: SettingsTab[] = ['general', 'providers', 'keybindings', 'notifications', 'remote-access', 'about'];
     for (const tab of tabs) {
       if (tab !== 'general') await page.getByTestId(`settings-nav-${tab}`).click();
-      // KeybindingsPane's root breaks the `settings-pane-<tab>` convention every
-      // other pane follows — it renders `settings-keybindings-pane` instead.
-      const paneTestId = tab === 'keybindings' ? 'settings-keybindings-pane' : `settings-pane-${tab}`;
-      await expect(page.getByTestId(paneTestId)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId(`settings-pane-${tab}`)).toBeVisible({ timeout: 10_000 });
     }
     await closeSettings(page);
   });
