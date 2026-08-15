@@ -12,6 +12,10 @@ vi.mock('@/features/session-tabs/SessionTabs', () => ({
   SessionTabs: () => <div data-testid="mock-session-tabs" />,
 }));
 
+// The search chip renders off the live platform; pin macOS so the glyph
+// assertion below reads ⌘K rather than jsdom's Ctrl+K.
+vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
+
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -69,12 +73,12 @@ describe('MainToolbar — search button', () => {
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
   });
 
-  it('renders the ⌘O keyboard hint chip inside the search button', () => {
+  it('renders the ⌘K keyboard hint chip inside the search button', () => {
     renderToolbar();
 
     const hint = screen.getByTestId('main-toolbar-search-hint');
     expect(screen.getByTestId('main-toolbar-search')).toContainElement(hint);
-    expect(hint.textContent).toBe('⌘O');
+    expect(hint.textContent).toBe('⌘K');
   });
 });
 

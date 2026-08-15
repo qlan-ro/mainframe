@@ -30,6 +30,10 @@ const { PROJECTS } = vi.hoisted(() => ({
   ],
 }));
 
+// The chord resolves `mod` per platform; jsdom reports non-Mac, so pin macOS
+// to keep this suite's ⌘⇧T press meaningful.
+vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
+
 vi.mock('@/lib/api/todos', () => ({
   listTodos: vi.fn(),
   createTodo: vi.fn(),
@@ -60,6 +64,7 @@ vi.mock('../use-start-todo-session', () => ({
 // ---------------------------------------------------------------------------
 
 import { TasksModalHost } from '../TasksModalHost';
+import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
 import { useTasksModal } from '../use-tasks-modal';
 import { useTodosStore } from '../use-todos-store';
 import { useSessionFilters } from '@/store/session-filters';
@@ -74,8 +79,17 @@ function identity(projectId: string | undefined): ReturnType<typeof useActiveIde
 
 function pressQuickAddShortcut() {
   act(() => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'T', metaKey: true, shiftKey: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 'T', metaKey: true, shiftKey: true }));
   });
+}
+
+/**
+ * ⌘⇧T reaches the host through the shortcut registry now, so the dispatcher
+ * has to be mounted alongside it — the host only registers the action.
+ */
+function Harness() {
+  useShortcutDispatcher();
+  return <TasksModalHost port={PORT} />;
 }
 
 beforeEach(() => {
@@ -106,7 +120,7 @@ describe('QuickTaskDialog — ⌘⇧T with a project resolvable', () => {
   it('opens the dialog and names the scoped project', async () => {
     act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
 
-    render(<TasksModalHost port={PORT} />);
+    render(<Harness />);
     pressQuickAddShortcut();
 
     expect(await screen.findByTestId('tasks-quick-dialog')).toBeInTheDocument();
@@ -123,7 +137,7 @@ describe('QuickTaskDialog — ⌘⇧T with no project resolvable', () => {
   it('renders the pick list instead of nothing', async () => {
     vi.mocked(useActiveIdentity).mockReturnValue(identity(undefined));
 
-    render(<TasksModalHost port={PORT} />);
+    render(<Harness />);
     pressQuickAddShortcut();
 
     expect(await screen.findByTestId('tasks-quick-dialog')).toBeInTheDocument();
@@ -142,7 +156,7 @@ describe('QuickTaskDialog — independence from the board’s scope (spec decisi
     const user = userEvent.setup();
     act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
 
-    render(<TasksModalHost port={PORT} />);
+    render(<Harness />);
     act(() => useTasksModal.getState().openModal());
     await waitFor(() => expect(todosApi.listTodos).toHaveBeenCalledWith(PORT, 'proj-2'));
     expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Sidecar');

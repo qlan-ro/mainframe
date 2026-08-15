@@ -1,5 +1,5 @@
 /**
- * The ⌘O four-mode command palette, on the stock cmdk engine.
+ * The ⌘K four-mode command palette, on the stock cmdk engine.
  * Modes by prefix: (none) files+sessions · ">" commands · "@" symbols · "#" changes.
  *
  * All result computation stays in the shared `useSpotlightResults`

@@ -44,7 +44,8 @@ import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { FindBar } from '../find/FindBar';
-import { useFindHotkey } from '../find/use-find-hotkey';
+import { useFindInChatStore } from '../find/find-in-chat-store';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
 
@@ -153,7 +154,7 @@ function ThreadFooterInput() {
 }
 
 export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
-  useFindHotkey();
+  useShortcutAction('chat.find', () => useFindInChatStore.getState().open());
   // The ITEM id, not mainThreadId: a split zone renders a thread that is not the
   // main one, and its rebound item is the identity whose change means "different
   // session in this viewport".
@@ -183,6 +184,9 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             ref={viewportRef}
             data-testid="chat-thread-viewport"
             data-mf-chat-thread
+            // Escape from the composer parks focus here; a scroll container is
+            // not focusable without it.
+            tabIndex={-1}
             className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
           >
             {/* Width cap: 48rem, minus the rail block (58px) MIRRORED on both

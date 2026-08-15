@@ -3,7 +3,7 @@
  * host, mounted unconditionally in AppShell (Phase 6 entry swap) and driven
  * by `use-automations-nav`.
  *
- * A dev-only affordance (Cmd/Ctrl+Shift+A, `import.meta.env.DEV` only) still
+ * A dev-only affordance (⌘⇧A, marked `dev` in the shortcut registry) still
  * opens it directly, alongside the production SidebarHeader entry point.
  *
  * The host owns the library's project scope for exactly as long as it is open:
@@ -21,6 +21,7 @@ import { useAutomationsStore } from './data/use-automations-store';
 import { useAutomationToasts } from './data/use-automation-toasts';
 import { useAutomationEvents } from './data/use-automation-events';
 import { AutomationsView } from './AutomationsView';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 
 export function AutomationsHost(): React.ReactElement | null {
   const open = useAutomationsNav((s) => s.open);
@@ -56,17 +57,9 @@ export function AutomationsHost(): React.ReactElement | null {
     void loadLibrary(projectId);
   }, [open, projectId, setScopeProjectId, loadLibrary]);
 
-  useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
-        e.preventDefault();
-        openHost();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openHost]);
+  // The registry's `dev` flag is the only gate on ⌘⇧A now — the dispatcher
+  // filters dev entries out of production builds at its one mount site.
+  useShortcutAction('app.automations', openHost);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>

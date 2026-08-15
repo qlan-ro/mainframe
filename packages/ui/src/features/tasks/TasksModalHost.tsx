@@ -20,6 +20,7 @@
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useSessionFilters } from '@/store/session-filters';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useModalProjectScope } from '@/features/project-scope/use-modal-project-scope';
@@ -63,17 +64,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement {
 
   const startSession = useStartTodoSession(port, boardProjectId ?? undefined);
 
-  // ⌘⇧T → open quick-add dialog
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        openQuick();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openQuick]);
+  useShortcutAction('app.quick-task', openQuick);
 
   // mf:open-tasks custom event (dispatched by SidebarHeader TasksBtn)
   useEffect(() => {

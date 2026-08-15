@@ -23,6 +23,7 @@ import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from '
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
+import { focusOwningTranscript } from './focus-composer';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
@@ -86,13 +87,42 @@ function ComposerInputField({
   placeholder: string;
 }) {
   const triggerAria = useTriggerFieldAria();
+  // Escape leaves the composer and parks focus on the transcript (⌘L brings it
+  // back). The `/` and `@` trigger menu owns Escape while it is open — closing
+  // the menu must not also throw the caret out of the field. No preventDefault
+  // here: the session panel and files panel dismiss themselves on a document-
+  // level Escape listener gated on `!event.defaultPrevented`, and React's
+  // synthetic handler (attached below `document`) would otherwise stand them
+  // down before that listener runs.
+  //
+  // `cancelOnEscape={false}` below turns off aui's OWN document-level Escape
+  // handler (`useEscapeKeydown` in ComposerPrimitive.Input), which calls the
+  // runtime's onCancel whenever `composer.canCancel` is true — and aui's
+  // "cancel" capability is `onCancel !== undefined`, a static flag for
+  // "the app supports cancelling", not `isRunning` (verified against
+  // ExternalStoreThreadRuntimeCore's capabilities.cancel). So it fires on
+  // every idle-chat Escape too: our onCancel calls controller.cancel(), which
+  // optimistically marks the run cancelling; on a chat with nothing to
+  // interrupt the daemon never broadcasts a stop, and the client-side
+  // "Working…" indicator strands running. Escape stays focus-park only; the
+  // Stop button is the one real way to cancel a run.
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
+        return;
+      }
+      onKeyDown(e);
+    },
+    [onKeyDown, triggerAria],
+  );
   return (
     <ComposerPrimitive.Input
       ref={textareaRef}
       data-testid="chat-composer-input"
       data-mf-composer-input
       data-noring
-      onKeyDown={onKeyDown}
+      cancelOnEscape={false}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder}
       rows={1}
       autoFocus

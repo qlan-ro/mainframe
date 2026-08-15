@@ -351,6 +351,11 @@ export class ChatThreadController {
   }
 
   public async cancel(): Promise<void> {
+    // Idle guard (#324 QA): interruptChat() on an already-idle chat is a
+    // daemon no-op — no chat.updated ever arrives to clear 'cancelling', so
+    // an unguarded call here strands the "Working…" indicator running
+    // forever. Only a run actually in flight has something to interrupt.
+    if (this.state.runState.type !== 'running') return;
     this.dispatch({ type: 'run.cancelling' });
     try {
       await interruptChat(this.port, this.daemonId);

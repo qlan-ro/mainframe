@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import { ProjectAvatar } from '@/features/sessions/ProjectAvatar';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { SessionTabContextMenu } from './SessionTabContextMenu';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
@@ -51,6 +52,8 @@ interface SessionTabPillProps {
   onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
+  /** 1-based ⌘N number, while the hint modifier is held; null the rest of the time. */
+  hintIndex?: number | null;
   /** The open-in-split gesture has somewhere to go from this tab. */
   canOpenInSplit: boolean;
   onOpenInSplit: (id: string) => void;
@@ -60,6 +63,7 @@ interface SessionTabPillProps {
 export function SessionTabPill({
   tab,
   grouped = false,
+  hintIndex = null,
   onActivate,
   onClose,
   onPin,
@@ -145,7 +149,11 @@ export function SessionTabPill({
             : 'font-medium text-muted-foreground hover:text-foreground',
         )}
       >
-        {tab.projectId != null ? (
+        {/* The badge takes the avatar's 14px slot rather than adding one, so
+            holding the modifier never reflows the strip under the pointer. */}
+        {hintIndex != null ? (
+          <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
+        ) : tab.projectId != null ? (
           <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
         ) : (
           <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />

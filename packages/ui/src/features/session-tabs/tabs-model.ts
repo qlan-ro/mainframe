@@ -8,6 +8,7 @@
  * boot's runtime ids by matching either field.
  */
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { canOpenInSplit } from '@/features/chat/zones/open-in-split';
 
 export const SESSION_TABS_STORAGE_KEY = 'mf:session-tabs';
 
@@ -198,4 +199,71 @@ export function reconcileTabs(state: TabsState, items: readonly ThreadListEntry[
 function reconcileDraftId(draftId: string | null, items: readonly ThreadListEntry[]): string | null {
   if (draftId === null) return null;
   return isDraftThread(draftId, items) ? draftId : null;
+}
+
+/**
+ * The strip's DISPLAYED order (fact 17): pinned tabs, then the preview, then
+ * the draft, with a visible split pair regrouped adjacently at the first
+ * member's position — the same computation `SessionTabs.tsx` renders, moved
+ * here so the shortcut helpers below and the strip read one function instead
+ * of two copies. `_mainThreadId` mirrors the call site's `activeTabId` but
+ * the grouping itself only consults `zones` and the displayed set — kept for
+ * signature parity with Task 16's call site.
+ */
+export function displayedTabIds(
+  state: TabsState,
+  zones: [string, string] | null,
+  _mainThreadId: string | null,
+): string[] {
+  const displayed = [...state.tabIds, state.previewId, state.draftId].filter((id): id is string => id !== null);
+  const zoneMembers = zones == null ? [] : zones.filter((id) => displayed.includes(id));
+  if (zoneMembers.length !== 2) return displayed;
+  const firstAt = displayed.findIndex((id) => zoneMembers.includes(id));
+  const rest = displayed.filter((id) => !zoneMembers.includes(id));
+  return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
+}
+
+/** The tab at a keyboard index (⌘1…⌘9), or null past the end (AC 10). */
+export function tabAtIndex(displayed: readonly string[], index: number): string | null {
+  return displayed[index] ?? null;
+}
+
+/** `sessions.tab-by-index` binds nine chords, so the tenth tab onward has no
+ *  number to advertise. */
+export const MAX_TAB_HINT = 9;
+
+/** The 1-based number ⌘N answers to for a session, or null when the session is
+ *  not an open tab — the inverse of `tabAtIndex`, and what the hint badges read. */
+export function tabHintIndex(displayed: readonly string[], id: string): number | null {
+  const index = displayed.indexOf(id);
+  return index === -1 || index >= MAX_TAB_HINT ? null : index + 1;
+}
+
+/** The next/previous tab in the displayed order, wrapping around; the same
+ *  id back with only one tab open (AC 11). */
+export function nextTabId(displayed: readonly string[], activeId: string, direction: 1 | -1): string {
+  const index = displayed.indexOf(activeId);
+  if (index === -1 || displayed.length === 0) return activeId;
+  const next = (index + direction + displayed.length) % displayed.length;
+  return displayed[next] ?? activeId;
+}
+
+/**
+ * The nearest tab, in displayed order and wrapping, that `canOpenInSplit`
+ * accepts as the active session's split partner — the keyboard's ⌘⇧\ walks
+ * the same guard the tab strip's ⌘-click and context menu use (fact 18), so
+ * they can never disagree about what is splittable (AC 12).
+ */
+export function nextSplitPartner(
+  displayed: readonly string[],
+  activeId: string,
+  zones: [string, string] | null,
+): string | null {
+  const start = displayed.indexOf(activeId);
+  if (start === -1) return null;
+  for (let step = 1; step < displayed.length; step++) {
+    const candidate = displayed[(start + step) % displayed.length] as string;
+    if (canOpenInSplit(zones, activeId, candidate)) return candidate;
+  }
+  return null;
 }

@@ -26,7 +26,16 @@ import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
-import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
+import {
+  canonicalTabId,
+  displayedTabIds,
+  nextActiveAfterClose,
+  nextTabId,
+  tabAtIndex,
+  tabHintIndex,
+} from './tabs-model';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
 function toTabEntry(
@@ -70,8 +79,11 @@ export function SessionTabs() {
   const activeTabId = canonicalTabId(mainThreadId, items);
 
   // Pinned tabs in order, then the peek, then the unsent draft — whichever
-  // session was just created is always the last tab in the strip.
-  const displayIds = [...tabIds, previewId, draftId].filter((id): id is string => id !== null);
+  // session was just created is always the last tab in the strip. Passing no
+  // zones keeps the PIN order, which is what a close resolves its successor
+  // against; the regrouped order below is a display concern.
+  const tabsState = { tabIds, previewId, draftId };
+  const displayIds = displayedTabIds(tabsState, null, activeTabId);
 
   // While split, the two zone tabs regroup ADJACENT (in zone order, at the
   // first member's position) so the strip mirrors the surface — a visual
@@ -82,14 +94,22 @@ export function SessionTabs() {
   // A PARKED pair still renders its container — the two sessions are still a
   // pair — but the split isn't what you're looking at, so its underline is dark.
   const splitOnScreen = splitVisible(zones, mainThreadId);
-  const ordered = grouped
-    ? (() => {
-        const firstAt = displayIds.findIndex((id) => zoneMembers.includes(id));
-        const rest = displayIds.filter((id) => !zoneMembers.includes(id));
-        return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
-      })()
-    : displayIds;
+  const ordered = displayedTabIds(tabsState, zones, activeTabId);
   const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId));
+
+  // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
+  // the stored pin order.
+  const switchTo = (id: string | null) => {
+    if (id != null && id !== activeTabId) aui.threads.switchToThread(id);
+  };
+  useShortcutAction('sessions.tab-by-index', (chordIndex) => switchTo(tabAtIndex(ordered, chordIndex)));
+  useShortcutAction('sessions.tab-next', () => switchTo(nextTabId(ordered, activeTabId, 1)));
+  useShortcutAction('sessions.tab-prev', () => switchTo(nextTabId(ordered, activeTabId, -1)));
+
+  // Holding the chord's modifier paints each pill with the number that reaches
+  // it — read off the same `ordered` the chord resolves against.
+  const hintsRevealed = useIndexHintsStore((s) => s.revealed);
+  const hintOf = (id: string) => (hintsRevealed ? tabHintIndex(ordered, id) : null);
 
   const handleActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already
@@ -154,6 +174,7 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
@@ -181,6 +202,7 @@ export function SessionTabs() {
                     key={tab.id}
                     tab={tab}
                     grouped
+                    hintIndex={hintOf(tab.id)}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onPin={pinTab}
@@ -197,6 +219,7 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
@@ -211,6 +234,7 @@ export function SessionTabs() {
             <SessionTabPill
               key={tab.id}
               tab={tab}
+              hintIndex={hintOf(tab.id)}
               onActivate={handleActivate}
               onClose={handleClose}
               onPin={pinTab}
