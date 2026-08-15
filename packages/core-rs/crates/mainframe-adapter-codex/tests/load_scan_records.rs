@@ -17,6 +17,7 @@ mod common;
 use mainframe_adapter_api::AdapterSession;
 use mainframe_adapter_codex::rollout_reader::RolloutReaderDeps;
 use mainframe_adapter_codex::{CodexScanDeps, CodexSession};
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::SessionOptions;
 use mainframe_types::chat::{ChatMessageType, MessageContent, MessageContentNode};
@@ -95,7 +96,12 @@ async fn load_scan_records_reconstructs_a_pr_create_pair_from_the_rollout() {
     let (_db_dir, registry) =
         common::temp_registry(&[(thread_id, None, None, Some(rollout_path.as_str()))]);
 
-    let session = CodexSession::new(options(Some(thread_id)), None, unreachable_path());
+    let session = CodexSession::new(
+        options(Some(thread_id)),
+        None,
+        unreachable_path(),
+        std::sync::Arc::new(BackgroundTaskTracker::new()),
+    );
     session.set_scan_deps(CodexScanDeps {
         registry,
         rollout: RolloutReaderDeps {
@@ -158,7 +164,12 @@ async fn load_scan_records_falls_back_to_load_history_without_a_registry_row() {
     let thread_id = "thread-mf339-missing";
     let (_db_dir, registry) = common::temp_registry(&[]);
 
-    let session = CodexSession::new(options(Some(thread_id)), None, unreachable_path());
+    let session = CodexSession::new(
+        options(Some(thread_id)),
+        None,
+        unreachable_path(),
+        std::sync::Arc::new(BackgroundTaskTracker::new()),
+    );
     session.set_scan_deps(CodexScanDeps {
         registry,
         rollout: RolloutReaderDeps {
