@@ -58,27 +58,36 @@ const PAD = 6;
 const LW = 268;
 const GAP = 18;
 
-function computeLabelStyle(rect: TargetRect, side: TourStep['side']): CSSProperties {
+// Clamps the label card's left edge between the viewport's left and right
+// edges (falls back to the left clamp alone if the viewport is narrower than
+// the card, so the card never reports a left more restrictive than 8px).
+export function clampLabelLeft(left: number, viewportWidth: number): number {
+  const maxLeft = Math.max(8, viewportWidth - LW - 8);
+  return Math.min(Math.max(8, left), maxLeft);
+}
+
+export function computeLabelStyle(rect: TargetRect, side: TourStep['side']): CSSProperties {
   const h = {
     top: rect.top - PAD,
     left: rect.left - PAD,
     w: rect.width + PAD * 2,
     height: rect.height + PAD * 2,
   };
+  const viewportWidth = window.innerWidth;
   if (side === 'right') {
-    return { top: Math.max(8, h.top), left: h.left + h.w + GAP };
+    return { top: Math.max(8, h.top), left: clampLabelLeft(h.left + h.w + GAP, viewportWidth) };
   }
   if (side === 'above') {
     return {
       top: h.top - GAP,
-      left: Math.max(8, h.left + h.w / 2 - LW / 2),
+      left: clampLabelLeft(h.left + h.w / 2 - LW / 2, viewportWidth),
       transform: 'translateY(-100%)',
     };
   }
   // below
   return {
     top: h.top + h.height + GAP,
-    left: Math.max(8, h.left + h.w / 2 - LW / 2),
+    left: clampLabelLeft(h.left + h.w / 2 - LW / 2, viewportWidth),
   };
 }
 
