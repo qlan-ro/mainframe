@@ -82,6 +82,10 @@ export class FakeHostBridge implements HostBridge {
     /* no-op in browser/dev — page zoom is a native-shell capability */
   }
 
+  setWindowTheme(_theme: 'light' | 'dark' | null): void {
+    /* no-op in browser/dev — window appearance is a native-shell capability */
+  }
+
   terminal = {
     create: (): Promise<TerminalHandle> => notSupported('terminal.create'),
   };
