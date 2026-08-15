@@ -81,8 +81,8 @@ describe('AC 2 — every shipped chord fires its id exactly once and prevents de
     { name: '⌘⇧R', id: 'app.review', init: { code: 'KeyR', metaKey: true, shiftKey: true } },
     { name: '⌘F', id: 'chat.find', init: { code: 'KeyF', metaKey: true } },
     { name: '⌘,', id: 'app.settings', init: { code: 'Comma', metaKey: true } },
-    { name: '⌘1', id: 'workspace.toggle-chat', init: { code: 'Digit1', metaKey: true } },
-    { name: '⌘2', id: 'workspace.toggle-workspace', init: { code: 'Digit2', metaKey: true } },
+    { name: '⌘⇧C', id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
+    { name: '⌘⇧E', id: 'workspace.toggle-workspace', init: { code: 'KeyE', metaKey: true, shiftKey: true } },
     { name: '⌘B', id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { name: '⌘⇧T', id: 'app.quick-task', init: { code: 'KeyT', metaKey: true, shiftKey: true } },
     { name: '⌘⇧A in dev', id: 'app.automations', init: { code: 'KeyA', metaKey: true, shiftKey: true }, dev: true },
@@ -135,8 +135,8 @@ describe('AC 4 — a modifier-carrying app chord fires from a focused text field
     { id: 'app.search-palette', init: { code: 'KeyO', metaKey: true } },
     { id: 'app.settings', init: { code: 'Comma', metaKey: true } },
     { id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
-    { id: 'workspace.toggle-chat', init: { code: 'Digit1', metaKey: true } },
-    { id: 'workspace.toggle-workspace', init: { code: 'Digit2', metaKey: true } },
+    { id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
+    { id: 'workspace.toggle-workspace', init: { code: 'KeyE', metaKey: true, shiftKey: true } },
     { id: 'chat.focus-composer', init: { code: 'KeyL', metaKey: true } },
   ];
 
@@ -271,11 +271,11 @@ describe('D7 regression — the session-tab family fires from a focused text fie
     unmount();
   });
 
-  it('⌃1 fires sessions.tab-by-index with chordIndex 0 from a focused textarea and prevents default', () => {
+  it('⌘1 fires sessions.tab-by-index with chordIndex 0 from a focused textarea and prevents default', () => {
     const textarea = focusedTextarea();
     const { spies, unmount } = mountAllHandlers();
 
-    const event = press(textarea, { code: 'Digit1', ctrlKey: true });
+    const event = press(textarea, { code: 'Digit1', metaKey: true });
 
     expect(spies['sessions.tab-by-index']).toHaveBeenCalledWith(0);
     expect(event).toBe(false);
@@ -292,11 +292,11 @@ describe('D7 regression — the session-tab family fires from a focused text fie
     unmount();
   });
 
-  it('⌃1 fires sessions.tab-by-index from the terminal helper textarea', () => {
+  it('⌘1 fires sessions.tab-by-index from the terminal helper textarea', () => {
     const textarea = terminalTextarea();
     const { spies, unmount } = mountAllHandlers();
 
-    press(textarea, { code: 'Digit1', ctrlKey: true });
+    press(textarea, { code: 'Digit1', metaKey: true });
 
     expect(spies['sessions.tab-by-index']).toHaveBeenCalledWith(0);
     unmount();

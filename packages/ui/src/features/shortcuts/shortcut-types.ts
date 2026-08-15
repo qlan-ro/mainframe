@@ -15,7 +15,8 @@ export interface Chord {
   shift?: boolean;
 }
 
-/** A chord that resolves differently per platform (⌃1 on macOS, Alt+1 off it). */
+/** A chord that resolves differently per platform. Nothing shipped needs one
+ *  today — `mod` covers ⌘-vs-Ctrl — but the matcher and cheat sheet support it. */
 export type PlatformChord = Chord | { mac: Chord; other: Chord };
 
 /** The four flags a `Chord` resolves to for the live platform, exact-matched

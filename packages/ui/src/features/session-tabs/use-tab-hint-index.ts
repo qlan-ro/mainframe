@@ -1,5 +1,5 @@
 /**
- * "Which number does ⌃N give this session?" — for surfaces outside the strip.
+ * "Which number does ⌘N give this session?" — for surfaces outside the strip.
  *
  * The sidebar lists every session, but only the open tabs answer to a chord,
  * so a row's badge is its position in the SAME displayed order the strip

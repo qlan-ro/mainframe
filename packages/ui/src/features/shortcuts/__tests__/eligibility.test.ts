@@ -125,7 +125,7 @@ describe('text-field rule — D7, evaluated on the resolved chord', () => {
 });
 
 describe('the terminal’s hidden textarea — fact 20', () => {
-  it('allows the ⌃Tab / ⌃1 / ⌃⇧Tab family from the xterm helper textarea', () => {
+  it('allows the ⌃Tab / ⌘1 / ⌃⇧Tab family from the xterm helper textarea', () => {
     const container = document.createElement('div');
     container.className = 'xterm';
     const textarea = document.createElement('textarea');

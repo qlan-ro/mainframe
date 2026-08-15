@@ -97,19 +97,19 @@ export function SessionTabs() {
   const ordered = displayedTabIds(tabsState, zones, activeTabId);
   const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId));
 
-  // ⌃1…⌃9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
+  // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
   // the stored pin order.
   const switchTo = (id: string | null) => {
     if (id != null && id !== activeTabId) aui.threads.switchToThread(id);
   };
   useShortcutAction('sessions.tab-by-index', (chordIndex) => switchTo(tabAtIndex(ordered, chordIndex)));
+  useShortcutAction('sessions.tab-next', () => switchTo(nextTabId(ordered, activeTabId, 1)));
+  useShortcutAction('sessions.tab-prev', () => switchTo(nextTabId(ordered, activeTabId, -1)));
 
   // Holding the chord's modifier paints each pill with the number that reaches
   // it — read off the same `ordered` the chord resolves against.
   const hintsRevealed = useIndexHintsStore((s) => s.revealed);
   const hintOf = (id: string) => (hintsRevealed ? tabHintIndex(ordered, id) : null);
-  useShortcutAction('sessions.tab-next', () => switchTo(nextTabId(ordered, activeTabId, 1)));
-  useShortcutAction('sessions.tab-prev', () => switchTo(nextTabId(ordered, activeTabId, -1)));
 
   const handleActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already

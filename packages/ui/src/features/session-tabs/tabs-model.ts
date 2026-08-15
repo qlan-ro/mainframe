@@ -223,7 +223,7 @@ export function displayedTabIds(
   return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
 }
 
-/** The tab at a keyboard index (⌃1…⌃9), or null past the end (AC 10). */
+/** The tab at a keyboard index (⌘1…⌘9), or null past the end (AC 10). */
 export function tabAtIndex(displayed: readonly string[], index: number): string | null {
   return displayed[index] ?? null;
 }
@@ -232,7 +232,7 @@ export function tabAtIndex(displayed: readonly string[], index: number): string 
  *  number to advertise. */
 export const MAX_TAB_HINT = 9;
 
-/** The 1-based number ⌃N answers to for a session, or null when the session is
+/** The 1-based number ⌘N answers to for a session, or null when the session is
  *  not an open tab — the inverse of `tabAtIndex`, and what the hint badges read. */
 export function tabHintIndex(displayed: readonly string[], id: string): number | null {
   const index = displayed.indexOf(id);

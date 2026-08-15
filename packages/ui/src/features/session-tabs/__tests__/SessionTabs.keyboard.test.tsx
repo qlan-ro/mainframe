@@ -1,6 +1,6 @@
 /**
  * SessionTabs — the keyboard side of session-tab switching and open-in-split
- * (⌃1…⌃9, ⌃Tab / ⌃⇧Tab, ⌘⇧\), mounted alongside the real dispatcher and the
+ * (⌘1…⌘9, ⌃Tab / ⌃⇧Tab, ⌘⇧\), mounted alongside the real dispatcher and the
  * real zone shortcut actions the way `ChatSurface` mounts them. ⌘⇧\ is proven
  * against the SAME zones-store transition the tab's own context menu produces
  * — the keyboard gesture and the menu action can never disagree about what is
@@ -82,7 +82,7 @@ function seedThreeTabs(active: string): void {
 
 const zones = () => useZonesStore.getState().zones;
 
-const pressTabIndex = (digit: number) => fireEvent.keyDown(window, { code: `Digit${digit}`, ctrlKey: true });
+const pressTabIndex = (digit: number) => fireEvent.keyDown(window, { code: `Digit${digit}`, metaKey: true });
 const pressTabNext = () => fireEvent.keyDown(window, { code: 'Tab', ctrlKey: true });
 const pressTabPrev = () => fireEvent.keyDown(window, { code: 'Tab', ctrlKey: true, shiftKey: true });
 const pressOpenInSplit = () =>
@@ -97,8 +97,8 @@ beforeEach(() => {
   useIndexHintsStore.setState({ revealed: false });
 });
 
-describe('⌃1…⌃9 — activate the Nth displayed tab (AC 10)', () => {
-  it('⌃1 activates the first tab', () => {
+describe('⌘1…⌘9 — activate the Nth displayed tab (AC 10)', () => {
+  it('⌘1 activates the first tab', () => {
     seedThreeTabs('chat-b');
     render();
 
@@ -107,7 +107,7 @@ describe('⌃1…⌃9 — activate the Nth displayed tab (AC 10)', () => {
     expect(switchToThread).toHaveBeenCalledWith('chat-a');
   });
 
-  it('⌃3 activates the third tab', () => {
+  it('⌘3 activates the third tab', () => {
     seedThreeTabs('chat-a');
     render();
 
@@ -216,7 +216,7 @@ describe('⌘⇧\\ — open the active session in a split from the keyboard (AC 
   });
 });
 
-describe('⌃N hint badges', () => {
+describe('⌘N hint badges', () => {
   // These pin the WIRING, not the reveal timing (index-hints.test.ts owns that):
   // the strip renders pills from four separate call sites, and a prop missing
   // from the plain non-split one shipped badges that appeared only while split.
@@ -241,7 +241,7 @@ describe('⌃N hint badges', () => {
     expect(hints()).toBe('123');
   });
 
-  it('numbers the regrouped order while split, so the badge matches what ⌃N opens', () => {
+  it('numbers the regrouped order while split, so the badge matches what ⌘N opens', () => {
     seedThreeTabs('chat-a');
     // a and c pair up and regroup adjacently, making c the second tab.
     useZonesStore.setState({ zones: ['chat-a', 'chat-c'], focusedIndex: 0 });
@@ -253,7 +253,7 @@ describe('⌃N hint badges', () => {
     expect(screen.getByTestId('session-tab-hint-chat-b').textContent).toBe('3');
   });
 
-  it('badges the tab that ⌃2 actually switches to', () => {
+  it('badges the tab that ⌘2 actually switches to', () => {
     seedThreeTabs('chat-a');
     useIndexHintsStore.setState({ revealed: true });
     render();

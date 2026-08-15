@@ -1,10 +1,10 @@
 /**
- * The reveal state behind the ⌃1…⌃9 tab hints.
+ * The reveal state behind the ⌘1…⌘9 tab hints.
  *
  * `sessions.tab-by-index` is the one entry whose target the chord cannot
- * name: ⌃4 means nothing until you know which tab is fourth. Holding the
+ * name: ⌘4 means nothing until you know which tab is fourth. Holding the
  * modifier answers that on the tabs themselves, so the binding is learned
- * where it is used rather than in the cheat sheet.
+ * where it is used rather than in the cheat sheet (issue #374).
  *
  * Lives beside `cheat-sheet-store` in the core group for the same reason it
  * does: the surfaces that paint badges read this store, never the reverse.
@@ -14,8 +14,9 @@ import { create } from 'zustand';
 import { isMacPlatform } from './platform';
 
 /**
- * Long enough that ⌃-chords and ⌥-accented typing pass through without
- * flashing the badges, short enough to read as a reveal rather than a wait.
+ * ⌘ leads nearly every chord in the app, so this delay is what keeps ⌘N, ⌘O and
+ * ⌘F from flashing the badges on their way past — long enough to sit out a
+ * deliberate chord, short enough to read as a reveal rather than a wait.
  */
 export const INDEX_HINT_DELAY_MS = 350;
 
@@ -30,11 +31,12 @@ export const useIndexHintsStore = create<IndexHintsStore>((set) => ({
 }));
 
 /**
- * The modifier `sessions.tab-by-index` binds — ⌃ on macOS, Alt elsewhere.
- * Takes the flags rather than the event so tests need no KeyboardEvent.
+ * The modifier `sessions.tab-by-index` binds — the `mod` key, so ⌘ on macOS
+ * and Ctrl elsewhere. Takes the flags rather than the event so tests need no
+ * KeyboardEvent.
  */
-export function hintModifierHeld(flags: { ctrlKey: boolean; altKey: boolean }, isMac: boolean): boolean {
-  return isMac ? flags.ctrlKey : flags.altKey;
+export function hintModifierHeld(flags: { metaKey: boolean; ctrlKey: boolean }, isMac: boolean): boolean {
+  return isMac ? flags.metaKey : flags.ctrlKey;
 }
 
 /**
@@ -74,7 +76,7 @@ export function useIndexHintReveal(): void {
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    // ⌃⇥ and any chord that moves focus out of the window swallow the keyup,
+    // ⌘⇥ and any chord that moves focus out of the window swallow the keyup,
     // which would otherwise leave the badges painted over every tab.
     window.addEventListener('blur', hide);
     return () => {

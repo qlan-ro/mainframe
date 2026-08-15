@@ -113,7 +113,7 @@ function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, 
           {/* Actions sit in front of the time, which stays put — the truncating
               title is the only thing that gives way on hover. */}
           {actionsSlot}
-          {/* While the hints show, the row trades its timestamp for the ⌃N that
+          {/* While the hints show, the row trades its timestamp for the ⌘N that
               reaches it — same trailing slot, so nothing below shifts. A row
               whose session has no open tab has no number and keeps the time. */}
           {hintIndex != null ? (

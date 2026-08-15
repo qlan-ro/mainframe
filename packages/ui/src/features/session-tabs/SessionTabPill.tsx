@@ -52,7 +52,7 @@ interface SessionTabPillProps {
   onActivate: (id: string, split: boolean) => void;
   onClose: (id: string) => void;
   onPin: (id: string) => void;
-  /** 1-based ⌃N number, while the hint modifier is held; null the rest of the time. */
+  /** 1-based ⌘N number, while the hint modifier is held; null the rest of the time. */
   hintIndex?: number | null;
   /** The open-in-split gesture has somewhere to go from this tab. */
   canOpenInSplit: boolean;

@@ -5,18 +5,22 @@
  */
 import type { ShortcutDescriptor } from './shortcut-types';
 
-/** ⌃1…⌃9 (mac) / Alt+1…Alt+9 (other), one chord per session-tab index. */
+/** ⌘1…⌘9 (Ctrl+1…9 off macOS), one chord per session-tab index. No platform
+ *  split: the digits belong to the tabs on every platform now that the surface
+ *  toggles have moved off them. */
 const TAB_BY_INDEX_CHORDS = Array.from({ length: 9 }, (_, i) => ({
-  mac: { code: `Digit${i + 1}`, ctrl: true },
-  other: { code: `Digit${i + 1}`, alt: true },
+  code: `Digit${i + 1}`,
+  mod: true,
 }));
 
 export const SHORTCUTS = [
   { id: 'sessions.new', chord: { code: 'KeyN', mod: true }, label: 'New session', group: 'Sessions' },
   {
     id: 'sessions.tab-by-index',
-    // ⌘1/⌘2 already toggle the Chat/Workspace surfaces (shipped behavior); session
-    // tabs bind to ⌃1..⌃9 instead of contesting that chord (todo #324 decision).
+    // ⌘1…⌘9 is the platform's "switch to the Nth tab" (Safari, VS Code, Slack),
+    // and session tabs are that. The surface toggles held these digits first but
+    // have no such convention behind them, so they moved to ⌘⇧C / ⌘⇧E rather
+    // than keep the chord issue #374 asked for.
     chord: TAB_BY_INDEX_CHORDS,
     label: 'Switch to tab N',
     group: 'Sessions',
@@ -62,13 +66,16 @@ export const SHORTCUTS = [
   },
   {
     id: 'workspace.toggle-chat',
-    chord: { code: 'Digit1', mod: true },
+    chord: { code: 'KeyC', mod: true, shift: true },
     label: 'Toggle Chat surface',
     group: 'Workspace',
   },
   {
     id: 'workspace.toggle-workspace',
-    chord: { code: 'Digit2', mod: true },
+    // ⌘⇧E, not ⌘⇧W: W reads as the better mnemonic but every browser binds it
+    // to close-window. E follows VS Code's Explorer, and this surface is where
+    // the files live.
+    chord: { code: 'KeyE', mod: true, shift: true },
     label: 'Toggle Workspace surface',
     group: 'Workspace',
   },
