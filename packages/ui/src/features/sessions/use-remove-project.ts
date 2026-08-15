@@ -6,10 +6,10 @@
  * dialog: the Tauri webview implements no JavaScript confirm panel, so a native
  * call resolves false without rendering and the removal never happens.
  *
- * `removeProjectFromList` is passed in (not pulled from a local `useProjects()`)
- * so the row drops from the CALLER's rendered instance — `useProjects` is local
- * `useState` per caller, so a fresh instance here would update nothing the
- * sidebar renders.
+ * `removeProjectFromList` is injected rather than pulled from a fresh
+ * `useProjects()` call, for testability — `useProjects` now reads the shared
+ * `store/projects.ts` store, so any caller's `removeProjectFromList()` updates
+ * every mounted consumer.
  */
 import { useCallback } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
