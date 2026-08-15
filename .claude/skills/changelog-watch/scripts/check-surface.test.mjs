@@ -41,8 +41,8 @@ async function fixture(rows) {
 test('passes over the checklists committed in this repo', async () => {
   const run = await runCli([]);
   assert.equal(run.code, 0, run.stderr);
-  assert.match(run.stdout, /docs\/adapters\/claude\/CONSUMED-SURFACE\.md: OK \(\d+ rows\)/);
-  assert.match(run.stdout, /docs\/adapters\/codex\/CONSUMED-SURFACE\.md: OK \(\d+ rows\)/);
+  assert.match(run.stdout, /docs\/research\/adapters\/claude\/CONSUMED-SURFACE\.md: OK \(\d+ rows\)/);
+  assert.match(run.stdout, /docs\/research\/adapters\/codex\/CONSUMED-SURFACE\.md: OK \(\d+ rows\)/);
 });
 
 test('flags a row citing a symbol its file does not define', async () => {
