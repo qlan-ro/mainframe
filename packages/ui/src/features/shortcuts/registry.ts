@@ -80,6 +80,15 @@ export const SHORTCUTS = [
     label: 'Toggle Workspace surface',
     group: 'Workspace',
   },
+  {
+    id: 'workspace.new-terminal',
+    // ⌘J is VS Code's Toggle Panel, which is where its terminal lives — the
+    // habit issue #374 asked for. Here it opens a terminal outright; the
+    // intent reveals the Workspace surface on its way, so one key is enough.
+    chord: { code: 'KeyJ', mod: true },
+    label: 'New terminal',
+    group: 'Workspace',
+  },
   { id: 'app.search-palette', chord: { code: 'KeyO', mod: true }, label: 'Open command palette', group: 'App' },
   { id: 'app.review', chord: { code: 'KeyR', mod: true, shift: true }, label: 'Open review', group: 'App' },
   { id: 'app.settings', chord: { code: 'Comma', mod: true }, label: 'Open settings', group: 'App' },

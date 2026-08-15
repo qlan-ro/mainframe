@@ -2,7 +2,7 @@ import { Fragment, memo, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
-import { onSurfaceIntent } from '@/store/surface-intents';
+import { emitSurfaceIntent, onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
@@ -65,6 +65,10 @@ function SurfaceHostImpl() {
   // again to hide" half of the shipped behavior.
   useShortcutAction('workspace.toggle-chat', () => toggleSurface('chat'));
   useShortcutAction('workspace.toggle-workspace', () => toggleSurface('workspace'));
+  // Goes through the intent rather than calling the terminal store: the
+  // subscriber resolves the cwd, spawns the PTY and lights the surface, so the
+  // chord and the picker row can never diverge.
+  useShortcutAction('workspace.new-terminal', () => emitSurfaceIntent({ type: 'new-terminal' }));
 
   const { top, bottom, topFlex, vFlex } = layout;
   const twoCol = top.length === 2;
