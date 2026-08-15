@@ -9,14 +9,13 @@
  * hangs on the connecting overlay.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { isElectronRuntime, isTauriRuntime } from '../detect';
+import { isTauriRuntime } from '../detect';
 
 type Mutable = Record<string, unknown>;
 
 afterEach(() => {
   delete (window as unknown as Mutable).__TAURI_INTERNALS__;
   delete (window as unknown as Mutable).__mfPreviewWebview;
-  delete (window as unknown as Mutable).mainframe;
 });
 
 describe('isTauriRuntime', () => {
@@ -42,13 +41,5 @@ describe('isTauriRuntime', () => {
     (window as unknown as Mutable).__mfPreviewWebview = false;
 
     expect(isTauriRuntime()).toBe(false);
-  });
-});
-
-describe('isElectronRuntime', () => {
-  it('is true only with the preload bridge present', () => {
-    expect(isElectronRuntime()).toBe(false);
-    (window as unknown as Mutable).mainframe = {};
-    expect(isElectronRuntime()).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 //! Ported from `GET /health` in `src/server/http.ts`.
 //!
 //! Bare-JSON response (not the `{success,data}` envelope) per
-//! `docs/rust-port/CONTRACT/routes.json`'s `/health` entry, and always public
+//! the frozen wire-contract snapshot from the Node daemon (retired — see git history around the 2026-07-24 Rust cutover) `/health` entry, and always public
 //! (the auth middleware skips it).
 
 use std::sync::Arc;
@@ -45,5 +45,5 @@ pub async fn get_health(State(ctx): State<Arc<AppCtx>>) -> Json<HealthResponse> 
 // serializes as `null` (not omitted) to match the fixture, so no
 // `skip_serializing_if`. `timestamp` uses now_iso8601() (millis + `Z`, matching
 // Node's Date.toISOString()), NOT chrono's to_rfc3339(). Byte shape verified in
-// docs/rust-port/fixtures/route.health.json (the scaffold's assertions moved to
+// packages/core-rs/crates/mainframe-types/tests/fixtures/route.health.json (the scaffold's assertions moved to
 // the http integration tests).

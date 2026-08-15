@@ -48,7 +48,6 @@ describe('design token audit', () => {
   // brand). Scanned since the 2026-08-09 v2 fold removed the tree-level skip.
   const COLOR_LITERAL_ALLOWLIST = new Set([
     'features/terminal/terminal-cache.ts',
-    'lib/host/electron-preview.ts',
     'features/chat/gates/shared/GateShell.tsx',
     'features/shared/ProviderLogo.tsx',
   ]);

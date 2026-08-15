@@ -20,7 +20,7 @@ useAutomationsStore.getState().setGateway(createHttpGateway());
 
 // Install the host-level window-drag listener once at startup.
 // TauriAdapter.init() wires the mousedown → startDragging listener.
-// ElectronAdapter has no init (CSS handles drag via [data-drag-region]).
+// FakeHostBridge has no init (CSS handles drag via [data-drag-region]).
 const host = getHost();
 host.init?.();
 

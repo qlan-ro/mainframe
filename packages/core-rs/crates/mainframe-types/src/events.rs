@@ -5,7 +5,7 @@
 //! tagged on `type`; tag values are copied verbatim (dotted / colon-delimited)
 //! via per-variant `#[serde(rename = ...)]`, and struct-variant fields are
 //! camelCased via `rename_all_fields`. Cross-checked against
-//! `docs/rust-port/CONTRACT/ws-events.json`.
+//! `the frozen wire-contract snapshot from the Node daemon (retired — see git history around the 2026-07-24 Rust cutover, docs/rust-port/CUTOVER.md, for the full record)`.
 
 use serde::{Deserialize, Serialize};
 
@@ -540,42 +540,40 @@ mod tests {
     #[test]
     fn fixture_permission_requested() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.permission-requested.json"
+            "../tests/fixtures/event.permission-requested.json"
         ));
     }
 
     #[test]
     fn fixture_display_message_added() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.display-message-added.json"
+            "../tests/fixtures/event.display-message-added.json"
         ));
     }
 
     #[test]
     fn fixture_chat_updated() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.chat-updated.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.chat-updated.json"));
     }
 
     #[test]
     fn fixture_message_queued_snapshot() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.message-queued-snapshot.json"
+            "../tests/fixtures/event.message-queued-snapshot.json"
         ));
     }
 
     #[test]
     fn fixture_workflow_run_updated() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.workflow-run-updated.json"
+            "../tests/fixtures/event.workflow-run-updated.json"
         ));
     }
 
     #[test]
     fn fixture_background_task_updated() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.background_task-updated.json"
+            "../tests/fixtures/event.background_task-updated.json"
         ));
     }
 
@@ -583,99 +581,85 @@ mod tests {
     #[test]
     fn fixture_connection_ready() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.connection-ready.json"
+            "../tests/fixtures/event.connection-ready.json"
         ));
     }
 
     #[test]
     fn fixture_chat_created() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.chat-created.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.chat-created.json"));
     }
 
     #[test]
     fn fixture_message_added() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.message-added.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.message-added.json"));
     }
 
     #[test]
     fn fixture_context_updated() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.context-updated.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.context-updated.json"));
     }
 
     #[test]
     fn fixture_process_started() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.process-started.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.process-started.json"));
     }
 
     #[test]
     fn fixture_chat_context_usage() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.chat-contextUsage.json"
+            "../tests/fixtures/event.chat-contextUsage.json"
         ));
     }
 
     #[test]
     fn fixture_adapter_models_updated() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.adapter-models-updated.json"
+            "../tests/fixtures/event.adapter-models-updated.json"
         ));
     }
 
     #[test]
     fn fixture_tunnel_status() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.tunnel-status.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.tunnel-status.json"));
     }
 
     #[test]
     fn fixture_workflow_step_updated() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.workflow-step-updated.json"
+            "../tests/fixtures/event.workflow-step-updated.json"
         ));
     }
 
     #[test]
     fn fixture_message_queued() {
         // Exercises the `ref` field (Rust raw identifier `r#ref`).
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.message-queued.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.message-queued.json"));
     }
 
     #[test]
     fn fixture_error() {
-        assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.error.json"
-        ));
+        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.error.json"));
     }
 
     #[test]
     fn fixture_worktree_offer_raised() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.worktree-offer-raised.json"
+            "../tests/fixtures/event.worktree-offer-raised.json"
         ));
     }
 
     #[test]
     fn fixture_worktree_offer_resolved() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.worktree-offer-resolved.json"
+            "../tests/fixtures/event.worktree-offer-resolved.json"
         ));
     }
 
     #[test]
     fn fixture_worktree_offer_snapshot() {
         assert_daemon_roundtrip(include_str!(
-            "../../../../../docs/rust-port/fixtures/event.worktree-offer-snapshot.json"
+            "../tests/fixtures/event.worktree-offer-snapshot.json"
         ));
     }
 
