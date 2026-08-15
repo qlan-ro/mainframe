@@ -1,5 +1,11 @@
 # @qlan-ro/mainframe-e2e
 
+## 0.1.1-rc.3
+
+### Patch Changes
+
+- [#633](https://github.com/qlan-ro/mainframe/pull/633) [`f7bd741`](https://github.com/qlan-ro/mainframe/commit/f7bd741531c95673ce1e17c10687cc31eb9b18e2) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Add a Tauri e2e spec covering the Automations library: row delete (confirmed and cancelled), the project badge for scoped and unscoped automations, and cross-project scoping in both directions.
+
 ## 0.1.1-rc.2
 
 ### Patch Changes
