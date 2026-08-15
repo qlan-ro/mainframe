@@ -136,6 +136,22 @@ it('projects stays [] and loading becomes false without an unhandled rejection w
   expect(result.current.projects).toEqual([]);
 });
 
+it('mounting several consumers together issues exactly one getProjects call', async () => {
+  mockGetProjects.mockResolvedValue([]);
+
+  const instances = [
+    renderHook(() => useProjects(), { wrapper }),
+    renderHook(() => useProjects(), { wrapper }),
+    renderHook(() => useProjects(), { wrapper }),
+  ];
+
+  await waitFor(() => {
+    for (const { result } of instances) expect(result.current.loading).toBe(false);
+  });
+
+  expect(mockGetProjects).toHaveBeenCalledTimes(1);
+});
+
 it('a reload from one mounted instance is visible to a second, independently-mounted instance', async () => {
   mockGetProjects.mockResolvedValue([]);
 
