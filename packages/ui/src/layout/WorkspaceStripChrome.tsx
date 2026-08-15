@@ -7,12 +7,13 @@
  *   workspace-surface-close       — hide the workspace (primary pane)
  *   workspace-pane-close-<paneId> — un-split (secondary pane)
  */
-import { FolderTree, LayoutPanelLeft, X } from 'lucide-react';
+import { LayoutPanelLeft, PanelRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { isSurfaceFloor, useLayoutStore } from '@/store/layout';
-import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { EditorGlyph } from './surface-icons';
 
 /** Strip height, shared with the empty-state header so the two never drift.
@@ -44,7 +45,8 @@ export function WorkspaceStripActions({ paneId, primary }: { paneId?: string; pr
   const isFloor = useLayoutStore((s) => isSurfaceFloor(s.layout, 'workspace'));
   const closePane = useLayoutStore((s) => s.closePane);
 
-  const filesOpen = useWorkspaceFilesPanel((s) => s.open);
+  const scopeKey = useActiveBasesStore((s) => s.scopeKey);
+  const filesOpen = useWorkspaceFilesPanel((s) => isWorkspaceFilesPanelOpen(s.openByScope, scopeKey));
   const setFilesOpen = useWorkspaceFilesPanel((s) => s.setOpen);
 
   return (
@@ -53,16 +55,13 @@ export function WorkspaceStripActions({ paneId, primary }: { paneId?: string; pr
         <Hint label={filesOpen ? 'Hide files' : 'Show files'}>
           <Button
             data-testid="workspace-files-open"
-            // The panel's light-dismiss ignores this trigger — otherwise the
-            // pointerdown would close the open panel and the click reopen it.
-            data-workspace-files-trigger
             aria-pressed={filesOpen}
             variant="ghost"
             size="icon-xs"
             onClick={() => setFilesOpen(!filesOpen)}
             className={cn(filesOpen ? 'bg-accent text-foreground' : 'text-muted-foreground')}
           >
-            <FolderTree />
+            <PanelRight />
           </Button>
         </Hint>
       )}

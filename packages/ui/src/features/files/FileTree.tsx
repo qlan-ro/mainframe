@@ -1,206 +1,44 @@
 /**
  * FileTree — a lazy, expandable project file tree for the workspace's
- * floating Files panel.
+ * docked Files sidebar.
  *
  * Directories fetch their children on first expand via `getFileTree(dir)`
  * (the daemon returns a single level per call). Clicking a file emits the
  * `open-file` surface intent — the same path the chat tool-cards use — so the
  * workspace surface lights and the file opens as a tab. No `layout/` import.
  *
+ * The header row (workspace-root label, refresh, collapse) sits in
+ * `SidebarHeader` so it never scrolls; only the rows scroll, inside
+ * `SidebarScrollRegion` (the shared scroll-fade primitive `SessionSidebar`
+ * also uses — see that file for why a hand-rolled `overflow-y-auto` isn't
+ * used here). Both live under the single `data-testid="file-tree"` root so
+ * the root label stays reachable via that testid (e2e right-clicks it).
+ *
  * Reveal support: when the files store has a `revealTarget`, the tree
  * auto-expands ancestor directories, scrolls the target row into view, and
  * transiently highlights it. The target is consumed (cleared) on mount so a
  * subsequent remount does not re-trigger the reveal.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, File, Folder, PanelRightClose, RotateCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { PanelRightClose, RotateCw } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
-import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useFilesStore } from '@/store/files';
 import { useLayoutStore } from '@/store/layout';
 import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
-import { FileTreeRowMenu } from './FileTreeRowMenu';
+import { SidebarHeader } from '@/components/ui/sidebar';
 import { Hint } from '@/components/ui/hint';
-
-/** Join an absolute base with a repo-relative path; falls back to the relative path when no base is known. */
-function toFullPath(base: string | undefined, relativePath: string): string {
-  return base ? `${base}/${relativePath}` : relativePath;
-}
-
-/** Last path segment (folder/file name) of an absolute or relative path. */
-function lastSegment(path: string): string {
-  const i = path.replace(/\/+$/, '').lastIndexOf('/');
-  return i === -1 ? path : path.slice(i + 1);
-}
-
-/** Directories first, then files, each alphabetical. */
-function sortEntries(entries: FileTreeEntry[]): FileTreeEntry[] {
-  return [...entries].sort((a, b) => {
-    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-/** True when `candidatePath` is a strict ancestor of `targetPath`. */
-function isAncestorOf(candidatePath: string, targetPath: string): boolean {
-  return targetPath.startsWith(candidatePath + '/');
-}
-
-interface NodeProps {
-  entry: FileTreeEntry;
-  depth: number;
-  port: number;
-  projectId: string;
-  chatId?: string;
-  /** Absolute workspace base (worktree/project path) for Reveal/Copy Path actions. */
-  base: string | undefined;
-  /** Normalized relative path to reveal, or null when no reveal is pending. */
-  revealPath: string | null;
-  /** Path of the file currently open in the active tab. */
-  activeFilePath: string | null;
-}
-
-function TreeNode({ entry, depth, port, projectId, chatId, base, revealPath, activeFilePath }: NodeProps) {
-  const [open, setOpen] = useState(false);
-  const [children, setChildren] = useState<FileTreeEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const indent = 8 + depth * 12;
-
-  const isRevealTarget = revealPath !== null && entry.path === revealPath;
-  const isRevealAncestor = entry.type === 'directory' && revealPath !== null && isAncestorOf(entry.path, revealPath);
-  const isSelected = entry.type === 'file' && entry.path === activeFilePath;
-
-  const rowRef = useRef<HTMLButtonElement>(null);
-
-  const fetchChildren = useCallback(async () => {
-    if (children !== null || loading) return;
-    setLoading(true);
-    try {
-      setChildren(await getFileTree(port, projectId, entry.path, chatId));
-    } catch (err) {
-      console.warn('[FileTree] failed to load', entry.path, err);
-      setChildren([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [children, loading, port, projectId, entry.path, chatId]);
-
-  const toggle = useCallback(async () => {
-    const next = !open;
-    setOpen(next);
-    if (next) {
-      await fetchChildren();
-    }
-  }, [open, fetchChildren]);
-
-  // Auto-expand ancestor directories to reach the reveal target — but only ONCE
-  // per reveal. The latch is load-bearing: without it, collapsing an ancestor of
-  // the last-revealed file re-fires this effect (open flips to false while the
-  // node is still a reveal-ancestor) and immediately re-opens it, making the
-  // folder impossible to collapse. Keyed on revealPath so a NEW reveal re-arms it.
-  const autoExpandedRevealRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isRevealAncestor || revealPath === null) return;
-    if (autoExpandedRevealRef.current === revealPath) return;
-    autoExpandedRevealRef.current = revealPath;
-    if (open) return;
-    setOpen(true);
-    fetchChildren().catch((err: unknown) => {
-      console.warn('[FileTree] reveal auto-expand failed', entry.path, err);
-    });
-  }, [isRevealAncestor, revealPath, open, fetchChildren, entry.path]);
-
-  // Scroll and highlight the target row once it's mounted in the DOM.
-  useEffect(() => {
-    if (!isRevealTarget || rowRef.current === null) return;
-    rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [isRevealTarget]);
-
-  const fullPath = toFullPath(base, entry.path);
-
-  if (entry.type === 'file') {
-    return (
-      <FileTreeRowMenu entry={entry} fullPath={fullPath}>
-        <button
-          ref={rowRef}
-          data-testid={`file-tree-row-${entry.path}`}
-          data-kind="file"
-          data-highlighted={isRevealTarget ? 'true' : undefined}
-          type="button"
-          onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
-          style={{ paddingLeft: indent }}
-          className={[
-            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground',
-            isSelected ? 'border-l-primary bg-accent font-semibold text-foreground' : 'border-l-transparent',
-            isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          <span className="w-[9px] flex-shrink-0" />
-          <File size={12} className="flex-shrink-0 text-muted-foreground" />
-          <TruncatedWithTooltip
-            text={entry.name}
-            tooltip={fullPath}
-            className="min-w-0"
-            contentClassName="font-mono break-all"
-          />
-        </button>
-      </FileTreeRowMenu>
-    );
-  }
-
-  return (
-    <>
-      <FileTreeRowMenu entry={entry} fullPath={fullPath}>
-        <button
-          data-testid={`file-tree-row-${entry.path}`}
-          data-kind="directory"
-          type="button"
-          onClick={toggle}
-          style={{ paddingLeft: indent }}
-          className="flex h-[22px] w-full items-center gap-[5px] border-none bg-transparent pr-[12px] text-left text-xs font-medium text-foreground hover:bg-accent"
-        >
-          <ChevronRight
-            size={12}
-            className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
-          />
-          <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
-          <TruncatedWithTooltip
-            text={entry.name}
-            tooltip={fullPath}
-            className="min-w-0"
-            contentClassName="font-mono break-all"
-          />
-        </button>
-      </FileTreeRowMenu>
-      {open &&
-        (children ?? []).length > 0 &&
-        sortEntries(children!).map((child) => (
-          <TreeNode
-            key={child.path}
-            entry={child}
-            depth={depth + 1}
-            port={port}
-            projectId={projectId}
-            chatId={chatId}
-            base={base}
-            revealPath={revealPath}
-            activeFilePath={activeFilePath}
-          />
-        ))}
-    </>
-  );
-}
+import { FileTreeRowMenu } from './FileTreeRowMenu';
+import { FileTreeNode } from './FileTreeNode';
+import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
+import { lastSegment, sortEntries } from './file-tree-utils';
 
 interface FileTreeProps {
   port: number;
   projectId: string;
   chatId?: string;
   /** Renders the panel-close control next to Refresh — the tree's
-   *  project-name row IS the floating Files panel's header (no separate row). */
+   *  project-name row IS the docked Files sidebar's header (no separate row). */
   onCollapse?: () => void;
 }
 
@@ -246,6 +84,8 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
     };
   }, [port, projectId, chatId, refreshKey]);
 
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
   if (error) {
     return <div className="px-3 py-4 text-xs text-muted-foreground">Couldn't load files.</div>;
   }
@@ -257,9 +97,8 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
   }
 
   return (
-    <div data-testid="file-tree">
-      {/* Header row: workspace-root label (right-clickable) + refresh button */}
-      <div className="flex h-[20px] items-center px-[12px] py-[4px]">
+    <div data-testid="file-tree" className="flex min-h-0 flex-1 flex-col">
+      <SidebarHeader className="h-[20px] flex-row items-center gap-0 px-[12px] py-[4px]">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
           <span className="flex-1 truncate font-mono text-xs font-medium text-muted-foreground">
             {lastSegment(base ?? projectId)}
@@ -269,7 +108,7 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
           <button
             data-testid="file-tree-refresh"
             type="button"
-            onClick={() => setRefreshKey((k) => k + 1)}
+            onClick={refresh}
             className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
           >
             <RotateCw size={14} className="text-muted-foreground" />
@@ -287,22 +126,24 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
             </button>
           </Hint>
         )}
-      </div>
-      <div className="py-[4px]">
-        {sortEntries(roots).map((entry) => (
-          <TreeNode
-            key={entry.path}
-            entry={entry}
-            depth={0}
-            port={port}
-            projectId={projectId}
-            chatId={chatId}
-            base={base}
-            revealPath={revealPath}
-            activeFilePath={activeTabPath}
-          />
-        ))}
-      </div>
+      </SidebarHeader>
+      <SidebarScrollRegion>
+        <div className="py-[4px]">
+          {sortEntries(roots).map((entry) => (
+            <FileTreeNode
+              key={entry.path}
+              entry={entry}
+              depth={0}
+              port={port}
+              projectId={projectId}
+              chatId={chatId}
+              base={base}
+              revealPath={revealPath}
+              activeFilePath={activeTabPath}
+            />
+          ))}
+        </div>
+      </SidebarScrollRegion>
     </div>
   );
 }
