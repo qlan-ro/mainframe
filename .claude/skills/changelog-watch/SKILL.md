@@ -66,7 +66,7 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    allowed no-op — it records "checked, nothing new".
 
 7. **Offer the todo drafts** (template in `classification.md`) for filing
-   per `docs/agents/issue-tracker.md`. Filing is a separate, explicit
+   per `docs/guides/issue-tracker.md`. Filing is a separate, explicit
    action — never automatic.
 
 ## Range too wide

@@ -155,7 +155,7 @@ finished.
 
 ## Todo draft template
 
-One draft per compatibility risk, filed per `docs/agents/issue-tracker.md`
+One draft per compatibility risk, filed per `docs/guides/issue-tracker.md`
 (`labels = ["needs-triage"]`, `status` left at its default `open`):
 
 ```

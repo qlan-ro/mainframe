@@ -6,11 +6,11 @@ AI-native development environment for orchestrating agents.
 
 ### Issue tracker
 
-Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/agents/issue-tracker.md`.
+Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/guides/issue-tracker.md`.
 
 ### Triage labels
 
-Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/agents/triage-labels.md`.
+Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/guides/triage-labels.md`.
 
 # Workflow
 
