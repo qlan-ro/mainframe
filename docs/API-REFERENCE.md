@@ -224,14 +224,14 @@ guard with a sensitive-path blocklist and a realpath check.
 
 | Method & Path | Purpose | Request | Response |
 |---|---|---|---|
-| `GET /api/filesystem/browse` | Browse an arbitrary directory (project picker) | `?path=` | Directory entries |
-| `GET /api/files/external` | Read a file by absolute path, outside any registered project | `?path=` | File content |
-| `GET /api/projects/{id}/paths/resolve` | Resolve a relative path against the project (or its worktree) root | `?path=` | Resolved absolute path |
-| `GET /api/projects/{id}/tree` | Directory tree listing | `?path=`, optional | `FsEntry[]` |
-| `GET /api/projects/{id}/search/files` | Search file names within the project | `?query=` | `FileHit[]` |
-| `GET /api/projects/{id}/files-list` | Flat file listing | — | File paths |
-| `GET /api/projects/{id}/files` | Read a file's content | `?path=` | File content |
-| `PUT /api/projects/{id}/files` | Write a file's content | `?path=`, body = raw content | `ok_empty` |
+| `GET /api/filesystem/browse` | Browse an arbitrary directory (project picker) | `?path=` (default `$HOME`, `~` expanded), `?includeFiles=`, `?includeHidden=` | Directory entries |
+| `GET /api/files/external` | Read a file by absolute path, outside any registered project | `?path=` (required), `?encoding=base64` (optional) | File content |
+| `GET /api/projects/{id}/paths/resolve` | Resolve a relative path against the project (or its worktree) root | `?path=` (required), `?chatId=` | Resolved absolute path |
+| `GET /api/projects/{id}/tree` | Directory tree listing | `?path=` (default `.`), `?chatId=` | `FsEntry[]` |
+| `GET /api/projects/{id}/search/files` | Search file names within the project | `?q=`, `?limit=` (default 50, cap 200), `?chatId=` | `FileHit[]` |
+| `GET /api/projects/{id}/files-list` | Flat file listing | `?limit=` (default/cap 5000), `?chatId=` | File paths |
+| `GET /api/projects/{id}/files` | Read a file's content | `?path=` (required), `?encoding=base64`, `?chatId=` | File content |
+| `PUT /api/projects/{id}/files` | Write a file's content | JSON body `{ path, content, chatId? }` (not a query param — this route takes the path in the body) | `ok_empty` |
 | `GET /api/projects/{id}/search/content` | Full-text content search — ripgrep for a directory scope, a direct read for a single-file scope | `?q=` (min 2 chars, required), `?path=` (scope, required), `?chatId=`, `?includeIgnored=` | Match list |
 
 ### Git — Read
@@ -281,11 +281,11 @@ project root otherwise) rather than a project id in the path.
 | Method & Path | Purpose | Request |
 |---|---|---|
 | `POST /api/git/status` | Status for a chat's working directory | `{ chatId }` |
-| `POST /api/git/stage` | Stage files | `{ chatId, paths? }` |
-| `POST /api/git/unstage` | Unstage files | `{ chatId, paths? }` |
-| `POST /api/git/commit` | Commit | `{ chatId, message }` |
-| `POST /api/git/push` | Push | `{ chatId, ... }` |
-| `POST /api/projects/{id}/git/diff-since-main` | Diff between the chat's branch and its base | `{ chatId }` |
+| `POST /api/git/stage` | Stage files | `{ chatId, files: string[] }` |
+| `POST /api/git/unstage` | Unstage files | `{ chatId, files: string[] }` |
+| `POST /api/git/commit` | Stage `files` (if any) then commit | `{ chatId, message, files: string[] }` |
+| `POST /api/git/push` | Push | `{ chatId }` |
+| `POST /api/projects/{id}/git/diff-since-main` | Diff between the chat's branch and its base | `{ chatId?, files?: string[] }` |
 
 ### Git — GitHub Remotes
 
@@ -305,7 +305,7 @@ through the `ChatManager` facade (enriched with `displayStatus` /
 
 | Method & Path | Purpose | Request | Response |
 |---|---|---|---|
-| `GET /api/chats` | List all chats | — | `Chat[]` |
+| `GET /api/chats` | List chats, filtered | `?project=` (project id), `?tags=` (CSV, each `[a-z0-9-]+`, ANDed), `?synthetic=` (CSV; `has-worktree` is the one recognized value) | `Chat[]` |
 | `GET /api/projects/{projectId}/chats` | List a project's chats | — | `Chat[]` |
 | `GET /api/chats/{id}` | Get one chat | — | `Chat` |
 | `POST /api/chats/{id}/archive` | Archive a chat | — | `ok_empty` |
@@ -555,7 +555,7 @@ Source: `routes/automations.rs`, `routes/automation_admin.rs`,
 
 | Method & Path | Purpose | Request | Response |
 |---|---|---|---|
-| `GET /api/automations` | List automations | — | Automation list |
+| `GET /api/automations` | List automations | `?projectId=` (scopes to that project plus unscoped/global automations; omitted returns everything) | Automation list |
 | `POST /api/automations` | Create an automation | Automation definition | Created automation |
 | `GET /api/automations/{id}` | Get one automation | — | Automation |
 | `PUT /api/automations/{id}` | Update an automation | Automation definition | Updated automation |
@@ -567,10 +567,10 @@ Source: `routes/automations.rs`, `routes/automation_admin.rs`,
 | `GET /api/automation-runs/{id}` | Get one run | — | Run detail, with a 32 KB truncated output preview per step |
 | `POST /api/automation-runs/{id}/cancel` | Cancel a running run | — | `ok_empty` |
 | `GET /api/automation-interactions` | List pending human-in-the-loop interactions | — | Interaction list |
-| `POST /api/automation-interactions/{id}/respond` | Resolve a pending interaction | Response payload | `ok_empty` |
+| `POST /api/automation-interactions/{id}/respond` | Resolve a pending interaction | `{ response: object }` (shape is per-interaction-type; not further validated at this layer) | `ok_empty` |
 | `GET /api/automation-actions` | List the action catalog available to automation steps | — | Action catalog |
 | `GET /api/automation-credentials` | List stored credential labels (never the secret values) | — | Label list |
-| `PUT /api/automation-credentials/{label}` | Store/update a credential | `{ value, ... }` | `ok_empty` |
+| `PUT /api/automation-credentials/{label}` | Store/update a credential | `{ token: string }` | `ok_empty` |
 | `GET /api/automation-credentials/{label}` | Read a credential's metadata (not its value) | — | Metadata |
 | `DELETE /api/automation-credentials/{label}` | Delete a credential | — | `ok_empty` |
 | `POST /api/automation-webhooks/{hookId}` | Webhook ingress (auth-exempt, HMAC-verified) | Raw provider payload | See [deviations](#envelope-and-status-code-deviations) |
