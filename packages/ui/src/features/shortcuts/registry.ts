@@ -19,7 +19,7 @@ export const SHORTCUTS = [
     id: 'sessions.tab-by-index',
     // ⌘1…⌘9 is the platform's "switch to the Nth tab" (Safari, VS Code, Slack),
     // and session tabs are that. The surface toggles held these digits first but
-    // have no such convention behind them, so they moved to ⌘⇧C / ⌘⇧E rather
+    // have no such convention behind them, so they moved to ⌘⇧C / ⌘⇧W rather
     // than keep the chord issue #374 asked for.
     chord: TAB_BY_INDEX_CHORDS,
     label: 'Switch to tab N',

@@ -6,7 +6,7 @@
  * the same property the cheat sheet has.
  *
  * data-testid:
- *   settings-keybindings-pane
+ *   settings-pane-keybindings
  *   settings-keybindings-group-<group>
  *   settings-keybindings-reset-all
  */
@@ -54,7 +54,7 @@ export function KeybindingsPane() {
   })).filter(({ rows }) => rows.length > 0);
 
   return (
-    <div data-testid="settings-keybindings-pane" className="flex flex-col gap-2">
+    <div data-testid="settings-pane-keybindings" className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
           Shortcuts are stored on this Mac. Recording a chord another action holds offers to take it.
