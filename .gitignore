@@ -72,3 +72,4 @@ dist-local/
 # Recorded demo output — takes are large and regenerated; scripts are versioned, videos are not.
 demos/**/*.mp4
 demos/**/*.webm
+skills-lock.json
