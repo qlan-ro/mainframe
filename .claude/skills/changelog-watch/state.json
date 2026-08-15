@@ -7,7 +7,7 @@
       "changelogPath": "CHANGELOG.md",
       "lastReviewedRef": "2.1.220",
       "lastReviewedAt": "2026-07-25",
-      "checklist": "docs/adapters/claude/CONSUMED-SURFACE.md"
+      "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
       "repo": "openai/codex",
@@ -15,7 +15,7 @@
       "includePrerelease": false,
       "lastReviewedRef": "rust-v0.145.0",
       "lastReviewedAt": "2026-07-25",
-      "checklist": "docs/adapters/codex/CONSUMED-SURFACE.md"
+      "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }
 }

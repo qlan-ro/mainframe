@@ -1,5 +1,5 @@
-//! Update-channel resolution — Plan: update-channel-setting design doc
-//! (docs/architecture/2026-07-13-update-channel-setting-design.md).
+//! Update-channel resolution — shipped per the update-channel-setting design
+//! (#458).
 //!
 //! Reads the daemon's `updateChannel` general setting and, for the
 //! prerelease channel, resolves the newest published GitHub release's

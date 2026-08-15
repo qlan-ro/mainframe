@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Contrast guardrail — the CI encoding of the typography/legibility audit
- * (docs/architecture/2026-07-11-typography-legibility-audit.md §7), repointed at
+ * (docs/research/2026-07-11-typography-legibility-audit.md §7), repointed at
  * the v2 token layer on 2026-08-06.
  *
  * It read `src/styles/globals.css` until then. That sheet was deleted with the v1

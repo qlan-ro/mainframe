@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Validates the citations in docs/adapters/{claude,codex}/CONSUMED-SURFACE.md:
+ * Validates the citations in docs/research/adapters/{claude,codex}/CONSUMED-SURFACE.md:
  * every checklist row must name a Mainframe consumer, and every cited file and
  * symbol must still exist. Without this the checklists rot invisibly — a
  * renamed symbol leaves a row that reads as covered while nothing consumes it.
@@ -13,8 +13,8 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '../../../..');
 
 const PAIRS = [
-  { doc: 'docs/adapters/claude/CONSUMED-SURFACE.md', crate: 'packages/core-rs/crates/mainframe-adapter-claude' },
-  { doc: 'docs/adapters/codex/CONSUMED-SURFACE.md', crate: 'packages/core-rs/crates/mainframe-adapter-codex' },
+  { doc: 'docs/research/adapters/claude/CONSUMED-SURFACE.md', crate: 'packages/core-rs/crates/mainframe-adapter-claude' },
+  { doc: 'docs/research/adapters/codex/CONSUMED-SURFACE.md', crate: 'packages/core-rs/crates/mainframe-adapter-codex' },
 ];
 
 const ROW_RE = /^\|\s*((?:CLAUDE|CODEX)-[A-Z]+-\d+)\s*\|/;

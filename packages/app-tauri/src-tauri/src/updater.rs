@@ -3,7 +3,7 @@
 //! Implements three Tauri commands (`updater_check`, `updater_download`,
 //! `updater_install`) plus a 10s-then-4h background scheduler that mirrors
 //! `packages/app-electron/src/main/auto-updater.ts`. Signing keypair + CI release
-//! workflow are deferred (see `docs/architecture/2026-06-24-host-bridge-plan3-infra-todos.md`).
+//! workflow are deferred.
 
 pub mod channel;
 pub mod error_classifier;
