@@ -14,6 +14,11 @@
  * the tree MOUNTED, so folder expansion and scroll position survive a close —
  * the same guarantee the old mounted-hidden trick gave, for free.
  *
+ * `FileTree` owns its own fixed header / scrolling body split (via
+ * `SidebarHeader` + `SidebarScrollRegion`) — this component just gives it a
+ * non-scrolling `flex-1 min-h-0` slot to fill, so the tree's header row stays
+ * pinned while only its rows scroll.
+ *
  * data-testid: workspace-files-panel (present only while open).
  */
 import { Sidebar } from '@/components/ui/sidebar';
@@ -32,7 +37,7 @@ export function WorkspaceFilesPanel() {
 
   return (
     <Sidebar side="right" collapsible="offcanvas">
-      <div data-testid={open ? 'workspace-files-panel' : undefined} className="min-h-0 flex-1 overflow-y-auto py-1.5">
+      <div data-testid={open ? 'workspace-files-panel' : undefined} className="flex min-h-0 flex-1 flex-col">
         {!projectId ? (
           <div className="px-3 py-4 text-xs text-muted-foreground">Open a session to browse its files.</div>
         ) : (
