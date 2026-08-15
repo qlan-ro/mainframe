@@ -13,9 +13,12 @@ import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { UrlTabInstance } from '@/features/url-tab/UrlTabInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { activeLaunchScope } from '@/lib/launch-scope';
 import { filterRunByScope } from '@/store/run-scope-filter';
 import { WorkspaceFilesPanel } from '@/features/files/WorkspaceFilesPanel';
@@ -149,29 +152,38 @@ export function WorkspaceSurface() {
     activeScopeKey ??
     (projectId ? (Object.keys(processStatuses).find((k) => k.startsWith(`${projectId}:`)) ?? null) : null);
 
+  // The docked Files sidebar's open state — scoped to the active-bases-store's
+  // scopeKey (not the fallback-widened `scopeKey` above, which is a tab-display
+  // convenience), and owned here so the sidebar and the content pane below are
+  // flex siblings under one SidebarProvider — the panel never overlaps content.
+  const filesScopeKey = useActiveBasesStore((s) => s.scopeKey);
+  const filesOpen = useWorkspaceFilesPanel((s) => isWorkspaceFilesPanelOpen(s.openByScope, filesScopeKey));
+  const setFilesOpen = useWorkspaceFilesPanel((s) => s.setOpen);
+
   return (
-    <div data-testid="workspace-surface" className="relative flex h-full flex-col">
-      {hasContent ? (
-        <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
-          {run.panes.map((pane, i) => (
-            <div
-              key={pane.id}
-              className={`flex min-h-0 min-w-0 flex-1 ${
-                i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
-              }`}
-            >
-              <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          <WorkspaceEmptyHeader />
-          <WorkspaceEmptyState />
-        </>
-      )}
-      {/* Floating Files rail + panel — the session panel's pattern on this surface. */}
+    <SidebarProvider data-testid="workspace-surface" open={filesOpen} onOpenChange={setFilesOpen} className="h-full">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        {hasContent ? (
+          <div className={`flex min-h-0 flex-1 ${run.dir === 'h' ? 'flex-col' : 'flex-row'}`}>
+            {run.panes.map((pane, i) => (
+              <div
+                key={pane.id}
+                className={`flex min-h-0 min-w-0 flex-1 ${
+                  i > 0 ? (run.dir === 'h' ? 'border-t border-border' : 'border-l border-border') : ''
+                }`}
+              >
+                <WorkspacePaneView pane={pane} primary={i === 0} scopeKey={scopeKey} projectId={projectId} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <WorkspaceEmptyHeader />
+            <WorkspaceEmptyState />
+          </>
+        )}
+      </div>
       <WorkspaceFilesPanel />
-    </div>
+    </SidebarProvider>
   );
 }

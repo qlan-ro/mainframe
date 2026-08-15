@@ -28,7 +28,7 @@ import { toFileRef } from '@/lib/files/file-ref';
 import { onSurfaceIntent } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useUiPrefs } from './ui-prefs';
-import { useWorkspaceFilesPanel } from './workspace-files-panel';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from './workspace-files-panel';
 import { useEditorStore } from './editor';
 import { useFilesStore } from './files';
 import { useOverlaysStore } from './overlays';
@@ -82,11 +82,8 @@ export function subscribeToFileIntents(): () => void {
         useEditorStore.getState().setRevealTarget(path, { line, character });
       }
 
-      // The floating Files panel is a PICKER — a completed pick closes it, or
-      // its glass card would sit over the just-opened tab's own header
-      // controls (a press on the card counts as "inside", so light dismiss
-      // can't save you; caught by the e2e batch).
-      useWorkspaceFilesPanel.getState().setOpen(false);
+      // The docked Files sidebar stays open across a pick — it pushes the
+      // content pane rather than covering it, so there is nothing to close.
       return;
     }
 
@@ -106,13 +103,11 @@ export function subscribeToFileIntents(): () => void {
       useLayoutStore
         .getState()
         .openFileTab({ kind: 'diff', path, title, original, modified, scopeKey: activeScopeKey() }, 'preview');
-      // Same picker rule as open-file above.
-      useWorkspaceFilesPanel.getState().setOpen(false);
       return;
     }
 
     if (intent.type === 'reveal-file') {
-      // Show the workspace AND float the Files panel so the user can see the tree.
+      // Show the workspace AND open the docked Files sidebar so the user can see the tree.
       ensureWorkspaceActive();
       useWorkspaceFilesPanel.getState().setOpen(true);
       // Normalize the path (same logic as open-file) and stash it for the tree.
@@ -158,7 +153,8 @@ export function subscribeToFileIntents(): () => void {
       // The toggle means "is the tree ON SCREEN", not just the panel flag:
       // with the panel open but the workspace surface unlit, the tree is
       // invisible — the click must show it (open + light), never close it.
-      const { open, setOpen } = useWorkspaceFilesPanel.getState();
+      const { openByScope, setOpen } = useWorkspaceFilesPanel.getState();
+      const open = isWorkspaceFilesPanelOpen(openByScope, activeScopeKey() ?? null);
       const { layout } = useLayoutStore.getState();
       const workspaceLit = layout.top.includes('workspace') || layout.bottom === 'workspace';
       if (open && workspaceLit) {

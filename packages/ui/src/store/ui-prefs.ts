@@ -1,11 +1,13 @@
 /**
  * ui-prefs — the single persisted store for global UI chrome.
  *
- * Owns sidebar visibility, the workspace Files sidebar's collapse, the
- * committed sidebar width, and the session panel's per-section open state. Persisted to localStorage under
+ * Owns sidebar visibility, the committed sidebar width, and the session
+ * panel's per-section open state. Persisted to localStorage under
  * `mf:ui-prefs` via zustand's persist middleware (mirrors store/tutorial.ts).
  * Per-session surface layout is NOT here — it stays in-memory in
- * store/layout.ts (live PTY/preview refs make it unsafe to persist).
+ * store/layout.ts (live PTY/preview refs make it unsafe to persist). The
+ * workspace Files sidebar's open state is scoped per project/worktree, so it
+ * lives in its own store — store/workspace-files-panel — not here.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -159,8 +161,10 @@ export const useUiPrefs = create<UiPrefsState>()(
         }
         if (version < 4) {
           // v3 retired the right InspectorPane; v4 retired its short-lived docked
-          // successor — the Files tree is a transient floating panel now
-          // (store/workspace-files-panel), so neither flag persists.
+          // successor — the Files tree became a transient floating panel, so
+          // neither flag persisted at the time. (2026-08-15: it's a docked
+          // sidebar again, but its open state lives in its own scoped store —
+          // store/workspace-files-panel, keyed per project/worktree — not here.)
           delete next.inspectorVisible;
           delete next.workspaceFilesCollapsed;
         }
