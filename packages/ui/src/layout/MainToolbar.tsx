@@ -5,10 +5,26 @@ import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
+import { useLayoutStore } from '@/store/layout';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { SessionTabs } from '../features/session-tabs/SessionTabs';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph } from './surface-icons';
+
+/**
+ * True when the workspace surface's docked Files sidebar sits flush against
+ * the window's right edge — i.e. the workspace is the bottom strip, or the
+ * rightmost (or only) top column. When the workspace is instead the LEFT
+ * column of a two-up split, its sidebar docks mid-window and the toolbar's
+ * trailing icons (all the way at the true right edge) sit nowhere near it.
+ */
+function isWorkspaceSidebarAtRightEdge(layout: { top: string[]; bottom: string | null }): boolean {
+  if (layout.bottom === 'workspace') return true;
+  return layout.top[layout.top.length - 1] === 'workspace';
+}
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -37,6 +53,14 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
   const isDark = resolvedMode === 'dark';
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
   const searchChord = chordHint('app.search-palette');
+
+  // Nudge the trailing controls left when the docked Files sidebar is open at
+  // the window's right edge, so they read as making room for it rather than
+  // sitting jammed against its top-right corner.
+  const layout = useLayoutStore((s) => s.layout);
+  const filesScopeKey = useActiveBasesStore((s) => s.scopeKey);
+  const filesOpen = useWorkspaceFilesPanel((s) => isWorkspaceFilesPanelOpen(s.openByScope, filesScopeKey));
+  const shiftForFilesSidebar = filesOpen && isWorkspaceSidebarAtRightEdge(layout);
 
   return (
     <div
@@ -71,7 +95,7 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
       <SessionTabs />
 
       {/* Right: controls — search │ project tools │ workspace. */}
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className={cn('flex shrink-0 items-center gap-0.5', shiftForFilesSidebar && 'mr-2')}>
         <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
           <Button
             data-testid="main-toolbar-search"

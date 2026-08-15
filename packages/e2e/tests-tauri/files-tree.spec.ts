@@ -6,19 +6,22 @@
  * execFileSync, no shell interpolation).
  *
  * The tree lives INSIDE the workspace surface since the session-tabs rework
- * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md): a FLOATING
- * glass panel hanging from the strip's Files button — the session panel's
- * overlay pattern — light-dismissed by Escape or an outside pointer. It stays
- * MOUNTED (hidden) while closed, so tree expansion survives a dismiss. The
- * app-level InspectorPane is deleted. Change-scope coverage lives in
- * review-panel.spec.ts's "§review-panel — change scopes", not here.
+ * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md), as a persistent
+ * DOCKED sidebar on the surface's right edge (reversed from the earlier
+ * floating/light-dismissed glass panel, 2026-08-15 — see packages/ui/CLAUDE.md).
+ * It resizes/pushes the content pane rather than overlaying it, closes only
+ * via its own toggle (never Escape or an outside click — a docked sidebar has
+ * no "outside" to light-dismiss into), and stays MOUNTED while collapsed, so
+ * tree expansion survives a close. The app-level InspectorPane is deleted.
+ * Change-scope coverage lives in review-panel.spec.ts's "§review-panel —
+ * change scopes", not here.
  *
  * Testid reference (verified against packages/ui/src):
  *   surface-rail-workspace   — toolbar surface toggle (lights the workspace;
  *                              the strip's Files button only exists while lit —
  *                              the old toolbar Files toggle is deleted, and the
  *                              palette's "Toggle Files" covers the hidden case)
- *   workspace-files-panel    — the floating panel (present only while OPEN)
+ *   workspace-files-panel    — the docked sidebar's content (present only while OPEN)
  *   workspace-files-open     — the strip's Files button (primary pane +
  *                              empty-state header)
  *   workspace-files-collapse — close control on the tree's header row
@@ -141,13 +144,13 @@ test.describe('§files-tree — workspace Files sidebar', () => {
 
   // ── Panel chrome ──────────────────────────────────────────────────────────
 
-  test('the strip Files button floats the panel, toggles it closed, and Escape light-dismisses', async () => {
+  test('the strip Files button opens the docked sidebar and toggles it closed; Escape and outside clicks do NOT dismiss it', async () => {
     const { page } = app;
     const stripButton = page.getByTestId('workspace-files-open');
     const pane = page.getByTestId('workspace-files-panel');
 
     // Boot: workspace unlit → no strip, no panel. Light the surface first —
-    // the strip's Files button is the panel's one docked trigger now (the
+    // the strip's Files button is the sidebar's one docked trigger now (the
     // toolbar toggle is gone; the palette's "Toggle Files" covers the
     // workspace-hidden case via the toggle-workspace-files intent).
     await expect(pane).toHaveCount(0);
@@ -159,16 +162,16 @@ test.describe('§files-tree — workspace Files sidebar', () => {
     await expect(pane).toBeVisible();
     await expect(stripButton).toHaveAttribute('aria-pressed', 'true');
 
-    // Second click closes (no dismiss-then-reopen double toggle).
+    // A docked sidebar has no "outside" to light-dismiss into — Escape leaves it open.
+    await page.keyboard.press('Escape');
+    await expect(pane).toBeVisible();
+
+    // Second click on the trigger closes it (no dismiss-then-reopen double toggle).
     await stripButton.click();
     await expect(pane).toHaveCount(0);
     await expect(stripButton).toHaveAttribute('aria-pressed', 'false');
 
-    // Reopen; Escape light-dismisses; leave it open for the tests below.
-    await stripButton.click();
-    await expect(pane).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(pane).toHaveCount(0);
+    // Reopen; leave it open for the tests below.
     await stripButton.click();
     await expect(pane).toBeVisible();
   });
@@ -219,7 +222,8 @@ test.describe('§files-tree — workspace Files sidebar', () => {
 
   test('the refresh button re-fetches the tree and shows a newly created file', async () => {
     const { page } = app;
-    // The previous test opened a file, which auto-closes the picker panel.
+    // The docked sidebar stays open across a file open — showFilesTree is a
+    // no-op here, kept for robustness if an earlier test in the file changes.
     await showFilesTree(page);
     await expect(page.getByTestId('file-tree-row-runtime-file.txt')).toHaveCount(0);
     writeFileSync(path.join(project.projectPath, 'runtime-file.txt'), 'created after mount\n');

@@ -4,12 +4,19 @@ import { subscribeToFileIntents } from '../intent-subscriber';
 import { emitSurfaceIntent } from '../surface-intents';
 import { useSettingsStore } from '../settings';
 import { useUiPrefs } from '../ui-prefs';
-import { useWorkspaceFilesPanel } from '../workspace-files-panel';
+import { useActiveBasesStore } from '../active-bases-store';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '../workspace-files-panel';
 import { useLayoutStore } from '../layout';
 
 function isWorkspaceActive() {
   const { layout } = useLayoutStore.getState();
   return layout.top.includes('workspace') || layout.bottom === 'workspace';
+}
+
+/** The docked panel's open flag for whatever scope is currently active. */
+function isFilesPanelOpen() {
+  const { openByScope } = useWorkspaceFilesPanel.getState();
+  return isWorkspaceFilesPanelOpen(openByScope, useActiveBasesStore.getState().scopeKey);
 }
 
 describe('intent-subscriber — command intents', () => {
@@ -21,6 +28,8 @@ describe('intent-subscriber — command intents', () => {
       sessions: new Map(),
       activeSessionId: null,
     });
+    useActiveBasesStore.setState({ bases: {}, scopeKey: null });
+    useWorkspaceFilesPanel.setState({ openByScope: {} });
     unsub = subscribeToFileIntents();
   });
   afterEach(() => unsub());
@@ -41,12 +50,12 @@ describe('intent-subscriber — command intents', () => {
     useLayoutStore.setState({
       layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
     });
-    useWorkspaceFilesPanel.setState({ open: true });
+    useWorkspaceFilesPanel.getState().setOpen(true);
     const layoutBefore = useLayoutStore.getState().layout;
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+    expect(isFilesPanelOpen()).toBe(false);
     // Closing must not rewrite the layout (nor hide the workspace).
     expect(useLayoutStore.getState().layout).toBe(layoutBefore);
   });
@@ -55,42 +64,39 @@ describe('intent-subscriber — command intents', () => {
     // The panel flag is on, but the workspace surface is unlit — the tree is
     // not on screen. The toggle means "show me the files": light the surface
     // and keep the panel open, instead of closing a tree nobody can see.
-    useWorkspaceFilesPanel.setState({ open: true });
+    useWorkspaceFilesPanel.getState().setOpen(true);
     expect(isWorkspaceActive()).toBe(false);
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
+    expect(isFilesPanelOpen()).toBe(true);
     expect(isWorkspaceActive()).toBe(true);
   });
 
-  it('open-file CLOSES the Files panel — a completed pick gets out of the way', () => {
-    // Without this the glass card sits over the just-opened tab's own header
-    // controls, and a press on the card counts as "inside" so light dismiss
-    // never fires (the e2e-batch occlusion bug).
-    useWorkspaceFilesPanel.setState({ open: true });
+  it('open-file does NOT close the Files panel — docked content is pushed, never covered', () => {
+    useWorkspaceFilesPanel.getState().setOpen(true);
 
     emitSurfaceIntent({ type: 'open-file', path: 'src/main.ts' });
 
-    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+    expect(isFilesPanelOpen()).toBe(true);
   });
 
-  it('open-diff closes the Files panel the same way', () => {
-    useWorkspaceFilesPanel.setState({ open: true });
+  it('open-diff does NOT close the Files panel either', () => {
+    useWorkspaceFilesPanel.getState().setOpen(true);
 
     emitSurfaceIntent({ type: 'open-diff', path: 'src/main.ts' });
 
-    expect(useWorkspaceFilesPanel.getState().open).toBe(false);
+    expect(isFilesPanelOpen()).toBe(true);
   });
 
   it('toggle-workspace-files opens the panel AND lights the workspace surface', () => {
     // An open panel inside a hidden surface would show nothing.
-    useWorkspaceFilesPanel.setState({ open: false });
+    expect(isFilesPanelOpen()).toBe(false);
     expect(isWorkspaceActive()).toBe(false);
 
     emitSurfaceIntent({ type: 'toggle-workspace-files' });
 
-    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
+    expect(isFilesPanelOpen()).toBe(true);
     expect(isWorkspaceActive()).toBe(true);
   });
 });
