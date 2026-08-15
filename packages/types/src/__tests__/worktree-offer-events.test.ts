@@ -1,6 +1,6 @@
 /**
  * Lockstep guard for the `worktree.offer.*` events: the golden fixtures under
- * `docs/rust-port/fixtures/` are the same bytes the Rust round-trip tests in
+ * `packages/core-rs/crates/mainframe-types/tests/fixtures/` are the same bytes the Rust round-trip tests in
  * `mainframe-types::events` consume, so a drift on either side fails here.
  * The expected values are typed `DaemonEvent` literals, which makes the TS
  * union itself part of the assertion at compile time.
@@ -11,7 +11,9 @@ import { describe, it, expect } from 'vitest';
 import type { DaemonEvent, WorktreeSwitchOffer } from '../index.js';
 
 function fixture(name: string): Record<string, unknown> {
-  const path = fileURLToPath(new URL(`../../../../docs/rust-port/fixtures/${name}`, import.meta.url));
+  const path = fileURLToPath(
+    new URL(`../../../../packages/core-rs/crates/mainframe-types/tests/fixtures/${name}`, import.meta.url),
+  );
   const { _provenance, ...event } = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
   expect(_provenance).toBe('synthetic');
   return event;

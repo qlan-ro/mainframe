@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn started_event_matches_fixture_shape() {
-        // Mirrors docs/rust-port/fixtures/event.background_task-started.json
+        // Mirrors packages/core-rs/crates/mainframe-types/tests/fixtures/event.background_task-started.json
         // (minus the `_provenance` tag).
         let json = r#"{"type":"background_task.started","chatId":"chat_9f2a3b1c","task":{"id":"bgt_001","kind":"bash","toolName":"Bash","toolUseId":"toolu_05E","command":"pnpm test --watch","description":"Run tests in watch mode","outputPath":null,"startedAt":1751970000000,"endedAt":null,"status":"running","lastOutputLine":null,"summary":null,"usage":null}}"#;
         let event: BackgroundTaskEvent = serde_json::from_str(json).unwrap();
