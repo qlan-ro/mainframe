@@ -1,9 +1,0 @@
-{"dir":"in","method":"sendMessage","args":["hi"],"delayMs":0}
-{"dir":"out","method":"onInit","args":["mock-session-332-dup-idx8"],"delayMs":0}
-{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Hello, how can I help?"}],null],"delayMs":10}
-{"dir":"out","method":"onResult","args":[{}],"delayMs":20}
-{"dir":"in","method":"sendMessage","args":["ship it twice"],"delayMs":0}
-{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Opening PR #308 now, twice."}],null],"delayMs":10}
-{"dir":"out","method":"onPrDetected","args":[{"url":"https://github.com/acme/widgets/pull/308","owner":"acme","repo":"widgets","number":308,"source":"created"}],"delayMs":20}
-{"dir":"out","method":"onPrDetected","args":[{"url":"https://github.com/acme/widgets/pull/308","owner":"acme","repo":"widgets","number":308,"source":"created"}],"delayMs":25}
-{"dir":"out","method":"onResult","args":[{}],"delayMs":30}

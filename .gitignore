@@ -54,6 +54,9 @@ docs/plans/
 docs/superpowers/
 docs/CODE-ANALYSIS*
 
+# Per-run internal QA logs (screenshots + notes keyed to a private local todo tracker)
+docs/qa/
+
 # Codex-review local session state (per-branch, not shared)
 .claude/codex-review/
 
