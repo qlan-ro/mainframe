@@ -1,12 +1,13 @@
 /**
- * Pure filter/sort helpers for the Tasks surface.
+ * Pure filter/sort helpers for the Tasks surface — the full Tasks board and the
+ * session rail's Tasks panel, which orders its rows with orderByStatusThenRecency.
  *
  * Ported from packages/app-electron/src/renderer/components/todos/TodoFilterBar.tsx
  * (lines 29–81). No side-effects; safe to test in isolation.
  *
  * Search scope is todo.title ONLY — matches desktop behavior exactly.
  */
-import type { Todo, TodoType, TodoPriority } from '@/lib/api/todos';
+import type { Todo, TodoType, TodoPriority, TodoStatus } from '@/lib/api/todos';
 
 export interface TodoFilters {
   types: TodoType[];
@@ -47,6 +48,16 @@ export function sortTodos(todos: Todo[], sort: TodoSort): Todo[] {
     }
   });
   return copy;
+}
+
+const ACTIVE_STATUS_RANK: Record<TodoStatus, number> = { in_progress: 0, open: 1, done: 2 };
+
+export function orderByStatusThenRecency(todos: Todo[]): Todo[] {
+  const byRecency = sortTodos(todos, { key: 'updated', dir: 'desc' });
+  // sortTodos returns a copy, so sorting in place spares the caller's array; the
+  // sort is stable, so grouping by status keeps each block newest-first.
+  byRecency.sort((a, b) => (ACTIVE_STATUS_RANK[a.status] ?? 3) - (ACTIVE_STATUS_RANK[b.status] ?? 3));
+  return byRecency;
 }
 
 export function extractAllLabels(todos: Todo[]): string[] {

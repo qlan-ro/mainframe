@@ -9,6 +9,9 @@
  *  5. ⌘↵ on the title input and on the body textarea both call store.create.
  *  6. Does NOT render when open=false.
  *  7. store.create receives projectId in the input body.
+ *  8. The header names the project the task will be written to.
+ *  9. With no project resolved the dialog offers the picker instead of the form.
+ * 10. Opening refetches the scoped project (todo #225 intent, moved off the host).
  *
  * (title/body/create testid presence is exercised implicitly by the gating
  * and create-flow tests below — no bare presence smokes needed.)
@@ -22,10 +25,12 @@ import userEvent from '@testing-library/user-event';
 // ---------------------------------------------------------------------------
 
 const mockCreate = vi.fn();
+// Stable identity — the form's open-keyed load effect depends on it.
+const mockLoad = vi.fn();
 
 vi.mock('../use-todos-store', () => ({
   useTodosStore: vi.fn((selector?: (s: unknown) => unknown) => {
-    const state = { create: mockCreate };
+    const state = { create: mockCreate, load: mockLoad };
     return selector ? selector(state) : state;
   }),
 }));
@@ -34,21 +39,39 @@ vi.mock('../use-todos-store', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 
+import type { Project } from '@qlan-ro/mainframe-types';
 import { QuickTaskDialog } from '../QuickTaskDialog';
 
 // ---------------------------------------------------------------------------
 // Render helper
 // ---------------------------------------------------------------------------
 
+const PROJECTS: Project[] = [
+  { id: 'proj-abc', name: 'Mainframe', path: '/repos/mainframe' } as Project,
+  { id: 'proj-other', name: 'Sidecar', path: '/repos/sidecar' } as Project,
+];
+
 interface RenderOpts {
   open?: boolean;
-  projectId?: string;
+  /** null — no project resolved, the dialog offers the picker instead. */
+  projectId?: string | null;
 }
 
 function renderDialog({ open = true, projectId = 'proj-abc' }: RenderOpts = {}) {
   const onClose = vi.fn();
-  render(<QuickTaskDialog port={31415} projectId={projectId} open={open} onClose={onClose} />);
-  return { onClose };
+  const onSelectProject = vi.fn();
+  render(
+    <QuickTaskDialog
+      port={31415}
+      projectId={projectId}
+      projects={PROJECTS}
+      filterProjectId={null}
+      onSelectProject={onSelectProject}
+      open={open}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onSelectProject };
 }
 
 // ---------------------------------------------------------------------------
@@ -206,5 +229,45 @@ describe('QuickTaskDialog — projectId is passed to store.create', () => {
     // store.create(port, input, projectId) — second arg is the input body
     const calledInput = mockCreate.mock.calls[0]?.[1] as { projectId: string };
     expect(calledInput.projectId).toBe('my-special-project');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8-10. Project scope — naming it, picking it, loading it
+// ---------------------------------------------------------------------------
+
+describe('QuickTaskDialog — the project it writes to', () => {
+  it('names the scoped project in the header', () => {
+    renderDialog();
+    expect(screen.getByTestId('tasks-quick-project')).toHaveTextContent('Mainframe');
+  });
+
+  it('refetches that project once per open', () => {
+    renderDialog();
+    expect(mockLoad).toHaveBeenCalledWith(31415, 'proj-abc');
+  });
+});
+
+describe('QuickTaskDialog — no project resolved', () => {
+  it('offers the project list instead of the form, so ⌘⇧T is never a dead click', () => {
+    renderDialog({ projectId: null });
+
+    expect(screen.getByTestId('tasks-quick-dialog')).toBeTruthy();
+    expect(screen.getByTestId('tasks-quick-project-pick')).toBeTruthy();
+    expect(screen.queryByTestId('tasks-quick-title')).toBeNull();
+    expect(screen.queryByTestId('tasks-quick-project')).toBeNull();
+  });
+
+  it('reports the picked project to the host', async () => {
+    const { onSelectProject } = renderDialog({ projectId: null });
+
+    await userEvent.click(screen.getByTestId('tasks-quick-project-proj-other'));
+
+    expect(onSelectProject).toHaveBeenCalledWith('proj-other');
+  });
+
+  it('does not load anything — there is no project to scope the load to', () => {
+    renderDialog({ projectId: null });
+    expect(mockLoad).not.toHaveBeenCalled();
   });
 });

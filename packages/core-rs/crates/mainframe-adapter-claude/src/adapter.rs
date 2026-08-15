@@ -122,7 +122,10 @@ impl Adapter for ClaudeAdapter {
         CLAUDE_ADAPTER_NAME
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: true }
+        AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: true,
+        }
     }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

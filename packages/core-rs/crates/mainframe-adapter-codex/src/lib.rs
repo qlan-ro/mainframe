@@ -14,6 +14,7 @@
 
 pub mod adapter;
 pub mod approval_handler;
+pub(crate) mod collab_activity;
 pub(crate) mod collab_card;
 pub(crate) mod collab_identity;
 pub(crate) mod collab_protocol;
@@ -36,9 +37,11 @@ pub mod plan_mode_handler;
 pub mod quota_identity;
 pub mod quota_pull;
 pub mod quota_rate_limit;
+pub(crate) mod rollout_apply_patch;
 pub(crate) mod rollout_fork;
 pub mod rollout_reader;
 pub(crate) mod rollout_reconstruct;
+pub(crate) mod rollout_unified_exec;
 pub mod session;
 pub(crate) mod session_state;
 pub(crate) mod thread_item_render;
@@ -59,7 +62,7 @@ pub use adapter::{CodexAdapter, map_codex_model};
 pub use external_sessions::{clear_codex_external_session_cache, list_external_sessions};
 pub use plan_mode_handler::CodexPlanModeHandler;
 pub use quota_identity::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
-pub use session::CodexSession;
+pub use session::{CodexScanDeps, CodexSession};
 pub use transcript::is_codex_transcript_present;
 
 // PORT STATUS: src/plugins/builtin/codex/index.ts (8 lines)

@@ -33,7 +33,6 @@ pub mod messages;
 pub mod models;
 pub mod permission_updates;
 pub mod plan_mode_handler;
-pub mod pr_detection;
 pub mod probe_models;
 pub mod quota_parse;
 pub mod quota_pull;

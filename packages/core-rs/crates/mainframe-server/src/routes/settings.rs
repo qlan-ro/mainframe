@@ -22,8 +22,8 @@ use mainframe_db::DbError;
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{AdapterInfo, AdapterModel, EffortLevel};
 use mainframe_types::settings::{
-    GeneralConfig, NotificationChatConfig, NotificationConfig, NotificationOtherConfig,
-    NotificationPermissionConfig,
+    ExecutionMode, GeneralConfig, NotificationChatConfig, NotificationConfig,
+    NotificationOtherConfig, NotificationPermissionConfig,
 };
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -488,8 +488,18 @@ fn is_effort_or_clear(value: &Option<String>) -> bool {
     }
 }
 
+/// `None` → true (absent is always valid); otherwise the value must deserialize
+/// as an `ExecutionMode`, so this can't drift from the enum the way the old
+/// hardcoded `["default", "acceptEdits", "yolo"]` list did.
+fn is_execution_mode(value: &Option<String>) -> bool {
+    match value {
+        None => true,
+        Some(v) => serde_json::from_value::<ExecutionMode>(Value::String(v.clone())).is_ok(),
+    }
+}
+
 fn validate_provider_patch(p: &ProviderPatch) -> bool {
-    in_enum(&p.default_mode, &["default", "acceptEdits", "yolo"])
+    is_execution_mode(&p.default_mode)
         && in_enum(&p.default_plan_mode, &["true", "false"])
         && is_effort_or_clear(&p.default_effort)
         && in_enum(&p.default_fast, &["true", "false", ""])
@@ -646,7 +656,7 @@ mod tests {
             "description": "",
             "installed": true,
             "models": models,
-            "capabilities": { "planMode": true },
+            "capabilities": { "planMode": true, "autoMode": false },
         }))
         .unwrap()
     }

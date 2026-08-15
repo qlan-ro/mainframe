@@ -212,6 +212,37 @@
   mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
 }
 
+/** Ramp depth for every `scroll-fade*` scroller — the app's existing ~20px reading, not stock's deeper percentage default. */
+@layer base {
+  :root {
+    --scroll-fade-size: 20px;
+  }
+}
+
+/** Starts `scroll-fade-y`'s ramps below the sidebar's parked sticky headers instead of dissolving them; overrides only the mask shape `scroll-fade-y` already reads. */
+@utility scroll-fade-sticky {
+  --scroll-fade-mask: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--scroll-fade-inset-t, 0px),
+    transparent var(--scroll-fade-inset-t, 0px),
+    #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px) - var(--scroll-fade-b, 0px)),
+    transparent calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 100%
+  );
+}
+
+/** Below the primary path's engine floor (unconfirmed — see the webview probe doc), shadcn's fallback pins both ramps open permanently; drop the mask so those engines clip like before this change. */
+@supports not (animation-timeline: scroll()) {
+  .scroll-fade-y,
+  .scroll-fade-x {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

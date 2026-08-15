@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
 
+use crate::collab_activity::end_activity;
 use crate::collab_card::open_card;
 use crate::collab_protocol::{CollabCallStatus, classify_collab_status};
 use crate::history::tool_result_block;
@@ -54,6 +55,7 @@ pub(crate) fn resolve_card(
     // The stashed spawn prompt only ever fed a card's opening description — once
     // resolved, nothing consults it again.
     state.spawn_prompts.remove(child_thread_id);
+    end_activity(child_thread_id, state);
 }
 
 pub(crate) fn on_wait_started(

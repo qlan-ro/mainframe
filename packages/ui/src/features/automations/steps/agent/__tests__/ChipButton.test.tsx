@@ -51,6 +51,23 @@ describe('ChipButton', () => {
     expect(screen.getByTestId('agent-a-permission').className).toContain('text-destructive');
   });
 
+  it('renders caution as a warning tint, and lets destructive outrank it', () => {
+    const { rerender } = render(
+      <ChipButton icon={Sparkles} label="Permission" testId="agent-a-permission" caution>
+        Auto
+      </ChipButton>,
+    );
+    expect(screen.getByTestId('agent-a-permission').className).toContain('text-warning');
+    expect(screen.getByTestId('agent-a-permission').className).not.toContain('text-destructive');
+
+    rerender(
+      <ChipButton icon={Sparkles} label="Permission" testId="agent-a-permission" caution destructive>
+        Unattended
+      </ChipButton>,
+    );
+    expect(screen.getByTestId('agent-a-permission').className).toContain('text-destructive');
+  });
+
   it('forwards clicks and native button props', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();

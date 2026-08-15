@@ -1,23 +1,21 @@
 //! Ported from `packages/core/src/plugins/builtin/claude/user-event.ts`.
 //!
 //! Handles user NDJSON events: queued-message replay acks, skill injections,
-//! tool_result blocks (PR detection, plan-file capture), CLI-feedback text, and
-//! the subagent (`parent_tool_use_id`) variant. The JS regexes are hand-rolled
-//! (no `regex` crate in the allowlist).
+//! tool_result blocks (plan-file capture), CLI-feedback text, and the
+//! subagent (`parent_tool_use_id`) variant. PR detection moved to the
+//! adapter-neutral `PrDetectionSink` (todo #339); this module no longer
+//! scans tool_result blocks for PRs. The JS regexes are hand-rolled (no
+//! `regex` crate in the allowlist).
 
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
 use mainframe_adapter_api::{LoadedSkill, SessionSink};
-use mainframe_types::adapter::DetectedPrSource;
 use mainframe_types::context::SkillFileEntry;
 
 use crate::assistant_event::blocks_to_message_content;
 use crate::history_tool_result::{build_tool_result_blocks, extract_tool_result_content};
-use crate::pr_detection::{
-    ToolUseMeta, extract_pr_from_tool_result, should_scan_tool_result_for_pr,
-};
 use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::{read_skill_content, resolve_existing_skill_path, resolve_skill_path};
 
@@ -425,45 +423,9 @@ pub fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &dyn Sess
         if ty == Some("tool_result") {
             let text = extract_tool_result_content(block.get("content"));
             crate::workflow_events::link_launch(st, &text);
-            let tool_use_id = block.get("tool_use_id").and_then(Value::as_str);
             let plan_path = plan_file_path(&text);
             if let Some(p) = plan_path {
                 sink.on_plan_file(p.trim());
-            }
-            // Path A — gated by originating tool.
-            let meta = tool_use_id.and_then(|id| st.tool_use_registry.get(id));
-            let meta = meta.map(|m| ToolUseMeta {
-                name: &m.name,
-                command: m.command.as_deref(),
-            });
-            if should_scan_tool_result_for_pr(meta.as_ref())
-                && let Some(pr) = extract_pr_from_tool_result(&text)
-            {
-                let source = if tool_use_id
-                    .map(|id| st.pending_pr_creates.contains(id))
-                    .unwrap_or(false)
-                {
-                    DetectedPrSource::Created
-                } else {
-                    DetectedPrSource::Mentioned
-                };
-                if source == DetectedPrSource::Created
-                    && let Some(id) = tool_use_id
-                {
-                    st.pending_pr_creates.remove(id);
-                }
-                sink.on_pr_detected(pr.with_source(source));
-            }
-
-            // Path B: command-arg-based mutation detection.
-            if let Some(id) = tool_use_id
-                && let Some(stashed) = st.pending_pr_mutations.remove(id)
-                && block.get("is_error").and_then(Value::as_bool) != Some(true)
-            {
-                sink.on_pr_detected(stashed.with_source(DetectedPrSource::Mentioned));
-            }
-            if let Some(id) = tool_use_id {
-                st.tool_use_registry.remove(id);
             }
         } else if ty == Some("text") {
             let text = block.get("text").and_then(Value::as_str).unwrap_or("");

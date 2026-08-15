@@ -10,9 +10,11 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
 
+use crate::collab_activity::open_activity;
 use crate::collab_identity::{card_task_line, card_title};
 use crate::collab_protocol::{
-    CollabTool, SubAgentKind, classify_collab_tool, classify_sub_agent_kind,
+    CollabCallStatus, CollabTool, SubAgentKind, classify_collab_status, classify_collab_tool,
+    classify_sub_agent_kind,
 };
 use crate::collab_resolve::{Outcome, on_wait_completed, on_wait_started, resolve_card};
 use crate::history::collab_agent_tool_use;
@@ -100,6 +102,7 @@ pub(crate) fn open_card(
         )],
         None,
     );
+    open_activity(child_thread_id, &card_id, &title, state);
 }
 
 /// Records the child's latest non-empty `agentMessage` text as the fallback
@@ -120,11 +123,19 @@ pub(crate) fn record_child_message(
 
 /// Re-opens a resolved card for a fresh `sendInput`/`resumeAgent` round without
 /// creating a second one (spec decision 4). A no-op for unregistered children.
+/// Always calls `open_activity`, never gated on `card.resolved`: `closeAgent`
+/// ends a child's row while leaving its card open and unresolved (spec decision
+/// 3), so a gated call here would skip that round's re-engagement row (AC 6).
+/// `open_activity`'s own map-presence check is the dedupe for a still-live child.
 pub(crate) fn reopen_card(child_thread_id: &str, state: &mut CodexSessionState) {
-    if let Some(card) = state.sub_agent_cards.get_mut(child_thread_id) {
-        card.open = true;
-        card.resolved = false;
-    }
+    let Some(card) = state.sub_agent_cards.get_mut(child_thread_id) else {
+        return;
+    };
+    card.open = true;
+    card.resolved = false;
+    let card_id = card.card_id.clone();
+    let title = card.title.clone();
+    open_activity(child_thread_id, &card_id, &title, state);
 }
 
 pub(crate) fn stash_spawn_prompts(item: &CollabAgentToolCallItem, state: &mut CodexSessionState) {
@@ -152,6 +163,16 @@ pub(crate) fn on_collab_tool_call(
             Phase::Started => on_wait_started(item, sink, state),
             Phase::Completed => on_wait_completed(item, sink, state),
         },
+        // A `closeAgent` that itself failed leaves the row to the turn-end
+        // sweep rather than claiming work stopped that may still be running
+        // (P1). `receiver_thread_ids` empty ends nothing.
+        CollabTool::CloseAgent if phase == Phase::Completed => {
+            if classify_collab_status(&item.status) != CollabCallStatus::Failed {
+                for child in item.receiver_thread_ids.iter().flatten() {
+                    crate::collab_activity::end_activity(child, state);
+                }
+            }
+        }
         CollabTool::CloseAgent | CollabTool::Unknown => tracing::debug!(
             module = "codex:collab",
             tool = %item.tool,

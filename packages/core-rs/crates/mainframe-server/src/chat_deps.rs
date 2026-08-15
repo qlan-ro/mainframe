@@ -17,9 +17,9 @@
 //!      small local bridge types (`RtDeps`, `CtxDbHandle`) satisfy those bounds by
 //!      routing each call back through `Db::call_blocking`.
 
-use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, Weak};
 
+use mainframe_adapter_api::pr_detection::scan_history_for_prs;
 use mainframe_adapter_api::{
     AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
 };
@@ -29,7 +29,6 @@ use mainframe_adapter_claude::external_session_cache::{
 use mainframe_adapter_claude::external_sessions::ExternalSessionListOpts;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::messages::message_parsing::strip_mainframe_command_tags;
-use mainframe_adapter_claude::pr_detection::{extract_pr_from_tool_result, is_pr_create_command};
 use mainframe_background_tasks::kill::{
     KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
 };
@@ -59,12 +58,12 @@ use mainframe_services::push::push_service::{PushMessage, PushPriority};
 use mainframe_services::quota::{IngestMode, QuotaManager};
 use mainframe_services::settings::provider_config::SettingsReader;
 use mainframe_types::adapter::{
-    AdapterModel, DetectedPr, DetectedPrSource, ExternalSessionPage, ProviderQuota, SessionOptions,
+    AdapterModel, DetectedPr, ExternalSessionPage, ProviderQuota, SessionOptions,
 };
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, MessageContentNode, Project,
-    ResolvedTuning, TodoItem,
+    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, Project, ResolvedTuning,
+    TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
@@ -147,8 +146,13 @@ impl DaemonChatDeps {
     /// `scan_loaded_history` only receives the chatId (§ trait contract), so it
     /// re-derives a session from the same chat row `doLoadChat` already read
     /// rather than reusing the live one — both are stateless reads over the
-    /// on-disk transcript, so results match; the cost is a second file read
-    /// (Claude) or a second temp app-server spawn (Codex).
+    /// on-disk transcript, so results match. `scan_loaded_history` then reads
+    /// this session twice, once via `load_history` (mentions) and once via
+    /// `load_scan_records` (PRs) — for Claude, where `load_scan_records`
+    /// defaults to `load_history`, that is the same file read twice; for
+    /// Codex it is `thread/read` plus a rollout reconstruction (no app-server
+    /// spawn since todo #339). Correctness (the rollout's injected preamble
+    /// must never feed the mention scan) outweighs the extra I/O here.
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
         let claude_session_id = chat.claude_session_id.clone()?;
@@ -164,13 +168,11 @@ impl DaemonChatDeps {
         )
     }
 
-    /// `@`-mention extraction + PR-URL scan over already-loaded history, then
-    /// persist newly-detected PRs and emit `chat.prDetected` for each.
+    /// PR-URL scan over already-loaded history, then persist newly-detected
+    /// PRs and emit `chat.prDetected` for each. PR-only: `@`-mention
+    /// extraction is a separate scan (`scan_and_persist_mentions`) because the
+    /// two need different history sources for Codex — see `scan_loaded_history`.
     fn scan_and_persist_prs(&self, chat_id: &str, history: &[ChatMessage]) {
-        let ctx_db = CtxDbHandle {
-            db: self.db.clone(),
-        };
-        scan_history_for_mentions(chat_id, history, &ctx_db);
         let scanned = scan_history_for_prs(history);
         if scanned.is_empty() {
             return;
@@ -185,6 +187,19 @@ impl DaemonChatDeps {
                 },
             );
         }
+    }
+
+    /// `@`-mention extraction over already-loaded history. Split out of
+    /// `scan_and_persist_prs` (todo #339 review) so it only ever runs against
+    /// `load_history` — never `load_scan_records`, whose Codex rollout
+    /// reconstruction injects a `role: "user"` preamble record
+    /// (`<recommended_plugins>` + AGENTS.md/CLAUDE.md body) that `thread/read`
+    /// never returns and that the mention extractor has no guard against.
+    fn scan_and_persist_mentions(&self, chat_id: &str, history: &[ChatMessage]) {
+        let ctx_db = CtxDbHandle {
+            db: self.db.clone(),
+        };
+        scan_history_for_mentions(chat_id, history, &ctx_db);
     }
 
     /// `Promise.all([extractPlanFiles(), extractSkillFiles()])` — either failing
@@ -543,11 +558,25 @@ impl ChatManagerDeps for DaemonChatDeps {
             let Some(session) = self.session_for_scan(chat_id) else {
                 return;
             };
-            let Ok(history) = session.load_history().await else {
-                return;
-            };
-            if !history.is_empty() {
-                self.scan_and_persist_prs(chat_id, &history);
+            // Mentions and PRs read different histories: `load_history` is the
+            // adapter's canonical transcript (what the user actually typed),
+            // while `load_scan_records` may reconstruct extra tool-output-only
+            // records `load_history` never returns (Codex's rollout — see
+            // `scan_and_persist_mentions`). Each scan gets its own source; a
+            // failure on one must not skip the other.
+            match session.load_history().await {
+                Ok(history) if !history.is_empty() => {
+                    self.scan_and_persist_mentions(chat_id, &history);
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!(%err, chat_id, "load_history failed"),
+            }
+            match session.load_scan_records().await {
+                Ok(history) if !history.is_empty() => {
+                    self.scan_and_persist_prs(chat_id, &history);
+                }
+                Ok(_) => {}
+                Err(err) => tracing::warn!(%err, chat_id, "load_scan_records failed"),
             }
             self.persist_plan_and_skill_files(chat_id, session.as_ref())
                 .await;
@@ -1054,63 +1083,6 @@ fn scan_history_for_mentions(chat_id: &str, history: &[ChatMessage], ctx_db: &dy
     }
 }
 
-/// Walk messages in order: assistant `tool_use` blocks identify PR-create
-/// commands; subsequent `tool_result` blocks with PR URLs are classified as
-/// `created` (matching `toolUseId`) or `mentioned` (everything else).
-fn scan_history_for_prs(history: &[ChatMessage]) -> Vec<DetectedPr> {
-    let mut scanned = Vec::new();
-    let mut seen_prs = HashSet::new();
-    let mut pending_creates = HashSet::new();
-    for msg in history {
-        if msg.r#type == ChatMessageType::Assistant {
-            for block in &msg.content {
-                let MessageContent::Node(MessageContentNode::ToolUse {
-                    id, name, input, ..
-                }) = block
-                else {
-                    continue;
-                };
-                if name != "Bash" && name != "BashTool" {
-                    continue;
-                }
-                let Some(command) = input.get("command").and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                if is_pr_create_command(command) {
-                    pending_creates.insert(id.clone());
-                }
-            }
-        }
-        if msg.r#type != ChatMessageType::ToolResult {
-            continue;
-        }
-        for block in &msg.content {
-            let MessageContent::Node(MessageContentNode::ToolResult {
-                content,
-                tool_use_id,
-                ..
-            }) = block
-            else {
-                continue;
-            };
-            let Some(pr) = extract_pr_from_tool_result(content) else {
-                continue;
-            };
-            let key = format!("{}/{}/{}", pr.owner, pr.repo, pr.number);
-            if !seen_prs.insert(key) {
-                continue;
-            }
-            let source = if pending_creates.remove(tool_use_id) {
-                DetectedPrSource::Created
-            } else {
-                DetectedPrSource::Mentioned
-            };
-            scanned.push(pr.with_source(source));
-        }
-    }
-    scanned
-}
-
 /// Bridges `AttachmentStore::list` (returns `StoredAttachmentMeta`) to the
 /// context-tracker's `AttachmentLister` (wants `SessionAttachment`). The stored
 /// meta is a structural superset of `SessionAttachment` (drops `materializedPath`);
@@ -1206,8 +1178,11 @@ mod scan_loaded_history_tests {
     use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
     use mainframe_claude_workflows::store::ProgressUsage;
     use mainframe_db::DatabaseManager;
-    use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+    use mainframe_types::adapter::{
+        AdapterProcess, ControlResponse, DetectedPrSource, SessionSpawnOptions,
+    };
     use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
+    use mainframe_types::chat::MessageContentNode;
     use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;
     use mainframe_types::context::MentionKind;
 
@@ -1270,61 +1245,8 @@ mod scan_loaded_history_tests {
         }
     }
 
-    // -- scan_history_for_prs --------------------------------------------
-
-    #[test]
-    fn scan_history_for_prs_marks_source_created_when_tool_use_id_matches_a_pending_gh_pr_create() {
-        let history = vec![
-            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
-            tool_result_msg("m2", "tu1", "Created https://github.com/acme/repo/pull/7"),
-        ];
-        let scanned = scan_history_for_prs(&history);
-        assert_eq!(
-            scanned,
-            vec![DetectedPr {
-                url: "https://github.com/acme/repo/pull/7".to_string(),
-                owner: "acme".to_string(),
-                repo: "repo".to_string(),
-                number: 7,
-                source: DetectedPrSource::Created,
-            }]
-        );
-    }
-
-    #[test]
-    fn scan_history_for_prs_marks_source_mentioned_without_a_matching_pending_create() {
-        let history = vec![tool_result_msg(
-            "m1",
-            "tu-unrelated",
-            "See https://github.com/acme/repo/pull/9 for context",
-        )];
-        let scanned = scan_history_for_prs(&history);
-        assert_eq!(
-            scanned,
-            vec![DetectedPr {
-                url: "https://github.com/acme/repo/pull/9".to_string(),
-                owner: "acme".to_string(),
-                repo: "repo".to_string(),
-                number: 9,
-                source: DetectedPrSource::Mentioned,
-            }]
-        );
-    }
-
-    #[test]
-    fn scan_history_for_prs_dedupes_the_same_pr_seen_in_two_tool_results() {
-        let history = vec![
-            tool_result_msg("m1", "tu1", "https://github.com/acme/repo/pull/3"),
-            tool_result_msg("m2", "tu2", "https://github.com/acme/repo/pull/3 again"),
-        ];
-        assert_eq!(scan_history_for_prs(&history).len(), 1);
-    }
-
-    #[test]
-    fn scan_history_for_prs_returns_empty_when_no_pr_url_present() {
-        let history = vec![tool_result_msg("m1", "tu1", "no PR here")];
-        assert!(scan_history_for_prs(&history).is_empty());
-    }
+    // -- scan_history_for_prs (moved to mainframe-adapter-api::pr_detection::history;
+    //    tests live in that crate's tests/pr_detection_history.rs, todo #339 task 4) --
 
     // -- scan_history_for_mentions ----------------------------------------
 
@@ -1545,6 +1467,160 @@ mod scan_loaded_history_tests {
         }
     }
 
+    /// Codex's canonical shape for a PR-create turn: an assistant `Bash`
+    /// tool_use whose command is `gh pr create …`, followed by a `ToolResult`
+    /// carrying the PR URL — the same pair `load_scan_records` reconstructs
+    /// from the rollout (todo #339). Acceptance criterion 1.
+    #[test]
+    fn scan_and_persist_prs_persists_a_codex_shaped_create_as_created_and_emits_event() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let history = vec![
+            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m2", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &history);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            persisted,
+            vec![DetectedPr {
+                url: "https://github.com/acme/repo/pull/7".to_string(),
+                owner: "acme".to_string(),
+                repo: "repo".to_string(),
+                number: 7,
+                source: DetectedPrSource::Created,
+            }]
+        );
+
+        let event = rx.try_recv().expect("chat.prDetected should be emitted");
+        match event {
+            DaemonEvent::ChatPrDetected { chat_id, pr } => {
+                assert_eq!(chat_id, chat.id);
+                assert_eq!(pr.source, DetectedPrSource::Created);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// Acceptance criterion 2 (no-duplicate half): rescanning the same
+    /// transcript a second time must not add a second row or emit a second
+    /// event — `add_detected_prs` dedupes by URL.
+    #[test]
+    fn scan_and_persist_prs_run_twice_persists_no_duplicate_and_emits_no_second_event() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let history = vec![
+            tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m2", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &history);
+        rx.try_recv().expect("first scan should emit");
+
+        deps.scan_and_persist_prs(&chat.id, &history);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(persisted.len(), 1, "no duplicate row on rescan");
+        assert!(
+            rx.try_recv().is_err(),
+            "no second chat.prDetected on rescan"
+        );
+    }
+
+    /// Acceptance criterion 2 (upgrade half): a URL first seen as `mentioned`
+    /// is upgraded in place to `created` when a later scan matches it to a
+    /// pending create — never duplicated, never downgraded.
+    #[test]
+    fn scan_and_persist_prs_upgrades_a_mentioned_pr_to_created_for_the_same_url() {
+        let deps = test_deps();
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .unwrap();
+        let mut rx = deps.broadcast.subscribe();
+
+        let mentioned_only = vec![tool_result_msg(
+            "m1",
+            "tu-unrelated",
+            "https://github.com/acme/repo/pull/7",
+        )];
+        deps.scan_and_persist_prs(&chat.id, &mentioned_only);
+        let after_mention = rx.try_recv().expect("mention scan should emit");
+        match after_mention {
+            DaemonEvent::ChatPrDetected { pr, .. } => {
+                assert_eq!(pr.source, DetectedPrSource::Mentioned);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+
+        let with_create = vec![
+            tool_use_msg("m2", "tu1", "Bash", "gh pr create --title x"),
+            tool_result_msg("m3", "tu1", "https://github.com/acme/repo/pull/7"),
+        ];
+        deps.scan_and_persist_prs(&chat.id, &with_create);
+
+        let persisted = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            persisted,
+            vec![DetectedPr {
+                url: "https://github.com/acme/repo/pull/7".to_string(),
+                owner: "acme".to_string(),
+                repo: "repo".to_string(),
+                number: 7,
+                source: DetectedPrSource::Created,
+            }],
+            "upgraded in place, not duplicated"
+        );
+
+        let after_create = rx.try_recv().expect("upgrade scan should emit");
+        match after_create {
+            DaemonEvent::ChatPrDetected { pr, .. } => {
+                assert_eq!(pr.source, DetectedPrSource::Created);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
     struct PlanSkillSession {
         plan_paths: Vec<String>,
         skill_paths: Vec<SkillFileEntry>,
@@ -1692,6 +1768,233 @@ mod scan_loaded_history_tests {
                 path: "/repo/.claude/skills/tdd/SKILL.md".to_string(),
                 display_name: "tdd".to_string(),
             }]
+        );
+    }
+
+    /// Codex-shaped session: `load_history` is the plain `thread/read` replay
+    /// (one real `@`-mention, no PR tool output); `load_scan_records` is the
+    /// rollout reconstruction, carrying both the PR-create tool pair `load_history`
+    /// lacks (codex-cli 0.147.0 never returns `commandExecution` from
+    /// `thread/read`) and an injected preamble record shaped like the rollout's
+    /// `<recommended_plugins>` wrapper, which reads as a bogus `@`-mention if
+    /// scanned.
+    struct DualHistorySession;
+
+    impl AdapterSession for DualHistorySession {
+        fn id(&self) -> &str {
+            "dual-sess"
+        }
+        fn adapter_id(&self) -> &str {
+            "dual"
+        }
+        fn project_path(&self) -> &str {
+            "/tmp"
+        }
+        fn is_spawned(&self) -> bool {
+            false
+        }
+        fn spawn(
+            &self,
+            _options: Option<SessionSpawnOptions>,
+            _sink: Option<Arc<dyn SessionSink>>,
+        ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
+            Box::pin(async { Err(AdapterError::Message("unused".to_string())) })
+        }
+        fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn get_process_info(&self) -> Option<AdapterProcess> {
+            None
+        }
+        fn send_message(
+            &self,
+            _message: String,
+            _images: Vec<ImageInput>,
+            _uuid: Option<String>,
+        ) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn respond_to_permission(
+            &self,
+            _response: ControlResponse,
+        ) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn set_permission_mode(
+            &self,
+            _mode: mainframe_types::settings::ExecutionMode,
+        ) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn set_plan_mode(&self, _on: bool) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn send_command(
+            &self,
+            _command: String,
+            _args: Option<String>,
+        ) -> BoxFuture<'_, Result<(), AdapterError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn cancel_queued_message(
+            &self,
+            _uuid: String,
+        ) -> BoxFuture<'_, Result<bool, AdapterError>> {
+            Box::pin(async { Ok(false) })
+        }
+        fn get_context_files(&self) -> ContextFiles {
+            ContextFiles {
+                global: Vec::new(),
+                project: Vec::new(),
+            }
+        }
+        fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+            Box::pin(async {
+                Ok(vec![text_msg(
+                    "m1",
+                    ChatMessageType::User,
+                    "please check @src/real.ts",
+                )])
+            })
+        }
+        fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+            Box::pin(async {
+                Ok(vec![
+                    text_msg(
+                        "preamble",
+                        ChatMessageType::User,
+                        "<recommended_plugins>\n@qlan-ro/mainframe-ui\n</recommended_plugins>",
+                    ),
+                    tool_use_msg("m2", "tu1", "Bash", "gh pr create --title x"),
+                    tool_result_msg("m3", "tu1", "https://github.com/acme/repo/pull/9"),
+                ])
+            })
+        }
+        fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn extract_skill_files(&self) -> BoxFuture<'_, Result<Vec<SkillFileEntry>, AdapterError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn stop_background_task(
+            &self,
+            _task_id: String,
+        ) -> BoxFuture<'_, Result<mainframe_adapter_api::StopBackgroundTaskResult, AdapterError>>
+        {
+            Box::pin(async {
+                Ok(mainframe_adapter_api::StopBackgroundTaskResult {
+                    ok: false,
+                    error: Some("unsupported".to_string()),
+                })
+            })
+        }
+    }
+
+    struct DualAdapter;
+
+    impl mainframe_adapter_api::Adapter for DualAdapter {
+        fn id(&self) -> &str {
+            "dual"
+        }
+        fn name(&self) -> &str {
+            "Dual"
+        }
+        fn capabilities(&self) -> mainframe_types::adapter::AdapterCapabilities {
+            mainframe_types::adapter::AdapterCapabilities {
+                plan_mode: false,
+                auto_mode: false,
+            }
+        }
+        fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
+            Box::pin(async { Ok(true) })
+        }
+        fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+            Box::pin(async { Ok(None) })
+        }
+        fn list_models(
+            &self,
+        ) -> BoxFuture<'_, Result<Vec<mainframe_types::adapter::AdapterModel>, AdapterError>>
+        {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
+            Arc::new(DualHistorySession)
+        }
+        fn kill_all(&self) {}
+    }
+
+    /// Todo #339 review finding: cold-load @-mention scanning must stay pinned
+    /// to `load_history` even when the PR scan needs `load_scan_records`'s
+    /// wider reconstruction — otherwise Codex's injected rollout preamble
+    /// leaks in as a bogus file mention.
+    #[tokio::test]
+    async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_scan_records() {
+        let deps = test_deps();
+        deps.adapters.register(Arc::new(DualAdapter));
+        let project = deps
+            .db
+            .call_blocking(|d| d.projects.create("/tmp/p1", None))
+            .unwrap();
+        let chat = deps
+            .db
+            .call_blocking(move |d| d.chats.create(&project.id, "dual", None, None, None))
+            .unwrap();
+        deps.db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| {
+                    d.chats.update(
+                        &id,
+                        &mainframe_db::chats::ChatUpdate {
+                            claude_session_id: Some("sess-1".to_string()),
+                            ..Default::default()
+                        },
+                    )
+                }
+            })
+            .unwrap();
+
+        ChatManagerDeps::scan_loaded_history(&deps, &chat.id).await;
+
+        let mentions = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_mentions(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            mentions
+                .iter()
+                .map(|m| m.path.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("src/real.ts")],
+            "mention scan must read load_history only, not the load_scan_records preamble"
+        );
+
+        let prs = deps
+            .db
+            .call_blocking({
+                let id = chat.id.clone();
+                move |d| d.chats.get_detected_prs(&id)
+            })
+            .unwrap();
+        assert_eq!(
+            prs,
+            vec![DetectedPr {
+                url: "https://github.com/acme/repo/pull/9".to_string(),
+                owner: "acme".to_string(),
+                repo: "repo".to_string(),
+                number: 9,
+                source: DetectedPrSource::Created,
+            }],
+            "PR scan must still read load_scan_records, where the Codex tool pair lives"
         );
     }
 }

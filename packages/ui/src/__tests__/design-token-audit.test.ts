@@ -45,15 +45,12 @@ describe('design token audit', () => {
   // here too but now routes through --mf-task-type-*/--mf-priority-* tokens.
   // ProviderLogo: brand identity, not theme — the Anthropic/OpenAI hues are
   // literals BY DESIGN (its own docstring: a preset swap must not re-tint a
-  // brand). SidebarScrollRegion: #000 stops inside mask-image gradients, where
-  // only the alpha channel means anything — not colors in the styling sense.
-  // (Both scanned since the 2026-08-09 v2 fold removed the tree-level skip.)
+  // brand). Scanned since the 2026-08-09 v2 fold removed the tree-level skip.
   const COLOR_LITERAL_ALLOWLIST = new Set([
     'features/terminal/terminal-cache.ts',
     'lib/host/electron-preview.ts',
     'features/chat/gates/shared/GateShell.tsx',
     'features/shared/ProviderLogo.tsx',
-    'features/shared/SidebarScrollRegion.tsx',
   ]);
 
   it('keeps production UI free of raw color literals outside the token contract', () => {

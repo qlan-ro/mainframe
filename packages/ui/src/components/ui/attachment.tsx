@@ -156,10 +156,8 @@ function AttachmentGroup({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="attachment-group"
       className={cn(
-        // Upstream's `scroll-fade-x` ramp is dropped: an unconditional both-ends
-        // fade eats items that fit, and the app's other horizontal rails (tab
-        // strips) clip. `[scrollbar-width:none]` is app.css's opt-out idiom.
-        'flex min-w-0 snap-x snap-mandatory scroll-px-1 gap-3 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] *:data-[slot=attachment]:flex-none *:data-[slot=attachment]:snap-start',
+        // `[scrollbar-width:none]` is app.css's scrollbar opt-out idiom.
+        'flex min-w-0 snap-x snap-mandatory scroll-px-1 gap-3 overflow-x-auto overscroll-x-contain py-1 [scrollbar-width:none] scroll-fade-x *:data-[slot=attachment]:flex-none *:data-[slot=attachment]:snap-start',
         className,
       )}
       {...props}

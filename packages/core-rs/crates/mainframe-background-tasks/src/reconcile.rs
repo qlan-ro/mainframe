@@ -28,7 +28,8 @@ pub struct ReconcileDeps<'a> {
     pub tracker: &'a BackgroundTaskTracker,
     pub db: &'a dyn ReconcileDb,
     pub spool_root: Option<String>,
-    /// Injected for tests so we don't depend on `process.getuid()` matching CI.
+    /// Test seam for pinning a validator; production leaves this `None` and
+    /// gets the default (the real uid on unix).
     pub validator: Option<Arc<dyn SpoolValidator>>,
 }
 
@@ -92,9 +93,6 @@ async fn reconcile_inner(deps: &ReconcileDeps<'_>, spool_root: &str) {
         Some(v) => v.clone(),
         None => Arc::new(make_spool_validator(SpoolValidatorDeps {
             platform: Platform::current(),
-            // TODO(port): getuid() needs libc/rustix (not allowlisted) — the
-            // default validator computes `claude-<uid>`; production callers should
-            // inject a validator until that dep lands. See spool_root.rs.
             getuid: None,
             env: std::env::vars().collect(),
             realpath: None,
@@ -574,7 +572,7 @@ mod tests {
 
 // PORT STATUS: src/background-tasks/reconcile.ts (103 lines)
 // confidence: high
-// todos: 1
+// todos: 0
 // notes: recovered snapshot stamps kind:'bash' (only bash spools to disk).
 // `deps.db` structural type → ReconcileDb trait (chats_list_all /
 // project_path) so this crate stays decoupled from mainframe-db. The TS outer
@@ -584,4 +582,3 @@ mod tests {
 // a SystemTime fallback. vitest fs mocks → real temp spool + real project dir
 // (canonicalize must succeed, so a real project path is required); the events test
 // asserts a SET (real readdir order is nondeterministic vs TS's ordered mock).
-// TODO(port): default validator uid — see spool_root.rs blocker.

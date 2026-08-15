@@ -20,16 +20,13 @@ import { Hint } from '@/components/ui/hint';
 import { useAdapters } from '@/store/adapters';
 import type { AskAgentStep } from '../../contract';
 import { ChipButton } from './ChipButton';
+import { resolveStepAdapter } from './resolve-step-adapter';
 
 export interface ModelMenuProps {
   adapterId: string | undefined;
   model: string | undefined;
   onChange: (patch: Pick<AskAgentStep, 'adapterId' | 'model'>) => void;
   testId: string;
-}
-
-function resolveAdapter(adapters: AdapterInfo[], adapterId: string | undefined): AdapterInfo | undefined {
-  return adapters.find((a) => a.id === adapterId) ?? adapters.find((a) => a.installed) ?? adapters[0];
 }
 
 function resolveModel(adapter: AdapterInfo | undefined, model: string | undefined) {
@@ -39,7 +36,7 @@ function resolveModel(adapter: AdapterInfo | undefined, model: string | undefine
 
 export function ModelMenu({ adapterId, model, onChange, testId }: ModelMenuProps) {
   const adapters = useAdapters();
-  const activeAdapter = resolveAdapter(adapters, adapterId);
+  const activeAdapter = resolveStepAdapter(adapters, adapterId);
   const activeModel = resolveModel(activeAdapter, model);
 
   // A disabled button swallows pointer events, so the hint wraps the chip rather than triggering on it.

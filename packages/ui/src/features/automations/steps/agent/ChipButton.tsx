@@ -27,12 +27,20 @@ export interface ChipButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   testId: string;
   destructive?: boolean;
+  /** A wrong-but-not-broken setting — outranked by `destructive` when both are set. */
+  caution?: boolean;
   chevron?: boolean;
   children: ReactNode;
 }
 
+function tintClass(destructive: boolean | undefined, caution: boolean | undefined): string {
+  if (destructive) return 'text-destructive';
+  if (caution) return 'text-warning';
+  return 'text-muted-foreground';
+}
+
 export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(function ChipButton(
-  { icon: Icon, label, testId, destructive, chevron, children, className, type, ...props },
+  { icon: Icon, label, testId, destructive, caution, chevron, children, className, type, ...props },
   ref,
 ) {
   return (
@@ -41,7 +49,7 @@ export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(functio
       type={type ?? 'button'}
       data-testid={testId}
       aria-label={label}
-      className={cn(CHIP_BASE, destructive ? 'text-destructive' : 'text-muted-foreground', className)}
+      className={cn(CHIP_BASE, tintClass(destructive, caution), className)}
       {...props}
     >
       <Icon size={12} className="shrink-0" aria-hidden />

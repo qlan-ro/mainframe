@@ -77,9 +77,41 @@ function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): To
   };
 }
 
-const OPEN_TODO = makeTodo({ id: 'todo-1', number: 11, title: 'Fix the rail', status: 'open' });
-const IN_PROGRESS_TODO = makeTodo({ id: 'todo-2', number: 12, title: 'Ship the stack', status: 'in_progress' });
-const DONE_TODO = makeTodo({ id: 'todo-3', number: 13, title: 'Old work', status: 'done' });
+const OPEN_TODO = makeTodo({
+  id: 'todo-1',
+  number: 11,
+  title: 'Fix the rail',
+  status: 'open',
+  updated_at: '2026-06-01T00:00:10.000Z',
+});
+const IN_PROGRESS_TODO = makeTodo({
+  id: 'todo-2',
+  number: 12,
+  title: 'Ship the stack',
+  status: 'in_progress',
+  updated_at: '2026-06-01T00:00:20.000Z',
+});
+const DONE_TODO = makeTodo({
+  id: 'todo-3',
+  number: 13,
+  title: 'Old work',
+  status: 'done',
+  updated_at: '2026-06-01T00:00:00.000Z',
+});
+const OPEN_TODO_2 = makeTodo({
+  id: 'todo-4',
+  number: 14,
+  title: 'Polish the empty state',
+  status: 'open',
+  updated_at: '2026-06-01T00:00:30.000Z',
+});
+const IN_PROGRESS_TODO_2 = makeTodo({
+  id: 'todo-5',
+  number: 15,
+  title: 'Wire the daemon route',
+  status: 'in_progress',
+  updated_at: '2026-06-01T00:00:40.000Z',
+});
 
 function Wrapper({ children }: { children: ReactNode }) {
   return (
@@ -105,7 +137,7 @@ beforeEach(() => {
   mockProjectId = 'proj-1';
   vi.mocked(todosApi.listTodos).mockResolvedValue([]);
   // The store is a module-level singleton — a previous case's rows would leak.
-  useTodosStore.setState({ todos: [], loading: false, error: null, loadedProjectId: null });
+  useTodosStore.setState({ entries: {} });
 });
 
 describe('TasksCard — no active project', () => {
@@ -282,5 +314,33 @@ describe('TasksCard — card chrome', () => {
     expect(screen.getByTestId('session-panel-card-tasks')).toHaveTextContent('Tasks');
     fireEvent.click(screen.getByTestId('session-panel-card-close-tasks'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TasksCard — row order', () => {
+  const rowOrder = () => screen.getAllByTestId(/^session-panel-task-row-/).map((el) => el.getAttribute('data-testid'));
+
+  it('lists in-progress tasks newest-first, then open tasks newest-first', async () => {
+    await renderLoaded([OPEN_TODO, IN_PROGRESS_TODO, OPEN_TODO_2, IN_PROGRESS_TODO_2, DONE_TODO]);
+    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-11')).toBeInTheDocument());
+
+    expect(rowOrder()).toEqual([
+      'session-panel-task-row-15',
+      'session-panel-task-row-12',
+      'session-panel-task-row-14',
+      'session-panel-task-row-11',
+    ]);
+  });
+
+  it('renders the same order regardless of the fetched array order', async () => {
+    await renderLoaded([IN_PROGRESS_TODO_2, DONE_TODO, OPEN_TODO, IN_PROGRESS_TODO, OPEN_TODO_2]);
+    await waitFor(() => expect(screen.getByTestId('session-panel-task-row-11')).toBeInTheDocument());
+
+    expect(rowOrder()).toEqual([
+      'session-panel-task-row-15',
+      'session-panel-task-row-12',
+      'session-panel-task-row-14',
+      'session-panel-task-row-11',
+    ]);
   });
 });

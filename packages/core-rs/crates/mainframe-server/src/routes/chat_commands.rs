@@ -307,6 +307,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn update_chat_config_body_accepts_auto() {
+        let body = parse_body::<UpdateChatConfigBody>(&axum::body::Bytes::from(
+            r#"{"permissionMode":"auto"}"#,
+        ));
+        assert!(matches!(
+            body.and_then(|b| b.permission_mode),
+            Some(ExecutionMode::Auto)
+        ));
+    }
+
+    #[test]
+    fn update_chat_config_body_rejects_unknown_mode() {
+        let body = parse_body::<UpdateChatConfigBody>(&axum::body::Bytes::from(
+            r#"{"permissionMode":"turbo"}"#,
+        ));
+        assert!(body.is_none());
+    }
+
     #[tokio::test]
     async fn interrupt_missing_chat_404() {
         let ctx = AppCtx::test_ctx();

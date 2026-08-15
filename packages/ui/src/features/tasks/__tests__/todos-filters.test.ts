@@ -23,9 +23,17 @@
  *  13. Returns unique labels sorted alphabetically.
  *  14. Returns [] for todos with no labels.
  *  15. Handles todos that share some labels (deduplication).
+ *
+ * orderByStatusThenRecency:
+ *  16. In-progress tasks come before open tasks, whatever the input order.
+ *  17. Within the in-progress block, newer updated_at first.
+ *  18. Within the open block, newer updated_at first.
+ *  19. A shuffled input with distinct timestamps produces the sorted output.
+ *  20. Does not mutate the input array.
+ *  21. done tasks sort last, even though the panel filters them out first.
  */
 import { describe, it, expect } from 'vitest';
-import { matchesFilters, sortTodos, extractAllLabels } from '../todos-filters';
+import { matchesFilters, sortTodos, extractAllLabels, orderByStatusThenRecency } from '../todos-filters';
 import type { Todo } from '@/lib/api/todos';
 import type { TodoFilters, TodoSort } from '../todos-filters';
 
@@ -353,5 +361,84 @@ describe('extractAllLabels', () => {
 
     // 'shared' appears 3 times but must appear once; sorted: alpha, beta, shared
     expect(result).toEqual(['alpha', 'beta', 'shared']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// orderByStatusThenRecency
+// ---------------------------------------------------------------------------
+
+describe('orderByStatusThenRecency', () => {
+  it('lists in-progress tasks before open tasks, whatever the input order', () => {
+    const todos = [
+      makeTodo({ id: 'open-a', status: 'open', updated_at: '2026-06-01T00:00:05.000Z' }),
+      makeTodo({ id: 'ip-a', status: 'in_progress', updated_at: '2026-06-01T00:00:01.000Z' }),
+      makeTodo({ id: 'open-b', status: 'open', updated_at: '2026-06-01T00:00:03.000Z' }),
+      makeTodo({ id: 'ip-b', status: 'in_progress', updated_at: '2026-06-01T00:00:02.000Z' }),
+    ];
+
+    const result = orderByStatusThenRecency(todos);
+
+    expect(result.map((t) => t.id)).toEqual(['ip-b', 'ip-a', 'open-a', 'open-b']);
+  });
+
+  it('orders the in-progress block by newest updated_at first', () => {
+    const todos = [
+      makeTodo({ id: 'ip-old', status: 'in_progress', updated_at: '2026-01-01T00:00:00.000Z' }),
+      makeTodo({ id: 'ip-new', status: 'in_progress', updated_at: '2026-06-01T00:00:00.000Z' }),
+      makeTodo({ id: 'ip-mid', status: 'in_progress', updated_at: '2026-03-01T00:00:00.000Z' }),
+    ];
+
+    const result = orderByStatusThenRecency(todos);
+
+    expect(result.map((t) => t.id)).toEqual(['ip-new', 'ip-mid', 'ip-old']);
+  });
+
+  it('orders the open block by newest updated_at first', () => {
+    const todos = [
+      makeTodo({ id: 'open-old', status: 'open', updated_at: '2026-01-01T00:00:00.000Z' }),
+      makeTodo({ id: 'open-new', status: 'open', updated_at: '2026-06-01T00:00:00.000Z' }),
+      makeTodo({ id: 'open-mid', status: 'open', updated_at: '2026-03-01T00:00:00.000Z' }),
+    ];
+
+    const result = orderByStatusThenRecency(todos);
+
+    expect(result.map((t) => t.id)).toEqual(['open-new', 'open-mid', 'open-old']);
+  });
+
+  it('produces the same order for a shuffled input with distinct timestamps', () => {
+    const ip3 = makeTodo({ id: 'ip-3', status: 'in_progress', updated_at: '2026-06-01T00:00:40.000Z' });
+    const ip2 = makeTodo({ id: 'ip-2', status: 'in_progress', updated_at: '2026-06-01T00:00:30.000Z' });
+    const ip1 = makeTodo({ id: 'ip-1', status: 'in_progress', updated_at: '2026-06-01T00:00:20.000Z' });
+    const open2 = makeTodo({ id: 'open-2', status: 'open', updated_at: '2026-06-01T00:00:10.000Z' });
+    const open1 = makeTodo({ id: 'open-1', status: 'open', updated_at: '2026-06-01T00:00:00.000Z' });
+    const shuffled = [open1, ip2, open2, ip3, ip1];
+
+    const result = orderByStatusThenRecency(shuffled);
+
+    expect(result.map((t) => t.id)).toEqual(['ip-3', 'ip-2', 'ip-1', 'open-2', 'open-1']);
+  });
+
+  it('does not mutate the input array', () => {
+    const original = [
+      makeTodo({ id: 'open-a', status: 'open', updated_at: '2026-06-01T00:00:01.000Z' }),
+      makeTodo({ id: 'ip-a', status: 'in_progress', updated_at: '2026-06-01T00:00:02.000Z' }),
+    ];
+
+    orderByStatusThenRecency(original);
+
+    expect(original.map((t) => t.id)).toEqual(['open-a', 'ip-a']);
+  });
+
+  it('sorts done tasks last, even though the panel filters them out first', () => {
+    const todos = [
+      makeTodo({ id: 'done-a', status: 'done', updated_at: '2026-06-01T00:00:50.000Z' }),
+      makeTodo({ id: 'open-a', status: 'open', updated_at: '2026-06-01T00:00:10.000Z' }),
+      makeTodo({ id: 'ip-a', status: 'in_progress', updated_at: '2026-06-01T00:00:20.000Z' }),
+    ];
+
+    const result = orderByStatusThenRecency(todos);
+
+    expect(result.map((t) => t.id)).toEqual(['ip-a', 'open-a', 'done-a']);
   });
 });

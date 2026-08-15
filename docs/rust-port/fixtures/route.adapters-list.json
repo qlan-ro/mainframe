@@ -31,7 +31,8 @@
       "modelsRevision": 2,
       "catalogSource": "probed",
       "capabilities": {
-        "planMode": true
+        "planMode": true,
+        "autoMode": true
       }
     }
   ]

@@ -3,8 +3,11 @@
 /**
  * PermissionSelect — Shield-icon trigger + dropdown of execution modes.
  *
- * Fixed list: Interactive / Auto-Edits / Unattended (mirrors desktop PERMISSION_MODES).
- * When the selected mode is 'yolo', the trigger is tinted text-destructive.
+ * Interactive / Auto-Edits / Auto / Unattended, least to most permissive. Auto is
+ * the Claude CLI's own mode and shows only for an adapter advertising
+ * capabilities.autoMode; the label is still resolved off the unfiltered list so a
+ * chat carrying a mode this adapter can't offer never renders the raw wire string.
+ * Tone tints the trigger and the option label: Unattended destructive, Auto caution.
  * NOT disabled while the chat is running — can be changed for the next turn.
  *
  * A floating list of choices is a native DropdownMenu (ledger rule, 2026-08-05).
@@ -14,7 +17,7 @@
 
 import { useState } from 'react';
 import { ChevronDown, Shield } from 'lucide-react';
-import type { Chat, ExecutionMode, ProviderConfig } from '@qlan-ro/mainframe-types';
+import type { AdapterInfo, Chat, ExecutionMode, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,19 +32,34 @@ export interface PermissionSelectProps {
   chat: Chat;
   setPermissionMode: (mode: ExecutionMode) => void;
   providerDefaults?: ProviderConfig;
+  /** Resolved adapter for this chat; gates the Auto option. Null/absent while the catalog loads. */
+  adapter?: AdapterInfo | null;
 }
 
-const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string }[] = [
+type ModeTone = 'caution' | 'destructive' | undefined;
+
+const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string; tone?: ModeTone }[] = [
   { id: 'default', label: 'Interactive', description: 'Approve every action' },
   { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits auto-applied; commands ask' },
-  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts' },
+  { id: 'auto', label: 'Auto', description: 'Claude decides which actions need approval', tone: 'caution' },
+  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts', tone: 'destructive' },
 ];
 
-export function PermissionSelect({ chat, setPermissionMode, providerDefaults }: PermissionSelectProps) {
+const TONE_INK: Record<'caution' | 'destructive', string> = {
+  caution: 'text-warning',
+  destructive: 'text-destructive',
+};
+
+function toneInk(tone: ModeTone): string {
+  return tone == null ? 'text-muted-foreground' : TONE_INK[tone];
+}
+
+export function PermissionSelect({ chat, setPermissionMode, providerDefaults, adapter }: PermissionSelectProps) {
   const [open, setOpen] = useState(false);
   const currentMode: ExecutionMode = chat.permissionMode ?? providerDefaults?.defaultMode ?? 'default';
-  const isYolo = currentMode === 'yolo';
-  const currentLabel = PERMISSION_MODES.find((m) => m.id === currentMode)?.label ?? currentMode;
+  const current = PERMISSION_MODES.find((m) => m.id === currentMode);
+  const currentLabel = current?.label ?? currentMode;
+  const offered = PERMISSION_MODES.filter((m) => m.id !== 'auto' || adapter?.capabilities.autoMode === true);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -59,7 +77,7 @@ export function PermissionSelect({ chat, setPermissionMode, providerDefaults }: 
               open && 'border-primary bg-sidebar-selection',
               'transition-colors',
               'focus-visible:outline-none',
-              isYolo ? 'text-destructive' : 'text-muted-foreground',
+              toneInk(current?.tone),
             )}
           >
             <Shield size={12} className="shrink-0" />
@@ -71,7 +89,7 @@ export function PermissionSelect({ chat, setPermissionMode, providerDefaults }: 
 
       <DropdownMenuContent align="start" side="top" sideOffset={6} className="min-w-40">
         <DropdownMenuGroup>
-          {PERMISSION_MODES.map((mode) => (
+          {offered.map((mode) => (
             <DropdownMenuItem
               key={mode.id}
               data-testid={`composer-permission-mode-select-option-${mode.id}`}
@@ -82,7 +100,7 @@ export function PermissionSelect({ chat, setPermissionMode, providerDefaults }: 
               )}
             >
               <span className="flex min-w-0 flex-col">
-                <span className="font-medium">{mode.label}</span>
+                <span className={cn('font-medium', mode.tone != null && TONE_INK[mode.tone])}>{mode.label}</span>
                 <span className="text-xs leading-snug text-muted-foreground">{mode.description}</span>
               </span>
             </DropdownMenuItem>

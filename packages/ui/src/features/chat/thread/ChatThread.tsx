@@ -5,7 +5,23 @@
  * render through MessagePrimitive.GroupedParts + the tool-card registry inside a
  * centered, max-width column. The composer sits in a `ViewportFooter` so its
  * height registers as scroll inset (the last message never hides behind it);
- * the recovery card takes that slot when the working directory is gone.
+ * the recovery card takes that slot when the working directory is gone. An
+ * unanswered gate shares that footer above the composer, in its own slot
+ * capped at 45% of the SCROLLPORT (a container query against
+ * `ThreadPrimitive.Viewport`'s `[container-type:size]` — not the root, which
+ * also contains the in-flow `FindBar` and would over-count the pane by the
+ * find bar's height whenever it's open) and scrolling internally, so it never
+ * scrolls out of reach and a tall composer draft can never squeeze it away
+ * (#336). Three invariants hold together at every scroll position: the gate
+ * slot keeps a `min-h-24` floor, the composer's bottom edge never paints past
+ * the scrollport, and some transcript stays visible above the footer. The
+ * footer reserves a fixed strip for that last one (`calc(100cqh-2rem)`, not a
+ * bare `100cqh`) and gives the gate slot first claim on any remaining
+ * shrinkage (`shrink-[100]` in ChatGateMount, against the composer wrapper's
+ * plain default) — the composer only compresses once the slot is already
+ * pinned at its floor. The composer's own root scrolls internally
+ * (`min-h-0 overflow-y-auto` in Composer.tsx) so shrinking it clips its
+ * content instead of letting it paint past the pane.
  */
 import type { ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
@@ -152,10 +168,18 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           data-testid="chat-thread"
           className="flex h-full flex-col overflow-hidden bg-background text-foreground"
         >
-          {/* In-chat Find bar (Cmd/Ctrl+F) — sticky above the scrolling viewport. */}
+          {/* In-chat Find bar (Cmd/Ctrl+F) — in-flow above the viewport, NOT
+              sticky/overlaid: it takes real space out of the root's flex
+              column, which is exactly why the `cqh` query container below
+              lives on the viewport rather than the root (#336). */}
           <FindBar />
           {/* Native autoscroll Viewport + a CSS warm-chrome thin scrollbar.
-          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.) */}
+          (Radix ScrollArea via asChild doesn't bind to ThreadPrimitive.Viewport.)
+          `[container-type:size]` gives the gate slot's and the footer's `cqh`
+          caps a reference that IS the scrollport the sticky footer pins
+          against — querying the root instead (the pre-#336-fix-up state)
+          silently over-counts the pane by the find bar's height whenever it's
+          open, since the root is the find bar's ancestor too. */}
           <ThreadPrimitive.Viewport
             ref={viewportRef}
             data-testid="chat-thread-viewport"
@@ -163,7 +187,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             // Escape from the composer parks focus here; a scroll container is
             // not focusable without it.
             tabIndex={-1}
-            className="relative flex flex-1 flex-col overflow-y-auto"
+            className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
           >
             {/* Width cap: 48rem, minus the rail block (58px) MIRRORED on both
                 sides — in a narrow zone the transcript clears the floating
@@ -176,11 +200,24 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                   not pinned above the composer (#214). */}
               <GeneratingIndicator />
               <CompactingIndicator />
-              <ChatGateMount />
             </div>
 
-            {/* Sticky footer — its height is measured into the scroll inset. */}
-            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex flex-col bg-background">
+            {/* Sticky footer — its height is measured into the scroll inset, so
+                the pinned gate is inset for free. `max-h-[calc(100cqh-2rem)]`
+                bounds the footer's OWN box against the viewport's
+                `[container-type:size]` (the actual scrollport `sticky
+                bottom-0` pins against — a sticky box taller than its
+                scrollport doesn't pin, it pins to the TOP and overflows past
+                the bottom), reserving a fixed 2rem strip so the transcript is
+                never fully occluded even with the gate at its cap and a tall
+                composer draft (#336). Below that cap, the inner wrapper is a
+                flex column with `min-h-0` on both the gate slot and the
+                banner+composer wrapper, so each can shrink below its natural
+                content size instead of overflowing the footer; the slot's
+                `shrink-[100]` (ChatGateMount) gives it first claim on any
+                deficit, so the composer only compresses once the slot is
+                already pinned at its floor. */}
+            <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background">
               <ThreadPrimitive.ScrollToBottom asChild>
                 <Button
                   data-testid="chat-scroll-to-bottom"
@@ -195,9 +232,21 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 </Button>
               </ThreadPrimitive.ScrollToBottom>
 
-              <div data-testid="chat-thread-footer" className="mx-auto w-full max-w-[min(48rem,100%-116px)] px-5 pb-4">
-                <WorktreeSwitchBanner />
-                <ThreadFooterInput />
+              <div
+                data-testid="chat-thread-footer"
+                className="mx-auto flex w-full min-h-0 max-w-[min(48rem,100%-116px)] flex-col px-5 pb-4"
+              >
+                <ChatGateMount />
+                {/* `min-h-0`, not `shrink-0`: the banner and the composer keep
+                    their natural size while there's room, but under a squeeze
+                    this wrapper — and the composer inside it (Composer.tsx) —
+                    must be free to shrink below content size, or the deficit
+                    the slot can't absorb alone paints the composer past the
+                    pane (#336). */}
+                <div className="flex min-h-0 flex-col">
+                  <WorktreeSwitchBanner />
+                  <ThreadFooterInput />
+                </div>
               </div>
             </ThreadPrimitive.ViewportFooter>
           </ThreadPrimitive.Viewport>

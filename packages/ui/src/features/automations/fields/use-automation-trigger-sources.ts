@@ -4,7 +4,7 @@
  * Builds the `/` (skills) and `@` (files) `TriggerConfig` entries for an
  * automations text field — the automations-context analog of
  * `ComposerTriggers`' `useComposerTriggerConfigs`. Sourced from the
- * automation's own `activeProjectId` (no chat/session context — `SkillsProvider`
+ * automation's own `scopeProjectId` (no chat/session context — `SkillsProvider`
  * is chat-coupled and can't be reused) and from `adapterId` (the agent step's
  * configured adapter, or — for the fields belonging to no step — the first
  * installed adapter that answers the skills route), mirroring
@@ -97,29 +97,29 @@ export function useAutomationTriggerSources(
   adapterId?: string,
   { enabled = true }: UseAutomationTriggerSourcesOptions = {},
 ): TriggerConfig[] {
-  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
+  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
   const adapters = useAdapters();
   const candidateAdapterIds = useMemo(
     () => (adapterId ? [adapterId] : adapters.filter((a) => a.installed).map((a) => a.id)),
     [adapterId, adapters],
   );
 
-  const skills = useAutomationSkills(activeProjectId, candidateAdapterIds, enabled);
+  const skills = useAutomationSkills(scopeProjectId, candidateAdapterIds, enabled);
   const skillsAdapter = useMemo(() => buildSkillsTriggerAdapter(skills), [skills]);
 
   const mentionCache = useMemo(
     () =>
       createMentionCache({
         searchFiles: (q) =>
-          enabled && activeProjectId ? searchFiles(IGNORED_PORT, activeProjectId, q) : Promise.resolve([]),
+          enabled && scopeProjectId ? searchFiles(IGNORED_PORT, scopeProjectId, q) : Promise.resolve([]),
         getFileTree: (dir) =>
-          enabled && activeProjectId ? getFileTree(IGNORED_PORT, activeProjectId, dir) : Promise.resolve([]),
+          enabled && scopeProjectId ? getFileTree(IGNORED_PORT, scopeProjectId, dir) : Promise.resolve([]),
         browseFilesystem: (dir) =>
           enabled
             ? browseFilesystem(IGNORED_PORT, dir, { includeFiles: true, includeHidden: true })
             : Promise.resolve([]),
       }),
-    [enabled, activeProjectId],
+    [enabled, scopeProjectId],
   );
 
   // No agents: an automation step has no chat to source a subagent list from.

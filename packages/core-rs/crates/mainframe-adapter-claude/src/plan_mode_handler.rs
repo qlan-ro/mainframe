@@ -262,6 +262,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn on_approve_with_auto_sets_auto_base_mode() {
+        let ctx = MockCtx::new(true);
+        let handler = ClaudePlanModeHandler;
+        let mut resp = base_response();
+        resp.execution_mode = Some(ExecutionMode::Auto);
+        handler.on_approve(resp, &ctx).await.unwrap();
+
+        let rec = ctx.rec();
+        assert_eq!(rec.set_permission_mode, vec![ExecutionMode::Auto]);
+        assert_eq!(
+            rec.updates,
+            vec![PlanChatUpdate {
+                plan_mode: Some(false),
+                permission_mode: Some(ExecutionMode::Auto),
+                clear_claude_session_id: false,
+            }]
+        );
+    }
+
+    #[tokio::test]
     async fn on_reject_forwards_the_deny_response_to_respond_to_permission() {
         let ctx = MockCtx::new(true);
         let handler = ClaudePlanModeHandler;

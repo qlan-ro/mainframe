@@ -106,8 +106,8 @@ future edge cases._
 ## ★ Gates (permission / plan / question)
 
 _Spec: `gates.spec.ts` + the interactive-card assertions inside `chat.spec.ts`. Routing lives in
-`ChatGateMount`, dispatched by `ControlRequest.toolName`; only one gate is mounted at a time, at the
-thread tail._
+`ChatGateMount`, dispatched by `ControlRequest.toolName`; only one gate is mounted at a time, pinned in
+the thread's sticky footer above the composer (`chat-thread-gate-slot`)._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|

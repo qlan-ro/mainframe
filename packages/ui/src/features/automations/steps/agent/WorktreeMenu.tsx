@@ -6,7 +6,7 @@
  * The branch name is a `'variables-only'` `TriggerTextField`: branch names
  * take `$refs` (`todo/$id`), never slash commands or `@`-files. Base
  * branches come from the automation's own resolved project
- * (`store.activeProjectId`) via `useProjectBranches` — the step needs no
+ * (`store.scopeProjectId`) via `useProjectBranches` — the step needs no
  * project picker of its own.
  */
 import { useState } from 'react';
@@ -35,8 +35,8 @@ export interface WorktreeMenuProps {
 
 export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMenuProps) {
   const [open, setOpen] = useState(false);
-  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
-  const { branches, currentBranch } = useProjectBranches(activeProjectId);
+  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
+  const { branches, currentBranch } = useProjectBranches(scopeProjectId);
 
   const branchName = worktree ? singlePart(worktree.branchName) : '';
   const summary = worktree ? branchName || 'new worktree' : 'no worktree';

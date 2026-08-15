@@ -54,7 +54,7 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
       >
         <div className="flex min-w-0 items-center gap-1">
           <ModelMenu adapterId={step.adapterId} model={step.model} onChange={patch} testId={testId} />
-          <PermissionMenu value={step.permissionMode} onChange={patch} testId={testId} />
+          <PermissionMenu adapterId={step.adapterId} value={step.permissionMode} onChange={patch} testId={testId} />
           <WorktreeMenu worktree={step.worktree} onChange={patch} tokens={tokens} testId={testId} />
         </div>
         <AdvancedToggle open={advancedOpen} onToggle={() => setAdvancedOpen((o) => !o)} testId={testId} />

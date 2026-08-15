@@ -1,26 +1,44 @@
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { AutomationsHost } from '../AutomationsHost';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
-import { AUTOMATION_FIXTURES } from '../fixtures/fixtures';
+import { createFixtureGateway } from '../fixtures/fixture-gateway';
+import { useSessionFilters } from '@/store/session-filters';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 
-// Project resolution is out of scope here — most tests want the pre-scoping
-// "show everything" behavior; the scoping-specific test below overrides it.
+// The scope hook reads the active session's project as its second seed source;
+// most tests here want it unresolved so the seed falls through to the sole
+// project below.
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: vi.fn(() => ({ projectId: undefined })),
 }));
 
-// The library row's project annotation fetches through the daemon port — inert here.
+// Feeds both the library row's project annotation and the scope hook's seed —
+// one project, so `seedProjectScope`'s sole-project branch resolves 'proj-1'.
 vi.mock('@/features/sessions/use-projects', () => ({
-  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
+  useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }], reloadProjects: vi.fn() }),
 }));
+
+/** Records every project the library load asks for, real gateway behind it. */
+function spyGateway(calls: (string | null | undefined)[]) {
+  const base = createFixtureGateway();
+  return {
+    ...base,
+    listAutomations: async (projectId?: string | null) => {
+      calls.push(projectId);
+      return base.listAutomations(projectId);
+    },
+  };
+}
 
 beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: undefined } as ReturnType<typeof useActiveIdentity>);
-  useAutomationsStore.setState({ activeProjectId: null });
+  useSessionFilters.setState({ filterProjectId: null });
+  // The store is module-global: a spy left installed by one test would answer
+  // for every later one.
+  useAutomationsStore.setState({ scopeProjectId: null, gateway: createFixtureGateway() });
 });
 
 it('renders nothing while closed', () => {
@@ -33,8 +51,8 @@ it('renders nothing while closed', () => {
   expect(container).toBeEmptyDOMElement();
 });
 
-it('loads automations even while closed, so the sidebar badge reflects pending interactions on boot', async () => {
-  useAutomationsStore.setState({ definitions: [] });
+it('loads interactions even while closed, so the sidebar badge is populated on boot', async () => {
+  useAutomationsStore.setState({ interactions: [] });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -43,12 +61,13 @@ it('loads automations even while closed, so the sidebar badge reflects pending i
   );
 
   await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
+    expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0);
   });
 });
 
-it('renders the view once opened, and loads automations from the gateway', async () => {
-  useAutomationsStore.setState({ definitions: [] });
+it('renders the view once opened and loads the seeded project’s library', async () => {
+  const calls: (string | null | undefined)[] = [];
+  useAutomationsStore.setState({ definitions: [], gateway: spyGateway(calls) });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -58,7 +77,12 @@ it('renders the view once opened, and loads automations from the gateway', async
 
   expect(screen.getByTestId('automations-host')).toBeInTheDocument();
   expect(await screen.findByTestId('automations-view')).toBeInTheDocument();
-  expect(useAutomationsStore.getState().definitions.length).toBe(AUTOMATION_FIXTURES.length);
+  // Exactly one call, for the seeded project: the hook now seeds during
+  // render, so the opening commit already carries the resolved scope — no
+  // wasted unscoped `listAutomations(null)` before it.
+  await vi.waitFor(() => expect(calls).toEqual(['proj-1']));
+  // No fixture carries a project, so the scoped read comes back empty.
+  await vi.waitFor(() => expect(useAutomationsStore.getState().definitions).toEqual([]));
 });
 
 it('dismissing the dialog closes the host', () => {
@@ -75,9 +99,9 @@ it('dismissing the dialog closes the host', () => {
   expect(useAutomationsNav.getState().open).toBe(false);
 });
 
-it('resolves the active project via useActiveIdentity into the store, scoping the library to it', async () => {
-  vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
-  useAutomationsStore.setState({ definitions: [] });
+it('holds no scope while closed, whatever the active session does, and takes the seed on open', async () => {
+  const calls: (string | null | undefined)[] = [];
+  useAutomationsStore.setState({ definitions: [], interactions: [], gateway: spyGateway(calls) });
   useAutomationsNav.setState({ open: false, editorTarget: null, runId: null });
   render(
     <TooltipProvider>
@@ -85,10 +109,20 @@ it('resolves the active project via useActiveIdentity into the store, scoping th
     </TooltipProvider>,
   );
 
-  await vi.waitFor(() => {
-    expect(useAutomationsStore.getState().activeProjectId).toBe('proj-1');
+  // The badge load proves the host's effects have flushed.
+  await vi.waitFor(() => expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0));
+  act(() => {
+    vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
+    useSessionFilters.setState({ filterProjectId: 'proj-1' });
   });
-  // None of the seeded fixtures belong to 'proj-1' — the scoped load should
-  // resolve to an empty list rather than every automation in the workspace.
+  expect(useAutomationsStore.getState().scopeProjectId).toBeNull();
+  expect(calls).toEqual([]);
   expect(useAutomationsStore.getState().definitions).toEqual([]);
+
+  act(() => {
+    useAutomationsNav.setState({ open: true });
+  });
+
+  await vi.waitFor(() => expect(useAutomationsStore.getState().scopeProjectId).toBe('proj-1'));
+  expect(calls).toContain('proj-1');
 });

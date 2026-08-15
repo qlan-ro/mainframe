@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { arrangeSessions, SESSION_SORTS } from '../group-sessions';
+import type { SortMode, SessionGroupResult } from '../group-sessions';
 
 // ---------------------------------------------------------------------------
 // Fixed reference clock — 2026-06-07T12:00:00 local time.
@@ -128,6 +129,25 @@ describe("arrangeSessions mode 'name'", () => {
     expect(labels(groups)).toEqual(['A–Z']);
     expect(idsOf(groups, 'A–Z')).toEqual(['a', 'b']);
   });
+
+  it('resolves identical titles by updatedAt descending while distinct titles stay alphabetical', () => {
+    const items = [
+      item('c', { title: 'Charlie' }),
+      item('a-old', { title: 'Alpha', updatedAt: EARLIER_MON }),
+      item('a-new', { title: 'Alpha', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(idsOf(groups, 'A–Z')).toEqual(['a-new', 'a-old', 'c']);
+  });
+
+  it('orders a multi-session Pinned group by recency in name mode', () => {
+    const items = [
+      item('p-old', { pinned: true, updatedAt: EARLIER_MON, title: 'B' }),
+      item('p-new', { pinned: true, updatedAt: TODAY_1100, title: 'A' }),
+    ];
+    const groups = arrangeSessions(items, 'name', NOW);
+    expect(idsOf(groups, 'Pinned')).toEqual(['p-new', 'p-old']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -147,12 +167,12 @@ describe("arrangeSessions mode 'project'", () => {
   it('emits one section per project, labeled by project name, in project-list order', () => {
     const items = [
       item('a1', { projectId: 'proj-a' }),
-      item('b1', { projectId: 'proj-b' }),
-      item('b2', { projectId: 'proj-b' }),
+      item('b1', { projectId: 'proj-b', updatedAt: YESTERDAY_1000 }),
+      item('b2', { projectId: 'proj-b', updatedAt: TODAY_1100 }),
     ];
     const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
     expect(labels(groups)).toEqual(['Beta', 'Alpha']);
-    expect(idsOf(groups, 'Beta')).toEqual(['b1', 'b2']);
+    expect(idsOf(groups, 'Beta')).toEqual(['b2', 'b1']);
     expect(idsOf(groups, 'Alpha')).toEqual(['a1']);
   });
 
@@ -179,6 +199,64 @@ describe("arrangeSessions mode 'project'", () => {
   it('returns an empty array for no items', () => {
     expect(arrangeSessions([], 'project', NOW, PROJECTS)).toEqual([]);
   });
+
+  it('orders a project section by updatedAt, newest first', () => {
+    const items = [
+      item('a-old', { projectId: 'proj-a', updatedAt: EARLIER_MON }),
+      item('a-new', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+      item('a-mid', { projectId: 'proj-a', updatedAt: YESTERDAY_1000 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Alpha')).toEqual(['a-new', 'a-mid', 'a-old']);
+  });
+
+  it('orders the unknown-project fallback section by updatedAt, newest first', () => {
+    const items = [
+      item('g-old', { projectId: 'proj-ghost', updatedAt: EARLIER_MON }),
+      item('g-new', { projectId: 'proj-ghost', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'proj-ghost')).toEqual(['g-new', 'g-old']);
+  });
+
+  it('orders multiple ghost-project sections by their newest session, after every known-project section', () => {
+    const items = [
+      item('a1', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+      item('gh1-old', { projectId: 'proj-ghost1', updatedAt: EARLIER_MON }),
+      item('gh2-new', { projectId: 'proj-ghost2', updatedAt: TODAY_0900 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Alpha', 'proj-ghost2', 'proj-ghost1']);
+  });
+
+  it('tiebreaks ghost sections with identical newest activity by projectId ascending', () => {
+    const items = [
+      item('ghz1', { projectId: 'proj-ghost-z', updatedAt: TODAY_1100 }),
+      item('ghy1', { projectId: 'proj-ghost-y', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['proj-ghost-y', 'proj-ghost-z']);
+  });
+
+  it('lifts a pinned session out of its project section and still orders the remainder by recency', () => {
+    const items = [
+      item('a-old', { projectId: 'proj-a', updatedAt: EARLIER_MON }),
+      item('a-pin', { projectId: 'proj-a', pinned: true, updatedAt: YESTERDAY_1000 }),
+      item('a-new', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Pinned')).toEqual(['a-pin']);
+    expect(idsOf(groups, 'Alpha')).toEqual(['a-new', 'a-old']);
+  });
+
+  it('orders a multi-session Pinned group by recency in project mode (regression guard)', () => {
+    const items = [
+      item('pin-old', { projectId: 'proj-a', pinned: true, updatedAt: EARLIER_MON }),
+      item('pin-new', { projectId: 'proj-b', pinned: true, updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(idsOf(groups, 'Pinned')).toEqual(['pin-new', 'pin-old']);
+  });
 });
 
 describe("arrangeSessions mode 'status'", () => {
@@ -200,4 +278,94 @@ describe("arrangeSessions mode 'status'", () => {
     expect(idsOf(groups, 'Pinned')).toEqual(['pin1']);
     expect(idsOf(groups, 'By status')).toEqual(['idle1']);
   });
+
+  it('resolves same-status ties by updatedAt descending while rank order stays working/waiting/idle', () => {
+    const items = [
+      item('w1', { displayStatus: 'working', updatedAt: TODAY_0900 }),
+      item('i-old', { displayStatus: 'idle', updatedAt: EARLIER_MON }),
+      item('i-new', { displayStatus: 'idle', updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(idsOf(groups, 'By status')).toEqual(['w1', 'i-new', 'i-old']);
+  });
+
+  it('orders a multi-session Pinned group by recency in status mode', () => {
+    const items = [
+      item('p-old', { pinned: true, updatedAt: EARLIER_MON, displayStatus: 'idle' }),
+      item('p-new', { pinned: true, updatedAt: TODAY_1100, displayStatus: 'idle' }),
+    ];
+    const groups = arrangeSessions(items, 'status', NOW);
+    expect(idsOf(groups, 'Pinned')).toEqual(['p-new', 'p-old']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// arrangeSessions is independent of input order (shuffle invariance)
+// ---------------------------------------------------------------------------
+
+/** Deterministic PRNG (no Math.random, so a failing seed reproduces). */
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Decorate-sort-undecorate shuffle — no indexed swaps, which noUncheckedIndexedAccess rejects. */
+function seededShuffle(items: SessionItem[], seed: number): SessionItem[] {
+  const rand = mulberry32(seed);
+  return items
+    .map((it) => ({ it, k: rand() }))
+    .sort((a, b) => a.k - b.k)
+    .map((e) => e.it);
+}
+
+function serialize(groups: SessionGroupResult[]): [string, string[]][] {
+  return groups.map((g) => [g.label, g.items.map((i) => i.id)]);
+}
+
+describe('arrangeSessions is independent of input order', () => {
+  const PROJECTS = [
+    { id: 'proj-a', name: 'Alpha' },
+    { id: 'proj-b', name: 'Beta' },
+  ];
+
+  const fixture: SessionItem[] = [
+    item('p1', { projectId: 'proj-a', pinned: true, updatedAt: TODAY_1100, displayStatus: 'working', title: 'Zulu' }),
+    item('p2', {
+      projectId: 'proj-b',
+      pinned: true,
+      updatedAt: YESTERDAY_1000,
+      displayStatus: 'idle',
+      title: 'Yankee',
+    }),
+    item('a1', { projectId: 'proj-a', updatedAt: TODAY_0900, displayStatus: 'working', title: 'Bravo' }),
+    item('a2', { projectId: 'proj-a', updatedAt: EARLIER_MON, displayStatus: 'waiting', title: 'Echo' }),
+    // a2/a3 share updatedAt (planted tie).
+    item('a3', { projectId: 'proj-a', updatedAt: EARLIER_MON, displayStatus: 'idle', title: 'Foxtrot' }),
+    item('b1', { projectId: 'proj-b', updatedAt: TODAY_1100, displayStatus: 'idle', title: 'Same Title' }),
+    // b1/b2 share a title (planted tie).
+    item('b2', { projectId: 'proj-b', updatedAt: YESTERDAY_1000, displayStatus: 'working', title: 'Same Title' }),
+    item('g1', { projectId: 'proj-ghost1', updatedAt: TODAY_0900, displayStatus: 'waiting', title: 'Golf' }),
+    item('g2', { projectId: 'proj-ghost2', updatedAt: EARLIER_MON, displayStatus: 'working', title: 'Hotel' }),
+    item('g3', { projectId: 'proj-ghost1', updatedAt: EARLIER_MON, displayStatus: 'idle', title: 'India' }),
+  ];
+
+  const MODES: SortMode[] = ['recent', 'name', 'status', 'project'];
+  const SEEDS = [1, 2, 3, 7, 42];
+
+  for (const mode of MODES) {
+    for (const seed of SEEDS) {
+      it(`mode '${mode}' seed ${seed}: shuffled input yields identical output`, () => {
+        const expected = serialize(arrangeSessions(fixture, mode, NOW, PROJECTS));
+        const shuffled = seededShuffle(fixture, seed);
+        const actual = serialize(arrangeSessions(shuffled, mode, NOW, PROJECTS));
+        expect(actual).toEqual(expected);
+      });
+    }
+  }
 });

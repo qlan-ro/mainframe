@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
+use mainframe_adapter_api::pr_detection::PrDetectionSink;
 use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
@@ -211,7 +212,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         chat_id: &str,
         built_for_session_id: Option<String>,
     ) -> Arc<dyn SessionSink> {
-        Arc::new(SessionSinkImpl {
+        let inner: Arc<dyn SessionSink> = Arc::new(SessionSinkImpl {
             chat_id: chat_id.to_string(),
             built_for_session_id,
             messages: self.messages.clone(),
@@ -222,7 +223,11 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
             attention_dedupe: self.attention_dedupe.clone(),
-        })
+        });
+        // PR detection is adapter-neutral (todo #339): wrapping here, the one
+        // construction point every session's sink comes from, is what makes
+        // every adapter inherit it — none needs its own scanning code.
+        Arc::new(PrDetectionSink::new(inner))
     }
 
     /// Emit display delta for a chat (code paths outside the session sink).
@@ -1306,6 +1311,9 @@ mod worktree_trigger_tests;
 
 #[cfg(test)]
 mod permission_cancel_tests;
+
+#[cfg(test)]
+mod pr_detection_wiring_tests;
 
 #[cfg(test)]
 mod tests {
