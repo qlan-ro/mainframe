@@ -1,14 +1,20 @@
 /**
- * useProjects — loads the daemon's project list once, keyed off the runtime port.
+ * useProjects — a thin selector over the shared `store/projects.ts` store.
  *
  * The single project source for the sessions feature: consumed by SessionSidebar
  * (filter pills + grouping) and the new-session picker / welcome flow (project
- * select). Reads the port from DaemonPortContext so it works inside aui's
- * runtime binder.
+ * select). Every call site reads the SAME list, so a reload issued from one
+ * mounted consumer (e.g. the first-run "Add project" CTA) is visible to every
+ * other one without a remount. Reads the port from DaemonPortContext so it
+ * works inside aui's runtime binder.
  */
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
-import { getProjects } from '@/lib/api/projects';
+import {
+  useProjectsStore,
+  reloadProjects as reloadProjectsAction,
+  removeProjectFromList as removeProjectFromListAction,
+} from '@/store/projects';
 import { useDaemonPort } from './runtime/daemon-port-context';
 
 export interface UseProjectsResult {
@@ -20,42 +26,17 @@ export interface UseProjectsResult {
 
 export function useProjects(): UseProjectsResult {
   const port = useDaemonPort();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function reloadProjects(): Promise<void> {
-    setLoading(true);
-    try {
-      setProjects(await getProjects(port));
-    } catch (e: unknown) {
-      console.warn('[useProjects] getProjects failed', e);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const projects = useProjectsStore((s) => s.projects);
+  const loading = useProjectsStore((s) => s.loading);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    getProjects(port)
-      .then((list) => {
-        if (!cancelled) setProjects(list);
-      })
-      .catch((e: unknown) => {
-        console.warn('[useProjects] getProjects failed', e);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    void reloadProjectsAction(port);
   }, [port]);
 
   return {
     projects,
     loading,
-    reloadProjects,
-    removeProjectFromList: (projectId) => setProjects((list) => list.filter((project) => project.id !== projectId)),
+    reloadProjects: () => reloadProjectsAction(port),
+    removeProjectFromList: removeProjectFromListAction,
   };
 }

@@ -2,10 +2,10 @@
  * useAddProject — the add-project orchestration: pick a directory, register it
  * with the daemon, then refetch the project list and toast the outcome.
  *
- * `reloadProjects` is passed in (not pulled from a local `useProjects()`) so the
- * refetch hits the CALLER's rendered `useProjects` instance — `useProjects` is
- * local `useState` per caller, so a fresh instance here would update nothing the
- * sidebar renders. Per decision, the active filter is left untouched on add.
+ * `reloadProjects` is injected rather than pulled from a fresh `useProjects()`
+ * call, for testability — `useProjects` now reads the shared `store/projects.ts`
+ * store, so any caller's `reloadProjects()` updates every mounted consumer.
+ * Per decision, the active filter is left untouched on add.
  */
 import { useCallback } from 'react';
 import { createProject } from '@/lib/api/projects';
