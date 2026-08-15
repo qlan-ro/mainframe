@@ -85,6 +85,25 @@ pub(crate) fn is_allowed_external_scheme(url: &str) -> bool {
         .any(|s| lower.starts_with(&format!("{s}://")) || lower.starts_with(&format!("{s}:")))
 }
 
+/// The initialization script every preview child webview loads before the page's
+/// own scripts.
+///
+/// `__mfPreviewWebview` tells the page it is being previewed rather than hosting
+/// the app. Tauri injects `__TAURI_INTERNALS__` into EVERY webview it creates,
+/// this one included, so a Mainframe UI opened in a preview (previewing a dev
+/// server that happens to be Mainframe) would otherwise take itself for the host
+/// app, call daemon commands this webview's capability never granted, and hang on
+/// its connecting overlay. `isTauriRuntime()` in packages/ui reads the flag.
+///
+/// `__mfPreviewTabId` bakes this tab's id in so BRIDGE_JS can stamp
+/// navigation/inspect events with it on first load, before any picker installs.
+fn preview_init_script(tab_id_json: &str) -> String {
+    format!(
+        "window.__mfPreviewWebview=true;window.__mfPreviewTabId={tab_id_json};\n{}",
+        crate::preview::bridge::BRIDGE_JS
+    )
+}
+
 // ── PreviewManager ─────────────────────────────────────────────────────────────
 
 /// Entry stored for each live preview tab.
@@ -210,10 +229,7 @@ pub async fn preview_create(
     // Bake this tab's id into the page so BRIDGE_JS can stamp navigation/inspect
     // events with it on first load (before any picker install sets it).
     let tab_id_json = serde_json::to_string(&tab_id).unwrap_or_else(|_| "\"\"".to_string());
-    let init_script = format!(
-        "window.__mfPreviewTabId={tab_id_json};\n{}",
-        crate::preview::bridge::BRIDGE_JS
-    );
+    let init_script = preview_init_script(&tab_id_json);
     let builder = tauri::webview::WebviewBuilder::new(&tab_id, WebviewUrl::External(parsed))
         .initialization_script(&init_script);
 
@@ -350,6 +366,35 @@ pub async fn preview_eval(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Initialization script ─────────────────────────────────────────────────
+
+    #[test]
+    fn init_script_marks_the_webview_as_a_preview() {
+        let script = preview_init_script("\"tab-1\"");
+
+        // The UI's isTauriRuntime() keys off this exact name; renaming one side
+        // alone silently restores the hang it exists to prevent.
+        assert!(script.contains("window.__mfPreviewWebview=true"));
+    }
+
+    #[test]
+    fn init_script_marks_the_preview_before_the_bridge_runs() {
+        let script = preview_init_script("\"tab-1\"");
+        let flag = script.find("__mfPreviewWebview").expect("flag present");
+        let bridge = script.find("(function ()").expect("bridge present");
+
+        // The page reads the flag during its own boot, so it has to be assigned
+        // ahead of everything else the script carries.
+        assert!(flag < bridge, "the preview flag must precede BRIDGE_JS");
+    }
+
+    #[test]
+    fn init_script_still_bakes_the_tab_id() {
+        let script = preview_init_script("\"tab-7\"");
+
+        assert!(script.contains("window.__mfPreviewTabId=\"tab-7\""));
+    }
 
     // ── PreviewManager bookkeeping ────────────────────────────────────────────
 
