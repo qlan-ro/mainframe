@@ -10,7 +10,7 @@
  * static config. The dev overlay file (withGlobalTauri) is still merged first.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,6 +48,25 @@ provisionSidecarIfMissing();
 const port = process.env.VITE_PORT ?? '5174';
 const devUrl = `http://localhost:${port}`;
 
+/**
+ * Dev builds also override the traffic-light y. macOS 26 gates the button
+ * metrics on the SDK a binary links: the packaged app (release runner is
+ * macos-14, SDK 14.x) gets the classic buttons, whose cluster centre lands at
+ * y + 2 from the window top; a local dev build links the current SDK (26+)
+ * and gets the new metrics, centre = y − 2. tauri.conf.json carries the
+ * packaged value (22 → centre 24, the sidebar header's midline); dev patches
+ * it to 26 so a dev window centres identically. The override patches the
+ * windows array read from the real config, so every other window property
+ * stays single-sourced. Retune both values together when the sidebar header
+ * row moves (see SessionSidebar.tsx) or the release runner's Xcode reaches
+ * SDK 26.
+ */
+const DEV_TRAFFIC_LIGHT_Y = 26;
+const conf = JSON.parse(readFileSync(join(here, '..', 'src-tauri', 'tauri.conf.json'), 'utf8'));
+const windows = conf.app.windows.map((w) =>
+  w.trafficLightPosition ? { ...w, trafficLightPosition: { ...w.trafficLightPosition, y: DEV_TRAFFIC_LIGHT_Y } } : w,
+);
+
 try {
   execFileSync(
     'cargo',
@@ -59,7 +78,7 @@ try {
       '--config',
       'src-tauri/tauri.dev.conf.json',
       '--config',
-      JSON.stringify({ build: { devUrl } }),
+      JSON.stringify({ build: { devUrl }, app: { windows } }),
     ],
     { stdio: 'inherit' },
   );
