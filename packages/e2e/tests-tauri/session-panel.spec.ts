@@ -299,7 +299,7 @@ async function dismissOverlayWithEscape(page: Page): Promise<void> {
  * WIDE that lands the host near ~900px, below `INLINE_MIN_WIDTH`, so the inline
  * stack unmounts and every card testid disappears (the rail stays, but its cards
  * do not). Found live: the Context describe's file-opening tests silently broke
- * the tests after them. ⌘2 toggles the workspace back off; calling this first
+ * the tests after them. ⌘⇧W toggles the workspace back off; calling this first
  * makes each test independent of what the previous one opened, which also matters
  * on a Playwright retry (hooks re-run, but a mid-describe retry does not).
  *
@@ -318,7 +318,7 @@ async function dismissOverlayWithEscape(page: Page): Promise<void> {
 async function ensureSessionCard(page: Page): Promise<void> {
   const workspaceSurface = page.getByTestId('workspace-surface');
   if (await workspaceSurface.isVisible().catch(() => false)) {
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(workspaceSurface).toHaveCount(0, { timeout: 5_000 });
   }
   const card = page.getByTestId('session-panel-card-session');

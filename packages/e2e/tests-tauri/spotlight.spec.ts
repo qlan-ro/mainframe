@@ -1,5 +1,5 @@
 /**
- * §spotlight — the ⌘O command palette for app-tauri browser mode.
+ * §spotlight — the ⌘K command palette for app-tauri browser mode.
  *
  * Spec: docs/plans/2026-07-03-tauri-e2e-test-plan.md #23 (Cluster D).
  * UI-only surface — no recording needed (no agent turn is ever sent).
@@ -53,7 +53,7 @@ async function renameChat(page: Page, chatId: string, title: string): Promise<vo
   if (!res.ok()) throw new Error(`renameChat failed (${res.status()}): ${await res.text()}`);
 }
 
-/** Open the palette via the deterministic toolbar-click path (⌘O covered separately). */
+/** Open the palette via the deterministic toolbar-click path (⌘K covered separately). */
 async function openPalette(page: Page): Promise<void> {
   await page.getByTestId('main-toolbar-search').click();
   await page.getByTestId('search-palette-input').waitFor({ timeout: 10_000 });
@@ -115,10 +115,10 @@ test.describe('§spotlight', () => {
     await closePaletteIfOpen(page);
   });
 
-  test('⌘O opens the palette via the global hotkey', async () => {
+  test('⌘K opens the palette via the global hotkey', async () => {
     const { page } = app;
     await expect(page.getByTestId('search-palette')).toHaveCount(0);
-    await page.keyboard.press('ControlOrMeta+o');
+    await page.keyboard.press('ControlOrMeta+k');
     await expect(page.getByTestId('search-palette')).toBeVisible({ timeout: 5_000 });
     await closePaletteIfOpen(page);
   });

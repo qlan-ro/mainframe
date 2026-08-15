@@ -3,7 +3,7 @@
  *
  * Cluster C, spec #20 of docs/plans/2026-07-03-tauri-e2e-test-plan.md, rewired for
  * the 2026-08-05 Files+Run merge: there are TWO surfaces now, so this covers the
- * surface rail, the dynamic floor, ⌘1/⌘2, the split controls, divider-drag resize,
+ * surface rail, the dynamic floor, ⌘⇧C/⌘⇧W, the split controls, divider-drag resize,
  * in-workspace tab→pane-edge drag (center=join / edge=split), Escape-cancel, and
  * per-session layout persistence. All UI-only; no AI turns, no recording needed.
  *
@@ -87,10 +87,13 @@ async function openPermanentFileTab(page: Page, query: string): Promise<void> {
   await expect(tab).toHaveCount(1);
 }
 
-// ─── §20a Surface rail, dynamic floor, ⌘1/⌘2 shortcuts ─────────────────────────
+// ─── §20a Surface rail, dynamic floor, ⌘⇧C/⌘⇧W shortcuts ───────────────────────
 //
-// SHORTCUT_MAP (SurfaceHost.tsx) has exactly two entries since the merge —
-// 1: chat, 2: workspace. There is no ⌘3.
+// registry.ts's surface toggles are `workspace.toggle-chat` (⌘⇧C) and
+// `workspace.toggle-workspace` (⌘⇧W), each wired via `useShortcutAction` in
+// SurfaceHost.tsx. The digit chords ⌘1…⌘9 no longer touch surfaces — they
+// switch session tabs (`sessions.tab-by-index`) — so pressing ⌘2 here is a
+// pure no-op, not a workspace toggle.
 
 test.describe('§20 layout — surface rail, floor, shortcuts', () => {
   let app: TauriAppFixture;
@@ -126,16 +129,16 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
     await expect(page.locator(WORKSPACE.strip)).toHaveCount(0);
   });
 
-  test('ControlOrMeta+2 toggles the workspace off; Chat is once again the sole lit surface', async () => {
+  test('ControlOrMeta+Shift+W toggles the workspace off; Chat is once again the sole lit surface', async () => {
     const { page } = app;
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
     await expect(page.getByTestId('surface-rail-chat')).toBeDisabled();
   });
 
-  test('ControlOrMeta+2 turns the workspace back on', async () => {
+  test('ControlOrMeta+Shift+W turns the workspace back on', async () => {
     const { page } = app;
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
   });
 
@@ -153,7 +156,7 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
     await expect(page.getByTestId('workspace-surface-close')).toBeDisabled();
 
     // A shortcut aimed at the floor surface is a no-op, not a crash.
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
 
     // Restore Chat via the rail so later tests in this file start from a normal state.
