@@ -33,9 +33,9 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    The fetcher refuses to overwrite an existing delta file — pass a different
    `--out`, or `--force` to replace it.
 
-3. **Load the tool's checklist** — `docs/adapters/claude/CONSUMED-SURFACE.md`
-   or `docs/adapters/codex/CONSUMED-SURFACE.md` (schema in
-   `docs/adapters/README.md`). Done when every checklist ID is in context.
+3. **Load the tool's checklist** — `docs/research/adapters/claude/CONSUMED-SURFACE.md`
+   or `docs/research/adapters/codex/CONSUMED-SURFACE.md` (schema in
+   `docs/research/adapters/README.md`). Done when every checklist ID is in context.
 
 4. **Classify every delta entry** per
    `.claude/skills/changelog-watch/classification.md`: relevance filter
@@ -66,7 +66,7 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    allowed no-op — it records "checked, nothing new".
 
 7. **Offer the todo drafts** (template in `classification.md`) for filing
-   per `docs/agents/issue-tracker.md`. Filing is a separate, explicit
+   per `docs/guides/issue-tracker.md`. Filing is a separate, explicit
    action — never automatic.
 
 ## Range too wide
@@ -98,7 +98,7 @@ Before acting on a `high` risk, confirm it against the live CLI with
 
 A new `tools` entry in `state.json` (`repo`, `mode: changelog|releases`,
 `changelogPath` or `includePrerelease`, seed `lastReviewedRef`) plus a
-`docs/adapters/<tool>/CONSUMED-SURFACE.md` checklist. No code change,
+`docs/research/adapters/<tool>/CONSUMED-SURFACE.md` checklist. No code change,
 provided the repo publishes either a changelog file or GitHub releases.
 
 ## Failure modes

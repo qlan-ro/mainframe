@@ -1,7 +1,7 @@
 # Classification reference
 
 How to turn a fetched delta (`fetch-delta.mjs` output) into a triage report.
-The checklists in `docs/adapters/*/CONSUMED-SURFACE.md` are authoritative;
+The checklists in `docs/research/adapters/*/CONSUMED-SURFACE.md` are authoritative;
 everything here is procedure for reading a changelog entry against them.
 
 ## Relevance filter — applied first, drop by default
@@ -155,7 +155,7 @@ finished.
 
 ## Todo draft template
 
-One draft per compatibility risk, filed per `docs/agents/issue-tracker.md`
+One draft per compatibility risk, filed per `docs/guides/issue-tracker.md`
 (`labels = ["needs-triage"]`, `status` left at its default `open`):
 
 ```

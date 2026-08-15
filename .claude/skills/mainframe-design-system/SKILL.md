@@ -209,7 +209,7 @@ a port rather than eyeballing.
 
 ## Related
 
-**`docs/architecture/2026-07-11-typography-legibility-audit.md`** and its findings companion — the
+**`docs/research/2026-07-11-typography-legibility-audit.md`** and its findings companion — the
 measured basis for the type roles, ink tiers, icon grid, and count-badge treatment above. It shipped as
 PR #452 (token re-tints, `UI_SCALE_FACTORS` 0.92/1.0/1.15, the contrast test, the primitive repairs), so
 read it as *what the app decided*, not as a proposal. Its remaining open items are the P2 tail.

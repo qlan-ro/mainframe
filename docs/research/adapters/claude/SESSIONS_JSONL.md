@@ -306,7 +306,7 @@ first sight but is fully explained by the leaked `toolResultStorage.ts`.
 ## A note on CONSUMED-SURFACE citations
 
 Earlier drafts of this doc cited stable ids (`CLAUDE-FILE-01..08`) from a
-`docs/adapters/claude/CONSUMED-SURFACE.md` inventory. That file exists only on
+`docs/research/adapters/claude/CONSUMED-SURFACE.md` inventory. That file exists only on
 the unmerged branch `todo/239-changelog-watch-skill` (PR #518, open), so the
 ids do not resolve for anyone reading from `main`. They have been replaced with
 direct source citations. Reinstate the ids once #239 merges.

@@ -6,17 +6,17 @@ AI-native development environment for orchestrating agents.
 
 ### Issue tracker
 
-Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/agents/issue-tracker.md`.
+Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainframe/plugins/todos/data.db`). See `docs/guides/issue-tracker.md`.
 
 ### Triage labels
 
-Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/agents/triage-labels.md`.
+Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/guides/triage-labels.md`.
 
 # Workflow
 
 - Before any new bug/feature work, pull latest main and start a new branch on it
 - Before any work, check needed skills to guide your development see [Skills](#skills)
-- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/adapters/claude/`, verified against the 2026-03-31 source leak and CLI v2.1.220: [SESSIONS_JSONL](docs/adapters/claude/SESSIONS_JSONL.md) (transcript format, directory layout, worktree relocation), [HOOKS](docs/adapters/claude/HOOKS.md), [PERMISSIONS](docs/adapters/claude/PERMISSIONS.md), [SLASH_COMMANDS](docs/adapters/claude/SLASH_COMMANDS.md), [CLEAR](docs/adapters/claude/CLEAR.md). Two older docs are kept with staleness banners — read the five above first: [PROTOCOL_REVERSED](docs/adapters/claude/PROTOCOL_REVERSED.md) (v2.1.37; still the only coverage of the `--sdk-url` WebSocket transport) and [CLAUDE-JSONL-SCHEMA](docs/adapters/claude/CLAUDE-JSONL-SCHEMA.md) (v2.0.76–2.1.34 field frequencies, subordinate to SESSIONS_JSONL). For which fields Mainframe actually consumes, see the consumed-surface checklists ([Claude](docs/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
+- For Claude CLI behavior, use the `claude-source-researcher` skill (reads the CLI source directly). Protocol docs are in `docs/research/adapters/claude/`, verified against the 2026-03-31 source leak and CLI v2.1.220: [SESSIONS_JSONL](docs/research/adapters/claude/SESSIONS_JSONL.md) (transcript format, directory layout, worktree relocation), [HOOKS](docs/research/adapters/claude/HOOKS.md), [PERMISSIONS](docs/research/adapters/claude/PERMISSIONS.md), [SLASH_COMMANDS](docs/research/adapters/claude/SLASH_COMMANDS.md), [CLEAR](docs/research/adapters/claude/CLEAR.md). Two older docs are kept with staleness banners — read the five above first: [PROTOCOL_REVERSED](docs/research/adapters/claude/PROTOCOL_REVERSED.md) (v2.1.37; still the only coverage of the `--sdk-url` WebSocket transport) and [CLAUDE-JSONL-SCHEMA](docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md) (v2.0.76–2.1.34 field frequencies, subordinate to SESSIONS_JSONL). For which fields Mainframe actually consumes, see the consumed-surface checklists ([Claude](docs/research/adapters/claude/CONSUMED-SURFACE.md), [Codex](docs/research/adapters/codex/CONSUMED-SURFACE.md)); verify a suspected live change against `.claude/skills/claude-protocol-debugger/` or `.claude/skills/codex-protocol-debugger/`.
 - Be sure to typecheck when you're done making a series of code changes
 - Prefer running single tests, and not the whole test suite, for performance
 - For git workflow and commit practices, see [Git](#git)

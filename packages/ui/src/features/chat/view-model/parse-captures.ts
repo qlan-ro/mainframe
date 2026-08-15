@@ -8,8 +8,8 @@
  * The syntax itself lives in `features/chat/markers/message-markers.ts`
  * alongside every other hidden-from-the-reader block.
  * Render-only in app-tauri — the capture COMPOSER stays gated on the
- * sandbox surface (see docs/architecture/MIGRATION-TRACKER.md). The format
- * side (`formatCaptures`) is deliberately NOT ported.
+ * sandbox surface. The format side (`formatCaptures`) is deliberately NOT
+ * ported.
  */
 import { CAPTURE_ROW_RE, splitSandboxCaptureBlock } from '../markers/message-markers';
 

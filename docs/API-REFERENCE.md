@@ -601,7 +601,7 @@ Each loaded plugin supplies its own sub-router, nested at `/api/plugins/{id}`
 by `PluginManager::router()`. Those routes are not enumerated here — they are
 per-plugin and only exist for plugins actually loaded (the built-in `todos`
 plugin is the one every Mainframe install ships with; see
-`docs/agents/issue-tracker.md`).
+`docs/guides/issue-tracker.md`).
 
 ## WebSocket Protocol
 
