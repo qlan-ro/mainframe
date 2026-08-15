@@ -12,10 +12,6 @@ Issues live in the Mainframe app's todos plugin (per-project SQLite, `~/.mainfra
 
 Five canonical triage roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), stored in each todo's `labels` JSON column. See `docs/agents/triage-labels.md`.
 
-### Domain docs
-
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (neither exists yet — created lazily by `/domain-modeling`).
-
 # Workflow
 
 - Before any new bug/feature work, pull latest main and start a new branch on it
