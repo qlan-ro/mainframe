@@ -16,10 +16,10 @@ what cost — and name the smallest cut that ships. This document is the deliver
 no code changes accompany it.
 
 *On the location:* this is the repo's first `docs/research/` entry. A feasibility
-study is neither a recorded decision (`docs/architecture/`, `docs/adr/`) nor a
-committed spec (`docs/specs/`), and filing it under either would imply a commitment
-that has not been made. Dated `docs/research/<date>-<todo>-<slug>.md` files keep
-investigation output separate from both.
+study is neither a recorded decision (`docs/adr/`) nor a committed spec, and filing
+it under either would imply a commitment that has not been made. Dated
+`docs/research/<date>-<todo>-<slug>.md` files keep investigation output separate
+from both.
 
 ## Out of scope
 
