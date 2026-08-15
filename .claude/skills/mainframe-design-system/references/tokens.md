@@ -35,7 +35,7 @@ class silently does nothing. Add a real usage before reaching for one.
 
 ### Which rung for which role
 
-Settled by the typography audit (`docs/architecture/2026-07-11-typography-legibility-audit.md`, shipped as
+Settled by the typography audit (`docs/research/2026-07-11-typography-legibility-audit.md`, shipped as
 PR #452). The scale was being authored a rung low; the fix retuned `UI_SCALE_FACTORS` to
 `compact 0.92 / normal 1.0 / large 1.15`, so **normal is now true ×1.0 zoom and `body` really is 13px**.
 
