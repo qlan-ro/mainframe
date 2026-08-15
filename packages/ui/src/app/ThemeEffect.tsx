@@ -10,11 +10,17 @@ import { getHost } from '@/lib/host';
  * nothing.
  */
 export function ThemeEffect() {
+  const mode = useTheme((s) => s.mode);
   const resolvedMode = useTheme((s) => s.resolvedMode);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedMode === 'dark');
     invalidateShikiTheme();
-  }, [resolvedMode]);
+    // Keep the native window appearance on the rendered theme. macOS draws the
+    // INACTIVE traffic lights for the window's appearance over our overlay
+    // title bar, so a mismatch (dark window, light content) leaves them
+    // invisible whenever the window is blurred.
+    getHost().setWindowTheme(mode === 'system' ? null : resolvedMode);
+  }, [mode, resolvedMode]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;

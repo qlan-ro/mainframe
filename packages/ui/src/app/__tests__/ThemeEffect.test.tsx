@@ -3,10 +3,13 @@ import { act, render } from '@testing-library/react';
 import { ThemeEffect } from '../ThemeEffect';
 import { useTheme, UI_SCALE_FACTORS } from '@/store/theme';
 
-// The zoom effect delegates to the host's native page zoom (no-op in jsdom);
-// mock the host so we can assert the factor setZoom is called with.
-const { setZoomMock } = vi.hoisted(() => ({ setZoomMock: vi.fn() }));
-vi.mock('@/lib/host', () => ({ getHost: () => ({ setZoom: setZoomMock }) }));
+// The zoom and window-theme effects delegate to native host calls (no-ops in
+// jsdom); mock the host so we can assert what they're called with.
+const { setZoomMock, setWindowThemeMock } = vi.hoisted(() => ({
+  setZoomMock: vi.fn(),
+  setWindowThemeMock: vi.fn(),
+}));
+vi.mock('@/lib/host', () => ({ getHost: () => ({ setZoom: setZoomMock, setWindowTheme: setWindowThemeMock }) }));
 
 let colorSchemeListener: ((event: MediaQueryListEvent) => void) | undefined;
 const addEventListenerMock = vi.fn();
@@ -37,6 +40,7 @@ describe('ThemeEffect', () => {
     document.documentElement.className = '';
     useTheme.setState({ mode: 'light', resolvedMode: 'light', uiScale: 'normal' });
     setZoomMock.mockClear();
+    setWindowThemeMock.mockClear();
     addEventListenerMock.mockReset();
     removeEventListenerMock.mockReset();
     installMatchMedia(false);
@@ -80,5 +84,36 @@ describe('ThemeEffect', () => {
     useTheme.setState({ uiScale: 'large' });
     render(<ThemeEffect />);
     expect(setZoomMock).toHaveBeenCalledWith(UI_SCALE_FACTORS.large);
+  });
+
+  describe('native window theme sync', () => {
+    it('syncs the native window to a fixed light mode', () => {
+      useTheme.setState({ mode: 'light', resolvedMode: 'light' });
+      render(<ThemeEffect />);
+      expect(setWindowThemeMock).toHaveBeenCalledWith('light');
+    });
+
+    it('syncs the native window to a fixed dark mode', () => {
+      useTheme.setState({ mode: 'dark', resolvedMode: 'dark' });
+      render(<ThemeEffect />);
+      expect(setWindowThemeMock).toHaveBeenCalledWith('dark');
+    });
+
+    it('lets the OS drive the native window in system mode', () => {
+      useTheme.setState({ mode: 'system', resolvedMode: 'dark' });
+      render(<ThemeEffect />);
+      expect(setWindowThemeMock).toHaveBeenCalledWith(null);
+    });
+
+    it('keeps the native window on null across an OS theme change in system mode', () => {
+      useTheme.setState({ mode: 'system', resolvedMode: 'light' });
+      render(<ThemeEffect />);
+      expect(setWindowThemeMock).toHaveBeenLastCalledWith(null);
+
+      act(() => colorSchemeListener?.({ matches: true } as MediaQueryListEvent));
+
+      expect(useTheme.getState().resolvedMode).toBe('dark');
+      expect(setWindowThemeMock).toHaveBeenLastCalledWith(null);
+    });
   });
 });
