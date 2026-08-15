@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ProviderConfig, GeneralConfig, NotificationConfig } from '@qlan-ro/mainframe-types';
 import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 
-export type SettingsTab = 'general' | 'providers' | 'notifications' | 'remote-access' | 'about';
+export type SettingsTab = 'general' | 'providers' | 'keybindings' | 'notifications' | 'remote-access' | 'about';
 
 interface SettingsState {
   isOpen: boolean;

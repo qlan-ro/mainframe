@@ -72,7 +72,7 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
 
       {/* Right: controls — search │ project tools │ workspace. */}
       <div className="flex shrink-0 items-center gap-0.5">
-        <Hint label={`Search (${searchChord})`}>
+        <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
           <Button
             data-testid="main-toolbar-search"
             variant="ghost"
@@ -81,12 +81,16 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
             className="text-muted-foreground"
           >
             <Search className="size-4" />
-            <kbd
-              data-testid="main-toolbar-search-hint"
-              className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-sm font-medium text-muted-foreground"
-            >
-              {searchChord}
-            </kbd>
+            {/* No chip at all when the action is unassigned — an empty kbd box
+                reads as a broken control rather than an absent shortcut. */}
+            {searchChord != null && (
+              <kbd
+                data-testid="main-toolbar-search-hint"
+                className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-sm font-medium text-muted-foreground"
+              >
+                {searchChord}
+              </kbd>
+            )}
           </Button>
         </Hint>
         <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />

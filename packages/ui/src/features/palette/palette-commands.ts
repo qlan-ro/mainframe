@@ -15,19 +15,19 @@ export function getPaletteCommands(): PaletteCommand[] {
     {
       id: 'review',
       label: 'Review changes…',
-      hint: chordHint('app.review'),
+      hint: chordHint('app.review') ?? undefined,
       run: () => emitSurfaceIntent({ type: 'open-review' }),
     },
     {
       id: 'settings',
       label: 'Open Settings…',
-      hint: chordHint('app.settings'),
+      hint: chordHint('app.settings') ?? undefined,
       run: () => emitSurfaceIntent({ type: 'open-settings' }),
     },
     {
       id: 'sidebar',
       label: 'Toggle Sidebar',
-      hint: chordHint('sessions.toggle-sidebar'),
+      hint: chordHint('sessions.toggle-sidebar') ?? undefined,
       run: () => emitSurfaceIntent({ type: 'toggle-sidebar' }),
     },
     { id: 'files', label: 'Toggle Files', run: () => emitSurfaceIntent({ type: 'toggle-workspace-files' }) },
@@ -39,7 +39,7 @@ export function getPaletteCommands(): PaletteCommand[] {
     {
       id: 'keyboard-shortcuts',
       label: 'Keyboard Shortcuts',
-      hint: chordHint('app.cheat-sheet'),
+      hint: chordHint('app.cheat-sheet') ?? undefined,
       // Opens directly rather than through `toggleCheatSheet()`: the palette is
       // itself a Dialog, so the toggle's "another modal is open" guard would
       // stand down against the palette's own still-mounted content.

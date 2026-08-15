@@ -47,10 +47,11 @@ const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
   const openSettings = useSettingsStore((s) => s.open);
+  const settingsHint = chordHint('app.settings');
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Hint label={`Settings · ${chordHint('app.settings')}`}>
+      <Hint label={settingsHint == null ? 'Settings' : `Settings · ${settingsHint}`}>
         <Button
           variant="ghost"
           size="icon-sm"

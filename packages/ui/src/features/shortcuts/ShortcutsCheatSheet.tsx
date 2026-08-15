@@ -19,20 +19,29 @@ import { SHORTCUTS, visibleShortcuts } from './registry';
 import { renderEntryChord } from './render-chord';
 import { isMacPlatform } from './platform';
 import { useCheatSheetStore } from './cheat-sheet-store';
+import { effectiveBindings, type EffectiveBinding } from './effective-bindings';
+import { useKeybindingsStore } from './keybindings-store';
 
 /** Display order; a group with no visible entry is skipped. */
 const GROUP_ORDER: readonly ShortcutGroup[] = ['Sessions', 'Chat', 'Workspace', 'App'];
 
-function ShortcutRow({ entry, isMac }: { entry: ShortcutDescriptor; isMac: boolean }) {
+function ShortcutRow({ binding, isMac }: { binding: EffectiveBinding; isMac: boolean }) {
+  const { entry, chord } = binding;
   return (
     <div
       data-testid={`shortcuts-cheat-sheet-row-${entry.id}`}
       className="flex items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted"
     >
       <span className="min-w-0 flex-1 truncate text-sm">{entry.label}</span>
-      <kbd className="shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
-        {renderEntryChord(entry, isMac)}
-      </kbd>
+      {chord === null ? (
+        // An unassigned action still earns a row: it is a thing you can bind,
+        // and hiding it would make the cheat sheet disagree with Settings.
+        <span className="shrink-0 text-xs text-muted-foreground">Unassigned</span>
+      ) : (
+        <kbd className="shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
+          {renderEntryChord({ ...entry, chord }, isMac)}
+        </kbd>
+      )}
     </div>
   );
 }
@@ -49,12 +58,16 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
   const setOpen = useCheatSheetStore((s) => s.setOpen);
   const isMac = isMacPlatform();
 
+  const overrides = useKeybindingsStore((s) => s.overrides);
+
   const sections = useMemo(() => {
     const visible = visibleShortcuts(entries, { dev });
-    return GROUP_ORDER.map((group) => ({ group, rows: visible.filter((entry) => entry.group === group) })).filter(
-      ({ rows }) => rows.length > 0,
-    );
-  }, [entries, dev]);
+    const bindings = effectiveBindings(visible, overrides);
+    return GROUP_ORDER.map((group) => ({
+      group,
+      rows: bindings.filter((binding) => binding.entry.group === group),
+    })).filter(({ rows }) => rows.length > 0);
+  }, [entries, dev, overrides]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -76,8 +89,8 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
           {sections.map(({ group, rows }) => (
             <section key={group} data-testid={`shortcuts-cheat-sheet-group-${group.toLowerCase()}`}>
               <SectionHeader>{group}</SectionHeader>
-              {rows.map((entry) => (
-                <ShortcutRow key={entry.id} entry={entry} isMac={isMac} />
+              {rows.map((binding) => (
+                <ShortcutRow key={binding.entry.id} binding={binding} isMac={isMac} />
               ))}
             </section>
           ))}

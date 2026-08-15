@@ -34,7 +34,9 @@ describe('SettingsDialog', () => {
     expect(screen.getByTestId('settings-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('settings-nav-general')).toBeInTheDocument();
     expect(screen.getByTestId('settings-nav-providers')).toBeInTheDocument();
-    expect(screen.queryByTestId('settings-nav-keybindings')).toBeNull(); // S4 dropped
+    // S4 dropped this as an empty placeholder; it is a real pane again now
+    // that the registry has an override layer behind it.
+    expect(screen.getByTestId('settings-nav-keybindings')).toBeInTheDocument();
   });
   it('clicking a nav row routes the content pane', async () => {
     render(<SettingsDialog port={31415} />);
