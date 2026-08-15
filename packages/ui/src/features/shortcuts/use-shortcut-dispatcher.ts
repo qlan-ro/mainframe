@@ -14,13 +14,21 @@ import { chordList, matchesChord, resolveChord } from './chord';
 import { isEligibleTarget } from './eligibility';
 import { isMacPlatform } from './platform';
 import { SHORTCUTS, visibleShortcuts } from './registry';
+import { dispatchableShortcuts } from './effective-bindings';
+import { useKeybindingsStore } from './keybindings-store';
 
 export function useShortcutDispatcher(): void {
+  // Rebinding has to re-arm the listener, so the overrides are a dependency
+  // rather than a one-time read at mount.
+  const overrides = useKeybindingsStore((s) => s.overrides);
+
   useEffect(() => {
     const isMac = isMacPlatform();
     // The dev gate is applied at this one mount site, so `dev: true` entries
     // need no second guard in the feature that owns them.
-    const entries = visibleShortcuts(SHORTCUTS, { dev: import.meta.env.DEV }).map((entry) => ({
+    const entries = visibleShortcuts(dispatchableShortcuts(SHORTCUTS, overrides), {
+      dev: import.meta.env.DEV,
+    }).map((entry) => ({
       entry,
       chords: chordList(entry).map((chord) => resolveChord(chord, isMac)),
     }));
@@ -40,5 +48,5 @@ export function useShortcutDispatcher(): void {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [overrides]);
 }
