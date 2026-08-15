@@ -9,7 +9,7 @@ likewise for every `subtype`). Silent degradation on unknown or renamed
 upstream input is exactly why a changelog watcher exists — a rename here
 produces no compile error and no runtime error, only a dropped event.
 
-See `docs/adapters/README.md` for the row schema, ID grammar, and citation
+See `docs/research/adapters/README.md` for the row schema, ID grammar, and citation
 rules.
 
 | ID | Surface | Upstream artifact | Mainframe consumer (file::symbol) | Coverage | Verified | Breakage symptom |

@@ -443,7 +443,7 @@ the v2.1.85 findings above:
 ## Command / Skill / Agent Enumeration (v2.1.198)
 
 Full method + the post-leak inventory it produced live in the (git-excluded) doc
-`docs/adapters/claude/PREBUILT_PROMPTS_CATALOG.md` (§Methodology). Technique + traps:
+`docs/research/adapters/claude/PREBUILT_PROMPTS_CATALOG.md` (§Methodology). Technique + traps:
 
 ### Extraction (Python `re.finditer` over bytes decoded `latin-1`)
 

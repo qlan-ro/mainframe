@@ -12,7 +12,7 @@ from the wire. The crate ships **no fixture directory** — every test in
 recommendations below must name a test file and the payload to pin, not just
 say "add coverage".
 
-See `docs/adapters/README.md` for the row schema, ID grammar, and citation
+See `docs/research/adapters/README.md` for the row schema, ID grammar, and citation
 rules.
 
 | ID | Surface | Upstream artifact | Mainframe consumer (file::symbol) | Coverage | Verified | Breakage symptom |

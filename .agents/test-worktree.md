@@ -256,7 +256,7 @@ needed:**
 - Authoring guards: start from an existing fixture in
   `packages/e2e/fixtures/recordings/` (permissions, compaction, attachments,
   bash exit codes, …) and take payload shapes from
-  `docs/adapters/claude/PROTOCOL_REVERSED.md` or `packages/core`'s own test
+  `docs/research/adapters/claude/PROTOCOL_REVERSED.md` or `packages/core`'s own test
   fixtures — never invent event shapes; a fixture the daemon would never
   receive proves nothing.
 - Replay wiring: build the plugin (esbuild, per

@@ -3,7 +3,7 @@
 > System architecture reference for the Mainframe AI development environment.
 > For the full HTTP/WebSocket route and message catalog, see
 > [`docs/API-REFERENCE.md`](API-REFERENCE.md). For Claude/Codex CLI protocol
-> details, see `docs/adapters/claude/` and `docs/adapters/codex/`.
+> details, see `docs/research/adapters/claude/` and `docs/research/adapters/codex/`.
 
 ## System overview
 
@@ -298,10 +298,10 @@ never in a normal boot.
 
 - `mainframe-adapter-claude` speaks Claude's `stream-json` protocol over
   stdio, including `control_request`/`control_response` permission
-  round-trips. Protocol-level detail lives in `docs/adapters/claude/` — see
+  round-trips. Protocol-level detail lives in `docs/research/adapters/claude/` — see
   the root `CLAUDE.md` for the current, verified set of docs there.
 - `mainframe-adapter-codex` speaks Codex's app-server JSON-RPC protocol.
-  Protocol-level detail lives in `docs/adapters/codex/`.
+  Protocol-level detail lives in `docs/research/adapters/codex/`.
 - `mainframe-adapter-mock` replays recorded fixtures instead of spawning a
   real CLI, for E2E tests and local demos.
 

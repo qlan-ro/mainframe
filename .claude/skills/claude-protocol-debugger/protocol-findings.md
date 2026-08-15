@@ -124,7 +124,7 @@ The CLI **fully owns the message queue** in `--input-format stream-json` mode. S
 
 ## Queued-Message Persistence (probe-verified, CLI 2.1.198, 2026-07-04)
 
-Live probe (`packages/core/scripts/queue-probe.mjs` in the app-tauri worktree; findings in `docs/adapters/claude/QUEUE.md`, local-only). Where this contradicts the leaked-source section above, the probe wins:
+Live probe (`packages/core/scripts/queue-probe.mjs` in the app-tauri worktree; findings in `docs/research/adapters/claude/QUEUE.md`, local-only). Where this contradicts the leaked-source section above, the probe wins:
 
 - **Mid-turn drain + per-uuid `isReplay` acks + mid-run `cancel_async_message` all WORK** on the stream-json + `--replay-user-messages` path. The old "cancel always failed" belief is dead.
 - **JSONL shape surprise**: a mid-turn-drained message persists as a structured `{type:'attachment', attachment:{type:'queued_command', prompt, source_uuid, commandMode:'prompt'}}` entry — NOT as the `<system-reminder>The user sent a new message while you were working…` text the leaked source suggests (that wrapper exists only in the API message built at query time). Parsers that only convert `user`/`assistant` entries silently DROP drained queued messages on reload.

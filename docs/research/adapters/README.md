@@ -8,8 +8,8 @@ classifies upstream changelog entries against these rows (risk / adoption
 opportunity / noise); `.claude/skills/{claude,codex}-protocol-debugger/`
 verify a suspected live change against the running CLI.
 
-One file per tool: `docs/adapters/claude/CONSUMED-SURFACE.md`,
-`docs/adapters/codex/CONSUMED-SURFACE.md`.
+One file per tool: `docs/research/adapters/claude/CONSUMED-SURFACE.md`,
+`docs/research/adapters/codex/CONSUMED-SURFACE.md`.
 
 ## Row schema
 
