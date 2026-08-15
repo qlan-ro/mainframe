@@ -82,7 +82,7 @@ describe('AC 2 — every shipped chord fires its id exactly once and prevents de
     { name: '⌘F', id: 'chat.find', init: { code: 'KeyF', metaKey: true } },
     { name: '⌘,', id: 'app.settings', init: { code: 'Comma', metaKey: true } },
     { name: '⌘⇧C', id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
-    { name: '⌘⇧E', id: 'workspace.toggle-workspace', init: { code: 'KeyE', metaKey: true, shiftKey: true } },
+    { name: '⌘⇧W', id: 'workspace.toggle-workspace', init: { code: 'KeyW', metaKey: true, shiftKey: true } },
     { name: '⌘B', id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { name: '⌘⇧T', id: 'app.quick-task', init: { code: 'KeyT', metaKey: true, shiftKey: true } },
     { name: '⌘⇧A in dev', id: 'app.automations', init: { code: 'KeyA', metaKey: true, shiftKey: true }, dev: true },
@@ -136,7 +136,7 @@ describe('AC 4 — a modifier-carrying app chord fires from a focused text field
     { id: 'app.settings', init: { code: 'Comma', metaKey: true } },
     { id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
-    { id: 'workspace.toggle-workspace', init: { code: 'KeyE', metaKey: true, shiftKey: true } },
+    { id: 'workspace.toggle-workspace', init: { code: 'KeyW', metaKey: true, shiftKey: true } },
     { id: 'chat.focus-composer', init: { code: 'KeyL', metaKey: true } },
   ];
 

@@ -72,10 +72,11 @@ export const SHORTCUTS = [
   },
   {
     id: 'workspace.toggle-workspace',
-    // ⌘⇧E, not ⌘⇧W: W reads as the better mnemonic but every browser binds it
-    // to close-window. E follows VS Code's Explorer, and this surface is where
-    // the files live.
-    chord: { code: 'KeyE', mod: true, shift: true },
+    // ⌘⇧W is free: the app menu registers ⌘W (Close Window) and, apart from
+    // ⇧⌘Z, no shifted accelerator at all — so nothing intercepts this before
+    // the webview. Worth knowing it sits one dropped Shift away from that
+    // ⌘W, which closes the window.
+    chord: { code: 'KeyW', mod: true, shift: true },
     label: 'Toggle Workspace surface',
     group: 'Workspace',
   },
