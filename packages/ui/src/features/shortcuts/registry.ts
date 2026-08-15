@@ -97,7 +97,17 @@ export const SHORTCUTS = [
     label: 'New browser tab',
     group: 'Workspace',
   },
-  { id: 'app.search-palette', chord: { code: 'KeyO', mod: true }, label: 'Open command palette', group: 'App' },
+  {
+    id: 'app.search-palette',
+    // ⌘K is what this palette is: a spotlight over files, sessions, symbols and
+    // commands, the Slack/Linear/Notion gesture. ⌘O means "Open a file…" on
+    // macOS, which is a different promise — and one this app could keep later.
+    // CodeMirror binds Shift-Mod-k (delete line) but not Mod-k, so the editor
+    // is safe; ⌘⇧K is the one to leave alone.
+    chord: { code: 'KeyK', mod: true },
+    label: 'Open command palette',
+    group: 'App',
+  },
   { id: 'app.review', chord: { code: 'KeyR', mod: true, shift: true }, label: 'Open review', group: 'App' },
   { id: 'app.settings', chord: { code: 'Comma', mod: true }, label: 'Open settings', group: 'App' },
   { id: 'app.quick-task', chord: { code: 'KeyT', mod: true, shift: true }, label: 'Quick add task', group: 'App' },

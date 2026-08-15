@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { isMacPlatform } from './platform';
 
 /**
- * ⌘ leads nearly every chord in the app, so this delay is what keeps ⌘N, ⌘O and
+ * ⌘ leads nearly every chord in the app, so this delay is what keeps ⌘N, ⌘K and
  * ⌘F from flashing the badges on their way past — long enough to sit out a
  * deliberate chord, short enough to read as a reveal rather than a wait.
  */

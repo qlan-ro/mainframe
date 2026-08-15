@@ -41,19 +41,19 @@ beforeEach(() => {
 });
 
 describe('app-root shortcuts', () => {
-  it('Cmd+O emits open-search-palette and calls preventDefault', () => {
+  it('Cmd+K emits open-search-palette and calls preventDefault', () => {
     const { unmount } = mountAppShortcuts();
-    const e = new KeyboardEvent('keydown', { metaKey: true, key: 'o', code: 'KeyO', cancelable: true });
+    const e = new KeyboardEvent('keydown', { metaKey: true, key: 'k', code: 'KeyK', cancelable: true });
     window.dispatchEvent(e);
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
     expect(e.defaultPrevented).toBe(true);
     unmount();
   });
 
-  it('Ctrl+O also emits open-search-palette off macOS', () => {
+  it('Ctrl+K also emits open-search-palette off macOS', () => {
     isMac = false;
     const { unmount } = mountAppShortcuts();
-    window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 'o', code: 'KeyO', cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 'k', code: 'KeyK', cancelable: true }));
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
     unmount();
   });
@@ -103,14 +103,15 @@ describe('app-root shortcuts', () => {
 
   it('unrelated keydown does not emit', () => {
     const { unmount } = mountAppShortcuts();
-    window.dispatchEvent(new KeyboardEvent('keydown', { metaKey: true, key: 'k', code: 'KeyK' }));
+    // ⌘G — deliberately a chord the registry does not bind.
+    window.dispatchEvent(new KeyboardEvent('keydown', { metaKey: true, key: 'g', code: 'KeyG' }));
     expect(mockEmit).not.toHaveBeenCalled();
     unmount();
   });
 
   it('stops answering once the shell unmounts', () => {
     mountAppShortcuts().unmount();
-    window.dispatchEvent(new KeyboardEvent('keydown', { metaKey: true, key: 'o', code: 'KeyO' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { metaKey: true, key: 'k', code: 'KeyK' }));
     expect(mockEmit).not.toHaveBeenCalled();
   });
 });

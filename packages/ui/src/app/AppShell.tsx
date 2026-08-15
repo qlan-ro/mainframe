@@ -51,7 +51,7 @@ function RuntimeBody({ port }: { port: number }) {
   useSandboxWsRouter();
   // The app's ONE keydown listener — every app chord dispatches through it.
   useShortcutDispatcher();
-  // Hold ⌃ (Alt off-mac) to reveal which number each session tab answers to.
+  // Hold ⌘ (Ctrl off-mac) to reveal which number each session tab answers to.
   useIndexHintReveal();
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
@@ -62,7 +62,7 @@ function RuntimeBody({ port }: { port: number }) {
     return () => setSessionNavigator(null);
   }, [aui]);
 
-  // ⌘N, ⌘O, ⌘⇧R, ⌘,, ⌘B and ⌘/ — the chords whose owner is the always-mounted
+  // ⌘N, ⌘K, ⌘⇧R, ⌘,, ⌘B and ⌘/ — the chords whose owner is the always-mounted
   // shell. ⌘N resets the stale draft and switches to the new thread; with a
   // project pill active useNewThreadAutoConfig seeds that project, without one
   // the welcome screen's own picker resolves it.

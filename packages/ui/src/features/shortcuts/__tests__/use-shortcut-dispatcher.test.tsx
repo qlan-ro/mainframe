@@ -77,7 +77,7 @@ afterEach(() => {
 describe('AC 2 — every shipped chord fires its id exactly once and prevents default', () => {
   const cases: Array<{ name: string; id: ShortcutId; init: KeyboardEventInit; dev?: boolean }> = [
     { name: '⌘N', id: 'sessions.new', init: { code: 'KeyN', metaKey: true } },
-    { name: '⌘O', id: 'app.search-palette', init: { code: 'KeyO', metaKey: true } },
+    { name: '⌘K', id: 'app.search-palette', init: { code: 'KeyK', metaKey: true } },
     { name: '⌘⇧R', id: 'app.review', init: { code: 'KeyR', metaKey: true, shiftKey: true } },
     { name: '⌘F', id: 'chat.find', init: { code: 'KeyF', metaKey: true } },
     { name: '⌘,', id: 'app.settings', init: { code: 'Comma', metaKey: true } },
@@ -109,7 +109,7 @@ describe('AC 3 — a bare (unmodified) keystroke in a text field fires nothing',
   const bare: KeyboardEventInit[] = [
     { code: 'KeyN' },
     { code: 'KeyF' },
-    { code: 'KeyO' },
+    { code: 'KeyK' },
     { code: 'KeyL' },
     { code: 'Digit1' },
     { code: 'Digit2' },
@@ -134,7 +134,7 @@ describe('AC 3 — a bare (unmodified) keystroke in a text field fires nothing',
 describe('AC 4 — a modifier-carrying app chord fires from a focused text field', () => {
   const cases: Array<{ id: ShortcutId; init: KeyboardEventInit }> = [
     { id: 'sessions.new', init: { code: 'KeyN', metaKey: true } },
-    { id: 'app.search-palette', init: { code: 'KeyO', metaKey: true } },
+    { id: 'app.search-palette', init: { code: 'KeyK', metaKey: true } },
     { id: 'app.settings', init: { code: 'Comma', metaKey: true } },
     { id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { id: 'workspace.toggle-chat', init: { code: 'KeyC', metaKey: true, shiftKey: true } },
@@ -212,7 +212,7 @@ describe('AC 6 — editor-yielding entries still fire from the terminal', () => 
 describe('AC 7 — an unshifted chord does not match while Shift is held', () => {
   const cases: Array<{ id: ShortcutId; init: KeyboardEventInit }> = [
     { id: 'sessions.new', init: { code: 'KeyN', metaKey: true, shiftKey: true } },
-    { id: 'app.search-palette', init: { code: 'KeyO', metaKey: true, shiftKey: true } },
+    { id: 'app.search-palette', init: { code: 'KeyK', metaKey: true, shiftKey: true } },
     { id: 'chat.find', init: { code: 'KeyF', metaKey: true, shiftKey: true } },
     { id: 'app.settings', init: { code: 'Comma', metaKey: true, shiftKey: true } },
   ];
@@ -309,7 +309,7 @@ describe('an id with no registered handler stays inert', () => {
   it('leaves the keystroke unprevented and calls nothing', () => {
     const { spies, unmount } = mountAllHandlers(['app.search-palette']);
 
-    const event = press(window, { code: 'KeyO', metaKey: true, cancelable: true });
+    const event = press(window, { code: 'KeyK', metaKey: true, cancelable: true });
 
     expect(spies['app.search-palette']).not.toHaveBeenCalled();
     expect(event).toBe(true);
