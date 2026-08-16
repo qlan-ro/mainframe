@@ -99,6 +99,7 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
         <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
           <Button
             data-testid="main-toolbar-search"
+            data-tut="search"
             variant="ghost"
             size="sm"
             onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}

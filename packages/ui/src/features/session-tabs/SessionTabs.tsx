@@ -157,7 +157,7 @@ export function SessionTabs() {
   };
 
   return (
-    <div data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
+    <div data-tut="session-tabs" data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
       <div
         data-no-drag
         className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] scroll-fade-x"
@@ -248,6 +248,7 @@ export function SessionTabs() {
       <Hint label="New session">
         <Button
           data-testid="session-tabs-new"
+          data-tut="new-session-tab"
           variant="ghost"
           size="icon-xs"
           onClick={newSession}

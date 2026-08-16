@@ -1,14 +1,29 @@
 /**
  * resolveTourPlan — anchor-driven step resolution.
  *
- * The tour only ever runs on an empty workspace, and that workspace has two
- * shapes: the welcome screen (projects exist, none picked for this draft) and
- * the first-run hero (no projects at all). Each conceptual step declares its
- * variants in anchor-preference order; these tests pin which variant each shape
- * resolves to, and that the resolved plan is the counter the label can trust.
+ * The tour arms in one state (a project exists, no sessions yet), where every
+ * step has a live anchor. Resolution stays anchor-driven anyway, so that the
+ * label can only ever count steps the tour can actually point at — the defect
+ * that made the old tour say "Step 1 of 4" and then jump to "Step 4 of 4".
  */
 import { describe, it, expect } from 'vitest';
 import { resolveTourPlan, TOUR_STEP_COUNT } from '../steps';
+
+/** Every anchor the armed workspace carries, verified against the running app. */
+const ARMED_ANCHORS = [
+  'add-project',
+  'new-session',
+  'new-session-row',
+  'new-session-tab',
+  'sessions-list',
+  'session-tabs',
+  'session-rail',
+  'workspace',
+  'search',
+  'kanban',
+  'automations',
+  'settings',
+];
 
 /** Builds a `hasAnchor` predicate over a fixed set of present anchors. */
 function anchors(...present: string[]) {
@@ -16,42 +31,46 @@ function anchors(...present: string[]) {
   return (target: string) => set.has(target);
 }
 
-const WELCOME = anchors('sessions', 'project', 'prompt', 'workspace');
-const FIRST_RUN = anchors('sessions', 'add-project', 'prompt', 'workspace');
-const COMPOSER_OPEN = anchors('sessions', 'project', 'prompt', 'composer', 'workspace');
-
 describe('resolveTourPlan', () => {
-  it('resolves all four steps on the welcome screen', () => {
-    const plan = resolveTourPlan(WELCOME);
-    expect(plan.map((s) => s.target)).toEqual(['sessions', 'project', 'prompt', 'workspace']);
+  it('resolves the full tour in the state it arms in', () => {
+    const plan = resolveTourPlan(anchors(...ARMED_ANCHORS));
     expect(plan).toHaveLength(TOUR_STEP_COUNT);
+    expect(plan.map((s) => s.target)).toEqual([
+      'add-project',
+      'new-session',
+      'sessions-list',
+      'session-rail',
+      'workspace',
+      'search',
+      'kanban',
+      'automations',
+      'settings',
+    ]);
   });
 
-  it('resolves all four steps on the first-run hero, swapping in its add-project variant', () => {
-    const plan = resolveTourPlan(FIRST_RUN);
-    expect(plan.map((s) => s.target)).toEqual(['sessions', 'add-project', 'prompt', 'workspace']);
-    expect(plan[1]?.title).toBe('Add your first project');
-  });
-
-  it('prefers the composer variant over the prompt fallback once the composer is mounted', () => {
-    const plan = resolveTourPlan(COMPOSER_OPEN);
-    expect(plan.map((s) => s.target)).toEqual(['sessions', 'project', 'composer', 'workspace']);
-  });
-
-  it('drops a step whose every variant is unanchorable, so the count never overstates', () => {
-    const plan = resolveTourPlan(anchors('sessions', 'workspace'));
-    expect(plan.map((s) => s.target)).toEqual(['sessions', 'workspace']);
+  it('drops an unanchorable step so the count never overstates', () => {
+    const plan = resolveTourPlan(anchors('add-project', 'new-session', 'settings'));
+    expect(plan.map((s) => s.target)).toEqual(['add-project', 'new-session', 'settings']);
   });
 
   it('returns an empty plan when nothing is anchorable', () => {
     expect(resolveTourPlan(anchors())).toEqual([]);
   });
 
+  it('marks the secondary locations for the affordances that have more than one', () => {
+    const plan = resolveTourPlan(anchors(...ARMED_ANCHORS));
+    const byTarget = Object.fromEntries(plan.map((s) => [s.target, s]));
+    expect(byTarget['new-session']?.also).toEqual(['new-session-row', 'new-session-tab']);
+    expect(byTarget['sessions-list']?.also).toEqual(['session-tabs']);
+    // A single-location step must not claim ghosts it has no anchors for.
+    expect(byTarget['kanban']?.also).toBeUndefined();
+  });
+
   it('gives every step a title, a body and a side', () => {
-    for (const step of resolveTourPlan(WELCOME)) {
+    for (const step of resolveTourPlan(anchors(...ARMED_ANCHORS))) {
       expect(step.title).not.toBe('');
       expect(step.body).not.toBe('');
-      expect(['right', 'above', 'below']).toContain(step.side);
+      expect(['left', 'right', 'above', 'below']).toContain(step.side);
     }
   });
 });

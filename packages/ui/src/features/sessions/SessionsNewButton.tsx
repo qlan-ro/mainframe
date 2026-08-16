@@ -41,7 +41,7 @@ export function SessionsNewButton({ filterProjectId, filterProjectName }: Sessio
         data-testid="sessions-new-button"
         // TutorialOverlay's first step anchors here; without it the step is
         // unanchorable and the auto-skip drops "Start a session" entirely.
-        data-tut="sessions"
+        data-tut="new-session"
         aria-label={label}
         className="size-6"
         onClick={open}

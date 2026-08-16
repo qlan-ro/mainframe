@@ -1,84 +1,94 @@
 /**
- * The first-run tour's step list, and the resolution that fits it to the screen
- * in front of the user.
+ * The first-run tour's steps, and the resolution that fits them to the screen.
  *
- * The tour arms only on an empty workspace, and that workspace comes in two
- * shapes — the welcome screen (a project exists but this draft has none picked)
- * and the first-run hero (no projects at all). Neither renders the composer, so
- * a step hard-wired to a composer anchor has nothing to point at.
+ * The tour arms in one deterministic state — at least one project, no sessions
+ * yet (see use-first-run-tour.ts) — so every step below has a live anchor. It
+ * stays anchor-driven anyway: `resolveTourPlan` drops a step whose `data-tut`
+ * target isn't on screen, and the label counts what survives. A step the tour
+ * can't point at is never counted, which is what kept the old 4-step tour
+ * saying "Step 1 of 4" and then jumping to "Step 4 of 4".
  *
- * Each conceptual step therefore declares VARIANTS in anchor-preference order:
- * the first whose `data-tut` anchor is on screen wins. That keeps the composer
- * copy for the state that has a composer, gives the empty states their own
- * anchor and wording, and leaves the step count honest — a step with no
- * anchorable variant is dropped from the plan rather than counted and skipped.
+ * `also` marks secondary locations for the same affordance. They get a ring but
+ * no scrim cut-out: the scrim IS the primary spotlight's box-shadow, so a second
+ * one would paint over the first hole.
  */
 
 export interface TourStep {
   /** `data-tut` value of the element the spotlight rings. */
   target: string;
-  side: 'right' | 'above' | 'below';
+  /** Further `data-tut` values to ring without cutting the scrim. */
+  also?: readonly string[];
+  side: 'left' | 'right' | 'above' | 'below';
   title: string;
   body: string;
 }
 
-const TOUR_STEPS: readonly (readonly TourStep[])[] = [
-  [
-    {
-      target: 'sessions',
-      side: 'right',
-      title: 'Start a session',
-      body: 'Spin up a fresh agent session for any project. Every task gets its own conversation and worktree.',
-    },
-  ],
-  [
-    {
-      target: 'project',
-      side: 'below',
-      title: 'Choose the project',
-      body: 'A session runs against one repo on disk. This chip picks which — change it any time before the first message.',
-    },
-    {
-      target: 'add-project',
-      side: 'below',
-      title: 'Add your first project',
-      body: 'Point Mainframe at a repo on disk. Your files stay where they are; only session metadata is tracked.',
-    },
-  ],
-  [
-    {
-      target: 'composer',
-      side: 'above',
-      title: 'Hand work to your agent',
-      body: 'Describe a task in plain language and press ⏎. Mainframe plans, edits across your repo, and runs commands. Its toolbar picks the model — Claude, Codex, or Gemini — per session.',
-    },
-    {
-      target: 'prompt',
-      side: 'below',
-      title: 'Hand work to your agent',
-      body: 'Once the project is set, the composer opens here. Describe a task in plain language and press ⏎ — and pick the model, Claude, Codex, or Gemini, from its toolbar.',
-    },
-  ],
-  [
-    {
-      target: 'workspace',
-      side: 'below',
-      title: 'Open the workspace',
-      body: 'Files, diffs, terminals, and a live preview of your app share one surface beside the chat. Capture the screen straight back into context.',
-    },
-  ],
+const TOUR_STEPS: readonly TourStep[] = [
+  {
+    target: 'add-project',
+    side: 'right',
+    title: 'Add a project',
+    body: 'Point Mainframe at a repo on disk and it lands in this list. Add as many as you like — every session belongs to one of them.',
+  },
+  {
+    target: 'new-session',
+    also: ['new-session-row', 'new-session-tab'],
+    side: 'right',
+    title: 'Start a session',
+    body: 'Three ways in, all the same: this +, the New Thread row above it, or the + on the tab strip. Each session gets its own conversation and worktree.',
+  },
+  {
+    target: 'sessions-list',
+    also: ['session-tabs'],
+    side: 'right',
+    title: 'Sessions and their tabs',
+    body: 'Every session lives in this list and opens as a tab up top. Right-click either one to pin it — or to open a second session beside the first as a split.',
+  },
+  {
+    target: 'session-rail',
+    side: 'left',
+    title: 'The session rail',
+    body: 'Pinned to the chat’s right edge: session details, context usage, background activity, the run control, and the session’s tasks.',
+  },
+  {
+    target: 'workspace',
+    side: 'below',
+    title: 'The workspace',
+    body: 'Files, diffs, terminals, consoles and a live preview of your app — all tabs on one surface beside the chat, with the file tree docked on its right edge.',
+  },
+  {
+    target: 'search',
+    side: 'below',
+    title: 'Search anything',
+    body: 'One palette over sessions, files, symbols and commands. ⌘K from anywhere.',
+  },
+  {
+    target: 'kanban',
+    side: 'right',
+    title: 'The Kanban board',
+    body: 'The project’s todos, as a board — what’s open, in progress and done.',
+  },
+  {
+    target: 'automations',
+    side: 'right',
+    title: 'Automations',
+    body: 'Agent runs that fire on their own. Build a workflow once, then put it on a schedule.',
+  },
+  {
+    target: 'settings',
+    side: 'right',
+    title: 'Reach this machine remotely',
+    body: 'Settings → Remote Access opens a tunnel to this daemon, so the mobile app can drive your sessions from anywhere.',
+  },
 ];
 
 /** Steps the tour can show at most — the ceiling the resolved plan counts up to. */
 export const TOUR_STEP_COUNT = TOUR_STEPS.length;
 
 /**
- * Picks one variant per step against the anchors currently on screen, dropping
- * steps that have none. The result is both the navigation order and the count
- * the label reports.
+ * Keeps the steps whose anchor is currently on screen. The result is both the
+ * navigation order and the count the label reports.
  */
 export function resolveTourPlan(hasAnchor: (target: string) => boolean): TourStep[] {
-  return TOUR_STEPS.map((variants) => variants.find((variant) => hasAnchor(variant.target))).filter(
-    (step): step is TourStep => step != null,
-  );
+  return TOUR_STEPS.filter((step) => hasAnchor(step.target));
 }

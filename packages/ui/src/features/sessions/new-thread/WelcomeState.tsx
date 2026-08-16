@@ -41,9 +41,6 @@ function ProjectPicker({ projectId }: { projectId: string | undefined }) {
         <button
           type="button"
           data-testid="welcome-project"
-          // The tour's project step anchors here; FirstRunState carries the
-          // `add-project` variant for the no-projects-yet shape of this screen.
-          data-tut="project"
           className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted"
         >
           {projectId != null && projectName != null ? (
@@ -131,9 +128,7 @@ export function WelcomeState({ projectId }: { projectId?: string }) {
           )}
         </div>
 
-        {/* `data-tut="prompt"` — the tour's stand-in for the composer, which
-            this screen withholds until the draft has a project. */}
-        <div data-tut="prompt" className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <h1 className="text-lg font-semibold text-foreground">What should we take on?</h1>
           <p className="text-sm text-muted-foreground">
             {projectId != null

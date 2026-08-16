@@ -168,7 +168,6 @@ export function Composer() {
     <ComposerTriggers textareaRef={textareaRef}>
       <ComposerPrimitive.Root
         data-testid="chat-composer"
-        data-tut="composer"
         onSubmit={(e) => {
           // Load-bearing, not boilerplate: aui composes its own onSubmit
           // (which calls composer.send()) with ours via checkForDefaultPrevented,

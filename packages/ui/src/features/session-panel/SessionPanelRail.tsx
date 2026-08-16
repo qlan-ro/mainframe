@@ -56,7 +56,7 @@ export function SessionPanelRail({ state, port }: SessionPanelRailProps) {
   const activityLabel = running > 0 ? runningLabel(running) : 'Activity';
 
   return (
-    <div data-testid="session-panel-rail" className={RAIL_CHROME}>
+    <div data-tut="session-rail" data-testid="session-panel-rail" className={RAIL_CHROME}>
       <Hint label="Session" side="left">
         <RailIconButton
           testId="session-panel-rail-open"

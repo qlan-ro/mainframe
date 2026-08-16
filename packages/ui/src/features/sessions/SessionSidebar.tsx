@@ -67,6 +67,7 @@ function HeaderActions() {
           variant="ghost"
           size="icon-sm"
           data-testid="sidebar-settings"
+          data-tut="settings"
           aria-label="Settings"
           onClick={() => openSettings()}
         >
@@ -169,7 +170,7 @@ export function SessionSidebar({ className }: { className?: string }) {
         />
       </SidebarHeader>
 
-      <SidebarScrollRegion>
+      <SidebarScrollRegion tut="sessions-list">
         <SessionsSection
           groups={groups}
           projectNames={projectNames}

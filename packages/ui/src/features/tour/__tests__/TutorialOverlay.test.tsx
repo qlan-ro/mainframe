@@ -2,20 +2,18 @@
  * TutorialOverlay.test.tsx
  *
  * Behaviors covered:
- *  1. Renders tour-overlay portal root when completed=false.
- *  2. Does NOT render when completed=true.
- *  3. Renders step 1 title "Start a session".
- *  4. Renders tour-label-card element.
- *  5. Step title tracks the store's step value, against the RESOLVED plan.
- *  6. At the last step, the Next/Done button label is "Done"; clicking it completes.
- *  7. Back button is absent at step 1.
- *  8. Step dots and the "Step N of M" count come from the resolved plan, not a
- *     fixed four — the bug this file pins is a label that counted steps the tour
- *     then skipped ("Step 1 of 4" jumping straight to "Step 4 of 4").
- *  9. tour-spotlight renders when a [data-tut] target exists in DOM.
- * 10. Nothing renders at all when no anchor is on screen (the overlay's
- *     click-catcher would otherwise block the app behind an invisible layer).
- * 11. An anchor that vanishes MID-tour still auto-skips in the direction of travel.
+ *  1. Renders / does not render against the store's `completed`.
+ *  2. Step content tracks the store's step against the RESOLVED plan.
+ *  3. Back is absent at the first step; the last step's button reads "Done"
+ *     and completes — the store no longer knows the total, so the overlay
+ *     owning the last step is what ends a 9-step tour at nine.
+ *  4. Step dots and "Step N of M" come from the resolved plan, never a fixed
+ *     count. This is the defect the file pins: a label that counted steps the
+ *     tour then skipped ("Step 1 of 4" jumping straight to "Step 4 of 4").
+ *  5. Secondary locations get a ring; only the primary carries the scrim.
+ *  6. Nothing renders when no anchor is on screen (the click-catcher would
+ *     otherwise block the app behind an invisible layer).
+ *  7. An anchor lost MID-tour auto-skips in the direction of travel.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -84,15 +82,26 @@ function removeAnchor(el: HTMLElement) {
   el.parentNode?.removeChild(el);
 }
 
-/** The full empty-workspace anchor set — every step resolves to a variant. */
-function insertWelcomeAnchors() {
-  return {
-    sessions: insertAnchor('sessions'),
-    project: insertAnchor('project'),
-    composer: insertAnchor('composer'),
-    workspace: insertAnchor('workspace'),
-  };
+/** Every anchor the armed workspace carries — the full 9-step tour. */
+function insertArmedAnchors(): Record<string, HTMLElement> {
+  const targets = [
+    'add-project',
+    'new-session',
+    'new-session-row',
+    'new-session-tab',
+    'sessions-list',
+    'session-tabs',
+    'session-rail',
+    'workspace',
+    'search',
+    'kanban',
+    'automations',
+    'settings',
+  ];
+  return Object.fromEntries(targets.map((t) => [t, insertAnchor(t)]));
 }
+
+const LAST_STEP = 8; // 9 steps, 0-indexed
 
 /** Lets the plan resolve and the 30ms measure settle run. */
 async function settle(ms = 50) {
@@ -119,93 +128,66 @@ beforeEach(() => {
 describe('TutorialOverlay', () => {
   it('does NOT render when completed=true', () => {
     mockCompleted = true;
-    insertAnchor('sessions');
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     expect(screen.queryByTestId('tour-overlay')).toBeNull();
   });
 
-  it('renders tour-overlay and tour-label-card when completed=false', async () => {
-    insertAnchor('sessions');
+  it('renders the overlay and label card when completed=false', async () => {
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByTestId('tour-overlay')).toBeTruthy();
     expect(screen.getByTestId('tour-label-card')).toBeTruthy();
   });
 
-  it('renders step 1 title "Start a session"', async () => {
-    insertAnchor('sessions');
+  it('opens on "Add a project", with no Back button', async () => {
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
-    expect(screen.getByText('Start a session')).toBeTruthy();
-  });
-
-  it('does NOT render Back button at step 0', async () => {
-    insertAnchor('sessions');
-    render(<TutorialOverlay />);
-    await settle();
+    expect(screen.getByText('Add a project')).toBeTruthy();
     expect(screen.queryByTestId('tour-back-btn')).toBeNull();
   });
 
-  it('shows the project step after step advances', async () => {
-    mockStep = 1;
-    insertWelcomeAnchors();
-    render(<TutorialOverlay />);
-    await settle();
-    expect(screen.getByText('Choose the project')).toBeTruthy();
-  });
-
-  it('substitutes the add-project variant when the first-run hero is on screen', async () => {
-    mockStep = 1;
-    insertAnchor('sessions');
-    insertAnchor('add-project');
-    insertAnchor('prompt');
-    insertAnchor('workspace');
-    render(<TutorialOverlay />);
-    await settle();
-    expect(screen.getByText('Add your first project')).toBeTruthy();
-  });
-
-  it('falls back to the prompt anchor for the composer step when no composer is mounted', async () => {
-    mockStep = 2;
-    insertAnchor('sessions');
-    insertAnchor('project');
-    insertAnchor('prompt');
-    insertAnchor('workspace');
-    render(<TutorialOverlay />);
-    await settle();
-    expect(screen.getByText('Hand work to your agent')).toBeTruthy();
-    expect(screen.getByTestId('tour-spotlight')).toBeTruthy();
-    expect(screen.getByText('Step 3 of 4')).toBeTruthy();
-  });
-
-  it('last step shows "Done" button label and clicking it calls store.complete', async () => {
+  it('tracks the store step through the plan', async () => {
     mockStep = 3;
-    const user = userEvent.setup();
-    insertWelcomeAnchors();
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
+    expect(screen.getByText('The session rail')).toBeTruthy();
+    expect(screen.getByText('Step 4 of 9')).toBeTruthy();
+  });
+
+  it('ends at step 9 — the store has no total, so the overlay owns completion', async () => {
+    mockStep = LAST_STEP;
+    const user = userEvent.setup();
+    insertArmedAnchors();
+    render(<TutorialOverlay />);
+    await settle();
+    expect(screen.getByText('Step 9 of 9')).toBeTruthy();
     const btn = screen.getByTestId('tour-next-btn');
     expect(btn.textContent).toBe('Done');
     await user.click(btn);
     expect(mockComplete).toHaveBeenCalledOnce();
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
-  it('renders one dot per resolved step and counts to that total', async () => {
-    insertWelcomeAnchors();
+  it('renders one dot per resolved step and no more', async () => {
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i <= LAST_STEP; i++) {
       expect(screen.getByTestId(`tour-step-dot-${i}`)).toBeTruthy();
     }
-    expect(screen.queryByTestId('tour-step-dot-4')).toBeNull();
-    expect(screen.getByText('Step 1 of 4')).toBeTruthy();
+    expect(screen.queryByTestId(`tour-step-dot-${LAST_STEP + 1}`)).toBeNull();
+    expect(screen.getByText('Step 1 of 9')).toBeTruthy();
   });
 
-  // The regression this whole change exists for: with only two anchorable steps
-  // the label used to say "of 4" and hop 1 → 4. It must now say "of 2".
+  // The regression the whole change exists for: the label must never count a
+  // step the tour cannot point at.
   it('counts only the steps it can actually show', async () => {
-    insertAnchor('sessions');
-    insertAnchor('workspace');
+    insertAnchor('add-project');
+    insertAnchor('settings');
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByText('Step 1 of 2')).toBeTruthy();
@@ -213,20 +195,37 @@ describe('TutorialOverlay', () => {
   });
 
   it('clamps a persisted step that overruns a shorter plan', async () => {
-    mockStep = 3;
-    insertAnchor('sessions');
-    insertAnchor('workspace');
+    mockStep = LAST_STEP;
+    insertAnchor('add-project');
+    insertAnchor('settings');
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-    expect(screen.getByText('Open the workspace')).toBeTruthy();
+    expect(screen.getByText('Reach this machine remotely')).toBeTruthy();
   });
 
-  it('renders spotlight when a [data-tut] target exists', async () => {
-    insertAnchor('sessions');
+  // "Three ways to start a session" needs three rings but exactly one scrim —
+  // the scrim IS the primary ring's outward box-shadow, so a second would paint
+  // over the first cut-out.
+  it('rings every secondary location, and cuts the scrim only once', async () => {
+    mockStep = 1; // "Start a session" — also: new-session-row, new-session-tab
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByTestId('tour-spotlight')).toBeTruthy();
+    expect(screen.getByTestId('tour-spotlight-also-0')).toBeTruthy();
+    expect(screen.getByTestId('tour-spotlight-also-1')).toBeTruthy();
+    expect(screen.getByTestId('tour-spotlight').style.boxShadow).toContain('9999px');
+    expect(screen.getByTestId('tour-spotlight-also-0').style.boxShadow).toBe('');
+  });
+
+  it('renders no secondary rings for a single-location step', async () => {
+    mockStep = 6; // Kanban
+    insertArmedAnchors();
+    render(<TutorialOverlay />);
+    await settle();
+    expect(screen.getByText('The Kanban board')).toBeTruthy();
+    expect(screen.queryByTestId('tour-spotlight-also-0')).toBeNull();
   });
 
   // With no anchors the overlay must render NOTHING — its click-catcher is
@@ -245,10 +244,10 @@ describe('TutorialOverlay', () => {
   // ---------------------------------------------------------------------------
 
   it('auto-skips FORWARD past a step whose anchor disappears after the plan is resolved', async () => {
-    const { sessions } = insertWelcomeAnchors();
+    const anchors = insertArmedAnchors();
     render(<TutorialOverlay />);
     // The plan resolved during render; drop the anchor before the 30ms settle.
-    removeAnchor(sessions);
+    removeAnchor(anchors['add-project'] as HTMLElement);
     await settle(80);
     expect(mockNext).toHaveBeenCalledTimes(1);
     expect(mockBack).not.toHaveBeenCalled();
@@ -256,7 +255,7 @@ describe('TutorialOverlay', () => {
 
   it('does NOT auto-skip a step whose anchor is present', async () => {
     mockStep = 1;
-    insertWelcomeAnchors();
+    insertArmedAnchors();
     render(<TutorialOverlay />);
     await settle(80);
     expect(mockNext).not.toHaveBeenCalled();
@@ -264,19 +263,19 @@ describe('TutorialOverlay', () => {
   });
 
   it('auto-skips BACKWARD past a lost anchor when the user was navigating Back', async () => {
-    // Start on the last step and click Back — this sets the travel direction
+    // Start on a later step and click Back — this sets the travel direction
     // before the store (mocked here) transitions to the now-anchorless step.
-    mockStep = 3;
+    mockStep = 2;
     const user = userEvent.setup();
-    const { composer } = insertWelcomeAnchors();
+    const anchors = insertArmedAnchors();
     const { rerender } = render(<TutorialOverlay />);
     await settle();
     await user.click(screen.getByTestId('tour-back-btn'));
     expect(mockBack).toHaveBeenCalledTimes(1);
-    removeAnchor(composer);
+    removeAnchor(anchors['new-session'] as HTMLElement);
 
-    // Simulate the store having moved back onto the composer step.
-    mockStep = 2;
+    // Simulate the store having moved back onto the new-session step.
+    mockStep = 1;
     rerender(<TutorialOverlay />);
     await settle(80);
 

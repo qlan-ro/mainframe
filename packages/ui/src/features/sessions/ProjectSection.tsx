@@ -68,7 +68,12 @@ export function ProjectSection({
             {/* top/right retuned: stock's offsets assume the group's own p-2,
                 which this section drops in favour of the header's inset. */}
             {/* FolderPlus, matching the first-run hero's Add-project CTA. */}
-            <SidebarGroupAction data-testid="sidebar-projects-add" className="top-1 right-0" onClick={onAddProject}>
+            <SidebarGroupAction
+              data-testid="sidebar-projects-add"
+              data-tut="add-project"
+              className="top-1 right-0"
+              onClick={onAddProject}
+            >
               <FolderPlus />
               <span className="sr-only">Add project</span>
             </SidebarGroupAction>

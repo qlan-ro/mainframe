@@ -23,9 +23,7 @@ export function FirstRunState() {
       >
         <FolderGit2 size={22} />
       </span>
-      {/* Same tour anchors as WelcomeState — only one of the two screens is
-          ever mounted, so the names can't collide. */}
-      <div data-tut="prompt" className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5">
         <h1 className="text-lg font-semibold text-foreground">Welcome to Mainframe</h1>
         <p className="text-sm text-muted-foreground">
           Add a project folder to start orchestrating agents on your codebase.
@@ -34,7 +32,6 @@ export function FirstRunState() {
       <button
         type="button"
         data-testid="sessions-firstrun-add-project"
-        data-tut="add-project"
         onClick={() => void addProject()}
         className="inline-flex h-[30px] items-center gap-1.5 rounded-[8px] bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
       >

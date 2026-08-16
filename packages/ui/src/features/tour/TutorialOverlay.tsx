@@ -54,6 +54,11 @@ export function computeLabelStyle(rect: TargetRect, side: TourStep['side']): CSS
   if (side === 'right') {
     return { top: Math.max(8, h.top), left: clampLabelLeft(h.left + h.w + GAP, viewportWidth) };
   }
+  // Left, for anchors pinned to the window's right edge (the session rail):
+  // 'right' would clamp the card back on top of the very thing it describes.
+  if (side === 'left') {
+    return { top: Math.max(8, h.top), left: clampLabelLeft(h.left - GAP - LW, viewportWidth) };
+  }
   if (side === 'above') {
     return {
       top: h.top - GAP,
@@ -68,9 +73,48 @@ export function computeLabelStyle(rect: TargetRect, side: TourStep['side']): CSS
   };
 }
 
+/**
+ * The accent ring + pulsing halo drawn over one anchor. `scrim` adds the
+ * full-viewport dim, so exactly one ring per step may carry it — the dim is
+ * this element's own outward box-shadow, and a second would cover the first.
+ */
+function SpotlightRing({ rect, testId, scrim }: { rect: TargetRect; testId: string; scrim?: boolean }) {
+  return (
+    <div
+      data-testid={testId}
+      className="absolute z-[2] pointer-events-none rounded-[8px]"
+      style={{
+        top: rect.top - PAD,
+        left: rect.left - PAD,
+        width: rect.width + PAD * 2,
+        height: rect.height + PAD * 2,
+        boxShadow: scrim === true ? '0 0 0 9999px var(--mf-scrim)' : undefined,
+        outline: '2px solid var(--primary)',
+        outlineOffset: 2,
+        transition:
+          'top 0.28s cubic-bezier(0.22,1,0.36,1), left 0.28s cubic-bezier(0.22,1,0.36,1), width 0.28s, height 0.28s',
+      }}
+    >
+      {/* Inner halo — twPulse keyframe defined in domain-tokens.css */}
+      <div
+        className="absolute inset-[-2px] rounded-[8px] animate-[twPulse_1.8s_ease-in-out_infinite]"
+        style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent)' }}
+      />
+    </div>
+  );
+}
+
+function measureAnchor(target: string): TargetRect | null {
+  const el = document.querySelector<HTMLElement>(`[data-tut="${target}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { top: r.top, left: r.left, width: r.width, height: r.height };
+}
+
 function WsTourCore({ plan }: { plan: TourStep[] }) {
   const { step, next, back, skip, complete } = useTutorialStore();
   const [rect, setRect] = useState<TargetRect | null>(null);
+  const [ghosts, setGhosts] = useState<TargetRect[]>([]);
   // A step persisted from an earlier run can outlive the plan it was recorded
   // against — a shorter plan today must not index off its end.
   const idx = Math.min(step, plan.length - 1);
@@ -80,17 +124,10 @@ function WsTourCore({ plan }: { plan: TourStep[] }) {
   const directionRef = useRef<'forward' | 'backward'>('forward');
 
   const remeasure = useCallback(() => {
-    if (!currentStep) {
-      setRect(null);
-      return;
-    }
-    const el = document.querySelector<HTMLElement>(`[data-tut="${currentStep.target}"]`);
-    if (!el) {
-      setRect(null);
-      return;
-    }
-    const r = el.getBoundingClientRect();
-    setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    setRect(currentStep ? measureAnchor(currentStep.target) : null);
+    setGhosts(
+      (currentStep?.also ?? []).map((target) => measureAnchor(target)).filter((r): r is TargetRect => r != null),
+    );
   }, [currentStep]);
 
   useEffect(() => {
@@ -140,29 +177,13 @@ function WsTourCore({ plan }: { plan: TourStep[] }) {
       <div className="absolute inset-0 z-[1] pointer-events-auto" style={{ cursor: 'default' }} />
 
       {/* Spotlight cut-out with accent ring + halo */}
-      {rect && (
-        <div
-          data-testid="tour-spotlight"
-          className="absolute z-[2] pointer-events-none rounded-[8px]"
-          style={{
-            top: rect.top - PAD,
-            left: rect.left - PAD,
-            width: rect.width + PAD * 2,
-            height: rect.height + PAD * 2,
-            boxShadow: '0 0 0 9999px var(--mf-scrim)',
-            outline: '2px solid var(--primary)',
-            outlineOffset: 2,
-            transition:
-              'top 0.28s cubic-bezier(0.22,1,0.36,1), left 0.28s cubic-bezier(0.22,1,0.36,1), width 0.28s, height 0.28s',
-          }}
-        >
-          {/* Inner halo — twPulse keyframe defined in domain-tokens.css */}
-          <div
-            className="absolute inset-[-2px] rounded-[8px] animate-[twPulse_1.8s_ease-in-out_infinite]"
-            style={{ boxShadow: '0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent)' }}
-          />
-        </div>
-      )}
+      {rect && <SpotlightRing rect={rect} testId="tour-spotlight" scrim />}
+
+      {/* Secondary locations for the same affordance: ring only. A second scrim
+          would paint its own 9999px shadow straight over the primary cut-out. */}
+      {ghosts.map((ghost, i) => (
+        <SpotlightRing key={`${ghost.top}-${ghost.left}`} rect={ghost} testId={`tour-spotlight-also-${i}`} />
+      ))}
 
       {/* Label card */}
       <WsTourLabel
