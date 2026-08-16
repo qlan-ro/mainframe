@@ -35,7 +35,7 @@ import { SessionMetaCard } from './SessionMetaCard';
 import { SessionRowMetaLine } from './SessionRowMetaLine';
 import { SessionRowRename } from './SessionRowRename';
 import { StatusDot } from './StatusDot';
-import { useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
+import { canOpenMetaCard, useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
 
 /** The section owns the horizontal inset; the row only keeps the stock pad. */
 const ROW_INDENT = 'pl-2';
@@ -172,8 +172,20 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   // cursor rather than at the host's default (0,0).
   const menuPoint = useRef<{ x: number; y: number } | null>(null);
   const rowRef = useRef<HTMLLIElement | null>(null);
+  // A ref, not state: the menu only gates the card, and re-rendering the row on
+  // every right-click would cost the open menu its anchor.
+  const menuOpen = useRef(false);
   const closeMeta = useCallback(() => setMetaOpen(false), []);
   useHoverCardWedgeGuard(metaOpen, rowRef, closeMeta);
+
+  const handleMetaOpenChange = useCallback((next: boolean) => {
+    setMetaOpen(next && !menuOpen.current && canOpenMetaCard(rowRef.current, document.activeElement));
+  }, []);
+
+  const handleMenuOpenChange = useCallback((open: boolean) => {
+    menuOpen.current = open;
+    if (open) setMetaOpen(false);
+  }, []);
 
   const unread = isSessionUnread(item, unreadIds);
   const title = item.title ?? 'Untitled session';
@@ -192,6 +204,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   return (
     <SessionContextMenu
       pinned={custom.pinned}
+      onOpenChange={handleMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
       onRename={() => queueMicrotask(() => setIsRenaming(true))}
@@ -211,10 +224,12 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {/* Controlled so the wedge guard can force-close: under load Radix's
-              open timer can fire after the pointer already left the row, and
-              then no pointerleave ever closes the card. */}
-          <HoverCard open={metaOpen} onOpenChange={setMetaOpen} openDelay={500} closeDelay={60}>
+          {/* Controlled so the wedge guard can force-close and `canOpenMetaCard`
+              can refuse an open the pointer never asked for: under load Radix's
+              open timer can fire after the pointer already left the row (or on a
+              click, which focuses it), and then no pointerleave ever closes the
+              card. */}
+          <HoverCard open={metaOpen} onOpenChange={handleMetaOpenChange} openDelay={500} closeDelay={60}>
             <HoverCardTrigger asChild>
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton

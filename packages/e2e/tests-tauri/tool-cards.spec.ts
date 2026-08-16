@@ -16,7 +16,8 @@
  *   messaging.0, thread.0            → Bash
  *   permissions-interactive.0        → Write
  *   changes-tab.0, context-tab.0     → Read, Edit
- *   plan-approval.0/.1               → Read, Write, Edit, ExitPlanMode
+ *   plan-approval.0                  → Read, Write, Edit, ExitPlanMode
+ *   plan-revision.0                  → Read, Write, Edit, ExitPlanMode (rejected → revised)
  *   ask-question.0                   → AskUserQuestion
  *   chat-status.0                    → Skill (SlashCommandCard) + onSkillLoaded (SkillLoadedCard)
  *   task-subagent.0                  → Task (nested onSubagentChild transcript)
@@ -391,17 +392,45 @@ test.describe('§tool-cards — Plan (plan-approval)', () => {
     await page.getByTestId('chat-permission-deny').click();
     await waitForIdle(page, 90_000);
   });
+});
 
-  // Mid-test createTauriChat: same documented navigation-race guard as chat.spec.ts's
-  // §plan-approval "revision" test (the row click + plan-mode toggle fire chat.updated →
-  // runtime.threads.reload(), which can revert the active thread before sendMessage runs).
-  // Reuses the exact interaction sequence chat.spec.ts already proves works against
-  // plan-approval.1.ndjson; this test only ADDS assertions at a point chat.spec.ts already
-  // safely reaches (right after the second chat-plan-gate appears), then performs the identical
-  // final reject to close out the recording.
+// ─── Plan family: the revision round-trip — plan-revision ────────────────────
+//
+// Its OWN describe, and its own recording key, on purpose. Fixtures are handed out
+// by a per-daemon counter (MockCliAdapter.indexes: the Nth session of a key replays
+// `<key>.<N-1>.ndjson`), so a test that wanted the SECOND recording only got it while
+// an earlier test in the same describe had consumed the first. On a Playwright retry
+// only the failed test re-runs — the counter restarts at 0 and the retry replayed the
+// APPROVED recording instead, which never opens a second plan gate. That made the
+// retry structurally red: one flake anywhere in this pair failed the whole run, and
+// the release e2e gate with it. One recording per describe keeps every attempt
+// identical. A fresh daemon also means the chat comes from `beforeAll`, so the
+// mid-test `createTauriChat` navigation race (the row click + plan-mode toggle fire
+// chat.updated → threads.reload(), which can revert the active thread before
+// sendMessage runs) is gone rather than tolerated.
+
+test.describe('§tool-cards — Plan revision (plan-revision)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'plan-revision' });
+    project = await createTauriProject(app.page, {
+      claudeMd:
+        '# E2E Test Project\n\nThis is an automated test environment.\n' +
+        'In plan mode, proceed with reasonable assumptions. Do not use AskUserQuestion. ' +
+        'Call ExitPlanMode immediately after reading the relevant files.\n',
+    });
+    await createTauriChat(app.page, project.projectId, 'plan');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
   test('a rejected plan (keep-planning → feedback) echoes the feedback as a user message and leaves the first PlanCard resultless', async () => {
     const { page } = app;
-    await createTauriChat(app.page, project.projectId, 'plan');
     await sendMessage(page, 'Add `export function multiply(a: number, b: number) { return a * b; }` to utils.ts');
     await page.getByTestId('chat-plan-gate').waitFor({ timeout: 45_000 });
 

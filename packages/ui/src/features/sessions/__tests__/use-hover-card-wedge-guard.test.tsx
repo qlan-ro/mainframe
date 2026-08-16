@@ -12,10 +12,15 @@
  *
  * jsdom returns all-zero rects, so the row and the card element each get a fixed
  * getBoundingClientRect. Every expected coordinate below is a literal.
+ *
+ * canOpenMetaCard — the open-gate that stops a click-focused row from popping
+ * its card 500ms after the pointer left. jsdom doesn't implement `:hover` or
+ * `:focus-visible`, so each element below gets a stubbed `matches()` that
+ * honors a fixed set of selectors instead of relying on jsdom's CSS engine.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useHoverCardWedgeGuard } from '../use-hover-card-wedge-guard';
+import { useHoverCardWedgeGuard, canOpenMetaCard } from '../use-hover-card-wedge-guard';
 
 const ROW_RECT: DOMRect = {
   x: 100,
@@ -127,5 +132,54 @@ describe('useHoverCardWedgeGuard', () => {
     move(900, 900);
 
     expect(close).not.toHaveBeenCalled();
+  });
+});
+
+function elementMatching(...selectors: string[]): HTMLElement {
+  const el = document.createElement('div');
+  el.matches = vi.fn((selector: string) => selectors.includes(selector)) as unknown as HTMLElement['matches'];
+  return el;
+}
+
+describe('canOpenMetaCard', () => {
+  it('allows the open when the row is genuinely hovered', () => {
+    const row = elementMatching(':hover');
+
+    expect(canOpenMetaCard(row, null)).toBe(true);
+  });
+
+  it('refuses when the row is not hovered and nothing is focused', () => {
+    const row = elementMatching();
+
+    expect(canOpenMetaCard(row, null)).toBe(false);
+  });
+
+  it('refuses a click-focused row — focus inside the row but not :focus-visible', () => {
+    const row = elementMatching();
+    const button = elementMatching();
+    row.appendChild(button);
+
+    expect(canOpenMetaCard(row, button)).toBe(false);
+  });
+
+  it('allows a keyboard-focused row — :focus-visible focus inside the row', () => {
+    const row = elementMatching();
+    const button = elementMatching(':focus-visible');
+    row.appendChild(button);
+
+    expect(canOpenMetaCard(row, button)).toBe(true);
+  });
+
+  it('refuses a :focus-visible element that sits outside the row', () => {
+    const row = elementMatching();
+    const outside = elementMatching(':focus-visible');
+    document.body.appendChild(row);
+    document.body.appendChild(outside);
+
+    expect(canOpenMetaCard(row, outside)).toBe(false);
+  });
+
+  it('refuses when the row is null', () => {
+    expect(canOpenMetaCard(null, elementMatching(':focus-visible'))).toBe(false);
   });
 });

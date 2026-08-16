@@ -92,7 +92,7 @@ fn options(project_path: String) -> SessionOptions {
 }
 
 #[tokio::test]
-async fn replays_sink_calls_and_reports_desync() {
+async fn replays_sink_calls_and_ignores_a_late_permission_response() {
     let events = parse_fixture(include_str!("fixtures/replay.ndjson")).unwrap();
     let session = ReplaySession::new(options("/tmp/mf-e2e-current".to_string()), events);
     let sink = Arc::new(RecordingSink::default());
@@ -109,6 +109,12 @@ async fn replays_sink_calls_and_reports_desync() {
         ["init:recorded-session", "message", "message", "tool-result"]
     );
 
+    // A `respondToPermission` past the end of the fixture is silently ignored
+    // (the real CLI drops a control response for a request it already
+    // resolved) rather than reported as a desync — see
+    // `session::tests::a_permission_answer_past_the_end_of_the_fixture_is_ignored`
+    // for the same contract at the `take_interaction` level. The sink's call
+    // list is therefore unchanged, not appended with a "fixture exhausted" error.
     session
         .respond_to_permission(ControlResponse {
             request_id: "r1".to_string(),
@@ -124,7 +130,10 @@ async fn replays_sink_calls_and_reports_desync() {
         .await
         .unwrap();
 
-    assert!(sink.calls().last().unwrap().contains("fixture exhausted"));
+    assert_eq!(
+        sink.calls(),
+        ["init:recorded-session", "message", "message", "tool-result"]
+    );
 }
 
 #[tokio::test]

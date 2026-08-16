@@ -180,6 +180,19 @@ impl ReplaySession {
 
     fn take_interaction(&self, expected: &str) -> (Vec<RecordedEvent>, i64, Option<String>) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // A permission answer past the end of the recording is a no-op, not a
+        // desync: the real CLI drops a `control_response` whose request it has
+        // already resolved, and recordings routinely stop at the last gate they
+        // opened (the answer to it was never recorded). Failing the whole run on
+        // one instead cost the v2.0.0 release a red e2e gate. Same tolerance the
+        // in-recording duplicate below gets — plan-approval.0.ndjson carries two
+        // identical `respondToPermission` markers because the daemon really does
+        // forward an ExitPlanMode allow twice (permission_handler forwards, then
+        // the plan-mode escalation forwards the same response again).
+        if expected == "respondToPermission" && state.replay.is_exhausted() {
+            tracing::debug!("mock-cli: ignoring a respondToPermission past the end of the fixture");
+            return (Vec::new(), state.last_delay, None);
+        }
         let mut prefix = if expected == "interrupt" {
             if !state.replay.peek_input("interrupt") {
                 return (Vec::new(), state.last_delay, None);
@@ -290,6 +303,35 @@ async fn apply_file_effects(project_path: &str, event: &RecordedEvent) -> std::i
 mod tests {
     use super::*;
     use mainframe_adapter_api::AdapterSession;
+
+    fn exhausted_session() -> ReplaySession {
+        let options = SessionOptions {
+            project_path: "/tmp/project".to_string(),
+            chat_id: None,
+            mainframe_chat_id: "chat-1".to_string(),
+        };
+        ReplaySession::new(options, Vec::new())
+    }
+
+    #[test]
+    fn a_permission_answer_past_the_end_of_the_fixture_is_ignored() {
+        let session = exhausted_session();
+
+        let (batch, _, error) = session.take_interaction("respondToPermission");
+
+        assert!(batch.is_empty());
+        assert_eq!(error, None);
+    }
+
+    #[test]
+    fn a_message_past_the_end_of_the_fixture_still_reports_a_desync() {
+        let session = exhausted_session();
+
+        let (_, _, error) = session.take_interaction("sendMessage");
+
+        let message = error.expect("an exhausted fixture must still fail a sendMessage");
+        assert!(message.contains("fixture exhausted"), "{message}");
+    }
 
     #[tokio::test]
     async fn missing_fixture_fails_spawn_with_path() {
