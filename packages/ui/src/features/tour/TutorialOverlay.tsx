@@ -5,47 +5,24 @@
  * Measures [data-tut] anchors via getBoundingClientRect so it works
  * correctly under any CSS transform (ZoomStage, etc.).
  *
+ * The step list is not fixed: `resolveTourPlan` fits it to the anchors actually
+ * on screen when the tour opens (see steps.ts). The plan is resolved ONCE and
+ * frozen, because the overlay's click-catcher blocks the app underneath — no
+ * anchor can appear or vanish while the user walks the tour.
+ *
  * Only renders when useTutorialStore().completed === false.
  * Navigation is purely button-driven (Next/Back/Skip/Done).
  */
 import { useEffect, useState, useCallback, useRef, CSSProperties } from 'react';
 import ReactDOM from 'react-dom';
 import { useTutorialStore } from '@/store/tutorial';
+import { resolveTourPlan, type TourStep } from './steps';
 import { WsTourLabel } from './WsTourLabel';
 
-interface TourStep {
-  target: string;
-  side: 'right' | 'above' | 'below';
-  title: string;
-  body: string;
-}
+/** One retry, for a tour resumed from a persisted step before the app paints. */
+const RESOLVE_RETRY_MS = 120;
 
-const STEPS: TourStep[] = [
-  {
-    target: 'sessions',
-    side: 'right',
-    title: 'Start a session',
-    body: 'Spin up a fresh agent session for any project. Every task gets its own conversation and worktree.',
-  },
-  {
-    target: 'composer',
-    side: 'above',
-    title: 'Hand work to your agent',
-    body: 'Describe a task in plain language and press ⏎. Mainframe plans, edits across your repo, and runs commands for you.',
-  },
-  {
-    target: 'model',
-    side: 'above',
-    title: 'Pick your model',
-    body: 'Claude, Codex, or Gemini — choose per session. The provider locks once the conversation starts.',
-  },
-  {
-    target: 'workspace',
-    side: 'below',
-    title: 'Open the workspace',
-    body: 'Files, diffs, terminals, and a live preview of your app share one surface beside the chat. Capture the screen straight back into context.',
-  },
-];
+const domHasAnchor = (target: string) => document.querySelector(`[data-tut="${target}"]`) != null;
 
 interface TargetRect {
   top: number;
@@ -91,10 +68,13 @@ export function computeLabelStyle(rect: TargetRect, side: TourStep['side']): CSS
   };
 }
 
-function WsTourCore() {
+function WsTourCore({ plan }: { plan: TourStep[] }) {
   const { step, next, back, skip, complete } = useTutorialStore();
   const [rect, setRect] = useState<TargetRect | null>(null);
-  const currentStep = STEPS[step];
+  // A step persisted from an earlier run can outlive the plan it was recorded
+  // against — a shorter plan today must not index off its end.
+  const idx = Math.min(step, plan.length - 1);
+  const currentStep = plan[idx];
   // Tracks which way the user was navigating, so an un-anchorable step gets
   // auto-skipped in that same direction rather than always forward.
   const directionRef = useRef<'forward' | 'backward'>('forward');
@@ -104,7 +84,7 @@ function WsTourCore() {
       setRect(null);
       return;
     }
-    const el = document.querySelector(`[data-tut="${currentStep.target}"]`);
+    const el = document.querySelector<HTMLElement>(`[data-tut="${currentStep.target}"]`);
     if (!el) {
       setRect(null);
       return;
@@ -118,12 +98,12 @@ function WsTourCore() {
     window.addEventListener('resize', remeasure);
     const id = setTimeout(() => {
       remeasure();
-      // Some steps' anchors are structurally absent for the current workspace
-      // state (e.g. "model" needs a resolved chat, which doesn't exist on a
-      // genuinely empty workspace — not a mount-timing race). Rather than
-      // leaving the label card floating with no spotlight, skip the step
-      // gracefully in the direction of travel.
-      if (currentStep && document.querySelector(`[data-tut="${currentStep.target}"]`) == null) {
+      // Safety net, no longer the normal path: the plan only holds steps that
+      // were anchorable when the tour opened, so this fires only if an anchor
+      // disappears mid-tour (a resize collapsing the sidebar, say). Rather than
+      // leave the label card floating with no spotlight, skip the step in the
+      // direction of travel.
+      if (currentStep && !domHasAnchor(currentStep.target)) {
         if (directionRef.current === 'backward') back();
         else next();
       }
@@ -136,7 +116,7 @@ function WsTourCore() {
 
   if (!currentStep) return null;
 
-  const isLast = step === STEPS.length - 1;
+  const isLast = idx === plan.length - 1;
 
   const handleNext = () => {
     directionRef.current = 'forward';
@@ -187,11 +167,10 @@ function WsTourCore() {
       {/* Label card */}
       <WsTourLabel
         step={currentStep}
-        idx={step}
-        total={STEPS.length}
+        idx={idx}
+        total={plan.length}
         onBack={handleBack}
         onNext={handleNext}
-        onSkip={skip}
         style={labelStyle}
       />
 
@@ -211,15 +190,41 @@ function WsTourCore() {
   );
 }
 
+/**
+ * Resolves the step plan once, against the anchors on screen. Returns null
+ * until a non-empty plan exists — the caller must render nothing meanwhile,
+ * since the overlay's click-catcher would otherwise block the whole app behind
+ * an invisible layer.
+ */
+function useTourPlan(enabled: boolean): TourStep[] | null {
+  const [plan, setPlan] = useState<TourStep[] | null>(null);
+
+  useEffect(() => {
+    if (!enabled || plan != null) return;
+    const resolve = () => {
+      const resolved = resolveTourPlan(domHasAnchor);
+      if (resolved.length > 0) setPlan(resolved);
+    };
+    resolve();
+    const id = setTimeout(resolve, RESOLVE_RETRY_MS);
+    return () => clearTimeout(id);
+  }, [enabled, plan]);
+
+  return plan;
+}
+
 export function TutorialOverlay() {
   const completed = useTutorialStore((s) => s.completed);
+  // Nothing anchorable means nothing to point at. Show no tour rather than
+  // completing it — a transient miss would otherwise burn a real first run.
+  const plan = useTourPlan(!completed);
 
-  if (completed) return null;
+  if (completed || plan == null) return null;
 
   return ReactDOM.createPortal(
     <div data-testid="tour-overlay" className="fixed inset-0 z-[11500] pointer-events-none">
       <div className="absolute inset-0 pointer-events-auto">
-        <WsTourCore />
+        <WsTourCore plan={plan} />
       </div>
     </div>,
     document.body,

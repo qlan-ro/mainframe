@@ -174,9 +174,9 @@ test.describe('§window-states First-run tour', () => {
   });
 
   // The v2 sidebar rebuild briefly dropped `data-tut="sessions"` from
-  // SessionsNewButton, which made STEPS[0] unanchorable and let `remeasure`'s
-  // auto-skip (built for structurally-absent steps like `model`) swallow "Start a
-  // session". The anchor is restored; the walk below covers the step order.
+  // SessionsNewButton, which made the first step unanchorable and let
+  // `remeasure`'s auto-skip swallow "Start a session". The anchor is restored;
+  // the walk below covers the step order.
   test('auto-opens ~1.5s after settle on an empty-sessions workspace', async () => {
     const { page } = app;
     // use-first-run-tour.ts SETTLE_MS=1500 — generous timeout for the settle
@@ -189,56 +189,69 @@ test.describe('§window-states First-run tour', () => {
     await expect(page.getByTestId('tour-skip-btn')).toBeVisible();
   });
 
-  // Steps 2 ("composer") and 3 ("model") legitimately have no anchor on a
-  // genuinely empty (zero-session) workspace: the boot draft has no project, so
-  // ChatThread withholds the composer entirely — and with it `data-tut="composer"`
-  // and the `composer-model-select` (`data-tut="model"`) inside its toolbar.
-  // `TutorialOverlay.remeasure` detects an absent anchor after its ~30ms settle
-  // window and skips the step in the current direction of travel, so a first-time
-  // user never sees a label card pointing at nothing. Only steps 1 (sessions) and
-  // 4 (workspace) are reachable in this state; the skip itself is unit-covered
-  // (TutorialOverlay.test.tsx).
-  test('Next/Back walk the reachable steps, auto-skipping the two composer-anchored steps; Done completes the tour', async () => {
+  // Every step lands on this workspace, and that is the fix: the tour used to
+  // hard-wire steps 2 and 3 to composer anchors, which a zero-session workspace
+  // never mounts (the boot draft has no project, so ChatThread withholds the
+  // composer). It counted "of 4" and hopped 1 → 4. Steps now carry variants
+  // (features/tour/steps.ts) — the project step falls back to the welcome
+  // screen's picker, and the composer step to its "What should we take on?"
+  // heading — so all four are walkable here. Variant selection itself is
+  // unit-covered (steps.test.ts).
+  test('Next/Back walk all four steps with no gaps; Done completes the tour', async () => {
     const { page } = app;
     const label = page.getByTestId('tour-label-card');
     const spotlight = page.getByTestId('tour-spotlight');
 
-    // The premise of the skips below: no composer on an unresolved draft.
+    // The premise of the fallback variants: no composer on an unresolved draft.
     await expect(page.getByTestId('chat-composer-input')).toHaveCount(0);
 
     // Step 1/4 — sessions. No Back button at the first step.
+    await expect(label).toContainText('Step 1 of 4');
     await expect(label).toContainText('Start a session');
     await expect(page.getByTestId('tour-back-btn')).toHaveCount(0);
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Next');
 
-    // Next auto-skips the anchorless steps 2 (composer) and 3 (model) and lands
-    // directly on step 4 (workspace) — each settle window is ~30ms, so a short
-    // poll covers both hops.
+    // Step 2/4 — the welcome screen's project picker, not the composer.
+    await page.getByTestId('tour-next-btn').click();
+    await expect(label).toContainText('Step 2 of 4', { timeout: 5_000 });
+    await expect(label).toContainText('Choose the project');
+    await expect(spotlight).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('tour-back-btn')).toBeVisible();
+
+    // Step 3/4 — the composer step, on its prompt-heading fallback anchor.
+    await page.getByTestId('tour-next-btn').click();
+    await expect(label).toContainText('Step 3 of 4', { timeout: 5_000 });
+    await expect(label).toContainText('Hand work to your agent');
+    await expect(spotlight).toBeVisible({ timeout: 5_000 });
+
+    // Step 4/4 — the workspace rail. Last step, so the button reads Done.
     await page.getByTestId('tour-next-btn').click();
     await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
     await expect(label).toContainText('Open the workspace');
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
-    await expect(page.getByTestId('tour-back-btn')).toBeVisible();
 
-    // Back from step 4 skips the same two steps in the backward direction,
-    // landing back on step 1 — where there is no Back button again.
-    await page.getByTestId('tour-back-btn').click();
-    await expect(label).toContainText('Step 1 of 4', { timeout: 5_000 });
+    // Back walks the same four in reverse, one step per click, down to step 1 —
+    // where there is no Back button again.
+    for (const expected of ['Step 3 of 4', 'Step 2 of 4', 'Step 1 of 4']) {
+      await page.getByTestId('tour-back-btn').click();
+      await expect(label).toContainText(expected, { timeout: 5_000 });
+    }
     await expect(label).toContainText('Start a session');
     await expect(page.getByTestId('tour-back-btn')).toHaveCount(0);
 
-    // Forward again lands back on step 4 (last step).
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
+    // Forward again to the last step.
+    for (const expected of ['Step 2 of 4', 'Step 3 of 4', 'Step 4 of 4']) {
+      await page.getByTestId('tour-next-btn').click();
+      await expect(label).toContainText(expected, { timeout: 5_000 });
+    }
 
-    // Step dots — 4 total, all present at the last step (STEPS.length is
-    // unaffected by the auto-skip; it just never lingers on step 3).
-    await expect(page.getByTestId('tour-step-dot-0')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-1')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-2')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-3')).toHaveCount(1);
+    // Step dots — one per resolved step, and no fifth.
+    for (const i of [0, 1, 2, 3]) {
+      await expect(page.getByTestId(`tour-step-dot-${i}`)).toHaveCount(1);
+    }
+    await expect(page.getByTestId('tour-step-dot-4')).toHaveCount(0);
 
     // Done completes the tour.
     await page.getByTestId('tour-next-btn').click();
