@@ -15,7 +15,7 @@
 
 <p align="center">
   <picture>
-    <img src="docs/screenshot.png" alt="Mainframe desktop" height="340">
+    <img height="340" alt="image" src="https://github.com/user-attachments/assets/73750bda-1787-42d8-aad2-d6de5e885145" />
   </picture>
   &nbsp;&nbsp;
   <picture>
