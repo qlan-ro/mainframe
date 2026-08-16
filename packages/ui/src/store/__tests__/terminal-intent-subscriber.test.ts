@@ -13,6 +13,11 @@ vi.mock('@/features/terminal/terminal-cache', () => ({
   disposeCachedTerminal: (...a: unknown[]) => disposeSpy(...a),
 }));
 
+const requestFocusSpy = vi.fn();
+vi.mock('@/features/terminal/terminal-focus', () => ({
+  requestTerminalFocus: (...a: unknown[]) => requestFocusSpy(...a),
+}));
+
 import { emitSurfaceIntent } from '../surface-intents';
 import { useActiveBasesStore } from '../active-bases-store';
 import { useLayoutStore } from '../layout';
@@ -76,5 +81,20 @@ describe('subscribeToTerminalIntents', () => {
   it('ignores non-terminal intents', () => {
     emitSurfaceIntent({ type: 'open-file-picker' });
     expect(createSessionSpy).not.toHaveBeenCalled();
+  });
+
+  it('requests terminal focus when addRunTab succeeds', async () => {
+    vi.spyOn(useLayoutStore.getState(), 'addRunTab').mockReturnValue(true);
+    emitSurfaceIntent({ type: 'new-terminal' });
+    await vi.waitFor(() => expect(requestFocusSpy).toHaveBeenCalledWith('term-1'));
+  });
+
+  // M6 dispose path: the target pane vanished during the async create, so the
+  // terminal is disposed rather than shown — it must never steal focus.
+  it('does not request terminal focus when addRunTab returns false', async () => {
+    vi.spyOn(useLayoutStore.getState(), 'addRunTab').mockReturnValue(false);
+    emitSurfaceIntent({ type: 'new-terminal', paneId: 'pane-gone' });
+    await vi.waitFor(() => expect(disposeSpy).toHaveBeenCalledWith('term-1'));
+    expect(requestFocusSpy).not.toHaveBeenCalled();
   });
 });
