@@ -25,6 +25,7 @@ import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
+import { requestTerminalFocus } from '@/features/terminal/terminal-focus';
 import type { RunPane, RunTab } from '@/store/run-pane';
 
 const GLYPHS: Record<RunTab['kind'], typeof Eye> = {
@@ -63,7 +64,10 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
       data-testid={`workspace-tab-${tab.id}`}
       role="tab"
       aria-selected={isActive}
-      onClick={() => activateRunTab(pane.id, tab.id)}
+      onClick={() => {
+        activateRunTab(pane.id, tab.id);
+        if (tab.kind === 'terminal') requestTerminalFocus(tab.id);
+      }}
       onDoubleClick={() => promoteFileTab(tab.id)}
       className={cn(
         'group flex h-6 max-w-40 min-w-0 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pr-1 pl-2 text-xs select-none',

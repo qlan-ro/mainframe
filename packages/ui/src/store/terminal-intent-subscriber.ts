@@ -10,6 +10,7 @@
  */
 import { createTerminalSession } from '@/features/terminal/create-terminal';
 import { disposeCachedTerminal } from '@/features/terminal/terminal-cache';
+import { requestTerminalFocus } from '@/features/terminal/terminal-focus';
 import { resolveCwd } from '@/features/terminal/terminal-cwd';
 import { getHost } from '@/lib/host';
 import { onSurfaceIntent } from './surface-intents';
@@ -51,7 +52,9 @@ async function spawnTerminal(paneId: string | undefined): Promise<void> {
     const added = useLayoutStore
       .getState()
       .addRunTab({ id, kind: 'terminal', title, scopeKey: scopeKey ?? undefined }, paneId);
-    if (!added) {
+    if (added) {
+      requestTerminalFocus(id);
+    } else {
       disposeCachedTerminal(id);
     }
   } catch (err) {
