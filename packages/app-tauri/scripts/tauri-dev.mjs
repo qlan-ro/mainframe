@@ -18,7 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /**
  * `externalBin` is resolved by src-tauri's build script, so a checkout that has
- * never provisioned the sidecar fails `tauri dev` at a build.rs panic ("resource
+ * never provisioned a sidecar fails `tauri dev` at a build.rs panic ("resource
  * path binaries/mainframe-daemon-<triple> doesn't exist") — which reads as a Rust
  * compile error rather than a missing artifact. Every fresh worktree is in that
  * state, so provision on absence.
@@ -29,7 +29,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * though — dev never runs this copy, so refreshing it each launch would buy
  * nothing. Run `pnpm bundle` to refresh it deliberately.
  */
-function provisionSidecarIfMissing() {
+function provisionSidecarsIfMissing() {
   const triple = execFileSync('rustc', ['-vV'], { encoding: 'utf8' })
     .split('\n')
     .find((l) => l.startsWith('host:'))
@@ -37,13 +37,25 @@ function provisionSidecarIfMissing() {
     .trim();
   if (!triple) throw new Error('could not read the host triple from `rustc -vV`');
 
-  if (existsSync(join(here, '..', 'src-tauri', 'binaries', `mainframe-daemon-${triple}`))) return;
+  // Both externalBin entries are mandatory to the build script, so each is
+  // provisioned on absence independently. The on-device helper is cheap either
+  // way: a few seconds of `swift build` on a macOS 26 machine, and an instant
+  // zero-byte placeholder anywhere else.
+  const sidecars = [
+    { stem: 'mainframe-daemon', script: 'provision-rust-daemon.mjs', slow: true },
+    { stem: 'mainframe-intelligence', script: 'provision-apple-intelligence.mjs', slow: false },
+  ];
 
-  console.log(`[tauri:dev] no daemon sidecar for ${triple} — provisioning (first build is slow)…`);
-  execFileSync('node', [join(here, 'provision-rust-daemon.mjs')], { stdio: 'inherit' });
+  for (const { stem, script, slow } of sidecars) {
+    if (existsSync(join(here, '..', 'src-tauri', 'binaries', `${stem}-${triple}`))) continue;
+    console.log(
+      `[tauri:dev] no ${stem} sidecar for ${triple} — provisioning${slow ? ' (first build is slow)' : ''}…`,
+    );
+    execFileSync('node', [join(here, script)], { stdio: 'inherit' });
+  }
 }
 
-provisionSidecarIfMissing();
+provisionSidecarsIfMissing();
 
 const port = process.env.VITE_PORT ?? '5174';
 const devUrl = `http://localhost:${port}`;

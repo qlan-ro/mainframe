@@ -67,7 +67,12 @@ function blocker(triple) {
 }
 
 const triple = argOf('target') ?? hostTriple();
-const dest = join(binariesDir, `mainframe-intelligence-${triple}`);
+// Tauri looks for `<stem>-<triple>.exe` on Windows, so the placeholder written
+// for a Windows target has to carry the suffix or the build script still fails.
+const dest = join(
+  binariesDir,
+  `mainframe-intelligence-${triple}${triple.includes('windows') ? '.exe' : ''}`,
+);
 mkdirSync(binariesDir, { recursive: true });
 
 const reason = blocker(triple);

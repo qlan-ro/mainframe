@@ -662,10 +662,10 @@ impl ChatManagerDeps for DaemonChatDeps {
             // throwaway session behind. It yields to the adapter whenever this
             // machine has no on-device path or the model declines, so the CLI
             // stays the generator of record.
-            if !local_disabled {
-                if let Some(title) = mainframe_local_intelligence::generate_title(&content).await {
-                    return Some(title);
-                }
+            if !local_disabled
+                && let Some(title) = mainframe_local_intelligence::generate_title(&content).await
+            {
+                return Some(title);
             }
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,

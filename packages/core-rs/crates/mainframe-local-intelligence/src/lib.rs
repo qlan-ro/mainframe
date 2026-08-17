@@ -240,7 +240,8 @@ mod tests {
     /// contributor's Mac might not either. Run it deliberately:
     ///
     /// ```text
-    /// MAINFRAME_LOCAL_INTELLIGENCE_BIN=$PWD/../../../app-tauri/src-tauri/binaries/mainframe-intelligence-aarch64-apple-darwin \
+    /// # from packages/core-rs, after `pnpm --filter @qlan-ro/mainframe-app-tauri bundle`
+    /// MAINFRAME_LOCAL_INTELLIGENCE_BIN=$PWD/../app-tauri/src-tauri/binaries/mainframe-intelligence-$(rustc -vV | sed -n 's/^host: //p') \
     ///   cargo test -p mainframe-local-intelligence -- --ignored --nocapture
     /// ```
     #[tokio::test]
