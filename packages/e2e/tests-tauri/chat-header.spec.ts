@@ -103,9 +103,9 @@ test.describe('§chat-header — hide-chat control (dynamic floor)', () => {
     await expect(page.getByTestId('chat-header-hide')).toBeDisabled();
   });
 
-  test('enabled once Files is lit (⌘/Ctrl+2), and hides the chat surface when clicked', async () => {
+  test('enabled once the workspace is lit (⌘/Ctrl+Shift+W), and hides the chat surface when clicked', async () => {
     const { page } = app;
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
 
     const hideButton = page.getByTestId('chat-header-hide');

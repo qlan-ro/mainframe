@@ -1,5 +1,5 @@
 /**
- * useProjects — behavior tests (TDD red phase).
+ * useProjects — behavior tests.
  *
  * Behaviors covered:
  *  - On mount, getProjects is called exactly once with port 31415.
@@ -8,11 +8,14 @@
  *    (id 'p1') and loading is false.
  *  - When getProjects rejects, projects stays [] and loading becomes false
  *    (no unhandled rejection).
+ *  - Two independently-mounted instances share one list (the shared-store
+ *    regression this hook exists to prevent — see store/projects.ts).
  */
 import { it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { DaemonPortProvider } from '../runtime/daemon-port-context';
+import { resetProjectsStore } from '@/store/projects';
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted so vi.mock factories run before imports
@@ -45,6 +48,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetProjectsStore();
 });
 
 it('invokes getProjects(31415) exactly once on mount', async () => {
@@ -130,4 +134,42 @@ it('projects stays [] and loading becomes false without an unhandled rejection w
   });
 
   expect(result.current.projects).toEqual([]);
+});
+
+it('mounting several consumers together issues exactly one getProjects call', async () => {
+  mockGetProjects.mockResolvedValue([]);
+
+  const instances = [
+    renderHook(() => useProjects(), { wrapper }),
+    renderHook(() => useProjects(), { wrapper }),
+    renderHook(() => useProjects(), { wrapper }),
+  ];
+
+  await waitFor(() => {
+    for (const { result } of instances) expect(result.current.loading).toBe(false);
+  });
+
+  expect(mockGetProjects).toHaveBeenCalledTimes(1);
+});
+
+it('a reload from one mounted instance is visible to a second, independently-mounted instance', async () => {
+  mockGetProjects.mockResolvedValue([]);
+
+  const a = renderHook(() => useProjects(), { wrapper });
+  const b = renderHook(() => useProjects(), { wrapper });
+
+  await waitFor(() => {
+    expect(a.result.current.loading).toBe(false);
+    expect(b.result.current.loading).toBe(false);
+  });
+
+  mockGetProjects.mockResolvedValueOnce([
+    { id: 'p1', name: 'mainframe', path: '/r/mf', createdAt: '', lastOpenedAt: '' },
+  ]);
+  await act(async () => {
+    await a.result.current.reloadProjects();
+  });
+
+  expect(a.result.current.projects.map((p) => p.id)).toEqual(['p1']);
+  expect(b.result.current.projects.map((p) => p.id)).toEqual(['p1']);
 });

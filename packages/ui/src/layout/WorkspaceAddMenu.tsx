@@ -67,7 +67,6 @@ export function WorkspaceAddMenu({ paneId, configs, onLaunch, onOpenUrl }: Works
         >
           <FileCode className="size-3.5 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate">Open file…</span>
-          <RowHint>⌘P</RowHint>
         </DropdownMenuItem>
         <DropdownMenuItem
           data-testid={`workspace-pane-new-terminal-${paneId}`}

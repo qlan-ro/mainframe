@@ -86,7 +86,7 @@ export function CmEditor({
 
   // Drives the theme compartment's CM6 `dark` flag; re-renders on a mode flip so
   // the sync effect below reconfigures the live view.
-  const mode = useTheme((s) => s.mode);
+  const resolvedMode = useTheme((s) => s.resolvedMode);
 
   // Per-instance compartments — created once on first render, never replaced.
   // Must be per-instance: sharing Compartment objects across EditorViews causes
@@ -113,7 +113,7 @@ export function CmEditor({
     const { lang, readOnly: roComp, theme: themeComp, extra } = compartmentsRef.current;
     const savedState = useEditorStore.getState().getViewState(path);
     // Initial dark flag from the store (kept in sync by the effect below).
-    const initialDark = useTheme.getState().mode === 'dark';
+    const initialDark = useTheme.getState().resolvedMode === 'dark';
 
     const saveKeymap = keymap.of([
       {
@@ -250,8 +250,8 @@ export function CmEditor({
     const view = viewRef.current;
     if (!view) return;
     const { theme: themeComp } = compartmentsRef.current;
-    view.dispatch({ effects: themeComp.reconfigure(makeWarmTheme(mode === 'dark')) });
-  }, [mode]);
+    view.dispatch({ effects: themeComp.reconfigure(makeWarmTheme(resolvedMode === 'dark')) });
+  }, [resolvedMode]);
 
   return <div ref={hostRef} data-testid="editor-code" className="mf-editor-selectable h-full" />;
 }

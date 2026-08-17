@@ -316,6 +316,20 @@ async fn provider_put_clears_skip_permissions_on_default_mode() {
 }
 
 #[tokio::test]
+async fn provider_put_accepts_auto_default_mode() {
+    let server = spawn_test_server(None).await;
+    let resp = client()
+        .put(server.http_url("/api/settings/providers/claude"))
+        .json(&json!({ "defaultMode": "auto" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = get_json(&server, "/api/settings/providers").await;
+    assert_eq!(body["data"]["claude"]["defaultMode"], "auto");
+}
+
+#[tokio::test]
 async fn provider_put_rejects_invalid_default_mode() {
     let server = spawn_test_server(None).await;
     let resp = client()

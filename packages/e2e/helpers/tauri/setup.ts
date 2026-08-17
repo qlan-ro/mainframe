@@ -10,6 +10,10 @@ import { waitConnected } from './wait.js';
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 const DEFAULT_CLAUDE_MD =
   '# E2E Test Project\n\nAutomated test environment. Do not use plan mode. Execute tool calls directly.\n';
+const NOTIFY_DEFINITION = {
+  triggers: [],
+  steps: [{ id: 'n1', kind: 'notify', message: ['done'] }],
+};
 
 export interface TauriProject {
   projectPath: string;
@@ -87,6 +91,26 @@ export async function createTauriChat(
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
   }
   return chatId;
+}
+
+/** Seed an automation via REST. Returns its id. Nothing broadcasts a create — the
+ *  caller must force a re-fetch (reload or active-project switch) to see it. */
+export async function createTauriAutomation(opts: { name: string; projectId?: string }): Promise<string> {
+  const body = opts.projectId
+    ? { name: opts.name, scope: 'project', projectId: opts.projectId, definition: NOTIFY_DEFINITION }
+    : { name: opts.name, scope: 'global', definition: NOTIFY_DEFINITION };
+
+  const res = await fetch(`${DAEMON_BASE}/api/automations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok)
+    throw new Error(`createTauriAutomation: POST /api/automations failed (${res.status} ${await res.text()})`);
+  const created = (await res.json()) as { data?: { id?: string } };
+  const automationId = created.data?.id;
+  if (!automationId) throw new Error(`createTauriAutomation: no automation id (${JSON.stringify(created)})`);
+  return automationId;
 }
 
 export function cleanupTauriProject(project?: TauriProject): void {

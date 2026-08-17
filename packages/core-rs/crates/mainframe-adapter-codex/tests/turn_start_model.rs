@@ -24,6 +24,7 @@ use std::path::Path;
 use common::Recorder;
 use mainframe_adapter_api::AdapterSession;
 use mainframe_adapter_codex::CodexSession;
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use serde_json::Value;
@@ -134,6 +135,7 @@ async fn spawn_test_session(
         },
         None,
         ResolvedPath::from_value("/usr/bin:/bin"),
+        std::sync::Arc::new(BackgroundTaskTracker::new()),
     );
 
     let rec = Recorder::new();

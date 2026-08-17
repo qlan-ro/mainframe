@@ -3,11 +3,12 @@
  * an opt-in note disclosure instead of the old truncated detail line. The note
  * is the same single detail (stale > error > result > tool precedence, AC 11)
  * — errors and stale notes open themselves, the rest sit behind the chevron.
- * `model`, `attempt` and the tool-call count stay in the row's `title` (D19).
+ * `model`, `attempt` and the tool-call count stay in the row's hover hint (D19).
  */
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Hint } from '@/components/ui/hint';
 import {
   agentDetailKind,
   agentDetailLine,
@@ -44,44 +45,45 @@ export function WorkflowAgentRow({ agent, run, last = true }: { agent: ViewAgent
   }, [autoOpen]);
 
   return (
-    <div
-      data-testid={`chat-workflow-agent-${agent.agentId}`}
-      data-state={agent.state}
-      title={agentTitle(agent)}
-      className="relative pl-4"
-    >
+    <div data-testid={`chat-workflow-agent-${agent.agentId}`} data-state={agent.state} className="relative pl-4">
       <span aria-hidden className={cn('absolute top-0 left-[5.5px] w-px bg-border', last ? 'h-[11px]' : 'bottom-0')} />
       <span className="absolute top-2 left-[3px]">
         <WorkflowPip status={agentPipStatus(agent)} className="size-1.5" />
       </span>
-      <button
-        type="button"
-        data-testid={`chat-workflow-agent-toggle-${agent.agentId}`}
-        disabled={!hasNote}
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-5.5 w-full items-center gap-1.5 text-left"
-      >
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate font-mono text-xs',
-            agent.state === 'unknown' ? 'text-muted-foreground' : 'text-foreground',
-          )}
-        >
-          {agent.label}
+      {/* The hint wraps the header rather than triggering on it: a note-less row
+          disables the button, and a disabled button swallows pointer events. */}
+      <Hint label={agentTitle(agent)}>
+        <span className="flex">
+          <button
+            type="button"
+            data-testid={`chat-workflow-agent-toggle-${agent.agentId}`}
+            disabled={!hasNote}
+            onClick={() => setOpen((o) => !o)}
+            className="flex h-5.5 w-full items-center gap-1.5 text-left"
+          >
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate font-mono text-xs',
+                agent.state === 'unknown' ? 'text-muted-foreground' : 'text-foreground',
+              )}
+            >
+              {agent.label}
+            </span>
+            <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+              {/* A just-spawned agent has no usage yet — "0 · 2s" is noise. */}
+              {agent.tokens > 0 ? `${formatAgentTokens(agent.tokens)} · ` : ''}
+              {formatAgentDuration(agent.durationMs)}
+            </span>
+            {hasNote && (
+              <ChevronDown
+                size={10}
+                className={cn('shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')}
+                aria-hidden
+              />
+            )}
+          </button>
         </span>
-        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-          {/* A just-spawned agent has no usage yet — "0 · 2s" is noise. */}
-          {agent.tokens > 0 ? `${formatAgentTokens(agent.tokens)} · ` : ''}
-          {formatAgentDuration(agent.durationMs)}
-        </span>
-        {hasNote && (
-          <ChevronDown
-            size={10}
-            className={cn('shrink-0 text-muted-foreground transition-transform', !open && '-rotate-90')}
-            aria-hidden
-          />
-        )}
-      </button>
+      </Hint>
       {hasNote && open && (
         <div
           data-testid={`chat-workflow-agent-note-${agent.agentId}`}

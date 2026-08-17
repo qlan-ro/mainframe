@@ -199,7 +199,10 @@ impl Adapter for FakeAdapter {
         &self.name
     }
     fn capabilities(&self) -> AdapterCapabilities {
-        AdapterCapabilities { plan_mode: true }
+        AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+        }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         self.is_installed_calls.fetch_add(1, Ordering::SeqCst);
@@ -340,6 +343,8 @@ async fn bumps_revision_flips_catalog_source_and_emits_after_allow_refresh() {
                 adapter_id: "claude".into(),
                 models: probed.clone(),
                 models_revision: 2,
+                // The client's only correction when the boot snapshot said false.
+                installed: Some(true),
             })
     );
     assert_eq!(a.probe_args(), vec![Some("/abs/claude".to_string())]);

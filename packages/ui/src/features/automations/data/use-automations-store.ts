@@ -4,7 +4,12 @@
  * to the in-memory fixture gateway so every phase through Phase 5 works with
  * no live daemon routes; `setGateway` is how Phase 6 swaps in the real
  * `http-gateway.ts` at the entry-point boundary, mirroring
- * `use-workflows-store.ts`'s `loadAll` stale-response guard.
+ * `use-workflows-store.ts`'s stale-response guard.
+ *
+ * Two loaders, because two consumers disagree about scope: `loadInteractions`
+ * feeds the sidebar's pending badge and runs from app boot whether or not the
+ * modal is open, while `loadLibrary` fetches one project's automations for the
+ * open modal.
  */
 import { create } from 'zustand';
 import type {
@@ -16,7 +21,8 @@ import type {
 import { createFixtureGateway } from '../fixtures/fixture-gateway';
 import type { AutomationsGateway } from './gateway';
 
-let loadSeq = 0;
+let librarySeq = 0;
+let interactionsSeq = 0;
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<AutomationRunSummary['status']> = new Set([
   'succeeded',
@@ -28,10 +34,15 @@ function isTerminalRunStatus(status: AutomationRunSummary['status']): boolean {
   return TERMINAL_RUN_STATUSES.has(status);
 }
 
+/** Sentinel for "loadLibrary has never run" — distinct from `null`, which is a real project id: "All projects". */
+const NEVER_LOADED = Symbol('never-loaded');
+
 interface AutomationsState {
   gateway: AutomationsGateway;
-  /** The current session's active project — resolved once, at the `AutomationsHost` mount boundary, via `useActiveIdentity()` (todo #234 bullet 1: automations are project-scoped non-configurably, mirroring Todos). `null` before an active project resolves. */
-  activeProjectId: string | null;
+  /** The project the open Automations modal is showing — the editor's save target and its project-scoped pickers read it too. `null` whenever the modal is closed, and while it is open when the user is on "All projects". */
+  scopeProjectId: string | null;
+  /** The project `definitions`/`runs` were last fetched for — lets `loadLibrary` tell a project change (clear the stale rows) from a same-project retry (keep them, so the Retry buttons don't blank the list). */
+  loadedProjectId: string | null | typeof NEVER_LOADED;
   definitions: AutomationSummary[];
   runs: AutomationRunSummary[];
   /** Bumped by `patchRun` on every applied update — lets a run view refetch on every `automation.run.updated` for its run id, not just status changes (a run can emit one per step transition). */
@@ -42,8 +53,11 @@ interface AutomationsState {
   loading: boolean;
   error: string | null;
   setGateway: (gateway: AutomationsGateway) => void;
-  setActiveProjectId: (projectId: string | null) => void;
-  loadAll: () => Promise<void>;
+  setScopeProjectId: (projectId: string | null) => void;
+  /** Pending interactions only — the sidebar badge's load, and never the library's. */
+  loadInteractions: () => Promise<void>;
+  /** The open modal's library: that project's automations plus their runs, the action catalog and the credential labels. */
+  loadLibrary: (projectId: string | null) => Promise<void>;
   patchDefinition: (definition: AutomationSummary) => void;
   removeDefinition: (id: string) => void;
   patchRun: (run: AutomationRunSummary) => void;
@@ -55,7 +69,8 @@ interface AutomationsState {
 
 export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   gateway: createFixtureGateway(),
-  activeProjectId: null,
+  scopeProjectId: null,
+  loadedProjectId: NEVER_LOADED,
   definitions: [],
   runs: [],
   runRevisions: {},
@@ -66,22 +81,43 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
   error: null,
 
   setGateway: (gateway) => set({ gateway }),
-  setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
+  setScopeProjectId: (scopeProjectId) => set({ scopeProjectId }),
 
-  loadAll: async () => {
-    const seqAtStart = ++loadSeq;
-    set({ loading: true, error: null });
-    const { gateway, activeProjectId } = get();
+  loadInteractions: async () => {
+    const seqAtStart = ++interactionsSeq;
     try {
-      const [definitions, interactions, catalog, credentials] = await Promise.all([
-        gateway.listAutomations(activeProjectId),
-        gateway.listInteractions(),
+      const interactions = await get().gateway.listInteractions();
+      if (seqAtStart !== interactionsSeq) return;
+      set({ interactions });
+    } catch (err) {
+      // The badge is ambient — a failure here must not paint the library's
+      // error screen, which belongs to the load the user asked for.
+      console.warn('[automations/use-automations-store] failed to load pending interactions', err);
+    }
+  },
+
+  loadLibrary: async (projectId) => {
+    const seqAtStart = ++librarySeq;
+    const { gateway, loadedProjectId } = get();
+    // Only a project CHANGE clears the list — a same-project retry (the
+    // library's own Retry buttons) must keep the prior rows on screen while
+    // it refetches, per the existing error-banner-over-stale-rows UX.
+    const isProjectChange = loadedProjectId !== NEVER_LOADED && loadedProjectId !== projectId;
+    set({
+      loading: true,
+      error: null,
+      loadedProjectId: projectId,
+      ...(isProjectChange ? { definitions: [], runs: [] } : {}),
+    });
+    try {
+      const [definitions, catalog, credentials] = await Promise.all([
+        gateway.listAutomations(projectId),
         gateway.listActions(),
         gateway.listCredentialLabels(),
       ]);
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       const runResults = await Promise.allSettled(definitions.map((d) => gateway.listRuns(d.id)));
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       const runs: AutomationRunSummary[] = [];
       let runsError: string | null = null;
       for (const result of runResults) {
@@ -89,9 +125,9 @@ export const useAutomationsStore = create<AutomationsState>((set, get) => ({
         else runsError = result.reason instanceof Error ? result.reason.message : 'Failed to load run history';
       }
       runs.sort((a, b) => b.startedAt - a.startedAt);
-      set({ definitions, interactions, catalog, credentials, runs, loading: false, error: runsError });
+      set({ definitions, catalog, credentials, runs, loading: false, error: runsError });
     } catch (err) {
-      if (seqAtStart !== loadSeq) return;
+      if (seqAtStart !== librarySeq) return;
       set({ loading: false, error: err instanceof Error ? err.message : 'Failed to load automations' });
     }
   },

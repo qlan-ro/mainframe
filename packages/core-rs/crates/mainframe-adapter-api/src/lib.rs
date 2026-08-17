@@ -26,6 +26,7 @@ use tokio::sync::Notify;
 
 pub mod adapter;
 pub mod plan_mode_actions;
+pub mod pr_detection;
 pub mod resolve_executable;
 pub mod title;
 
@@ -367,6 +368,7 @@ impl AdapterRegistry {
         let Some(prev) = self.snapshots.get(adapter_id).map(|e| e.value().clone()) else {
             return;
         };
+        let installed = patch.installed;
         let models_changed = patch.models.is_some();
         let models_revision = if models_changed {
             Some(prev.models_revision.unwrap_or(1) + 1)
@@ -403,6 +405,7 @@ impl AdapterRegistry {
                 adapter_id: adapter_id.to_string(),
                 models,
                 models_revision: rev,
+                installed: Some(installed),
             });
         }
     }

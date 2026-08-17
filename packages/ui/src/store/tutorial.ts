@@ -1,14 +1,17 @@
 /**
  * Tutorial tour store — persists first-run completion state.
  *
- * Fields: completed (gated by store), step (0-indexed, 0..3).
+ * Fields: completed (gated by store), step (0-indexed).
  * Actions: next / back / skip / complete / reset.
  * Button-driven navigation only — no action-gated auto-advance.
+ *
+ * The store holds no step total: how many steps exist is decided at runtime by
+ * the anchors on screen (features/tour/steps.ts), so the overlay owns the last
+ * step and calls complete(). A constant here would silently end a longer tour
+ * early, which is what a hardcoded 4 did when the tour grew past four steps.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-const TOTAL_STEPS = 4;
 
 interface TutorialState {
   completed: boolean;
@@ -25,14 +28,7 @@ export const useTutorialStore = create<TutorialState>()(
     (set, get) => ({
       completed: false,
       step: 0,
-      next: () => {
-        const { step } = get();
-        if (step >= TOTAL_STEPS - 1) {
-          set({ completed: true });
-        } else {
-          set({ step: step + 1 });
-        }
-      },
+      next: () => set({ step: get().step + 1 }),
       back: () => {
         const { step } = get();
         if (step > 0) set({ step: step - 1 });

@@ -212,10 +212,12 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
               <ContextMenuShortcut>⌘C</ContextMenuShortcut>
             </ContextMenuItem>
 
+            {/* No chord label: nothing binds one to this action — it is reachable
+                only from here — and ⌘⇧C now toggles the Chat surface, so
+                advertising it would send you somewhere else entirely. */}
             <ContextMenuItem data-testid="editor-context-menu-copy-ref" onSelect={() => void handleCopyReference()}>
               <Quote className="text-muted-foreground" />
               Copy Reference
-              <ContextMenuShortcut>⌘⇧C</ContextMenuShortcut>
             </ContextMenuItem>
           </ContextMenuGroup>
 

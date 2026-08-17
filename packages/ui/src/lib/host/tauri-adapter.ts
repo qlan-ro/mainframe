@@ -107,6 +107,12 @@ export class TauriAdapter implements HostBridge {
     void bridge.setUiZoom(factor);
   }
 
+  setWindowTheme(theme: 'light' | 'dark' | null): void {
+    getCurrentWebviewWindow()
+      .setTheme(theme)
+      .catch((err) => console.warn('[host] setTheme failed', err));
+  }
+
   /**
    * Install the window-drag listener (relocated from bridge.ts module scope).
    * Tauri 2 does not auto-wire mousedown → startDragging for [data-drag-region].

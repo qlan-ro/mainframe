@@ -175,6 +175,15 @@ export interface HostBridge {
    * never overflows (unlike the CSS `zoom` property).
    */
   setZoom(factor: number): void;
+  /**
+   * Sync the native window appearance with the app's rendered theme, or follow
+   * the OS (`null`). macOS draws inactive title-bar controls (traffic lights)
+   * for the WINDOW's appearance; with an overlay title bar their backdrop is
+   * the web content, so a mismatch (dark window appearance over a light theme,
+   * or vice versa) renders them invisible when the window is not focused.
+   * Tauri: `window.setTheme`; browser/fake: no-op.
+   */
+  setWindowTheme(theme: 'light' | 'dark' | null): void;
   /** Tauri installs the window-drag listener here; Electron is a CSS no-op. */
   init?(): void;
 }

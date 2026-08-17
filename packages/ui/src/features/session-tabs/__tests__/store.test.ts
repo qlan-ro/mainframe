@@ -1,9 +1,11 @@
 /**
  * session-tabs store — the open set, editor-style: an ordered PINNED list plus
  * ONE preview slot, both held as runtime thread ids. Two invariants carry the
- * feature: an activation is a peek (it replaces the preview) unless it pins,
- * and restore must not clobber the tabs the boot already opened — including the
- * preview that is on screen while the persisted one is still being restored.
+ * feature: an activation is a peek (it replaces the preview) unless it opens
+ * elsewhere, and restore must not clobber the tabs the boot already opened —
+ * including the preview that is on screen while the persisted one is still
+ * being restored. The third slot (the protected draft) lives in
+ * store.draft.test.ts.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useSessionTabsStore } from '../store';
@@ -12,7 +14,7 @@ const pinned = () => useSessionTabsStore.getState().tabIds;
 const preview = () => useSessionTabsStore.getState().previewId;
 
 beforeEach(() => {
-  useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: false });
+  useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
 });
 
 describe('ensureTab', () => {
@@ -33,13 +35,13 @@ describe('ensureTab', () => {
     expect(pinned()).toEqual([]);
   });
 
-  it('appends to the pinned set and leaves the preview alone when pin is true', () => {
-    // A just-created draft is a deliberate tab, not a peek (`shouldPinOnOpen`).
+  it('appends to the pinned set and leaves the preview alone for the pinned slot', () => {
+    // Splitting a session onto a zone is a "keep this open" signal.
     useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'p' });
 
-    useSessionTabsStore.getState().ensureTab('__LOCALID_1', { pin: true });
+    useSessionTabsStore.getState().ensureTab('b', 'pinned');
 
-    expect(pinned()).toEqual(['a', '__LOCALID_1']);
+    expect(pinned()).toEqual(['a', 'b']);
     expect(preview()).toBe('p');
   });
 
@@ -65,12 +67,12 @@ describe('ensureTab', () => {
     expect(preview()).toBe('p');
   });
 
-  it('does not promote the previewed session even when asked to pin it', () => {
-    // Already-open wins over `pin`: the seam only reaches this with a
-    // `shouldPinOnOpen` id, which pinned on its first activation.
+  it('does not promote the previewed session even when asked for the pinned slot', () => {
+    // Already-open wins over the requested slot: membership is decided once,
+    // on the activation that opened the tab.
     useSessionTabsStore.setState({ tabIds: [], previewId: '__LOCALID_1' });
 
-    useSessionTabsStore.getState().ensureTab('__LOCALID_1', { pin: true });
+    useSessionTabsStore.getState().ensureTab('__LOCALID_1', 'pinned');
 
     expect(pinned()).toEqual([]);
     expect(preview()).toBe('__LOCALID_1');
@@ -191,30 +193,17 @@ describe('hydrate', () => {
 });
 
 describe('reconcile', () => {
-  it('applies both resolvers to the live state', () => {
+  it('applies the resolver to the live state', () => {
     useSessionTabsStore.setState({ tabIds: ['a', 'gone', 'b'], previewId: 'stale' });
 
-    useSessionTabsStore.getState().reconcile(
-      (ids) => ids.filter((id) => id !== 'gone'),
-      () => 'fresh',
-    );
+    useSessionTabsStore.getState().reconcile((s) => ({
+      ...s,
+      tabIds: s.tabIds.filter((id) => id !== 'gone'),
+      previewId: 'fresh',
+    }));
 
     expect(pinned()).toEqual(['a', 'b']);
     expect(preview()).toBe('fresh');
-  });
-
-  it('dissolves a resolved preview that lands inside the resolved pinned set', () => {
-    // The local→remote handoff can resolve both slots onto one session; the pin
-    // wins so the strip never shows the same session twice.
-    useSessionTabsStore.setState({ tabIds: ['__LOCALID_9'], previewId: '__LOCALID_9' });
-
-    useSessionTabsStore.getState().reconcile(
-      () => ['chat-new'],
-      () => 'chat-new',
-    );
-
-    expect(pinned()).toEqual(['chat-new']);
-    expect(preview()).toBeNull();
   });
 
   it('swaps a pinned id in place — the tab keeps its slot', () => {
@@ -222,15 +211,15 @@ describe('reconcile', () => {
     // id to another without removing and re-appending it.
     useSessionTabsStore.setState({ tabIds: ['a', 'local', 'b'] });
 
-    useSessionTabsStore.getState().reconcile(
-      (ids) => ids.map((id) => (id === 'local' ? 'remote' : id)),
-      (id) => id,
-    );
+    useSessionTabsStore.getState().reconcile((s) => ({
+      ...s,
+      tabIds: s.tabIds.map((id) => (id === 'local' ? 'remote' : id)),
+    }));
 
     expect(pinned()).toEqual(['a', 'remote', 'b']);
   });
 
-  it('leaves the state object untouched when both resolvers return what they got', () => {
+  it('leaves the state object untouched when the resolver returns what it got', () => {
     // Identity matters, not just equality: the seam reconciles on every
     // thread-list change, and a fresh object each time would re-render the
     // whole strip while a chat streams — even though the resolver allocates a
@@ -238,10 +227,7 @@ describe('reconcile', () => {
     useSessionTabsStore.setState({ tabIds: ['a', 'b'], previewId: 'p' });
     const before = useSessionTabsStore.getState();
 
-    useSessionTabsStore.getState().reconcile(
-      (ids) => [...ids],
-      (id) => id,
-    );
+    useSessionTabsStore.getState().reconcile((s) => ({ ...s, tabIds: [...s.tabIds] }));
 
     expect(useSessionTabsStore.getState()).toBe(before);
   });
@@ -249,22 +235,16 @@ describe('reconcile', () => {
   it('writes new state when only the preview changed', () => {
     useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'p' });
 
-    useSessionTabsStore.getState().reconcile(
-      (ids) => [...ids],
-      () => null,
-    );
+    useSessionTabsStore.getState().reconcile((s) => ({ ...s, previewId: null }));
 
     expect(pinned()).toEqual(['a']);
     expect(preview()).toBeNull();
   });
 
-  it('empties the strip when the resolvers return nothing', () => {
+  it('empties the strip when the resolver returns nothing', () => {
     useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'p' });
 
-    useSessionTabsStore.getState().reconcile(
-      () => [],
-      () => null,
-    );
+    useSessionTabsStore.getState().reconcile(() => ({ tabIds: [], previewId: null, draftId: null }));
 
     expect(pinned()).toEqual([]);
     expect(preview()).toBeNull();
@@ -274,10 +254,7 @@ describe('reconcile', () => {
     useSessionTabsStore.setState({ tabIds: ['a'] });
 
     useSessionTabsStore.getState().ensureTab('b');
-    useSessionTabsStore.getState().reconcile(
-      (ids) => ids,
-      (id) => id,
-    );
+    useSessionTabsStore.getState().reconcile((s) => s);
 
     expect(pinned()).toEqual(['a']);
     expect(preview()).toBe('b');

@@ -418,7 +418,10 @@ mod tests {
             "Claude"
         }
         fn capabilities(&self) -> mainframe_types::adapter::AdapterCapabilities {
-            mainframe_types::adapter::AdapterCapabilities { plan_mode: false }
+            mainframe_types::adapter::AdapterCapabilities {
+                plan_mode: false,
+                auto_mode: false,
+            }
         }
         fn is_installed(
             &self,

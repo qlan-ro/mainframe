@@ -9,7 +9,7 @@
 # Targets: tauri = native shell via tauri-mcp bridge (max 1);
 # tauri-qa = packaged build via tauri-mcp bridge, isolated port/data dir (max 1);
 # browser = renderer+daemon only, cheapest — use when no scenario needs the native shell.
-# Project QA knowledge (fixtures, seeding, gotchas): .agents/test-worktree.md, ui-selectors.md
+# Project QA knowledge (fixtures, seeding, gotchas): .agents/test-worktree.md
 set -uo pipefail
 
 AGENTS="$(cd "$(dirname "$0")" && pwd -P)"

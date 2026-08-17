@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useUrlTunnel } from './use-url-tunnel';
 import type { PortTunnelEntry } from '@/store/port-tunnels';
@@ -62,18 +63,21 @@ export function UrlChip({ href, port }: UrlChipProps) {
       <span className="font-mono text-xs text-primary">{href}</span>
       {badge && <span className={`${BADGE_CLASS} ${badge.className}`}>{badge.label}</span>}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            data-testid="smart-action-url-open"
-            title={openLabel}
-            aria-label={openLabel}
-            disabled={busy}
-            className={ICON_BUTTON_CLASS}
-          >
-            <OpenIcon className="size-3.5" />
-          </button>
-        </DropdownMenuTrigger>
+        {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+            swallow the menu's own ref and onClick. */}
+        <Hint label={openLabel}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              data-testid="smart-action-url-open"
+              aria-label={openLabel}
+              disabled={busy}
+              className={ICON_BUTTON_CLASS}
+            >
+              <OpenIcon className="size-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+        </Hint>
         <DropdownMenuContent align="start">
           {/* The tab owns tunnelling — this path must not start one. */}
           <DropdownMenuItem
@@ -90,16 +94,17 @@ export function UrlChip({ href, port }: UrlChipProps) {
         </DropdownMenuContent>
       </DropdownMenu>
       {canStop && (
-        <button
-          type="button"
-          data-testid="smart-action-url-stop-tunnel"
-          title="Stop tunnel"
-          aria-label="Stop tunnel"
-          className={ICON_BUTTON_CLASS}
-          onClick={stop}
-        >
-          <Unplug className="size-3.5" />
-        </button>
+        <Hint label="Stop tunnel">
+          <button
+            type="button"
+            data-testid="smart-action-url-stop-tunnel"
+            aria-label="Stop tunnel"
+            className={ICON_BUTTON_CLASS}
+            onClick={stop}
+          >
+            <Unplug className="size-3.5" />
+          </button>
+        </Hint>
       )}
     </span>
   );

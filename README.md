@@ -15,7 +15,7 @@
 
 <p align="center">
   <picture>
-    <img src="docs/screenshot.png" alt="Mainframe desktop" height="340">
+    <img height="340" alt="image" src="https://github.com/user-attachments/assets/73750bda-1787-42d8-aad2-d6de5e885145" />
   </picture>
   &nbsp;&nbsp;
   <picture>
@@ -24,8 +24,8 @@
 </p>
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9" controls muted playsinline width="720">
-    Your browser doesn't support inline video. <a href="https://github.com/user-attachments/assets/3eca698b-824f-4e9f-a80b-bcb6e74f31c9">Download the demo</a>.
+  <video src="https://github.com/user-attachments/assets/aa2a542a-e87e-4205-8ee0-8d1562900328" controls muted playsinline width="720">
+    Your browser doesn't support inline video. <a href="https://github.com/user-attachments/assets/aa2a542a-e87e-4205-8ee0-8d1562900328">Download the demo</a>.
   </video>
 </p>
 

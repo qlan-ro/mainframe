@@ -13,13 +13,18 @@ vi.mock('@/features/sessions/use-projects', () => ({
 function render(ui: React.ReactElement) {
   return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 }
+
+// The scope is the host's, so every render here supplies it.
+function renderView(overrides: Partial<React.ComponentProps<typeof AutomationsView>> = {}) {
+  return render(<AutomationsView projectId="proj-1" onProjectChange={vi.fn()} {...overrides} />);
+}
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 
 it('renders the header, the count, and closes via the close button', () => {
   useAutomationsStore.setState({ definitions: [], interactions: [] });
   useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
-  render(<AutomationsView />);
+  renderView();
 
   expect(screen.getByText('Workflows')).toBeInTheDocument();
   expect(screen.getByTestId('automations-title-count')).toHaveTextContent('0 automations');
@@ -44,7 +49,7 @@ it('shows the library section by default, listing loaded definitions', () => {
       },
     ],
   });
-  render(<AutomationsView />);
+  renderView();
 
   expect(screen.getByTestId('automations-section-library')).toBeInTheDocument();
   expect(screen.getByTestId('automations-library-row-a1')).toHaveTextContent('Daily standup');
@@ -53,7 +58,7 @@ it('shows the library section by default, listing loaded definitions', () => {
 it('shows the (lazy-loaded) editor section when an editor target is open', async () => {
   useAutomationsStore.setState({ definitions: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: null });
-  render(<AutomationsView />);
+  renderView();
   // AutomationEditor is React.lazy — the Suspense boundary swaps its whole
   // subtree (including this wrapper div) for the fallback until the chunk
   // resolves, so this assertion must await it rather than getByTestId.
@@ -63,7 +68,7 @@ it('shows the (lazy-loaded) editor section when an editor target is open', async
 it('shows the (lazy-loaded) run section when a run id is open, taking precedence over the editor', async () => {
   useAutomationsStore.setState({ definitions: [], runs: [] });
   useAutomationsNav.setState({ editorTarget: { mode: 'new' }, runId: 'r1' });
-  render(<AutomationsView />);
+  renderView();
   // RunView is React.lazy too — same Suspense-swap reasoning as the editor test above.
   expect(await screen.findByTestId('automations-section-run')).toBeInTheDocument();
 });
@@ -71,7 +76,7 @@ it('shows the (lazy-loaded) run section when a run id is open, taking precedence
 it('shows the describe section when describeOpen is set, below run/editor precedence', () => {
   useAutomationsStore.setState({ definitions: [], runs: [], catalog: [] });
   useAutomationsNav.setState({ editorTarget: null, runId: null, describeOpen: true, detailsAutomationId: null });
-  render(<AutomationsView />);
+  renderView();
   expect(screen.getByTestId('automations-section-describe')).toBeInTheDocument();
 });
 
@@ -98,6 +103,44 @@ it('shows the (lazy-loaded) details section when a details target is open, below
     describeOpen: false,
     detailsAutomationId: 'a1',
   });
-  render(<AutomationsView />);
+  renderView();
   expect(await screen.findByTestId('automations-section-details')).toBeInTheDocument();
+});
+
+it('names the scoped project in the header and hands a pick back to the host', () => {
+  useAutomationsStore.setState({ definitions: [], interactions: [] });
+  useAutomationsNav.setState({
+    open: true,
+    editorTarget: null,
+    runId: null,
+    describeOpen: false,
+    detailsAutomationId: null,
+  });
+  const onProjectChange = vi.fn();
+  renderView({ onProjectChange });
+
+  const picker = screen.getByTestId('automations-project-picker');
+  expect(picker).toHaveTextContent('Mainframe');
+
+  // Radix DropdownMenu opens on pointer events, which a real click also fires.
+  fireEvent.pointerDown(picker, { button: 0 });
+  fireEvent.pointerUp(picker);
+  fireEvent.click(screen.getByTestId('automations-project-all'));
+
+  expect(onProjectChange).toHaveBeenCalledWith(null);
+});
+
+it('leaves the picker inoperable while a sub-view owns the modal', async () => {
+  useAutomationsStore.setState({ definitions: [], catalog: [] });
+  useAutomationsNav.setState({
+    open: true,
+    editorTarget: { mode: 'new' },
+    runId: null,
+    describeOpen: false,
+    detailsAutomationId: null,
+  });
+  renderView();
+
+  expect(await screen.findByTestId('automations-section-editor')).toBeInTheDocument();
+  expect(screen.getByTestId('automations-project-picker')).toBeDisabled();
 });

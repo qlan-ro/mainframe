@@ -72,7 +72,7 @@ function Field(props: Partial<TriggerTextFieldProps> & { initial?: string }) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetAdapters();
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
 });
 
 describe('TriggerTextField', () => {
@@ -121,7 +121,7 @@ describe('TriggerTextField', () => {
         capabilities: { planMode: false },
       },
     ]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -145,7 +145,7 @@ describe('TriggerTextField', () => {
         capabilities: { planMode: false },
       },
     ]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -170,7 +170,7 @@ describe('TriggerTextField', () => {
         capabilities: { planMode: false },
       },
     ]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -185,7 +185,7 @@ describe('TriggerTextField', () => {
 
   it('an explicit adapterId sources skills from that adapter, not the first installed one', async () => {
     seedAdapters([adapter(ADAPTER_ID), adapter('codex')]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -197,7 +197,7 @@ describe('TriggerTextField', () => {
 
   it('omitting adapterId falls back to the first installed adapter', async () => {
     seedAdapters([adapter(ADAPTER_ID), adapter('codex')]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -209,7 +209,7 @@ describe('TriggerTextField', () => {
 
   it('skips an installed adapter that serves no skills and lists the next one that does', async () => {
     seedAdapters([adapter('codex'), adapter(ADAPTER_ID)]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockImplementation(async (_port, id) => {
       if (id === 'codex') throw new Error('Adapter not found or does not support skills');

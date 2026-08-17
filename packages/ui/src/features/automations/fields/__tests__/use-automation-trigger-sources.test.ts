@@ -1,7 +1,7 @@
 /**
  * useAutomationTriggerSources — builds the `/` (skills) and `@` (files)
  * TriggerConfig entries for an automations text field, sourced from the
- * automation's own `activeProjectId` (no chat/session context) and an
+ * automation's own `scopeProjectId` (no chat/session context) and an
  * explicit adapterId (or `useAdapters`' first installed adapter). Mirrors
  * `use-chat-skills.test.tsx`'s mocking strategy.
  *
@@ -57,7 +57,7 @@ function adapter(id: string, installed: boolean): AdapterInfo {
 beforeEach(() => {
   vi.clearAllMocks();
   resetAdapters();
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
 });
 
 describe('useAutomationTriggerSources', () => {
@@ -66,8 +66,8 @@ describe('useAutomationTriggerSources', () => {
     expect(result.current.map((c) => c.char)).toEqual(['/', '@']);
   });
 
-  it('loads skills for the given adapterId once activeProjectId resolves', async () => {
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+  it('loads skills for the given adapterId once scopeProjectId resolves', async () => {
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 
@@ -85,7 +85,7 @@ describe('useAutomationTriggerSources', () => {
 
   it('falls back to the first installed adapter from useAdapters when no adapterId is given', async () => {
     seedAdapters([adapter('codex', false), adapter('claude', true)]);
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([]);
 
@@ -95,8 +95,8 @@ describe('useAutomationTriggerSources', () => {
     expect(vi.mocked(getSkills)).toHaveBeenCalledExactlyOnceWith(0, 'claude', PROJECT_PATH);
   });
 
-  it('the "@" adapter searches files scoped to activeProjectId, with no chatId', async () => {
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+  it('the "@" adapter searches files scoped to scopeProjectId, with no chatId', async () => {
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([]);
 
@@ -108,7 +108,7 @@ describe('useAutomationTriggerSources', () => {
   });
 
   it('never fetches skills when disabled, even with a resolved project and adapter', async () => {
-    useAutomationsStore.setState({ activeProjectId: PROJECT_ID });
+    useAutomationsStore.setState({ scopeProjectId: PROJECT_ID });
     vi.mocked(getProjects).mockResolvedValue([PROJECT_FIXTURE]);
     vi.mocked(getSkills).mockResolvedValue([SKILL_FIXTURE]);
 

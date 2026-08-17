@@ -101,7 +101,8 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
         {base64 === null ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : objectUrl ? (
-          <embed src={objectUrl} type={mimeType} className="w-full flex-1" title="PDF viewer" />
+          // aria-label, not title: `title` names the embed AND renders a native tooltip.
+          <embed src={objectUrl} type={mimeType} className="w-full flex-1" aria-label="PDF viewer" />
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         )}

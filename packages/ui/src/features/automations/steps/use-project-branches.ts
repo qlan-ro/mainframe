@@ -2,7 +2,7 @@
  * useProjectBranches — local branches for a project, feeding the Agent
  * step's worktree base-branch `BranchSelect` (todo #234 bullet 4). The step
  * itself carries no project picker — it inherits the automation's own
- * resolved `activeProjectId` (see `AgentConfig.tsx`), so this hook just
+ * resolved `scopeProjectId` (see `AgentConfig.tsx`), so this hook just
  * needs that id, not a chat/session context.
  *
  * `getGitBranches`'s `port` param is vestigial (`lib/api/http.ts`'s

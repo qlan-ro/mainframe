@@ -8,6 +8,7 @@
  * boot's runtime ids by matching either field.
  */
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { canOpenInSplit } from '@/features/chat/zones/open-in-split';
 
 export const SESSION_TABS_STORAGE_KEY = 'mf:session-tabs';
 
@@ -156,12 +157,113 @@ export function reconcilePreviewId(
   return valid.has(canonical) ? canonical : null;
 }
 
-/** Whether an activated thread should open PINNED rather than as a preview: a
- *  draft the user just created is a deliberate tab, not a peek at history.
- *  Judged by the ENTRY's status, not the id shape — a session created this run
- *  keeps its `__LOCALID_*` id for life, and re-opening it later must preview
- *  like any other session. A local id with no entry yet is a brand-new draft. */
-export function shouldPinOnOpen(id: string, items: readonly ThreadListEntry[]): boolean {
+/** Whether an activated thread is an UNSENT draft, which opens in the protected
+ *  draft slot rather than as a peek at history. Judged by the ENTRY's status,
+ *  not the id shape — a session created this run keeps its `__LOCALID_*` id for
+ *  life, and re-opening it later previews like any other session. A local id
+ *  with no entry yet is a brand-new draft. */
+export function isDraftThread(id: string, items: readonly ThreadListEntry[]): boolean {
   const entry = items.find((t) => t.id === id);
   return entry == null ? isLocalId(id) : entry.status === 'new';
+}
+
+/** Which slot an activation opens into. */
+export type TabSlot = 'pinned' | 'preview' | 'draft';
+
+/** The three slots the strip is made of, in display order. */
+export interface TabsState {
+  tabIds: readonly string[];
+  previewId: string | null;
+  draftId: string | null;
+}
+
+/**
+ * The whole open set's reconcile, in one pass — the per-slot rules plus the two
+ * transitions that move an id BETWEEN slots and so cannot live in either:
+ *
+ * - the first send demotes the draft into the preview slot: it stops being the
+ *   protected tab and becomes the temporary one, replacing whatever was peeked at;
+ * - a preview (demoted or not) that resolves onto a pinned session dissolves
+ *   into that pin, so the strip never shows one session twice.
+ */
+export function reconcileTabs(state: TabsState, items: readonly ThreadListEntry[], activeId: string | null): TabsState {
+  const sent = state.draftId !== null && !isDraftThread(state.draftId, items);
+  const draftId = sent ? null : reconcileDraftId(state.draftId, items);
+  const tabIds = reconcileTabIds(state.tabIds, items, activeId);
+  const preview = reconcilePreviewId(sent ? state.draftId : state.previewId, items, activeId);
+  return { tabIds, previewId: preview !== null && tabIds.includes(preview) ? null : preview, draftId };
+}
+
+/** The draft slot's own rule: it survives going inactive (that is the point of
+ *  the slot) and only leaves when it stops being a draft — sent, or gone. */
+function reconcileDraftId(draftId: string | null, items: readonly ThreadListEntry[]): string | null {
+  if (draftId === null) return null;
+  return isDraftThread(draftId, items) ? draftId : null;
+}
+
+/**
+ * The strip's DISPLAYED order (fact 17): pinned tabs, then the preview, then
+ * the draft, with a visible split pair regrouped adjacently at the first
+ * member's position — the same computation `SessionTabs.tsx` renders, moved
+ * here so the shortcut helpers below and the strip read one function instead
+ * of two copies. `_mainThreadId` mirrors the call site's `activeTabId` but
+ * the grouping itself only consults `zones` and the displayed set — kept for
+ * signature parity with Task 16's call site.
+ */
+export function displayedTabIds(
+  state: TabsState,
+  zones: [string, string] | null,
+  _mainThreadId: string | null,
+): string[] {
+  const displayed = [...state.tabIds, state.previewId, state.draftId].filter((id): id is string => id !== null);
+  const zoneMembers = zones == null ? [] : zones.filter((id) => displayed.includes(id));
+  if (zoneMembers.length !== 2) return displayed;
+  const firstAt = displayed.findIndex((id) => zoneMembers.includes(id));
+  const rest = displayed.filter((id) => !zoneMembers.includes(id));
+  return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
+}
+
+/** The tab at a keyboard index (⌘1…⌘9), or null past the end (AC 10). */
+export function tabAtIndex(displayed: readonly string[], index: number): string | null {
+  return displayed[index] ?? null;
+}
+
+/** `sessions.tab-by-index` binds nine chords, so the tenth tab onward has no
+ *  number to advertise. */
+export const MAX_TAB_HINT = 9;
+
+/** The 1-based number ⌘N answers to for a session, or null when the session is
+ *  not an open tab — the inverse of `tabAtIndex`, and what the hint badges read. */
+export function tabHintIndex(displayed: readonly string[], id: string): number | null {
+  const index = displayed.indexOf(id);
+  return index === -1 || index >= MAX_TAB_HINT ? null : index + 1;
+}
+
+/** The next/previous tab in the displayed order, wrapping around; the same
+ *  id back with only one tab open (AC 11). */
+export function nextTabId(displayed: readonly string[], activeId: string, direction: 1 | -1): string {
+  const index = displayed.indexOf(activeId);
+  if (index === -1 || displayed.length === 0) return activeId;
+  const next = (index + direction + displayed.length) % displayed.length;
+  return displayed[next] ?? activeId;
+}
+
+/**
+ * The nearest tab, in displayed order and wrapping, that `canOpenInSplit`
+ * accepts as the active session's split partner — the keyboard's ⌘⇧\ walks
+ * the same guard the tab strip's ⌘-click and context menu use (fact 18), so
+ * they can never disagree about what is splittable (AC 12).
+ */
+export function nextSplitPartner(
+  displayed: readonly string[],
+  activeId: string,
+  zones: [string, string] | null,
+): string | null {
+  const start = displayed.indexOf(activeId);
+  if (start === -1) return null;
+  for (let step = 1; step < displayed.length; step++) {
+    const candidate = displayed[(start + step) % displayed.length] as string;
+    if (canOpenInSplit(zones, activeId, candidate)) return candidate;
+  }
+  return null;
 }

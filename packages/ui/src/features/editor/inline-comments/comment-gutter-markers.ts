@@ -56,7 +56,6 @@ export class CommentGutterMarker extends GutterMarker {
   toDOM(): Text | Element {
     const el = document.createElement('span');
     el.className = 'cm-comment-gutter-marker';
-    el.setAttribute('title', 'View comment');
     el.setAttribute('aria-label', 'View comment');
     el.style.cursor = 'pointer';
     el.style.fontSize = '11px';

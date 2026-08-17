@@ -3,11 +3,11 @@
  * session is whichever tab is focused; there is ONE chat surface and tabs
  * switch its content (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  *
- * The open set lives in `store.ts`; membership + persistence in
- * `useSessionTabsSync` (mounted here — the strip is the feature's one
- * always-rendered component). Closing removes from the set only — it never
- * archives. Closing the last tab falls back to the new-session flow, the same
- * behavior as the sidebar "+" / ⌘N.
+ * The open set lives in `store.ts` — pinned tabs, one peek, one unsent draft,
+ * rendered in that order; membership + persistence in `useSessionTabsSync`
+ * (mounted here — the strip is the feature's one always-rendered component).
+ * Closing removes from the set only — it never archives. Closing the last tab
+ * falls back to the new-session flow, the same behavior as the sidebar "+" / ⌘N.
  *
  * Overflow: pills shrink from w-45 to min-w-24, then the row scrolls
  * horizontally (no scrollbar — the app's opt-out idiom). The trailing spacer
@@ -18,14 +18,24 @@ import { Plus } from 'lucide-react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
+import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { useSessionTabsStore } from './store';
-import { canonicalTabId, nextActiveAfterClose } from './tabs-model';
+import {
+  canonicalTabId,
+  displayedTabIds,
+  nextActiveAfterClose,
+  nextTabId,
+  tabAtIndex,
+  tabHintIndex,
+} from './tabs-model';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
 function toTabEntry(
@@ -55,6 +65,7 @@ export function SessionTabs() {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const previewId = useSessionTabsStore((s) => s.previewId);
+  const draftId = useSessionTabsStore((s) => s.draftId);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const pinTab = useSessionTabsStore((s) => s.pinTab);
   const newSession = useNewChatHotkeyHandler(aui);
@@ -67,8 +78,12 @@ export function SessionTabs() {
   // in that window. aui switches on either id, so clicks pass the tab id.
   const activeTabId = canonicalTabId(mainThreadId, items);
 
-  // Pinned tabs in order; the preview slot renders last (editor-style).
-  const displayIds = previewId === null ? tabIds : [...tabIds, previewId];
+  // Pinned tabs in order, then the peek, then the unsent draft — whichever
+  // session was just created is always the last tab in the strip. Passing no
+  // zones keeps the PIN order, which is what a close resolves its successor
+  // against; the regrouped order below is a display concern.
+  const tabsState = { tabIds, previewId, draftId };
+  const displayIds = displayedTabIds(tabsState, null, activeTabId);
 
   // While split, the two zone tabs regroup ADJACENT (in zone order, at the
   // first member's position) so the strip mirrors the surface — a visual
@@ -76,20 +91,49 @@ export function SessionTabs() {
   const zones = useZonesStore((s) => s.zones);
   const zoneMembers = zones == null ? [] : zones.filter((id) => displayIds.includes(id));
   const grouped = zoneMembers.length === 2;
-  const ordered = grouped
-    ? (() => {
-        const firstAt = displayIds.findIndex((id) => zoneMembers.includes(id));
-        const rest = displayIds.filter((id) => !zoneMembers.includes(id));
-        return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
-      })()
-    : displayIds;
+  // A PARKED pair still renders its container — the two sessions are still a
+  // pair — but the split isn't what you're looking at, so its underline is dark.
+  const splitOnScreen = splitVisible(zones, mainThreadId);
+  const ordered = displayedTabIds(tabsState, zones, activeTabId);
   const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId));
+
+  // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
+  // the stored pin order.
+  const switchTo = (id: string | null) => {
+    if (id != null && id !== activeTabId) aui.threads.switchToThread(id);
+  };
+  useShortcutAction('sessions.tab-by-index', (chordIndex) => switchTo(tabAtIndex(ordered, chordIndex)));
+  useShortcutAction('sessions.tab-next', () => switchTo(nextTabId(ordered, activeTabId, 1)));
+  useShortcutAction('sessions.tab-prev', () => switchTo(nextTabId(ordered, activeTabId, -1)));
+
+  // Holding the chord's modifier paints each pill with the number that reaches
+  // it — read off the same `ordered` the chord resolves against.
+  const hintsRevealed = useIndexHintsStore((s) => s.revealed);
+  const hintOf = (id: string) => (hintsRevealed ? tabHintIndex(ordered, id) : null);
 
   const handleActivate = (id: string, split: boolean) => {
     // ⌘-click: open the split (or retarget its unfocused slot). A tab already
     // visible, and any draft, degrades to a plain focus click.
     if (split && openInSplit(activeTabId, id)) return;
     if (id !== activeTabId) aui.threads.switchToThread(id);
+  };
+
+  // The context-menu twin of ⌘-click. The gesture guard lives in
+  // `canOpenInSplit`, so a menu item is enabled exactly when acting would work.
+  const handleOpenInSplit = (id: string) => {
+    openInSplit(activeTabId, id);
+  };
+
+  // The context-menu twin of ⌘\. Dissolving from a tab's own menu leaves you on
+  // THAT session — the one you pointed at — rather than ⌘\'s "other zone wins",
+  // which has no tab to aim at. A parked pair dissolves without moving focus,
+  // the same rule `handleClose` follows.
+  const handleCloseSplit = (id: string) => {
+    const zonesStore = useZonesStore.getState();
+    if (zonesStore.zones == null) return;
+    const visible = splitVisible(zonesStore.zones, activeTabId);
+    zonesStore.closeSplit();
+    if (visible && id !== activeTabId) aui.threads.switchToThread(id);
   };
 
   const handleClose = (id: string) => {
@@ -113,10 +157,10 @@ export function SessionTabs() {
   };
 
   return (
-    <div data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
+    <div data-tut="session-tabs" data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
       <div
         data-no-drag
-        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
+        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] scroll-fade-x"
       >
         {grouped ? (
           <>
@@ -130,15 +174,26 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
+                  canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                  onOpenInSplit={handleOpenInSplit}
+                  onCloseSplit={handleCloseSplit}
                 />
               ))}
-            {/* The split pair reads as ONE unit: shared underline across both. */}
+            {/* The split pair reads as ONE unit: one underline spanning both,
+                lit on exactly the terms a lone tab's is — the split is ON
+                SCREEN. So the line only ever means "this is live", and a parked
+                pair leaves the strip unmarked rather than claiming focus it
+                doesn't have. Adjacency is what says "these two go together". */}
             <div
               data-testid="session-tabs-zone-group"
-              className="relative flex h-full shrink items-center rounded-t-sm bg-foreground/4 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground"
+              className={cn(
+                'relative flex h-full shrink items-center after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground after:transition-opacity',
+                splitOnScreen ? 'after:opacity-100' : 'after:opacity-0',
+              )}
             >
               {tabs
                 .filter((tab) => zoneMembers.includes(tab.id))
@@ -147,9 +202,13 @@ export function SessionTabs() {
                     key={tab.id}
                     tab={tab}
                     grouped
+                    hintIndex={hintOf(tab.id)}
                     onActivate={handleActivate}
                     onClose={handleClose}
                     onPin={pinTab}
+                    canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                    onOpenInSplit={handleOpenInSplit}
+                    onCloseSplit={handleCloseSplit}
                   />
                 ))}
             </div>
@@ -160,21 +219,36 @@ export function SessionTabs() {
                 <SessionTabPill
                   key={tab.id}
                   tab={tab}
+                  hintIndex={hintOf(tab.id)}
                   onActivate={handleActivate}
                   onClose={handleClose}
                   onPin={pinTab}
+                  canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+                  onOpenInSplit={handleOpenInSplit}
+                  onCloseSplit={handleCloseSplit}
                 />
               ))}
           </>
         ) : (
           tabs.map((tab) => (
-            <SessionTabPill key={tab.id} tab={tab} onActivate={handleActivate} onClose={handleClose} onPin={pinTab} />
+            <SessionTabPill
+              key={tab.id}
+              tab={tab}
+              hintIndex={hintOf(tab.id)}
+              onActivate={handleActivate}
+              onClose={handleClose}
+              onPin={pinTab}
+              canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
+              onOpenInSplit={handleOpenInSplit}
+              onCloseSplit={handleCloseSplit}
+            />
           ))
         )}
       </div>
       <Hint label="New session">
         <Button
           data-testid="session-tabs-new"
+          data-tut="new-session-tab"
           variant="ghost"
           size="icon-xs"
           onClick={newSession}

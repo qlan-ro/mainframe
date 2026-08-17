@@ -76,6 +76,7 @@ fn now_ms() -> i64 {
 
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
+#[derive(Debug)]
 pub struct BackgroundTaskTracker {
     emitter: broadcast::Sender<TaskEvent>,
     by_chat: Arc<DashMap<String, HashMap<String, BackgroundTask>>>,

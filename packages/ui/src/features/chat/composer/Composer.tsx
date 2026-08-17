@@ -23,6 +23,7 @@ import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from '
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
+import { focusOwningTranscript } from './focus-composer';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
@@ -86,13 +87,42 @@ function ComposerInputField({
   placeholder: string;
 }) {
   const triggerAria = useTriggerFieldAria();
+  // Escape leaves the composer and parks focus on the transcript (⌘L brings it
+  // back). The `/` and `@` trigger menu owns Escape while it is open — closing
+  // the menu must not also throw the caret out of the field. No preventDefault
+  // here: the session panel and files panel dismiss themselves on a document-
+  // level Escape listener gated on `!event.defaultPrevented`, and React's
+  // synthetic handler (attached below `document`) would otherwise stand them
+  // down before that listener runs.
+  //
+  // `cancelOnEscape={false}` below turns off aui's OWN document-level Escape
+  // handler (`useEscapeKeydown` in ComposerPrimitive.Input), which calls the
+  // runtime's onCancel whenever `composer.canCancel` is true — and aui's
+  // "cancel" capability is `onCancel !== undefined`, a static flag for
+  // "the app supports cancelling", not `isRunning` (verified against
+  // ExternalStoreThreadRuntimeCore's capabilities.cancel). So it fires on
+  // every idle-chat Escape too: our onCancel calls controller.cancel(), which
+  // optimistically marks the run cancelling; on a chat with nothing to
+  // interrupt the daemon never broadcasts a stop, and the client-side
+  // "Working…" indicator strands running. Escape stays focus-park only; the
+  // Stop button is the one real way to cancel a run.
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
+        return;
+      }
+      onKeyDown(e);
+    },
+    [onKeyDown, triggerAria],
+  );
   return (
     <ComposerPrimitive.Input
       ref={textareaRef}
       data-testid="chat-composer-input"
       data-mf-composer-input
       data-noring
-      onKeyDown={onKeyDown}
+      cancelOnEscape={false}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder}
       rows={1}
       autoFocus
@@ -138,7 +168,6 @@ export function Composer() {
     <ComposerTriggers textareaRef={textareaRef}>
       <ComposerPrimitive.Root
         data-testid="chat-composer"
-        data-tut="composer"
         onSubmit={(e) => {
           // Load-bearing, not boilerplate: aui composes its own onSubmit
           // (which calls composer.send()) with ours via checkForDefaultPrevented,
@@ -146,7 +175,13 @@ export function Composer() {
           e.preventDefault();
           submit();
         }}
-        className="min-w-60 rounded-xl border border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+        // `min-h-0 overflow-y-auto`: the thread footer shrinks this element,
+        // not just its wrapper, when an expanded gate and a tall draft
+        // compete for the same pane (#336) — without `min-h-0` a flex item's
+        // automatic minimum is its content size, so it would overflow the
+        // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
+        // that content rather than letting it paint past the card's border.
+        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-border bg-card shadow-sm transition-colors [scrollbar-width:none] focus-within:border-ring"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"

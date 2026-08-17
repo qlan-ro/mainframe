@@ -67,7 +67,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
-type SettingsTab = 'general' | 'providers' | 'notifications' | 'remote-access' | 'about';
+type SettingsTab = 'general' | 'providers' | 'keybindings' | 'notifications' | 'remote-access' | 'about';
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 async function providerSetting(adapterId: string, key: string): Promise<unknown> {
@@ -141,7 +141,7 @@ test.describe('§settings', () => {
   test('⌘, opens the dialog via the global hotkey', async () => {
     const { page } = app;
     await expect(page.getByTestId('settings-dialog')).toHaveCount(0);
-    await page.keyboard.press('Meta+,');
+    await page.keyboard.press('ControlOrMeta+,');
     await expect(page.getByTestId('settings-dialog')).toBeVisible({ timeout: 5_000 });
     await closeSettings(page);
   });
@@ -153,7 +153,7 @@ test.describe('§settings', () => {
     await expect(page.getByTestId('settings-dialog')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('all five tabs render their pane; there is no keybindings tab', async () => {
+  test('all six tabs render their pane, including Keybindings', async () => {
     const { page } = app;
     // Open the dialog ONCE, then navigate tabs in place. The previous version
     // called `openTab()` (which itself calls `openSettings()`) on every loop
@@ -164,12 +164,11 @@ test.describe('§settings', () => {
     // calls `openTab`/`openSettings` exactly once per test, which is why this was
     // the only one affected.
     await openSettings(page);
-    const tabs: SettingsTab[] = ['general', 'providers', 'notifications', 'remote-access', 'about'];
+    const tabs: SettingsTab[] = ['general', 'providers', 'keybindings', 'notifications', 'remote-access', 'about'];
     for (const tab of tabs) {
       if (tab !== 'general') await page.getByTestId(`settings-nav-${tab}`).click();
       await expect(page.getByTestId(`settings-pane-${tab}`)).toBeVisible({ timeout: 10_000 });
     }
-    await expect(page.getByTestId('settings-nav-keybindings')).toHaveCount(0);
     await closeSettings(page);
   });
 

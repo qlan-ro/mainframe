@@ -10,6 +10,7 @@ use mainframe_types::adapter::{AdapterProcess, AdapterProcessStatus, SessionOpti
 use crate::dispatch::emit_event;
 use crate::fixture::{EventDirection, RecordedEvent, ReplayState};
 use crate::history::recorded_session_id;
+use crate::task_bridge::TaskBridge;
 
 const MAX_DELAY_MS: u64 = 120;
 
@@ -75,6 +76,9 @@ enum ReplaySource {
 
 pub struct ReplaySession {
     pub(crate) id: String,
+    /// Reports replayed subagent / background-bash work to the daemon's tracker.
+    /// `None` outside the daemon (unit tests, and any caller that wires no tracker).
+    pub(crate) task_bridge: Option<Arc<TaskBridge>>,
     pub(crate) project_path: String,
     pub(crate) spawned: AtomicBool,
     pub(crate) sink: Arc<Mutex<Option<Arc<dyn SessionSink>>>>,
@@ -86,6 +90,7 @@ impl ReplaySession {
     pub fn new(options: SessionOptions, events: Vec<RecordedEvent>) -> Self {
         Self {
             id: options.mainframe_chat_id,
+            task_bridge: None,
             project_path: options.project_path,
             spawned: AtomicBool::new(false),
             sink: Arc::new(Mutex::new(None)),
@@ -95,6 +100,13 @@ impl ReplaySession {
             })),
             source: tokio::sync::Mutex::new(ReplaySource::Ready),
         }
+    }
+
+    /// Attach the background-task bridge. Builder-style so the three constructors
+    /// keep their signatures.
+    pub(crate) fn with_bridge(mut self, bridge: Option<Arc<TaskBridge>>) -> Self {
+        self.task_bridge = bridge;
+        self
     }
 
     pub(crate) fn from_fixture(
@@ -168,6 +180,19 @@ impl ReplaySession {
 
     fn take_interaction(&self, expected: &str) -> (Vec<RecordedEvent>, i64, Option<String>) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // A permission answer past the end of the recording is a no-op, not a
+        // desync: the real CLI drops a `control_response` whose request it has
+        // already resolved, and recordings routinely stop at the last gate they
+        // opened (the answer to it was never recorded). Failing the whole run on
+        // one instead cost the v2.0.0 release a red e2e gate. Same tolerance the
+        // in-recording duplicate below gets — plan-approval.0.ndjson carries two
+        // identical `respondToPermission` markers because the daemon really does
+        // forward an ExitPlanMode allow twice (permission_handler forwards, then
+        // the plan-mode escalation forwards the same response again).
+        if expected == "respondToPermission" && state.replay.is_exhausted() {
+            tracing::debug!("mock-cli: ignoring a respondToPermission past the end of the fixture");
+            return (Vec::new(), state.last_delay, None);
+        }
         let mut prefix = if expected == "interrupt" {
             if !state.replay.peek_input("interrupt") {
                 return (Vec::new(), state.last_delay, None);
@@ -211,6 +236,8 @@ impl ReplaySession {
             return;
         };
         let delay_ceiling = max_delay_ms();
+        let bridge = self.task_bridge.clone();
+        let chat_id = self.id.clone();
         tokio::spawn(async move {
             let started_at = tokio::time::Instant::now();
             for event in outputs {
@@ -219,6 +246,11 @@ impl ReplaySession {
                 );
                 if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
                     tokio::time::sleep(remaining).await;
+                }
+                // Start/end the task BEFORE the message lands, so the Activity
+                // panel and the transcript card appear on the same frame.
+                if let Some(bridge) = bridge.as_ref() {
+                    bridge.observe(&chat_id, &event);
                 }
                 emit_event(sink.clone(), event);
             }
@@ -271,6 +303,35 @@ async fn apply_file_effects(project_path: &str, event: &RecordedEvent) -> std::i
 mod tests {
     use super::*;
     use mainframe_adapter_api::AdapterSession;
+
+    fn exhausted_session() -> ReplaySession {
+        let options = SessionOptions {
+            project_path: "/tmp/project".to_string(),
+            chat_id: None,
+            mainframe_chat_id: "chat-1".to_string(),
+        };
+        ReplaySession::new(options, Vec::new())
+    }
+
+    #[test]
+    fn a_permission_answer_past_the_end_of_the_fixture_is_ignored() {
+        let session = exhausted_session();
+
+        let (batch, _, error) = session.take_interaction("respondToPermission");
+
+        assert!(batch.is_empty());
+        assert_eq!(error, None);
+    }
+
+    #[test]
+    fn a_message_past_the_end_of_the_fixture_still_reports_a_desync() {
+        let session = exhausted_session();
+
+        let (_, _, error) = session.take_interaction("sendMessage");
+
+        let message = error.expect("an exhausted fixture must still fail a sendMessage");
+        assert!(message.contains("fixture exhausted"), "{message}");
+    }
 
     #[tokio::test]
     async fn missing_fixture_fails_spawn_with_path() {

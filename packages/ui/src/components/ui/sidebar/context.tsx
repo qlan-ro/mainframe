@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 
 export const SIDEBAR_WIDTH = '16rem';
 export const SIDEBAR_WIDTH_ICON = '3rem';
-export const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 /** Below the floor the two-line rows truncate to nothing; above the ceiling the panel stops being chrome. */
 export const SIDEBAR_MIN_WIDTH = 208;
@@ -47,7 +46,8 @@ interface SidebarProviderProps extends React.ComponentProps<'div'> {
 }
 
 /**
- * Owns open/collapsed state and the ⌘B shortcut.
+ * Owns open/collapsed state. ⌘B lives in the shortcut registry, not here — a
+ * `components/ui/` primitive stays passthrough.
  *
  * Two deviations from upstream, both because this is a desktop app: there is no
  * mobile Sheet branch, and state is not persisted to a `sidebar_state` cookie —
@@ -89,17 +89,6 @@ export function SidebarProvider({
   );
 
   const toggleSidebar = React.useCallback(() => setOpen(!open), [open, setOpen]);
-
-  React.useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== SIDEBAR_KEYBOARD_SHORTCUT) return;
-      if (!event.metaKey && !event.ctrlKey) return;
-      event.preventDefault();
-      toggleSidebar();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggleSidebar]);
 
   const value = React.useMemo<SidebarContextValue>(
     () => ({

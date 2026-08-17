@@ -1,6 +1,8 @@
 import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTheme } from '@/store/theme';
+import { useLayoutStore } from '@/store/layout';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 
 const mockEmit = vi.fn();
@@ -11,6 +13,10 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[])
 vi.mock('@/features/session-tabs/SessionTabs', () => ({
   SessionTabs: () => <div data-testid="mock-session-tabs" />,
 }));
+
+// The search chip renders off the live platform; pin macOS so the glyph
+// assertion below reads ⌘K rather than jsdom's Ctrl+K.
+vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
 
 import { MainToolbar } from '../MainToolbar';
 import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
@@ -28,7 +34,11 @@ const renderToolbar = (overrides: Partial<ToolbarProps> = {}) =>
 beforeEach(() => {
   localStorage.clear();
   useTheme.getState().setMode('light');
-  useWorkspaceFilesPanel.setState({ open: false });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+  });
+  useActiveBasesStore.setState({ bases: {}, scopeKey: null });
+  useWorkspaceFilesPanel.setState({ openByScope: {} });
   useSetupAdvisor.setState({ open: false });
   mockEmit.mockReset();
 });
@@ -69,12 +79,12 @@ describe('MainToolbar — search button', () => {
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-search-palette' });
   });
 
-  it('renders the ⌘O keyboard hint chip inside the search button', () => {
+  it('renders the ⌘K keyboard hint chip inside the search button', () => {
     renderToolbar();
 
     const hint = screen.getByTestId('main-toolbar-search-hint');
     expect(screen.getByTestId('main-toolbar-search')).toContainElement(hint);
-    expect(hint.textContent).toBe('⌘O');
+    expect(hint.textContent).toBe('⌘K');
   });
 });
 
@@ -87,6 +97,16 @@ describe('MainToolbar — theme toggle', () => {
     fireEvent.click(screen.getByTestId('main-toolbar-theme'));
 
     expect(useTheme.getState().mode).toBe('dark');
+  });
+
+  it('uses the resolved System appearance for its icon and fixed override', () => {
+    useTheme.setState({ mode: 'system', resolvedMode: 'dark' });
+    renderToolbar();
+
+    expect(screen.getByTestId('main-toolbar-theme').querySelector('.lucide-sun')).not.toBeNull();
+    fireEvent.click(screen.getByTestId('main-toolbar-theme'));
+
+    expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'light' });
   });
 });
 
@@ -109,5 +129,49 @@ describe('MainToolbar — Setup Advisor button', () => {
     renderToolbar();
 
     expect(screen.queryByTestId('automation-recommender-open')).toBeNull();
+  });
+});
+
+describe('MainToolbar — trailing controls shift for the docked Files sidebar', () => {
+  /** The right control group is the parent of the theme button. */
+  function trailingGroup() {
+    return screen.getByTestId('main-toolbar-theme').parentElement as HTMLElement;
+  }
+
+  it('does not shift when the Files sidebar is closed', () => {
+    renderToolbar();
+
+    expect(trailingGroup().className).not.toContain('mr-2');
+  });
+
+  it('does not shift when the workspace surface is not lit', () => {
+    useActiveBasesStore.setState({ scopeKey: 'proj-1:/repo' });
+    useWorkspaceFilesPanel.getState().setOpen(true);
+    // layout.top stays ['chat'] — workspace is not present at all.
+    renderToolbar();
+
+    expect(trailingGroup().className).not.toContain('mr-2');
+  });
+
+  it('shifts left when the Files sidebar is open and workspace is the sole/rightmost surface', () => {
+    useActiveBasesStore.setState({ scopeKey: 'proj-1:/repo' });
+    useWorkspaceFilesPanel.getState().setOpen(true);
+    useLayoutStore.setState({
+      layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    });
+    renderToolbar();
+
+    expect(trailingGroup().className).toContain('mr-2');
+  });
+
+  it('does not shift when the workspace is the LEFT column of a split (sidebar docks mid-window)', () => {
+    useActiveBasesStore.setState({ scopeKey: 'proj-1:/repo' });
+    useWorkspaceFilesPanel.getState().setOpen(true);
+    useLayoutStore.setState({
+      layout: { top: ['workspace', 'chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    });
+    renderToolbar();
+
+    expect(trailingGroup().className).not.toContain('mr-2');
   });
 });

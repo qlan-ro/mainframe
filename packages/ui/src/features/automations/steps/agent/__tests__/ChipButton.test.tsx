@@ -10,7 +10,7 @@ import { Sparkles } from 'lucide-react';
 import { ChipButton } from '../ChipButton';
 
 describe('ChipButton', () => {
-  it('renders the value as its only visible text, with the descriptive label on title + aria-label', () => {
+  it('renders the value as its only visible text, with the descriptive label on aria-label', () => {
     render(
       <ChipButton icon={Sparkles} label="Model: Claude · Sonnet 5" testId="agent-a-model">
         Sonnet 5
@@ -20,7 +20,7 @@ describe('ChipButton', () => {
     expect(chip).toHaveTextContent('Sonnet 5');
     expect(chip).not.toHaveTextContent('Model:');
     expect(chip).toHaveAttribute('aria-label', 'Model: Claude · Sonnet 5');
-    expect(chip).toHaveAttribute('title', 'Model: Claude · Sonnet 5');
+    expect(chip).not.toHaveAttribute('title');
   });
 
   it('carries the open-state highlight classes so the chip lights up while its menu is up', () => {
@@ -45,6 +45,23 @@ describe('ChipButton', () => {
 
     rerender(
       <ChipButton icon={Sparkles} label="Permission" testId="agent-a-permission" destructive>
+        Unattended
+      </ChipButton>,
+    );
+    expect(screen.getByTestId('agent-a-permission').className).toContain('text-destructive');
+  });
+
+  it('renders caution as a warning tint, and lets destructive outrank it', () => {
+    const { rerender } = render(
+      <ChipButton icon={Sparkles} label="Permission" testId="agent-a-permission" caution>
+        Auto
+      </ChipButton>,
+    );
+    expect(screen.getByTestId('agent-a-permission').className).toContain('text-warning');
+    expect(screen.getByTestId('agent-a-permission').className).not.toContain('text-destructive');
+
+    rerender(
+      <ChipButton icon={Sparkles} label="Permission" testId="agent-a-permission" caution destructive>
         Unattended
       </ChipButton>,
     );

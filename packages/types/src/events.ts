@@ -79,6 +79,8 @@ export type DaemonEvent =
       adapterId: string;
       models: import('./adapter.js').AdapterModel[];
       modelsRevision: number;
+      /** The probe's install verdict. Optional only for daemons older than the field. */
+      installed?: boolean;
     }
   | {
       type: 'provider.quota.updated';

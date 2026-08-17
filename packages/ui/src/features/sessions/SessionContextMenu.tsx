@@ -16,6 +16,8 @@ import {
 
 interface SessionContextMenuProps {
   pinned: boolean;
+  /** The row suppresses its hover card while the menu is up. */
+  onOpenChange?: (open: boolean) => void;
   onPin: () => void;
   onUnpin: () => void;
   onRename: () => void;
@@ -28,6 +30,7 @@ interface SessionContextMenuProps {
 
 export function SessionContextMenu({
   pinned,
+  onOpenChange,
   onPin,
   onUnpin,
   onRename,
@@ -42,7 +45,7 @@ export function SessionContextMenu({
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-44">
         <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>

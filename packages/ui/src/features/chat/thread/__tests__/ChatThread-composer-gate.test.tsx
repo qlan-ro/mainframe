@@ -48,7 +48,6 @@ vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../find/FindBar', () => ({ FindBar: () => null }));
-vi.mock('../../find/use-find-hotkey', () => ({ useFindHotkey: () => {} }));
 vi.mock('../../tools/register-cards', () => ({}));
 
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';

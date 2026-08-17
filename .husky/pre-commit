@@ -1,1 +1,9 @@
-npx lint-staged
+# --no-stash: lint-staged's backup step runs `git stash create`, which git
+# unconditionally refuses on any path traversing a symlinked directory —
+# .claude/skills/* are now symlinks into .agents/skills/*, so any commit
+# touching a skill's tracked files (e.g. changelog-watch/state.json) would
+# otherwise fail pre-commit with "beyond a symbolic link" before a single
+# task runs. Tasks (eslint/prettier/rustfmt) still run and still revert on
+# failure (--no-revert is not set); only the extra stash-based safety net
+# is skipped.
+npx lint-staged --no-stash

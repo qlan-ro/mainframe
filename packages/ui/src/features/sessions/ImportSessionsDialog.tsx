@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { ProjectAvatar } from './ProjectAvatar';
 import { ImportSessionList } from './ImportSessionList';
@@ -35,18 +36,18 @@ function ProjectPicker({ projects, filterProjectId, onSelect }: ProjectPickerPro
   return (
     <div className="flex flex-col gap-0.5">
       {sorted.map((project) => (
-        <Button
-          key={project.id}
-          data-testid={`sessions-import-project-${project.id}`}
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start font-normal"
-          title={project.path}
-          onClick={() => onSelect(project.id)}
-        >
-          <ProjectAvatar name={project.name} color={projectColor(project.id)} />
-          <span className="min-w-0 truncate">{project.name}</span>
-        </Button>
+        <Hint key={project.id} label={project.path} side="right">
+          <Button
+            data-testid={`sessions-import-project-${project.id}`}
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start font-normal"
+            onClick={() => onSelect(project.id)}
+          >
+            <ProjectAvatar name={project.name} color={projectColor(project.id)} />
+            <span className="min-w-0 truncate">{project.name}</span>
+          </Button>
+        </Hint>
       ))}
     </div>
   );

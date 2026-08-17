@@ -160,11 +160,11 @@ test.describe('§window-states First-run tour', () => {
     // tests need the first-run tour to actually arm, and its addInitScript re-fires
     // on every reload, so a plain removeItem+reload here could never win.
     app = await launchTauriApp({ suppressTour: false });
-    // One project (zero chats) — useFirstRunTour only counts REAL sessions, so
-    // this seeds the empty-sessions workspace that arms the tour on reload. The
-    // boot draft stays PROJECTLESS there (the welcome screen owns the project
-    // pick), so the composer — and with it the `composer`/`model` tour anchors —
-    // is deliberately absent; see the walk test for what that means for the tour.
+    // One project, zero chats — exactly the state useFirstRunTour arms in. Both
+    // halves matter: no REAL sessions (drafts excluded) makes it a first run,
+    // and at least one project is what puts a chat surface on screen at all. On
+    // a projectless install the app shows its first-run hero instead, the
+    // session rail never mounts, and the tour deliberately waits.
     project = await createTauriProject(app.page);
   });
 
@@ -173,10 +173,9 @@ test.describe('§window-states First-run tour', () => {
     await closeTauriApp(app);
   });
 
-  // The v2 sidebar rebuild briefly dropped `data-tut="sessions"` from
-  // SessionsNewButton, which made STEPS[0] unanchorable and let `remeasure`'s
-  // auto-skip (built for structurally-absent steps like `model`) swallow "Start a
-  // session". The anchor is restored; the walk below covers the step order.
+  // The v2 sidebar rebuild briefly dropped the sessions anchor from
+  // SessionsNewButton, which made that step unanchorable and let `remeasure`'s
+  // auto-skip swallow it. Anchors are asserted step by step in the walk below.
   test('auto-opens ~1.5s after settle on an empty-sessions workspace', async () => {
     const { page } = app;
     // use-first-run-tour.ts SETTLE_MS=1500 — generous timeout for the settle
@@ -189,58 +188,72 @@ test.describe('§window-states First-run tour', () => {
     await expect(page.getByTestId('tour-skip-btn')).toBeVisible();
   });
 
-  // Steps 2 ("composer") and 3 ("model") legitimately have no anchor on a
-  // genuinely empty (zero-session) workspace: the boot draft has no project, so
-  // ChatThread withholds the composer entirely — and with it `data-tut="composer"`
-  // and the `composer-model-select` (`data-tut="model"`) inside its toolbar.
-  // `TutorialOverlay.remeasure` detects an absent anchor after its ~30ms settle
-  // window and skips the step in the current direction of travel, so a first-time
-  // user never sees a label card pointing at nothing. Only steps 1 (sessions) and
-  // 4 (workspace) are reachable in this state; the skip itself is unit-covered
-  // (TutorialOverlay.test.tsx).
-  test('Next/Back walk the reachable steps, auto-skipping the two composer-anchored steps; Done completes the tour', async () => {
+  // Nine steps, every one of them anchored — that is the whole point of gating
+  // the tour on a project existing. The old tour hard-wired two of its four
+  // steps to composer anchors this workspace never mounts, counted "of 4"
+  // anyway, and hopped 1 → 4. The label now counts the resolved plan, so a step
+  // it cannot point at is never counted (unit-covered in steps.test.ts).
+  const STEP_TITLES = [
+    'Add a project',
+    'Start a session',
+    'Sessions and their tabs',
+    'The session rail',
+    'The workspace',
+    'Search anything',
+    'The Kanban board',
+    'Automations',
+    'Which machine you’re on',
+  ];
+
+  test('Next/Back walk all nine steps with no gaps; Done completes the tour', async () => {
     const { page } = app;
     const label = page.getByTestId('tour-label-card');
     const spotlight = page.getByTestId('tour-spotlight');
 
-    // The premise of the skips below: no composer on an unresolved draft.
-    await expect(page.getByTestId('chat-composer-input')).toHaveCount(0);
-
-    // Step 1/4 — sessions. No Back button at the first step.
-    await expect(label).toContainText('Start a session');
+    // Step 1 — no Back button at the start.
+    await expect(label).toContainText('Step 1 of 9');
+    await expect(label).toContainText(STEP_TITLES[0]!);
     await expect(page.getByTestId('tour-back-btn')).toHaveCount(0);
     await expect(spotlight).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tour-next-btn')).toHaveText('Next');
 
-    // Next auto-skips the anchorless steps 2 (composer) and 3 (model) and lands
-    // directly on step 4 (workspace) — each settle window is ~30ms, so a short
-    // poll covers both hops.
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
-    await expect(label).toContainText('Open the workspace');
-    await expect(spotlight).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
-    await expect(page.getByTestId('tour-back-btn')).toBeVisible();
+    // Forward through every remaining step; each one must land on its own
+    // title AND have a measured spotlight — no silent hops, no card pointing
+    // at nothing.
+    for (let i = 1; i < STEP_TITLES.length; i++) {
+      await page.getByTestId('tour-next-btn').click();
+      await expect(label).toContainText(`Step ${i + 1} of 9`, { timeout: 5_000 });
+      await expect(label).toContainText(STEP_TITLES[i]!);
+      await expect(spotlight).toBeVisible({ timeout: 5_000 });
+    }
 
-    // Back from step 4 skips the same two steps in the backward direction,
-    // landing back on step 1 — where there is no Back button again.
+    // "Start a session" is the multi-location step: three ways in, three rings,
+    // but only the primary cuts the scrim. Walk back to it and check.
+    for (let i = STEP_TITLES.length - 2; i >= 1; i--) {
+      await page.getByTestId('tour-back-btn').click();
+      await expect(label).toContainText(`Step ${i + 1} of 9`, { timeout: 5_000 });
+    }
+    await expect(label).toContainText(STEP_TITLES[1]!);
+    await expect(page.getByTestId('tour-spotlight-also-0')).toBeVisible();
+    await expect(page.getByTestId('tour-spotlight-also-1')).toBeVisible();
+
+    // Back once more reaches step 1, where Back disappears again.
     await page.getByTestId('tour-back-btn').click();
-    await expect(label).toContainText('Step 1 of 4', { timeout: 5_000 });
-    await expect(label).toContainText('Start a session');
+    await expect(label).toContainText('Step 1 of 9', { timeout: 5_000 });
     await expect(page.getByTestId('tour-back-btn')).toHaveCount(0);
 
-    // Forward again lands back on step 4 (last step).
-    await page.getByTestId('tour-next-btn').click();
-    await expect(label).toContainText('Step 4 of 4', { timeout: 5_000 });
+    // Step dots — one per resolved step, and no tenth.
+    for (let i = 0; i < STEP_TITLES.length; i++) {
+      await expect(page.getByTestId(`tour-step-dot-${i}`)).toHaveCount(1);
+    }
+    await expect(page.getByTestId(`tour-step-dot-${STEP_TITLES.length}`)).toHaveCount(0);
 
-    // Step dots — 4 total, all present at the last step (STEPS.length is
-    // unaffected by the auto-skip; it just never lingers on step 3).
-    await expect(page.getByTestId('tour-step-dot-0')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-1')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-2')).toHaveCount(1);
-    await expect(page.getByTestId('tour-step-dot-3')).toHaveCount(1);
-
-    // Done completes the tour.
+    // Forward to the last step, where the button becomes Done and ends the tour.
+    for (let i = 1; i < STEP_TITLES.length; i++) {
+      await page.getByTestId('tour-next-btn').click();
+      await expect(label).toContainText(`Step ${i + 1} of 9`, { timeout: 5_000 });
+    }
+    await expect(page.getByTestId('tour-next-btn')).toHaveText('Done');
     await page.getByTestId('tour-next-btn').click();
     await expect(page.getByTestId('tour-overlay')).toHaveCount(0, { timeout: 5_000 });
   });

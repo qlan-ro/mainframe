@@ -172,19 +172,40 @@ test.describe('§plan approval', () => {
     await page.locator('[data-testid="chat-permission-always-allow"]').click();
     await waitForIdle(page, 90_000);
   });
+});
 
-  // TODO(app-tauri): mid-test createTauriChat navigation race — after the first test completes,
-  // calling createTauriChat() mid-test (not in beforeAll) causes the message to be delivered to
-  // the previously-active chat instead of the new one. Root cause: after createTauriChat clicks
-  // the new chat row and enables plan mode (firing chat.updated → runtime.threads.reload()), a
-  // navigation event from the session list router reverts the active thread to the first chat
-  // before sendMessage is called. Reproduces in the screenshot: "Add multiply..." message appears
-  // inline in the "Add Greet Function" thread. Requires a dedicated daemon+describe per test or
-  // a useSessionListRouter fix to avoid reverting active thread on reload.
+// ─── §7b Plan revision ────────────────────────────────────────────────────────
+//
+// A dedicated daemon + recording key, for the reason spelled out in tool-cards.spec.ts's
+// §tool-cards — Plan revision: fixtures are handed out by a per-daemon counter, so a test
+// that needs the second recording of a key is only correct while an earlier test in the
+// same describe has consumed the first — which a Playwright retry (failed test only) does
+// not do. That also retires the mid-test `createTauriChat` navigation race this test used
+// to carry (the row click + plan-mode toggle fire chat.updated → threads.reload(), which
+// could revert the active thread and deliver the message to the previous chat).
+
+test.describe('§plan revision', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'plan-revision' });
+    project = await createTauriProject(app.page, {
+      claudeMd:
+        '# E2E Test Project\n\nThis is an automated test environment.\n' +
+        'In plan mode, proceed with reasonable assumptions. Do not use AskUserQuestion. ' +
+        'Call ExitPlanMode immediately after reading the relevant files.\n',
+    });
+    await createTauriChat(app.page, project.projectId, 'plan');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
   test('plan revision: keep-planning opens feedback input, send-feedback triggers a new plan gate', async () => {
     const { page } = app;
-    // Uses plan-approval.1.ndjson (second session = index 1 within this daemon instance).
-    await createTauriChat(app.page, project.projectId, 'plan');
     await sendMessage(page, 'Add `export function multiply(a: number, b: number) { return a * b; }` to utils.ts');
     await page.locator('[data-testid="chat-plan-gate"]').waitFor({ timeout: 45_000 });
 

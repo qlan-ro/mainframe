@@ -5,12 +5,14 @@
 //! lazy thread/start vs thread/resume, turn/start config, and the loadHistory
 //! temp-app-server + thread/read recursion are copied from the TS.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 
 use mainframe_adapter_api::{
@@ -29,8 +31,11 @@ use serde_json::{Map, Value, json};
 
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
+use crate::history_convert::convert_thread_items;
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
+use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
+use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
@@ -102,6 +107,15 @@ impl Default for PendingConfig {
     }
 }
 
+/// Test seam for `load_scan_records`: redirects the Codex state DB and the
+/// rollout containment root, neither of which the production entry points
+/// (`lookup_agent_metadata`, `read_rollout_items(.., None)`) can override.
+#[derive(Debug, Clone, Default)]
+pub struct CodexScanDeps {
+    pub registry: ThreadRegistryDeps,
+    pub rollout: RolloutReaderDeps,
+}
+
 pub struct CodexSession {
     id: String,
     project_path: String,
@@ -118,6 +132,9 @@ pub struct CodexSession {
     /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
     /// `enrichPath` env mutation).
     resolved_path: ResolvedPath,
+    /// Test seam only — `None` in production, which routes `load_scan_records`
+    /// through the real `~/.codex/state_5.sqlite` and `~/.codex/sessions`.
+    scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
 }
 
 impl CodexSession {
@@ -125,7 +142,13 @@ impl CodexSession {
         options: SessionOptions,
         on_exit: Option<Box<dyn FnOnce() + Send>>,
         resolved_path: ResolvedPath,
+        background_tasks: Arc<BackgroundTaskTracker>,
     ) -> Self {
+        let state = CodexSessionState {
+            mainframe_chat_id: options.mainframe_chat_id.clone(),
+            background_tasks: Some(background_tasks),
+            ..CodexSessionState::default()
+        };
         Self {
             id: nanoid!(),
             project_path: options.project_path,
@@ -134,12 +157,19 @@ impl CodexSession {
             client: Arc::new(Mutex::new(None)),
             approval_handler: Arc::new(Mutex::new(None)),
             sink: Arc::new(Mutex::new(null_sink())),
-            state: Arc::new(Mutex::new(CodexSessionState::default())),
+            state: Arc::new(Mutex::new(state)),
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
             resolved_path,
+            scan_deps: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Test-only override for `load_scan_records`'s registry DB and rollout
+    /// containment root.
+    pub fn set_scan_deps(&self, deps: CodexScanDeps) {
+        *self.scan_deps.lock().unwrap_or_else(|e| e.into_inner()) = Some(deps);
     }
 
     /// Set the one-shot on-exit callback (used by `CodexAdapter::create_session` to
@@ -161,11 +191,7 @@ impl CodexSession {
     }
 
     fn map_permission_mode(&self, mode: ExecutionMode) -> (String, String) {
-        if mode == ExecutionMode::Yolo {
-            ("never".to_string(), "danger-full-access".to_string())
-        } else {
-            ("on-request".to_string(), "workspace-write".to_string())
-        }
+        permission_mode_policy(mode)
     }
 
     fn map_sandbox_policy(&self, sandbox: &str) -> Value {
@@ -246,6 +272,25 @@ impl CodexSession {
     }
 }
 
+/// Codex has no CLI-native `auto` mode, so it coerces to the same
+/// (`on-request`, `workspace-write`) pair as Interactive rather than falling
+/// through to the danger pair meant for Yolo. A free function so the mapping
+/// is unit-testable without constructing a `CodexSession`.
+fn permission_mode_policy(mode: ExecutionMode) -> (String, String) {
+    match mode {
+        ExecutionMode::Yolo => ("never".to_string(), "danger-full-access".to_string()),
+        ExecutionMode::Default | ExecutionMode::AcceptEdits => {
+            ("on-request".to_string(), "workspace-write".to_string())
+        }
+        ExecutionMode::Auto => {
+            tracing::warn!(
+                "chat is set to the Claude-only `auto` permission mode; Codex runs it as Interactive"
+            );
+            ("on-request".to_string(), "workspace-write".to_string())
+        }
+    }
+}
+
 pub(crate) fn de<T: DeserializeOwned>(v: Value) -> Result<T, AdapterError> {
     serde_json::from_value(v).map_err(|e| AdapterError::Message(e.to_string()))
 }
@@ -314,6 +359,31 @@ pub(crate) async fn spawn_temp_app_server(
         .map_err(|e| AdapterError::Message(e.0))?;
     client.notify("initialized", None);
     Ok(client)
+}
+
+/// The rollout half of `CodexSession::load_scan_records`: looks up the
+/// thread's rollout path in the registry DB, re-derives its
+/// `commandExecution`/`fileChange`/`mcpToolCall` items, and converts them to
+/// canonical `ChatMessage`s. Returns `None` when there is no registry row, no
+/// rollout path, or the rollout yields no items — the caller falls back to
+/// `load_history` in that case.
+async fn rollout_scan_records(
+    thread_id: &str,
+    deps: Option<&CodexScanDeps>,
+) -> Option<Vec<ChatMessage>> {
+    let thread_ids = [thread_id.to_string()];
+    let meta = lookup_agent_metadata_with(&thread_ids, deps.map(|d| &d.registry));
+    let rollout_path = meta.get(thread_id)?.rollout_path.clone()?;
+    let items = read_rollout_items(&rollout_path, Some(thread_id), deps.map(|d| &d.rollout)).await;
+    if items.is_empty() {
+        return None;
+    }
+    Some(convert_thread_items(
+        &items,
+        thread_id,
+        &HashMap::new(),
+        &HashMap::new(),
+    ))
 }
 
 impl AdapterSession for CodexSession {
@@ -739,6 +809,35 @@ impl AdapterSession for CodexSession {
         })
     }
 
+    /// PR-detection scan source (todo #339): `thread/read` never returns
+    /// `commandExecution` items on codex-cli 0.147.0, so `load_history`'s
+    /// output has nothing for the PR scan to see. Read the rollout JSONL
+    /// instead — offline, no app-server spawn — and fall back to
+    /// `load_history` only if there is no registry row or no rollout items.
+    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        Box::pin(async move {
+            let Some(thread_id) = self.resume_thread_id.clone() else {
+                return Ok(Vec::new());
+            };
+            let deps = self
+                .scan_deps
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            match rollout_scan_records(&thread_id, deps.as_ref()).await {
+                Some(records) => Ok(records),
+                None => {
+                    tracing::debug!(
+                        module = "codex:session",
+                        thread_id,
+                        "no rollout for PR scan; falling back to thread/read"
+                    );
+                    self.load_history().await
+                }
+            }
+        })
+    }
+
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
@@ -841,6 +940,20 @@ mod tests {
             .and_then(|(_, v)| v)
             .map(|v| v.to_string_lossy().into_owned());
         assert_eq!(path.as_deref(), Some("/opt/homebrew/bin:/usr/bin"));
+    }
+
+    /// Codex has no `auto` mode of its own; a chat carrying it (spawned on
+    /// Claude, then switched to a Codex step) must coerce to the same policy
+    /// as Interactive rather than falling through to the danger pair.
+    #[test]
+    fn permission_mode_policy_coerces_auto_to_interactive() {
+        let interactive = ("on-request".to_string(), "workspace-write".to_string());
+        assert_eq!(permission_mode_policy(ExecutionMode::Default), interactive);
+        assert_eq!(permission_mode_policy(ExecutionMode::Auto), interactive);
+        assert_eq!(
+            permission_mode_policy(ExecutionMode::Yolo),
+            ("never".to_string(), "danger-full-access".to_string())
+        );
     }
 }
 

@@ -130,7 +130,7 @@ export function CmDiffEditor({
   extraExtensionsRef.current = extraExtensions;
 
   // Drives both panes' theme compartment dark flag; re-renders on a mode flip.
-  const mode = useTheme((s) => s.mode);
+  const resolvedMode = useTheme((s) => s.resolvedMode);
 
   // Per-pane compartments — one set for a (original), one for b (modified).
   // Each must be a separate instance: sharing Compartments across EditorViews
@@ -148,7 +148,7 @@ export function CmDiffEditor({
     const langExt = resolveLanguage(language);
     const baseExts = buildBaseExtensions();
     // Initial dark flag from the store (kept in sync by the effect below).
-    const themeExt = makeWarmTheme(useTheme.getState().mode === 'dark');
+    const themeExt = makeWarmTheme(useTheme.getState().resolvedMode === 'dark');
 
     // Click handler for the modified (b) pane — installed only when onLineSelect
     // is provided. Uses EditorView.domEventHandlers so it is additive and does
@@ -277,12 +277,12 @@ export function CmDiffEditor({
   useEffect(() => {
     const mv = mergeViewRef.current;
     if (!mv) return;
-    const themeExt = makeWarmTheme(mode === 'dark');
+    const themeExt = makeWarmTheme(resolvedMode === 'dark');
     const { theme: aTheme } = aCompartmentsRef.current;
     const { theme: bTheme } = bCompartmentsRef.current;
     mv.a.dispatch({ effects: aTheme.reconfigure(themeExt) });
     mv.b.dispatch({ effects: bTheme.reconfigure(themeExt) });
-  }, [mode]);
+  }, [resolvedMode]);
 
   // No `overflow-auto` here: `.cm-mergeView` (sized above) is the intended
   // scroll container. A second scrollable ancestor around it is exactly the

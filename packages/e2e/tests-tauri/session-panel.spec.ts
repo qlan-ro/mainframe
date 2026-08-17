@@ -63,9 +63,12 @@
  *     the empty-state row + the Manage link are asserted instead, the same way
  *     the memory-file sub-group's absence is. Seeding `.claude/skills` no longer
  *     affects this panel — `listSkills` feeds the Setup Advisor, not the panel.
- *   - The mock adapter emits NO `background_task.*` events (no recording carries
- *     one either — grepped), so Background Activity's running state is not
- *     reachable. Empty-state + rail affordance is the honest coverage.
+ *   - The mock adapter derives `background_task.*` events from replayed tool_use /
+ *     tool_result blocks (todo #327's `task_bridge.rs`) rather than emitting them
+ *     itself, so most recordings still carry none and Background Activity reads
+ *     empty for them. `task-subagent.0` is the one exception (below) — its Task
+ *     tool_use resolves only on a second turn, giving Background Activity's
+ *     running state a real, reachable fixture.
  * The two adapter-independent seeds survive: `POST /api/chats/:id/mentions` and
  * `POST /api/chats/:id/attachments` write straight to the daemon.
  *
@@ -114,7 +117,10 @@
  *   session-panel-plan-progress   — the progress track; its fill carries style="width: N%"
  *   session-panel-plan-step-<i>   — one plan step, keyed by position
  *   session-panel-activity-empty  — "Nothing running"
- *   session-panel-task-<id> / session-panel-workflow-<runKey> — live rows (unreachable, above)
+ *   session-panel-task-<id> / session-panel-workflow-<runKey> — live rows; the
+ *                                   `agent`-kind row is covered by the task-subagent
+ *                                   describe below, `workflow` stays unreachable
+ *                                   (out of scope — see the ground-truth note)
  *   session-panel-launch-row-<name>   — a launch config row (whole row acts)
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph (a span
  *                                   INSIDE the row button; both are clickable)
@@ -293,7 +299,7 @@ async function dismissOverlayWithEscape(page: Page): Promise<void> {
  * WIDE that lands the host near ~900px, below `INLINE_MIN_WIDTH`, so the inline
  * stack unmounts and every card testid disappears (the rail stays, but its cards
  * do not). Found live: the Context describe's file-opening tests silently broke
- * the tests after them. ⌘2 toggles the workspace back off; calling this first
+ * the tests after them. ⌘⇧W toggles the workspace back off; calling this first
  * makes each test independent of what the previous one opened, which also matters
  * on a Playwright retry (hooks re-run, but a mid-describe retry does not).
  *
@@ -312,7 +318,7 @@ async function dismissOverlayWithEscape(page: Page): Promise<void> {
 async function ensureSessionCard(page: Page): Promise<void> {
   const workspaceSurface = page.getByTestId('workspace-surface');
   if (await workspaceSurface.isVisible().catch(() => false)) {
-    await page.keyboard.press('ControlOrMeta+2');
+    await page.keyboard.press('ControlOrMeta+Shift+W');
     await expect(workspaceSurface).toHaveCount(0, { timeout: 5_000 });
   }
   const card = page.getByTestId('session-panel-card-session');
@@ -860,5 +866,55 @@ test.describe('§session-panel — Context section', () => {
 
     await header.click();
     await expect(item).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ─── §session-panel — Activity card, a live agent row (task-subagent) ─────────
+//
+// task-subagent.0 is now two turns (todo #327): the first delegates to a
+// subagent and completes the turn with the Task tool_use still unresolved, the
+// second's tool_result closes it. That gap is what gives Background Activity a
+// real "something is running" fixture, mirroring the mainframe-adapter-mock
+// `task_bridge.rs` unit coverage at the daemon level.
+
+test.describe('§session-panel — Activity card (task-subagent)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'task-subagent' });
+    await app.page.setViewportSize(WIDE);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a delegated subagent shows one running Agent row until its result lands', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate finding the greeting export to a subagent');
+    await waitForIdle(page, 60_000);
+
+    await page.getByTestId('session-panel-rail-activity').click();
+    const card = page.getByTestId('session-panel-card-activity');
+    await expect(card).toBeVisible({ timeout: 5_000 });
+
+    const row = card.getByTestId('session-panel-task-mock-toolu_task_1');
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByTestId('session-panel-kind-agent')).toBeVisible();
+    await expect(row).toContainText('Agent');
+
+    await expect(page.getByTestId('session-panel-rail-activity-dot')).toBeVisible();
+    await expect(page.getByTestId('session-panel-rail-activity')).toHaveAttribute('aria-label', '1 task running');
+
+    await sendMessage(page, 'Thanks — what did it find?');
+    await waitForIdle(page, 60_000);
+
+    await expect(row).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId('session-panel-activity-empty')).toBeVisible();
+    await expect(page.getByTestId('session-panel-rail-activity-dot')).toHaveCount(0);
   });
 });

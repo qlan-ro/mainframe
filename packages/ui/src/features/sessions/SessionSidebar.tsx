@@ -11,7 +11,9 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
+import { chordHint } from '@/features/shortcuts/chord-hint';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { pickProjectSession } from '@/features/sessions/view-model/initial-session';
@@ -40,24 +42,40 @@ import { SidebarActions } from './SidebarActions';
 import { TagFilterBar } from './TagFilterBar';
 import { useRemoveProject } from '@/features/sessions/use-remove-project';
 
-/** Reserves the native macOS traffic-lights cluster (3 × 12px + gaps + inset). */
+/**
+ * Reserves the native macOS traffic-lights cluster (3 buttons + gaps + inset).
+ * The cluster's vertical centring is native too: `trafficLightPosition.y` is
+ * tuned so the lights centre on this row's midline — SidebarHeader's 8px top
+ * pad + the 32px icon-sm row = 24px at UI scale 1.0. Nothing recomputes that
+ * y, and the y→centre mapping is SDK-gated: a binary linked against SDK ≤ 15
+ * (every packaged build — the release runner is macos-14) renders the classic
+ * buttons, centre = y + 2, so tauri.conf.json carries 22; a dev build linked
+ * against SDK 26+ renders the new metrics, centre = y − 2, so tauri-dev.mjs
+ * patches y to 26. Retune BOTH whenever this row's geometry changes, or when
+ * the release runner's Xcode reaches SDK 26.
+ */
 const TRAFFIC_LIGHTS_WIDTH = 80;
 
 function HeaderActions() {
   const openSettings = useSettingsStore((s) => s.open);
+  const settingsHint = chordHint('app.settings');
 
   return (
     <div className="flex items-center gap-0.5 text-muted-foreground">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        data-testid="sidebar-settings"
-        title="Settings · ⌘,"
-        onClick={() => openSettings()}
-      >
-        <SettingsIcon />
-      </Button>
-      <SidebarTrigger data-testid="sidebar-collapse" title="Hide sidebar" />
+      <Hint label={settingsHint == null ? 'Settings' : `Settings · ${settingsHint}`}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid="sidebar-settings"
+          aria-label="Settings"
+          onClick={() => openSettings()}
+        >
+          <SettingsIcon />
+        </Button>
+      </Hint>
+      <Hint label="Hide sidebar">
+        <SidebarTrigger data-testid="sidebar-collapse" />
+      </Hint>
     </div>
   );
 }
@@ -130,8 +148,14 @@ export function SessionSidebar({ className }: { className?: string }) {
             empty run drags the window (buttons are auto-excluded by the host
             handler, so Settings/collapse still click). */}
         <div data-drag-region className="flex items-center justify-between">
-          <div aria-hidden style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
-          <UpdatePill />
+          {/* The pill rides with the traffic lights: update chrome reads as
+              window chrome, and the row's slack stays a drag region. gap-1.5
+              keeps it clear of the zoom button, whose hit rect ends at 80px
+              under the new-SDK metrics — flush with the reserve. */}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div aria-hidden className="shrink-0" style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
+            <UpdatePill />
+          </div>
           <HeaderActions />
         </div>
         <SidebarActions filterProjectId={filterProjectId} />
@@ -145,7 +169,7 @@ export function SessionSidebar({ className }: { className?: string }) {
         />
       </SidebarHeader>
 
-      <SidebarScrollRegion>
+      <SidebarScrollRegion tut="sessions-list">
         <SessionsSection
           groups={groups}
           projectNames={projectNames}

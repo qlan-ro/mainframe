@@ -78,32 +78,33 @@ function TokenRows({ token, testId, expanded, onToggle, onInsert }: TokenRowsPro
 
   return (
     <>
-      <DropdownMenuItem
-        data-testid={`${testId}-option-${key}`}
-        aria-expanded={isExpandable ? expanded : undefined}
-        title={token.description}
-        onSelect={(e) => {
-          // Expanding is not a choice — keep the menu open so the fields show.
-          if (isExpandable) {
-            e.preventDefault();
-            onToggle();
-            return;
-          }
-          onInsert(token.ref);
-        }}
-      >
-        <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-md', style.tintClass)}>
-          <Icon className={cn('size-3', style.iconClass)} aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1 truncate">{token.label}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">{token.type}</span>
-        {isExpandable && (
-          <ChevronRight
-            className={cn('size-3 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')}
-            aria-hidden
-          />
-        )}
-      </DropdownMenuItem>
+      <Hint label={token.description} side="right">
+        <DropdownMenuItem
+          data-testid={`${testId}-option-${key}`}
+          aria-expanded={isExpandable ? expanded : undefined}
+          onSelect={(e) => {
+            // Expanding is not a choice — keep the menu open so the fields show.
+            if (isExpandable) {
+              e.preventDefault();
+              onToggle();
+              return;
+            }
+            onInsert(token.ref);
+          }}
+        >
+          <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-md', style.tintClass)}>
+            <Icon className={cn('size-3', style.iconClass)} aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1 truncate">{token.label}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{token.type}</span>
+          {isExpandable && (
+            <ChevronRight
+              className={cn('size-3 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')}
+              aria-hidden
+            />
+          )}
+        </DropdownMenuItem>
+      </Hint>
       {expanded &&
         token.fields!.map((field) => (
           <DropdownMenuItem

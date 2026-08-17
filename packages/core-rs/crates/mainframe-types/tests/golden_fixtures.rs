@@ -1,5 +1,5 @@
 //! Golden round-trip harness over every captured fixture in
-//! `docs/rust-port/fixtures/` (Phase 0 artifacts).
+//! `packages/core-rs/crates/mainframe-types/tests/fixtures/` (Phase 0 artifacts).
 //!
 //! For each `event.*.json` the payload is deserialized into [`DaemonEvent`],
 //! re-serialized, and compared for JSON-*semantic* equality with the original
@@ -39,7 +39,7 @@ use mainframe_types::events::DaemonEvent;
 fn fixtures_dir() -> PathBuf {
     // CARGO_MANIFEST_DIR = <repo>/packages/core-rs/crates/mainframe-types
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../docs/rust-port/fixtures")
+        .join("tests/fixtures")
         .canonicalize()
         .expect("fixtures directory must exist")
 }

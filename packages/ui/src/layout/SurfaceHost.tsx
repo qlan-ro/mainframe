@@ -1,18 +1,14 @@
-import { Fragment, memo, useCallback, useEffect, useRef } from 'react';
+import { Fragment, memo, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
 import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
-import { onSurfaceIntent } from '@/store/surface-intents';
+import { emitSurfaceIntent, onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { SurfDivider } from './SurfDivider';
 import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
-
-const SHORTCUT_MAP: Record<string, SurfaceId> = {
-  '1': 'chat',
-  '2': 'workspace',
-};
 
 // Each surface is its own rounded floating card, per the prototype (04-engine
 // `surfCard`); the MainToolbar sits transparent on the window background, NOT
@@ -64,22 +60,16 @@ function SurfaceHostImpl() {
     return subscribeToUrlTabIntents();
   }, []);
 
-  // Cmd/Ctrl + 1/2 toggle Chat / Workspace.
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const surface = SHORTCUT_MAP[e.key];
-      if (!surface) return;
-      e.preventDefault();
-      toggleSurface(surface);
-    },
-    [toggleSurface],
-  );
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+  // ⌘1/⌘2 TOGGLE their surface — the `activate-surface` intent only lights an
+  // inactive one, so routing these through it would silently drop the "press
+  // again to hide" half of the shipped behavior.
+  useShortcutAction('workspace.toggle-chat', () => toggleSurface('chat'));
+  useShortcutAction('workspace.toggle-workspace', () => toggleSurface('workspace'));
+  // Goes through the intent rather than calling the terminal store: the
+  // subscriber resolves the cwd, spawns the PTY and lights the surface, so the
+  // chord and the picker row can never diverge.
+  useShortcutAction('workspace.new-terminal', () => emitSurfaceIntent({ type: 'new-terminal' }));
+  useShortcutAction('workspace.new-url-tab', () => emitSurfaceIntent({ type: 'open-url-tab' }));
 
   const { top, bottom, topFlex, vFlex } = layout;
   const twoCol = top.length === 2;

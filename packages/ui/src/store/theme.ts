@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { getHost } from '@/lib/host';
 
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type ResolvedThemeMode = Exclude<ThemeMode, 'system'>;
 export type UiScale = 'compact' | 'normal' | 'large';
 
 const MODE_KEY = 'mf-theme';
 const UI_SCALE_KEY = 'mf-ui-scale';
+const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
 
+const THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark'];
 const UI_SCALES: readonly UiScale[] = ['compact', 'normal', 'large'];
 
 /** Native page-zoom factors. Normal is crisp un-zoomed (dominant text = the raw
@@ -20,11 +23,23 @@ export const UI_SCALE_FACTORS: Record<UiScale, number> = {
 
 function readMode(): ThemeMode {
   try {
-    return localStorage.getItem(MODE_KEY) === 'dark' ? 'dark' : 'light';
+    const mode = localStorage.getItem(MODE_KEY);
+    return THEME_MODES.includes(mode as ThemeMode) ? (mode as ThemeMode) : 'system';
   } catch {
-    /* private-mode / unavailable storage — fall back to light */
+    return 'system';
+  }
+}
+
+function readSystemMode(): ResolvedThemeMode {
+  try {
+    return window.matchMedia?.(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
+  } catch {
     return 'light';
   }
+}
+
+function resolveMode(mode: ThemeMode): ResolvedThemeMode {
+  return mode === 'system' ? readSystemMode() : mode;
 }
 
 function readUiScale(): UiScale {
@@ -63,28 +78,39 @@ function persist(key: string, value: string): void {
  */
 export function applyStoredTheme(): void {
   const root = document.documentElement;
-  root.classList.toggle('dark', readMode() === 'dark');
+  root.classList.toggle('dark', resolveMode(readMode()) === 'dark');
   root.removeAttribute('data-scheme');
 }
 
 interface ThemeState {
   mode: ThemeMode;
+  resolvedMode: ResolvedThemeMode;
   uiScale: UiScale;
   toggle: () => void;
   setMode: (mode: ThemeMode) => void;
+  syncSystemMode: (matchesDark: boolean) => void;
   setUiScale: (uiScale: UiScale) => void;
 }
 
-export const useTheme = create<ThemeState>((set, get) => ({
-  mode: readMode(),
-  uiScale: readUiScale(),
-  toggle: () => get().setMode(get().mode === 'dark' ? 'light' : 'dark'),
-  setMode: (mode) => {
-    persist(MODE_KEY, mode);
-    set({ mode });
-  },
-  setUiScale: (uiScale) => {
-    persist(UI_SCALE_KEY, uiScale);
-    set({ uiScale });
-  },
-}));
+export const useTheme = create<ThemeState>((set, get) => {
+  const mode = readMode();
+  return {
+    mode,
+    resolvedMode: resolveMode(mode),
+    uiScale: readUiScale(),
+    toggle: () => get().setMode(get().resolvedMode === 'dark' ? 'light' : 'dark'),
+    setMode: (nextMode) => {
+      persist(MODE_KEY, nextMode);
+      set({ mode: nextMode, resolvedMode: resolveMode(nextMode) });
+    },
+    syncSystemMode: (matchesDark) => {
+      if (get().mode !== 'system') return;
+      const resolvedMode = matchesDark ? 'dark' : 'light';
+      if (get().resolvedMode !== resolvedMode) set({ resolvedMode });
+    },
+    setUiScale: (uiScale) => {
+      persist(UI_SCALE_KEY, uiScale);
+      set({ uiScale });
+    },
+  };
+});

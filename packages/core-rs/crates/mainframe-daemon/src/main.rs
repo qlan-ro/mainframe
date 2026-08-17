@@ -206,10 +206,16 @@ async fn run_daemon() {
         Arc::clone(&claude_workflows),
         resolved_path.clone(),
     )));
-    adapters.register(Arc::new(CodexAdapter::new(resolved_path.clone())));
+    adapters.register(Arc::new(CodexAdapter::new(
+        Arc::clone(&background_tasks),
+        resolved_path.clone(),
+    )));
     if std::env::var("E2E_MODE").as_deref() == Ok("mock") {
         tracing::warn!("E2E mock mode enabled; registering the native replay adapter");
-        adapters.register(Arc::new(MockCliAdapter::default()));
+        adapters.register(Arc::new(MockCliAdapter::with_tracker(
+            Arc::clone(&background_tasks),
+            Arc::clone(&claude_workflows),
+        )));
     }
     adapters.seed_static_snapshots();
 

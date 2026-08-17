@@ -44,7 +44,7 @@ export function WorkspaceTabStrip({ pane, primary }: { pane: RunPane; primary: b
         </div>
       ) : (
         <>
-          <div className="flex h-full min-w-0 flex-initial items-center gap-0.5 overflow-x-auto pr-0.5 [scrollbar-width:none]">
+          <div className="flex h-full min-w-0 flex-initial items-center gap-0.5 overflow-x-auto pr-0.5 [scrollbar-width:none] scroll-fade-x">
             {pane.tabs.map((t) => (
               <WorkspaceTabPill
                 key={t.id}

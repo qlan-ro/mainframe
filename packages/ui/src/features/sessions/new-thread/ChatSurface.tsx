@@ -37,7 +37,9 @@ import { ChatZone } from '@/features/chat/zones/ChatZone';
 import { SplitDivider } from '@/features/chat/zones/SplitDivider';
 import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
-import { useZoneHotkeys } from '@/features/chat/zones/use-zone-hotkeys';
+import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
+import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
@@ -53,7 +55,8 @@ export function ChatSurface() {
   // Keeps `mainThreadId ∈ zones` while split (and closes the split on a draft).
   useZonesReconciler();
   const aui = useAui();
-  useZoneHotkeys(aui);
+  useZoneShortcutActions(aui);
+  useShortcutAction('chat.focus-composer', focusVisibleComposer);
   const zones = useZonesStore((s) => s.zones);
   const closeSplit = useZonesStore((s) => s.closeSplit);
   const splitFrac = useZonesStore((s) => s.frac);

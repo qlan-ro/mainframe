@@ -271,10 +271,9 @@ describe('CmEditor', () => {
   });
 
   describe('live light↔dark hot-swap (theme compartment)', () => {
-    it('reconfigures the CM6 dark flag when the theme store mode flips after mount', () => {
-      // Start in light mode so the initial dark flag is false.
+    it('reconfigures the CM6 dark flag when System resolves differently after mount', () => {
       act(() => {
-        useTheme.setState({ mode: 'light' });
+        useTheme.setState({ mode: 'system', resolvedMode: 'light' });
       });
 
       let view: EditorView | null = null;
@@ -295,15 +294,14 @@ describe('CmEditor', () => {
       // EditorView.darkTheme facet reflects the active theme's `dark` flag.
       expect(view!.state.facet(EditorView.darkTheme)).toBe(false);
 
-      // Flip to dark — the sync effect must reconfigure the theme compartment.
       act(() => {
-        useTheme.setState({ mode: 'dark' });
+        useTheme.setState({ resolvedMode: 'dark' });
       });
       expect(view!.state.facet(EditorView.darkTheme)).toBe(true);
+      expect(useTheme.getState().mode).toBe('system');
 
-      // Flip back to light.
       act(() => {
-        useTheme.setState({ mode: 'light' });
+        useTheme.setState({ resolvedMode: 'light' });
       });
       expect(view!.state.facet(EditorView.darkTheme)).toBe(false);
     });

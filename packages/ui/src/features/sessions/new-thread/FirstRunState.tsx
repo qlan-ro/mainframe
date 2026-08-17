@@ -26,7 +26,7 @@ export function FirstRunState() {
       <div className="flex flex-col gap-1.5">
         <h1 className="text-lg font-semibold text-foreground">Welcome to Mainframe</h1>
         <p className="text-sm text-muted-foreground">
-          Add a project folder to start orchestrating agents on your codebase.
+          Add a project folder to start orchestrating agents on your codebase. We’ll show you around once it’s in.
         </p>
       </div>
       <button

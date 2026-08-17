@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefCallback } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefCallback } from 'react';
 
 const BOTTOM_THRESHOLD_PX = 2;
 
@@ -6,7 +6,18 @@ function isAtBottom(element: HTMLElement) {
   return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_THRESHOLD_PX;
 }
 
-export function useThreadBottomPin() {
+/**
+ * Keeps the transcript pinned to its bottom edge.
+ *
+ * `threadId` is the session the viewport is currently showing. Every session in
+ * the single-thread surface shares ONE viewport element, so a switch changes the
+ * content underneath a scroll offset that survives — and assistant-ui's own
+ * switch-scroll (`threadListItem.switchedTo` → scrollToBottom) never reaches a
+ * Viewport mounted outside the per-item subtree, as ours is. Without the re-pin
+ * below, switching into a session after reading back in any session left the
+ * transcript parked mid-history.
+ */
+export function useThreadBottomPin(threadId: string | null) {
   const viewportElement = useRef<HTMLDivElement | null>(null);
   const pinned = useRef(true);
   const removeScrollListener = useRef<(() => void) | null>(null);
@@ -41,6 +52,15 @@ export function useThreadBottomPin() {
     });
     resizeObserver.current.observe(element);
   }, []);
+
+  // A switched-into session starts pinned regardless of where the previous one
+  // was left; its history often lands a beat later, which the observer above
+  // then follows down.
+  useLayoutEffect(() => {
+    pinned.current = true;
+    const viewport = viewportElement.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [threadId]);
 
   useEffect(
     () => () => {

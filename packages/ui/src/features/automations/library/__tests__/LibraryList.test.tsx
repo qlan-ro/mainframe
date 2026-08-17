@@ -15,7 +15,7 @@ vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [{ id: 'proj-1', name: 'Mainframe' }] }),
 }));
 
-const DEFAULT_LOAD_ALL = useAutomationsStore.getState().loadAll;
+const DEFAULT_LOAD_LIBRARY = useAutomationsStore.getState().loadLibrary;
 
 const AUTOMATION_A: AutomationSummary = {
   id: 'auto-a',
@@ -42,7 +42,12 @@ const AUTOMATION_B: AutomationSummary = {
 describe('LibraryList', () => {
   beforeEach(() => {
     useAutomationsNav.setState({ open: true, editorTarget: null, runId: null });
-    useAutomationsStore.setState({ loading: false, error: null, loadAll: DEFAULT_LOAD_ALL });
+    useAutomationsStore.setState({
+      loading: false,
+      error: null,
+      scopeProjectId: null,
+      loadLibrary: DEFAULT_LOAD_LIBRARY,
+    });
   });
 
   it('renders a row per definition, keyed by automation id', () => {
@@ -106,7 +111,7 @@ describe('LibraryList', () => {
       definitions: [AUTOMATION_A],
       runs: [],
       error: 'run history unavailable',
-      loadAll: async () => {
+      loadLibrary: async () => {
         retried += 1;
       },
     });
@@ -151,13 +156,14 @@ describe('LibraryList', () => {
   });
 
   it('shows an inline error with retry instead of BlankState when the fetch fails', () => {
-    const loadAllSpy = vi.fn().mockResolvedValue(undefined);
+    const loadLibrarySpy = vi.fn().mockResolvedValue(undefined);
     useAutomationsStore.setState({
       definitions: [],
       runs: [],
       loading: false,
       error: 'Network unreachable',
-      loadAll: loadAllSpy,
+      scopeProjectId: 'proj-1',
+      loadLibrary: loadLibrarySpy,
     });
     render(<LibraryList />);
 
@@ -165,7 +171,8 @@ describe('LibraryList', () => {
     expect(screen.queryByTestId('automations-blank-describe')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('automations-library-retry'));
-    expect(loadAllSpy).toHaveBeenCalledTimes(1);
+    // Retry re-reads the project the modal is scoped to, not "everything".
+    expect(loadLibrarySpy).toHaveBeenCalledExactlyOnceWith('proj-1');
   });
 
   it('renders the row list, not the loading/error/blank states, once data has loaded', () => {

@@ -56,19 +56,30 @@ code {
   -webkit-user-select: text;
 }
 
-/* Thin scrollbar, GLOBAL (hover-revealed thumb, transparent track). Standards
-   path ONLY (scrollbar-width/scrollbar-color): setting either standard property
-   makes engines ignore ::-webkit-scrollbar rules, so the two must never be
-   mixed. In @layer base so utilities keep winning — an unlayered rule would
-   outrank ALL layered ones and silently re-enable scrollbars on
-   [scrollbar-width:none] opt-outs like the tab strips. */
+/* WebKit needs direct track painting because its native track can ignore scrollbar-color. */
 @layer base {
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
+  @supports selector(*::-webkit-scrollbar) {
+    *::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
   }
-  *:hover {
-    scrollbar-color: var(--border) transparent;
+
+  @supports not selector(*::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+    *:hover {
+      scrollbar-color: var(--border) transparent;
+    }
   }
 }
 

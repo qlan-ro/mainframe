@@ -587,7 +587,7 @@ fn empty_text() -> DisplayContent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pr_detection::extract_pr_from_tool_result;
+    use mainframe_adapter_api::pr_detection::extract_pr_from_tool_result;
     use mainframe_display::truncate_tool_content::TRUNCATE_THRESHOLD_BYTES;
     use mainframe_types::chat::{ChatMessage, ChatMessageType};
 

@@ -22,11 +22,16 @@ export function subscribeToUrlTabIntents(): () => void {
   });
 }
 
-function openUrlTab(raw: string, paneId: string | undefined): void {
-  // Second guard: both entry points normalize before emitting, so a null here
-  // means a caller skipped that step rather than a user typo.
-  const url = normalizePreviewUrl(raw);
-  if (!url) {
+function openUrlTab(raw: string | undefined, paneId: string | undefined): void {
+  // A blank tab is a first-class outcome, not a failed one: an empty address
+  // resolves to `invalid`, whose body renders the always-enabled address bar.
+  // That is exactly what ⌘T wants, so it skips normalization rather than
+  // tripping the guard below.
+  const blank = raw === undefined || raw === '';
+  // Second guard: the URL-carrying entry points normalize before emitting, so a
+  // null here means a caller skipped that step rather than a user typo.
+  const url = blank ? '' : normalizePreviewUrl(raw);
+  if (url === null) {
     console.warn('[url-tab-intent] ignoring an unusable URL', raw);
     return;
   }
@@ -34,11 +39,15 @@ function openUrlTab(raw: string, paneId: string | undefined): void {
   const { scopeKey } = useActiveBasesStore.getState();
   // addRunTab dedups a `url` tab by normalized url + scope and places Run in
   // the layout, so opening the same URL twice focuses the first tab.
-  const added = useLayoutStore
-    .getState()
-    .addRunTab(
-      { id: urlTabId(url), kind: 'url', title: urlTabTitle(url), url, scopeKey: scopeKey ?? undefined },
-      paneId,
-    );
+  const added = useLayoutStore.getState().addRunTab(
+    {
+      id: urlTabId(url),
+      kind: 'url',
+      title: blank ? 'New tab' : urlTabTitle(url),
+      url,
+      scopeKey: scopeKey ?? undefined,
+    },
+    paneId,
+  );
   if (!added) console.warn('[url-tab-intent] target pane closed before the URL tab was added', url);
 }

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { PanelLeftIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { clampSidebarWidth, useSidebar } from './context';
 
@@ -130,29 +131,30 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<'butto
   }
 
   return (
-    <button
-      data-slot="sidebar-rail"
-      data-sidebar="rail"
-      aria-label="Resize sidebar"
-      tabIndex={-1}
-      title="Drag to resize, click to collapse"
-      onPointerDown={onPointerDown}
-      className={cn(
-        'absolute inset-y-0 z-20 w-2 transition-all ease-linear',
-        // The hover line sits ON the panel edge (over its border), not centered
-        // in this 8px strip — centered, it rendered as a SECOND line ~4px in
-        // from the real border.
-        'after:absolute after:inset-y-0 after:w-[2px] after:bg-transparent',
-        'group-data-[side=left]:after:right-0 group-data-[side=right]:after:left-0',
-        'hover:after:bg-sidebar-border',
-        'group-data-[side=left]:right-0 group-data-[side=right]:left-0',
-        'group-data-[side=left]:cursor-col-resize group-data-[side=right]:cursor-col-resize',
-        'group-data-[state=collapsed]:group-data-[side=left]:cursor-e-resize',
-        'group-data-[state=collapsed]:group-data-[side=right]:cursor-w-resize',
-        className,
-      )}
-      {...props}
-    />
+    <Hint label="Drag to resize, click to collapse">
+      <button
+        data-slot="sidebar-rail"
+        data-sidebar="rail"
+        aria-label="Resize sidebar"
+        tabIndex={-1}
+        onPointerDown={onPointerDown}
+        className={cn(
+          'absolute inset-y-0 z-20 w-2 transition-all ease-linear',
+          // The hover line sits ON the panel edge (over its border), not centered
+          // in this 8px strip — centered, it rendered as a SECOND line ~4px in
+          // from the real border.
+          'after:absolute after:inset-y-0 after:w-[2px] after:bg-transparent',
+          'group-data-[side=left]:after:right-0 group-data-[side=right]:after:left-0',
+          'hover:after:bg-sidebar-border',
+          'group-data-[side=left]:right-0 group-data-[side=right]:left-0',
+          'group-data-[side=left]:cursor-col-resize group-data-[side=right]:cursor-col-resize',
+          'group-data-[state=collapsed]:group-data-[side=left]:cursor-e-resize',
+          'group-data-[state=collapsed]:group-data-[side=right]:cursor-w-resize',
+          className,
+        )}
+        {...props}
+      />
+    </Hint>
   );
 }
 

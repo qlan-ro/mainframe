@@ -204,6 +204,14 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     // No message has been sent on this chat yet — no claudeSessionId, so no copy-id item.
     await expect(page.getByTestId('sessions-ctx-copy-id')).toHaveCount(0);
 
+    // Past the hover card's 500ms open delay, with the pointer still resting on the
+    // row from the right-click: the card must NOT open over the menu. It used to,
+    // and since Radix only lets its TOP dismissable layer answer Escape, the menu
+    // then stayed up (a CI-only failure — locally the assertions above finish inside
+    // the 500ms). SessionRow refuses the open while its context menu is up.
+    await page.waitForTimeout(900);
+    await expect(page.locator('[data-slot="hover-card-content"]')).toHaveCount(0);
+
     await page.keyboard.press('Escape');
     await expect(pinItem).toHaveCount(0, { timeout: 5_000 });
   });
@@ -252,6 +260,11 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     // rather than pinned here in either direction.
     await rowX.hover();
     const cardProject = page.getByTestId('sessions-meta-card-project');
+    // Exactly one card, named before the visibility check: a click-focused row used
+    // to open a SECOND card that no pointerleave ever closed (Radix opens on focus
+    // too), and the strict-mode violation that produced read as a locator error
+    // rather than the duplicate-card bug it was.
+    await expect(cardProject).toHaveCount(1, { timeout: 5_000 });
     await expect(cardProject).toBeVisible({ timeout: 5_000 });
     await expect(cardProject).toContainText(path.basename(project.projectPath));
   });

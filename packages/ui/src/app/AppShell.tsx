@@ -26,10 +26,8 @@ import { SettingsDialog } from '../features/settings/SettingsDialog';
 import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
-import { useSettingsStore } from '../store/settings';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
-import { useNewChatHotkey } from '../features/sessions/use-new-chat-hotkey';
 import { useNewChatHotkeyHandler } from '../features/sessions/new-thread/use-new-chat-hotkey-handler';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
@@ -38,7 +36,10 @@ import { useUiPrefs } from '../store/ui-prefs';
 import { MainToolbar } from '../layout/MainToolbar';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { setSessionNavigator } from '../lib/session-nav';
-import { useGlobalOverlayHotkeys } from './use-global-overlay-hotkeys';
+import { useShortcutDispatcher } from '../features/shortcuts/use-shortcut-dispatcher';
+import { useIndexHintReveal } from '../features/shortcuts/index-hints';
+import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
+import { useAppShortcutActions } from './use-app-shortcut-actions';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
@@ -48,7 +49,10 @@ const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
   useSandboxWsRouter();
-  useGlobalOverlayHotkeys();
+  // The app's ONE keydown listener — every app chord dispatches through it.
+  useShortcutDispatcher();
+  // Hold ⌘ (Ctrl off-mac) to reveal which number each session tab answers to.
+  useIndexHintReveal();
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
   // session via their "Open session →" CTA without reaching through to the runtime.
@@ -58,12 +62,11 @@ function RuntimeBody({ port }: { port: number }) {
     return () => setSessionNavigator(null);
   }, [aui]);
 
-  // Global ⌘N / Ctrl+N → new chat. In "All" view (no project pill active) this
-  // opens the sidebar "+" button's project picker instead of switching straight
-  // to a projectless new thread (see useNewChatHotkeyHandler for the branch and
-  // resolveNewChatHotkeyAction for the seam); a project pill active keeps the
-  // native path (reset the stale draft, switch — auto-config seeds the project).
-  useNewChatHotkey(useNewChatHotkeyHandler(aui));
+  // ⌘N, ⌘K, ⌘⇧R, ⌘,, ⌘B and ⌘/ — the chords whose owner is the always-mounted
+  // shell. ⌘N resets the stale draft and switches to the new thread; with a
+  // project pill active useNewThreadAutoConfig seeds that project, without one
+  // the welcome screen's own picker resolves it.
+  useAppShortcutActions({ onNewSession: useNewChatHotkeyHandler(aui) });
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
@@ -79,18 +82,6 @@ function RuntimeBody({ port }: { port: number }) {
   useEffect(() => {
     setActiveBases({ worktreePath, projectPath }, activeLaunchScope(projectId, worktreePath, projectPath));
   }, [projectId, worktreePath, projectPath, setActiveBases]);
-
-  // ⌘, / Ctrl+, opens settings.
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
-        e.preventDefault();
-        useSettingsStore.getState().open();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   return (
     <SidebarProvider
@@ -129,6 +120,7 @@ function RuntimeBody({ port }: { port: number }) {
       <SetupAdvisorHost />
       <ConfirmDialogHost />
       <SettingsDialog port={port} />
+      <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
     </SidebarProvider>
   );

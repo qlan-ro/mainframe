@@ -34,27 +34,38 @@ export function SidebarActions({ filterProjectId }: { filterProjectId: string | 
     <SidebarGroup className="p-0">
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="sm" data-testid="sidebar-action-new-thread" onClick={newThread}>
+          <SidebarMenuButton
+            size="sm"
+            data-testid="sidebar-action-new-thread"
+            data-tut="new-session-row"
+            onClick={newThread}
+          >
             <SquarePen className="text-muted-foreground" />
-            <span>New Thread</span>
+            <span className="text-muted-foreground">New Thread</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
             data-testid="sidebar-action-kanban"
+            data-tut="kanban"
             // The todos board host (TasksModalHost, mounted at the app root)
             // listens for this window event; there is no store seam to call.
             onClick={() => window.dispatchEvent(new CustomEvent('mf:open-tasks'))}
           >
             <SquareKanban className="text-muted-foreground" />
-            <span>Kanban</span>
+            <span className="text-muted-foreground">Kanban</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
-          <SidebarMenuButton size="sm" data-testid="sidebar-action-automations" onClick={openAutomations}>
+          <SidebarMenuButton
+            size="sm"
+            data-testid="sidebar-action-automations"
+            data-tut="automations"
+            onClick={openAutomations}
+          >
             <Zap className="text-muted-foreground" />
-            <span>Automations</span>
+            <span className="text-muted-foreground">Automations</span>
             {pendingAutomations > 0 && (
               <span
                 data-testid="sidebar-action-automations-pending"

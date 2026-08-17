@@ -20,11 +20,11 @@ type Worktree = NonNullable<AskAgentStep['worktree']>;
 const WORKTREE: Worktree = { baseBranch: 'main', branchName: [] };
 
 beforeEach(() => {
-  useAutomationsStore.setState({ activeProjectId: 'proj-1' });
+  useAutomationsStore.setState({ scopeProjectId: 'proj-1' });
 });
 
 afterEach(() => {
-  useAutomationsStore.setState({ activeProjectId: null });
+  useAutomationsStore.setState({ scopeProjectId: null });
 });
 
 describe('WorktreeMenu — chip', () => {

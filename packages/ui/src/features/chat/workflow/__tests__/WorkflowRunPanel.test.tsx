@@ -149,7 +149,8 @@ describe('WorkflowRunPanel — agent rows (AC 10, D19)', () => {
     expect(row.textContent).toContain('12s');
   });
 
-  it('carries model, attempt and tool count in the row title, not the visible row', () => {
+  it('carries model, attempt and tool count in the row hint, not the visible row', async () => {
+    const user = userEvent.setup();
     render(
       <WorkflowRunPanel
         run={run({
@@ -166,9 +167,12 @@ describe('WorkflowRunPanel — agent rows (AC 10, D19)', () => {
       />,
     );
     const row = screen.getByTestId('chat-workflow-agent-a-1');
-    expect(row).toHaveAttribute('title', expect.stringContaining('claude-opus-4'));
-    expect(row).toHaveAttribute('title', expect.stringContaining('2'));
-    expect(row).toHaveAttribute('title', expect.stringContaining('7'));
+    // The hint wraps the header — a note-less row disables the button it holds.
+    await user.hover(screen.getByTestId('chat-workflow-agent-toggle-a-1').parentElement!);
+    const hint = await screen.findByRole('tooltip');
+    expect(hint).toHaveTextContent('claude-opus-4');
+    expect(hint).toHaveTextContent('attempt 2');
+    expect(hint).toHaveTextContent('7 tool calls');
     // The visible row text carries no tool-call count (D19) — only tokens/duration metrics.
     expect(row.textContent).not.toContain('7 tool');
   });

@@ -54,6 +54,9 @@ docs/plans/
 docs/superpowers/
 docs/CODE-ANALYSIS*
 
+# Per-run internal QA logs (screenshots + notes keyed to a private local todo tracker)
+docs/qa/
+
 # Codex-review local session state (per-branch, not shared)
 .claude/codex-review/
 
@@ -65,3 +68,8 @@ packages/e2e/logs/
 .playwright-cli/
 dist-local/
 /packages/e2e/daemon-logs/
+
+# Recorded demo output — takes are large and regenerated; scripts are versioned, videos are not.
+demos/**/*.mp4
+demos/**/*.webm
+skills-lock.json

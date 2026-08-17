@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { clearTerminalFocus } from './terminal-focus';
 
 export interface CachedTerminal {
   wrapper: HTMLDivElement;
@@ -71,4 +72,5 @@ export function disposeCachedTerminal(id: string): void {
   entry.term.dispose();
   entry.wrapper.remove();
   cache.delete(id);
+  clearTerminalFocus(id);
 }

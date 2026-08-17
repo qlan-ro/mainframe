@@ -61,7 +61,7 @@ beforeEach(() => {
   isLoadingValue = true;
   mainThreadIdValue = null;
   localStorage.clear();
-  useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: false });
+  useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
   useSessionListLoadState.setState({ loaded: false });
 });
 
@@ -104,23 +104,8 @@ describe('activation', () => {
     expect(state.previewId).toBe('chat-b');
   });
 
-  it('pins a just-created draft immediately and keeps the peek beside it', () => {
-    // "+" is a deliberate new tab, not a peek at history.
-    settledList([SESSION_A, SESSION_B]);
-    mainThreadIdValue = 'chat-b';
-    const { rerender } = renderHook(() => useSessionTabsSync());
-
-    itemsValue = [SESSION_A, SESSION_B, { id: '__LOCALID_1', status: 'new' }];
-    mainThreadIdValue = '__LOCALID_1';
-    rerender();
-
-    const state = useSessionTabsStore.getState();
-    expect(state.tabIds).toEqual(['__LOCALID_1']);
-    expect(state.previewId).toBe('chat-b');
-  });
-
   it('previews a session re-opened by the local id it kept after its first send', () => {
-    // `shouldPinOnOpen` reads the ENTRY's status, not the id shape: a session
+    // `isDraftThread` reads the ENTRY's status, not the id shape: a session
     // created this run still answers to `__LOCALID_*`, but once sent it is a
     // regular session and re-opening it peeks like any other.
     settledList([SESSION_A, { id: '__LOCALID_5', status: 'regular', remoteId: 'chat-b', custom: {} }]);
@@ -167,8 +152,8 @@ describe('persistence (v3)', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    // The draft pinned, so it is the dropped pin — and the restored preview
-    // stays as the only survivor of the write.
+    // The draft holds its own slot, which is never persisted — the restored
+    // preview stays as the only survivor of the write.
     expect(readPersisted()).toEqual({ v: 3, ids: ['chat-a'], preview: 'chat-b', zones: [], zonesFrac: null });
   });
 

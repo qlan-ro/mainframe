@@ -3,12 +3,12 @@
  * in tabs-model.test.ts, which is at its size limit).
  *
  * `reconcilePreviewId` is `reconcileTabIds` collapsed to one nullable id: same
- * canonicalisation, same validity rule. `shouldPinOnOpen` decides whether an
- * activation is a peek at history or a tab the user deliberately created.
+ * canonicalisation, same validity rule. The protected draft slot and the
+ * transitions between the three slots live in tabs-model.draft.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { reconcilePreviewId, shouldPinOnOpen } from '../tabs-model';
+import { reconcilePreviewId } from '../tabs-model';
 
 /** A real session row: a regular thread-list entry, optionally remoteId-stamped. */
 function entry(id: string, over: Partial<ThreadListEntry> = {}): ThreadListEntry {
@@ -74,52 +74,5 @@ describe('reconcilePreviewId', () => {
 
   it('empties the slot when the thread list is empty and nothing is active', () => {
     expect(reconcilePreviewId('chat-a', [], null)).toBeNull();
-  });
-});
-
-describe('shouldPinOnOpen', () => {
-  it('pins a local draft id that has no thread-list entry yet', () => {
-    expect(shouldPinOnOpen('__LOCALID_1', [])).toBe(true);
-  });
-
-  it('pins the unsent draft the user just created', () => {
-    const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'new' }];
-
-    expect(shouldPinOnOpen('__LOCALID_1', items)).toBe(true);
-  });
-
-  it('previews a SENT session re-opened by the local id it kept — only drafts pin', () => {
-    const items = [entry('__LOCALID_1', { remoteId: 'chat-a' })];
-
-    expect(shouldPinOnOpen('__LOCALID_1', items)).toBe(false);
-  });
-
-  it('previews an existing session opened from the sidebar', () => {
-    const items = [entry('chat-a', { custom: {}, title: 'Fix the parser' })];
-
-    expect(shouldPinOnOpen('chat-a', items)).toBe(false);
-  });
-
-  it('pins a status-new entry even when its id is not a local one', () => {
-    const items: ThreadListEntry[] = [{ id: 'chat-a', status: 'new' }];
-
-    expect(shouldPinOnOpen('chat-a', items)).toBe(true);
-  });
-
-  it('previews an id with no entry at all', () => {
-    expect(shouldPinOnOpen('chat-a', [])).toBe(false);
-  });
-
-  it('previews an archived session', () => {
-    const items = [entry('chat-a', { status: 'archived', custom: {} })];
-
-    expect(shouldPinOnOpen('chat-a', items)).toBe(false);
-  });
-
-  it('matches on the entry id only — a remoteId hit does not pin', () => {
-    // The seam passes the ACTIVE id; the canonical entry is the one that counts.
-    const items: ThreadListEntry[] = [{ id: '__LOCALID_1', status: 'new', remoteId: 'chat-a' }];
-
-    expect(shouldPinOnOpen('chat-a', items)).toBe(false);
   });
 });

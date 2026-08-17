@@ -12,6 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use common::Recorder;
 use mainframe_adapter_api::{AdapterSession, ImageInput};
 use mainframe_adapter_codex::CodexSession;
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use serde_json::Value;
@@ -65,6 +66,7 @@ async fn send_and_capture(
         },
         None,
         ResolvedPath::from_value("/usr/bin:/bin"),
+        std::sync::Arc::new(BackgroundTaskTracker::new()),
     );
 
     let recorder = Recorder::new();

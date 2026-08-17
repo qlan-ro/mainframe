@@ -6,12 +6,13 @@
  * The branch name is a `'variables-only'` `TriggerTextField`: branch names
  * take `$refs` (`todo/$id`), never slash commands or `@`-files. Base
  * branches come from the automation's own resolved project
- * (`store.activeProjectId`) via `useProjectBranches` — the step needs no
+ * (`store.scopeProjectId`) via `useProjectBranches` — the step needs no
  * project picker of its own.
  */
 import { useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import type { TokenDescriptor } from '@qlan-ro/mainframe-types';
+import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { BranchSelect } from '@/features/git/BranchSelect';
@@ -34,19 +35,23 @@ export interface WorktreeMenuProps {
 
 export function WorktreeMenu({ worktree, onChange, tokens, testId }: WorktreeMenuProps) {
   const [open, setOpen] = useState(false);
-  const activeProjectId = useAutomationsStore((s) => s.activeProjectId);
-  const { branches, currentBranch } = useProjectBranches(activeProjectId);
+  const scopeProjectId = useAutomationsStore((s) => s.scopeProjectId);
+  const { branches, currentBranch } = useProjectBranches(scopeProjectId);
 
   const branchName = worktree ? singlePart(worktree.branchName) : '';
   const summary = worktree ? branchName || 'new worktree' : 'no worktree';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <ChipButton icon={GitBranch} label={`Worktree: ${summary}`} testId={`${testId}-worktree`} className="min-w-0">
-          <span className={branchName ? 'max-w-40 truncate font-mono text-xs' : 'max-w-40 truncate'}>{summary}</span>
-        </ChipButton>
-      </PopoverTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the popover's own ref and onClick. */}
+      <Hint label={`Worktree: ${summary}`}>
+        <PopoverTrigger asChild>
+          <ChipButton icon={GitBranch} label={`Worktree: ${summary}`} testId={`${testId}-worktree`} className="min-w-0">
+            <span className={branchName ? 'max-w-40 truncate font-mono text-xs' : 'max-w-40 truncate'}>{summary}</span>
+          </ChipButton>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent
         data-testid={`${testId}-worktree-menu`}
         align="start"

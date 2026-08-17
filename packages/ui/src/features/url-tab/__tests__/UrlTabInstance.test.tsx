@@ -162,12 +162,13 @@ describe('UrlTabInstance — toolbar composition and the live address bar', () =
     expect(fakeHost.preview.mount).not.toHaveBeenCalled();
   });
 
-  it('renders the invalid body and never mounts, with the input still enabled (AC6)', () => {
+  it('never mounts for an unusable address, with the input still enabled (AC6)', () => {
     vi.mocked(useDaemonIsLocal).mockReturnValue(true);
 
+    // An empty address is the blank ⌘T tab; the AC6 guarantees are the same.
     render(<UrlTabInstance tabId="t1" url="" visible />, { wrapper });
 
-    expect(screen.getByTestId('url-tab-body-invalid')).toBeInTheDocument();
+    expect(screen.getByTestId('url-tab-body-blank')).toBeInTheDocument();
     expect(fakeHost.preview.mount).not.toHaveBeenCalled();
     expect(screen.getByTestId('preview-url-input')).not.toBeDisabled();
   });

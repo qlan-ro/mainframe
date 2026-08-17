@@ -71,8 +71,7 @@ Tauri appends a SHA-256 source to `script-src` for every bundled JS asset (336
 of them here), and per the CSP spec any hash source in a directive makes
 browsers ignore `'unsafe-inline'` in that same directive. That is what
 `"dangerousDisableAssetCspModification": ["script-src"]` turns off — narrowly,
-leaving the `style-src` hashes alone. Evidence:
-`docs/qa/2026-08-10-todo-318-group6-live-verification.md`.
+leaving the `style-src` hashes alone.
 `packages/app-tauri/src-tauri/tests/config_guard.rs` fails if any of the three
 concessions widens, or if one reaches the default config.
 

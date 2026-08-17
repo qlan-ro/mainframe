@@ -8,6 +8,7 @@
  * standalone instruction keeps the paragraph's rhythm.
  */
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react';
+import { Hint } from '@/components/ui/hint';
 import { useInstructionActions } from './use-instruction-actions';
 import type { InstructionChipTarget } from './use-instruction-chip';
 
@@ -28,26 +29,28 @@ export function InstructionChip({ target, variant = 'inline' }: InstructionChipP
   const chip = (
     <span className={CHIP_CLASS} data-smart-action-token={target.token}>
       <code className="font-mono text-xs">{target.insertText}</code>
-      <button
-        type="button"
-        data-testid="smart-action-instruction-append"
-        title="Add to composer"
-        aria-label="Add to composer"
-        className={ICON_BUTTON_CLASS}
-        onClick={() => append(target.insertText)}
-      >
-        <CornerDownLeft className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        data-testid="smart-action-instruction-new-session"
-        title="Run in a new session"
-        aria-label="Run in a new session"
-        className={ICON_BUTTON_CLASS}
-        onClick={() => runInNewSession(target.insertText)}
-      >
-        <MessageSquarePlus className="size-3.5" />
-      </button>
+      <Hint label="Add to composer">
+        <button
+          type="button"
+          data-testid="smart-action-instruction-append"
+          aria-label="Add to composer"
+          className={ICON_BUTTON_CLASS}
+          onClick={() => append(target.insertText)}
+        >
+          <CornerDownLeft className="size-3.5" />
+        </button>
+      </Hint>
+      <Hint label="Run in a new session">
+        <button
+          type="button"
+          data-testid="smart-action-instruction-new-session"
+          aria-label="Run in a new session"
+          className={ICON_BUTTON_CLASS}
+          onClick={() => runInNewSession(target.insertText)}
+        >
+          <MessageSquarePlus className="size-3.5" />
+        </button>
+      </Hint>
     </span>
   );
 

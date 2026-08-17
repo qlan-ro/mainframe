@@ -187,6 +187,127 @@ describe('plain click', () => {
   });
 });
 
+describe('the tab context menu', () => {
+  // The menu adds no capability — it makes the ⌘-click / ⌘\ gestures reachable
+  // without knowing them. So each case asserts the SAME zones-store transition
+  // the keyboard gesture produces.
+  const rightClick = (testId: string) => fireEvent.contextMenu(screen.getByTestId(testId));
+
+  it('opens a split against the focused session, like ⌘-click', () => {
+    seed('chat-a');
+    render();
+
+    rightClick('session-tab-chat-p');
+    fireEvent.click(screen.getByTestId('session-tab-ctx-open-split'));
+
+    expect(zones()).toEqual(['chat-a', 'chat-p']);
+    expect(focusedIndex()).toBe(0);
+  });
+
+  it('offers Open in Split as DISABLED on the active tab — there is nothing to split against', () => {
+    seed('chat-a');
+    render();
+
+    rightClick('session-tab-chat-a');
+
+    expect(screen.getByTestId('session-tab-ctx-open-split').getAttribute('data-disabled')).not.toBeNull();
+    expect(zones()).toBeNull();
+  });
+
+  it('offers Close Split on a member instead of Open in Split', () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    rightClick('session-tab-chat-b');
+
+    expect(screen.getByTestId('session-tab-ctx-close-split')).toBeTruthy();
+    expect(screen.queryByTestId('session-tab-ctx-open-split')).toBeNull();
+  });
+
+  it('dissolves the pair and lands on the session you pointed at', () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    rightClick('session-tab-chat-b');
+    fireEvent.click(screen.getByTestId('session-tab-ctx-close-split'));
+
+    expect(zones()).toBeNull();
+    expect(switchToThread).toHaveBeenCalledWith('chat-b');
+    // Dissolving the split must not close either session's tab.
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('dissolves a PARKED pair without yanking focus off what you are reading', () => {
+    seed('chat-p');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    rightClick('session-tab-chat-a');
+    fireEvent.click(screen.getByTestId('session-tab-ctx-close-split'));
+
+    expect(zones()).toBeNull();
+    expect(switchToThread).not.toHaveBeenCalled();
+  });
+
+  it('closes the tab from the menu, the same path as the ✕', () => {
+    seed('chat-a');
+    render();
+
+    rightClick('session-tab-chat-p');
+    fireEvent.click(screen.getByTestId('session-tab-ctx-close'));
+
+    expect(useSessionTabsStore.getState().previewId).toBeNull();
+  });
+
+  it('offers Keep Open on the preview tab only', () => {
+    seed('chat-a');
+    render();
+
+    rightClick('session-tab-chat-p');
+    expect(screen.getByTestId('session-tab-ctx-keep-open')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('session-tab-ctx-keep-open'));
+
+    expect(useSessionTabsStore.getState().tabIds).toContain('chat-p');
+    expect(useSessionTabsStore.getState().previewId).toBeNull();
+  });
+});
+
+describe("the pair's shared underline", () => {
+  // The underline is the SELECTION signal, and a split can be open while parked
+  // behind a third session. Lighting it on membership rather than on visibility
+  // is what used to make three tabs read as selected at once.
+  const groupMark = () => screen.getByTestId('session-tabs-zone-group').className;
+
+  it('is lit while a member of the pair is the focused session', () => {
+    seed('chat-a');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    expect(groupMark()).toContain('after:opacity-100');
+  });
+
+  it('goes dark while the pair is PARKED behind another session', () => {
+    seed('chat-p');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    expect(groupMark()).toContain('after:opacity-0');
+    expect(groupMark()).not.toContain('after:opacity-100');
+  });
+
+  it('leaves the parked pair with exactly one lit tab in the strip — the focused one', () => {
+    seed('chat-p');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    render();
+
+    expect(screen.getByTestId('session-tab-chat-p').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('session-tab-chat-a').getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByTestId('session-tab-chat-b').getAttribute('aria-selected')).toBe('false');
+  });
+});
+
 describe('closing a zone tab', () => {
   it("collapses the split to the other chat when the FOCUSED zone's tab closes", () => {
     seed('chat-a');

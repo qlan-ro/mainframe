@@ -16,19 +16,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Hint } from '@/components/ui/hint';
 import { useAdapters } from '@/store/adapters';
 import type { AskAgentStep } from '../../contract';
 import { ChipButton } from './ChipButton';
+import { resolveStepAdapter } from './resolve-step-adapter';
 
 export interface ModelMenuProps {
   adapterId: string | undefined;
   model: string | undefined;
   onChange: (patch: Pick<AskAgentStep, 'adapterId' | 'model'>) => void;
   testId: string;
-}
-
-function resolveAdapter(adapters: AdapterInfo[], adapterId: string | undefined): AdapterInfo | undefined {
-  return adapters.find((a) => a.id === adapterId) ?? adapters.find((a) => a.installed) ?? adapters[0];
 }
 
 function resolveModel(adapter: AdapterInfo | undefined, model: string | undefined) {
@@ -38,30 +36,35 @@ function resolveModel(adapter: AdapterInfo | undefined, model: string | undefine
 
 export function ModelMenu({ adapterId, model, onChange, testId }: ModelMenuProps) {
   const adapters = useAdapters();
-  const activeAdapter = resolveAdapter(adapters, adapterId);
+  const activeAdapter = resolveStepAdapter(adapters, adapterId);
   const activeModel = resolveModel(activeAdapter, model);
 
+  // A disabled button swallows pointer events, so the hint wraps the chip rather than triggering on it.
   if (!activeAdapter || !activeModel) {
     return (
-      <ChipButton icon={Sparkles} label="No agent providers installed" testId={`${testId}-model`} disabled>
-        No agents
-      </ChipButton>
+      <Hint label="No agent providers installed">
+        <span className="inline-flex shrink-0">
+          <ChipButton icon={Sparkles} label="No agent providers installed" testId={`${testId}-model`} disabled>
+            No agents
+          </ChipButton>
+        </span>
+      </Hint>
     );
   }
 
+  const label = `Model: ${activeAdapter.name} · ${activeModel.label}`;
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <ChipButton
-          icon={Sparkles}
-          label={`Model: ${activeAdapter.name} · ${activeModel.label}`}
-          testId={`${testId}-model`}
-          chevron
-          className="min-w-0"
-        >
-          <span className="truncate">{activeModel.label}</span>
-        </ChipButton>
-      </DropdownMenuTrigger>
+      {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
+          swallow the menu's own ref and onClick. */}
+      <Hint label={label}>
+        <DropdownMenuTrigger asChild>
+          <ChipButton icon={Sparkles} label={label} testId={`${testId}-model`} chevron className="min-w-0">
+            <span className="truncate">{activeModel.label}</span>
+          </ChipButton>
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent
         data-testid={`${testId}-model-menu`}
         align="start"

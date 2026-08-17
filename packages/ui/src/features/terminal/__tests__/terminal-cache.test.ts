@@ -25,6 +25,8 @@ vi.mock('@xterm/addon-fit', () => ({
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 import { getOrCreate, disposeCachedTerminal, getCachedTerminal } from '../terminal-cache';
+// Real module — verifying disposeCachedTerminal's effect on it is the point of these tests.
+import { requestTerminalFocus, claimTerminalFocus } from '../terminal-focus';
 
 describe('terminal-cache', () => {
   beforeEach(() => {
@@ -60,5 +62,19 @@ describe('terminal-cache', () => {
     const b = getOrCreate('t4');
     expect(a).not.toBe(b);
     disposeCachedTerminal('t4');
+  });
+
+  it('disposeCachedTerminal clears a pending focus request for that id', () => {
+    getOrCreate('t5');
+    requestTerminalFocus('t5');
+    disposeCachedTerminal('t5');
+    expect(claimTerminalFocus('t5')).toBe(false);
+  });
+
+  it('disposeCachedTerminal leaves a pending request for a different id alone', () => {
+    getOrCreate('t6');
+    requestTerminalFocus('other-id');
+    disposeCachedTerminal('t6');
+    expect(claimTerminalFocus('other-id')).toBe(true);
   });
 });

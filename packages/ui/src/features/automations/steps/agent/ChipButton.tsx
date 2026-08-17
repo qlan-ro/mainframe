@@ -4,8 +4,10 @@
  * same control.
  *
  * A chip shows only its *value*; the field it configures is carried on
- * `title`/`aria-label`. At 20px there is no room for "Model: Sonnet 5", and
- * the icon already names the field for sighted users.
+ * `aria-label`. At 20px there is no room for "Model: Sonnet 5", and the icon
+ * already names the field for sighted users. The visible hover hint is a
+ * `Hint` at the call site — it has to wrap the menu trigger, which is outside
+ * this component.
  */
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { ChevronDown, type LucideIcon } from 'lucide-react';
@@ -25,12 +27,20 @@ export interface ChipButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   testId: string;
   destructive?: boolean;
+  /** A wrong-but-not-broken setting — outranked by `destructive` when both are set. */
+  caution?: boolean;
   chevron?: boolean;
   children: ReactNode;
 }
 
+function tintClass(destructive: boolean | undefined, caution: boolean | undefined): string {
+  if (destructive) return 'text-destructive';
+  if (caution) return 'text-warning';
+  return 'text-muted-foreground';
+}
+
 export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(function ChipButton(
-  { icon: Icon, label, testId, destructive, chevron, children, className, type, ...props },
+  { icon: Icon, label, testId, destructive, caution, chevron, children, className, type, ...props },
   ref,
 ) {
   return (
@@ -38,9 +48,8 @@ export const ChipButton = forwardRef<HTMLButtonElement, ChipButtonProps>(functio
       ref={ref}
       type={type ?? 'button'}
       data-testid={testId}
-      title={label}
       aria-label={label}
-      className={cn(CHIP_BASE, destructive ? 'text-destructive' : 'text-muted-foreground', className)}
+      className={cn(CHIP_BASE, tintClass(destructive, caution), className)}
       {...props}
     >
       <Icon size={12} className="shrink-0" aria-hidden />

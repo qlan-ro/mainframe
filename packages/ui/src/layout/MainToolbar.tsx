@@ -5,9 +5,26 @@ import { useSetupAdvisor } from '@/features/setup-advisor/use-setup-advisor';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { chordHint } from '@/features/shortcuts/chord-hint';
+import { useLayoutStore } from '@/store/layout';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 import { SessionTabs } from '../features/session-tabs/SessionTabs';
 import { SurfaceRail } from './SurfaceRail';
 import { SidebarLeftGlyph } from './surface-icons';
+
+/**
+ * True when the workspace surface's docked Files sidebar sits flush against
+ * the window's right edge — i.e. the workspace is the bottom strip, or the
+ * rightmost (or only) top column. When the workspace is instead the LEFT
+ * column of a two-up split, its sidebar docks mid-window and the toolbar's
+ * trailing icons (all the way at the true right edge) sit nowhere near it.
+ */
+function isWorkspaceSidebarAtRightEdge(layout: { top: string[]; bottom: string | null }): boolean {
+  if (layout.bottom === 'workspace') return true;
+  return layout.top[layout.top.length - 1] === 'workspace';
+}
 
 interface MainToolbarProps {
   /** Collapsed traffic-light clearance applied to the left group (0 when the sidebar is shown). */
@@ -31,10 +48,19 @@ interface MainToolbarProps {
  * (docs/plans/2026-08-08-session-tabs-and-workspace-files.md).
  */
 export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, projectId }: MainToolbarProps) {
-  const mode = useTheme((s) => s.mode);
+  const resolvedMode = useTheme((s) => s.resolvedMode);
   const toggleTheme = useTheme((s) => s.toggle);
-  const isDark = mode === 'dark';
+  const isDark = resolvedMode === 'dark';
   const openSetupAdvisor = useSetupAdvisor((s) => s.openSheet);
+  const searchChord = chordHint('app.search-palette');
+
+  // Nudge the trailing controls left when the docked Files sidebar is open at
+  // the window's right edge, so they read as making room for it rather than
+  // sitting jammed against its top-right corner.
+  const layout = useLayoutStore((s) => s.layout);
+  const filesScopeKey = useActiveBasesStore((s) => s.scopeKey);
+  const filesOpen = useWorkspaceFilesPanel((s) => isWorkspaceFilesPanelOpen(s.openByScope, filesScopeKey));
+  const shiftForFilesSidebar = filesOpen && isWorkspaceSidebarAtRightEdge(layout);
 
   return (
     <div
@@ -69,22 +95,27 @@ export function MainToolbar({ leadingInset, sidebarRendered, onExpandSidebar, pr
       <SessionTabs />
 
       {/* Right: controls — search │ project tools │ workspace. */}
-      <div className="flex shrink-0 items-center gap-0.5">
-        <Hint label="Search (⌘O)">
+      <div className={cn('flex shrink-0 items-center gap-0.5', shiftForFilesSidebar && 'mr-2')}>
+        <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
           <Button
             data-testid="main-toolbar-search"
+            data-tut="search"
             variant="ghost"
             size="sm"
             onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
             className="text-muted-foreground"
           >
             <Search className="size-4" />
-            <kbd
-              data-testid="main-toolbar-search-hint"
-              className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-sm font-medium text-muted-foreground"
-            >
-              ⌘O
-            </kbd>
+            {/* No chip at all when the action is unassigned — an empty kbd box
+                reads as a broken control rather than an absent shortcut. */}
+            {searchChord != null && (
+              <kbd
+                data-testid="main-toolbar-search-hint"
+                className="pointer-events-none inline-flex items-center rounded-sm border bg-muted px-1 font-mono text-sm font-medium text-muted-foreground"
+              >
+                {searchChord}
+              </kbd>
+            )}
           </Button>
         </Hint>
         <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />

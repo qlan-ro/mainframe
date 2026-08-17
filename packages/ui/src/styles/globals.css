@@ -135,7 +135,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.62 0.16 150);
   --warning: oklch(0.535 0.125 59.112);
-  --bubble-tinted: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
+  --bubble-tinted: oklch(from var(--primary) 0.96 calc(c * 0.15) h);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--primary);
@@ -178,7 +178,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.75 0.17 150);
   --warning: oklch(0.794 0.127 63.093);
-  --bubble-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
+  --bubble-tinted: oklch(from var(--primary) 0.32 calc(c * 0.15) h);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: var(--primary);
@@ -210,6 +210,37 @@
   overflow: hidden;
   white-space: nowrap;
   mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
+}
+
+/** Ramp depth for every `scroll-fade*` scroller — the app's existing ~20px reading, not stock's deeper percentage default. */
+@layer base {
+  :root {
+    --scroll-fade-size: 20px;
+  }
+}
+
+/** Starts `scroll-fade-y`'s ramps below the sidebar's parked sticky headers instead of dissolving them; overrides only the mask shape `scroll-fade-y` already reads. */
+@utility scroll-fade-sticky {
+  --scroll-fade-mask: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 var(--scroll-fade-inset-t, 0px),
+    transparent var(--scroll-fade-inset-t, 0px),
+    #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px) - var(--scroll-fade-b, 0px)),
+    transparent calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
+    #000 100%
+  );
+}
+
+/** Below the primary path's engine floor (unconfirmed — see the webview probe doc), shadcn's fallback pins both ramps open permanently; drop the mask so those engines clip like before this change. */
+@supports not (animation-timeline: scroll()) {
+  .scroll-fade-y,
+  .scroll-fade-x {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
 }
 
 @layer base {

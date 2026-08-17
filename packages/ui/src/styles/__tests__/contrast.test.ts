@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
  * Contrast guardrail — the CI encoding of the typography/legibility audit
- * (docs/architecture/2026-07-11-typography-legibility-audit.md §7), repointed at
+ * (docs/research/2026-07-11-typography-legibility-audit.md §7), repointed at
  * the v2 token layer on 2026-08-06.
  *
  * It read `src/styles/globals.css` until then. That sheet was deleted with the v1
@@ -21,7 +21,7 @@
  *   foreground on background 12.63 / 15.57 · on card 12.63 / 14.10
  *   muted-foreground on background 4.74 / 7.66 · on card 4.74 / 6.94
  *   warning as text on background 5.37 / 10.11
- *   foreground on bubble-tinted 10.03 / 10.72  (matches the Phase-2 ledger)
+ *   foreground on bubble-tinted 11.17 / 9.93   (paled 2026-08-15, still clears by a wide margin)
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
  *   success on background 3.39 / 9.50          (a glyph/dot hue, never body text)
  *

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { getOrCreate } from './terminal-cache';
+import { getCachedTerminal, getOrCreate } from './terminal-cache';
+import { claimTerminalFocus, onTerminalFocusRequest } from './terminal-focus';
 
 interface Props {
   terminalId: string;
@@ -61,6 +62,18 @@ export function TerminalInstance({ terminalId, visible }: Props): React.ReactEle
     );
     return () => cancelAnimationFrame(frame);
   }, [visible]);
+
+  // Claim a deliberate open (⌘J, add menu, tab click). Runs once for the current
+  // visibility, then stays subscribed so a request arriving while this terminal
+  // is already the active tab focuses it too.
+  useEffect(() => {
+    const apply = (): void => {
+      if (!visible) return;
+      if (claimTerminalFocus(terminalId)) getCachedTerminal(terminalId)?.term.focus();
+    };
+    apply();
+    return onTerminalFocusRequest(apply);
+  }, [terminalId, visible]);
 
   return (
     <div

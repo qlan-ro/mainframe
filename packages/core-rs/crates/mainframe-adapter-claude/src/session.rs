@@ -20,7 +20,7 @@
 //! updates keep the destination the CLI declared instead of being rewritten,
 //! and a `setMode` update is always forced session-scoped (#283).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
@@ -48,7 +48,6 @@ use crate::cliproxy::{self, CliProxyEnv};
 use crate::constants::MAINFRAME_SYSTEM_PROMPT_APPEND;
 use crate::context_files::collect_claude_context_files;
 use crate::events::{handle_stderr, handle_stdout};
-use crate::pr_detection::DetectedPrCore;
 use crate::session_control::{ControlRequestChannel, SendAwaitingOpts, StdinTx};
 use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
@@ -155,12 +154,6 @@ pub struct ActiveTask {
     pub command: Option<String>,
 }
 
-/// tool_use_id → originating tool name (+ Bash command). Gates Path-A PR scan.
-pub struct ToolUseRegistryEntry {
-    pub name: String,
-    pub command: Option<String>,
-}
-
 /// Cross-task read surface (CONCURRENCY.tsv 88): atomics for pid/status/last-activity.
 struct SharedSurface {
     pid: AtomicU32,
@@ -206,9 +199,6 @@ pub struct ClaudeSessionState {
     pub child: Option<ChildHandle>,
     pub active_tasks: HashMap<String, ActiveTask>,
     pub interrupt_timer: Option<tokio::task::JoinHandle<()>>,
-    pub pending_pr_creates: HashSet<String>,
-    pub pending_pr_mutations: HashMap<String, DetectedPrCore>,
-    pub tool_use_registry: HashMap<String, ToolUseRegistryEntry>,
     pub skill_path_cache: HashMap<String, String>,
     pub task_v2_events: Vec<Value>,
     pub task_events: ClaudeTaskEvents,
@@ -236,6 +226,7 @@ fn execution_mode_cli(mode: ExecutionMode) -> &'static str {
     match mode {
         ExecutionMode::Default => "default",
         ExecutionMode::AcceptEdits => "acceptEdits",
+        ExecutionMode::Auto => "auto",
         ExecutionMode::Yolo => "bypassPermissions",
     }
 }
@@ -373,9 +364,6 @@ impl ClaudeSession {
                 child: None,
                 active_tasks: HashMap::new(),
                 interrupt_timer: None,
-                pending_pr_creates: HashSet::new(),
-                pending_pr_mutations: HashMap::new(),
-                tool_use_registry: HashMap::new(),
                 skill_path_cache: HashMap::new(),
                 task_v2_events: Vec::new(),
                 task_events: ClaudeTaskEvents::new(background_tasks, workflow_store),
@@ -1348,6 +1336,12 @@ mod tests {
     }
 
     #[test]
+    fn auto_mode_passes_permission_mode_auto() {
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None);
+        assert_eq!(mode_arg(&args), "auto");
+    }
+
+    #[test]
     fn yolo_mode_passes_permission_mode_bypass_permissions() {
         let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None);
         assert_eq!(mode_arg(&args), "bypassPermissions");
@@ -1437,6 +1431,30 @@ mod tests {
         let mut rx = spawned_with_stdin(&s);
         s.set_permission_mode(ExecutionMode::Yolo).await.unwrap();
         assert_eq!(read_json(&mut rx)["request"]["mode"], "bypassPermissions");
+    }
+
+    #[tokio::test]
+    async fn set_permission_mode_sends_auto_verbatim() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        let payload = read_json(&mut rx);
+        assert_eq!(payload["request"]["subtype"], "set_permission_mode");
+        assert_eq!(payload["request"]["mode"], "auto");
+    }
+
+    #[tokio::test]
+    async fn leaving_plan_mode_restores_auto() {
+        let s = session();
+        let mut rx = spawned_with_stdin(&s);
+        s.set_permission_mode(ExecutionMode::Auto).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
+
+        s.set_plan_mode(true).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "plan");
+
+        s.set_plan_mode(false).await.unwrap();
+        assert_eq!(read_json(&mut rx)["request"]["mode"], "auto");
     }
 
     #[tokio::test]

@@ -238,6 +238,8 @@ export interface AdapterInfo {
   catalogSource?: 'probed' | 'fallback';
   capabilities: {
     planMode: boolean;
+    /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
+    autoMode?: boolean;
   };
 }
 
@@ -357,6 +359,8 @@ export interface Adapter {
   name: string;
   readonly capabilities: {
     planMode: boolean;
+    /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
+    autoMode?: boolean;
   };
 
   isInstalled(): Promise<boolean>;

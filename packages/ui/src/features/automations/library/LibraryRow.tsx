@@ -6,7 +6,7 @@
  * history to browse, or to Overview if it's never run.
  *
  * The project badge names the automation's own project. The daemon list is
- * scoped to the active project PLUS unscoped (projectId null) automations,
+ * scoped to the modal's project PLUS unscoped (projectId null) automations,
  * so the badge is what distinguishes "yours" from "everywhere".
  *
  * Owns its own async gateway calls (toggle/run), mirroring the v1
@@ -163,7 +163,6 @@ export function LibraryRow({ automation, lastRun }: LibraryRowProps): React.Reac
           type="button"
           data-testid={`automations-library-run-${automation.id}`}
           disabled={running}
-          title="Run now"
           onClick={stopAnd(() => void handleRun())}
           className="inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] border-border bg-transparent px-[11px] text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-card hover:bg-card disabled:cursor-not-allowed disabled:opacity-45"
         >

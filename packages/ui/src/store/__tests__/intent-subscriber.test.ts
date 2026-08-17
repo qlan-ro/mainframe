@@ -19,7 +19,7 @@ import { useFilesStore } from '../files';
 import { useActiveBasesStore } from '../active-bases-store';
 import { subscribeToFileIntents } from '../intent-subscriber';
 import { useOverlaysStore } from '../overlays';
-import { useWorkspaceFilesPanel } from '../workspace-files-panel';
+import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '../workspace-files-panel';
 
 const WORKTREE = '/Users/dev/myapp/.worktrees/feat-wt';
 const PROJECT = '/Users/dev/myapp';
@@ -51,6 +51,7 @@ beforeEach(() => {
   useFilesStore.setState({ revealTarget: null });
   // Reset bases to empty by default (tests that need bases set them explicitly).
   useActiveBasesStore.setState({ bases: {}, scopeKey: null });
+  useWorkspaceFilesPanel.setState({ openByScope: {} });
 });
 
 afterEach(() => {
@@ -162,12 +163,13 @@ describe('reveal-file intent subscriber', () => {
   it('reveal-file lights the workspace surface AND opens the Files panel', () => {
     // A file revealed into a closed panel is a file the user cannot see.
     const unsub = subscribeToFileIntents();
-    useWorkspaceFilesPanel.setState({ open: false });
 
     expect(isWorkspaceActive()).toBe(false);
     emitSurfaceIntent({ type: 'reveal-file', path: '/src/main.ts' });
     expect(isWorkspaceActive()).toBe(true);
-    expect(useWorkspaceFilesPanel.getState().open).toBe(true);
+    expect(
+      isWorkspaceFilesPanelOpen(useWorkspaceFilesPanel.getState().openByScope, useActiveBasesStore.getState().scopeKey),
+    ).toBe(true);
 
     unsub();
   });
