@@ -644,10 +644,29 @@ impl ChatManagerDeps for DaemonChatDeps {
             );
             return Box::pin(async { None });
         };
+        // Apple's on-device model is tried first where it exists; this opts a
+        // machine back to CLI-generated titles, which are slower and cost tokens
+        // but come from a much larger model.
+        let local_disabled = <Self as ChatManagerDeps>::settings_get(
+            self,
+            "general",
+            "titleGeneration.localDisabled",
+        )
+        .as_deref()
+            == Some("true");
         let content = content.to_string();
         let binary = binary.to_string();
         let adapter_id = adapter_id.to_string();
         Box::pin(async move {
+            // On-device costs no tokens, spawns no vendor CLI, and leaves no
+            // throwaway session behind. It yields to the adapter whenever this
+            // machine has no on-device path or the model declines, so the CLI
+            // stays the generator of record.
+            if !local_disabled {
+                if let Some(title) = mainframe_local_intelligence::generate_title(&content).await {
+                    return Some(title);
+                }
+            }
             match adapter.generate_title(content, binary).await {
                 Ok(title) => title,
                 Err(err) => {

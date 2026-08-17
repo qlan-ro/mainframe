@@ -118,6 +118,10 @@ pub struct SidecarConfig {
     pub daemon_port: u16,
     /// Optional data dir override.
     pub data_dir: Option<PathBuf>,
+    /// The bundled `mainframe-intelligence` helper, when this machine has one.
+    /// `None` removes the variable from the daemon's env, so a value left over in
+    /// a developer's shell can't silently route titles through a real model.
+    pub local_intelligence_bin: Option<PathBuf>,
 }
 
 /// Spawn the daemon sidecar. Returns a handle used to kill it on app exit.
@@ -137,7 +141,11 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
         cmd.env(k, v);
     }
 
-    for env_override in daemon_env_overrides(config.daemon_port, config.data_dir.as_deref()) {
+    for env_override in daemon_env_overrides(
+        config.daemon_port,
+        config.data_dir.as_deref(),
+        config.local_intelligence_bin.as_deref(),
+    ) {
         match env_override {
             EnvOverride::Set(key, value) => {
                 cmd.env(key, value);
@@ -166,7 +174,11 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     })
 }
 
-fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {
+fn daemon_env_overrides(
+    daemon_port: u16,
+    data_dir: Option<&Path>,
+    local_intelligence_bin: Option<&Path>,
+) -> Vec<EnvOverride> {
     let port = daemon_port.to_string();
     let mut overrides = vec![
         EnvOverride::Set("NODE_ENV", "production".to_string()),
@@ -183,6 +195,14 @@ fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOve
         None => overrides.push(EnvOverride::Remove("MAINFRAME_DATA_DIR")),
     }
 
+    match local_intelligence_bin {
+        Some(bin) => overrides.push(EnvOverride::Set(
+            "MAINFRAME_LOCAL_INTELLIGENCE_BIN",
+            bin.to_string_lossy().into_owned(),
+        )),
+        None => overrides.push(EnvOverride::Remove("MAINFRAME_LOCAL_INTELLIGENCE_BIN")),
+    }
+
     overrides
 }
 
@@ -196,6 +216,17 @@ fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOve
 pub fn find_bundled_rust_daemon() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     find_bundled_binary_in(exe.parent()?, "mainframe-daemon")
+}
+
+/// Locate the bundled `mainframe-intelligence` helper, which gives the daemon a
+/// path to Apple's on-device model for chat titles.
+///
+/// Unlike the daemon there is no monorepo fallback: the helper only exists once
+/// someone has provisioned it, so a plain dev checkout and the E2E suite keep
+/// titling through the CLI adapters instead of reaching a real model.
+pub fn find_bundled_local_intelligence() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    find_bundled_binary_in(exe.parent()?, "mainframe-intelligence")
 }
 
 /// Locate a bundled sidecar binary named `stem` (or `stem-<triple>`) in `dir`,
@@ -243,7 +274,8 @@ mod tests {
 
         // A sibling `node` must not satisfy the mainframe-daemon scan.
         let mut n = std::fs::File::create(dir.join("node")).unwrap();
-        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        n.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert!(find_bundled_binary_in(&dir, "mainframe-daemon").is_none());
 
         // Zero-byte placeholder ignored.
@@ -253,7 +285,8 @@ mod tests {
         // Real-sized triple binary found via the fallback.
         let mut f =
             std::fs::File::create(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert_eq!(
             find_bundled_binary_in(&dir, "mainframe-daemon"),
             Some(dir.join("mainframe-daemon-x86_64-unknown-linux-gnu"))
@@ -261,7 +294,8 @@ mod tests {
 
         // Exact base name wins over the triple sibling.
         let mut f = std::fs::File::create(dir.join("mainframe-daemon")).unwrap();
-        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize]).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
         assert_eq!(
             find_bundled_binary_in(&dir, "mainframe-daemon"),
             Some(dir.join("mainframe-daemon"))
@@ -272,17 +306,71 @@ mod tests {
 
     #[test]
     fn daemon_env_overrides_remove_shell_owned_data_dir_when_not_explicit() {
-        assert!(
-            daemon_env_overrides(31500, None).contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR"))
-        );
+        assert!(daemon_env_overrides(31500, None, None)
+            .contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR")));
     }
 
     #[test]
     fn daemon_env_overrides_keep_explicit_data_dir() {
         assert!(
-            daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data"))).contains(
+            daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data")), None).contains(
                 &EnvOverride::Set("MAINFRAME_DATA_DIR", "/tmp/mainframe-data".to_string())
             )
         );
+    }
+
+    /// The daemon reads this name from `mainframe_local_intelligence::HELPER_BIN_ENV`
+    /// in the other cargo workspace, which cannot be imported here. Its test
+    /// `the_env_var_matches_the_name_the_tauri_shell_sets` pins the same literal
+    /// from that side; renaming in one place alone silently disables the feature.
+    #[test]
+    fn daemon_env_overrides_pass_the_local_intelligence_helper_through() {
+        assert!(
+            daemon_env_overrides(31500, None, Some(Path::new("/Apps/mainframe-intelligence")))
+                .contains(&EnvOverride::Set(
+                    "MAINFRAME_LOCAL_INTELLIGENCE_BIN",
+                    "/Apps/mainframe-intelligence".to_string()
+                ))
+        );
+    }
+
+    /// A stale value in the developer's shell must not reach the daemon: without
+    /// the removal, `MAINFRAME_LOCAL_INTELLIGENCE_BIN` exported in a terminal
+    /// would route every chat title through a real on-device model.
+    #[test]
+    fn daemon_env_overrides_remove_the_helper_when_none_is_bundled() {
+        assert!(daemon_env_overrides(31500, None, None)
+            .contains(&EnvOverride::Remove("MAINFRAME_LOCAL_INTELLIGENCE_BIN")));
+    }
+
+    /// The helper scan reuses the daemon's, so it inherits the placeholder floor
+    /// and must stay disjoint from the daemon binary sitting beside it.
+    #[test]
+    fn bundled_local_intelligence_scan_is_disjoint_from_the_daemon() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("mf-bundled-afm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut d = std::fs::File::create(dir.join("mainframe-daemon")).unwrap();
+        d.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
+        assert!(find_bundled_binary_in(&dir, "mainframe-intelligence").is_none());
+
+        std::fs::File::create(dir.join("mainframe-intelligence")).unwrap();
+        assert!(
+            find_bundled_binary_in(&dir, "mainframe-intelligence").is_none(),
+            "a zero-byte placeholder must not be spawned"
+        );
+
+        let mut f = std::fs::File::create(dir.join("mainframe-intelligence")).unwrap();
+        f.write_all(&vec![0u8; (MIN_SIDECAR_BIN_BYTES + 1) as usize])
+            .unwrap();
+        assert_eq!(
+            find_bundled_binary_in(&dir, "mainframe-intelligence"),
+            Some(dir.join("mainframe-intelligence"))
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,5 +1,7 @@
 # Sidecar binary for Tauri's externalBin, provisioned per target triple:
-#   mainframe-daemon-<triple> — Rust daemon (scripts/provision-rust-daemon.mjs)
+#   mainframe-daemon-<triple>       — Rust daemon (scripts/provision-rust-daemon.mjs)
+#   mainframe-intelligence-<triple> — Apple on-device helper
+#                                     (scripts/provision-apple-intelligence.mjs)
 # Real binary is MB-scale and platform-specific — never committed. cargo check
 # does not need it; `tauri build` does, so provision first. Only this
 # .gitignore + README.md are tracked.
@@ -7,6 +9,7 @@
 # node-* also ignored: a stale local artifact from the retired Node sidecar
 # (packages/app-tauri no longer provisions one); harmless leftover on disk.
 mainframe-daemon-*
+mainframe-intelligence-*
 node-*
 !.gitignore
 !README.md

@@ -34,6 +34,7 @@ mainframe-adapter-mock = { workspace = true }
 mainframe-background-tasks = { workspace = true }
 mainframe-claude-workflows = { workspace = true }
 mainframe-launch = { workspace = true }
+mainframe-local-intelligence = { workspace = true }
 mainframe-plugins = { workspace = true }
 mainframe-lsp = { workspace = true }
 reqwest = { workspace = true }

@@ -328,10 +328,12 @@ fn boot_rust_daemon(
     shell_env: &std::collections::HashMap<String, String>,
 ) -> Result<sidecar::DaemonHandle, String> {
     let daemon_bin = resolve_rust_daemon_bin()?;
+    let local_intelligence_bin = resolve_local_intelligence_bin();
 
     tracing::info!(
         daemon = %daemon_bin.display(),
         port = daemon_port(),
+        local_intelligence = local_intelligence_bin.as_ref().map(|p| p.display().to_string()),
         "booting rust daemon sidecar"
     );
 
@@ -340,6 +342,36 @@ fn boot_rust_daemon(
         shell_env: shell_env.clone(),
         daemon_port: daemon_port(),
         data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
+        local_intelligence_bin,
+    })
+}
+
+/// Locate the `mainframe-intelligence` helper that gives the daemon Apple's
+/// on-device model for chat titles.
+///
+/// Precedence:
+///   1. `MAINFRAME_LOCAL_INTELLIGENCE_BIN` env override — how a developer opts a
+///      dev build in, since there is deliberately no monorepo fallback.
+///   2. Bundled externalBin next to the exe.
+///
+/// `None` means this machine has no on-device path, and the daemon titles
+/// through the CLI adapters exactly as it did before. That is the expected
+/// result off macOS and on any build where the helper wasn't provisioned.
+fn resolve_local_intelligence_bin() -> Option<PathBuf> {
+    if let Some(raw) = std::env::var_os("MAINFRAME_LOCAL_INTELLIGENCE_BIN") {
+        let path = PathBuf::from(raw);
+        if path.exists() {
+            tracing::info!(path = %path.display(), "local intelligence resolved (env override)");
+            return Some(path);
+        }
+        tracing::warn!(
+            path = %path.display(),
+            "MAINFRAME_LOCAL_INTELLIGENCE_BIN does not exist; falling back to CLI titles"
+        );
+        return None;
+    }
+    sidecar::find_bundled_local_intelligence().inspect(|path| {
+        tracing::info!(path = %path.display(), "local intelligence resolved (bundled)");
     })
 }
 

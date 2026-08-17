@@ -1542,6 +1542,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-local-intelligence"
+version = "0.0.0"
+dependencies = [
+ "mainframe-adapter-api",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mainframe-lsp"
 version = "0.0.0"
 dependencies = [
@@ -1624,6 +1634,7 @@ dependencies = [
  "mainframe-db",
  "mainframe-git",
  "mainframe-launch",
+ "mainframe-local-intelligence",
  "mainframe-lsp",
  "mainframe-plugins",
  "mainframe-runtime",

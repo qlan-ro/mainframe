@@ -43,7 +43,7 @@
       "providerShortName": null,
       "signingIdentity": null
     },
-    "externalBin": ["binaries/mainframe-daemon"]
+    "externalBin": ["binaries/mainframe-daemon", "binaries/mainframe-intelligence"]
   },
   "plugins": {
     "shell": {

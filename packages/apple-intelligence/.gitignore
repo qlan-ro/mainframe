@@ -1,0 +1,3 @@
+# SwiftPM build output. The provisioner copies the release binary into
+# packages/app-tauri/src-tauri/binaries/, which is itself gitignored.
+.build/

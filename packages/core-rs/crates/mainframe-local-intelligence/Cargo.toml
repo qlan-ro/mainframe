@@ -1,0 +1,16 @@
+[package]
+name = "mainframe-local-intelligence"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+mainframe-adapter-api = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

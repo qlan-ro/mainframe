@@ -8,7 +8,8 @@
     "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "cargo tauri build",
     "provision:rust-daemon": "node scripts/provision-rust-daemon.mjs",
-    "bundle": "pnpm run provision:rust-daemon"
+    "bundle": "pnpm run provision:rust-daemon && pnpm run provision:apple-intelligence",
+    "provision:apple-intelligence": "node scripts/provision-apple-intelligence.mjs"
   },
   "dependencies": {
     "@qlan-ro/mainframe-ui": "workspace:*"
