@@ -42,7 +42,7 @@ function SwitcherTrigger({
   ...props
 }: { meta: DaemonMeta; status: DaemonStatus } & ComponentProps<typeof SidebarMenuButton>) {
   return (
-    <SidebarMenuButton size="lg" data-testid="daemon-footer-trigger" {...props}>
+    <SidebarMenuButton size="lg" data-testid="daemon-footer-trigger" data-tut="daemon" {...props}>
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent">
         <DaemonGlyph kind={meta.kind} />
       </span>

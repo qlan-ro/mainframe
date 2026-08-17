@@ -67,7 +67,6 @@ function HeaderActions() {
           variant="ghost"
           size="icon-sm"
           data-testid="sidebar-settings"
-          data-tut="settings"
           aria-label="Settings"
           onClick={() => openSettings()}
         >

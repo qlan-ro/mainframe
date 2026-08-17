@@ -96,7 +96,7 @@ function insertArmedAnchors(): Record<string, HTMLElement> {
     'search',
     'kanban',
     'automations',
-    'settings',
+    'daemon',
   ];
   return Object.fromEntries(targets.map((t) => [t, insertAnchor(t)]));
 }
@@ -187,7 +187,7 @@ describe('TutorialOverlay', () => {
   // step the tour cannot point at.
   it('counts only the steps it can actually show', async () => {
     insertAnchor('add-project');
-    insertAnchor('settings');
+    insertAnchor('daemon');
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByText('Step 1 of 2')).toBeTruthy();
@@ -197,11 +197,11 @@ describe('TutorialOverlay', () => {
   it('clamps a persisted step that overruns a shorter plan', async () => {
     mockStep = LAST_STEP;
     insertAnchor('add-project');
-    insertAnchor('settings');
+    insertAnchor('daemon');
     render(<TutorialOverlay />);
     await settle();
     expect(screen.getByText('Step 2 of 2')).toBeTruthy();
-    expect(screen.getByText('Reach this machine remotely')).toBeTruthy();
+    expect(screen.getByText('Which machine you’re on')).toBeTruthy();
   });
 
   // "Three ways to start a session" needs three rings but exactly one scrim —

@@ -202,7 +202,7 @@ test.describe('§window-states First-run tour', () => {
     'Search anything',
     'The Kanban board',
     'Automations',
-    'Reach this machine remotely',
+    'Which machine you’re on',
   ];
 
   test('Next/Back walk all nine steps with no gaps; Done completes the tour', async () => {

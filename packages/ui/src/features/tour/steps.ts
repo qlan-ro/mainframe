@@ -75,10 +75,10 @@ const TOUR_STEPS: readonly TourStep[] = [
     body: 'Agent runs that fire on their own. Build a workflow once, then put it on a schedule.',
   },
   {
-    target: 'settings',
-    side: 'right',
-    title: 'Reach this machine remotely',
-    body: 'Settings → Remote Access opens a tunnel to this daemon, so the mobile app can drive your sessions from anywhere.',
+    target: 'daemon',
+    side: 'above',
+    title: 'Which machine you’re on',
+    body: 'Sessions run on a daemon, and this is the one you’re pointed at. Add a remote here to drive another machine’s sessions — or pair your phone with this one.',
   },
 ];
 

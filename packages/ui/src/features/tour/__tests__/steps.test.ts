@@ -22,7 +22,7 @@ const ARMED_ANCHORS = [
   'search',
   'kanban',
   'automations',
-  'settings',
+  'daemon',
 ];
 
 /** Builds a `hasAnchor` predicate over a fixed set of present anchors. */
@@ -44,13 +44,13 @@ describe('resolveTourPlan', () => {
       'search',
       'kanban',
       'automations',
-      'settings',
+      'daemon',
     ]);
   });
 
   it('drops an unanchorable step so the count never overstates', () => {
-    const plan = resolveTourPlan(anchors('add-project', 'new-session', 'settings'));
-    expect(plan.map((s) => s.target)).toEqual(['add-project', 'new-session', 'settings']);
+    const plan = resolveTourPlan(anchors('add-project', 'new-session', 'daemon'));
+    expect(plan.map((s) => s.target)).toEqual(['add-project', 'new-session', 'daemon']);
   });
 
   it('returns an empty plan when nothing is anchorable', () => {
