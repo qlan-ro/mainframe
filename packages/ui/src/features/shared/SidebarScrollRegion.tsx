@@ -30,7 +30,16 @@ export function useScrollRegion(): HTMLDivElement | null {
   return useContext(ScrollRegionContext);
 }
 
-export function SidebarScrollRegion({ children, className }: { children: ReactNode; className?: string }) {
+export function SidebarScrollRegion({
+  children,
+  className,
+  tut,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** `data-tut` anchor, when this region is a first-run tour target. */
+  tut?: string;
+}) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const insets = useStickyInsets(viewport);
 
@@ -38,6 +47,7 @@ export function SidebarScrollRegion({ children, className }: { children: ReactNo
     <SidebarContent
       ref={setViewport}
       data-testid="sidebar-scroll"
+      data-tut={tut}
       className={cn(
         // gap-0: a section's parked header and its content are siblings here —
         // they have to be, or the header could never lift above its own box —

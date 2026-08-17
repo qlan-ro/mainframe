@@ -228,7 +228,6 @@ export function ProviderModelSelect({
             <button
               type="button"
               data-testid="composer-model-select"
-              data-tut="model"
               disabled={disabled}
               aria-label={`Provider and model: ${triggerLabel}`}
               className={cn(

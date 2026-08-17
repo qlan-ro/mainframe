@@ -169,7 +169,7 @@ export function SessionSidebar({ className }: { className?: string }) {
         />
       </SidebarHeader>
 
-      <SidebarScrollRegion>
+      <SidebarScrollRegion tut="sessions-list">
         <SessionsSection
           groups={groups}
           projectNames={projectNames}

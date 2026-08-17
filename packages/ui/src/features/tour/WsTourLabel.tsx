@@ -6,13 +6,7 @@
  */
 import type { CSSProperties } from 'react';
 import { Sparkles } from 'lucide-react';
-
-interface TourStep {
-  target: string;
-  side: 'right' | 'above' | 'below';
-  title: string;
-  body: string;
-}
+import type { TourStep } from './steps';
 
 interface WsTourLabelProps {
   step: TourStep;
@@ -20,7 +14,6 @@ interface WsTourLabelProps {
   total: number;
   onBack: () => void;
   onNext: () => void;
-  onSkip: () => void;
   style: CSSProperties;
 }
 
