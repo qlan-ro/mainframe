@@ -6,7 +6,7 @@ file to edit or sync. Full product rationale: `docs/designs/2026-07-11-automatio
 
 ## The model
 
-Steps come from four verbs, plus two block types for structure:
+Steps come from six verbs, plus two block types for structure:
 
 | Verb | Purpose |
 |---|---|
@@ -14,6 +14,8 @@ Steps come from four verbs, plus two block types for structure:
 | `ask_me` | Pause and show a form; the run resumes once answered. |
 | `run_action` | Call a deterministic action (built-in, curated connector, or MCP tool) — no agent involved. |
 | `notify` | Send a desktop/mobile notification. |
+| `set_variable` | Name a value once; later steps address it as `$name`. |
+| `wait` | Park the run for a fixed delay (`seconds`, capped at 7 days), then carry on. |
 
 | Block | Purpose |
 |---|---|
@@ -33,6 +35,11 @@ Reserved `stepId`s: `trigger` (trigger context), `builtin` (`today`, `now`),
   `automation_interactions`.
 - `<dataDir>/automation-credentials.json` (mode 0600) — action credentials
   and webhook signing secrets (reserved label `webhook:<hookId>`).
+- A run's `wakeAt` is resolved by a 30-second sweep, which is why it is also a
+  `wait` step's resolution — a wait resumes on the first sweep at or after its
+  deadline, so short waits round up. The same sweep enforces `ask_agent`'s
+  `timeoutMinutes`; one `wakeAt` carries both meanings, discriminated by the
+  parked step's kind.
 - Runs are checkpointed after every step, so they survive daemon restarts.
   A run's frozen `definition` snapshot lives inside its checkpoint, so
   editing an automation never shifts step references of an in-flight run.

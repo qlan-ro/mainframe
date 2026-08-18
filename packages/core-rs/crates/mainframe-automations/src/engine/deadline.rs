@@ -35,7 +35,7 @@ impl Interpreter {
     ///
     /// The sweep interval is also the resolution of a `wait`: a wait resumes
     /// on the first sweep at or after its wakeAt, so short waits round up.
-    pub async fn sweep_due(&self, now: i64) -> Result<(), StoreError> {
+    pub async fn sweep_due(self: &Arc<Self>, now: i64) -> Result<(), StoreError> {
         let due = self
             .deps
             .store
@@ -107,7 +107,7 @@ impl Interpreter {
         }
     }
 
-    async fn resolve_due_step(&self, run: &RunRecord) -> Result<(), StoreError> {
+    async fn resolve_due_step(self: &Arc<Self>, run: &RunRecord) -> Result<(), StoreError> {
         let waiting = run
             .checkpoint
             .steps
@@ -129,7 +129,7 @@ impl Interpreter {
     /// Settles a due `wait` and resumes the walk. Mirrors `apply_answers`:
     /// the parked entry becomes `succeeded` in place, carrying no outputs —
     /// a wait produces no tokens.
-    async fn resume_wait(&self, run_id: &str, step_ref: &str) -> Result<(), StoreError> {
+    async fn resume_wait(self: &Arc<Self>, run_id: &str, step_ref: &str) -> Result<(), StoreError> {
         let step_ref_owned = step_ref.to_string();
         let now = epoch_ms_now();
         let patched = self
@@ -149,7 +149,24 @@ impl Interpreter {
             Err(StoreError::TerminalRun { .. }) => return Ok(()),
             Err(err) => return Err(err),
         }
-        self.advance(run_id).await
+
+        // No emit here: A6 is already satisfied downstream. `advance` emits the
+        // whole run record on every park and terminal, and that payload carries
+        // the checkpoint this resume just settled — so the run view sees the
+        // transition on the next park without a second, identical event.
+        //
+        // Detached: `advance` runs to the next park or terminal, which can be a
+        // multi-minute step. Awaiting it here would stall every other due run
+        // behind this one and push out the sweep's own tick. `run_manually`
+        // spawns its advance for the same reason.
+        let interpreter = Arc::clone(self);
+        let run_id = run_id.to_string();
+        tokio::spawn(async move {
+            if let Err(err) = interpreter.advance(&run_id).await {
+                tracing::error!(run_id, error = %err, "wait resume: advance failed");
+            }
+        });
+        Ok(())
     }
 }
 
