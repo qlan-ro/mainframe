@@ -187,6 +187,11 @@ fn apply_answers(
     entry.outputs = Some(answers);
     entry.error = None;
     entry.finished_at = Some(now);
+    entry.wake_at = None;
+    // Correct today only because ask_me carries no deadline of its own — but
+    // a sibling concurrent branch may still be waiting on one, so recompute
+    // the run-level min rather than assume it's now `None`.
+    crate::engine::checkpoint::recompute_wake_at(checkpoint);
     Ok(())
 }
 

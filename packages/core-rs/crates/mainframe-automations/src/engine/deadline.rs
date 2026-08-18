@@ -15,12 +15,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::domain::{Step, find_step_by_id};
+use crate::domain::{Step, enclosing_concurrent_branch, find_step_by_id};
 use crate::error::StoreError;
-use crate::store::{RunRecord, StepStatus, TerminalStatus, epoch_ms_now};
+use crate::store::{AutomationCheckpoint, RunRecord, StepStatus, TerminalStatus, epoch_ms_now};
 
 use super::advance::Interpreter;
-use super::checkpoint::fail_step_entry;
+use super::checkpoint::{fail_step_entry, has_waiting_entry, recompute_wake_at};
+use super::markers::fail_enclosing_branch;
 
 const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 
@@ -44,7 +45,7 @@ impl Interpreter {
             .into_iter()
             .filter(|run| run.checkpoint.wake_at.is_some_and(|wake_at| wake_at <= now));
         for run in due {
-            self.resolve_due_step(&run).await?;
+            self.resolve_due_step(&run, now).await?;
         }
         Ok(())
     }
@@ -69,6 +70,15 @@ impl Interpreter {
     /// Fails one step outside the walk, applying the same keepGoing policy
     /// the engine uses everywhere: without it the run finalizes here, since
     /// a later advance() skips `failed` entries without consulting keepGoing.
+    ///
+    /// Extended for Phase 4a concurrency (MUST-FIX 3), identically to
+    /// `agent_settle::fail_waiting_step`: a step inside a concurrent branch
+    /// needs that branch's own marker written here too, or the driver
+    /// launders it into `Succeeded` on replay — unless `keepGoing` is true,
+    /// in which case skipping the marker IS the correct behavior (same
+    /// reasoning as `fail_waiting_step`). A run with an outstanding
+    /// `Waiting` entry must never finalize out-of-band, so a still-waiting
+    /// sibling forces `advance()` regardless of `keepGoing`.
     pub async fn fail_step(
         &self,
         run_id: &str,
@@ -78,10 +88,8 @@ impl Interpreter {
         let Some(run) = self.deps.store.get_run(run_id).await? else {
             return Ok(());
         };
-        let step =
-            run.checkpoint.steps.get(step_ref).and_then(|entry| {
-                find_step_by_id(&run.checkpoint.definition.steps, &entry.step_id)
-            });
+        let (step, enclosing_branch) = lookup_failing_step(&run, step_ref);
+        let step_keep_going = step.is_some_and(Step::keep_going);
 
         let step_ref_owned = step_ref.to_string();
         let error_owned = error.to_string();
@@ -90,16 +98,21 @@ impl Interpreter {
             .store
             .patch_checkpoint(run_id, move |cp| {
                 fail_step_entry(cp, &step_ref_owned, &error_owned);
-                cp.wake_at = None;
+                if !step_keep_going {
+                    fail_enclosing_branch(cp, &enclosing_branch, &error_owned);
+                }
+                // A sibling branch may still be waiting — recompute rather
+                // than clobbering its deadline with None.
+                recompute_wake_at(cp);
             })
             .await;
-        match patched {
-            Ok(_) => {}
+        let record = match patched {
+            Ok(record) => record,
             Err(StoreError::TerminalRun { .. }) => return Ok(()),
             Err(err) => return Err(err),
-        }
+        };
 
-        if step.is_some_and(Step::keep_going) {
+        if step.is_some_and(Step::keep_going) || has_waiting_entry(&record.checkpoint) {
             self.advance(run_id).await
         } else {
             self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error.to_string()))
@@ -107,23 +120,24 @@ impl Interpreter {
         }
     }
 
-    async fn resolve_due_step(self: &Arc<Self>, run: &RunRecord) -> Result<(), StoreError> {
-        let waiting = run
-            .checkpoint
-            .steps
-            .iter()
-            .find(|(_, entry)| entry.status == StepStatus::Waiting);
-        let Some((step_ref, entry)) = waiting else {
-            return Ok(());
-        };
-        match entry.kind.as_str() {
-            "ask_agent" => {
-                self.fail_step(&run.id, step_ref, AGENT_DEADLINE_ERROR)
-                    .await
+    /// Every waiting entry whose OWN deadline is due (Phase 4a: N branches can
+    /// now be parked at once, each with an independent deadline).
+    async fn resolve_due_step(
+        self: &Arc<Self>,
+        run: &RunRecord,
+        now: i64,
+    ) -> Result<(), StoreError> {
+        for (step_ref, kind) in due_waiting_entries(&run.checkpoint, now) {
+            match kind.as_str() {
+                "ask_agent" => {
+                    self.fail_step(&run.id, &step_ref, AGENT_DEADLINE_ERROR)
+                        .await?
+                }
+                "wait" => self.resume_wait(&run.id, &step_ref).await?,
+                _ => {}
             }
-            "wait" => self.resume_wait(&run.id, step_ref).await,
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     /// Settles a due `wait` and resumes the walk. Mirrors `apply_answers`:
@@ -139,8 +153,11 @@ impl Interpreter {
                 if let Some(entry) = cp.steps.get_mut(&step_ref_owned) {
                     entry.status = StepStatus::Succeeded;
                     entry.finished_at = Some(now);
+                    entry.wake_at = None;
                 }
-                cp.wake_at = None;
+                // A sibling branch may still be waiting — recompute rather
+                // than clobbering its deadline with None.
+                recompute_wake_at(cp);
             })
             .await;
         match patched {
@@ -168,6 +185,52 @@ impl Interpreter {
         });
         Ok(())
     }
+}
+
+/// The failing step itself (for its `keepGoing`) plus, if it lives inside a
+/// concurrent branch, that branch's own `(block_id, ref_suffix)` — shared
+/// lookup for `fail_step`.
+fn lookup_failing_step<'a>(
+    run: &'a RunRecord,
+    step_ref: &str,
+) -> (Option<&'a Step>, Option<(String, String)>) {
+    let Some(entry) = run.checkpoint.steps.get(step_ref) else {
+        return (None, None);
+    };
+    let step = find_step_by_id(&run.checkpoint.definition.steps, &entry.step_id);
+    let ref_suffix = step_ref
+        .strip_prefix(entry.step_id.as_str())
+        .unwrap_or_default();
+    let enclosing_branch =
+        enclosing_concurrent_branch(&run.checkpoint.definition.steps, &entry.step_id, ref_suffix);
+    (step, enclosing_branch)
+}
+
+/// Every currently-waiting entry whose own deadline has passed.
+fn due_waiting_entries(checkpoint: &AutomationCheckpoint, now: i64) -> Vec<(String, String)> {
+    let mut due: Vec<(String, String)> = checkpoint
+        .steps
+        .iter()
+        .filter(|(_, entry)| entry.status == StepStatus::Waiting)
+        .filter(|(_, entry)| entry.wake_at.is_some_and(|wake_at| wake_at <= now))
+        .map(|(step_ref, entry)| (step_ref.clone(), entry.kind.clone()))
+        .collect();
+    // Migration: a checkpoint parked before per-entry wake_at existed carries
+    // its deadline only at the run level. Fall back to the pre-Phase-4a
+    // single-park resolution so an in-flight run from before the upgrade
+    // does not wedge — this run-level field can only be due here for an
+    // entry that predates the per-entry one, since every write path since
+    // recomputes it from entry-level fields alone.
+    if due.is_empty() && checkpoint.wake_at.is_some_and(|wake_at| wake_at <= now) {
+        due.extend(
+            checkpoint
+                .steps
+                .iter()
+                .find(|(_, entry)| entry.status == StepStatus::Waiting && entry.wake_at.is_none())
+                .map(|(step_ref, entry)| (step_ref.clone(), entry.kind.clone())),
+        );
+    }
+    due
 }
 
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port

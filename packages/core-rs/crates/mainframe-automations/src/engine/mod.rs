@@ -7,9 +7,12 @@ pub mod advance;
 pub mod agent;
 mod agent_settle;
 pub(crate) mod blocks;
+pub(crate) mod blocks_concurrent;
+pub(crate) mod blocks_concurrent_repeat;
 pub(crate) mod checkpoint;
 mod deadline;
 pub(crate) mod expects;
+pub(crate) mod markers;
 pub mod notify_verb;
 pub mod run_action_verb;
 mod run_locks;
@@ -17,7 +20,7 @@ pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
 pub use agent::AgentVerb;
-pub use blocks::RETRY_ATTEMPT_KIND;
+pub use markers::{RETRY_ATTEMPT_KIND, is_engine_marker};
 pub use notify_verb::NotifyVerb;
 pub use run_action_verb::RunActionVerb;
 
@@ -123,7 +126,16 @@ pub(crate) mod test_support;
 mod agent_test_support;
 
 #[cfg(test)]
+mod agent_settle_concurrent_tests;
+
+#[cfg(test)]
 mod agent_tests;
+
+#[cfg(test)]
+mod blocks_concurrent_repeat_tests;
+
+#[cfg(test)]
+mod blocks_concurrent_tests;
 
 #[cfg(test)]
 mod blocks_if_tests;
@@ -145,6 +157,9 @@ mod cancel_tests;
 
 #[cfg(test)]
 mod expects_tests;
+
+#[cfg(test)]
+mod find_step_by_id_tests;
 
 #[cfg(test)]
 mod linear_tests;

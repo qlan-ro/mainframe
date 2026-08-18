@@ -205,7 +205,7 @@ async fn commit(
     let (step_ref, step_id, kind) = commit_keys(step, step_ref);
     ctx.store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error);
+            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error, None);
         })
         .await
 }

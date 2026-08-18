@@ -374,6 +374,22 @@ pub(crate) fn repeat_step(id: &str, items: TokenRef, steps: Vec<Step>) -> Step {
         id: id.to_string(),
         keep_going: false,
         items,
+        concurrency: None,
+        steps,
+    })
+}
+
+pub(crate) fn concurrent_repeat_step(
+    id: &str,
+    items: TokenRef,
+    concurrency: u32,
+    steps: Vec<Step>,
+) -> Step {
+    Step::Repeat(RepeatBlock {
+        id: id.to_string(),
+        keep_going: false,
+        items,
+        concurrency: Some(concurrency),
         steps,
     })
 }

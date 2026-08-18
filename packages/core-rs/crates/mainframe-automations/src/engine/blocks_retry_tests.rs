@@ -9,7 +9,7 @@ use serde_json::json;
 
 use crate::store::{RunStatus, StepStatus};
 
-use super::blocks::RETRY_ATTEMPT_KIND;
+use super::markers::RETRY_ATTEMPT_KIND;
 use super::test_support::{
     FakePorts, completed, definition, failed, harness, manual, notify_step, retry_step, text,
 };

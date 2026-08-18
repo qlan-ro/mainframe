@@ -312,6 +312,10 @@ pub struct RepeatBlock {
     pub keep_going: bool,
     /// The list token to iterate (wire name `items`, not `over`).
     pub items: TokenRef,
+    /// Absent or `1`: today's exact sequential behavior. `2..=32`: up to that
+    /// many iterations run concurrently through the branch driver (Phase 4a).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<u32>,
     pub steps: Vec<Step>,
 }
 
@@ -327,6 +331,8 @@ pub fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step>
             Step::If(block) => find_step_by_id(&block.then, step_id)
                 .or_else(|| find_step_by_id(&block.otherwise, step_id)),
             Step::Repeat(block) => find_step_by_id(&block.steps, step_id),
+            Step::Loop(block) => find_step_by_id(&block.steps, step_id),
+            Step::Retry(block) => find_step_by_id(&block.steps, step_id),
             _ => None,
         };
         if nested.is_some() {

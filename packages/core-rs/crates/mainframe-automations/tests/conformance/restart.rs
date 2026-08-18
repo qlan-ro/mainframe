@@ -10,6 +10,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::json;
 use tempfile::TempDir;
@@ -19,6 +20,7 @@ use crate::harness::{
     load_fixture, wait_action, wait_status,
 };
 use mainframe_automations::AutomationsEngine;
+use mainframe_automations::domain::AutomationCreateInput;
 use mainframe_automations::store::RunStatus;
 
 struct Boot {
@@ -192,6 +194,83 @@ async fn restart_mid_running_nonidempotent_fails_loudly() {
         0,
         "mid-action step not re-run"
     );
+}
+
+/// A repeat over `github.list_prs`' two records, fanned out with
+/// `concurrency: 2` — built inline rather than as a fixture, since the
+/// fixtures directory is Node-authored canon (T1.2 `fixture_tests`) and this
+/// scenario (Phase 4a) has no Node counterpart to mirror.
+fn concurrent_fan_out_input() -> AutomationCreateInput {
+    serde_json::from_value(json!({
+        "name": "Concurrent PR review",
+        "scope": "global",
+        "definition": {
+            "triggers": [],
+            "steps": [
+                {
+                    "id": "list-open-prs",
+                    "kind": "run_action",
+                    "actionId": "github.list_prs",
+                    "params": { "author": ["@me"] }
+                },
+                {
+                    "id": "repeat-prs",
+                    "kind": "repeat",
+                    "items": { "stepId": "list-open-prs", "output": "prs" },
+                    "concurrency": 2,
+                    "steps": [
+                        {
+                            "id": "ask-review-pr",
+                            "kind": "ask_agent",
+                            "prompt": [
+                                "/codex-review ",
+                                { "token": { "stepId": "current", "output": "item", "field": "url" } }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn restart_mid_fan_out_resumes_both_agent_watches_and_completes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (db, creds) = db_paths(&dir);
+
+    let run_id = {
+        let b1 = boot(&db, &creds, FakeAgentPort::manual()).await;
+        let created = b1.engine.create(concurrent_fan_out_input()).await.unwrap();
+        b1.engine.set_enabled(&created.id, false).await.unwrap();
+        let run_id = b1.engine.run_manually(&created.id).await.unwrap().id;
+        // Both branches must have started their own chat before the crash —
+        // the run flips to `waiting` as soon as the FIRST one parks, so wait
+        // on the agent port's own call count, not just the run status.
+        for _ in 0..600 {
+            if b1.agent.start_count() >= 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(
+            b1.agent.start_count(),
+            2,
+            "both fan-out branches must have started a chat"
+        );
+        wait_status(&b1.engine, &run_id, RunStatus::Waiting).await;
+        run_id
+    };
+
+    // `b2` is a FRESH port, so `start_count() == 0` would hold whether or not
+    // watches actually resumed — it proves nothing. The real assertion is
+    // `wait_status(Succeeded)` below: `FakeAgentPort::completing` only ever
+    // answers a `watch()` call, so the run can only reach `Succeeded` if
+    // reconcile re-attached both chats' watches (never called here) itself.
+    let b2 = boot(&db, &creds, FakeAgentPort::completing("reviewed")).await;
+    b2.engine.start().await.unwrap();
+    wait_status(&b2.engine, &run_id, RunStatus::Succeeded).await;
 }
 
 #[tokio::test]

@@ -96,6 +96,12 @@ pub struct CheckpointStep {
     pub chat_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interaction_id: Option<String>,
+    /// This entry's own deadline (Phase 4a): only a `waiting` entry carries
+    /// one. `AutomationCheckpoint::wake_at` stays the min across every
+    /// waiting entry — the sweep's cheap pre-filter — so N concurrent parks
+    /// each keep an independent deadline instead of the last write winning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake_at: Option<i64>,
 }
 
 /// Canonical checkpoint (contract §2). `definition` is the FROZEN snapshot

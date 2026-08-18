@@ -4,6 +4,7 @@
 pub mod automation;
 pub(crate) mod catalog;
 pub(crate) mod comparators;
+pub mod concurrent_branch;
 pub mod condition;
 pub mod form;
 pub(crate) mod scope;
@@ -12,9 +13,11 @@ pub mod template;
 pub mod token;
 pub mod trigger;
 pub mod validate;
+pub(crate) mod validate_breaks;
 pub(crate) mod validate_variables;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
+pub use concurrent_branch::enclosing_concurrent_branch;
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
 pub use step::{
@@ -42,6 +45,9 @@ mod serde_tests;
 
 #[cfg(test)]
 mod serde_trigger_tests;
+
+#[cfg(test)]
+mod validate_concurrency_tests;
 
 #[cfg(test)]
 mod validate_tests;

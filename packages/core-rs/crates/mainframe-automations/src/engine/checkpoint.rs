@@ -33,6 +33,13 @@ impl WalkFrame {
         }
     }
 
+    /// Just the suffix `iteration` would produce, without cloning `item`
+    /// into a full frame — the concurrent scheduler checks far more indices
+    /// than it ever admits, and a `TokenValue` clone per check added up.
+    pub fn iteration_suffix(&self, index: usize) -> String {
+        format!("{}#{index}", self.ref_suffix)
+    }
+
     /// One condition-loop pass deeper. Same `#<i>` suffixing as `iteration`,
     /// but the `current` stack is left alone: a condition loop has no item, and
     /// pushing a placeholder would make `⟨current⟩` resolve inside it — either
@@ -48,7 +55,10 @@ impl WalkFrame {
 /// Writes one stepRef entry. `outputs` land only on `succeeded` (a failed
 /// re-run must not clobber earlier outputs); `startedAt` survives
 /// transitions; `chatId`/`interactionId` are preserved — the running→waiting
-/// rewrite must not drop what a verb stamped between commits.
+/// rewrite must not drop what a verb stamped between commits. `wake_at` is
+/// the caller's to set explicitly (only `park_step`/the agent verb ever pass
+/// one) — every other transition clears it.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn set_step(
     checkpoint: &mut AutomationCheckpoint,
     step_ref: &str,
@@ -57,6 +67,7 @@ pub(crate) fn set_step(
     status: StepStatus,
     outputs: Option<Map<String, Value>>,
     error: Option<String>,
+    wake_at: Option<i64>,
 ) {
     let now = epoch_ms_now();
     let existing = checkpoint.steps.get(step_ref);
@@ -78,6 +89,7 @@ pub(crate) fn set_step(
         finished_at: terminal.then_some(now),
         chat_id: existing.and_then(|e| e.chat_id.clone()),
         interaction_id: existing.and_then(|e| e.interaction_id.clone()),
+        wake_at,
     };
     checkpoint.steps.insert(step_ref.to_string(), entry);
 }
@@ -85,6 +97,12 @@ pub(crate) fn set_step(
 /// The walk's wait commit (T4.3): a verb may park AND settle its entry
 /// before the walk's own commit runs (a fast agent completion) — a terminal
 /// entry must not be re-parked, nor its wakeAt re-armed.
+///
+/// No fallback re-reads an existing `wake_at` here: `walk_frame` already
+/// returns `Parked` for any step whose entry is already `Waiting`, without
+/// ever reaching `run_leaf`/dispatch — so `park_step` only ever sees a step
+/// transitioning INTO `Waiting` for the first time, carrying dispatch's own
+/// freshly-computed `wake_at` (or `None`) as the caller's argument.
 pub(crate) fn park_step(
     checkpoint: &mut AutomationCheckpoint,
     step_ref: &str,
@@ -109,8 +127,9 @@ pub(crate) fn park_step(
         StepStatus::Waiting,
         None,
         None,
+        wake_at,
     );
-    checkpoint.wake_at = wake_at;
+    recompute_wake_at(checkpoint);
 }
 
 /// Fails an EXISTING entry in place (the stale-`running` restart policy) —
@@ -120,7 +139,33 @@ pub(crate) fn fail_step_entry(checkpoint: &mut AutomationCheckpoint, step_ref: &
         entry.status = StepStatus::Failed;
         entry.error = Some(error.to_string());
         entry.finished_at = Some(epoch_ms_now());
+        entry.wake_at = None;
     }
+}
+
+/// True while some entry is still `waiting` — an out-of-band failure (agent
+/// settle, deadline) consults this AFTER writing its own failure, so a run
+/// with an outstanding `Waiting` entry never finalizes here: that entry (a
+/// concurrent sibling, most often) is left to settle on its own and the
+/// driver owns the eventual verdict instead.
+pub(crate) fn has_waiting_entry(checkpoint: &AutomationCheckpoint) -> bool {
+    checkpoint
+        .steps
+        .values()
+        .any(|entry| entry.status == StepStatus::Waiting)
+}
+
+/// The run-level `wake_at` is only the sweep's cheap pre-filter (skip a whole
+/// run without inspecting every entry) — recomputed as the minimum across
+/// every still-`waiting` entry so N concurrent parks each keep their own
+/// deadline instead of one clobbering the others.
+pub(crate) fn recompute_wake_at(checkpoint: &mut AutomationCheckpoint) {
+    checkpoint.wake_at = checkpoint
+        .steps
+        .values()
+        .filter(|entry| entry.status == StepStatus::Waiting)
+        .filter_map(|entry| entry.wake_at)
+        .min();
 }
 
 /// Builds the frame's flat token scope (Node `buildTokenContext`+`stepsView`):

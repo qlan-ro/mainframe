@@ -117,6 +117,8 @@ export interface IfBlock extends AutomationStepBase {
 export interface RepeatBlock extends AutomationStepBase {
   kind: 'repeat';
   items: TokenRef;
+  /** Absent or `1`: sequential (today's behavior). `2..=32`: iterations run concurrently. */
+  concurrency?: number;
   steps: AutomationStep[];
 }
 

@@ -14,7 +14,7 @@ use crate::store::{RunRecord, RunStore, StepStatus, epoch_ms_now};
 use crate::tokens::render;
 
 use super::advance::AgentWaitRegistry;
-use super::checkpoint::set_step;
+use super::checkpoint::{recompute_wake_at, set_step};
 use super::expects::build_output_contract;
 use super::{RunAdvancer, StepOutcome, VerbContext};
 
@@ -92,11 +92,15 @@ impl AgentVerb {
                     StepStatus::Waiting,
                     None,
                     None,
+                    wake_at,
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.chat_id = Some(chat_id);
                 }
-                cp.wake_at = wake_at;
+                // A sibling branch may still be waiting on an earlier
+                // deadline — recompute the run-level min instead of
+                // overwriting it with this entry's own.
+                recompute_wake_at(cp);
             })
             .await;
         if let Err(err) = parked {

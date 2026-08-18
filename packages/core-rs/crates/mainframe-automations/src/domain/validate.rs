@@ -23,6 +23,10 @@ use crate::engine::blocks::MAX_REPEAT_ITEMS;
 /// far more often than an intent; a genuinely long delay belongs on a
 /// schedule trigger, not inside a run.
 const MAX_WAIT_SECONDS: u32 = 7 * 24 * 60 * 60;
+/// Phase 4a: a wide-open fan-out is almost always a mistake (every branch
+/// opens its own agent chat), not a deliberate choice — the cap forces a
+/// second look rather than a silent 500-chat storm.
+const MAX_REPEAT_CONCURRENCY: u32 = 32;
 
 use super::validate_variables::{
     set_variable_name_issue, unresolved_variable_names, variable_names_clashing_with,
@@ -46,7 +50,7 @@ pub struct ValidationError {
     pub message: String,
 }
 
-struct Ctx<'a> {
+pub(super) struct Ctx<'a> {
     /// Name clashes reach outside the walk's scope (a later sibling, the other
     /// `if` arm), so the whole definition stays in hand.
     definition: &'a AutomationDefinition,
@@ -59,7 +63,7 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn push(&mut self, step_id: &str, message: String) {
+    pub(super) fn push(&mut self, step_id: &str, message: String) {
         self.push_at(ValidationLevel::Error, step_id, message);
     }
 
@@ -70,6 +74,13 @@ impl Ctx<'_> {
             message,
         });
     }
+}
+
+/// CLAUDE.md's identifier charset (`^[a-zA-Z0-9_-]+$`) — enforced here
+/// because the engine's marker scheme reserves `@` and `#` for itself.
+fn is_valid_step_id(id: &str) -> bool {
+    id.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 fn automation_error(message: &str) -> ValidationError {
@@ -96,8 +107,21 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
                 level: ValidationLevel::Error,
                 message: "Every step needs an id.".to_string(),
             });
-        } else if !seen.insert(id.to_string()) {
+            return;
+        }
+        if !seen.insert(id.to_string()) {
             duplicated.insert(id.to_string());
+        }
+        // The charset is load-bearing beyond display, now: the marker scheme
+        // (`@c`, `@w`, `@a`) and the `#`-suffix chain both assume a step id
+        // never carries those characters itself.
+        if !is_valid_step_id(id) {
+            errors.push(ValidationError {
+                step_id: Some(id.to_string()),
+                level: ValidationLevel::Error,
+                message: "Step ids can only use letters, numbers, underscores, and hyphens."
+                    .to_string(),
+            });
         }
     });
     for id in &duplicated {
@@ -131,34 +155,9 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     };
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
-    walk(&definition.steps, &mut scope, &mut ctx);
-    check_breaks(&definition.steps, false, &mut ctx);
+    walk(&definition.steps, &mut scope, &mut ctx, 1);
+    super::validate_breaks::check_breaks(&definition.steps, &mut ctx);
     ctx.errors
-}
-
-/// A `break` outside every loop has nothing to leave. Checked in its own pass
-/// because the enclosing-block question is structural — it has nothing to do
-/// with the token scope `walk` threads.
-fn check_breaks(steps: &[Step], in_loop: bool, ctx: &mut Ctx) {
-    for step in steps {
-        match step {
-            Step::Break(_) if !in_loop => ctx.push(
-                step.id(),
-                "Put this inside a loop or repeat — there's nothing here for it to stop."
-                    .to_string(),
-            ),
-            Step::If(s) => {
-                check_breaks(&s.then, in_loop, ctx);
-                check_breaks(&s.otherwise, in_loop, ctx);
-            }
-            Step::Repeat(s) => check_breaks(&s.steps, true, ctx),
-            Step::Loop(s) => check_breaks(&s.steps, true, ctx),
-            // A retry is not a loop: a break inside one targets whatever loop
-            // encloses the retry, so `in_loop` passes through unchanged.
-            Step::Retry(s) => check_breaks(&s.steps, in_loop, ctx),
-            _ => {}
-        }
-    }
 }
 
 fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
@@ -184,7 +183,10 @@ fn lookup<'a>(scope: &'a [TokenInfo], token_ref: &TokenRef) -> Option<&'a TokenI
         .find(|t| t.step_id == token_ref.step_id && t.output == token_ref.output)
 }
 
-fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
+/// `enclosing_concurrency` is the product of every enclosing concurrent
+/// Repeat's own factor — the nested-fan-out cap needs it, since a Repeat two
+/// levels deep multiplies with BOTH ancestors, not just its immediate parent.
+fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_concurrency: u32) {
     for step in steps {
         let names = build_variable_namespace(scope);
         for token_ref in step_refs(step) {
@@ -246,9 +248,14 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                     }
                 }
                 let mut then_scope = scope.clone();
-                walk(&s.then, &mut then_scope, ctx);
+                walk(&s.then, &mut then_scope, ctx, enclosing_concurrency);
                 let mut otherwise_scope = scope.clone();
-                walk(&s.otherwise, &mut otherwise_scope, ctx);
+                walk(
+                    &s.otherwise,
+                    &mut otherwise_scope,
+                    ctx,
+                    enclosing_concurrency,
+                );
                 // Both branches' outputs leak to later siblings once the
                 // block closes.
                 scope.extend(step_produces(step));
@@ -265,9 +272,34 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                         ),
                     );
                 }
+                let mut factor = None;
+                if let Some(concurrency) = s.concurrency {
+                    if !(1..=MAX_REPEAT_CONCURRENCY).contains(&concurrency) {
+                        ctx.push(
+                            step.id(),
+                            format!("Concurrency must be between 1 and {MAX_REPEAT_CONCURRENCY}."),
+                        );
+                    } else if concurrency > 1 {
+                        factor = Some(concurrency);
+                        let product = enclosing_concurrency.saturating_mul(concurrency);
+                        if product > MAX_REPEAT_CONCURRENCY {
+                            ctx.push(
+                                step.id(),
+                                format!(
+                                    "This repeat is nested inside another concurrent repeat — \
+                                     together they could open {product} chats at once. Keep the \
+                                     product at or under {MAX_REPEAT_CONCURRENCY}."
+                                ),
+                            );
+                        }
+                    }
+                }
+                let inner_concurrency = factor.map_or(enclosing_concurrency, |n| {
+                    enclosing_concurrency.saturating_mul(n)
+                });
                 let mut inner_scope = scope.clone();
                 inner_scope.push(current_item_info());
-                walk(&s.steps, &mut inner_scope, ctx);
+                walk(&s.steps, &mut inner_scope, ctx, inner_concurrency);
                 // Isolated: nothing produced inside leaks after the block.
             }
             Step::Retry(s) => {
@@ -283,7 +315,7 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                     );
                 }
                 let mut inner_scope = scope.clone();
-                walk(&s.steps, &mut inner_scope, ctx);
+                walk(&s.steps, &mut inner_scope, ctx, enclosing_concurrency);
                 // Isolated like Repeat: a failed attempt's outputs must not
                 // outlive the block, or a later step could read a value the
                 // successful attempt never produced.
@@ -322,7 +354,7 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                     }
                 }
                 let mut inner_scope = scope.clone();
-                walk(&s.steps, &mut inner_scope, ctx);
+                walk(&s.steps, &mut inner_scope, ctx, enclosing_concurrency);
                 // Isolated like Repeat: a pass's outputs don't outlive the block.
             }
             _ => scope.extend(step_produces(step)),

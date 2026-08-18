@@ -38,6 +38,7 @@ async fn seed_step(
                         .then_some(1),
                     chat_id: None,
                     interaction_id: None,
+                    wake_at: None,
                 },
             );
         })

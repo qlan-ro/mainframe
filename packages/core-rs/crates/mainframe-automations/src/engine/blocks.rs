@@ -9,7 +9,9 @@ use crate::store::{AutomationCheckpoint, StepStatus};
 use crate::tokens::{TokenValue, evaluate};
 
 use super::WalkResult;
-use super::checkpoint::{WalkFrame, build_scope, set_step};
+use super::blocks_concurrent_repeat;
+use super::checkpoint::{WalkFrame, build_scope};
+use super::markers::{RETRY_ATTEMPT_KIND, mark_outcome};
 use super::walk::{StepsResult, WalkCtx, walk_frame};
 
 /// Contract §2: an unbounded Repeat rewrites the whole checkpoint JSON per
@@ -67,6 +69,20 @@ pub(crate) async fn run_repeat(
         });
     }
 
+    // Absent or 1 keeps this exact sequential loop; concurrency > 1 hands
+    // scheduling to the branch driver instead (Phase 4a).
+    if let Some(concurrency) = block.concurrency.filter(|&n| n > 1) {
+        return blocks_concurrent_repeat::run_repeat_concurrent(
+            block,
+            &items,
+            concurrency,
+            checkpoint,
+            ctx,
+            frame,
+        )
+        .await;
+    }
+
     let mut current = checkpoint;
     for (index, item) in items.into_iter().enumerate() {
         let iter_frame = frame.iteration(index, item);
@@ -89,11 +105,6 @@ pub(crate) async fn run_repeat(
         checkpoint: current,
     })
 }
-
-/// The kind stamped on a retry's attempt-bookkeeping entries. These are engine
-/// state, not user steps: `project_timeline` filters them, and nothing in the
-/// editor's verb table has to know about them.
-pub const RETRY_ATTEMPT_KIND: &str = "retry_attempt";
 
 /// Retry (Part 3 Phase 3): re-walk the body from the top until it succeeds or
 /// the attempts run out.
@@ -175,22 +186,7 @@ async fn mark_attempt(
     status: StepStatus,
     error: Option<String>,
 ) -> Result<AutomationCheckpoint, StoreError> {
-    let (marker, step_id) = (marker.to_string(), block.id.clone());
-    let record = ctx
-        .store
-        .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(
-                cp,
-                &marker,
-                &step_id,
-                RETRY_ATTEMPT_KIND,
-                status,
-                None,
-                error.clone(),
-            );
-        })
-        .await?;
-    Ok(record.checkpoint)
+    mark_outcome(ctx, marker, &block.id, RETRY_ATTEMPT_KIND, status, error).await
 }
 
 /// Condition loop (Part 3 Phase 2). Unlike `run_repeat`, the continue test is
