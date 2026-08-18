@@ -5,8 +5,10 @@
  * are all top-level fields, never nested under an `args` bag like ts153's
  * `step.args`). Composes `AutoForm` (params), `CredentialConnect` (only
  * when `action.auth === 'token'`, using the real `credentialLabelHint` —
- * not a UI-invented field), the `run_command`-only outputAs segment +
- * `CommandPreview` (A1), and `FailureToggle` under `MoreOptions`. The header
+ * not a UI-invented field), the outputAs segment (`schema.hasOutputAs` —
+ * `run_command` and `files.read`, the two actions whose params accept it) +
+ * `CommandPreview` (`run_command`-only, A1), and `FailureToggle` under
+ * `MoreOptions`. The header
  * glyph/tint and the embedded catalog reuse `ActionCatalog`'s
  * `actionIcon`/`actionAccent` tables so the picked-action chrome and the
  * catalog list never drift apart.
@@ -59,7 +61,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
     );
   }
 
-  const schema = asActionParamsSchema(action.paramsSchema);
+  const schema = asActionParamsSchema(action);
   const isRunCommand = action.id === 'run_command';
   const HeaderIcon = actionIcon(action.id);
   const accent = actionAccent(action.id);
@@ -102,7 +104,7 @@ export function ActionConfig({ step, onChange, tokens, catalog, testId }: Action
         />
       )}
 
-      {isRunCommand && schema.hasOutputAs && (
+      {schema.hasOutputAs && (
         <FieldRow label="Treat output as">
           <div className="inline-flex gap-0.5 rounded-md bg-muted p-0.5">
             {OUTPUT_AS_OPTIONS.map((option) => (

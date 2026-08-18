@@ -11,7 +11,9 @@ use serde_json::{Value, json};
 use crate::domain::OutputAs;
 use crate::tokens::TokenValue;
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::paths::resolve_and_validate_path;
 use super::shell::{resolve_shell, spawn_script, tail_chars};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
@@ -71,6 +73,14 @@ impl Action for RunCommandAction {
             auth: ActionAuth::None,
             credential_label_hint: None,
             params_schema: params_schema(),
+            fields: vec![
+                ActionField::code("script", "Script").placeholder("pnpm test"),
+                ActionField::select("runIn", "Run in", &["project root", "worktree", "custom"]),
+                ActionField::chip("customPath", "Path")
+                    .placeholder("~/code/my-project")
+                    .show_when("runIn", "custom"),
+            ],
+            has_output_as: true,
             outputs: vec![
                 ActionOutput::new("output", ActionOutputType::Text),
                 ActionOutput::new("exitCode", ActionOutputType::Number),

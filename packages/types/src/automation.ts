@@ -328,13 +328,37 @@ export interface AutomationInteractionSummary {
 
 export type ActionOutputType = 'text' | 'number' | 'list' | 'record';
 
+export type ActionFieldControl = 'text' | 'select' | 'chip' | 'chiparea' | 'code' | 'columns';
+
+export interface ActionField {
+  key: string;
+  label: string;
+  control: ActionFieldControl;
+  options?: string[];
+  placeholder?: string;
+  /** Field only renders when a sibling field's committed value equals this. */
+  showWhen?: { key: string; equals: string };
+}
+
 export interface ActionCatalogEntry {
   id: string;
   title: string;
   group: 'builtin' | 'connector' | 'mcp';
   auth: 'none' | 'token';
   credentialLabelHint?: string;
+  /** JSON Schema, validated server-side by the action's own parser. */
   paramsSchema: unknown;
+  /**
+   * The editor's auto-form field list — a sibling of `paramsSchema`, not a
+   * translation of it: JSON Schema can't express "this is a code editor" or
+   * "this is a token-accepting chip field", so the daemon authors these by
+   * hand (Part 0 of the 2026-08-18 automations-provider-connections plan).
+   * Optional so an older daemon's payload still renders — as an empty form,
+   * the same fallback `asActionParamsSchema` used before this field existed.
+   */
+  fields?: ActionField[];
+  /** `run_command`/`files.read`-only: whether the step's top-level `outputAs` (text/lines) applies to this action. */
+  hasOutputAs?: boolean;
   outputs: Array<{ name: string; type: ActionOutputType }>;
   /**
    * False when a prerequisite is missing on this machine (the GitHub actions
@@ -345,4 +369,11 @@ export interface ActionCatalogEntry {
   available?: boolean;
   /** One sentence naming the prerequisite and its remedy, shown verbatim. */
   unavailableReason?: string;
+  /**
+   * Decision 12: whether re-running this action is safe. Optional, and the
+   * OPPOSITE default from `available` — absent reads as **not** idempotent,
+   * so an older daemon's catalog makes the editor warn conservatively about
+   * a step that could double-fire, rather than silently reading as safe.
+   */
+  idempotent?: boolean;
 }

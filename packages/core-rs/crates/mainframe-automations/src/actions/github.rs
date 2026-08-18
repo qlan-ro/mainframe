@@ -17,7 +17,9 @@ use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
 use super::gh::{GhCli, validate_repo};
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionAvailability, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 async fn availability(gh: &GhCli) -> ActionAvailability {
@@ -81,6 +83,14 @@ impl Action for GithubCreatePrAction {
                 "required": ["repo", "title", "head", "base"],
                 "additionalProperties": false
             }),
+            fields: vec![
+                ActionField::text("repo", "Repository").placeholder("org/repo"),
+                ActionField::chip("title", "Title"),
+                ActionField::chiparea("body", "Body"),
+                ActionField::chip("head", "Branch").placeholder("feature/…"),
+                ActionField::text("base", "Base branch").placeholder("main"),
+            ],
+            has_output_as: false,
             outputs: vec![
                 ActionOutput::new("prUrl", ActionOutputType::Text),
                 ActionOutput::new("prNumber", ActionOutputType::Number),
@@ -180,6 +190,8 @@ impl Action for GithubListPrsAction {
                 },
                 "additionalProperties": false
             }),
+            fields: vec![ActionField::text("author", "Author").placeholder("@me")],
+            has_output_as: false,
             outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
             idempotent: true,
         }

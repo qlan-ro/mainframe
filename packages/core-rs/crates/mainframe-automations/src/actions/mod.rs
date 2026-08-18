@@ -193,6 +193,9 @@ mod http_tests;
 mod notion_ado_tests;
 
 #[cfg(test)]
+mod registry_fields_tests;
+
+#[cfg(test)]
 mod registry_tests;
 
 #[cfg(test)]

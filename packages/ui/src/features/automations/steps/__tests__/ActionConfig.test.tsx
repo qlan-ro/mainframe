@@ -138,23 +138,6 @@ describe('ActionConfig — picked, no credential (run_command)', () => {
     expect(screen.queryByTestId('automations-action-a-credential-connect')).not.toBeInTheDocument();
   });
 
-  it('renders the outputAs Text/Lines segment for run_command, patching step.outputAs', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'run_command', params: {} };
-    render(
-      <ActionConfig
-        step={step}
-        onChange={onChange}
-        tokens={[]}
-        catalog={ACTION_CATALOG_FIXTURE}
-        testId="automations-action-a"
-      />,
-    );
-    await user.click(screen.getByTestId('automations-action-a-outputas-lines'));
-    expect(onChange).toHaveBeenCalledWith({ ...step, outputAs: 'lines' });
-  });
-
   it('renders the CommandPreview for run_command, reflecting params.script', () => {
     const step: RunActionStep = {
       id: 'a',
@@ -174,8 +157,8 @@ describe('ActionConfig — picked, no credential (run_command)', () => {
     expect(screen.getByTestId('automations-action-a-preview-text')).toHaveTextContent('echo hi');
   });
 
-  it('does not render outputAs or CommandPreview for non-run_command actions', () => {
-    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'files.read', params: {} };
+  it('does not render CommandPreview for a non-run_command action', () => {
+    const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'files.append', params: {} };
     render(
       <ActionConfig
         step={step}
@@ -185,7 +168,6 @@ describe('ActionConfig — picked, no credential (run_command)', () => {
         testId="automations-action-a"
       />,
     );
-    expect(screen.queryByTestId('automations-action-a-outputas-lines')).not.toBeInTheDocument();
     expect(screen.queryByTestId('automations-action-a-preview-text')).not.toBeInTheDocument();
   });
 

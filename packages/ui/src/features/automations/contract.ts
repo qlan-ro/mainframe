@@ -50,6 +50,8 @@ export type {
   AutomationInteractionStatus,
   AutomationInteractionSummary,
   ActionOutputType,
+  ActionFieldControl,
+  ActionField,
   ActionCatalogEntry,
   DaemonEvent,
 } from '@qlan-ro/mainframe-types';

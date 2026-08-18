@@ -11,7 +11,9 @@ use serde_json::{Value, json};
 use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
 
 const ADO_API: &str = "https://dev.azure.com";
@@ -89,6 +91,14 @@ impl Action for AdoCreateItemAction {
                 "required": ["org", "project", "type", "title"],
                 "additionalProperties": false
             }),
+            fields: vec![
+                ActionField::text("org", "Organization").placeholder("my-org"),
+                ActionField::text("project", "Project").placeholder("my-project"),
+                ActionField::select("type", "Type", &["Task", "Bug", "User Story"]),
+                ActionField::chip("title", "Title"),
+                ActionField::chiparea("description", "Description"),
+            ],
+            has_output_as: false,
             outputs: vec![
                 ActionOutput::new("workItemId", ActionOutputType::Number),
                 ActionOutput::new("url", ActionOutputType::Text),
