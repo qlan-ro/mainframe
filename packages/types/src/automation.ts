@@ -157,6 +157,23 @@ export interface LoopBlock extends AutomationStepBase {
   steps: AutomationStep[];
 }
 
+/**
+ * Re-runs its body from the top when it fails.
+ *
+ * Each attempt walks in its own frame, so a failed attempt's checkpoint entries
+ * never shadow the next one's — the walk treats an already-failed step as
+ * settled, so without that a replayed attempt would report success.
+ *
+ * **Retrying re-runs side effects.** A body that opened a PR and then failed
+ * opens a second one on the next attempt. Prefer retrying reads and commands.
+ */
+export interface RetryBlock extends AutomationStepBase {
+  kind: 'retry';
+  /** Total tries, including the first — `1` is "no retry". */
+  maxAttempts: number;
+  steps: AutomationStep[];
+}
+
 /** Leaves the innermost enclosing `loop` or `repeat`. Validation rejects one with no enclosing block. */
 export interface BreakStep extends AutomationStepBase {
   kind: 'break';
@@ -179,7 +196,8 @@ export type AutomationStep =
   | BreakStep
   | IfBlock
   | RepeatBlock
-  | LoopBlock;
+  | LoopBlock
+  | RetryBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }

@@ -19,6 +19,7 @@ import {
   GitBranch,
   MessageSquare,
   Plug,
+  RefreshCw,
   Repeat,
   RotateCw,
   Sparkles,
@@ -129,6 +130,18 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     hint: 'Run steps over and over until a condition is met',
     block: true,
   },
+  retry: {
+    // Amber like the other "something went wrong" affordances — a retry is a
+    // failure-handling block, not a control-flow one.
+    icon: RefreshCw,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    cardTintClass: 'bg-mf-accent-amber/5',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Retry on failure',
+    hint: 'Try these steps again if they fail',
+    block: true,
+  },
   break: {
     icon: CircleStop,
     iconClass: 'text-mf-accent-amber',
@@ -151,5 +164,5 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
   { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify', 'wait'] },
-  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'break'] },
+  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'retry', 'break'] },
 ];

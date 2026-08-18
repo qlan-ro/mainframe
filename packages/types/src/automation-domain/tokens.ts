@@ -147,7 +147,7 @@ export function findStepById(steps: AutomationStep[], stepId: string): Automatio
       if (inThen) return inThen;
       const inOtherwise = findStepById(step.otherwise, stepId);
       if (inOtherwise) return inOtherwise;
-    } else if (step.kind === 'repeat' || step.kind === 'loop') {
+    } else if (step.kind === 'repeat' || step.kind === 'loop' || step.kind === 'retry') {
       const inner = findStepById(step.steps, stepId);
       if (inner) return inner;
     }
@@ -180,6 +180,8 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
       return step.mode === 'while' ? 'Repeat while' : 'Repeat until';
     case 'break':
       return 'Stop the loop';
+    case 'retry':
+      return 'Retry on failure';
   }
 }
 
@@ -274,6 +276,7 @@ function producedBy(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenD
     case 'wait':
     case 'break':
     case 'loop':
+    case 'retry':
       return [];
     case 'set_variable':
       return [

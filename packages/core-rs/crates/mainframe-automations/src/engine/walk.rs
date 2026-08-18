@@ -91,6 +91,7 @@ async fn run_step(
         Step::If(block) => blocks::run_if(block, checkpoint, ctx, frame).await,
         Step::Repeat(block) => blocks::run_repeat(block, checkpoint, ctx, frame).await,
         Step::Loop(block) => blocks::run_loop(block, checkpoint, ctx, frame).await,
+        Step::Retry(block) => blocks::run_retry(block, checkpoint, ctx, frame).await,
         // Not a leaf: it writes no checkpoint entry and produces no outputs,
         // it only redirects the walk.
         Step::Break(_) => Ok(StepsResult {
@@ -228,9 +229,11 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         },
         // Unreachable by construction (run_step routes blocks and break
         // first); a graceful error beats a forbidden panic in library code.
-        Step::If(_) | Step::Repeat(_) | Step::Loop(_) | Step::Break(_) => StepOutcome::Failed {
-            error: "internal: block dispatched as a leaf verb".to_string(),
-        },
+        Step::If(_) | Step::Repeat(_) | Step::Loop(_) | Step::Retry(_) | Step::Break(_) => {
+            StepOutcome::Failed {
+                error: "internal: block dispatched as a leaf verb".to_string(),
+            }
+        }
     }
 }
 

@@ -3,13 +3,13 @@
 //! — only leaf verbs do — so re-entering one on resume is always safe: the
 //! nested walk short-circuits on already-terminal steps.
 
-use crate::domain::{IfBlock, LoopBlock, LoopMode, RepeatBlock};
+use crate::domain::{IfBlock, LoopBlock, LoopMode, RepeatBlock, RetryBlock};
 use crate::error::StoreError;
-use crate::store::AutomationCheckpoint;
+use crate::store::{AutomationCheckpoint, StepStatus};
 use crate::tokens::{TokenValue, evaluate};
 
 use super::WalkResult;
-use super::checkpoint::{WalkFrame, build_scope};
+use super::checkpoint::{WalkFrame, build_scope, set_step};
 use super::walk::{StepsResult, WalkCtx, walk_frame};
 
 /// Contract §2: an unbounded Repeat rewrites the whole checkpoint JSON per
@@ -88,6 +88,109 @@ pub(crate) async fn run_repeat(
         result: WalkResult::Done,
         checkpoint: current,
     })
+}
+
+/// The kind stamped on a retry's attempt-bookkeeping entries. These are engine
+/// state, not user steps: `project_timeline` filters them, and nothing in the
+/// editor's verb table has to know about them.
+pub const RETRY_ATTEMPT_KIND: &str = "retry_attempt";
+
+/// Retry (Part 3 Phase 3): re-walk the body from the top until it succeeds or
+/// the attempts run out.
+///
+/// Attempts cannot be inferred by replaying the walk: `walk_frame` treats an
+/// already-`failed` entry as settled and continues past it, so a replayed
+/// failed attempt would report `Done`. Each attempt therefore gets its own
+/// frame AND a marker entry recording its outcome, which is also what lets a
+/// restart mid-retry resume on the right attempt instead of starting over.
+pub(crate) async fn run_retry(
+    block: &RetryBlock,
+    checkpoint: AutomationCheckpoint,
+    ctx: &WalkCtx<'_>,
+    frame: &WalkFrame,
+) -> Result<StepsResult, StoreError> {
+    let mut current = checkpoint;
+    let mut last_error: Option<String> = None;
+
+    for attempt in 0..block.max_attempts {
+        let marker = format!("{}@a{}{}", block.id, attempt, frame.ref_suffix);
+        match current.steps.get(&marker) {
+            Some(entry) if entry.status == StepStatus::Succeeded => {
+                return Ok(StepsResult {
+                    result: WalkResult::Done,
+                    checkpoint: current,
+                });
+            }
+            Some(entry) if entry.status == StepStatus::Failed => {
+                last_error = entry.error.clone();
+                continue;
+            }
+            _ => {}
+        }
+
+        let StepsResult { result, checkpoint } =
+            walk_frame(&block.steps, current, ctx, frame.pass(attempt as usize)).await?;
+        current = checkpoint;
+
+        match result {
+            WalkResult::Done => {
+                current = mark_attempt(ctx, &marker, block, StepStatus::Succeeded, None).await?;
+                return Ok(StepsResult {
+                    result: WalkResult::Done,
+                    checkpoint: current,
+                });
+            }
+            WalkResult::Failed { error } => {
+                current =
+                    mark_attempt(ctx, &marker, block, StepStatus::Failed, Some(error.clone()))
+                        .await?;
+                last_error = Some(error);
+            }
+            // Parked mid-attempt, or a break unwinding to an outer loop: the
+            // attempt is unfinished, so it gets no marker and the resume
+            // re-enters the same frame.
+            other => {
+                return Ok(StepsResult {
+                    result: other,
+                    checkpoint: current,
+                });
+            }
+        }
+    }
+
+    Ok(StepsResult {
+        result: WalkResult::Failed {
+            error: last_error.unwrap_or_else(|| {
+                format!("retry '{}' ran no attempts — maxAttempts is 0", block.id)
+            }),
+        },
+        checkpoint: current,
+    })
+}
+
+async fn mark_attempt(
+    ctx: &WalkCtx<'_>,
+    marker: &str,
+    block: &RetryBlock,
+    status: StepStatus,
+    error: Option<String>,
+) -> Result<AutomationCheckpoint, StoreError> {
+    let (marker, step_id) = (marker.to_string(), block.id.clone());
+    let record = ctx
+        .store
+        .patch_checkpoint(ctx.run_id, move |cp| {
+            set_step(
+                cp,
+                &marker,
+                &step_id,
+                RETRY_ATTEMPT_KIND,
+                status,
+                None,
+                error.clone(),
+            );
+        })
+        .await?;
+    Ok(record.checkpoint)
 }
 
 /// Condition loop (Part 3 Phase 2). Unlike `run_repeat`, the continue test is

@@ -196,7 +196,8 @@ fn own_source_kind(step: &Step) -> Option<TokenSourceKind> {
         | Step::Break(_)
         | Step::Repeat(_)
         | Step::If(_)
-        | Step::Loop(_) => None,
+        | Step::Loop(_)
+        | Step::Retry(_) => None,
     }
 }
 
@@ -239,7 +240,9 @@ fn produced_by(step: &Step) -> Vec<TokenInfo> {
                 info(&s.id, name, *token_type, &output_label(name), &s.action_id)
             })
             .collect(),
-        Step::Notify(_) | Step::Wait(_) | Step::Break(_) | Step::Loop(_) => Vec::new(),
+        Step::Notify(_) | Step::Wait(_) | Step::Break(_) | Step::Loop(_) | Step::Retry(_) => {
+            Vec::new()
+        }
         Step::SetVariable(s) => {
             let source = if s.name.is_empty() {
                 "Set a value".to_string()
@@ -272,7 +275,7 @@ pub(crate) fn step_refs(step: &Step) -> Vec<&TokenRef> {
             }
             refs
         }
-        Step::AskMe(_) | Step::Wait(_) | Step::Break(_) => Vec::new(),
+        Step::AskMe(_) | Step::Wait(_) | Step::Break(_) | Step::Retry(_) => Vec::new(),
         Step::RunAction(s) => s.params.values().flat_map(|p| chip_tokens(p)).collect(),
         Step::Notify(s) => chip_tokens(&s.message),
         Step::SetVariable(s) => chip_tokens(&s.value),

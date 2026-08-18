@@ -27,7 +27,8 @@ fn chip_texts(step: &Step) -> Vec<&ChipText> {
         | Step::Break(_)
         | Step::If(_)
         | Step::Repeat(_)
-        | Step::Loop(_) => Vec::new(),
+        | Step::Loop(_)
+        | Step::Retry(_) => Vec::new(),
     }
 }
 
@@ -70,7 +71,8 @@ fn names_claimed_by(step: &Step, into: &mut HashSet<String>) {
         | Step::Break(_)
         | Step::If(_)
         | Step::Repeat(_)
-        | Step::Loop(_) => {}
+        | Step::Loop(_)
+        | Step::Retry(_) => {}
     }
 }
 
@@ -87,7 +89,7 @@ fn region_names(steps: &[Step], except: &str, into: &mut HashSet<String>) {
                 region_names(&s.otherwise, except, into);
             }
             // A loop body is its own naming region, exactly like a repeat's.
-            Step::Repeat(_) | Step::Loop(_) => {}
+            Step::Repeat(_) | Step::Loop(_) | Step::Retry(_) => {}
             _ => names_claimed_by(step, into),
         }
     }
@@ -102,6 +104,7 @@ fn contains_step(steps: &[Step], step_id: &str) -> bool {
                 }
                 Step::Repeat(s) => contains_step(&s.steps, step_id),
                 Step::Loop(s) => contains_step(&s.steps, step_id),
+                Step::Retry(s) => contains_step(&s.steps, step_id),
                 _ => false,
             }
     })
@@ -114,6 +117,7 @@ fn enclosing_repeat_body<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a [St
         match step {
             Step::Repeat(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
             Step::Loop(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
+            Step::Retry(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
             Step::If(s) => {
                 if let Some(body) = enclosing_repeat_body(&s.then, step_id) {
                     return Some(body);

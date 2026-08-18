@@ -35,6 +35,7 @@ export function mapStepChipText(step: AutomationStep, map: ChipTextMapper): Auto
     case 'repeat':
       return { ...step, steps: step.steps.map((inner) => mapStepChipText(inner, map)) };
     case 'loop':
+    case 'retry':
       return { ...step, steps: step.steps.map((inner) => mapStepChipText(inner, map)) };
     case 'ask_me':
     case 'wait':

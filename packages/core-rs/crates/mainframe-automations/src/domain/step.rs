@@ -25,6 +25,7 @@ pub enum Step {
     Repeat(RepeatBlock),
     #[serde(rename = "loop")]
     Loop(LoopBlock),
+    Retry(RetryBlock),
 }
 
 impl Step {
@@ -40,6 +41,7 @@ impl Step {
             Step::If(s) => &s.id,
             Step::Repeat(s) => &s.id,
             Step::Loop(s) => &s.id,
+            Step::Retry(s) => &s.id,
         }
     }
 
@@ -55,6 +57,7 @@ impl Step {
             Step::If(_) => "if",
             Step::Repeat(_) => "repeat",
             Step::Loop(_) => "loop",
+            Step::Retry(_) => "retry",
         }
     }
 
@@ -70,8 +73,31 @@ impl Step {
             Step::If(s) => s.keep_going,
             Step::Repeat(s) => s.keep_going,
             Step::Loop(s) => s.keep_going,
+            Step::Retry(s) => s.keep_going,
         }
     }
+}
+
+/// Re-runs its body from the top when it fails.
+///
+/// Each attempt walks in its own frame, so a failed attempt's checkpoint
+/// entries never shadow the next one's — without that the walk would skip the
+/// already-`failed` step and report the retry as a success.
+///
+/// **Retrying re-runs side effects.** A body that opened a PR and then failed
+/// opens a second one on the next attempt. There is no idempotence guard here:
+/// the `idempotent` manifest flag is engine-internal and never reaches the
+/// wire catalog, so the honest surfacing is the editor's copy, not a check
+/// that would silently half-work. Prefer retrying reads and commands.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RetryBlock {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keep_going: bool,
+    /// Total tries, including the first — `1` is "no retry".
+    pub max_attempts: u32,
+    pub steps: Vec<Step>,
 }
 
 /// Leaves the innermost enclosing loop or repeat. Validation rejects one that

@@ -42,6 +42,7 @@ function collectChipTexts(step: AutomationStep): ChipText[] {
     case 'wait':
     case 'break':
     case 'loop':
+    case 'retry':
       return [];
   }
 }
@@ -184,6 +185,14 @@ export function validate(
           issues.push({ stepId: step.id, level: 'error', msg: 'Set how many passes this loop may run.' });
         } else if (step.maxIterations > MAX_LOOP_PASSES) {
           issues.push({ stepId: step.id, level: 'error', msg: `A loop can run at most ${MAX_LOOP_PASSES} passes.` });
+        }
+        walk(step.steps);
+      }
+      if (step.kind === 'retry') {
+        if (!step.maxAttempts) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Set how many times this should be tried.' });
+        } else if (step.maxAttempts > MAX_LOOP_PASSES) {
+          issues.push({ stepId: step.id, level: 'error', msg: `A retry can run at most ${MAX_LOOP_PASSES} attempts.` });
         }
         walk(step.steps);
       }

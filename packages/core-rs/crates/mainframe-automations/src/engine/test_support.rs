@@ -10,8 +10,8 @@ use tempfile::TempDir;
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
     BreakStep, ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue,
-    IfBlock, LoopBlock, LoopMode, NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step,
-    TokenRef, WaitStep,
+    IfBlock, LoopBlock, LoopMode, NotifyStep, RepeatBlock, RetryBlock, RunActionStep,
+    SetVariableStep, Step, TokenRef, WaitStep,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -321,6 +321,15 @@ pub(crate) fn loop_step(
     })
 }
 
+pub(crate) fn retry_step(id: &str, max_attempts: u32, steps: Vec<Step>) -> Step {
+    Step::Retry(RetryBlock {
+        id: id.to_string(),
+        keep_going: false,
+        max_attempts,
+        steps,
+    })
+}
+
 pub(crate) fn break_step(id: &str) -> Step {
     Step::Break(BreakStep {
         id: id.to_string(),
@@ -371,6 +380,10 @@ pub(crate) fn repeat_step(id: &str, items: TokenRef, steps: Vec<Step>) -> Step {
 
 pub(crate) fn completed(outputs: Map<String, Value>) -> StepOutcome {
     StepOutcome::Completed { outputs }
+}
+
+pub(crate) fn failed(error: String) -> StepOutcome {
+    StepOutcome::Failed { error }
 }
 
 pub(crate) fn empty_outputs() -> Map<String, Value> {

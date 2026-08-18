@@ -153,6 +153,9 @@ fn check_breaks(steps: &[Step], in_loop: bool, ctx: &mut Ctx) {
             }
             Step::Repeat(s) => check_breaks(&s.steps, true, ctx),
             Step::Loop(s) => check_breaks(&s.steps, true, ctx),
+            // A retry is not a loop: a break inside one targets whatever loop
+            // encloses the retry, so `in_loop` passes through unchanged.
+            Step::Retry(s) => check_breaks(&s.steps, in_loop, ctx),
             _ => {}
         }
     }
@@ -168,6 +171,7 @@ fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
             }
             Step::Repeat(s) => for_each_step(&s.steps, visit),
             Step::Loop(s) => for_each_step(&s.steps, visit),
+            Step::Retry(s) => for_each_step(&s.steps, visit),
             _ => {}
         }
     }
@@ -265,6 +269,24 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                 inner_scope.push(current_item_info());
                 walk(&s.steps, &mut inner_scope, ctx);
                 // Isolated: nothing produced inside leaks after the block.
+            }
+            Step::Retry(s) => {
+                if s.max_attempts == 0 {
+                    ctx.push(
+                        step.id(),
+                        "Set how many times this should be tried.".to_string(),
+                    );
+                } else if s.max_attempts as usize > MAX_REPEAT_ITEMS {
+                    ctx.push(
+                        step.id(),
+                        format!("A retry can run at most {MAX_REPEAT_ITEMS} attempts."),
+                    );
+                }
+                let mut inner_scope = scope.clone();
+                walk(&s.steps, &mut inner_scope, ctx);
+                // Isolated like Repeat: a failed attempt's outputs must not
+                // outlive the block, or a later step could read a value the
+                // successful attempt never produced.
             }
             Step::Loop(s) => {
                 if s.conditions.is_empty() {

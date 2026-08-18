@@ -51,11 +51,15 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       return { id, kind, mode: 'until', match: 'all', conditions: [], maxIterations: 20, steps: [] };
     case 'break':
       return { id, kind };
+    // 3 tries: one retry is usually noise, and past three a flaky dependency
+    // is a problem to fix rather than to paper over.
+    case 'retry':
+      return { id, kind, maxAttempts: 3, steps: [] };
   }
 }
 
-function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' }> {
-  return step.kind === 'if' || step.kind === 'repeat' || step.kind === 'loop';
+function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' | 'retry' }> {
+  return step.kind === 'if' || step.kind === 'repeat' || step.kind === 'loop' || step.kind === 'retry';
 }
 
 export interface RecipeProps {

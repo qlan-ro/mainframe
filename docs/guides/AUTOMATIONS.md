@@ -6,7 +6,7 @@ file to edit or sync. Full product rationale: `docs/designs/2026-07-11-automatio
 
 ## The model
 
-Steps come from seven verbs, plus three block types for structure:
+Steps come from seven verbs, plus four block types for structure:
 
 | Verb | Purpose |
 |---|---|
@@ -23,6 +23,7 @@ Steps come from seven verbs, plus three block types for structure:
 | `if` | Structured `⟨token⟩ · comparator · value` conditions, `then`/`otherwise` branches. |
 | `repeat` | Iterate a list-typed token; steps inside see `⟨current⟩`. |
 | `loop` | Repeat `while`/`until` a condition, re-tested each pass. Requires `maxIterations` (≤ 500); exhausting it **fails** the block. |
+| `retry` | Re-run the body from the top on failure, up to `maxAttempts`. Every attempt re-runs side effects — there is no idempotence guard. |
 
 Data flows through **tokens** (`TokenRef {stepId, output, field?}`), not
 expressions. Text fields hold `ChipText` — a mix of literal text and token

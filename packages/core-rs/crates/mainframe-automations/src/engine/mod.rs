@@ -17,6 +17,7 @@ pub(crate) mod walk;
 
 pub use advance::{AgentWaitRegistry, Interpreter, InterpreterDeps};
 pub use agent::AgentVerb;
+pub use blocks::RETRY_ATTEMPT_KIND;
 pub use notify_verb::NotifyVerb;
 pub use run_action_verb::RunActionVerb;
 
@@ -135,6 +136,9 @@ mod blocks_repeat_tests;
 
 #[cfg(test)]
 mod blocks_loop_tests;
+
+#[cfg(test)]
+mod blocks_retry_tests;
 
 #[cfg(test)]
 mod cancel_tests;

@@ -108,6 +108,37 @@ fn a_loop_over_the_pass_cap_is_rejected() {
 }
 
 #[test]
+fn a_retry_with_no_attempts_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "guard", "kind": "retry", "maxAttempts": 0, "steps": []}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("guard") && e.message.contains("how many times")),
+        "expected a zero-attempt error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_inside_a_retry_still_needs_an_enclosing_loop() {
+    // A retry is not a loop — a break inside one targets whatever loop
+    // encloses the retry, and there is none here.
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "guard", "kind": "retry", "maxAttempts": 2,
+                   "steps": [{"id": "stop", "kind": "break"}]}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("stop") && e.message.contains("inside a loop")),
+        "expected a stray-break error, got {errors:?}"
+    );
+}
+
+#[test]
 fn a_break_outside_any_loop_is_rejected() {
     let errors = validate(&def(json!({
         "triggers": [],

@@ -28,6 +28,7 @@ export type {
   IfBlock,
   RepeatBlock,
   LoopBlock,
+  RetryBlock,
   BreakStep,
   AutomationStep,
   SchedulePattern,
