@@ -9,8 +9,9 @@ use tempfile::TempDir;
 
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
-    ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue, IfBlock,
-    NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step, TokenRef, WaitStep,
+    BreakStep, ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue,
+    IfBlock, LoopBlock, LoopMode, NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step,
+    TokenRef, WaitStep,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -300,6 +301,31 @@ pub(crate) fn named_ask_agent_step(id: &str, output_name: &str) -> Step {
     };
     step.output_name = Some(output_name.to_string());
     Step::AskAgent(step)
+}
+
+pub(crate) fn loop_step(
+    id: &str,
+    mode: LoopMode,
+    conditions: Vec<ConditionRow>,
+    max_iterations: u32,
+    steps: Vec<Step>,
+) -> Step {
+    Step::Loop(LoopBlock {
+        id: id.to_string(),
+        keep_going: false,
+        mode,
+        match_mode: ConditionMatch::All,
+        conditions,
+        max_iterations,
+        steps,
+    })
+}
+
+pub(crate) fn break_step(id: &str) -> Step {
+    Step::Break(BreakStep {
+        id: id.to_string(),
+        keep_going: false,
+    })
 }
 
 pub(crate) fn token_ref(step_id: &str, output: &str, field: Option<&str>) -> TokenRef {

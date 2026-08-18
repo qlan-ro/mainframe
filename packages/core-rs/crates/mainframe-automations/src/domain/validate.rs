@@ -17,6 +17,7 @@ use super::scope::{
 };
 use super::step::Step;
 use super::token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TokenRef};
+use crate::engine::blocks::MAX_REPEAT_ITEMS;
 /// A parked run costs nothing, so the cap is not a resource bound — it is a
 /// typo guard. Anything longer than a week is a seconds/milliseconds mix-up
 /// far more often than an intent; a genuinely long delay belongs on a
@@ -131,7 +132,30 @@ pub fn validate(definition: &AutomationDefinition) -> Vec<ValidationError> {
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
     walk(&definition.steps, &mut scope, &mut ctx);
+    check_breaks(&definition.steps, false, &mut ctx);
     ctx.errors
+}
+
+/// A `break` outside every loop has nothing to leave. Checked in its own pass
+/// because the enclosing-block question is structural — it has nothing to do
+/// with the token scope `walk` threads.
+fn check_breaks(steps: &[Step], in_loop: bool, ctx: &mut Ctx) {
+    for step in steps {
+        match step {
+            Step::Break(_) if !in_loop => ctx.push(
+                step.id(),
+                "Put this inside a loop or repeat — there's nothing here for it to stop."
+                    .to_string(),
+            ),
+            Step::If(s) => {
+                check_breaks(&s.then, in_loop, ctx);
+                check_breaks(&s.otherwise, in_loop, ctx);
+            }
+            Step::Repeat(s) => check_breaks(&s.steps, true, ctx),
+            Step::Loop(s) => check_breaks(&s.steps, true, ctx),
+            _ => {}
+        }
+    }
 }
 
 fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
@@ -143,6 +167,7 @@ fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
                 for_each_step(&s.otherwise, visit);
             }
             Step::Repeat(s) => for_each_step(&s.steps, visit),
+            Step::Loop(s) => for_each_step(&s.steps, visit),
             _ => {}
         }
     }
@@ -240,6 +265,43 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                 inner_scope.push(current_item_info());
                 walk(&s.steps, &mut inner_scope, ctx);
                 // Isolated: nothing produced inside leaks after the block.
+            }
+            Step::Loop(s) => {
+                if s.conditions.is_empty() {
+                    ctx.push(
+                        step.id(),
+                        "Add a condition — a loop with none would never stop.".to_string(),
+                    );
+                }
+                if s.max_iterations == 0 {
+                    ctx.push(
+                        step.id(),
+                        "Set how many passes this loop may run.".to_string(),
+                    );
+                } else if s.max_iterations as usize > MAX_REPEAT_ITEMS {
+                    ctx.push(
+                        step.id(),
+                        format!("A loop can run at most {MAX_REPEAT_ITEMS} passes."),
+                    );
+                }
+                for condition in &s.conditions {
+                    let Some(found) = lookup(scope, &condition.token) else {
+                        continue; // the missing ref already got its own error
+                    };
+                    if !comparators_for(found.token_type).contains(&condition.comparator) {
+                        ctx.push(
+                            step.id(),
+                            format!(
+                                "\"{}\" doesn't work on a {} value — pick a different comparator.",
+                                comparator_wire_name(condition.comparator),
+                                found.token_type.describe()
+                            ),
+                        );
+                    }
+                }
+                let mut inner_scope = scope.clone();
+                walk(&s.steps, &mut inner_scope, ctx);
+                // Isolated like Repeat: a pass's outputs don't outlive the block.
             }
             _ => scope.extend(step_produces(step)),
         }

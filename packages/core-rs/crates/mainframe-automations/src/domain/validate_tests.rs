@@ -66,6 +66,74 @@ fn a_wait_within_the_cap_is_clean() {
     assert!(errors.is_empty(), "expected no errors, got {errors:?}");
 }
 
+fn a_loop(id: &str, extra: Value) -> Value {
+    let mut base = json!({
+        "id": id, "kind": "loop", "mode": "until", "match": "all",
+        "conditions": [{"token": {"stepId": "builtin", "output": "today"}, "comparator": "is", "value": "x"}],
+        "maxIterations": 5, "steps": []
+    });
+    let map = base.as_object_mut().unwrap();
+    for (k, v) in extra.as_object().unwrap() {
+        map.insert(k.clone(), v.clone());
+    }
+    base
+}
+
+#[test]
+fn a_loop_with_no_conditions_is_rejected_because_it_would_never_stop() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"conditions": []}))]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("poll") && e.message.contains("never stop")),
+        "expected a no-condition error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_loop_over_the_pass_cap_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"maxIterations": 501}))]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("poll") && e.message.contains("at most 500")),
+        "expected an over-cap error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_outside_any_loop_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "stop", "kind": "break"}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("stop") && e.message.contains("inside a loop")),
+        "expected a stray-break error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_nested_in_an_if_inside_a_loop_is_accepted() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"steps": [{
+            "id": "maybe", "kind": "if", "match": "all",
+            "conditions": [{"token": {"stepId": "builtin", "output": "today"}, "comparator": "is", "value": "x"}],
+            "then": [{"id": "stop", "kind": "break"}], "otherwise": []
+        }]}))]
+    })));
+    assert!(errors.is_empty(), "expected no errors, got {errors:?}");
+}
+
 #[test]
 fn empty_step_ids_are_rejected() {
     let errors = validate(&def(json!({

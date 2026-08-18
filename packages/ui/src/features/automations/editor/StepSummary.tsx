@@ -14,6 +14,7 @@ import type {
   ChipText,
   NotifyStep,
   RunActionStep,
+  BreakStep,
   SetVariableStep,
   TokenRef,
   WaitStep,
@@ -22,7 +23,7 @@ import { isTokenPart } from '../domain/chip-parts';
 import type { TokenDescriptor } from '../domain/tokens';
 import { TokenChip } from '../fields/TokenChip';
 
-export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | WaitStep;
+export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | WaitStep | BreakStep;
 
 interface StepSummaryProps {
   step: LeafStep;
@@ -91,6 +92,8 @@ export function StepSummary({ step, tokens, catalog }: StepSummaryProps) {
       return <span className="text-xs text-muted-foreground">{step.name ? `Set $${step.name}` : 'Unnamed value'}</span>;
     case 'wait':
       return <span className="text-xs text-muted-foreground">{formatDuration(step.seconds)}</span>;
+    case 'break':
+      return <span className="text-xs text-muted-foreground">Leave the surrounding loop</span>;
   }
 }
 

@@ -168,7 +168,10 @@ impl Interpreter {
                         self.finalize_and_emit(run_id, TerminalStatus::Failed, Some(error))
                             .await
                     }
-                    WalkResult::Done => {
+                    // Validation rejects a break with no enclosing loop, so
+                    // reaching the top means a definition slipped past it —
+                    // finish the run rather than wedging it.
+                    WalkResult::Done | WalkResult::Broke => {
                         self.finalize_and_emit(run_id, TerminalStatus::Succeeded, None)
                             .await
                     }

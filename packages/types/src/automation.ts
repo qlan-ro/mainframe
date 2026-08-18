@@ -133,6 +133,35 @@ export interface WaitStep extends AutomationStepBase {
   seconds: number;
 }
 
+/**
+ * A condition-driven loop — the counterpart to `RepeatBlock`, whose list is
+ * resolved once before it starts and so cannot poll or converge.
+ *
+ * Conditions are re-evaluated before each pass, against the PREVIOUS pass's
+ * outputs. Before the first pass there is nothing to read, and the rule there
+ * is: if the condition's tokens don't resolve yet, run the pass. Without it
+ * "repeat while the build is running" would exit before running anything,
+ * since the step producing that status lives inside the loop. It costs `until`
+ * nothing — a goal provable from outside the loop still resolves, so "poll
+ * until the build is green" still runs zero passes when it already was.
+ *
+ * `maxIterations` is mandatory (capped at 500, Repeat's bound) and exhausting
+ * it FAILS the block: a poll that never went green must not read as one that did.
+ */
+export interface LoopBlock extends AutomationStepBase {
+  kind: 'loop';
+  mode: 'while' | 'until';
+  match: 'all' | 'any';
+  conditions: ConditionRow[];
+  maxIterations: number;
+  steps: AutomationStep[];
+}
+
+/** Leaves the innermost enclosing `loop` or `repeat`. Validation rejects one with no enclosing block. */
+export interface BreakStep extends AutomationStepBase {
+  kind: 'break';
+}
+
 /** Defines a named value downstream steps address as `$name` (automation-domain/variables.ts). */
 export interface SetVariableStep extends AutomationStepBase {
   kind: 'set_variable';
@@ -141,7 +170,16 @@ export interface SetVariableStep extends AutomationStepBase {
 }
 
 export type AutomationStep =
-  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | WaitStep | IfBlock | RepeatBlock;
+  | AskAgentStep
+  | AskMeStep
+  | RunActionStep
+  | NotifyStep
+  | SetVariableStep
+  | WaitStep
+  | BreakStep
+  | IfBlock
+  | RepeatBlock
+  | LoopBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }

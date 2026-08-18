@@ -147,7 +147,7 @@ export function findStepById(steps: AutomationStep[], stepId: string): Automatio
       if (inThen) return inThen;
       const inOtherwise = findStepById(step.otherwise, stepId);
       if (inOtherwise) return inOtherwise;
-    } else if (step.kind === 'repeat') {
+    } else if (step.kind === 'repeat' || step.kind === 'loop') {
       const inner = findStepById(step.steps, stepId);
       if (inner) return inner;
     }
@@ -176,6 +176,10 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
       return 'If … otherwise';
     case 'repeat':
       return 'Repeat for each';
+    case 'loop':
+      return step.mode === 'while' ? 'Repeat while' : 'Repeat until';
+    case 'break':
+      return 'Stop the loop';
   }
 }
 
@@ -268,6 +272,8 @@ function producedBy(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenD
     }
     case 'notify':
     case 'wait':
+    case 'break':
+    case 'loop':
       return [];
     case 'set_variable':
       return [

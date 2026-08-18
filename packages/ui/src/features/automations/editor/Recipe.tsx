@@ -45,11 +45,17 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       const ref = listToken ? listToken.ref : { stepId: 'builtin', output: 'today' };
       return { id, kind, items: ref, steps: [] };
     }
+    // 20 passes: enough for a realistic CI poll at a 30s wait, low enough that
+    // a runaway condition surfaces in minutes rather than hours.
+    case 'loop':
+      return { id, kind, mode: 'until', match: 'all', conditions: [], maxIterations: 20, steps: [] };
+    case 'break':
+      return { id, kind };
   }
 }
 
-function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' }> {
-  return step.kind === 'if' || step.kind === 'repeat';
+function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' }> {
+  return step.kind === 'if' || step.kind === 'repeat' || step.kind === 'loop';
 }
 
 export interface RecipeProps {

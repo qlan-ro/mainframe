@@ -13,7 +13,18 @@
  * design review.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles, Timer, Variable } from 'lucide-react';
+import {
+  Bell,
+  CircleStop,
+  GitBranch,
+  MessageSquare,
+  Plug,
+  Repeat,
+  RotateCw,
+  Sparkles,
+  Timer,
+  Variable,
+} from 'lucide-react';
 import type { AutomationStep } from '../contract';
 import { sourceKindStyle } from '../fields/TokenChip';
 
@@ -105,6 +116,27 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     hint: 'Branch on a result',
     block: true,
   },
+  loop: {
+    // Same green as `repeat` — both are "run these steps more than once", and
+    // splitting the hue would imply a difference in kind rather than in what
+    // decides the next pass.
+    icon: Repeat,
+    iconClass: itemStyle.iconClass,
+    tintClass: itemStyle.tintClass,
+    cardTintClass: 'bg-mf-auto-kind-loop/5',
+    borderClass: itemStyle.borderClass,
+    label: 'Repeat while / until',
+    hint: 'Run steps over and over until a condition is met',
+    block: true,
+  },
+  break: {
+    icon: CircleStop,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Stop the loop',
+    hint: 'Leave the surrounding loop early',
+  },
   repeat: {
     icon: RotateCw,
     iconClass: itemStyle.iconClass,
@@ -119,5 +151,5 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
   { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify', 'wait'] },
-  { label: 'Add structure', kinds: ['if', 'repeat'] },
+  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'break'] },
 ];

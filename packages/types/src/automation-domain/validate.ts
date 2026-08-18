@@ -19,6 +19,9 @@ export interface ValidationIssue {
   msg: string;
 }
 
+/** Repeat's fan-out bound, shared: a loop pass writes the same suffixed entries an iteration does, so it inherits the same checkpoint-growth ceiling. */
+const MAX_LOOP_PASSES = 500;
+
 /** A set-variable name has to survive being typed as `$name`, so it is an identifier, not free text. */
 const VARIABLE_NAME = /^[a-z_][a-z0-9_]*$/;
 
@@ -37,6 +40,8 @@ function collectChipTexts(step: AutomationStep): ChipText[] {
     case 'repeat':
     case 'ask_me':
     case 'wait':
+    case 'break':
+    case 'loop':
       return [];
   }
 }
@@ -47,7 +52,7 @@ function collectTokenRefs(step: AutomationStep): TokenRef[] {
     .flat()
     .filter(isTokenPart)
     .map((part) => part.token);
-  if (step.kind === 'if') refs.push(...step.conditions.map((c) => c.token));
+  if (step.kind === 'if' || step.kind === 'loop') refs.push(...step.conditions.map((c) => c.token));
   if (step.kind === 'repeat') refs.push(step.items);
   return refs;
 }
@@ -168,6 +173,17 @@ export function validate(
             level: 'error',
             msg: `"${itemsToken.label}" isn't a list — pick a value that produces a list to repeat over.`,
           });
+        }
+        walk(step.steps);
+      }
+      if (step.kind === 'loop') {
+        if (step.conditions.length === 0) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Add a condition — a loop with none would never stop.' });
+        }
+        if (!step.maxIterations) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Set how many passes this loop may run.' });
+        } else if (step.maxIterations > MAX_LOOP_PASSES) {
+          issues.push({ stepId: step.id, level: 'error', msg: `A loop can run at most ${MAX_LOOP_PASSES} passes.` });
         }
         walk(step.steps);
       }

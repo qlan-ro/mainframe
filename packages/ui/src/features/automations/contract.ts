@@ -27,6 +27,8 @@ export type {
   ConditionRow,
   IfBlock,
   RepeatBlock,
+  LoopBlock,
+  BreakStep,
   AutomationStep,
   SchedulePattern,
   ScheduleTrigger,

@@ -47,7 +47,13 @@ pub enum StepOutcome {
 pub enum WalkResult {
     Done,
     Parked,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
+    /// A `break` fired. Propagates up through nested frames — `if` arms carry
+    /// it outward, `repeat`/`loop` catch it and finish as `Done`. Validation
+    /// guarantees an enclosing block exists, so it never reaches the top.
+    Broke,
 }
 
 /// What a verb sees: run/step identity plus the frame's token scope.
@@ -126,6 +132,9 @@ mod variables_tests;
 
 #[cfg(test)]
 mod blocks_repeat_tests;
+
+#[cfg(test)]
+mod blocks_loop_tests;
 
 #[cfg(test)]
 mod cancel_tests;

@@ -32,6 +32,17 @@ impl WalkFrame {
             current_items,
         }
     }
+
+    /// One condition-loop pass deeper. Same `#<i>` suffixing as `iteration`,
+    /// but the `current` stack is left alone: a condition loop has no item, and
+    /// pushing a placeholder would make `⟨current⟩` resolve inside it — either
+    /// to nonsense, or shadowing the enclosing Repeat's real item.
+    pub fn pass(&self, index: usize) -> WalkFrame {
+        WalkFrame {
+            ref_suffix: format!("{}#{index}", self.ref_suffix),
+            current_items: self.current_items.clone(),
+        }
+    }
 }
 
 /// Writes one stepRef entry. `outputs` land only on `succeeded` (a failed

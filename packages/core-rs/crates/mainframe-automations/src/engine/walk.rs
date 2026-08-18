@@ -64,7 +64,9 @@ pub(crate) fn walk_frame<'a>(
                 run_step(step, &step_ref, current, ctx, &frame).await?;
             current = checkpoint;
             let fatal = matches!(result, WalkResult::Failed { .. }) && !step.keep_going();
-            if matches!(result, WalkResult::Parked) || fatal {
+            // `Broke` unwinds to the nearest enclosing loop, so it stops this
+            // frame the same way a park does.
+            if matches!(result, WalkResult::Parked | WalkResult::Broke) || fatal {
                 return Ok(StepsResult {
                     result,
                     checkpoint: current,
@@ -88,6 +90,13 @@ async fn run_step(
     match step {
         Step::If(block) => blocks::run_if(block, checkpoint, ctx, frame).await,
         Step::Repeat(block) => blocks::run_repeat(block, checkpoint, ctx, frame).await,
+        Step::Loop(block) => blocks::run_loop(block, checkpoint, ctx, frame).await,
+        // Not a leaf: it writes no checkpoint entry and produces no outputs,
+        // it only redirects the walk.
+        Step::Break(_) => Ok(StepsResult {
+            result: WalkResult::Broke,
+            checkpoint,
+        }),
         _ => run_leaf(step, step_ref, checkpoint, ctx, frame).await,
     }
 }
@@ -213,13 +222,13 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
                 Value::String(render(&s.value, ctx.scope, ctx.names)),
             )]),
         },
-        // Unreachable by construction (run_step routes blocks first); a
-        // graceful error beats a forbidden panic in library code.
         // Parks on a wake_at the due-sweep resumes; no port, no side effect.
         Step::Wait(s) => StepOutcome::Wait {
             wake_at: Some(epoch_ms_now() + i64::from(s.seconds) * 1_000),
         },
-        Step::If(_) | Step::Repeat(_) => StepOutcome::Failed {
+        // Unreachable by construction (run_step routes blocks and break
+        // first); a graceful error beats a forbidden panic in library code.
+        Step::If(_) | Step::Repeat(_) | Step::Loop(_) | Step::Break(_) => StepOutcome::Failed {
             error: "internal: block dispatched as a leaf verb".to_string(),
         },
     }

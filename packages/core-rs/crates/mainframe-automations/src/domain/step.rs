@@ -20,8 +20,11 @@ pub enum Step {
     Notify(NotifyStep),
     SetVariable(SetVariableStep),
     Wait(WaitStep),
+    Break(BreakStep),
     If(IfBlock),
     Repeat(RepeatBlock),
+    #[serde(rename = "loop")]
+    Loop(LoopBlock),
 }
 
 impl Step {
@@ -33,8 +36,10 @@ impl Step {
             Step::Notify(s) => &s.id,
             Step::SetVariable(s) => &s.id,
             Step::Wait(s) => &s.id,
+            Step::Break(s) => &s.id,
             Step::If(s) => &s.id,
             Step::Repeat(s) => &s.id,
+            Step::Loop(s) => &s.id,
         }
     }
 
@@ -46,8 +51,10 @@ impl Step {
             Step::Notify(_) => "notify",
             Step::SetVariable(_) => "set_variable",
             Step::Wait(_) => "wait",
+            Step::Break(_) => "break",
             Step::If(_) => "if",
             Step::Repeat(_) => "repeat",
+            Step::Loop(_) => "loop",
         }
     }
 
@@ -59,10 +66,67 @@ impl Step {
             Step::Notify(s) => s.keep_going,
             Step::SetVariable(s) => s.keep_going,
             Step::Wait(s) => s.keep_going,
+            Step::Break(s) => s.keep_going,
             Step::If(s) => s.keep_going,
             Step::Repeat(s) => s.keep_going,
+            Step::Loop(s) => s.keep_going,
         }
     }
+}
+
+/// Leaves the innermost enclosing loop or repeat. Validation rejects one that
+/// has no enclosing block, so the walk never has to decide what a stray break
+/// means.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BreakStep {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keep_going: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoopMode {
+    /// Keep going while the conditions match.
+    While,
+    /// Keep going until the conditions match.
+    Until,
+}
+
+/// A condition-driven loop — the counterpart to `Repeat`, which walks a list
+/// resolved once before it starts and so cannot poll or converge.
+///
+/// The conditions are re-evaluated before each pass, against the PREVIOUS
+/// pass's outputs — a body step writes a suffixed entry the block's own frame
+/// cannot see, so the test runs in that pass's frame.
+///
+/// Before the first pass there is nothing to read, and the rule there is:
+/// **if the condition's tokens don't resolve yet, run the pass.** Without it
+/// "repeat while the build is running" would exit before running anything,
+/// since the step producing that status lives inside the loop. It costs
+/// `until` nothing — a goal provable from outside the loop still resolves, so
+/// "poll until the build is green" still runs zero passes when it was already
+/// green, which is the case a post-test loop gets wrong.
+///
+/// `max_iterations` is mandatory and capped at the same `MAX_REPEAT_ITEMS`
+/// bound Repeat already lives with, so a loop introduces no new checkpoint
+/// growth class: each pass writes its own suffixed step entries exactly as a
+/// Repeat iteration does. Exhausting the bound FAILS the block rather than
+/// exiting quietly — a poll that never went green must not read as one that
+/// did.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LoopBlock {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keep_going: bool,
+    pub mode: LoopMode,
+    #[serde(rename = "match")]
+    pub match_mode: ConditionMatch,
+    pub conditions: Vec<ConditionRow>,
+    pub max_iterations: u32,
+    pub steps: Vec<Step>,
 }
 
 /// Parks the run for a fixed delay, then resumes.

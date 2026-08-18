@@ -22,7 +22,12 @@ fn chip_texts(step: &Step) -> Vec<&ChipText> {
         Step::RunAction(s) => s.params.values().collect(),
         Step::Notify(s) => vec![&s.message],
         Step::SetVariable(s) => vec![&s.value],
-        Step::AskMe(_) | Step::Wait(_) | Step::If(_) | Step::Repeat(_) => Vec::new(),
+        Step::AskMe(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_) => Vec::new(),
     }
 }
 
@@ -60,7 +65,12 @@ fn names_claimed_by(step: &Step, into: &mut HashSet<String>) {
                 into.insert(format!("{}{suffix}", variable_name_for(&info)));
             }
         }
-        Step::Notify(_) | Step::Wait(_) | Step::If(_) | Step::Repeat(_) => {}
+        Step::Notify(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_) => {}
     }
 }
 
@@ -76,7 +86,8 @@ fn region_names(steps: &[Step], except: &str, into: &mut HashSet<String>) {
                 region_names(&s.then, except, into);
                 region_names(&s.otherwise, except, into);
             }
-            Step::Repeat(_) => {}
+            // A loop body is its own naming region, exactly like a repeat's.
+            Step::Repeat(_) | Step::Loop(_) => {}
             _ => names_claimed_by(step, into),
         }
     }
@@ -90,6 +101,7 @@ fn contains_step(steps: &[Step], step_id: &str) -> bool {
                     contains_step(&s.then, step_id) || contains_step(&s.otherwise, step_id)
                 }
                 Step::Repeat(s) => contains_step(&s.steps, step_id),
+                Step::Loop(s) => contains_step(&s.steps, step_id),
                 _ => false,
             }
     })
@@ -101,6 +113,7 @@ fn enclosing_repeat_body<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a [St
     for step in steps {
         match step {
             Step::Repeat(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
+            Step::Loop(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
             Step::If(s) => {
                 if let Some(body) = enclosing_repeat_body(&s.then, step_id) {
                     return Some(body);

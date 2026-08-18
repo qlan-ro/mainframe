@@ -8,15 +8,16 @@
  */
 import { GripVertical, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ActionCatalogEntry, AutomationStep, IfBlock, RepeatBlock } from '../contract';
+import type { ActionCatalogEntry, AutomationStep, IfBlock, LoopBlock, RepeatBlock } from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import type { ValidationIssue } from '../domain/validate';
 import { IfBody } from './IfBody';
+import { LoopBody } from './LoopBody';
 import { RepeatBody } from './RepeatBody';
 import { VERB_META } from './verb-meta';
 
 export interface BlockCardProps {
-  step: IfBlock | RepeatBlock;
+  step: IfBlock | RepeatBlock | LoopBlock;
   onChange: (next: AutomationStep | null) => void;
   tokens: TokenDescriptor[];
   catalog: ActionCatalogEntry[];
@@ -32,7 +33,7 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
   const myIssues = issues.filter((i) => i.stepId === step.id);
   const bad = myIssues.length > 0;
 
-  function patch(p: Partial<IfBlock> | Partial<RepeatBlock>) {
+  function patch(p: Partial<IfBlock> | Partial<RepeatBlock> | Partial<LoopBlock>) {
     onChange({ ...step, ...p } as AutomationStep);
   }
 
@@ -83,10 +84,14 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
       )}
       <div className="pr-[10px] pb-[11px] pl-[12px]">
         <div className={cn('flex flex-col gap-[11px] border-l-2 pl-[12px]', meta.borderClass)}>
-          {step.kind === 'if' ? (
+          {step.kind === 'if' && (
             <IfBody step={step} onChange={patch} tokens={tokens} catalog={catalog} issues={issues} depth={depth} />
-          ) : (
+          )}
+          {step.kind === 'repeat' && (
             <RepeatBody step={step} onChange={patch} tokens={tokens} catalog={catalog} issues={issues} depth={depth} />
+          )}
+          {step.kind === 'loop' && (
+            <LoopBody step={step} onChange={patch} tokens={tokens} catalog={catalog} issues={issues} depth={depth} />
           )}
         </div>
       </div>
