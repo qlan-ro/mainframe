@@ -22,7 +22,7 @@ fn chip_texts(step: &Step) -> Vec<&ChipText> {
         Step::RunAction(s) => s.params.values().collect(),
         Step::Notify(s) => vec![&s.message],
         Step::SetVariable(s) => vec![&s.value],
-        Step::AskMe(_) | Step::If(_) | Step::Repeat(_) => Vec::new(),
+        Step::AskMe(_) | Step::Wait(_) | Step::If(_) | Step::Repeat(_) => Vec::new(),
     }
 }
 
@@ -60,7 +60,7 @@ fn names_claimed_by(step: &Step, into: &mut HashSet<String>) {
                 into.insert(format!("{}{suffix}", variable_name_for(&info)));
             }
         }
-        Step::Notify(_) | Step::If(_) | Step::Repeat(_) => {}
+        Step::Notify(_) | Step::Wait(_) | Step::If(_) | Step::Repeat(_) => {}
     }
 }
 

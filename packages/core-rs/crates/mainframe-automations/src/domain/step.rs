@@ -1,5 +1,5 @@
 //! Do-steps (contract §1): the verbs (`ask_agent`, `ask_me`, `run_action`,
-//! `notify`, `set_variable`) and the two blocks (`if`, `repeat`).
+//! `notify`, `set_variable`, `wait`) and the two blocks (`if`, `repeat`).
 
 use std::collections::BTreeMap;
 
@@ -19,6 +19,7 @@ pub enum Step {
     RunAction(RunActionStep),
     Notify(NotifyStep),
     SetVariable(SetVariableStep),
+    Wait(WaitStep),
     If(IfBlock),
     Repeat(RepeatBlock),
 }
@@ -31,6 +32,7 @@ impl Step {
             Step::RunAction(s) => &s.id,
             Step::Notify(s) => &s.id,
             Step::SetVariable(s) => &s.id,
+            Step::Wait(s) => &s.id,
             Step::If(s) => &s.id,
             Step::Repeat(s) => &s.id,
         }
@@ -43,6 +45,7 @@ impl Step {
             Step::RunAction(_) => "run_action",
             Step::Notify(_) => "notify",
             Step::SetVariable(_) => "set_variable",
+            Step::Wait(_) => "wait",
             Step::If(_) => "if",
             Step::Repeat(_) => "repeat",
         }
@@ -55,10 +58,27 @@ impl Step {
             Step::RunAction(s) => s.keep_going,
             Step::Notify(s) => s.keep_going,
             Step::SetVariable(s) => s.keep_going,
+            Step::Wait(s) => s.keep_going,
             Step::If(s) => s.keep_going,
             Step::Repeat(s) => s.keep_going,
         }
     }
+}
+
+/// Parks the run for a fixed delay, then resumes.
+///
+/// Resolution is the engine's 30 s sweep, not a timer: a wait resumes on the
+/// first sweep at or after its `wake_at`, so short waits round up and a wait
+/// costs nothing while parked. That also makes it restart-safe for free —
+/// `wake_at` lives in the checkpoint, so a daemon restart mid-wait resumes on
+/// schedule instead of losing the timer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WaitStep {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub keep_going: bool,
+    pub seconds: u32,
 }
 
 /// A2: a declared key parsed from the agent's final JSON message, becoming a

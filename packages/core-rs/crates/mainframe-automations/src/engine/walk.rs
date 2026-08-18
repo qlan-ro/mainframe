@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use crate::domain::Step;
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
-use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus};
+use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, epoch_ms_now};
 use crate::tokens::{NameIndex, NameMap, render};
 
 use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
@@ -215,6 +215,10 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         },
         // Unreachable by construction (run_step routes blocks first); a
         // graceful error beats a forbidden panic in library code.
+        // Parks on a wake_at the due-sweep resumes; no port, no side effect.
+        Step::Wait(s) => StepOutcome::Wait {
+            wake_at: Some(epoch_ms_now() + i64::from(s.seconds) * 1_000),
+        },
         Step::If(_) | Step::Repeat(_) => StepOutcome::Failed {
             error: "internal: block dispatched as a leaf verb".to_string(),
         },

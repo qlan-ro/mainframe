@@ -19,7 +19,7 @@ pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, Sc
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
 pub use step::{
     AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, IfBlock, NotifyStep, OutputAs,
-    RepeatBlock, RunActionStep, SetVariableStep, Step, WorktreeSpec, find_step_by_id,
+    RepeatBlock, RunActionStep, SetVariableStep, Step, WaitStep, WorktreeSpec, find_step_by_id,
 };
 pub use template::{ChipPart, ChipText, chip_tokens};
 pub use token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef};

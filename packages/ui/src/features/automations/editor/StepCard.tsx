@@ -25,6 +25,7 @@ import { AskMeConfig } from '../steps/AskMeConfig';
 import { ActionConfig } from '../steps/ActionConfig';
 import { NotifyConfig } from '../steps/NotifyConfig';
 import { SetValueConfig } from '../steps/SetValueConfig';
+import { WaitConfig } from '../steps/WaitConfig';
 import { StepSummary, type LeafStep } from './StepSummary';
 import { VERB_META } from './verb-meta';
 
@@ -42,6 +43,7 @@ const STEP_CONFIGS: { [K in LeafStep['kind']]: FC<StepConfigProps<K>> } = {
   run_action: ActionConfig,
   set_variable: SetValueConfig,
   notify: NotifyConfig,
+  wait: WaitConfig,
 };
 
 /**

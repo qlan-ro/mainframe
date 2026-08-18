@@ -40,3 +40,6 @@ mod restart;
 
 #[path = "conformance/cancel.rs"]
 mod cancel;
+
+#[path = "conformance/wait.rs"]
+mod wait;

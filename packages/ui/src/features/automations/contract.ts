@@ -22,6 +22,7 @@ export type {
   RunActionStep,
   NotifyStep,
   SetVariableStep,
+  WaitStep,
   Comparator,
   ConditionRow,
   IfBlock,

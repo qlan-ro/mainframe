@@ -36,6 +36,7 @@ function collectChipTexts(step: AutomationStep): ChipText[] {
     case 'if':
     case 'repeat':
     case 'ask_me':
+    case 'wait':
       return [];
   }
 }

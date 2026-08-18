@@ -13,7 +13,7 @@
  * design review.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles, Variable } from 'lucide-react';
+import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles, Timer, Variable } from 'lucide-react';
 import type { AutomationStep } from '../contract';
 import { sourceKindStyle } from '../fields/TokenChip';
 
@@ -85,6 +85,16 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     label: 'Notify me',
     hint: 'Send a desktop / mobile notification',
   },
+  wait: {
+    // Shares notify's amber: both are passive punctuation between real work,
+    // and neither produces a token, so neither earns a source-kind hue.
+    icon: Timer,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Wait',
+    hint: 'Pause for a fixed delay, then carry on',
+  },
   if: {
     icon: GitBranch,
     iconClass: 'text-mf-accent-violet',
@@ -108,6 +118,6 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
 };
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
-  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify'] },
+  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify', 'wait'] },
   { label: 'Add structure', kinds: ['if', 'repeat'] },
 ];

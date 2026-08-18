@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
     ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue, IfBlock,
-    NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step, TokenRef,
+    NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step, TokenRef, WaitStep,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -253,6 +253,14 @@ pub(crate) fn set_variable_step(id: &str, name: &str, value: ChipText) -> Step {
         keep_going: false,
         name: name.to_string(),
         value,
+    })
+}
+
+pub(crate) fn wait_step(id: &str, seconds: u32) -> Step {
+    Step::Wait(WaitStep {
+        id: id.to_string(),
+        keep_going: false,
+        seconds,
     })
 }
 

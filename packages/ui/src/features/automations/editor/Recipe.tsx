@@ -32,6 +32,10 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       return { id, kind, message: [] };
     case 'set_variable':
       return { id, kind, name: '', value: [''] };
+    // 5 minutes: long enough to be a real pause, short enough that a user who
+    // adds one to poll something sees it resume rather than assume it hung.
+    case 'wait':
+      return { id, kind, seconds: 300 };
     case 'if':
       return { id, kind, match: 'all', conditions: [], then: [], otherwise: [] };
     case 'repeat': {

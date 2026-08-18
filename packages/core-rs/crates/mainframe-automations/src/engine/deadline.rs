@@ -1,24 +1,41 @@
-//! Deadline sweep + out-of-band step failure (T4.3, Node interpreter.ts
-//! sweepDeadlines/failStep): a waiting ask_agent step whose `wakeAt` passed
-//! fails with the deadline error; `keepGoing` decides whether the run
-//! continues. The chat itself is NOT told to stop (Node parity — only the
-//! automation stops waiting); its eventual completion finds a non-waiting
-//! entry and is dropped by the settle guard.
+//! Due-sweep + out-of-band step failure (T4.3, Node interpreter.ts
+//! sweepDeadlines/failStep). One `wakeAt` carries two meanings, discriminated
+//! by the parked step's kind:
+//!
+//! - `ask_agent` — a deadline. The step fails with the deadline error and
+//!   `keepGoing` decides whether the run continues. The chat itself is NOT
+//!   told to stop (Node parity — only the automation stops waiting); its
+//!   eventual completion finds a non-waiting entry and is dropped by the
+//!   settle guard.
+//! - `wait` — a resume. The step succeeds and the run advances.
+//!
+//! Any other parked kind (`ask_me`, which parks with `wakeAt: null`) is never
+//! due and is left alone.
+
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::domain::{Step, find_step_by_id};
 use crate::error::StoreError;
-use crate::store::{RunRecord, StepStatus, TerminalStatus};
+use crate::store::{RunRecord, StepStatus, TerminalStatus, epoch_ms_now};
 
 use super::advance::Interpreter;
 use super::checkpoint::fail_step_entry;
 
 const AGENT_DEADLINE_ERROR: &str = "agent step deadline exceeded";
 
+/// Matches the schedule sweep's cadence — one 30 s heartbeat is enough for
+/// both, and a second interval would only add jitter.
+pub const DUE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
+
 impl Interpreter {
-    /// Driven by the 30 s sweep (T8/T10): fail every live run whose wakeAt
-    /// deadline has passed. ask_me waits carry `wakeAt: null` by design and
-    /// are never swept (no expiry — contract §9).
-    pub async fn sweep_deadlines(&self, now: i64) -> Result<(), StoreError> {
+    /// Driven by the 30 s sweep (T8/T10): resolve every live run whose wakeAt
+    /// has passed. ask_me waits carry `wakeAt: null` by design and are never
+    /// swept (no expiry — contract §9).
+    ///
+    /// The sweep interval is also the resolution of a `wait`: a wait resumes
+    /// on the first sweep at or after its wakeAt, so short waits round up.
+    pub async fn sweep_due(&self, now: i64) -> Result<(), StoreError> {
         let due = self
             .deps
             .store
@@ -27,9 +44,26 @@ impl Interpreter {
             .into_iter()
             .filter(|run| run.checkpoint.wake_at.is_some_and(|wake_at| wake_at <= now));
         for run in due {
-            self.fail_deadline_step(&run).await?;
+            self.resolve_due_step(&run).await?;
         }
         Ok(())
+    }
+
+    /// The 30 s driver, armed by `AutomationsEngine::start`. Without this the
+    /// `wakeAt` column is inert: agent deadlines never fire and a `wait` step
+    /// parks forever.
+    pub fn spawn_due_sweep(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(DUE_SWEEP_INTERVAL);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                if let Err(err) = self.sweep_due(epoch_ms_now()).await {
+                    // One bad sweep must not kill the driver for every run.
+                    tracing::error!(error = %err, "automations due-sweep failed");
+                }
+            }
+        })
     }
 
     /// Fails one step outside the walk, applying the same keepGoing policy
@@ -73,7 +107,7 @@ impl Interpreter {
         }
     }
 
-    async fn fail_deadline_step(&self, run: &RunRecord) -> Result<(), StoreError> {
+    async fn resolve_due_step(&self, run: &RunRecord) -> Result<(), StoreError> {
         let waiting = run
             .checkpoint
             .steps
@@ -82,11 +116,40 @@ impl Interpreter {
         let Some((step_ref, entry)) = waiting else {
             return Ok(());
         };
-        if entry.kind != "ask_agent" {
-            return Ok(());
+        match entry.kind.as_str() {
+            "ask_agent" => {
+                self.fail_step(&run.id, step_ref, AGENT_DEADLINE_ERROR)
+                    .await
+            }
+            "wait" => self.resume_wait(&run.id, step_ref).await,
+            _ => Ok(()),
         }
-        self.fail_step(&run.id, step_ref, AGENT_DEADLINE_ERROR)
-            .await
+    }
+
+    /// Settles a due `wait` and resumes the walk. Mirrors `apply_answers`:
+    /// the parked entry becomes `succeeded` in place, carrying no outputs —
+    /// a wait produces no tokens.
+    async fn resume_wait(&self, run_id: &str, step_ref: &str) -> Result<(), StoreError> {
+        let step_ref_owned = step_ref.to_string();
+        let now = epoch_ms_now();
+        let patched = self
+            .deps
+            .store
+            .patch_checkpoint(run_id, move |cp| {
+                if let Some(entry) = cp.steps.get_mut(&step_ref_owned) {
+                    entry.status = StepStatus::Succeeded;
+                    entry.finished_at = Some(now);
+                }
+                cp.wake_at = None;
+            })
+            .await;
+        match patched {
+            Ok(_) => {}
+            // Cancel raced the wake — the run is already terminal.
+            Err(StoreError::TerminalRun { .. }) => return Ok(()),
+            Err(err) => return Err(err),
+        }
+        self.advance(run_id).await
     }
 }
 

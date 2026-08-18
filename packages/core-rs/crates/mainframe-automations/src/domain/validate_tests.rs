@@ -29,6 +29,44 @@ fn duplicate_step_ids_are_rejected() {
 }
 
 #[test]
+fn a_zero_second_wait_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 0}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("pause") && e.message.contains("how long")),
+        "expected a zero-duration error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_wait_longer_than_the_cap_is_rejected() {
+    // 8 days — over the 7-day cap, the shape a seconds/milliseconds mix-up takes.
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 691_200}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("pause") && e.message.contains("7 days")),
+        "expected an over-cap error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_wait_within_the_cap_is_clean() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 300}]
+    })));
+    assert!(errors.is_empty(), "expected no errors, got {errors:?}");
+}
+
+#[test]
 fn empty_step_ids_are_rejected() {
     let errors = validate(&def(json!({
         "triggers": [],

@@ -168,6 +168,8 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
     }
     case 'notify':
       return 'Notify me';
+    case 'wait':
+      return 'Wait';
     case 'set_variable':
       return step.name ? `Set ${step.name}` : 'Set a value';
     case 'if':
@@ -265,6 +267,7 @@ function producedBy(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenD
       });
     }
     case 'notify':
+    case 'wait':
       return [];
     case 'set_variable':
       return [

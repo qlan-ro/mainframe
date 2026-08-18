@@ -33,6 +33,15 @@ impl AutomationsEngine {
         Ok(run)
     }
 
+    /// Resolve every live run whose `wakeAt` has passed — agent deadlines fail,
+    /// `wait` steps resume. `start()` arms this on a 30 s tick; it is public so
+    /// a caller with its own clock (the conformance suite) can drive it
+    /// deterministically instead of sleeping.
+    pub async fn sweep_due(&self, now: i64) -> Result<(), EngineError> {
+        self.interpreter.sweep_due(now).await?;
+        Ok(())
+    }
+
     pub async fn list_runs(&self, automation_id: &str) -> Result<Vec<RunSummary>, EngineError> {
         let runs = self.runs.list_runs(automation_id, RUNS_PAGE).await?;
         Ok(runs.iter().map(to_run_summary).collect())

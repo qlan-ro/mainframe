@@ -120,6 +120,19 @@ export interface RepeatBlock extends AutomationStepBase {
   steps: AutomationStep[];
 }
 
+/**
+ * Parks the run for a fixed delay, then resumes.
+ *
+ * Resolution is the engine's 30s due-sweep, not a timer, so short waits round
+ * up. That also makes it restart-safe: `wakeAt` lives in the run's checkpoint,
+ * so a daemon restart mid-wait resumes on schedule instead of losing a timer.
+ * Capped at 7 days by validation — a longer delay belongs on a schedule trigger.
+ */
+export interface WaitStep extends AutomationStepBase {
+  kind: 'wait';
+  seconds: number;
+}
+
 /** Defines a named value downstream steps address as `$name` (automation-domain/variables.ts). */
 export interface SetVariableStep extends AutomationStepBase {
   kind: 'set_variable';
@@ -128,7 +141,7 @@ export interface SetVariableStep extends AutomationStepBase {
 }
 
 export type AutomationStep =
-  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | IfBlock | RepeatBlock;
+  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | WaitStep | IfBlock | RepeatBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }

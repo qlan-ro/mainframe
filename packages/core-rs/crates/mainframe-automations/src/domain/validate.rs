@@ -17,6 +17,12 @@ use super::scope::{
 };
 use super::step::Step;
 use super::token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TokenRef};
+/// A parked run costs nothing, so the cap is not a resource bound — it is a
+/// typo guard. Anything longer than a week is a seconds/milliseconds mix-up
+/// far more often than an intent; a genuinely long delay belongs on a
+/// schedule trigger, not inside a run.
+const MAX_WAIT_SECONDS: u32 = 7 * 24 * 60 * 60;
+
 use super::validate_variables::{
     set_variable_name_issue, unresolved_variable_names, variable_names_clashing_with,
 };
@@ -176,6 +182,16 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx) {
                     ctx.push(step.id(), "Choose an action for this step.".to_string());
                 }
                 scope.extend(step_produces(step));
+            }
+            Step::Wait(s) => {
+                if s.seconds == 0 {
+                    ctx.push(step.id(), "Set how long this step should wait.".to_string());
+                } else if s.seconds > MAX_WAIT_SECONDS {
+                    ctx.push(
+                        step.id(),
+                        "A wait can be at most 7 days — check the unit.".to_string(),
+                    );
+                }
             }
             Step::SetVariable(s) => {
                 let claimed = variable_names_clashing_with(ctx.definition, step.id());

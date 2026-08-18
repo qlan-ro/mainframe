@@ -148,6 +148,9 @@ mod resume_tests;
 #[cfg(test)]
 mod run_action_verb_tests;
 
+#[cfg(test)]
+mod wait_tests;
+
 // PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1-T4.2), not a TS port
 // confidence: high
 // todos: 0
