@@ -27,6 +27,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The daemon links libdbus through keyring's secret-service backend, so
+      # the Linux legs of this matrix need the dev package or cargo dies in
+      # libdbus-sys' build.rs. macOS uses its own keychain and needs nothing.
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: pnpm/action-setup@v6
         with:
           version: 10
