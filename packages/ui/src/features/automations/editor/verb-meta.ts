@@ -17,6 +17,7 @@ import {
   Bell,
   CircleStop,
   GitBranch,
+  GitFork,
   MessageSquare,
   Plug,
   RefreshCw,
@@ -160,9 +161,21 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     hint: 'Run steps once per item in a list',
     block: true,
   },
+  parallel: {
+    // The pre-seeded `--mf-auto-kind-parallel` token this file's header
+    // comment already reserved for this block.
+    icon: GitFork,
+    iconClass: 'text-mf-auto-kind-parallel',
+    tintClass: 'bg-mf-auto-kind-parallel/12',
+    cardTintClass: 'bg-mf-auto-kind-parallel/5',
+    borderClass: 'border-mf-auto-kind-parallel/30',
+    label: 'Run in parallel',
+    hint: 'Run separate branches of steps at the same time',
+    block: true,
+  },
 };
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
   { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify', 'wait'] },
-  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'retry', 'break'] },
+  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'retry', 'parallel', 'break'] },
 ];

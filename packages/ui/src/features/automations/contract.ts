@@ -29,6 +29,7 @@ export type {
   RepeatBlock,
   LoopBlock,
   RetryBlock,
+  ParallelBlock,
   BreakStep,
   AutomationStep,
   SchedulePattern,

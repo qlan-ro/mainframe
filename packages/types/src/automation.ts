@@ -176,6 +176,22 @@ export interface RetryBlock extends AutomationStepBase {
   steps: AutomationStep[];
 }
 
+/**
+ * Heterogeneous concurrent block: unlike `RepeatBlock.concurrency`, which
+ * runs the SAME body once per item, each branch here is its own authored
+ * step list. Every branch starts before the block parks, and it settles
+ * wait-for-all — a failed branch does not stop its siblings, because
+ * finalizing a run has no way to cancel a sibling's in-flight agent chat.
+ * On failure the reported error is the lowest-indexed branch's, matching
+ * `RepeatBlock`'s "earliest item wins" rule. `break` cannot cross a
+ * `parallel` boundary — every branch is concurrent, with no sequential
+ * fallback the way `RepeatBlock.concurrency` has one.
+ */
+export interface ParallelBlock extends AutomationStepBase {
+  kind: 'parallel';
+  branches: AutomationStep[][];
+}
+
 /** Leaves the innermost enclosing `loop` or `repeat`. Validation rejects one with no enclosing block. */
 export interface BreakStep extends AutomationStepBase {
   kind: 'break';
@@ -199,7 +215,8 @@ export type AutomationStep =
   | IfBlock
   | RepeatBlock
   | LoopBlock
-  | RetryBlock;
+  | RetryBlock
+  | ParallelBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }

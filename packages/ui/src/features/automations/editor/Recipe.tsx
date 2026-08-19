@@ -55,11 +55,24 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
     // is a problem to fix rather than to paper over.
     case 'retry':
       return { id, kind, maxAttempts: 3, steps: [] };
+    // Two empty branches: a parallel with fewer than two has nothing to run
+    // side by side, so starting below that minimum would be a fresh block
+    // that's already invalid.
+    case 'parallel':
+      return { id, kind, branches: [[], []] };
   }
 }
 
-function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' | 'retry' }> {
-  return step.kind === 'if' || step.kind === 'repeat' || step.kind === 'loop' || step.kind === 'retry';
+function isBlock(
+  step: AutomationStep,
+): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' | 'retry' | 'parallel' }> {
+  return (
+    step.kind === 'if' ||
+    step.kind === 'repeat' ||
+    step.kind === 'loop' ||
+    step.kind === 'retry' ||
+    step.kind === 'parallel'
+  );
 }
 
 export interface RecipeProps {

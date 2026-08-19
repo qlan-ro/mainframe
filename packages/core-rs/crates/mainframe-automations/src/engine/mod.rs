@@ -9,6 +9,7 @@ mod agent_settle;
 pub(crate) mod blocks;
 pub(crate) mod blocks_concurrent;
 pub(crate) mod blocks_concurrent_repeat;
+pub(crate) mod blocks_parallel;
 pub(crate) mod checkpoint;
 mod deadline;
 pub(crate) mod expects;
@@ -136,6 +137,9 @@ mod blocks_concurrent_repeat_tests;
 
 #[cfg(test)]
 mod blocks_concurrent_tests;
+
+#[cfg(test)]
+mod blocks_parallel_tests;
 
 #[cfg(test)]
 mod blocks_if_tests;

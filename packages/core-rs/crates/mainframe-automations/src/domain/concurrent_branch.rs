@@ -3,7 +3,7 @@
 //! never walks through `engine::blocks_concurrent`'s own driver, so it has
 //! no other way to learn which branch marker it must fail itself.
 
-use super::step::{RepeatBlock, Step, find_step_by_id};
+use super::step::{ParallelBlock, RepeatBlock, Step, find_step_by_id};
 
 /// `(block_id, branch_ref_suffix)` of the innermost concurrent (`concurrency
 /// > 1`) Repeat enclosing `step_id`, if any. `ref_suffix` is the `#<i>` chain
@@ -34,6 +34,14 @@ pub fn enclosing_concurrent_branch(
             Step::Retry(block) if find_step_by_id(&block.steps, step_id).is_some() => {
                 descend_pass_through(&block.steps, step_id, ref_suffix)
             }
+            Step::Parallel(block)
+                if block
+                    .branches
+                    .iter()
+                    .any(|branch| find_step_by_id(branch, step_id).is_some()) =>
+            {
+                descend_parallel(block, step_id, ref_suffix)
+            }
             _ => None,
         };
         if found.is_some() {
@@ -41,6 +49,26 @@ pub fn enclosing_concurrent_branch(
         }
     }
     None
+}
+
+/// A `parallel` branch is ALWAYS concurrent (no `concurrency > 1` gate like
+/// `descend_repeat`'s — a branch here has no sequential counterpart), so it
+/// always answers itself once no deeper concurrent block claims the leaf
+/// first. Same ancestor-segment prepending as `descend_repeat`.
+fn descend_parallel(
+    block: &ParallelBlock,
+    step_id: &str,
+    ref_suffix: &str,
+) -> Option<(String, String)> {
+    let (segment, rest) = split_first_segment(ref_suffix)?;
+    let branch = block
+        .branches
+        .iter()
+        .find(|branch| find_step_by_id(branch, step_id).is_some())?;
+    if let Some((id, inner_suffix)) = enclosing_concurrent_branch(branch, step_id, rest) {
+        return Some((id, format!("{segment}{inner_suffix}")));
+    }
+    Some((block.id.clone(), segment.to_string()))
 }
 
 /// A Repeat consumes one segment and, absent a deeper concurrent match,
@@ -86,7 +114,7 @@ fn split_first_segment(suffix: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::enclosing_concurrent_branch;
-    use crate::domain::{RepeatBlock, RetryBlock, Step, TokenRef};
+    use crate::domain::{ParallelBlock, RepeatBlock, RetryBlock, Step, TokenRef};
     use crate::engine::test_support::{ask_agent_step, notify_step};
 
     fn repeat(id: &str, concurrency: Option<u32>, steps: Vec<Step>) -> Step {
@@ -109,6 +137,14 @@ mod tests {
             keep_going: false,
             max_attempts: 1,
             steps,
+        })
+    }
+
+    fn parallel(id: &str, branches: Vec<Vec<Step>>) -> Step {
+        Step::Parallel(ParallelBlock {
+            id: id.to_string(),
+            keep_going: false,
+            branches,
         })
     }
 
@@ -176,6 +212,60 @@ mod tests {
             Some(("fanout".to_string(), "#2#1".to_string())),
             "the retry's own attempt segment (#2) must survive in the marker key, \
              not just the branch's own segment (#1)"
+        );
+    }
+
+    #[test]
+    fn a_leaf_directly_in_a_parallel_branch_resolves_to_that_parallel() {
+        let steps = vec![parallel(
+            "split",
+            vec![
+                vec![ask_agent_step("agent", false)],
+                vec![notify_step("ping", vec![])],
+            ],
+        )];
+        assert_eq!(
+            enclosing_concurrent_branch(&steps, "agent", "#0"),
+            Some(("split".to_string(), "#0".to_string()))
+        );
+    }
+
+    #[test]
+    fn nested_parallel_blocks_resolve_to_the_innermost_one() {
+        let steps = vec![parallel(
+            "outer",
+            vec![vec![parallel(
+                "inner",
+                vec![
+                    vec![ask_agent_step("agent", false)],
+                    vec![notify_step("ping", vec![])],
+                ],
+            )]],
+        )];
+        assert_eq!(
+            enclosing_concurrent_branch(&steps, "agent", "#0#0"),
+            Some(("inner".to_string(), "#0#0".to_string()))
+        );
+    }
+
+    #[test]
+    fn a_parallel_nested_inside_a_sequential_repeat_keeps_the_repeat_iteration_ancestor_segment() {
+        let steps = vec![repeat(
+            "outer",
+            None,
+            vec![parallel(
+                "split",
+                vec![
+                    vec![ask_agent_step("agent", false)],
+                    vec![notify_step("ping", vec![])],
+                ],
+            )],
+        )];
+        assert_eq!(
+            enclosing_concurrent_branch(&steps, "agent", "#2#0"),
+            Some(("split".to_string(), "#2#0".to_string())),
+            "the repeat's own iteration segment (#2) must survive in the marker key, \
+             not just the branch's own segment (#0)"
         );
     }
 }

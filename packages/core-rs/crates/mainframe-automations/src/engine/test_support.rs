@@ -10,8 +10,8 @@ use tempfile::TempDir;
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
     BreakStep, ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue,
-    IfBlock, LoopBlock, LoopMode, NotifyStep, RepeatBlock, RetryBlock, RunActionStep,
-    SetVariableStep, Step, TokenRef, WaitStep,
+    IfBlock, LoopBlock, LoopMode, NotifyStep, ParallelBlock, RepeatBlock, RetryBlock,
+    RunActionStep, SetVariableStep, Step, TokenRef, WaitStep,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -391,6 +391,14 @@ pub(crate) fn concurrent_repeat_step(
         items,
         concurrency: Some(concurrency),
         steps,
+    })
+}
+
+pub(crate) fn parallel_step(id: &str, branches: Vec<Vec<Step>>) -> Step {
+    Step::Parallel(ParallelBlock {
+        id: id.to_string(),
+        keep_going: false,
+        branches,
     })
 }
 

@@ -10,6 +10,7 @@ use crate::tokens::variables::build_variable_namespace;
 
 use super::automation::AutomationDefinition;
 use super::comparators::{comparator_wire_name, comparators_for};
+use super::condition::ConditionRow;
 use super::form::FormFieldType;
 use super::scope::{
     TokenInfo, TokenType, builtin_tokens, current_item_info, step_produces, step_refs,
@@ -23,11 +24,8 @@ use crate::engine::blocks::MAX_REPEAT_ITEMS;
 /// far more often than an intent; a genuinely long delay belongs on a
 /// schedule trigger, not inside a run.
 const MAX_WAIT_SECONDS: u32 = 7 * 24 * 60 * 60;
-/// Phase 4a: a wide-open fan-out is almost always a mistake (every branch
-/// opens its own agent chat), not a deliberate choice — the cap forces a
-/// second look rather than a silent 500-chat storm.
-const MAX_REPEAT_CONCURRENCY: u32 = 32;
 
+use super::validate_concurrency::{parallel_branch_factor, repeat_concurrency_factor};
 use super::validate_variables::{
     set_variable_name_issue, unresolved_variable_names, variable_names_clashing_with,
 };
@@ -171,6 +169,11 @@ fn for_each_step<'a>(steps: &'a [Step], visit: &mut dyn FnMut(&'a Step)) {
             Step::Repeat(s) => for_each_step(&s.steps, visit),
             Step::Loop(s) => for_each_step(&s.steps, visit),
             Step::Retry(s) => for_each_step(&s.steps, visit),
+            Step::Parallel(s) => {
+                for branch in &s.branches {
+                    for_each_step(branch, visit);
+                }
+            }
             _ => {}
         }
     }
@@ -181,6 +184,32 @@ fn lookup<'a>(scope: &'a [TokenInfo], token_ref: &TokenRef) -> Option<&'a TokenI
         .iter()
         .rev()
         .find(|t| t.step_id == token_ref.step_id && t.output == token_ref.output)
+}
+
+/// `If` and `Loop` share one condition shape (`ConditionRow`) and therefore
+/// one comparator-compatibility check — a value's type decides which
+/// comparators make sense on it regardless of which block is asking.
+fn check_condition_comparators(
+    step_id: &str,
+    conditions: &[ConditionRow],
+    scope: &[TokenInfo],
+    ctx: &mut Ctx,
+) {
+    for condition in conditions {
+        let Some(found) = lookup(scope, &condition.token) else {
+            continue; // the missing ref already got its own error
+        };
+        if !comparators_for(found.token_type).contains(&condition.comparator) {
+            ctx.push(
+                step_id,
+                format!(
+                    "\"{}\" doesn't work on a {} value — pick a different comparator.",
+                    comparator_wire_name(condition.comparator),
+                    found.token_type.describe()
+                ),
+            );
+        }
+    }
 }
 
 /// `enclosing_concurrency` is the product of every enclosing concurrent
@@ -232,21 +261,7 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_con
                 scope.extend(step_produces(step));
             }
             Step::If(s) => {
-                for condition in &s.conditions {
-                    let Some(found) = lookup(scope, &condition.token) else {
-                        continue; // the missing ref already got its own error
-                    };
-                    if !comparators_for(found.token_type).contains(&condition.comparator) {
-                        ctx.push(
-                            step.id(),
-                            format!(
-                                "\"{}\" doesn't work on a {} value — pick a different comparator.",
-                                comparator_wire_name(condition.comparator),
-                                found.token_type.describe()
-                            ),
-                        );
-                    }
-                }
+                check_condition_comparators(step.id(), &s.conditions, scope, ctx);
                 let mut then_scope = scope.clone();
                 walk(&s.then, &mut then_scope, ctx, enclosing_concurrency);
                 let mut otherwise_scope = scope.clone();
@@ -272,31 +287,9 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_con
                         ),
                     );
                 }
-                let mut factor = None;
-                if let Some(concurrency) = s.concurrency {
-                    if !(1..=MAX_REPEAT_CONCURRENCY).contains(&concurrency) {
-                        ctx.push(
-                            step.id(),
-                            format!("Concurrency must be between 1 and {MAX_REPEAT_CONCURRENCY}."),
-                        );
-                    } else if concurrency > 1 {
-                        factor = Some(concurrency);
-                        let product = enclosing_concurrency.saturating_mul(concurrency);
-                        if product > MAX_REPEAT_CONCURRENCY {
-                            ctx.push(
-                                step.id(),
-                                format!(
-                                    "This repeat is nested inside another concurrent repeat — \
-                                     together they could open {product} chats at once. Keep the \
-                                     product at or under {MAX_REPEAT_CONCURRENCY}."
-                                ),
-                            );
-                        }
-                    }
-                }
-                let inner_concurrency = factor.map_or(enclosing_concurrency, |n| {
-                    enclosing_concurrency.saturating_mul(n)
-                });
+                let factor =
+                    repeat_concurrency_factor(step.id(), s.concurrency, enclosing_concurrency, ctx);
+                let inner_concurrency = enclosing_concurrency.saturating_mul(factor);
                 let mut inner_scope = scope.clone();
                 inner_scope.push(current_item_info());
                 walk(&s.steps, &mut inner_scope, ctx, inner_concurrency);
@@ -338,31 +331,32 @@ fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, ctx: &mut Ctx, enclosing_con
                         format!("A loop can run at most {MAX_REPEAT_ITEMS} passes."),
                     );
                 }
-                for condition in &s.conditions {
-                    let Some(found) = lookup(scope, &condition.token) else {
-                        continue; // the missing ref already got its own error
-                    };
-                    if !comparators_for(found.token_type).contains(&condition.comparator) {
-                        ctx.push(
-                            step.id(),
-                            format!(
-                                "\"{}\" doesn't work on a {} value — pick a different comparator.",
-                                comparator_wire_name(condition.comparator),
-                                found.token_type.describe()
-                            ),
-                        );
-                    }
-                }
+                check_condition_comparators(step.id(), &s.conditions, scope, ctx);
                 let mut inner_scope = scope.clone();
                 walk(&s.steps, &mut inner_scope, ctx, enclosing_concurrency);
                 // Isolated like Repeat: a pass's outputs don't outlive the block.
+            }
+            Step::Parallel(s) => {
+                let factor = parallel_branch_factor(
+                    step.id(),
+                    s.branches.len() as u32,
+                    enclosing_concurrency,
+                    ctx,
+                );
+                let inner_concurrency = enclosing_concurrency.saturating_mul(factor);
+                for branch in &s.branches {
+                    let mut branch_scope = scope.clone();
+                    walk(branch, &mut branch_scope, ctx, inner_concurrency);
+                }
+                // Isolated: no branch sees a sibling's outputs, and nothing
+                // produced inside leaks after the block, matching Repeat.
             }
             _ => scope.extend(step_produces(step)),
         }
     }
 }
 
-fn check_form_fields(step_id: &str, step: &super::step::AskMeStep, ctx: &mut Ctx) {
+fn check_form_fields(step_id: &str, step: &super::step_verbs::AskMeStep, ctx: &mut Ctx) {
     for field in &step.fields {
         let label = field.label.clone().unwrap_or_default();
         if label.is_empty() && field.key.is_empty() {

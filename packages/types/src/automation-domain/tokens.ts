@@ -150,6 +150,11 @@ export function findStepById(steps: AutomationStep[], stepId: string): Automatio
     } else if (step.kind === 'repeat' || step.kind === 'loop' || step.kind === 'retry') {
       const inner = findStepById(step.steps, stepId);
       if (inner) return inner;
+    } else if (step.kind === 'parallel') {
+      for (const branch of step.branches) {
+        const inner = findStepById(branch, stepId);
+        if (inner) return inner;
+      }
     }
   }
   return null;
@@ -182,6 +187,8 @@ export function stepLabel(step: AutomationStep, catalog: ActionCatalogEntry[]): 
       return 'Stop the loop';
     case 'retry':
       return 'Retry on failure';
+    case 'parallel':
+      return 'Run in parallel';
   }
 }
 
@@ -277,6 +284,7 @@ function producedBy(step: AutomationStep, catalog: ActionCatalogEntry[]): TokenD
     case 'break':
     case 'loop':
     case 'retry':
+    case 'parallel':
       return [];
     case 'set_variable':
       return [

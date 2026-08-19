@@ -6,6 +6,7 @@
  * factory), so this component only needs to resolve-and-display, plus offer
  * a picker to change the pick. TDD: test written first, implemented after.
  */
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -34,6 +35,30 @@ const NO_CATALOG: ActionCatalogEntry[] = [];
 
 function repeatStep(overrides: Partial<RepeatBlock> = {}): RepeatBlock {
   return { id: 'r1', kind: 'repeat', items: OPEN_PRS.ref, steps: [], ...overrides };
+}
+
+/** A controlled-input edit (clear + type) needs the patch fed back into
+ * props between keystrokes, or the field keeps re-rendering the stale value. */
+function renderControlled(initial: RepeatBlock) {
+  const onChange = vi.fn();
+  function Host() {
+    const [value, setValue] = useState(initial);
+    return (
+      <RepeatBody
+        step={value}
+        onChange={(patch) => {
+          onChange(patch);
+          setValue((v) => ({ ...v, ...patch }));
+        }}
+        tokens={[TODAY, OPEN_PRS]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+      />
+    );
+  }
+  render(<Host />);
+  return { onChange };
 }
 
 describe('RepeatBody', () => {
@@ -80,6 +105,92 @@ describe('RepeatBody', () => {
       />,
     );
     expect(screen.getByTestId('automations-recipe-r1-steps')).toBeInTheDocument();
+  });
+
+  it('shows sequential by default, with no concurrency count visible', () => {
+    render(
+      <RepeatBody
+        step={repeatStep()}
+        onChange={vi.fn()}
+        tokens={[TODAY, OPEN_PRS]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+      />,
+    );
+    expect(screen.getByTestId('automations-repeat-concurrency-mode-r1-sequential')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('automations-repeat-concurrency-mode-r1-concurrent')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.queryByTestId('automations-repeat-concurrency-r1')).not.toBeInTheDocument();
+  });
+
+  it('seeds the concurrent mode as already selected when the step already carries a concurrency', () => {
+    render(
+      <RepeatBody
+        step={repeatStep({ concurrency: 5 })}
+        onChange={vi.fn()}
+        tokens={[TODAY, OPEN_PRS]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+      />,
+    );
+    expect(screen.getByTestId('automations-repeat-concurrency-mode-r1-concurrent')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('automations-repeat-concurrency-r1')).toHaveValue(5);
+  });
+
+  it('switching to "several at a time" defaults the count to 2 and shows the overlap caveat', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <RepeatBody
+        step={repeatStep()}
+        onChange={onChange}
+        tokens={[TODAY, OPEN_PRS]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+      />,
+    );
+    await user.click(screen.getByTestId('automations-repeat-concurrency-mode-r1-concurrent'));
+    expect(onChange).toHaveBeenCalledWith({ concurrency: 2 });
+    expect(screen.getByTestId('automations-repeat-concurrency-caveat-r1')).toHaveTextContent(
+      'Steps that wait — agents, forms, waits — genuinely overlap.',
+    );
+  });
+
+  it('switching back to "one at a time" clears the concurrency field entirely', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <RepeatBody
+        step={repeatStep({ concurrency: 8 })}
+        onChange={onChange}
+        tokens={[TODAY, OPEN_PRS]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+      />,
+    );
+    await user.click(screen.getByTestId('automations-repeat-concurrency-mode-r1-sequential'));
+    expect(onChange).toHaveBeenCalledWith({ concurrency: undefined });
+  });
+
+  it('stores an edited concurrency value', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderControlled(repeatStep({ concurrency: 2 }));
+    const field = screen.getByTestId('automations-repeat-concurrency-r1');
+    await user.clear(field);
+    await user.type(field, '9');
+    expect(onChange).toHaveBeenLastCalledWith({ concurrency: 9 });
   });
 
   it('changing the pick calls onChange with the new items ref', async () => {

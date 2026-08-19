@@ -6,7 +6,7 @@ file to edit or sync. Full product rationale: `docs/designs/2026-07-11-automatio
 
 ## The model
 
-Steps come from seven verbs, plus four block types for structure:
+Steps come from seven verbs, plus five block types for structure:
 
 | Verb | Purpose |
 |---|---|
@@ -21,9 +21,16 @@ Steps come from seven verbs, plus four block types for structure:
 | Block | Purpose |
 |---|---|
 | `if` | Structured `⟨token⟩ · comparator · value` conditions, `then`/`otherwise` branches. |
-| `repeat` | Iterate a list-typed token; steps inside see `⟨current⟩`. |
+| `repeat` | Iterate a list-typed token; steps inside see `⟨current⟩`. `concurrency` (`2`–`32`) runs that many iterations at once instead of one at a time; absent or `1` is sequential. |
 | `loop` | Repeat `while`/`until` a condition, re-tested each pass. Requires `maxIterations` (≤ 500); exhausting it **fails** the block. |
 | `retry` | Re-run the body from the top on failure, up to `maxAttempts`. Every attempt re-runs side effects — there is no idempotence guard. |
+| `parallel` | Run 2–32 authored branches (each its own step list) at once, wait-for-all. A failed branch does not stop its siblings; the reported error is the lowest-indexed branch's. `break` cannot cross into or out of a branch. |
+
+Both `repeat`'s `concurrency` and `parallel` share one caveat: only steps that
+*wait* — `ask_agent`, `ask_me`, `wait` — genuinely overlap in wall-clock
+time. Local work inside a single branch or iteration still runs one step at
+a time; concurrency is about how many chats/forms/timers can be outstanding
+at once, not about parallelizing CPU-bound work.
 
 Data flows through **tokens** (`TokenRef {stepId, output, field?}`), not
 expressions. Text fields hold `ChipText` — a mix of literal text and token

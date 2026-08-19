@@ -28,7 +28,7 @@ function StatefulStepCard({ step, onChange }: { step: LeafStep; onChange: (next:
       onChange={(next) => {
         // a leaf pane emits no block
         if (next === null || next.kind === 'if' || next.kind === 'repeat') return;
-        if (next.kind === 'loop' || next.kind === 'retry') return;
+        if (next.kind === 'loop' || next.kind === 'retry' || next.kind === 'parallel') return;
         setCurrent(next);
         onChange(next);
       }}

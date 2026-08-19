@@ -51,6 +51,14 @@ fn walk(steps: &[Step], context: BreakContext, ctx: &mut Ctx) {
             // A retry is not a loop: a break inside one targets whatever loop
             // encloses the retry, so the context passes through unchanged.
             Step::Retry(s) => walk(&s.steps, context, ctx),
+            // A parallel branch is ALWAYS concurrent — unlike Repeat, it has
+            // no sequential form to fall back to — so every branch gets the
+            // same ConcurrentBranch context Repeat only reaches at concurrency>1.
+            Step::Parallel(s) => {
+                for branch in &s.branches {
+                    walk(branch, BreakContext::ConcurrentBranch, ctx);
+                }
+            }
             _ => {}
         }
     }

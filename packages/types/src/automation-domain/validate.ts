@@ -43,6 +43,7 @@ function collectChipTexts(step: AutomationStep): ChipText[] {
     case 'break':
     case 'loop':
     case 'retry':
+    case 'parallel':
       return [];
   }
 }
@@ -195,6 +196,12 @@ export function validate(
           issues.push({ stepId: step.id, level: 'error', msg: `A retry can run at most ${MAX_LOOP_PASSES} attempts.` });
         }
         walk(step.steps);
+      }
+      if (step.kind === 'parallel') {
+        // Branch-count bounds and the nested fan-out cap are the daemon's
+        // canonical call (domain/validate.rs) — this only has to reach every
+        // step inside a branch, the same way every other block's walk does.
+        for (const branch of step.branches) walk(branch);
       }
     }
   };

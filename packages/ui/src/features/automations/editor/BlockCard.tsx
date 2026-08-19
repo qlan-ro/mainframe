@@ -8,17 +8,26 @@
  */
 import { GripVertical, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ActionCatalogEntry, AutomationStep, IfBlock, LoopBlock, RepeatBlock, RetryBlock } from '../contract';
+import type {
+  ActionCatalogEntry,
+  AutomationStep,
+  IfBlock,
+  LoopBlock,
+  ParallelBlock,
+  RepeatBlock,
+  RetryBlock,
+} from '../contract';
 import type { TokenDescriptor } from '../domain/tokens';
 import type { ValidationIssue } from '../domain/validate';
 import { IfBody } from './IfBody';
 import { LoopBody } from './LoopBody';
+import { ParallelBody } from './ParallelBody';
 import { RepeatBody } from './RepeatBody';
 import { RetryBody } from './RetryBody';
 import { VERB_META } from './verb-meta';
 
 export interface BlockCardProps {
-  step: IfBlock | RepeatBlock | LoopBlock | RetryBlock;
+  step: IfBlock | RepeatBlock | LoopBlock | RetryBlock | ParallelBlock;
   onChange: (next: AutomationStep | null) => void;
   tokens: TokenDescriptor[];
   catalog: ActionCatalogEntry[];
@@ -34,7 +43,9 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
   const myIssues = issues.filter((i) => i.stepId === step.id);
   const bad = myIssues.length > 0;
 
-  function patch(p: Partial<IfBlock> | Partial<RepeatBlock> | Partial<LoopBlock> | Partial<RetryBlock>) {
+  function patch(
+    p: Partial<IfBlock> | Partial<RepeatBlock> | Partial<LoopBlock> | Partial<RetryBlock> | Partial<ParallelBlock>,
+  ) {
     onChange({ ...step, ...p } as AutomationStep);
   }
 
@@ -96,6 +107,16 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
           )}
           {step.kind === 'retry' && (
             <RetryBody step={step} onChange={patch} tokens={tokens} catalog={catalog} issues={issues} depth={depth} />
+          )}
+          {step.kind === 'parallel' && (
+            <ParallelBody
+              step={step}
+              onChange={patch}
+              tokens={tokens}
+              catalog={catalog}
+              issues={issues}
+              depth={depth}
+            />
           )}
         </div>
       </div>

@@ -14,7 +14,7 @@ use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, epoch_
 use crate::tokens::{NameIndex, NameMap, render};
 
 use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
-use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks};
+use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks, blocks_parallel};
 
 pub(crate) struct WalkCtx<'a> {
     pub run_id: &'a str,
@@ -92,6 +92,7 @@ async fn run_step(
         Step::Repeat(block) => blocks::run_repeat(block, checkpoint, ctx, frame).await,
         Step::Loop(block) => blocks::run_loop(block, checkpoint, ctx, frame).await,
         Step::Retry(block) => blocks::run_retry(block, checkpoint, ctx, frame).await,
+        Step::Parallel(block) => blocks_parallel::run_parallel(block, checkpoint, ctx, frame).await,
         // Not a leaf: it writes no checkpoint entry and produces no outputs,
         // it only redirects the walk.
         Step::Break(_) => Ok(StepsResult {
@@ -229,11 +230,14 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
         },
         // Unreachable by construction (run_step routes blocks and break
         // first); a graceful error beats a forbidden panic in library code.
-        Step::If(_) | Step::Repeat(_) | Step::Loop(_) | Step::Retry(_) | Step::Break(_) => {
-            StepOutcome::Failed {
-                error: "internal: block dispatched as a leaf verb".to_string(),
-            }
-        }
+        Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_)
+        | Step::Break(_) => StepOutcome::Failed {
+            error: "internal: block dispatched as a leaf verb".to_string(),
+        },
     }
 }
 

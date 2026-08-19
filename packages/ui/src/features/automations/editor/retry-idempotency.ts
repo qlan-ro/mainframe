@@ -16,6 +16,8 @@ function collectRunActionSteps(steps: AutomationStep[]): RunActionStep[] {
       found.push(...collectRunActionSteps(step.then), ...collectRunActionSteps(step.otherwise));
     } else if (step.kind === 'repeat' || step.kind === 'loop' || step.kind === 'retry') {
       found.push(...collectRunActionSteps(step.steps));
+    } else if (step.kind === 'parallel') {
+      for (const branch of step.branches) found.push(...collectRunActionSteps(branch));
     }
   }
   return found;
