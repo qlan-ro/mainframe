@@ -4,18 +4,19 @@
  * `WfCredentialField`, ported onto the real `useAutomationsStore`
  * credentials list + `AutomationsGateway` routes).
  *
- * Dispatches to the real per-provider connect flow: `GithubDeviceConnect`
- * (device flow — the one OAuth provider) for `github`, `TokenCredentialField`
- * (a pasted token, real since the 2026-08-19 provider-connections plan — no
- * more `placeholder-token-<service>`) for everything else. `onChange` patches
- * the OWNING step's `credential` field (top-level on `RunActionStep`, not
- * inside `params` — contract §1) with the label, or `undefined` on disconnect.
+ * Dispatches to the real per-provider connect flow: `GithubCredentialConnect`
+ * (a pasted token always, plus device flow once a GitHub App client ID is
+ * configured) for `github`, `TokenCredentialField` (a pasted token, real
+ * since the 2026-08-19 provider-connections plan — no more
+ * `placeholder-token-<service>`) for everything else. `onChange` patches the
+ * OWNING step's `credential` field (top-level on `RunActionStep`, not inside
+ * `params` — contract §1) with the label, or `undefined` on disconnect.
  */
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsStore } from '../data/use-automations-store';
-import { GithubDeviceConnect } from './GithubDeviceConnect';
+import { GithubCredentialConnect } from './GithubCredentialConnect';
 import { providerDisplayName } from './provider-copy';
 import { TokenCredentialField } from './TokenCredentialField';
 
@@ -73,7 +74,7 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
   }
 
   if (service === 'github') {
-    return <GithubDeviceConnect onChange={onChange} testId={testId} />;
+    return <GithubCredentialConnect onChange={onChange} testId={testId} />;
   }
   return <TokenCredentialField service={service} onChange={onChange} testId={testId} />;
 }

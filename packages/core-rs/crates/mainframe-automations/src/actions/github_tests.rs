@@ -24,11 +24,28 @@ fn ctx(token: &str) -> ActionCtx {
             kind: CredentialKind::Token,
             token: token.to_string(),
             extra: None,
+            refresh_token: None,
+            expires_at: None,
         }),
         credential_label: Some("github".to_string()),
         idempotency_key: "run-1:step-1".to_string(),
         project_root: "/tmp".to_string(),
         worktree_path: None,
+    }
+}
+
+/// A GitHub-App-issued token (has `expires_at`) — as opposed to a pasted PAT,
+/// which never does.
+fn app_ctx(token: &str) -> ActionCtx {
+    ActionCtx {
+        creds: Some(Credentials {
+            kind: CredentialKind::Token,
+            token: token.to_string(),
+            extra: None,
+            refresh_token: Some("ghr_refresh".to_string()),
+            expires_at: Some(9_999_999_999_999),
+        }),
+        ..ctx(token)
     }
 }
 
@@ -182,6 +199,49 @@ async fn strict_inputs_reject_unknown_and_missing_fields() {
         "{}",
         err.0
     );
+}
+
+#[tokio::test]
+async fn a_404_against_an_app_issued_token_reports_not_installed_with_the_install_url() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/qlan/mainframe/pulls"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("Not Found"))
+        .mount(&server)
+        .await;
+
+    let err = GithubCreatePrAction::with_base_url(server.uri())
+        .execute(
+            &json!({"repo": "qlan/mainframe", "title": "t", "head": "h", "base": "b"}),
+            &app_ctx("ghu_1"),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err.0,
+        "GitHub create PR failed: Mainframe isn't installed on 'qlan' — install it at https://github.com/settings/installations"
+    );
+}
+
+#[tokio::test]
+async fn a_404_against_a_pasted_pat_stays_the_generic_http_failure() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/qlan/mainframe/pulls"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("Not Found"))
+        .mount(&server)
+        .await;
+
+    let err = GithubCreatePrAction::with_base_url(server.uri())
+        .execute(
+            &json!({"repo": "qlan/mainframe", "title": "t", "head": "h", "base": "b"}),
+            &ctx("ghp_1"),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.0, "GitHub create PR failed (404): Not Found");
 }
 
 #[tokio::test]

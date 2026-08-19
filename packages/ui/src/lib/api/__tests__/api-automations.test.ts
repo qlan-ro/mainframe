@@ -21,6 +21,7 @@ import {
   deleteAutomationCredential,
   startGithubDeviceFlow,
   pollGithubDeviceFlow,
+  getGithubDeviceFlowStatus,
 } from '../automations';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
@@ -345,6 +346,17 @@ describe('startGithubDeviceFlow', () => {
   it('throws an ApiRequestError with status 501 when unconfigured', async () => {
     mockFetchHttpError(501, "GitHub connection isn't set up yet");
     await expect(startGithubDeviceFlow()).rejects.toMatchObject({ status: 501 });
+  });
+});
+
+describe('getGithubDeviceFlowStatus', () => {
+  it('calls GET /api/automation-credentials/github/device/status', async () => {
+    mockFetchOk({ configured: true });
+    const result = await getGithubDeviceFlowStatus();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automation-credentials/github/device/status', {
+      method: 'GET',
+    });
+    expect(result).toEqual({ configured: true });
   });
 });
 

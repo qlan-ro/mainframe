@@ -1,13 +1,14 @@
 /**
- * GithubDeviceConnect — the device-flow half of `CredentialConnect`. GitHub
- * is the one provider that gets real OAuth (device flow needs no client
- * secret and no redirect URI); every other provider gets `TokenCredentialField`.
+ * GithubDeviceConnect — the device-flow half of GitHub's credential connect
+ * (`GithubCredentialConnect.tsx`), rendered only once the parent has
+ * confirmed a GitHub App client ID is configured; `TokenCredentialField`
+ * next to it is the always-available path, never gated behind this one.
  *
  * Each poll is one daemon round trip (`github_device.rs`'s `poll_once`); this
  * component owns the interval-respecting retry loop — `pending` keeps the
  * current interval, `slow_down` adopts the daemon's new one. `unavailable`
- * is a distinct, permanent state (no OAuth App client ID configured yet),
- * never conflated with a transient failure.
+ * is a defensive fallback for the 501 the daemon would still return if this
+ * ever mounted out of sync with the parent's client-ID check.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Plug } from 'lucide-react';
@@ -114,7 +115,7 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
         className="flex flex-col gap-1 rounded-md border-[0.5px] border-border bg-card p-2.5 text-xs text-muted-foreground"
       >
         <span className="font-medium text-foreground">GitHub connection isn't available yet</span>
-        <span>An administrator needs to register a GitHub OAuth App with device flow enabled first.</span>
+        <span>Use the token field above — sign-in with GitHub is coming soon.</span>
       </div>
     );
   }

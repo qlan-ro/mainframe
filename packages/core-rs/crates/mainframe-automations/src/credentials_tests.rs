@@ -12,6 +12,8 @@ fn token_creds(token: &str) -> Credentials {
         kind: CredentialKind::Token,
         token: token.to_string(),
         extra: None,
+        refresh_token: None,
+        expires_at: None,
     }
 }
 
@@ -54,6 +56,8 @@ async fn persists_across_reload_in_node_compatible_shape() {
             "organization".to_string(),
             "qlan".to_string(),
         )])),
+        refresh_token: None,
+        expires_at: None,
     };
     store.set("ado", creds.clone()).await.unwrap();
     drop(store);
@@ -121,9 +125,35 @@ fn debug_never_prints_secret_material() {
             "password".to_string(),
             "hunter2".to_string(),
         )])),
+        refresh_token: Some("ghr_refreshsecret".to_string()),
+        expires_at: Some(1_700_000_000_000),
     };
     let debug = format!("{creds:?}");
     assert!(!debug.contains("ghp_supersecret"), "leaked token: {debug}");
     assert!(!debug.contains("hunter2"), "leaked extra value: {debug}");
+    assert!(
+        !debug.contains("ghr_refreshsecret"),
+        "leaked refresh token: {debug}"
+    );
     assert!(debug.contains("[redacted]"));
+}
+
+#[tokio::test]
+async fn a_pre_refresh_credential_file_deserializes_unchanged() {
+    // Credentials persisted before refresh_token/expires_at existed carry
+    // neither field — the new fields must default rather than fail to parse.
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("automation-credentials.json");
+    std::fs::write(
+        &path,
+        serde_json::json!({
+            "github": {"kind": "token", "token": "ghp_old"}
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let store = FileCredentialStore::load(path).await;
+
+    assert_eq!(store.get("github").await, Some(token_creds("ghp_old")));
 }

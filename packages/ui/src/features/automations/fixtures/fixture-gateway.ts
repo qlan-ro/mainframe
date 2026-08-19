@@ -210,5 +210,12 @@ export function createFixtureGateway(): AutomationsGateway {
     async pollGithubDeviceFlow() {
       return { status: 'connected' as const };
     },
+
+    async githubDeviceFlowStatus() {
+      // The dev host never registers a GitHub App — mirrors production's
+      // default (empty client ID) so the fixture UI shows the same
+      // token-only state a fresh install sees.
+      return { configured: false };
+    },
   };
 }

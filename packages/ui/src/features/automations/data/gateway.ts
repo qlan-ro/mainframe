@@ -60,6 +60,8 @@ export interface AutomationsGateway {
   /** GitHub's device flow (the only OAuth provider) — see `steps/GithubDeviceConnect.tsx`. */
   startGithubDeviceFlow(): Promise<GithubDeviceStart>;
   pollGithubDeviceFlow(deviceCode: string): Promise<GithubDevicePollResult>;
+  /** Whether a GitHub App client ID is configured — gates offering the device-flow button alongside the always-available token field (`GithubCredentialConnect.tsx`). */
+  githubDeviceFlowStatus(): Promise<{ configured: boolean }>;
 
   /**
    * Subscribe to the 5 `automation.*` DaemonEvent members. The fixture

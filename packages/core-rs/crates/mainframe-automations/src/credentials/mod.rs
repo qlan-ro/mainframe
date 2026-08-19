@@ -21,13 +21,17 @@ use crate::engine::BoxFuture;
 
 mod boot;
 mod keyring_store;
+mod refreshing;
 
 pub use boot::build_credential_store;
+pub use refreshing::RefreshingCredentialStore;
 
 #[cfg(test)]
 mod boot_tests;
 #[cfg(test)]
 mod keyring_store_tests;
+#[cfg(test)]
+mod refreshing_tests;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +40,13 @@ pub struct Credentials {
     pub token: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra: Option<BTreeMap<String, String>>,
+    /// Set only for a GitHub-App-issued token (device flow); absent for a
+    /// pasted PAT, which means "never refresh" (`RefreshingCredentialStore`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    /// Epoch ms. Absent alongside `refresh_token` for a pasted PAT.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,8 +55,9 @@ pub enum CredentialKind {
     Token,
 }
 
-/// Manual Debug: `token` and `extra` values are secret material and must not
-/// reach logs or error messages (plan T6.1).
+/// Manual Debug: `token`, `extra`, and `refresh_token` are secret material
+/// and must not reach logs or error messages (plan T6.1; refresh_token added
+/// by the 2026-08-19 GitHub App migration).
 impl fmt::Debug for Credentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Credentials")
@@ -59,6 +71,11 @@ impl fmt::Debug for Credentials {
                         .collect::<BTreeMap<_, _>>()
                 }),
             )
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "[redacted]"),
+            )
+            .field("expires_at", &self.expires_at)
             .finish()
     }
 }
@@ -71,6 +88,13 @@ pub enum CredentialError {
     Json(#[from] serde_json::Error),
     #[error("keychain store failed: {0}")]
     Keyring(String),
+    /// A `RefreshingCredentialStore` couldn't renew an expired GitHub-App
+    /// token — surfaced verbatim as a step failure (contract: matches the
+    /// `credential '<label>' not found` naming style).
+    #[error(
+        "credential '{label}' expired and refresh failed: {reason} — reconnect GitHub in Settings"
+    )]
+    RefreshFailed { label: String, reason: String },
 }
 
 pub trait CredentialStore: Send + Sync {

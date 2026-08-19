@@ -156,7 +156,40 @@ async fn poll_connected_carries_the_access_token() {
     assert_eq!(
         outcome,
         PollOutcome::Connected {
-            token: "ghu_abc123".to_string()
+            token: "ghu_abc123".to_string(),
+            expires_in: None,
+            refresh_token: None,
+        }
+    );
+}
+
+#[tokio::test]
+async fn poll_connected_carries_the_github_app_expiry_and_refresh_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/login/oauth/access_token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "ghu_abc123",
+            "token_type": "bearer",
+            "expires_in": 28800,
+            "refresh_token": "ghr_refresh123",
+            "refresh_token_expires_in": 15811200,
+        })))
+        .mount(&server)
+        .await;
+
+    let outcome = flow(&server, "test-client")
+        .await
+        .poll_once("dc-1")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        PollOutcome::Connected {
+            token: "ghu_abc123".to_string(),
+            expires_in: Some(28800),
+            refresh_token: Some("ghr_refresh123".to_string()),
         }
     );
 }

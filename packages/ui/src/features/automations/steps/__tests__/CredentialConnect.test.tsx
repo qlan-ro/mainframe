@@ -50,8 +50,8 @@ describe('CredentialConnect', () => {
     expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Connect Notion…');
   });
 
-  it('dispatches the github service to the device-flow connect button', () => {
+  it('dispatches the github service to the always-available token field', async () => {
     render(<CredentialConnect service="github" onChange={vi.fn()} testId="automations-credential-a" />);
-    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Connect GitHub…');
+    expect(await screen.findByTestId('automations-credential-a-connect')).toHaveTextContent('Connect GitHub…');
   });
 });

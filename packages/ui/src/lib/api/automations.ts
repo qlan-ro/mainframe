@@ -105,3 +105,7 @@ export const startGithubDeviceFlow = (): Promise<GithubDeviceStart> =>
 
 export const pollGithubDeviceFlow = (deviceCode: string): Promise<GithubDevicePollResult> =>
   request('POST', `${b()}/automation-credentials/github/device/poll`, { deviceCode });
+
+/** Whether a GitHub App client ID is registered — gates the sign-in-with-GitHub button. */
+export const getGithubDeviceFlowStatus = (): Promise<{ configured: boolean }> =>
+  request('GET', `${b()}/automation-credentials/github/device/status`);

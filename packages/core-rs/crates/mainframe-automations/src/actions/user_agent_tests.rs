@@ -24,6 +24,8 @@ fn ctx() -> ActionCtx {
             kind: CredentialKind::Token,
             token: "token".to_string(),
             extra: None,
+            refresh_token: None,
+            expires_at: None,
         }),
         credential_label: Some("label".to_string()),
         idempotency_key: "run-1:step-1".to_string(),

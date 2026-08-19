@@ -57,6 +57,8 @@ fn creds(token: &str) -> Credentials {
         kind: CredentialKind::Token,
         token: token.to_string(),
         extra: None,
+        refresh_token: None,
+        expires_at: None,
     }
 }
 

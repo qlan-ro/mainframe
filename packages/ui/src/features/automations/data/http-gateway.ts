@@ -48,6 +48,7 @@ export function createHttpGateway(): AutomationsGateway {
 
     startGithubDeviceFlow: api.startGithubDeviceFlow,
     pollGithubDeviceFlow: api.pollGithubDeviceFlow,
+    githubDeviceFlowStatus: api.getGithubDeviceFlowStatus,
 
     onEvent(listener) {
       return daemonWs.onEvent((event: DaemonEvent) => {

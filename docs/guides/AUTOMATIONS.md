@@ -82,8 +82,9 @@ All responses use the WS4 envelope (`{success, data}` or `{success:false, error}
 | `GET` | `/api/automation-credentials/:label` | Get a credential's kind (never its value) |
 | `PUT` | `/api/automation-credentials/:label` | Store a credential token |
 | `DELETE` | `/api/automation-credentials/:label` | Delete a credential |
-| `POST` | `/api/automation-credentials/github/device/start` | Start a GitHub OAuth device-flow session |
-| `POST` | `/api/automation-credentials/github/device/poll` | One poll attempt against the pending device-flow session (`{deviceCode}`); a `connected` result stores the token under the `github` label |
+| `GET` | `/api/automation-credentials/github/device/status` | `{configured}` — whether a GitHub App client ID is registered; the editor uses this to decide whether to offer sign-in-with-GitHub alongside the always-available token field |
+| `POST` | `/api/automation-credentials/github/device/start` | Start a GitHub App device-flow session |
+| `POST` | `/api/automation-credentials/github/device/poll` | One poll attempt against the pending device-flow session (`{deviceCode}`); a `connected` result stores the token (plus, for a GitHub App, its refresh token and expiry) under the `github` label |
 | `POST` | `/api/automation-webhooks/:hookId` | Webhook ingress (see below) |
 | `POST` | `/api/notifications` | Raise a standalone, run-less notification (`{title, body, links?}`) — see below |
 
@@ -93,11 +94,15 @@ Step timeline entries truncate their output preview at 32 KB.
 
 `POST /api/notifications` broadcasts `notification.created` and mirrors it to
 mobile push, best-effort (a push failure never fails the request). It exists
-for work launched *outside* an automation run that still needs to notify
-natively — an `ask_agent` step spawns a Claude CLI session, which has no
-`PushNotification` harness tool, so a todo-lane run scheduled by an
-automation would otherwise be silent. `~/.claude/skills/todo-lane/scripts/lane_apply.py`
-posts here from its `start`/`finish` stage transitions.
+for callers that have no notification tool of their own — a Codex session
+(its adapter intercepts nothing), a plain script, cron, CI.
+
+It is deliberately NOT the path for a Claude session. The Claude adapter
+already intercepts that session's `PushNotification` tool call
+(`assistant_event.rs` `scan_attention_requests`) and turns it into a desktop
+notification plus a high-priority mobile push stamped with the `chat_id`, so
+it deep-links back to the chat. A bare POST carries no identity and cannot,
+which makes the existing path strictly better wherever it applies.
 
 Like the webhook route, a loopback caller reaches this with no token
 (`middleware/auth.rs` — loopback is never rejected); unlike the webhook
@@ -173,20 +178,58 @@ the wire; a no-output action has an empty outputs list.
 
 The two `github.*` actions call the GitHub REST API directly (`POST
 /repos/:repo/pulls`, `GET /search/issues`) with a bearer token stored under
-the `github` credential label — same shape as `notion`/`ado`, connected via
-the editor's GitHub device-flow button rather than a pasted token. A step
-saved before this migration carries no `credential` label (the old manifest
-declared `auth: none`, since `gh` held the token); `run_action` defaults a
-`credential`-less GitHub step to the well-known `github` label so it resolves
-against whatever is connected instead of running unauthenticated.
+the `github` credential label — same shape as `notion`/`ado`. GitHub always
+offers a pasted-token field, exactly like Notion and Azure DevOps; once a
+GitHub App client ID is registered, the editor *also* offers sign-in with
+GitHub as the nicer alternative, side by side with the token field — the
+token path is never hidden behind it. A step saved before the REST migration
+carries no `credential` label (the old manifest declared `auth: none`, since
+`gh` held the token); `run_action` defaults a `credential`-less GitHub step
+to the well-known `github` label so it resolves against whatever is
+connected instead of running unauthenticated.
 
-GitHub is the only provider that gets OAuth: its device flow needs no client
-secret and no redirect URI. Notion and Azure DevOps get a token-paste field
-instead — Notion's token endpoint requires a server-side secret this app
-can't ship, and Azure DevOps' legacy OAuth platform stopped accepting new
-registrations in April 2025. The Azure DevOps token must be
-organization-scoped: Microsoft stops issuing global PATs on 2026-03-15 and
-decommissions them on 2026-12-01.
+GitHub is the only provider with an app-based connect flow: device flow
+needs no client secret and no redirect URI. Notion and Azure DevOps only
+ever get a token-paste field — Notion's token endpoint requires a
+server-side secret this app can't ship, and Azure DevOps' legacy OAuth
+platform stopped accepting new registrations in April 2025. The Azure
+DevOps token must be organization-scoped: Microsoft stops issuing global
+PATs on 2026-03-15 and decommissions them on 2026-12-01.
+
+### GitHub token refresh
+
+A GitHub App user token expires after 8 hours; device flow also returns a
+refresh token valid 6 months. `RefreshingCredentialStore`
+(`packages/core-rs/crates/mainframe-automations/src/credentials/refreshing.rs`)
+sits above the raw credential store on the `run_action` execution path: it
+refreshes a token within 5 minutes of expiry and persists the result before
+a step runs, so a long-running automation never hits a stale token mid-run.
+Refresh needs only `client_id` — GitHub's docs mark `client_secret` "Required
+unless the user access token was generated using the device flow," and this
+connector only ever generates via device flow, so no secret ships in the
+binary. **If token generation ever moves off device flow, refresh starts
+requiring a secret and this design no longer works.**
+
+Refresh is serialized per credential label: GitHub invalidates a refresh
+token the instant a new one is issued, so a `repeat` block with
+`concurrency` running several GitHub steps at once would otherwise stampede
+the refresh endpoint and log the connection out. A refresh failure surfaces
+as a step failure naming the credential and the remedy (reconnect GitHub),
+the same message style as a missing credential. A pasted PAT carries no
+refresh token or expiry and is never touched by this path.
+
+### GitHub App installation
+
+A GitHub App must be **installed** on a repository or organization, not
+just authorized — finishing device flow only grants the *user* token; it
+says nothing about which repos the app can reach. A token that authorizes
+fine but targets an uninstalled repo/org gets a 404 from every repo
+endpoint. `github.create_pr` detects this case (a 404 against a token that
+carries `expires_at`, i.e. a GitHub-App-issued token, not a pasted PAT) and
+reports "Mainframe isn't installed on '\<org\>'" with a link to
+`https://github.com/settings/installations`, instead of a bare HTTP
+failure — this is the single most likely support question, so it gets its
+own message rather than surfacing as a generic 404.
 
 `run_command` spawns via `zsh -lc` (array args, never string-interpolated
 shell). Chips inside the script are never spliced into shell source: each
@@ -201,16 +244,26 @@ payloads, PR titles) can't inject shell commands.
 | `AUTOMATIONS_MCP_ENABLED` | Enables MCP server discovery and `mcp:<server>:<tool>` actions in the catalog | off (post-launch feature, not yet wired) |
 | `DESCRIBE_ENABLED` | Enables the "describe it" natural-language drafting entry point in the editor | off (no drafting endpoint yet) |
 
-## GitHub OAuth App setup
+## GitHub App setup
 
-The GitHub device-flow connect button needs a registered OAuth App with
-device flow enabled. Until one is registered, `GITHUB_OAUTH_CLIENT_ID` in
+Sign-in with GitHub needs a registered **GitHub App** (not an OAuth App —
+only a GitHub App issues the expiring, refreshable user tokens this
+connector relies on) with device flow enabled and token expiration left
+**on**. Until one is registered, `GITHUB_APP_CLIENT_ID` in
 `packages/core-rs/crates/mainframe-automations/src/github_device.rs` is
-empty and `POST /api/automation-credentials/github/device/start` answers
-501; the editor shows GitHub as unavailable rather than failing obscurely.
-Register the app (device flow enabled, no redirect URI needed — it never
-redirects) and set the constant to its client ID, which is a public
-identifier and carries no secret.
+empty, `GET .../device/status` reports `{configured: false}`, and
+`POST .../device/start` answers 501 if reached directly — the editor shows
+only the pasted-token field rather than failing obscurely or offering a
+button that can't work. This degrades gracefully: nothing about GitHub
+requires the app to be registered, since the token field always works.
+
+To register: create the GitHub App, enable device flow, leave token
+expiration on (needed for `RefreshingCredentialStore` above), and set the
+constant to its client ID — a public identifier, not a secret. Device flow
+needs no client secret to exchange or refresh, so none is stored anywhere
+in this app. After registering, remind users to **install** the app on
+their org/repos (see "GitHub App installation" above) — authorizing via
+device flow alone is not enough.
 
 ## Spec
 

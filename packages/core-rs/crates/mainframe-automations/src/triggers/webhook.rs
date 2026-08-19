@@ -195,6 +195,8 @@ pub async fn ensure_webhook_secret(
                 kind: CredentialKind::Token,
                 token: token.clone(),
                 extra: None,
+                refresh_token: None,
+                expires_at: None,
             },
         )
         .await?;

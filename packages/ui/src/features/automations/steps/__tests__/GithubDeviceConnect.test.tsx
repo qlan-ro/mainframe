@@ -1,8 +1,8 @@
 /**
  * GithubDeviceConnect — device-flow states: idle → starting → waiting
  * (shows the user code, polls at the daemon's interval) → connected/
- * expired/denied/error, plus the permanent `unavailable` state when no
- * OAuth App client ID is configured yet.
+ * expired/denied/error, plus the defensive `unavailable` fallback if the
+ * daemon still reports no GitHub App client ID configured.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
@@ -137,7 +137,7 @@ describe('GithubDeviceConnect', () => {
     expect(screen.getByTestId('automations-credential-a-status')).toHaveTextContent('incorrect_device_code');
   });
 
-  it('reports unavailable when no OAuth App client ID is configured, without a generic error', async () => {
+  it('reports unavailable when no GitHub App client ID is configured, without a generic error or an administrator dead end', async () => {
     const user = userEvent.setup({ delay: null });
     const startGithubDeviceFlow = vi.fn(async () => {
       throw new ApiRequestError('not configured', [], 501);
@@ -147,8 +147,8 @@ describe('GithubDeviceConnect', () => {
 
     await user.click(screen.getByTestId('automations-credential-a-connect'));
 
-    expect(await screen.findByTestId('automations-credential-a-unavailable')).toHaveTextContent(
-      "GitHub connection isn't available yet",
-    );
+    const unavailable = await screen.findByTestId('automations-credential-a-unavailable');
+    expect(unavailable).toHaveTextContent("GitHub connection isn't available yet");
+    expect(unavailable).not.toHaveTextContent(/administrator/i);
   });
 });

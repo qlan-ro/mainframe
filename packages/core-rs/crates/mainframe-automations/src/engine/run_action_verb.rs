@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Map, Value};
 
 use crate::actions::{ActionCtx, ActionRegistry};
-use crate::credentials::CredentialStore;
+use crate::credentials::RefreshingCredentialStore;
 use crate::domain::{ChipPart, ChipText, RunActionStep};
 use crate::ports::ProjectRegistry;
 use crate::store::{AutomationStore, RunStore};
@@ -21,7 +21,9 @@ const ACTIONS_WITH_OUTPUT_AS: [&str; 2] = ["run_command", "files.read"];
 
 pub struct RunActionVerb {
     registry: Arc<ActionRegistry>,
-    credentials: Arc<dyn CredentialStore>,
+    /// Wraps the raw store with expiry-refresh — the only consumer that
+    /// needs it (a step is where an expired GitHub App token would 401).
+    credentials: Arc<RefreshingCredentialStore>,
     projects: Arc<dyn ProjectRegistry>,
     runs: RunStore,
     automations: AutomationStore,
@@ -30,7 +32,7 @@ pub struct RunActionVerb {
 impl RunActionVerb {
     pub fn new(
         registry: Arc<ActionRegistry>,
-        credentials: Arc<dyn CredentialStore>,
+        credentials: Arc<RefreshingCredentialStore>,
         projects: Arc<dyn ProjectRegistry>,
         runs: RunStore,
         automations: AutomationStore,
@@ -63,12 +65,17 @@ impl RunActionVerb {
         let creds = match &credential_label {
             None => None,
             Some(label) => match self.credentials.get(label).await {
-                Some(creds) => Some(creds),
-                None => {
+                Ok(Some(creds)) => Some(creds),
+                Ok(None) => {
                     return StepOutcome::Failed {
                         error: format!(
                             "credential '{label}' not found — add it via PUT /api/automation-credentials/{label}"
                         ),
+                    };
+                }
+                Err(err) => {
+                    return StepOutcome::Failed {
+                        error: err.to_string(),
                     };
                 }
             },
