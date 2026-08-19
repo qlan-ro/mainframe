@@ -15,6 +15,13 @@
  * enumerate them into structured rows (§9's acknowledged gap) — so, unlike
  * an earlier version of this fixture, there is no hardcoded database/column
  * list here pretending that endpoint exists.
+ *
+ * `credentialLabelHint` values are lowercase storage labels (`notion`,
+ * `ado`, `github`), matching the daemon exactly — the label is the
+ * credential store's key, so a mismatch here would connect a provider under
+ * one label and look for it under another. The two `github.*` actions moved
+ * to `auth: 'token'` when the REST migration replaced the `gh` CLI (2026-08-19
+ * provider-connections plan).
  */
 import type { ActionCatalogEntry, ActionField } from '../contract';
 
@@ -157,8 +164,8 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
       id: 'github.create_pr',
       title: 'Create a pull request',
       group: 'connector',
-      // No credential: the `gh` CLI holds the token, so these two ask for none.
-      auth: 'none',
+      auth: 'token',
+      credentialLabelHint: 'github',
       outputs: [
         { name: 'prUrl', type: 'text' },
         { name: 'prNumber', type: 'number' },
@@ -190,7 +197,8 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
       id: 'github.list_prs',
       title: 'List my open PRs',
       group: 'connector',
-      auth: 'none',
+      auth: 'token',
+      credentialLabelHint: 'github',
       outputs: [{ name: 'prs', type: 'list' }],
       idempotent: true,
       paramsSchema: {
@@ -207,7 +215,7 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
       title: 'Add a database row',
       group: 'connector',
       auth: 'token',
-      credentialLabelHint: 'Notion',
+      credentialLabelHint: 'notion',
       outputs: [{ name: 'pageUrl', type: 'text' }],
       idempotent: false,
       paramsSchema: {
@@ -225,7 +233,7 @@ export const ACTION_CATALOG_FIXTURE: ActionCatalogEntry[] = [
       title: 'Create a work item',
       group: 'connector',
       auth: 'token',
-      credentialLabelHint: 'Azure DevOps',
+      credentialLabelHint: 'ado',
       outputs: [
         { name: 'workItemId', type: 'number' },
         { name: 'url', type: 'text' },

@@ -1,9 +1,14 @@
-//! Credential storage (T6.1): plaintext JSON at
-//! `<dataDir>/automation-credentials.json` with 0600 perms — the same file
-//! Node's FileCredentialStore owns, so the on-disk shape must stay
-//! `Record<label, Credentials>` with `kind:"token"`. The trait is the
-//! contract: an OS-keychain impl can replace the file store without touching
-//! callers. Secrets never enter template scope or step I/O.
+//! Credential storage (T6.1, extended by the 2026-08-19
+//! provider-connections plan). `CredentialStore` is the contract every
+//! caller depends on; `FileCredentialStore` (plaintext JSON at 0600) is the
+//! original impl and stays as the fallback for headless Linux or a keychain
+//! that isn't reachable. `keyring_store` adds the OS-keychain-backed impl
+//! the plan asked for; `boot::build_credential_store` is where a daemon
+//! picks between them (logs the choice, migrates an existing plaintext file
+//! into the keychain the first time it becomes available). Node is deleted
+//! (c470bb1f) — there is no second reader of this file, so the on-disk shape
+//! is this crate's alone to evolve. Secrets never enter template scope or
+//! step I/O.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -13,6 +18,16 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::engine::BoxFuture;
+
+mod boot;
+mod keyring_store;
+
+pub use boot::build_credential_store;
+
+#[cfg(test)]
+mod boot_tests;
+#[cfg(test)]
+mod keyring_store_tests;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +69,8 @@ pub enum CredentialError {
     Io(#[from] std::io::Error),
     #[error("credential store serialization failed: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("keychain store failed: {0}")]
+    Keyring(String),
 }
 
 pub trait CredentialStore: Send + Sync {
@@ -169,9 +186,10 @@ impl CredentialStore for FileCredentialStore {
     }
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.1), not a TS port
+// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.1;
+// keyring backend + migration is the 2026-08-19 provider-connections plan), not a TS port
 // confidence: high
 // todos: 0
-// notes: on-disk shape matches Node automations/credentials.ts (shared
-//        <dataDir> file); Rust adds temp+rename atomicity and Debug
-//        redaction on top of Node's direct write.
+// notes: FileCredentialStore is now the fallback store, not the only one —
+//        see keyring_store.rs (OS-keychain impl) and boot.rs (which one a
+//        daemon boots with, and the file→keychain migration).

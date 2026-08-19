@@ -1,40 +1,59 @@
-//! T7.1 — github connector over a stub `gh`: create_pr → `{prUrl, prNumber}`,
+//! T7.1 — github connector over wiremock (moved off the `gh` CLI by the
+//! 2026-08-19 provider-connections plan): create_pr → `{prUrl, prNumber}`,
 //! list_prs → `{prs: List<Record{url,title,number,author}>}` (contract §5
-//! camelCase), and catalog entries that mute themselves when the CLI can't be
-//! used. Auth is gone from these tests on purpose: `gh` holds the token, so
-//! the actions take no credential.
+//! camelCase) via `/search/issues`, bearer auth from the stored `github`
+//! credential, and the strict-input/repo-validation/401-naming behavior
+//! ado.rs and notion.rs already cover for their own connectors.
 
 use std::collections::BTreeMap;
 
-use serde_json::{Value, json};
+use serde_json::json;
+use wiremock::matchers::{bearer_token, header, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::credentials::{CredentialKind, Credentials};
 use crate::tokens::TokenValue;
 
-use super::gh_stub::{StubGh, missing_gh};
 use super::github::{GithubCreatePrAction, GithubListPrsAction};
 use super::manifest::{ActionAuth, ActionOutput, ActionOutputType};
-use super::{Action, ActionCtx, ActionRegistry};
+use super::{Action, ActionCtx};
 
-fn ctx() -> ActionCtx {
+fn ctx(token: &str) -> ActionCtx {
     ActionCtx {
-        creds: None,
-        credential_label: None,
+        creds: Some(Credentials {
+            kind: CredentialKind::Token,
+            token: token.to_string(),
+            extra: None,
+        }),
+        credential_label: Some("github".to_string()),
         idempotency_key: "run-1:step-1".to_string(),
         project_root: "/tmp".to_string(),
         worktree_path: None,
     }
 }
 
-fn sent_body(stub: &StubGh) -> Value {
-    serde_json::from_str(&stub.stdin()).unwrap()
-}
-
 #[tokio::test]
 async fn create_pr_posts_the_body_and_maps_outputs() {
-    let stub =
-        StubGh::ready(r#"{"html_url": "https://github.com/qlan/mainframe/pull/7", "number": 7}"#);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/qlan/mainframe/pulls"))
+        .and(bearer_token("ghp_1"))
+        .and(header("accept", "application/vnd.github+json"))
+        .and(wiremock::matchers::body_json(json!({
+            "title": "feat: thing",
+            "body": "does the thing",
+            "head": "feat/thing",
+            "base": "main",
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "html_url": "https://github.com/qlan/mainframe/pull/7",
+            "number": 7,
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
 
-    let outputs = GithubCreatePrAction::new(stub.cli())
+    let outputs = GithubCreatePrAction::with_base_url(server.uri())
         .execute(
             &json!({
                 "repo": "qlan/mainframe",
@@ -43,25 +62,11 @@ async fn create_pr_posts_the_body_and_maps_outputs() {
                 "head": "feat/thing",
                 "base": "main",
             }),
-            &ctx(),
+            &ctx("ghp_1"),
         )
         .await
         .unwrap();
 
-    // One spawn: running an action never re-probes availability.
-    assert_eq!(
-        stub.calls(),
-        ["api repos/qlan/mainframe/pulls --method POST --input -"]
-    );
-    assert_eq!(
-        sent_body(&stub),
-        json!({
-            "title": "feat: thing",
-            "body": "does the thing",
-            "head": "feat/thing",
-            "base": "main",
-        })
-    );
     assert_eq!(
         outputs["prUrl"],
         TokenValue::Text("https://github.com/qlan/mainframe/pull/7".to_string())
@@ -75,42 +80,51 @@ async fn create_pr_posts_the_body_and_maps_outputs() {
 
 #[tokio::test]
 async fn create_pr_body_defaults_to_empty() {
-    let stub = StubGh::ready(r#"{"html_url": "https://github.com/o/r/pull/1", "number": 1}"#);
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/repos/o/r/pulls"))
+        .and(wiremock::matchers::body_json(
+            json!({"title": "t", "body": "", "head": "h", "base": "b"}),
+        ))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "html_url": "https://github.com/o/r/pull/1",
+            "number": 1,
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
 
-    GithubCreatePrAction::new(stub.cli())
+    GithubCreatePrAction::with_base_url(server.uri())
         .execute(
             &json!({"repo": "o/r", "title": "t", "head": "h", "base": "b"}),
-            &ctx(),
+            &ctx("tok"),
         )
         .await
         .unwrap();
-
-    assert_eq!(
-        sent_body(&stub),
-        json!({"title": "t", "body": "", "head": "h", "base": "b"})
-    );
 }
 
 #[tokio::test]
-async fn list_prs_searches_and_maps_records() {
-    let stub = StubGh::ready(
-        r#"[
-            {"url": "https://github.com/o/r/pull/1", "title": "one", "number": 1, "author": {"login": "doru"}},
-            {"url": "https://github.com/o/r/pull/2", "title": "two", "number": 2, "author": {"login": "doru"}}
-        ]"#,
-    );
+async fn list_prs_searches_open_prs_and_maps_records() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search/issues"))
+        .and(query_param("q", "is:pr state:open author:@me"))
+        .and(bearer_token("ghp_1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": [
+                {"html_url": "https://github.com/o/r/pull/1", "title": "one", "number": 1, "user": {"login": "doru"}},
+                {"html_url": "https://github.com/o/r/pull/2", "title": "two", "number": 2, "user": {"login": "doru"}}
+            ]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
 
-    let outputs = GithubListPrsAction::new(stub.cli())
-        .execute(&json!({}), &ctx())
+    let outputs = GithubListPrsAction::with_base_url(server.uri())
+        .execute(&json!({}), &ctx("ghp_1"))
         .await
         .unwrap();
 
-    // `gh search prs` resolves `@me` itself — the REST search endpoint the
-    // old HTTP client called never did.
-    assert_eq!(
-        stub.calls(),
-        ["search prs --state open --author @me --json url,title,number,author"]
-    );
     let expected_first = TokenValue::Record(BTreeMap::from([
         (
             "url".to_string(),
@@ -130,27 +144,24 @@ async fn list_prs_searches_and_maps_records() {
 }
 
 #[tokio::test]
-async fn a_repo_that_could_reshape_the_endpoint_never_reaches_gh() {
-    let stub = StubGh::ready("");
-
-    let err = GithubCreatePrAction::new(stub.cli())
+async fn a_repo_that_could_reshape_the_endpoint_never_reaches_github() {
+    let err = GithubCreatePrAction::with_base_url("http://localhost:1".to_string())
         .execute(
             &json!({"repo": "o/r/pulls/1", "title": "t", "head": "h", "base": "b"}),
-            &ctx(),
+            &ctx("tok"),
         )
         .await
         .unwrap_err();
 
     assert!(err.0.contains("must be 'owner/name'"), "{}", err.0);
-    assert!(stub.calls().is_empty(), "{:?}", stub.calls());
 }
 
 #[tokio::test]
 async fn strict_inputs_reject_unknown_and_missing_fields() {
-    let action = GithubCreatePrAction::new(missing_gh());
+    let action = GithubCreatePrAction::with_base_url("http://localhost:1".to_string());
 
     let err = action
-        .execute(&json!({"repo": "o/r"}), &ctx())
+        .execute(&json!({"repo": "o/r"}), &ctx("tok"))
         .await
         .unwrap_err();
     assert!(
@@ -162,7 +173,7 @@ async fn strict_inputs_reject_unknown_and_missing_fields() {
     let err = action
         .execute(
             &json!({"repo": "o/r", "title": "t", "head": "h", "base": "b", "extra": 1}),
-            &ctx(),
+            &ctx("tok"),
         )
         .await
         .unwrap_err();
@@ -174,49 +185,27 @@ async fn strict_inputs_reject_unknown_and_missing_fields() {
 }
 
 #[tokio::test]
-async fn the_catalog_mutes_the_actions_when_gh_is_unusable() {
-    let logged_out = StubGh::logged_out();
-    let mut registry = ActionRegistry::new();
-    registry
-        .register(Box::new(GithubCreatePrAction::new(missing_gh())))
-        .unwrap();
-    registry
-        .register(Box::new(GithubListPrsAction::new(logged_out.cli())))
-        .unwrap();
+async fn a_401_names_the_credential_label() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/search/issues"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("Bad credentials"))
+        .mount(&server)
+        .await;
 
-    let catalog = registry.wire_catalog().await;
-
-    assert!(!catalog[0].available);
+    let err = GithubListPrsAction::with_base_url(server.uri())
+        .execute(&json!({}), &ctx("stale"))
+        .await
+        .unwrap_err();
     assert_eq!(
-        catalog[0].unavailable_reason.as_deref(),
-        Some(
-            "The GitHub CLI isn't installed. Install the GitHub CLI from https://cli.github.com, then run `gh auth login`."
-        )
+        err.0,
+        "GitHub list PRs failed (401, credential 'github'): Bad credentials"
     );
-    assert!(!catalog[1].available);
-    assert_eq!(
-        catalog[1].unavailable_reason.as_deref(),
-        Some("The GitHub CLI isn't signed in. Run `gh auth login`.")
-    );
-}
-
-#[tokio::test]
-async fn a_signed_in_cli_leaves_the_actions_usable() {
-    let stub = StubGh::ready("");
-    let mut registry = ActionRegistry::new();
-    registry
-        .register(Box::new(GithubListPrsAction::new(stub.cli())))
-        .unwrap();
-
-    let catalog = registry.wire_catalog().await;
-
-    assert!(catalog[0].available);
-    assert_eq!(catalog[0].unavailable_reason, None);
 }
 
 #[test]
 fn manifests_match_contract() {
-    let create = GithubCreatePrAction::new(missing_gh()).manifest();
+    let create = GithubCreatePrAction::new().manifest();
     assert_eq!(create.id, "github.create_pr");
     assert_eq!(
         create.outputs,
@@ -226,17 +215,16 @@ fn manifests_match_contract() {
         ]
     );
     assert!(!create.idempotent);
-    // The CLI owns the token, so neither action asks for a credential.
-    assert_eq!(create.auth, ActionAuth::None);
-    assert_eq!(create.credential_label_hint, None);
+    assert_eq!(create.auth, ActionAuth::Token);
+    assert_eq!(create.credential_label_hint, Some("github"));
 
-    let list = GithubListPrsAction::new(missing_gh()).manifest();
+    let list = GithubListPrsAction::new().manifest();
     assert_eq!(list.id, "github.list_prs");
     assert_eq!(
         list.outputs,
         vec![ActionOutput::new("prs", ActionOutputType::List)]
     );
     assert!(list.idempotent);
-    assert_eq!(list.auth, ActionAuth::None);
-    assert_eq!(list.credential_label_hint, None);
+    assert_eq!(list.auth, ActionAuth::Token);
+    assert_eq!(list.credential_label_hint, Some("github"));
 }

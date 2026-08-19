@@ -15,6 +15,7 @@ pub mod credentials;
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub mod github_device;
 pub mod github_http;
 pub mod github_issues;
 mod github_issues_types;
@@ -33,6 +34,9 @@ pub use service::{
 
 #[cfg(test)]
 mod credentials_tests;
+
+#[cfg(test)]
+mod github_device_tests;
 
 #[cfg(test)]
 mod github_issues_errors_tests;

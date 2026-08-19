@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use tempfile::TempDir;
 
+use crate::credentials::FileCredentialStore;
 use crate::domain::{
     AskMeStep, AutomationCreateInput, AutomationFormField, AutomationScope, FormFieldType, Step,
 };
@@ -68,10 +69,12 @@ impl ProjectRegistry for FixedProjects {
 pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let sink = Arc::new(CollectingSink::default());
+    let credentials =
+        Arc::new(FileCredentialStore::load(dir.path().join("automation-credentials.json")).await);
     let engine = AutomationsEngine::new(
         AutomationsConfig {
             db_path: dir.path().join("automations.db"),
-            credentials_path: dir.path().join("automation-credentials.json"),
+            credentials,
         },
         AutomationsPorts {
             agent: Arc::new(NoAgent),
@@ -96,10 +99,11 @@ async fn build_engine(
     agent: Arc<dyn AgentPort>,
     sink: Arc<CollectingSink>,
 ) -> Arc<AutomationsEngine> {
+    let credentials = Arc::new(FileCredentialStore::load(credentials_path.to_path_buf()).await);
     AutomationsEngine::new(
         AutomationsConfig {
             db_path: db_path.to_path_buf(),
-            credentials_path: credentials_path.to_path_buf(),
+            credentials,
         },
         AutomationsPorts {
             agent,

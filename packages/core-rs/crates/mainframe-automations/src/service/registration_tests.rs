@@ -5,7 +5,7 @@
 //! and a `registration` a client sends on save never lands in the definition,
 //! so a stale save can't claim a hook is live.
 
-use crate::credentials::{CredentialKind, CredentialStore};
+use crate::credentials::CredentialKind;
 use crate::domain::{
     AutomationCreateInput, AutomationDefinition, AutomationScope, Trigger, WebhookRegistration,
     WebhookTrigger,

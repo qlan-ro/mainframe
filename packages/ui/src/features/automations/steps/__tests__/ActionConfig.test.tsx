@@ -207,10 +207,13 @@ describe('ActionConfig — picked, credential required (notion.add_row)', () => 
     );
     expect(screen.getByTestId('automations-action-a-credential-connect')).toHaveTextContent('Connect Notion…');
     await user.click(screen.getByTestId('automations-action-a-credential-connect'));
-    expect(onChange).toHaveBeenCalledWith({ ...step, credential: 'Notion' });
+    expect(screen.getByTestId('automations-action-a-credential-token')).toBeInTheDocument();
+    await user.type(screen.getByTestId('automations-action-a-credential-token'), 'secret_1');
+    await user.click(screen.getByTestId('automations-action-a-credential-save'));
+    expect(onChange).toHaveBeenCalledWith({ ...step, credential: 'notion' });
   });
 
-  it('asks for no credential on a GitHub action — the `gh` CLI holds that token', () => {
+  it('renders the GitHub device-flow connect button — GitHub actions require a real credential now', () => {
     useAutomationsStore.setState({ credentials: [] });
     const step: RunActionStep = { id: 'a', kind: 'run_action', actionId: 'github.create_pr', params: {} };
     render(
@@ -222,6 +225,6 @@ describe('ActionConfig — picked, credential required (notion.add_row)', () => 
         testId="automations-action-a"
       />,
     );
-    expect(screen.queryByTestId('automations-action-a-credential-connect')).not.toBeInTheDocument();
+    expect(screen.getByTestId('automations-action-a-credential-connect')).toHaveTextContent('Connect GitHub…');
   });
 });

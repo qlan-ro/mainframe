@@ -5,7 +5,6 @@
 
 pub mod ado;
 pub mod files;
-mod gh;
 pub mod github;
 pub mod http_action;
 pub mod manifest;
@@ -156,11 +155,8 @@ pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), Act
 
 /// Curated connectors (plan Phase 7).
 pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    // One CLI handle for both GitHub actions: clones share the availability
-    // probe, so building the catalog costs a single `gh auth status`.
-    let gh = gh::GhCli::new();
-    registry.register(Box::new(github::GithubCreatePrAction::new(gh.clone())))?;
-    registry.register(Box::new(github::GithubListPrsAction::new(gh)))?;
+    registry.register(Box::new(github::GithubCreatePrAction::new()))?;
+    registry.register(Box::new(github::GithubListPrsAction::new()))?;
     registry.register(Box::new(notion::NotionAddRowAction::new()))?;
     registry.register(Box::new(ado::AdoCreateItemAction::new()))?;
     Ok(())
@@ -176,12 +172,6 @@ pub fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionE
 
 #[cfg(test)]
 mod files_tests;
-
-#[cfg(test)]
-mod gh_stub;
-
-#[cfg(test)]
-mod gh_tests;
 
 #[cfg(test)]
 mod github_tests;

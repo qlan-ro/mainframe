@@ -1,37 +1,58 @@
-//! github connector (T7.1), running on the GitHub CLI rather than an HTTP
-//! client: `gh` already holds a token in the OS keyring, so these actions
-//! need no credential of their own (`auth: none`) and the daemon never
-//! stores a GitHub secret. Params arrive pre-rendered plain strings — the
-//! run_action executor renders ChipText before invoking any action other
-//! than run_command. `github.list_prs` has no `repo` param: `gh search prs`
-//! spans every repo the user can see and resolves `@me` itself, which the
-//! REST search endpoint the old client called never did. The CLI handle is
-//! injectable so tests drive a stub binary.
-
-use std::collections::BTreeMap;
+//! github connector (T7.1, moved off the `gh` CLI onto REST by the
+//! 2026-08-19 provider-connections plan): a bearer token stored under the
+//! `github` credential label, same shape as `notion`/`ado`. Params arrive
+//! pre-rendered plain strings — the run_action executor renders ChipText
+//! before invoking any action other than run_command. `github.create_pr`
+//! lives here; `github.list_prs` is `github_list_prs.rs` (split to stay
+//! under the file line cap, sharing `parse_json` from here).
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::engine::BoxFuture;
+use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
 
-use super::gh::{GhCli, validate_repo};
 use super::manifest::{
     ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
 };
-use super::{Action, ActionAvailability, ActionCtx, ActionError, ActionOutputs, parse_input};
+use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
 
-async fn availability(gh: &GhCli) -> ActionAvailability {
-    match gh.status().await.unavailable_reason() {
-        Some(reason) => ActionAvailability::Unavailable(reason),
-        None => ActionAvailability::Available,
-    }
-}
+mod github_list_prs;
+pub use github_list_prs::GithubListPrsAction;
 
-fn parse_json<T: serde::de::DeserializeOwned>(body: &str, op: &str) -> Result<T, ActionError> {
+pub(super) fn parse_json<T: serde::de::DeserializeOwned>(
+    body: &str,
+    op: &str,
+) -> Result<T, ActionError> {
     serde_json::from_str(body)
         .map_err(|err| ActionError(format!("{op} failed: unexpected response ({err})")))
+}
+
+/// `owner/repo`, the only shape a `/repos/<repo>/…` path segment can take.
+/// Rejecting anything else keeps a user-supplied value from reshaping the
+/// endpoint path (extra segments, `..`, a query string).
+fn validate_repo(action_id: &str, repo: &str) -> Result<(), ActionError> {
+    let mut parts = repo.split('/');
+    let valid = matches!((parts.next(), parts.next(), parts.next()), (Some(owner), Some(name), None)
+        if is_repo_segment(owner) && is_repo_segment(name));
+    if valid {
+        return Ok(());
+    }
+    Err(ActionError(format!(
+        "invalid input for '{action_id}': repo '{repo}' must be 'owner/name'"
+    )))
+}
+
+fn is_repo_segment(segment: &str) -> bool {
+    // Dots are legal inside a repo name, so the charset alone would admit
+    // `..` — a segment that walks the endpoint path up instead of naming a
+    // repo. Requiring one non-dot character rules out `.` and `..` without
+    // rejecting `my.repo`.
+    segment.bytes().any(|b| b != b'.')
+        && segment
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }
 
 // ── github.create_pr ────────────────────────────────────────────────────────
@@ -54,12 +75,26 @@ struct CreatedPr {
 }
 
 pub struct GithubCreatePrAction {
-    gh: GhCli,
+    base: String,
+    client: reqwest::Client,
 }
 
 impl GithubCreatePrAction {
-    pub(crate) fn new(gh: GhCli) -> Self {
-        Self { gh }
+    pub fn new() -> Self {
+        Self::with_base_url(GITHUB_API.to_string())
+    }
+
+    pub fn with_base_url(base: impl Into<String>) -> Self {
+        Self {
+            base: base.into(),
+            client: super::http_client(),
+        }
+    }
+}
+
+impl Default for GithubCreatePrAction {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -69,8 +104,8 @@ impl Action for GithubCreatePrAction {
             id: "github.create_pr",
             title: "GitHub: create pull request",
             group: ActionGroup::Connector,
-            auth: ActionAuth::None,
-            credential_label_hint: None,
+            auth: ActionAuth::Token,
+            credential_label_hint: Some("github"),
             params_schema: json!({
                 "type": "object",
                 "properties": {
@@ -99,37 +134,42 @@ impl Action for GithubCreatePrAction {
         }
     }
 
-    fn availability<'a>(&'a self) -> BoxFuture<'a, ActionAvailability> {
-        Box::pin(availability(&self.gh))
-    }
-
     fn execute<'a>(
         &'a self,
         params: &'a Value,
-        _ctx: &'a ActionCtx,
+        ctx: &'a ActionCtx,
     ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>> {
         Box::pin(async move {
             const OP: &str = "GitHub create PR";
             let input: CreatePrInput = parse_input("github.create_pr", params)?;
             validate_repo("github.create_pr", &input.repo)?;
 
-            let payload = json!({
+            let mut request = github_headers(
+                self.client
+                    .post(format!("{}/repos/{}/pulls", self.base, input.repo)),
+            )
+            .json(&json!({
                 "title": input.title,
                 "body": input.body,
                 "head": input.head,
                 "base": input.base,
-            })
-            .to_string();
-            let endpoint = format!("repos/{}/pulls", input.repo);
-            let stdout = self
-                .gh
-                .output(
-                    OP,
-                    &["api", &endpoint, "--method", "POST", "--input", "-"],
-                    Some(&payload),
-                )
-                .await?;
-            let created: CreatedPr = parse_json(&stdout, OP)?;
+            }));
+            if let Some(creds) = &ctx.creds {
+                request = request.bearer_auth(&creds.token);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
+            let status = response.status().as_u16();
+            let body = response
+                .text()
+                .await
+                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
+            if status >= 400 {
+                return Err(http_failure(OP, status, ctx, &body));
+            }
+            let created: CreatedPr = parse_json(&body, OP)?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("prUrl".to_string(), TokenValue::Text(created.html_url));
@@ -139,116 +179,9 @@ impl Action for GithubCreatePrAction {
     }
 }
 
-// ── github.list_prs ─────────────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ListPrsInput {
-    #[serde(default = "default_author")]
-    author: String,
-}
-
-fn default_author() -> String {
-    "@me".to_string()
-}
-
-#[derive(Debug, Deserialize)]
-struct PrAuthor {
-    login: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct FoundPr {
-    url: String,
-    title: String,
-    number: f64,
-    author: PrAuthor,
-}
-
-pub struct GithubListPrsAction {
-    gh: GhCli,
-}
-
-impl GithubListPrsAction {
-    pub(crate) fn new(gh: GhCli) -> Self {
-        Self { gh }
-    }
-}
-
-impl Action for GithubListPrsAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
-            id: "github.list_prs",
-            title: "GitHub: list my open pull requests",
-            group: ActionGroup::Connector,
-            auth: ActionAuth::None,
-            credential_label_hint: None,
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "author": {"type": "string", "default": "@me"}
-                },
-                "additionalProperties": false
-            }),
-            fields: vec![ActionField::text("author", "Author").placeholder("@me")],
-            has_output_as: false,
-            outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
-            idempotent: true,
-        }
-    }
-
-    fn availability<'a>(&'a self) -> BoxFuture<'a, ActionAvailability> {
-        Box::pin(availability(&self.gh))
-    }
-
-    fn execute<'a>(
-        &'a self,
-        params: &'a Value,
-        _ctx: &'a ActionCtx,
-    ) -> BoxFuture<'a, Result<ActionOutputs, ActionError>> {
-        Box::pin(async move {
-            const OP: &str = "GitHub list PRs";
-            let input: ListPrsInput = parse_input("github.list_prs", params)?;
-            let stdout = self
-                .gh
-                .output(
-                    OP,
-                    &[
-                        "search",
-                        "prs",
-                        "--state",
-                        "open",
-                        "--author",
-                        &input.author,
-                        "--json",
-                        "url,title,number,author",
-                    ],
-                    None,
-                )
-                .await?;
-            let found: Vec<FoundPr> = parse_json(&stdout, OP)?;
-
-            let prs = found
-                .into_iter()
-                .map(|pr| {
-                    TokenValue::Record(BTreeMap::from([
-                        ("url".to_string(), TokenValue::Text(pr.url)),
-                        ("title".to_string(), TokenValue::Text(pr.title)),
-                        ("number".to_string(), TokenValue::Number(pr.number)),
-                        ("author".to_string(), TokenValue::Text(pr.author.login)),
-                    ]))
-                })
-                .collect();
-
-            let mut outputs = ActionOutputs::new();
-            outputs.insert("prs".to_string(), TokenValue::List(prs));
-            Ok(outputs)
-        })
-    }
-}
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1), not a TS port
+// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1;
+// REST migration off `gh` is the 2026-08-19 provider-connections plan), not a TS port
 // confidence: high
 // todos: 0
-// notes: diverges from Node actions/github.ts on purpose — auth and transport
-//        both moved to the GitHub CLI, so no token is stored or sent by us.
+// notes: mirrors ado.rs/notion.rs's shape now (bearer token from ctx.creds,
+//        injectable base_url for wiremock tests) instead of shelling out.

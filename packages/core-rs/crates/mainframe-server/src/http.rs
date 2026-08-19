@@ -81,6 +81,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // which middleware/auth.rs exempts by path (HMAC-verified instead).
         .merge(routes::automations::router())
         .merge(routes::automation_admin::router())
+        .merge(routes::automation_credentials_github::router())
         .merge(routes::automation_webhook::router())
         // Standalone notifications for work launched outside a chat/run (e.g.
         // an ask_agent-spawned CLI session). Behind auth like everything

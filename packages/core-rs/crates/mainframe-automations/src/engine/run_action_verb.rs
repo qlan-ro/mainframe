@@ -50,7 +50,17 @@ impl RunActionVerb {
             Err(err) => return StepOutcome::Failed { error: err.0 },
         };
 
-        let creds = match &step.credential {
+        // A step saved before an action required auth carries no `credential`
+        // label (e.g. GitHub steps from before the REST migration, which
+        // shipped with `auth: none`). Falling back to the action's own hint
+        // lets such a step resolve against the well-known label instead of
+        // running unauthenticated and failing with a vague 401.
+        let credential_label = step
+            .credential
+            .clone()
+            .or_else(|| action.manifest().credential_label_hint.map(str::to_string));
+
+        let creds = match &credential_label {
             None => None,
             Some(label) => match self.credentials.get(label).await {
                 Some(creds) => Some(creds),
@@ -67,7 +77,7 @@ impl RunActionVerb {
         let input = build_action_input(step, ctx.scope, ctx.names);
         let action_ctx = ActionCtx {
             creds,
-            credential_label: step.credential.clone(),
+            credential_label,
             idempotency_key: format!("{}:{}", ctx.run_id, ctx.step_ref),
             project_root: self.resolve_project_root(ctx.run_id).await,
             // Neither engine populates run-in `worktree` yet (Node parity —

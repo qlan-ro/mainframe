@@ -46,6 +46,9 @@ export function createHttpGateway(): AutomationsGateway {
     putCredential: api.putAutomationCredential,
     deleteCredential: api.deleteAutomationCredential,
 
+    startGithubDeviceFlow: api.startGithubDeviceFlow,
+    pollGithubDeviceFlow: api.pollGithubDeviceFlow,
+
     onEvent(listener) {
       return daemonWs.onEvent((event: DaemonEvent) => {
         if (isAutomationEvent(event)) listener(event);

@@ -196,5 +196,19 @@ export function createFixtureGateway(): AutomationsGateway {
     async deleteCredential() {
       /* fixture gateway keeps no credential state — the dev host never authenticates */
     },
+
+    async startGithubDeviceFlow() {
+      return {
+        deviceCode: 'fixture-device-code',
+        userCode: 'WDJB-MJHT',
+        verificationUri: 'https://github.com/login/device',
+        interval: 5,
+        expiresIn: 900,
+      };
+    },
+
+    async pollGithubDeviceFlow() {
+      return { status: 'connected' as const };
+    },
   };
 }

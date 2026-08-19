@@ -156,9 +156,7 @@ fn builtin_catalog_matches_the_contract_output_table() {
 /// /api/automation-actions): camelCase keys, `credentialLabelHint` omitted
 /// when absent, `available` true for an action with no external
 /// prerequisite, and `fields`/`hasOutputAs`/`idempotent` now cross the wire
-/// (the bug this test used to assert away). The GitHub actions are
-/// registered on their own in github_tests — their availability probe would
-/// shell out to the developer's real `gh`.
+/// (the bug this test used to assert away).
 #[tokio::test]
 async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let mut registry = ActionRegistry::new();

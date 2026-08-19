@@ -41,6 +41,12 @@ export function createFakeGateway(overrides: Partial<AutomationsGateway> = {}): 
     listCredentialLabels: async () => [],
     putCredential: async () => {},
     deleteCredential: async () => {},
+    startGithubDeviceFlow: async () => {
+      throw new Error('not implemented');
+    },
+    pollGithubDeviceFlow: async () => {
+      throw new Error('not implemented');
+    },
     onEvent: () => () => {},
     ...overrides,
   };

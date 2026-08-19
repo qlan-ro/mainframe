@@ -6,7 +6,6 @@
 
 use std::fmt;
 
-use crate::credentials::CredentialStore;
 use crate::domain::{AutomationDefinition, Trigger};
 use crate::triggers::webhook::ensure_webhook_secret;
 

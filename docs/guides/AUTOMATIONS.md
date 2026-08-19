@@ -43,8 +43,13 @@ Reserved `stepId`s: `trigger` (trigger context), `builtin` (`today`, `now`),
 - `<dataDir>/automations.db` — a separate SQLite file from `mainframe.db`,
   WAL mode. Tables: `automations`, `automation_runs`,
   `automation_interactions`.
-- `<dataDir>/automation-credentials.json` (mode 0600) — action credentials
-  and webhook signing secrets (reserved label `webhook:<hookId>`).
+- Action credentials and webhook signing secrets (reserved label
+  `webhook:<hookId>`) live in the OS keychain when one is available — the
+  daemon logs which backend won at boot. `<dataDir>/automation-credentials.json`
+  (mode 0600) is the fallback for a machine with no usable keychain (headless
+  Linux, no secret service running); an existing plaintext file migrates into
+  the keychain automatically the first time a usable one is found, and is
+  deleted once every credential has moved across.
 - A run's `wakeAt` is resolved by a 30-second sweep, which is why it is also a
   `wait` step's resolution — a wait resumes on the first sweep at or after its
   deadline, so short waits round up. The same sweep enforces `ask_agent`'s
@@ -77,6 +82,8 @@ All responses use the WS4 envelope (`{success, data}` or `{success:false, error}
 | `GET` | `/api/automation-credentials/:label` | Get a credential's kind (never its value) |
 | `PUT` | `/api/automation-credentials/:label` | Store a credential token |
 | `DELETE` | `/api/automation-credentials/:label` | Delete a credential |
+| `POST` | `/api/automation-credentials/github/device/start` | Start a GitHub OAuth device-flow session |
+| `POST` | `/api/automation-credentials/github/device/poll` | One poll attempt against the pending device-flow session (`{deviceCode}`); a `connected` result stores the token under the `github` label |
 | `POST` | `/api/automation-webhooks/:hookId` | Webhook ingress (see below) |
 | `POST` | `/api/notifications` | Raise a standalone, run-less notification (`{title, body, links?}`) — see below |
 
@@ -164,11 +171,22 @@ the wire; a no-output action has an empty outputs list.
 | `mcp:<server>:<tool>` | `result: text` (+ structured content when present) |
 | `ask_agent` (verb, not an action id) | `result: text`, `chatId: text`, plus any keys declared in `expects` |
 
-The two `github.*` actions run the [GitHub CLI](https://cli.github.com)
-(`gh api`, `gh search prs`), so they ask for no credential of their own —
-`gh` holds the token. Without `gh` installed and signed in, the catalog
-reports them `available: false` with the reason to show, and the editor
-mutes them.
+The two `github.*` actions call the GitHub REST API directly (`POST
+/repos/:repo/pulls`, `GET /search/issues`) with a bearer token stored under
+the `github` credential label — same shape as `notion`/`ado`, connected via
+the editor's GitHub device-flow button rather than a pasted token. A step
+saved before this migration carries no `credential` label (the old manifest
+declared `auth: none`, since `gh` held the token); `run_action` defaults a
+`credential`-less GitHub step to the well-known `github` label so it resolves
+against whatever is connected instead of running unauthenticated.
+
+GitHub is the only provider that gets OAuth: its device flow needs no client
+secret and no redirect URI. Notion and Azure DevOps get a token-paste field
+instead — Notion's token endpoint requires a server-side secret this app
+can't ship, and Azure DevOps' legacy OAuth platform stopped accepting new
+registrations in April 2025. The Azure DevOps token must be
+organization-scoped: Microsoft stops issuing global PATs on 2026-03-15 and
+decommissions them on 2026-12-01.
 
 `run_command` spawns via `zsh -lc` (array args, never string-interpolated
 shell). Chips inside the script are never spliced into shell source: each
@@ -182,6 +200,17 @@ payloads, PR titles) can't inject shell commands.
 |---|---|---|
 | `AUTOMATIONS_MCP_ENABLED` | Enables MCP server discovery and `mcp:<server>:<tool>` actions in the catalog | off (post-launch feature, not yet wired) |
 | `DESCRIBE_ENABLED` | Enables the "describe it" natural-language drafting entry point in the editor | off (no drafting endpoint yet) |
+
+## GitHub OAuth App setup
+
+The GitHub device-flow connect button needs a registered OAuth App with
+device flow enabled. Until one is registered, `GITHUB_OAUTH_CLIENT_ID` in
+`packages/core-rs/crates/mainframe-automations/src/github_device.rs` is
+empty and `POST /api/automation-credentials/github/device/start` answers
+501; the editor shows GitHub as unavailable rather than failing obscurely.
+Register the app (device flow enabled, no redirect URI needed — it never
+redirects) and set the constant to its client ID, which is a public
+identifier and carries no secret.
 
 ## Spec
 

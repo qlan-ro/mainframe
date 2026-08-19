@@ -47,6 +47,11 @@ rustix = { version = "1", features = ["process"] }
 chrono-tz = "0.10"
 # Test-only: HTTP mocking for automations action tests (use as a dev-dependency).
 wiremock = "0.6"
+# The platform credential-store backends are opt-in in keyring 3.x — without
+# an explicit backend feature the crate silently falls back to an in-memory
+# mock store. Same feature set already proven in
+# packages/app-tauri/src-tauri/Cargo.toml.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 # Test-only: decode the daemon's gzip/brotli responses in the compression
 # integration tests (use as dev-dependencies). Versions must match what
 # async-compression already pulls in, so no second copy compiles.

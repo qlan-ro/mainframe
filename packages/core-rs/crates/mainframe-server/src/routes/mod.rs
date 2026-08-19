@@ -9,6 +9,7 @@ pub mod agents;
 pub mod attachments;
 pub mod auth;
 pub mod automation_admin;
+pub mod automation_credentials_github;
 pub mod automation_webhook;
 pub mod automations;
 #[cfg(test)]
