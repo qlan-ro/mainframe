@@ -33,6 +33,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # This job builds the daemon (build:app:tauri), which links libdbus via
+      # keyring's secret-service backend — without the dev package cargo dies
+      # in libdbus-sys' build.rs.
+      - name: System dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: pnpm/action-setup@v6
         with:
           version: 10
