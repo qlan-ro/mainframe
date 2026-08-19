@@ -78,8 +78,25 @@ All responses use the WS4 envelope (`{success, data}` or `{success:false, error}
 | `PUT` | `/api/automation-credentials/:label` | Store a credential token |
 | `DELETE` | `/api/automation-credentials/:label` | Delete a credential |
 | `POST` | `/api/automation-webhooks/:hookId` | Webhook ingress (see below) |
+| `POST` | `/api/notifications` | Raise a standalone, run-less notification (`{title, body, links?}`) — see below |
 
 Step timeline entries truncate their output preview at 32 KB.
+
+## Standalone notifications
+
+`POST /api/notifications` broadcasts `notification.created` and mirrors it to
+mobile push, best-effort (a push failure never fails the request). It exists
+for work launched *outside* an automation run that still needs to notify
+natively — an `ask_agent` step spawns a Claude CLI session, which has no
+`PushNotification` harness tool, so a todo-lane run scheduled by an
+automation would otherwise be silent. `~/.claude/skills/todo-lane/scripts/lane_apply.py`
+posts here from its `start`/`finish` stage transitions.
+
+Like the webhook route, a loopback caller reaches this with no token
+(`middleware/auth.rs` — loopback is never rejected); unlike the webhook
+route, it needs no path exemption because it isn't auth-exempt for anyone
+else. `title` is required and rejected if empty; `body` and `links` are
+optional.
 
 ## Webhooks
 
@@ -126,6 +143,7 @@ non-matching preset is a 204 — none of the three leave a run silently lost.
 | `automation.interaction.resolved` | `{interactionId, runId}` |
 | `automation.completed` | `{automationId, automationName, runId, status: 'succeeded'\|'failed', result}` — feeds both the "automation finishes" and "automation fails" triggers; there is no separate event per trigger kind |
 | `automation.notification` | `{runId, automationId, title, body, links: {runId, chatIds}}` |
+| `notification.created` | `{title, body, links?: {chatIds}}` — a standalone notification with no run behind it (`POST /api/notifications`); the toast degrades to no action when `links` is absent |
 
 ## Actions — ids and outputs
 

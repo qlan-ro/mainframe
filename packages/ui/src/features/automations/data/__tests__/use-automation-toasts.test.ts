@@ -12,6 +12,8 @@
  *   automation.notification (chatIds)     → mfToast with a chatId (native "Open session" CTA)
  *   automation.completed (succeeded)      → mfToast.success + "View run" action
  *   automation.completed (failed)         → mfToast.error + "View run" action
+ *   notification.created (no links)       → mfToast with no action — there is no run to link to
+ *   notification.created (chatIds)        → mfToast with a chatId (native "Open session" CTA)
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
@@ -140,6 +142,34 @@ describe('useAutomationToasts — automation.completed', () => {
     expect(title).toContain('PR auto-review');
     expect(opts?.description).toBe('worktree was locked');
     expect(opts?.action?.label).toBe('View run');
+  });
+});
+
+describe('useAutomationToasts — notification.created', () => {
+  it('fires an info toast with no action when the notification carries no chat', () => {
+    mountWithHandler();
+    handler({ type: 'notification.created', title: '#12 lane', body: 'pipeline:qa' });
+
+    expect(mfToast).toHaveBeenCalledOnce();
+    const [call] = vi.mocked(mfToast).mock.calls[0]!;
+    expect(call.title).toBe('#12 lane');
+    expect(call.description).toBe('pipeline:qa');
+    expect(call.chatId).toBeUndefined();
+    expect(call.action).toBeUndefined();
+  });
+
+  it('passes the chatId (native "Open session" CTA) when links carry one', () => {
+    mountWithHandler();
+    handler({
+      type: 'notification.created',
+      title: '#12 lane',
+      body: 'pipeline:qa',
+      links: { chatIds: ['chat-1'] },
+    });
+
+    const [call] = vi.mocked(mfToast).mock.calls[0]!;
+    expect(call.chatId).toBe('chat-1');
+    expect(call.action).toBeUndefined();
   });
 });
 

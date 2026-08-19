@@ -104,4 +104,13 @@ describe('useAutomationEvents — automation.completed / automation.notification
     expect(useAutomationsStore.getState().runs).toHaveLength(0);
     expect(useAutomationsStore.getState().interactions).toHaveLength(0);
   });
+
+  it('notification.created is switched on but patches nothing either', () => {
+    renderHook(() => useAutomationEvents());
+
+    handler({ type: 'notification.created', title: '#12 lane', body: 'pipeline:qa' });
+
+    expect(useAutomationsStore.getState().runs).toHaveLength(0);
+    expect(useAutomationsStore.getState().interactions).toHaveLength(0);
+  });
 });

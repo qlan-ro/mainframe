@@ -23,7 +23,9 @@ use crate::ctx::GitFactory;
 use crate::db::Db;
 
 pub use agent::DaemonAgentPort;
-pub use bridges::{DaemonEventSink, DaemonEventSource, DaemonNotifier, map_automation_event};
+pub use bridges::{
+    DaemonEventSink, DaemonEventSource, DaemonNotifier, broadcast_and_push, map_automation_event,
+};
 pub use chat_port::{AgentChatPort, ChatManagerPort};
 
 /// `ActionCtx.projectRoot` resolution (Node service.resolveProjectRoot): the

@@ -30,6 +30,7 @@ pub mod git_write;
 pub mod health;
 pub mod launch;
 pub mod lsp_routes;
+pub mod notifications;
 pub mod projects;
 pub mod quota;
 pub mod search;
