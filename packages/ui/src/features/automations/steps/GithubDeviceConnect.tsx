@@ -134,7 +134,7 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
         <div className="flex items-center gap-1.5">
           <span
             data-testid={`${testId}-code`}
-            className="rounded-sm bg-muted px-2 py-1 font-mono text-sm tracking-widest text-foreground"
+            className="rounded-sm bg-muted px-2 py-1 font-mono text-sm tracking-wide text-foreground"
           >
             {phase.start.userCode}
           </span>

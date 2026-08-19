@@ -39,7 +39,7 @@ describe('GithubDeviceConnect', () => {
 
     await user.click(screen.getByTestId('automations-credential-a-connect'));
 
-    expect(screen.getByTestId('automations-credential-a-code')).toHaveTextContent('WDJB-MJHT');
+    expect(await screen.findByTestId('automations-credential-a-code')).toHaveTextContent('WDJB-MJHT');
     expect(screen.getByText('https://github.com/login/device')).toBeInTheDocument();
   });
 
@@ -147,7 +147,7 @@ describe('GithubDeviceConnect', () => {
 
     await user.click(screen.getByTestId('automations-credential-a-connect'));
 
-    expect(screen.getByTestId('automations-credential-a-unavailable')).toHaveTextContent(
+    expect(await screen.findByTestId('automations-credential-a-unavailable')).toHaveTextContent(
       "GitHub connection isn't available yet",
     );
   });
