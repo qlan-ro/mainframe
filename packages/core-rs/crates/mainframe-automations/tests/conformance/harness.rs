@@ -16,6 +16,7 @@ use serde_json::{Map, Value};
 use sha2::Sha256;
 use tempfile::TempDir;
 
+use mainframe_automations::credentials::FileCredentialStore;
 use mainframe_automations::domain::AutomationCreateInput;
 use mainframe_automations::store::{InteractionRecord, RunRecord, RunStatus};
 use mainframe_automations::triggers::{WebhookDecision, WebhookHeaders};
@@ -61,10 +62,11 @@ pub async fn build_engine(
     actions: &FakeActions,
 ) -> Arc<AutomationsEngine> {
     let root = db.parent().unwrap().to_string_lossy().into_owned();
+    let credentials = Arc::new(FileCredentialStore::load(creds.to_path_buf()).await);
     AutomationsEngine::new(
         AutomationsConfig {
             db_path: db.to_path_buf(),
-            credentials_path: creds.to_path_buf(),
+            credentials,
         },
         AutomationsPorts {
             agent,

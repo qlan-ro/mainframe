@@ -13,7 +13,9 @@ use serde_json::{Map, Value, json};
 use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
 
 const NOTION_API: &str = "https://api.notion.com";
@@ -74,6 +76,13 @@ impl Action for NotionAddRowAction {
                 "required": ["databaseId"],
                 "additionalProperties": {"type": "string"}
             }),
+            // Only `databaseId` is a named field: the row's column values are
+            // `additionalProperties` (any string key), and there is no
+            // per-database schema-lookup endpoint to enumerate them into
+            // structured rows (module doc) — so they have no field-schema
+            // entry, same as before this fix.
+            fields: vec![ActionField::chip("databaseId", "Database")],
+            has_output_as: false,
             outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
             idempotent: false,
         }

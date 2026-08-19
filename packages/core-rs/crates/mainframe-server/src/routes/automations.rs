@@ -12,6 +12,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use mainframe_automations::domain::AutomationCreateInput;
+use mainframe_automations::engine::is_engine_marker;
 use mainframe_automations::ports::to_run_summary;
 use mainframe_automations::store::RunRecord;
 use mainframe_automations::{AutomationsEngine, EngineError};
@@ -217,6 +218,10 @@ fn project_timeline(run: &RunRecord) -> Vec<AutomationTimelineEntry> {
     run.checkpoint
         .steps
         .iter()
+        // Retry attempts and concurrent-branch outcomes are engine state, not
+        // user steps: neither has a verb the editor could render, and
+        // surfacing one would put an unknown kind in front of the run view.
+        .filter(|(_, entry)| !is_engine_marker(&entry.kind))
         .map(|(step_ref, entry)| AutomationTimelineEntry {
             step_ref: step_ref.clone(),
             step_id: entry.step_id.clone(),

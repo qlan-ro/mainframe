@@ -1,13 +1,16 @@
 /**
- * `ActionCatalogEntry.paramsSchema` is `unknown` on the wire (contract §1) —
- * no plan has ratified its shape yet, and §9 flags the one place that
- * matters most (Notion's columns) as an explicit gap: "needs a schema-lookup
- * endpoint the contract lacks". This module is the UI-local shape Phase 4
- * renders against, cast out of `paramsSchema` at the one seam
- * (`fixtures/action-catalog.ts` authors it; `AutoForm` reads it) — the same
- * pattern `domain/tokens.ts`'s `ACTION_LIST_ITEM_FIELDS` already uses for
- * catalog metadata the wire doesn't carry. When a real schema-lookup route
- * lands, only these two files need to change.
+ * `ActionCatalogEntry.fields`/`hasOutputAs` are the daemon's field schema
+ * (Part 0 of the 2026-08-18 automations-provider-connections plan) — a
+ * sibling of the wire `paramsSchema` (JSON Schema, validated server-side),
+ * not a translation of it: JSON Schema can't express "this is a code
+ * editor" or "this is a token-accepting chip field". `asActionParamsSchema`
+ * below narrows the whole catalog entry defensively rather than trusting
+ * its shape — a foreign/future entry (an MCP tool, an older daemon with no
+ * `fields`) renders as an empty form instead of crashing. §9 still flags one
+ * gap this doesn't close: Notion's row columns need a database-schema
+ * lookup endpoint that doesn't exist, so `notion.add_row` only gets a
+ * `databaseId` field — the `'columns'` control below stays a valid, unused
+ * shape for when that endpoint ships.
  *
  * Every param field commits into `RunActionStep.params[key]` (always
  * `ChipText` — contract §1, no raw-JSON variant). `'text'`/`'select'` fields
@@ -40,7 +43,7 @@ export interface ActionFieldSchema {
 
 export interface ActionParamsSchema {
   fields: ActionFieldSchema[];
-  /** `run_command` only: renders the Text/Lines segment that patches `step.outputAs` directly (not a params entry — contract §1). */
+  /** `run_command`/`files.read` only: renders the Text/Lines segment that patches `step.outputAs` directly (not a params entry — contract §1). */
   hasOutputAs?: boolean;
 }
 
@@ -54,14 +57,14 @@ function isFieldSchema(value: unknown): value is ActionFieldSchema {
   );
 }
 
-/** Defensive narrowing for `paramsSchema: unknown` — a malformed/foreign catalog entry (a future live daemon response, an MCP tool) renders as an empty form instead of crashing. */
-export function asActionParamsSchema(paramsSchema: unknown): ActionParamsSchema {
-  if (typeof paramsSchema !== 'object' || paramsSchema === null) return { fields: [] };
-  const fields = (paramsSchema as { fields?: unknown }).fields;
+/** Defensive narrowing of a catalog entry's `fields`/`hasOutputAs` — a malformed/foreign entry (an MCP tool, an older daemon with no `fields`) renders as an empty form instead of crashing. */
+export function asActionParamsSchema(entry: unknown): ActionParamsSchema {
+  if (typeof entry !== 'object' || entry === null) return { fields: [] };
+  const fields = (entry as { fields?: unknown }).fields;
   if (!Array.isArray(fields)) return { fields: [] };
   return {
     fields: fields.filter(isFieldSchema),
-    hasOutputAs: (paramsSchema as { hasOutputAs?: unknown }).hasOutputAs === true,
+    hasOutputAs: (entry as { hasOutputAs?: unknown }).hasOutputAs === true,
   };
 }
 

@@ -9,8 +9,9 @@ use tempfile::TempDir;
 
 use crate::domain::{
     AskAgentStep, AskMeStep, AutomationCreateInput, AutomationDefinition, AutomationScope,
-    ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue, IfBlock,
-    NotifyStep, RepeatBlock, RunActionStep, SetVariableStep, Step, TokenRef,
+    BreakStep, ChipPart, ChipText, Comparator, ConditionMatch, ConditionRow, ConditionValue,
+    IfBlock, LoopBlock, LoopMode, NotifyStep, ParallelBlock, RepeatBlock, RetryBlock,
+    RunActionStep, SetVariableStep, Step, TokenRef, WaitStep,
 };
 use crate::ports::{AutomationEvent, Clock, EventSink, RunSummary};
 use crate::store::{AutomationDb, AutomationStore, InteractionStore, RunStore, RunTriggerContext};
@@ -256,6 +257,14 @@ pub(crate) fn set_variable_step(id: &str, name: &str, value: ChipText) -> Step {
     })
 }
 
+pub(crate) fn wait_step(id: &str, seconds: u32) -> Step {
+    Step::Wait(WaitStep {
+        id: id.to_string(),
+        keep_going: false,
+        seconds,
+    })
+}
+
 pub(crate) fn ask_me_step(id: &str) -> Step {
     Step::AskMe(AskMeStep {
         id: id.to_string(),
@@ -292,6 +301,40 @@ pub(crate) fn named_ask_agent_step(id: &str, output_name: &str) -> Step {
     };
     step.output_name = Some(output_name.to_string());
     Step::AskAgent(step)
+}
+
+pub(crate) fn loop_step(
+    id: &str,
+    mode: LoopMode,
+    conditions: Vec<ConditionRow>,
+    max_iterations: u32,
+    steps: Vec<Step>,
+) -> Step {
+    Step::Loop(LoopBlock {
+        id: id.to_string(),
+        keep_going: false,
+        mode,
+        match_mode: ConditionMatch::All,
+        conditions,
+        max_iterations,
+        steps,
+    })
+}
+
+pub(crate) fn retry_step(id: &str, max_attempts: u32, steps: Vec<Step>) -> Step {
+    Step::Retry(RetryBlock {
+        id: id.to_string(),
+        keep_going: false,
+        max_attempts,
+        steps,
+    })
+}
+
+pub(crate) fn break_step(id: &str) -> Step {
+    Step::Break(BreakStep {
+        id: id.to_string(),
+        keep_going: false,
+    })
 }
 
 pub(crate) fn token_ref(step_id: &str, output: &str, field: Option<&str>) -> TokenRef {
@@ -331,12 +374,40 @@ pub(crate) fn repeat_step(id: &str, items: TokenRef, steps: Vec<Step>) -> Step {
         id: id.to_string(),
         keep_going: false,
         items,
+        concurrency: None,
         steps,
+    })
+}
+
+pub(crate) fn concurrent_repeat_step(
+    id: &str,
+    items: TokenRef,
+    concurrency: u32,
+    steps: Vec<Step>,
+) -> Step {
+    Step::Repeat(RepeatBlock {
+        id: id.to_string(),
+        keep_going: false,
+        items,
+        concurrency: Some(concurrency),
+        steps,
+    })
+}
+
+pub(crate) fn parallel_step(id: &str, branches: Vec<Vec<Step>>) -> Step {
+    Step::Parallel(ParallelBlock {
+        id: id.to_string(),
+        keep_going: false,
+        branches,
     })
 }
 
 pub(crate) fn completed(outputs: Map<String, Value>) -> StepOutcome {
     StepOutcome::Completed { outputs }
+}
+
+pub(crate) fn failed(error: String) -> StepOutcome {
+    StepOutcome::Failed { error }
 }
 
 pub(crate) fn empty_outputs() -> Map<String, Value> {

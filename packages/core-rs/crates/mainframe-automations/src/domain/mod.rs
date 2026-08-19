@@ -4,22 +4,31 @@
 pub mod automation;
 pub(crate) mod catalog;
 pub(crate) mod comparators;
+pub mod concurrent_branch;
 pub mod condition;
 pub mod form;
 pub(crate) mod scope;
 pub mod step;
+mod step_verbs;
 pub mod template;
 pub mod token;
 pub mod trigger;
 pub mod validate;
+pub(crate) mod validate_breaks;
+pub(crate) mod validate_concurrency;
 pub(crate) mod validate_variables;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
+pub use concurrent_branch::enclosing_concurrent_branch;
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
 pub use step::{
-    AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, IfBlock, NotifyStep, OutputAs,
-    RepeatBlock, RunActionStep, SetVariableStep, Step, WorktreeSpec, find_step_by_id,
+    BreakStep, IfBlock, LoopBlock, LoopMode, ParallelBlock, RepeatBlock, RetryBlock, Step,
+    find_step_by_id,
+};
+pub use step_verbs::{
+    AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, NotifyStep, OutputAs,
+    RunActionStep, SetVariableStep, WaitStep, WorktreeSpec,
 };
 pub use template::{ChipPart, ChipText, chip_tokens};
 pub use token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef};
@@ -41,6 +50,12 @@ mod serde_tests;
 
 #[cfg(test)]
 mod serde_trigger_tests;
+
+#[cfg(test)]
+mod validate_concurrency_tests;
+
+#[cfg(test)]
+mod validate_parallel_tests;
 
 #[cfg(test)]
 mod validate_tests;

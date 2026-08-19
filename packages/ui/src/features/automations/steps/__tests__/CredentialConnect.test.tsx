@@ -1,9 +1,10 @@
 /**
- * CredentialConnect — "Connect <service>…" ↔ connected pill (ts153
- * wf2-stepconfig.jsx `WfCredentialField`, ported onto the real
- * `useAutomationsStore` credentials list + gateway routes instead of a local
- * `window.WF2_CREDENTIALS` mock). TDD: test written first, implemented
- * after.
+ * CredentialConnect — connected pill ↔ dispatch to the real per-provider
+ * connect flow (device flow for `github`, a pasted token for everything
+ * else). Flow-specific behavior (device polling states, the token paste
+ * form) is covered in `GithubDeviceConnect.test.tsx` and
+ * `TokenCredentialField.test.tsx`; this file covers only the pill and the
+ * dispatch itself.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -17,43 +18,40 @@ describe('CredentialConnect', () => {
     useAutomationsStore.setState({ credentials: [], gateway: fakeGateway() });
   });
 
-  it('renders a "Connect <service>…" button when not connected', () => {
-    render(<CredentialConnect service="GitHub" onChange={vi.fn()} testId="automations-credential-a" />);
-    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Connect GitHub…');
-  });
-
-  it('renders a connected pill with the credential label when already connected', () => {
-    useAutomationsStore.setState({ credentials: ['GitHub'] });
-    render(<CredentialConnect service="GitHub" onChange={vi.fn()} testId="automations-credential-a" />);
-    expect(screen.getByTestId('automations-credential-a-connected')).toHaveTextContent('GitHub');
+  it('renders a connected pill with the provider display name when already connected', () => {
+    useAutomationsStore.setState({ credentials: ['notion'] });
+    render(<CredentialConnect service="notion" onChange={vi.fn()} testId="automations-credential-a" />);
+    expect(screen.getByTestId('automations-credential-a-connected')).toHaveTextContent('Notion');
     expect(screen.queryByTestId('automations-credential-a-connect')).not.toBeInTheDocument();
   });
 
-  it('connecting calls the gateway, updates the store, and calls onChange with the label', async () => {
-    const user = userEvent.setup();
-    const putCredential = vi.fn(async () => {});
-    useAutomationsStore.setState({ gateway: fakeGateway({ putCredential }) });
-    const onChange = vi.fn();
-    render(<CredentialConnect service="GitHub" onChange={onChange} testId="automations-credential-a" />);
-
-    await user.click(screen.getByTestId('automations-credential-a-connect'));
-
-    expect(putCredential).toHaveBeenCalledWith('GitHub', expect.any(String));
-    expect(useAutomationsStore.getState().credentials).toContain('GitHub');
-    expect(onChange).toHaveBeenCalledWith('GitHub');
+  it('falls back to the raw label for a provider with no display-name mapping', () => {
+    useAutomationsStore.setState({ credentials: ['some-service'] });
+    render(<CredentialConnect service="some-service" onChange={vi.fn()} testId="automations-credential-a" />);
+    expect(screen.getByTestId('automations-credential-a-connected')).toHaveTextContent('some-service');
   });
 
   it('disconnecting calls the gateway, updates the store, and calls onChange(undefined)', async () => {
     const user = userEvent.setup();
     const deleteCredential = vi.fn(async () => {});
-    useAutomationsStore.setState({ credentials: ['GitHub'], gateway: fakeGateway({ deleteCredential }) });
+    useAutomationsStore.setState({ credentials: ['notion'], gateway: fakeGateway({ deleteCredential }) });
     const onChange = vi.fn();
-    render(<CredentialConnect service="GitHub" onChange={onChange} testId="automations-credential-a" />);
+    render(<CredentialConnect service="notion" onChange={onChange} testId="automations-credential-a" />);
 
     await user.click(screen.getByTestId('automations-credential-a-disconnect'));
 
-    expect(deleteCredential).toHaveBeenCalledWith('GitHub');
-    expect(useAutomationsStore.getState().credentials).not.toContain('GitHub');
+    expect(deleteCredential).toHaveBeenCalledWith('notion');
+    expect(useAutomationsStore.getState().credentials).not.toContain('notion');
     expect(onChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('dispatches a token-auth service (e.g. notion) to the paste-a-token flow', () => {
+    render(<CredentialConnect service="notion" onChange={vi.fn()} testId="automations-credential-a" />);
+    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Connect Notion…');
+  });
+
+  it('dispatches the github service to the device-flow connect button', () => {
+    render(<CredentialConnect service="github" onChange={vi.fn()} testId="automations-credential-a" />);
+    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Connect GitHub…');
   });
 });

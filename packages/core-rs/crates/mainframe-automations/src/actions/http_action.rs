@@ -14,7 +14,9 @@ use serde_json::{Value, json};
 use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
@@ -86,6 +88,16 @@ impl Action for HttpRequestAction {
             auth: ActionAuth::Token,
             credential_label_hint: None,
             params_schema: params_schema(),
+            fields: vec![
+                ActionField::select(
+                    "method",
+                    "Method",
+                    &["GET", "POST", "PUT", "PATCH", "DELETE"],
+                ),
+                ActionField::chip("url", "URL").placeholder("https://api.example.com/…"),
+                ActionField::chiparea("body", "Body"),
+            ],
+            has_output_as: false,
             outputs: vec![
                 ActionOutput::new("status", ActionOutputType::Number),
                 ActionOutput::new("body", ActionOutputType::Text),

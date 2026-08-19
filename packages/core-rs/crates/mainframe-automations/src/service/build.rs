@@ -4,7 +4,6 @@
 use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::actions::{ActionRegistry, register_all_actions};
-use crate::credentials::FileCredentialStore;
 use crate::engine::{AgentVerb, Interpreter, InterpreterDeps, NotifyVerb, RunActionVerb};
 use crate::error::StoreError;
 use crate::interactions::{AskMeVerb, InteractionService};
@@ -34,7 +33,7 @@ pub(super) async fn build(
             Arc::new(registry)
         }
     };
-    let credentials = Arc::new(FileCredentialStore::load(config.credentials_path).await);
+    let credentials = config.credentials;
 
     let agent_verb = AgentVerb::new(ports.agent, runs.clone(), ports.events.clone());
     let verb_ports = EngineVerbPorts {

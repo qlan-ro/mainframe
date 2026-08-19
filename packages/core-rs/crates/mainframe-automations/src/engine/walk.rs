@@ -10,11 +10,11 @@ use serde_json::{Map, Value};
 use crate::domain::Step;
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
-use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus};
+use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, epoch_ms_now};
 use crate::tokens::{NameIndex, NameMap, render};
 
 use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
-use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks};
+use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks, blocks_parallel};
 
 pub(crate) struct WalkCtx<'a> {
     pub run_id: &'a str,
@@ -64,7 +64,9 @@ pub(crate) fn walk_frame<'a>(
                 run_step(step, &step_ref, current, ctx, &frame).await?;
             current = checkpoint;
             let fatal = matches!(result, WalkResult::Failed { .. }) && !step.keep_going();
-            if matches!(result, WalkResult::Parked) || fatal {
+            // `Broke` unwinds to the nearest enclosing loop, so it stops this
+            // frame the same way a park does.
+            if matches!(result, WalkResult::Parked | WalkResult::Broke) || fatal {
                 return Ok(StepsResult {
                     result,
                     checkpoint: current,
@@ -88,6 +90,15 @@ async fn run_step(
     match step {
         Step::If(block) => blocks::run_if(block, checkpoint, ctx, frame).await,
         Step::Repeat(block) => blocks::run_repeat(block, checkpoint, ctx, frame).await,
+        Step::Loop(block) => blocks::run_loop(block, checkpoint, ctx, frame).await,
+        Step::Retry(block) => blocks::run_retry(block, checkpoint, ctx, frame).await,
+        Step::Parallel(block) => blocks_parallel::run_parallel(block, checkpoint, ctx, frame).await,
+        // Not a leaf: it writes no checkpoint entry and produces no outputs,
+        // it only redirects the walk.
+        Step::Break(_) => Ok(StepsResult {
+            result: WalkResult::Broke,
+            checkpoint,
+        }),
         _ => run_leaf(step, step_ref, checkpoint, ctx, frame).await,
     }
 }
@@ -195,7 +206,7 @@ async fn commit(
     let (step_ref, step_id, kind) = commit_keys(step, step_ref);
     ctx.store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error);
+            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error, None);
         })
         .await
 }
@@ -213,9 +224,18 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
                 Value::String(render(&s.value, ctx.scope, ctx.names)),
             )]),
         },
-        // Unreachable by construction (run_step routes blocks first); a
-        // graceful error beats a forbidden panic in library code.
-        Step::If(_) | Step::Repeat(_) => StepOutcome::Failed {
+        // Parks on a wake_at the due-sweep resumes; no port, no side effect.
+        Step::Wait(s) => StepOutcome::Wait {
+            wake_at: Some(epoch_ms_now() + i64::from(s.seconds) * 1_000),
+        },
+        // Unreachable by construction (run_step routes blocks and break
+        // first); a graceful error beats a forbidden panic in library code.
+        Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_)
+        | Step::Break(_) => StepOutcome::Failed {
             error: "internal: block dispatched as a leaf verb".to_string(),
         },
     }

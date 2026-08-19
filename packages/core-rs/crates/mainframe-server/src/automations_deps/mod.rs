@@ -23,7 +23,9 @@ use crate::ctx::GitFactory;
 use crate::db::Db;
 
 pub use agent::DaemonAgentPort;
-pub use bridges::{DaemonEventSink, DaemonEventSource, DaemonNotifier, map_automation_event};
+pub use bridges::{
+    DaemonEventSink, DaemonEventSource, DaemonNotifier, broadcast_and_push, map_automation_event,
+};
 pub use chat_port::{AgentChatPort, ChatManagerPort};
 
 /// `ActionCtx.projectRoot` resolution (Node service.resolveProjectRoot): the
@@ -94,9 +96,10 @@ pub async fn build_automations_engine(
         event_source: Some(DaemonEventSource::spawn(broadcast.subscribe())),
         registry: None,
     };
+    let credentials = mainframe_automations::credentials::build_credential_store(data_dir).await;
     let config = AutomationsConfig {
         db_path: data_dir.join("automations.db"),
-        credentials_path: data_dir.join("automation-credentials.json"),
+        credentials,
     };
     match AutomationsEngine::new(config, ports).await {
         Ok(engine) => Some(engine),

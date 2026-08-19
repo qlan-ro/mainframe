@@ -298,13 +298,13 @@ async fn deadline_sweep_fails_an_overdue_agent_step() {
     let wake_at = parked.checkpoint.wake_at.unwrap();
 
     // Not due yet: nothing changes.
-    rig.engine.sweep_deadlines(wake_at - 1).await.unwrap();
+    rig.engine.sweep_due(wake_at - 1).await.unwrap();
     assert_eq!(
         rig.h.store.get_run(&run.id).await.unwrap().unwrap().status,
         RunStatus::Waiting
     );
 
-    rig.engine.sweep_deadlines(wake_at + 1).await.unwrap();
+    rig.engine.sweep_due(wake_at + 1).await.unwrap();
     let finished = rig.h.store.get_run(&run.id).await.unwrap().unwrap();
     assert_eq!(finished.status, RunStatus::Failed);
     assert_eq!(

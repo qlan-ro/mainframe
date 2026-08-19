@@ -32,6 +32,10 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       return { id, kind, message: [] };
     case 'set_variable':
       return { id, kind, name: '', value: [''] };
+    // 5 minutes: long enough to be a real pause, short enough that a user who
+    // adds one to poll something sees it resume rather than assume it hung.
+    case 'wait':
+      return { id, kind, seconds: 300 };
     case 'if':
       return { id, kind, match: 'all', conditions: [], then: [], otherwise: [] };
     case 'repeat': {
@@ -41,11 +45,34 @@ function newStep(kind: AutomationStep['kind'], tokensBefore: TokenDescriptor[]):
       const ref = listToken ? listToken.ref : { stepId: 'builtin', output: 'today' };
       return { id, kind, items: ref, steps: [] };
     }
+    // 20 passes: enough for a realistic CI poll at a 30s wait, low enough that
+    // a runaway condition surfaces in minutes rather than hours.
+    case 'loop':
+      return { id, kind, mode: 'until', match: 'all', conditions: [], maxIterations: 20, steps: [] };
+    case 'break':
+      return { id, kind };
+    // 3 tries: one retry is usually noise, and past three a flaky dependency
+    // is a problem to fix rather than to paper over.
+    case 'retry':
+      return { id, kind, maxAttempts: 3, steps: [] };
+    // Two empty branches: a parallel with fewer than two has nothing to run
+    // side by side, so starting below that minimum would be a fresh block
+    // that's already invalid.
+    case 'parallel':
+      return { id, kind, branches: [[], []] };
   }
 }
 
-function isBlock(step: AutomationStep): step is Extract<AutomationStep, { kind: 'if' | 'repeat' }> {
-  return step.kind === 'if' || step.kind === 'repeat';
+function isBlock(
+  step: AutomationStep,
+): step is Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' | 'retry' | 'parallel' }> {
+  return (
+    step.kind === 'if' ||
+    step.kind === 'repeat' ||
+    step.kind === 'loop' ||
+    step.kind === 'retry' ||
+    step.kind === 'parallel'
+  );
 }
 
 export interface RecipeProps {

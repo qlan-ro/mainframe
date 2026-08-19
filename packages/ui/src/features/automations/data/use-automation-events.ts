@@ -7,11 +7,13 @@
  * gateway too), store patches only matter once a live daemon exists to patch
  * from, so this goes straight to the singleton.
  *
- * `automation.completed`/`automation.notification` are switched on (per the
- * contract's five events) but patch nothing: `use-automation-toasts.ts` owns
- * their user-facing behavior, and a completed run's terminal status already
- * lands via `automation.run.updated` — `finalizeAndEmit` (interpreter.ts)
- * emits it before `onRunFinalized` fires the completion event.
+ * `automation.completed`/`automation.notification`/`notification.created`
+ * are switched on (per the contract's five automation events, plus the
+ * standalone run-less notification) but patch nothing: `use-automation-
+ * toasts.ts` owns their user-facing behavior, and a completed run's terminal
+ * status already lands via `automation.run.updated` — `finalizeAndEmit`
+ * (interpreter.ts) emits it before `onRunFinalized` fires the completion
+ * event.
  */
 import { useEffect } from 'react';
 import { daemonWs } from '@/lib/daemon/ws-client';
@@ -34,6 +36,7 @@ export function useAutomationEvents(): void {
           break;
         case 'automation.completed':
         case 'automation.notification':
+        case 'notification.created':
           break;
         default:
           break;

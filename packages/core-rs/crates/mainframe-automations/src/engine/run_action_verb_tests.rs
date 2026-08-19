@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::actions::{ActionRegistry, register_all_actions};
-use crate::credentials::FileCredentialStore;
+use crate::credentials::{CredentialKind, CredentialStore, Credentials, FileCredentialStore};
 use crate::domain::{OutputAs, RunActionStep};
 use crate::engine::run_action_verb::{RunActionVerb, build_action_input};
 use crate::engine::test_support::{FakeClock, harness, text, token};
@@ -135,6 +135,133 @@ async fn missing_credential_fails_with_an_actionable_error() {
             assert_eq!(
                 error,
                 "credential 'gh' not found — add it via PUT /api/automation-credentials/gh"
+            );
+        }
+        other => panic!("expected failure, got {other:?}"),
+    }
+}
+
+/// A fake action carrying the real `github.list_prs` manifest's auth shape
+/// (`auth: token`, hint `github`) but no HTTP call, so the default-label
+/// test below stays hermetic.
+struct FakeGithubListPrs;
+
+impl crate::actions::Action for FakeGithubListPrs {
+    fn manifest(&self) -> crate::actions::ActionManifest {
+        crate::actions::ActionManifest {
+            id: "github.list_prs",
+            title: "fake",
+            group: crate::actions::ActionGroup::Connector,
+            auth: crate::actions::ActionAuth::Token,
+            credential_label_hint: Some("github"),
+            params_schema: json!({"type": "object"}),
+            fields: vec![],
+            has_output_as: false,
+            outputs: vec![],
+            idempotent: true,
+        }
+    }
+
+    fn execute<'a>(
+        &'a self,
+        _params: &'a serde_json::Value,
+        _ctx: &'a crate::actions::ActionCtx,
+    ) -> BoxFuture<'a, Result<crate::actions::ActionOutputs, crate::actions::ActionError>> {
+        Box::pin(async move { Ok(std::collections::BTreeMap::new()) })
+    }
+}
+
+/// A GitHub step saved before the REST migration carries no `credential`
+/// label (the old manifest declared `auth: none`). It must resolve against
+/// the well-known `github` label rather than failing or running
+/// unauthenticated.
+#[tokio::test]
+async fn a_pre_migration_github_step_resolves_the_default_credential_label() {
+    let h = harness().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = ActionRegistry::new();
+    registry.register(Box::new(FakeGithubListPrs)).unwrap();
+    let credentials = Arc::new(FileCredentialStore::load(dir.path().join("creds.json")).await);
+    credentials
+        .set(
+            "github",
+            Credentials {
+                kind: CredentialKind::Token,
+                token: "ghp_migrated".to_string(),
+                extra: None,
+            },
+        )
+        .await
+        .unwrap();
+    let automations = crate::store::AutomationStore::new(h.db.clone());
+    let verb = RunActionVerb::new(
+        Arc::new(registry),
+        credentials,
+        Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
+        h.store.clone(),
+        automations,
+    );
+
+    // A step exactly as an old, pre-migration definition would carry it:
+    // `action_id` set, `credential` absent.
+    let list_prs = step("github.list_prs", vec![]);
+    let scope = Scope::root(Arc::new(FakeClock));
+    let outcome = verb
+        .execute(
+            &list_prs,
+            VerbContext {
+                run_id: "r1",
+                step_ref: "act",
+                scope: &scope,
+                names: &NameMap::new(),
+            },
+        )
+        .await;
+
+    assert!(
+        matches!(outcome, StepOutcome::Completed { .. }),
+        "expected success (the default label must resolve), got {outcome:?}"
+    );
+}
+
+/// The same pre-migration step, but nobody has connected GitHub yet: the
+/// failure must name the defaulted `github` label specifically, proving the
+/// fallback actually chose it rather than skipping credential resolution.
+#[tokio::test]
+async fn a_pre_migration_github_step_with_no_connection_names_the_default_label() {
+    let h = harness().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = ActionRegistry::new();
+    registry.register(Box::new(FakeGithubListPrs)).unwrap();
+    let credentials = Arc::new(FileCredentialStore::load(dir.path().join("creds.json")).await);
+    let automations = crate::store::AutomationStore::new(h.db.clone());
+    let verb = RunActionVerb::new(
+        Arc::new(registry),
+        credentials,
+        Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
+        h.store.clone(),
+        automations,
+    );
+
+    let list_prs = step("github.list_prs", vec![]);
+    let scope = Scope::root(Arc::new(FakeClock));
+    let outcome = verb
+        .execute(
+            &list_prs,
+            VerbContext {
+                run_id: "r1",
+                step_ref: "act",
+                scope: &scope,
+                names: &NameMap::new(),
+            },
+        )
+        .await;
+
+    match outcome {
+        StepOutcome::Failed { error } => {
+            assert_eq!(
+                error,
+                "credential 'github' not found — add it via PUT /api/automation-credentials/github"
             );
         }
         other => panic!("expected failure, got {other:?}"),

@@ -16,6 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # `keyring`'s secret-service backend links libdbus, so without the dev
+      # package every cargo step below dies in libdbus-sys' build.rs before
+      # anything compiles.
+      - name: System dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

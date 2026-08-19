@@ -2,9 +2,7 @@
 //! one (403 "Request forbidden by administrative rules"), and the wiremock
 //! suites elsewhere in this module never asserted the header, so a bare
 //! `reqwest::Client::new()` shipped undetected. One file covers every
-//! connector that still speaks HTTP, because the trap is per-client, not
-//! per-API. GitHub is absent on purpose: it runs on the `gh` CLI, which sends
-//! its own.
+//! connector that speaks HTTP, because the trap is per-client, not per-API.
 
 use std::collections::BTreeMap;
 
@@ -15,6 +13,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use crate::credentials::{CredentialKind, Credentials};
 
 use super::ado::AdoCreateItemAction;
+use super::github::GithubCreatePrAction;
 use super::http_action::HttpRequestAction;
 use super::notion::NotionAddRowAction;
 use super::{Action, ActionCtx, USER_AGENT};
@@ -75,6 +74,24 @@ async fn ado_create_item_sends_a_user_agent() {
         .await;
 
     assert!(result.is_ok(), "ado without a User-Agent: {result:?}");
+}
+
+#[tokio::test]
+async fn github_create_pr_sends_a_user_agent() {
+    let server = server_requiring_user_agent(
+        201,
+        json!({"html_url": "https://github.com/o/r/pull/1", "number": 1}),
+    )
+    .await;
+
+    let result = GithubCreatePrAction::with_base_url(server.uri())
+        .execute(
+            &json!({"repo": "o/r", "title": "t", "head": "h", "base": "b"}),
+            &ctx(),
+        )
+        .await;
+
+    assert!(result.is_ok(), "github without a User-Agent: {result:?}");
 }
 
 #[tokio::test]

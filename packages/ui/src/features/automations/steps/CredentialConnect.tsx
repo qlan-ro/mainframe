@@ -1,22 +1,23 @@
 /**
  * CredentialConnect — "Connect <service>…" once per service, then a
  * connected pill with a disconnect affordance (ts153 wf2-stepconfig.jsx
- * `WfCredentialField`, ported off `window.WF2_CREDENTIALS` onto the real
- * `useAutomationsStore` credentials list + `AutomationsGateway` routes —
- * self-sufficient like `LibraryRow`, per `AutomationEditor`'s doc comment).
+ * `WfCredentialField`, ported onto the real `useAutomationsStore`
+ * credentials list + `AutomationsGateway` routes).
  *
- * This app has no OAuth flow yet (contract §3: credentials are opaque
- * labelled tokens in a flat file) — connecting stores a placeholder token
- * under the service's own name as its label, matching the one-account-per-
- * service model the six fixtures assume. `onChange` patches the OWNING
- * step's `credential` field (top-level on `RunActionStep`, not inside
- * `params` — contract §1) with the label, or `undefined` on disconnect.
+ * Dispatches to the real per-provider connect flow: `GithubDeviceConnect`
+ * (device flow — the one OAuth provider) for `github`, `TokenCredentialField`
+ * (a pasted token, real since the 2026-08-19 provider-connections plan — no
+ * more `placeholder-token-<service>`) for everything else. `onChange` patches
+ * the OWNING step's `credential` field (top-level on `RunActionStep`, not
+ * inside `params` — contract §1) with the label, or `undefined` on disconnect.
  */
 import { useState } from 'react';
-import { Plug, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
 import { mfToast } from '@/lib/toast';
 import { useAutomationsStore } from '../data/use-automations-store';
+import { GithubDeviceConnect } from './GithubDeviceConnect';
+import { providerDisplayName } from './provider-copy';
+import { TokenCredentialField } from './TokenCredentialField';
 
 export interface CredentialConnectProps {
   service: string;
@@ -31,24 +32,9 @@ function errorMessage(err: unknown): string | undefined {
 export function CredentialConnect({ service, onChange, testId }: CredentialConnectProps) {
   const credentials = useAutomationsStore((s) => s.credentials);
   const gateway = useAutomationsStore((s) => s.gateway);
-  const addCredential = useAutomationsStore((s) => s.addCredential);
   const removeCredential = useAutomationsStore((s) => s.removeCredential);
   const [busy, setBusy] = useState(false);
   const connected = credentials.includes(service);
-
-  async function connect() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await gateway.putCredential(service, `placeholder-token-${service}`);
-      addCredential(service);
-      onChange(service);
-    } catch (err) {
-      mfToast.error(`Could not connect ${service}`, { description: errorMessage(err) });
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function disconnect() {
     if (busy) return;
@@ -58,7 +44,7 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
       removeCredential(service);
       onChange(undefined);
     } catch (err) {
-      mfToast.error(`Could not disconnect ${service}`, { description: errorMessage(err) });
+      mfToast.error(`Could not disconnect ${providerDisplayName(service)}`, { description: errorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -71,13 +57,13 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
         className="inline-flex h-[28px] items-center gap-1.5 rounded-full border-[0.5px] border-success/40 bg-success/10 pl-2.5 pr-1"
       >
         <span className="size-1.5 rounded-full bg-success" aria-hidden />
-        <span className="text-xs text-foreground">{service}</span>
+        <span className="text-xs text-foreground">{providerDisplayName(service)}</span>
         <button
           type="button"
           data-testid={`${testId}-disconnect`}
           onClick={() => void disconnect()}
           disabled={busy}
-          aria-label={`Disconnect ${service}`}
+          aria-label={`Disconnect ${providerDisplayName(service)}`}
           className="flex size-[18px] shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-black/10 dark:hover:bg-white/10"
         >
           <X size={10} aria-hidden />
@@ -86,17 +72,8 @@ export function CredentialConnect({ service, onChange, testId }: CredentialConne
     );
   }
 
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      data-testid={`${testId}-connect`}
-      onClick={() => void connect()}
-      disabled={busy}
-      className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
-    >
-      <Plug size={12} aria-hidden />
-      Connect {service}…
-    </Button>
-  );
+  if (service === 'github') {
+    return <GithubDeviceConnect onChange={onChange} testId={testId} />;
+  }
+  return <TokenCredentialField service={service} onChange={onChange} testId={testId} />;
 }

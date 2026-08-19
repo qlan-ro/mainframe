@@ -33,17 +33,32 @@ impl Notifier for DaemonNotifier {
                 data: serde_json::json!({ "runId": notification.run_id }),
                 priority: PushPriority::Default,
             };
-            let _ = self.broadcast.send(DaemonEvent::AutomationNotification {
+            let event = DaemonEvent::AutomationNotification {
                 run_id: notification.run_id,
                 automation_id: notification.automation_id,
                 title: notification.title,
                 body: notification.body,
                 links: notification.links,
-            });
-            self.push.send_push(message).await;
+            };
+            broadcast_and_push(&self.broadcast, &self.push, event, message).await;
             Ok(())
         })
     }
+}
+
+/// The shared half of every "tell the user" path: broadcast on the WS bus,
+/// then mirror to mobile push. Used by both `DaemonNotifier` (automation
+/// runs) and `routes::notifications` (standalone, run-less notifications) so
+/// the two calls aren't duplicated. Best-effort — `PushService::send_push`
+/// has no `Result`, so a push failure never reaches the caller.
+pub async fn broadcast_and_push(
+    broadcast: &broadcast::Sender<DaemonEvent>,
+    push: &PushService,
+    event: DaemonEvent,
+    message: PushMessage,
+) {
+    let _ = broadcast.send(event);
+    push.send_push(message).await;
 }
 
 /// Engine event → daemon bus. The payload types are shared (T9.1), so the

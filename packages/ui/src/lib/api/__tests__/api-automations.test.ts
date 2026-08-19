@@ -19,6 +19,8 @@ import {
   getAutomationCredential,
   putAutomationCredential,
   deleteAutomationCredential,
+  startGithubDeviceFlow,
+  pollGithubDeviceFlow,
 } from '../automations';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
@@ -321,5 +323,40 @@ describe('deleteAutomationCredential', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automation-credentials/github', {
       method: 'DELETE',
     });
+  });
+});
+
+describe('startGithubDeviceFlow', () => {
+  it('sends POST /api/automation-credentials/github/device/start', async () => {
+    mockFetchOk({
+      deviceCode: 'dc-1',
+      userCode: 'WDJB-MJHT',
+      verificationUri: 'https://github.com/login/device',
+      interval: 5,
+      expiresIn: 900,
+    });
+    const result = await startGithubDeviceFlow();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automation-credentials/github/device/start', {
+      method: 'POST',
+    });
+    expect(result.userCode).toBe('WDJB-MJHT');
+  });
+
+  it('throws an ApiRequestError with status 501 when unconfigured', async () => {
+    mockFetchHttpError(501, "GitHub connection isn't set up yet");
+    await expect(startGithubDeviceFlow()).rejects.toMatchObject({ status: 501 });
+  });
+});
+
+describe('pollGithubDeviceFlow', () => {
+  it('sends POST /api/automation-credentials/github/device/poll with { deviceCode }', async () => {
+    mockFetchOk({ status: 'pending' });
+    const result = await pollGithubDeviceFlow('dc-1');
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/automation-credentials/github/device/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceCode: 'dc-1' }),
+    });
+    expect(result).toEqual({ status: 'pending' });
   });
 });

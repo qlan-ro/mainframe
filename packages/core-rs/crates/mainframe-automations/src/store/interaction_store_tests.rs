@@ -117,6 +117,59 @@ async fn resolve_claims_and_writes_answers_in_one_transaction() {
     assert_eq!(run_after.status, RunStatus::Running);
 }
 
+/// `apply_answers` is the one `Waiting`->terminal transition that used to
+/// leave `wake_at` untouched — harmless only because `ask_me` itself never
+/// carries a deadline. A sibling that DOES (an agent's `timeoutMinutes`,
+/// Phase 4a concurrency) must keep its own deadline live across this resolve.
+#[tokio::test]
+async fn resolving_an_interaction_recomputes_wake_at_instead_of_clobbering_a_sibling_deadline() {
+    let h = harness().await;
+    let a = seed_automation(&h, "with sibling deadline").await;
+    let run = h
+        .runs
+        .create_run(
+            &a.id,
+            a.definition.clone(),
+            RunTriggerContext::manual(),
+            None,
+        )
+        .await
+        .unwrap();
+    let sibling_wake_at = 9_999_999;
+    let mut checkpoint = with_step(
+        run.checkpoint.clone(),
+        "ask",
+        step_entry("ask", StepStatus::Waiting),
+    );
+    let mut agent_entry = step_entry("agent", StepStatus::Waiting);
+    agent_entry.kind = "ask_agent".to_string();
+    agent_entry.wake_at = Some(sibling_wake_at);
+    checkpoint = with_step(checkpoint, "agent", agent_entry);
+    checkpoint.wake_at = Some(sibling_wake_at);
+    h.runs.save_checkpoint(&run.id, checkpoint).await.unwrap();
+
+    let interaction = h
+        .interactions
+        .create(&run.id, "ask", "Daily check-in", vec![mood_field()])
+        .await
+        .unwrap();
+    assert!(
+        h.interactions
+            .resolve_interaction(&interaction.id, answers())
+            .await
+            .unwrap()
+    );
+
+    let run_after = h.runs.get_run(&run.id).await.unwrap().unwrap();
+    assert_eq!(run_after.checkpoint.steps["ask"].wake_at, None);
+    assert_eq!(
+        run_after.checkpoint.wake_at,
+        Some(sibling_wake_at),
+        "the sibling's still-live deadline must survive, not be clobbered by None"
+    );
+    assert_eq!(run_after.status, RunStatus::Waiting);
+}
+
 #[tokio::test]
 async fn second_resolve_returns_false() {
     let h = harness().await;

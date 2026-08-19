@@ -46,10 +46,12 @@ impl AutomationsEngine {
             }
         }
 
-        // Arm the derived-state schedule sweep and the event-trigger loop.
-        // Their JoinHandles live in `tasks` so `stop()` aborts them.
+        // Arm the derived-state schedule sweep, the run due-sweep, and the
+        // event-trigger loop. Their JoinHandles live in `tasks` so `stop()`
+        // aborts them.
         let mut tasks = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
         tasks.push(self.sweeper.clone().spawn(self.clock.clone()));
+        tasks.push(self.interpreter.clone().spawn_due_sweep());
         if let Some(source) = &self.event_source {
             tasks.push(spawn_event_loop(self.router.clone(), source.clone()));
         }

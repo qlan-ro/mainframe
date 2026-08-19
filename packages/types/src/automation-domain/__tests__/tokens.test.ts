@@ -270,4 +270,16 @@ describe('findStepById', () => {
     };
     expect(findStepById([repeatStep], 'inner')).toBe(inner);
   });
+
+  it('recurses into every parallel branch', () => {
+    const branchOne = askAgent('branch-one');
+    const branchTwo = askAgent('branch-two');
+    const parallelStep: AutomationStep = {
+      id: 'p1',
+      kind: 'parallel',
+      branches: [[branchOne], [branchTwo]],
+    };
+    expect(findStepById([parallelStep], 'branch-one')).toBe(branchOne);
+    expect(findStepById([parallelStep], 'branch-two')).toBe(branchTwo);
+  });
 });

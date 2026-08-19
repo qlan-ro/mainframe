@@ -9,7 +9,7 @@ use std::sync::Arc;
 use serde_json::{Map, Value};
 
 use crate::domain::AskMeStep;
-use crate::engine::checkpoint::set_step;
+use crate::engine::checkpoint::{recompute_wake_at, set_step};
 use crate::engine::{RunAdvancer, StepOutcome, VerbContext};
 use crate::error::StoreError;
 use crate::ports::{
@@ -122,11 +122,15 @@ impl AskMeVerb {
                     StepStatus::Waiting,
                     None,
                     None,
+                    None,
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.interaction_id = Some(interaction_id);
                 }
-                cp.wake_at = None;
+                // A sibling branch may still hold an armed deadline — an
+                // ask_me park never carries one of its own, so recompute
+                // instead of clobbering the run-level min with None.
+                recompute_wake_at(cp);
             })
             .await;
         match parked {

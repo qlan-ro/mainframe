@@ -144,12 +144,13 @@ jobs:
           sed -i.bak "s/^version = \".*\"/version = \"${version}\"/" packages/core-rs/Cargo.toml
           rm packages/core-rs/Cargo.toml.bak
 
-      # Tauri's Linux build needs the system WebKitGTK / GTK stack.
+      # Tauri's Linux build needs the system WebKitGTK / GTK stack; libdbus is
+      # for the daemon's keyring backend (secret-service).
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

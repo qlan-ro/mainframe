@@ -234,4 +234,14 @@ describe('Recipe — adding a step', () => {
       msg: '"Today" isn\'t a list — pick a value that produces a list to repeat over.',
     });
   });
+
+  it('a fresh "parallel" step starts with two empty branches', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Recipe steps={[]} onChange={onChange} tokens={[TODAY]} catalog={NO_CATALOG} issues={[]} testId="root" />);
+    await user.click(screen.getByTestId('root-add'));
+    await user.click(screen.getByTestId('root-add-verb-parallel'));
+    const added = onChange.mock.calls[0]?.[0] as AutomationStep[];
+    expect(added[0]).toMatchObject({ kind: 'parallel', branches: [[], []] });
+  });
 });

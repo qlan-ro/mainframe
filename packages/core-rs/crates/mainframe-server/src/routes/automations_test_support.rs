@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use mainframe_automations::credentials::FileCredentialStore;
 use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest, Notification, Notifier,
@@ -67,10 +68,12 @@ pub(crate) struct AutomationsHarness {
 pub(crate) async fn automations_ctx() -> AutomationsHarness {
     let dir = tempfile::tempdir().unwrap();
     let base = AppCtx::test_ctx();
+    let credentials =
+        Arc::new(FileCredentialStore::load(dir.path().join("automation-credentials.json")).await);
     let engine = AutomationsEngine::new(
         AutomationsConfig {
             db_path: dir.path().join("automations.db"),
-            credentials_path: dir.path().join("automation-credentials.json"),
+            credentials,
         },
         AutomationsPorts {
             agent: Arc::new(NoAgent),

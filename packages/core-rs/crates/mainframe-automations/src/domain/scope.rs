@@ -5,7 +5,8 @@
 
 use super::catalog::{action_outputs, capitalize, output_label};
 use super::form::FormFieldType;
-use super::step::{ExpectedOutputType, Step};
+use super::step::Step;
+use super::step_verbs::ExpectedOutputType;
 use super::token::{TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef, TokenSourceKind};
 use super::trigger::Trigger;
 
@@ -191,7 +192,14 @@ fn own_source_kind(step: &Step) -> Option<TokenSourceKind> {
         Step::AskMe(_) => Some(TokenSourceKind::AskMe),
         Step::RunAction(_) => Some(TokenSourceKind::Action),
         Step::SetVariable(_) => Some(TokenSourceKind::Variable),
-        Step::Notify(_) | Step::Repeat(_) | Step::If(_) => None,
+        Step::Notify(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::Repeat(_)
+        | Step::If(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_) => None,
     }
 }
 
@@ -234,7 +242,12 @@ fn produced_by(step: &Step) -> Vec<TokenInfo> {
                 info(&s.id, name, *token_type, &output_label(name), &s.action_id)
             })
             .collect(),
-        Step::Notify(_) => Vec::new(),
+        Step::Notify(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_) => Vec::new(),
         Step::SetVariable(s) => {
             let source = if s.name.is_empty() {
                 "Set a value".to_string()
@@ -267,12 +280,15 @@ pub(crate) fn step_refs(step: &Step) -> Vec<&TokenRef> {
             }
             refs
         }
-        Step::AskMe(_) => Vec::new(),
+        Step::AskMe(_) | Step::Wait(_) | Step::Break(_) | Step::Retry(_) | Step::Parallel(_) => {
+            Vec::new()
+        }
         Step::RunAction(s) => s.params.values().flat_map(|p| chip_tokens(p)).collect(),
         Step::Notify(s) => chip_tokens(&s.message),
         Step::SetVariable(s) => chip_tokens(&s.value),
         Step::If(s) => s.conditions.iter().map(|c| &c.token).collect(),
         Step::Repeat(s) => vec![&s.items],
+        Step::Loop(s) => s.conditions.iter().map(|c| &c.token).collect(),
     }
 }
 

@@ -117,7 +117,84 @@ export interface IfBlock extends AutomationStepBase {
 export interface RepeatBlock extends AutomationStepBase {
   kind: 'repeat';
   items: TokenRef;
+  /** Absent or `1`: sequential (today's behavior). `2..=32`: iterations run concurrently. */
+  concurrency?: number;
   steps: AutomationStep[];
+}
+
+/**
+ * Parks the run for a fixed delay, then resumes.
+ *
+ * Resolution is the engine's 30s due-sweep, not a timer, so short waits round
+ * up. That also makes it restart-safe: `wakeAt` lives in the run's checkpoint,
+ * so a daemon restart mid-wait resumes on schedule instead of losing a timer.
+ * Capped at 7 days by validation — a longer delay belongs on a schedule trigger.
+ */
+export interface WaitStep extends AutomationStepBase {
+  kind: 'wait';
+  seconds: number;
+}
+
+/**
+ * A condition-driven loop — the counterpart to `RepeatBlock`, whose list is
+ * resolved once before it starts and so cannot poll or converge.
+ *
+ * Conditions are re-evaluated before each pass, against the PREVIOUS pass's
+ * outputs. Before the first pass there is nothing to read, and the rule there
+ * is: if the condition's tokens don't resolve yet, run the pass. Without it
+ * "repeat while the build is running" would exit before running anything,
+ * since the step producing that status lives inside the loop. It costs `until`
+ * nothing — a goal provable from outside the loop still resolves, so "poll
+ * until the build is green" still runs zero passes when it already was.
+ *
+ * `maxIterations` is mandatory (capped at 500, Repeat's bound) and exhausting
+ * it FAILS the block: a poll that never went green must not read as one that did.
+ */
+export interface LoopBlock extends AutomationStepBase {
+  kind: 'loop';
+  mode: 'while' | 'until';
+  match: 'all' | 'any';
+  conditions: ConditionRow[];
+  maxIterations: number;
+  steps: AutomationStep[];
+}
+
+/**
+ * Re-runs its body from the top when it fails.
+ *
+ * Each attempt walks in its own frame, so a failed attempt's checkpoint entries
+ * never shadow the next one's — the walk treats an already-failed step as
+ * settled, so without that a replayed attempt would report success.
+ *
+ * **Retrying re-runs side effects.** A body that opened a PR and then failed
+ * opens a second one on the next attempt. Prefer retrying reads and commands.
+ */
+export interface RetryBlock extends AutomationStepBase {
+  kind: 'retry';
+  /** Total tries, including the first — `1` is "no retry". */
+  maxAttempts: number;
+  steps: AutomationStep[];
+}
+
+/**
+ * Heterogeneous concurrent block: unlike `RepeatBlock.concurrency`, which
+ * runs the SAME body once per item, each branch here is its own authored
+ * step list. Every branch starts before the block parks, and it settles
+ * wait-for-all — a failed branch does not stop its siblings, because
+ * finalizing a run has no way to cancel a sibling's in-flight agent chat.
+ * On failure the reported error is the lowest-indexed branch's, matching
+ * `RepeatBlock`'s "earliest item wins" rule. `break` cannot cross a
+ * `parallel` boundary — every branch is concurrent, with no sequential
+ * fallback the way `RepeatBlock.concurrency` has one.
+ */
+export interface ParallelBlock extends AutomationStepBase {
+  kind: 'parallel';
+  branches: AutomationStep[][];
+}
+
+/** Leaves the innermost enclosing `loop` or `repeat`. Validation rejects one with no enclosing block. */
+export interface BreakStep extends AutomationStepBase {
+  kind: 'break';
 }
 
 /** Defines a named value downstream steps address as `$name` (automation-domain/variables.ts). */
@@ -128,7 +205,18 @@ export interface SetVariableStep extends AutomationStepBase {
 }
 
 export type AutomationStep =
-  AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | IfBlock | RepeatBlock;
+  | AskAgentStep
+  | AskMeStep
+  | RunActionStep
+  | NotifyStep
+  | SetVariableStep
+  | WaitStep
+  | BreakStep
+  | IfBlock
+  | RepeatBlock
+  | LoopBlock
+  | RetryBlock
+  | ParallelBlock;
 
 export type SchedulePattern =
   | { type: 'daily'; at: string }
@@ -257,13 +345,37 @@ export interface AutomationInteractionSummary {
 
 export type ActionOutputType = 'text' | 'number' | 'list' | 'record';
 
+export type ActionFieldControl = 'text' | 'select' | 'chip' | 'chiparea' | 'code' | 'columns';
+
+export interface ActionField {
+  key: string;
+  label: string;
+  control: ActionFieldControl;
+  options?: string[];
+  placeholder?: string;
+  /** Field only renders when a sibling field's committed value equals this. */
+  showWhen?: { key: string; equals: string };
+}
+
 export interface ActionCatalogEntry {
   id: string;
   title: string;
   group: 'builtin' | 'connector' | 'mcp';
   auth: 'none' | 'token';
   credentialLabelHint?: string;
+  /** JSON Schema, validated server-side by the action's own parser. */
   paramsSchema: unknown;
+  /**
+   * The editor's auto-form field list — a sibling of `paramsSchema`, not a
+   * translation of it: JSON Schema can't express "this is a code editor" or
+   * "this is a token-accepting chip field", so the daemon authors these by
+   * hand (Part 0 of the 2026-08-18 automations-provider-connections plan).
+   * Optional so an older daemon's payload still renders — as an empty form,
+   * the same fallback `asActionParamsSchema` used before this field existed.
+   */
+  fields?: ActionField[];
+  /** `run_command`/`files.read`-only: whether the step's top-level `outputAs` (text/lines) applies to this action. */
+  hasOutputAs?: boolean;
   outputs: Array<{ name: string; type: ActionOutputType }>;
   /**
    * False when a prerequisite is missing on this machine (the GitHub actions
@@ -274,4 +386,11 @@ export interface ActionCatalogEntry {
   available?: boolean;
   /** One sentence naming the prerequisite and its remedy, shown verbatim. */
   unavailableReason?: string;
+  /**
+   * Decision 12: whether re-running this action is safe. Optional, and the
+   * OPPOSITE default from `available` — absent reads as **not** idempotent,
+   * so an older daemon's catalog makes the editor warn conservatively about
+   * a step that could double-fire, rather than silently reading as safe.
+   */
+  idempotent?: boolean;
 }

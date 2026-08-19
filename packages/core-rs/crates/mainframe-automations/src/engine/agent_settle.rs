@@ -4,14 +4,15 @@
 
 use serde_json::{Map, Value};
 
-use crate::domain::{ExpectedOutput, Step, find_step_by_id};
+use crate::domain::{ExpectedOutput, Step, enclosing_concurrent_branch, find_step_by_id};
 use crate::error::StoreError;
 use crate::ports::{AgentOutcome, AgentPortError, AutomationEvent, to_run_summary};
 use crate::store::{StepStatus, epoch_ms_now};
 
 use super::agent::{AgentVerb, WaitKey};
-use super::checkpoint::fail_step_entry;
+use super::checkpoint::{fail_step_entry, has_waiting_entry, recompute_wake_at};
 use super::expects::{build_correction_message, parse_expected};
+use super::markers::fail_enclosing_branch;
 
 enum Verdict {
     Succeed(Map<String, Value>),
@@ -24,6 +25,10 @@ enum Verdict {
 struct WaitingContext {
     keep_going: bool,
     expects: Vec<ExpectedOutput>,
+    /// `(block_id, branch_ref_suffix)` of the nearest enclosing concurrent
+    /// Repeat, if any — MUST-FIX 3: a failure that settles here bypasses the
+    /// branch driver, so it has to write that branch's own marker itself.
+    enclosing_branch: Option<(String, String)>,
 }
 
 impl AgentVerb {
@@ -52,7 +57,12 @@ impl AgentVerb {
                 Verdict::Fail(error) => {
                     self.remove_wait(chat_id);
                     return self
-                        .fail_waiting_step(&key, context.keep_going, &error)
+                        .fail_waiting_step(
+                            &key,
+                            context.keep_going,
+                            context.enclosing_branch.clone(),
+                            &error,
+                        )
                         .await;
                 }
                 Verdict::Retry(reason) => {
@@ -103,12 +113,21 @@ impl AgentVerb {
             return None;
         };
         let step = find_step_by_id(&run.checkpoint.definition.steps, &entry.step_id);
+        let ref_suffix = key
+            .step_ref
+            .strip_prefix(entry.step_id.as_str())
+            .unwrap_or_default();
         Some(WaitingContext {
             keep_going: step.is_some_and(Step::keep_going),
             expects: match step {
                 Some(Step::AskAgent(ask)) => ask.expects.clone().unwrap_or_default(),
                 _ => Vec::new(),
             },
+            enclosing_branch: enclosing_concurrent_branch(
+                &run.checkpoint.definition.steps,
+                &entry.step_id,
+                ref_suffix,
+            ),
         })
     }
 
@@ -122,8 +141,11 @@ impl AgentVerb {
                     entry.outputs = Some(outputs);
                     entry.error = None;
                     entry.finished_at = Some(epoch_ms_now());
+                    entry.wake_at = None;
                 }
-                cp.wake_at = None;
+                // A sibling branch may still be waiting — recompute rather
+                // than clobbering its deadline with None.
+                recompute_wake_at(cp);
             })
             .await;
         match patched {
@@ -141,32 +163,53 @@ impl AgentVerb {
         }
     }
 
-    /// Mirrors Node failWaitingStep: without `keepGoing` the run finalizes
-    /// `failed` HERE — a later advance() would skip the failed entry and
-    /// silently treat it as done.
-    async fn fail_waiting_step(&self, key: &WaitKey, keep_going: bool, error: &str) {
+    /// Mirrors Node failWaitingStep, extended for Phase 4a concurrency
+    /// (MUST-FIX 3): a leaf failing here bypasses `blocks_concurrent`'s own
+    /// driver entirely, so if it lives inside a concurrent branch and
+    /// `keepGoing` is false, this is the ONLY place that branch's own marker
+    /// ever gets written — without it, the driver replays the leaf's
+    /// `Failed` entry, skips past it (`walk.rs`'s terminal-skip), and
+    /// launders the branch into `Succeeded`. `keepGoing: true` skips the
+    /// marker write on purpose: it means the same thing here as everywhere
+    /// else — don't fail the run over this step — so the driver's replay is
+    /// left free to walk the branch's remaining steps and settle it Done,
+    /// matching sequential `run_repeat`'s absorption of the same failure.
+    ///
+    /// A run with an outstanding `Waiting` entry must never finalize
+    /// out-of-band, or it orphans whatever that entry is waiting on — so
+    /// `keepGoing` is no longer the sole decider of advance-vs-finalize; a
+    /// still-waiting sibling forces `advance()` regardless.
+    async fn fail_waiting_step(
+        &self,
+        key: &WaitKey,
+        keep_going: bool,
+        enclosing_branch: Option<(String, String)>,
+        error: &str,
+    ) {
         let step_ref = key.step_ref.clone();
         let error_owned = error.to_string();
         let patched = self
             .store
             .patch_checkpoint(&key.run_id, move |cp| {
                 fail_step_entry(cp, &step_ref, &error_owned);
-                cp.wake_at = None;
+                if !keep_going {
+                    fail_enclosing_branch(cp, &enclosing_branch, &error_owned);
+                }
+                recompute_wake_at(cp);
             })
             .await;
-        match patched {
-            Ok(record) => {
-                self.events.emit(AutomationEvent::RunUpdated {
-                    run: to_run_summary(&record),
-                });
-            }
+        let record = match patched {
+            Ok(record) => record,
             Err(StoreError::TerminalRun { .. }) => return,
             Err(err) => {
                 tracing::error!(run_id = key.run_id, error = %err, "agent settle: fail write failed");
                 return;
             }
-        }
-        if keep_going {
+        };
+        self.events.emit(AutomationEvent::RunUpdated {
+            run: to_run_summary(&record),
+        });
+        if keep_going || has_waiting_entry(&record.checkpoint) {
             self.advance(&key.run_id).await;
         } else {
             self.fail_run(&key.run_id, error).await;

@@ -91,6 +91,27 @@ describe('scopeAt — the invisible rule made concrete', () => {
     expect(afterScope.some((t) => t.ref.stepId === 'inner')).toBe(false);
   });
 
+  it('Parallel is isolated: a branch sees earlier steps in ITS OWN branch, not a sibling branch, and nothing leaks after', () => {
+    const branchOneFirst = askAgent('branch-one-first');
+    const branchOneSecond = askAgent('branch-one-second');
+    const branchTwo = askAgent('branch-two');
+    const parallelStep: AutomationStep = {
+      id: 'p1',
+      kind: 'parallel',
+      branches: [[branchOneFirst, branchOneSecond], [branchTwo]],
+    };
+    const after = askAgent('after');
+    const definition = def([parallelStep, after]);
+
+    const withinBranchOne = scopeAt(definition, [], 'branch-one-second');
+    expect(withinBranchOne.some((t) => t.ref.stepId === 'branch-one-first')).toBe(true);
+    expect(withinBranchOne.some((t) => t.ref.stepId === 'branch-two')).toBe(false);
+
+    const afterScope = scopeAt(definition, [], 'after');
+    expect(afterScope.some((t) => t.ref.stepId === 'branch-one-first')).toBe(false);
+    expect(afterScope.some((t) => t.ref.stepId === 'branch-two')).toBe(false);
+  });
+
   it('a set-variable step is visible downstream and invisible to itself and to earlier steps', () => {
     const setVariable: AutomationStep = { id: 'v1', kind: 'set_variable', name: 'notes', value: ['text'] };
     const definition = def([askAgent('before'), setVariable, askAgent('after')]);

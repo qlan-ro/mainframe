@@ -14,14 +14,16 @@ import type {
   ChipText,
   NotifyStep,
   RunActionStep,
+  BreakStep,
   SetVariableStep,
   TokenRef,
+  WaitStep,
 } from '../contract';
 import { isTokenPart } from '../domain/chip-parts';
 import type { TokenDescriptor } from '../domain/tokens';
 import { TokenChip } from '../fields/TokenChip';
 
-export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep;
+export type LeafStep = AskAgentStep | AskMeStep | RunActionStep | NotifyStep | SetVariableStep | WaitStep | BreakStep;
 
 interface StepSummaryProps {
   step: LeafStep;
@@ -88,5 +90,21 @@ export function StepSummary({ step, tokens, catalog }: StepSummaryProps) {
       return <RunActionSummary step={step} catalog={catalog} />;
     case 'set_variable':
       return <span className="text-xs text-muted-foreground">{step.name ? `Set $${step.name}` : 'Unnamed value'}</span>;
+    case 'wait':
+      return <span className="text-xs text-muted-foreground">{formatDuration(step.seconds)}</span>;
+    case 'break':
+      return <span className="text-xs text-muted-foreground">Leave the surrounding loop</span>;
   }
+}
+
+/** Largest whole unit, matching how `WaitConfig` derives the editing unit. */
+export function formatDuration(seconds: number): string {
+  if (seconds <= 0) return 'No duration set';
+  const [amount, unit] =
+    seconds % 3600 === 0
+      ? [seconds / 3600, 'hour']
+      : seconds % 60 === 0
+        ? [seconds / 60, 'minute']
+        : [seconds, 'second'];
+  return `Wait ${amount} ${unit}${amount === 1 ? '' : 's'}`;
 }

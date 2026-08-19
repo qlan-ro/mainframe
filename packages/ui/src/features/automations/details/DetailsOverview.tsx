@@ -17,10 +17,18 @@ import { VERB_META } from '../editor/verb-meta';
 import { TriggerChips } from '../library/TriggerChips';
 
 function isLeaf(step: AutomationStep): step is LeafStep {
-  return step.kind !== 'if' && step.kind !== 'repeat';
+  return (
+    step.kind !== 'if' &&
+    step.kind !== 'repeat' &&
+    step.kind !== 'loop' &&
+    step.kind !== 'retry' &&
+    step.kind !== 'parallel'
+  );
 }
 
-function blockCaption(step: Extract<AutomationStep, { kind: 'if' | 'repeat' }>): string {
+function blockCaption(
+  step: Extract<AutomationStep, { kind: 'if' | 'repeat' | 'loop' | 'retry' | 'parallel' }>,
+): string {
   if (step.kind === 'if') {
     const parts = [
       step.then.length > 0 ? `${step.then.length} step${step.then.length === 1 ? '' : 's'} in "then"` : null,
@@ -30,7 +38,17 @@ function blockCaption(step: Extract<AutomationStep, { kind: 'if' | 'repeat' }>):
     ].filter((p): p is string => p !== null);
     return parts.length > 0 ? parts.join(', ') : 'No steps yet';
   }
-  return `${step.steps.length} step${step.steps.length === 1 ? '' : 's'} per item`;
+  if (step.kind === 'parallel') {
+    return `${step.branches.length} branches running at once`;
+  }
+  const count = `${step.steps.length} step${step.steps.length === 1 ? '' : 's'}`;
+  if (step.kind === 'retry') {
+    return `${count}, tried up to ${step.maxAttempts} time${step.maxAttempts === 1 ? '' : 's'}`;
+  }
+  if (step.kind === 'loop') {
+    return `${count}, repeated ${step.mode} the condition holds (max ${step.maxIterations})`;
+  }
+  return `${count} per item`;
 }
 
 interface StepEntry {

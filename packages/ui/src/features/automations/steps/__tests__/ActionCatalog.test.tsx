@@ -57,6 +57,13 @@ describe('ActionCatalog', () => {
     expect(screen.getByText(/no actions match/i)).toBeInTheDocument();
   });
 
+  it('shows the provider display name, not the raw storage label, in the trailing badge', () => {
+    render(<ActionCatalog catalog={ACTION_CATALOG_FIXTURE} onPick={vi.fn()} testId="automations-catalog" />);
+    expect(screen.getByTestId('automations-catalog-action-notion.add_row')).toHaveTextContent('Notion');
+    expect(screen.getByTestId('automations-catalog-action-ado.create_item')).toHaveTextContent('Azure DevOps');
+    expect(screen.getByTestId('automations-catalog-action-github.create_pr')).toHaveTextContent('GitHub');
+  });
+
   it('shows a LIST badge only for actions whose output type is list', () => {
     render(<ActionCatalog catalog={ACTION_CATALOG_FIXTURE} onPick={vi.fn()} testId="automations-catalog" />);
     const listPrsRow = screen.getByTestId('automations-catalog-action-github.list_prs');

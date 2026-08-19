@@ -92,6 +92,8 @@ impl Action for RecordingAction {
             auth: self.auth,
             credential_label_hint: None,
             params_schema: serde_json::json!({ "type": "object", "additionalProperties": true }),
+            fields: vec![],
+            has_output_as: false,
             outputs: vec![],
             idempotent: self.idempotent,
         }

@@ -22,7 +22,14 @@ fn chip_texts(step: &Step) -> Vec<&ChipText> {
         Step::RunAction(s) => s.params.values().collect(),
         Step::Notify(s) => vec![&s.message],
         Step::SetVariable(s) => vec![&s.value],
-        Step::AskMe(_) | Step::If(_) | Step::Repeat(_) => Vec::new(),
+        Step::AskMe(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_) => Vec::new(),
     }
 }
 
@@ -60,7 +67,14 @@ fn names_claimed_by(step: &Step, into: &mut HashSet<String>) {
                 into.insert(format!("{}{suffix}", variable_name_for(&info)));
             }
         }
-        Step::Notify(_) | Step::If(_) | Step::Repeat(_) => {}
+        Step::Notify(_)
+        | Step::Wait(_)
+        | Step::Break(_)
+        | Step::If(_)
+        | Step::Repeat(_)
+        | Step::Loop(_)
+        | Step::Retry(_)
+        | Step::Parallel(_) => {}
     }
 }
 
@@ -76,7 +90,9 @@ fn region_names(steps: &[Step], except: &str, into: &mut HashSet<String>) {
                 region_names(&s.then, except, into);
                 region_names(&s.otherwise, except, into);
             }
-            Step::Repeat(_) => {}
+            // A loop body is its own naming region, exactly like a repeat's;
+            // each parallel branch is its own region too.
+            Step::Repeat(_) | Step::Loop(_) | Step::Retry(_) | Step::Parallel(_) => {}
             _ => names_claimed_by(step, into),
         }
     }
@@ -90,6 +106,12 @@ fn contains_step(steps: &[Step], step_id: &str) -> bool {
                     contains_step(&s.then, step_id) || contains_step(&s.otherwise, step_id)
                 }
                 Step::Repeat(s) => contains_step(&s.steps, step_id),
+                Step::Loop(s) => contains_step(&s.steps, step_id),
+                Step::Retry(s) => contains_step(&s.steps, step_id),
+                Step::Parallel(s) => s
+                    .branches
+                    .iter()
+                    .any(|branch| contains_step(branch, step_id)),
                 _ => false,
             }
     })
@@ -101,6 +123,13 @@ fn enclosing_repeat_body<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a [St
     for step in steps {
         match step {
             Step::Repeat(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
+            Step::Loop(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
+            Step::Retry(s) if contains_step(&s.steps, step_id) => return Some(&s.steps),
+            Step::Parallel(s) => {
+                if let Some(branch) = s.branches.iter().find(|b| contains_step(b, step_id)) {
+                    return Some(branch);
+                }
+            }
             Step::If(s) => {
                 if let Some(body) = enclosing_repeat_body(&s.then, step_id) {
                     return Some(body);

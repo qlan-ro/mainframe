@@ -9,6 +9,7 @@ pub mod agents;
 pub mod attachments;
 pub mod auth;
 pub mod automation_admin;
+pub mod automation_credentials_github;
 pub mod automation_webhook;
 pub mod automations;
 #[cfg(test)]
@@ -30,6 +31,7 @@ pub mod git_write;
 pub mod health;
 pub mod launch;
 pub mod lsp_routes;
+pub mod notifications;
 pub mod projects;
 pub mod quota;
 pub mod search;

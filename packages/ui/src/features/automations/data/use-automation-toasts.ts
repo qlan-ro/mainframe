@@ -16,6 +16,10 @@
  *     of the two is ever set.
  *   automation.completed    → mfToast.success/error by status, always with
  *     a "View run" action (a failed run also puts the result in `description`).
+ *   notification.created    → mfToast; a run-less notification (e.g. a
+ *     todo-lane stage update) has no run to link to, so it gets the chat CTA
+ *     when one is carried and otherwise no action at all — never a "View
+ *     run" link with nothing behind it.
  * automation.run.updated / interaction.created / interaction.resolved carry
  * no user-facing toast here — Phase 6's `use-automation-events.ts` patches
  * the store from those instead.
@@ -57,6 +61,16 @@ export function useAutomationToasts(): void {
           fire(`${event.automationName} ${event.status === 'succeeded' ? 'finished' : 'failed'}`, {
             description: event.status === 'failed' ? event.result : undefined,
             action: viewRunAction(event.runId),
+          });
+          break;
+        }
+        case 'notification.created': {
+          const [chatId] = event.links?.chatIds ?? [];
+          mfToast({
+            type: 'info',
+            title: event.title,
+            description: event.body,
+            ...(chatId ? { chatId } : {}),
           });
           break;
         }

@@ -29,6 +29,143 @@ fn duplicate_step_ids_are_rejected() {
 }
 
 #[test]
+fn a_zero_second_wait_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 0}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("pause") && e.message.contains("how long")),
+        "expected a zero-duration error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_wait_longer_than_the_cap_is_rejected() {
+    // 8 days — over the 7-day cap, the shape a seconds/milliseconds mix-up takes.
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 691_200}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("pause") && e.message.contains("7 days")),
+        "expected an over-cap error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_wait_within_the_cap_is_clean() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "pause", "kind": "wait", "seconds": 300}]
+    })));
+    assert!(errors.is_empty(), "expected no errors, got {errors:?}");
+}
+
+fn a_loop(id: &str, extra: Value) -> Value {
+    let mut base = json!({
+        "id": id, "kind": "loop", "mode": "until", "match": "all",
+        "conditions": [{"token": {"stepId": "builtin", "output": "today"}, "comparator": "is", "value": "x"}],
+        "maxIterations": 5, "steps": []
+    });
+    let map = base.as_object_mut().unwrap();
+    for (k, v) in extra.as_object().unwrap() {
+        map.insert(k.clone(), v.clone());
+    }
+    base
+}
+
+#[test]
+fn a_loop_with_no_conditions_is_rejected_because_it_would_never_stop() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"conditions": []}))]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("poll") && e.message.contains("never stop")),
+        "expected a no-condition error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_loop_over_the_pass_cap_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"maxIterations": 501}))]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("poll") && e.message.contains("at most 500")),
+        "expected an over-cap error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_retry_with_no_attempts_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "guard", "kind": "retry", "maxAttempts": 0, "steps": []}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("guard") && e.message.contains("how many times")),
+        "expected a zero-attempt error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_inside_a_retry_still_needs_an_enclosing_loop() {
+    // A retry is not a loop — a break inside one targets whatever loop
+    // encloses the retry, and there is none here.
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "guard", "kind": "retry", "maxAttempts": 2,
+                   "steps": [{"id": "stop", "kind": "break"}]}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("stop") && e.message.contains("inside a loop")),
+        "expected a stray-break error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_outside_any_loop_is_rejected() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [{"id": "stop", "kind": "break"}]
+    })));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.step_id.as_deref() == Some("stop") && e.message.contains("inside a loop")),
+        "expected a stray-break error, got {errors:?}"
+    );
+}
+
+#[test]
+fn a_break_nested_in_an_if_inside_a_loop_is_accepted() {
+    let errors = validate(&def(json!({
+        "triggers": [],
+        "steps": [a_loop("poll", json!({"steps": [{
+            "id": "maybe", "kind": "if", "match": "all",
+            "conditions": [{"token": {"stepId": "builtin", "output": "today"}, "comparator": "is", "value": "x"}],
+            "then": [{"id": "stop", "kind": "break"}], "otherwise": []
+        }]}))]
+    })));
+    assert!(errors.is_empty(), "expected no errors, got {errors:?}");
+}
+
+#[test]
 fn empty_step_ids_are_rejected() {
     let errors = validate(&def(json!({
         "triggers": [],

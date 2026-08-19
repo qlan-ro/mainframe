@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import type { ActionCatalogEntry } from '../contract';
+import { providerDisplayName } from './provider-copy';
 
 const ACTION_ICONS: Record<string, LucideIcon> = {
   run_command: Terminal,
@@ -228,7 +229,9 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
                 </span>
               </span>
               <span className="mt-0.5 shrink-0 text-xs text-muted-foreground">
-                {action.credentialLabelHint ?? GROUP_LABEL[action.group]}
+                {action.credentialLabelHint
+                  ? providerDisplayName(action.credentialLabelHint)
+                  : GROUP_LABEL[action.group]}
               </span>
             </button>
           );

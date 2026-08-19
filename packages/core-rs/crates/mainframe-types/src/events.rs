@@ -104,6 +104,15 @@ pub struct MessageSendCommand {
     pub args: Option<String>,
 }
 
+/// `notification.created`'s optional `links` payload. Unlike
+/// `AutomationNotificationLinks` there is no run to key off — a standalone
+/// notification (e.g. from `lane_apply.py`) carries chat ids only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationLinks {
+    pub chat_ids: Vec<String>,
+}
+
 // ─── DaemonEvent (server→client) ─────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -443,6 +452,17 @@ pub enum DaemonEvent {
         title: String,
         body: String,
         links: AutomationNotificationLinks,
+    },
+    /// A standalone, run-less notification — `POST /api/notifications`
+    /// (contract §4a). Distinct from `automation.notification`, whose
+    /// `runId`/`automationId` a caller outside a run doesn't have (e.g.
+    /// `lane_apply.py`, a plain script posting from loopback).
+    #[serde(rename = "notification.created")]
+    NotificationCreated {
+        title: String,
+        body: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        links: Option<NotificationLinks>,
     },
 }
 
@@ -833,6 +853,41 @@ mod tests {
                 "title": "Daily standup",
                 "body": "Standup posted",
                 "links": { "runId": "run_1", "chatIds": ["chat_1"] }
+            }),
+        );
+    }
+
+    #[test]
+    fn notification_created_wire_shape_omits_absent_links() {
+        assert_daemon_wire(
+            DaemonEvent::NotificationCreated {
+                title: "#12 lane".into(),
+                body: "→ pipeline:qa".into(),
+                links: None,
+            },
+            json!({
+                "type": "notification.created",
+                "title": "#12 lane",
+                "body": "→ pipeline:qa"
+            }),
+        );
+    }
+
+    #[test]
+    fn notification_created_wire_shape_with_links() {
+        assert_daemon_wire(
+            DaemonEvent::NotificationCreated {
+                title: "#12 lane".into(),
+                body: "→ pipeline:qa".into(),
+                links: Some(NotificationLinks {
+                    chat_ids: vec!["chat_1".into()],
+                }),
+            },
+            json!({
+                "type": "notification.created",
+                "title": "#12 lane",
+                "body": "→ pipeline:qa",
+                "links": { "chatIds": ["chat_1"] }
             }),
         );
     }

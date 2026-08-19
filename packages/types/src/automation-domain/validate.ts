@@ -19,6 +19,9 @@ export interface ValidationIssue {
   msg: string;
 }
 
+/** Repeat's fan-out bound, shared: a loop pass writes the same suffixed entries an iteration does, so it inherits the same checkpoint-growth ceiling. */
+const MAX_LOOP_PASSES = 500;
+
 /** A set-variable name has to survive being typed as `$name`, so it is an identifier, not free text. */
 const VARIABLE_NAME = /^[a-z_][a-z0-9_]*$/;
 
@@ -36,6 +39,11 @@ function collectChipTexts(step: AutomationStep): ChipText[] {
     case 'if':
     case 'repeat':
     case 'ask_me':
+    case 'wait':
+    case 'break':
+    case 'loop':
+    case 'retry':
+    case 'parallel':
       return [];
   }
 }
@@ -46,7 +54,7 @@ function collectTokenRefs(step: AutomationStep): TokenRef[] {
     .flat()
     .filter(isTokenPart)
     .map((part) => part.token);
-  if (step.kind === 'if') refs.push(...step.conditions.map((c) => c.token));
+  if (step.kind === 'if' || step.kind === 'loop') refs.push(...step.conditions.map((c) => c.token));
   if (step.kind === 'repeat') refs.push(step.items);
   return refs;
 }
@@ -169,6 +177,31 @@ export function validate(
           });
         }
         walk(step.steps);
+      }
+      if (step.kind === 'loop') {
+        if (step.conditions.length === 0) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Add a condition — a loop with none would never stop.' });
+        }
+        if (!step.maxIterations) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Set how many passes this loop may run.' });
+        } else if (step.maxIterations > MAX_LOOP_PASSES) {
+          issues.push({ stepId: step.id, level: 'error', msg: `A loop can run at most ${MAX_LOOP_PASSES} passes.` });
+        }
+        walk(step.steps);
+      }
+      if (step.kind === 'retry') {
+        if (!step.maxAttempts) {
+          issues.push({ stepId: step.id, level: 'error', msg: 'Set how many times this should be tried.' });
+        } else if (step.maxAttempts > MAX_LOOP_PASSES) {
+          issues.push({ stepId: step.id, level: 'error', msg: `A retry can run at most ${MAX_LOOP_PASSES} attempts.` });
+        }
+        walk(step.steps);
+      }
+      if (step.kind === 'parallel') {
+        // Branch-count bounds and the nested fan-out cap are the daemon's
+        // canonical call (domain/validate.rs) — this only has to reach every
+        // step inside a branch, the same way every other block's walk does.
+        for (const branch of step.branches) walk(branch);
       }
     }
   };

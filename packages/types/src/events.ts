@@ -127,6 +127,15 @@ export type DaemonEvent =
       title: string;
       body: string;
       links: { runId: string; chatIds: string[] };
+    }
+  // A standalone, run-less notification (POST /api/notifications) — e.g. a
+  // todo-lane stage update from lane_apply.py, which runs outside any
+  // automation run and so has neither a runId nor an automationId.
+  | {
+      type: 'notification.created';
+      title: string;
+      body: string;
+      links?: { chatIds: string[] };
     };
 
 export type ClientEvent =

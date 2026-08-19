@@ -51,3 +51,4 @@ flate2 = { workspace = true }
 brotli = { workspace = true }
 tracing-subscriber = { workspace = true }
 mainframe-runtime = { workspace = true, features = ["test-support"] }
+wiremock = { workspace = true }

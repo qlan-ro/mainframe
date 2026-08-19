@@ -80,3 +80,28 @@ export const putAutomationCredential = (label: string, token: string): Promise<v
 
 export const deleteAutomationCredential = (label: string): Promise<void> =>
   requestEmpty('DELETE', `${b()}/automation-credentials/${encodeURIComponent(label)}`);
+
+/** `POST /api/automation-credentials/github/device/start` response — one device-flow session. */
+export interface GithubDeviceStart {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  interval: number;
+  expiresIn: number;
+}
+
+export type GithubDevicePollStatus = 'pending' | 'slow_down' | 'expired' | 'denied' | 'connected' | 'error';
+
+/** `POST /api/automation-credentials/github/device/poll` response — one poll attempt's outcome. */
+export interface GithubDevicePollResult {
+  status: GithubDevicePollStatus;
+  interval?: number;
+  message?: string;
+}
+
+/** Throws (status 501) when no OAuth App client ID is configured yet — see `github_device.rs`. */
+export const startGithubDeviceFlow = (): Promise<GithubDeviceStart> =>
+  request('POST', `${b()}/automation-credentials/github/device/start`);
+
+export const pollGithubDeviceFlow = (deviceCode: string): Promise<GithubDevicePollResult> =>
+  request('POST', `${b()}/automation-credentials/github/device/poll`, { deviceCode });

@@ -9,7 +9,9 @@ use crate::domain::OutputAs;
 use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, expand_user_path, parse_input};
 
 #[derive(Debug, Deserialize)]
@@ -104,6 +106,8 @@ impl Action for FilesReadAction {
                 "required": ["path"],
                 "additionalProperties": false
             }),
+            fields: vec![ActionField::chip("path", "File").placeholder("~/notes/log.md")],
+            has_output_as: true,
             outputs: vec![ActionOutput::new("content", ActionOutputType::Text)],
             idempotent: true,
         }
@@ -170,6 +174,11 @@ fn write_manifest(id: &'static str, title: &'static str, idempotent: bool) -> Ac
             "required": ["path", "content"],
             "additionalProperties": false
         }),
+        fields: vec![
+            ActionField::chip("path", "File").placeholder("~/notes/log.md"),
+            ActionField::chiparea("content", "Text"),
+        ],
+        has_output_as: false,
         outputs: vec![],
         idempotent,
     }

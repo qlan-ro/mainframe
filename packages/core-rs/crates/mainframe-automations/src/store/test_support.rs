@@ -60,6 +60,7 @@ pub(crate) fn step_entry(step_id: &str, status: StepStatus) -> CheckpointStep {
         finished_at: None,
         chat_id: None,
         interaction_id: None,
+        wake_at: None,
     }
 }
 

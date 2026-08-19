@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ActionCatalogEntry, IfBlock, RepeatBlock } from '../../contract';
+import type { ActionCatalogEntry, IfBlock, ParallelBlock, RepeatBlock } from '../../contract';
 import type { TokenDescriptor } from '../../domain/tokens';
 import type { ValidationIssue } from '../../domain/validate';
 import { BlockCard } from '../BlockCard';
@@ -99,5 +99,26 @@ describe('BlockCard — repeat', () => {
     );
     expect(screen.getByText('Repeat for each')).toBeInTheDocument();
     expect(screen.getByTestId('automations-repeat-items-r1')).toBeInTheDocument();
+  });
+});
+
+describe('BlockCard — parallel', () => {
+  it('renders the static "Run in parallel" label and its ParallelBody', () => {
+    const step: ParallelBlock = { id: 'p1', kind: 'parallel', branches: [[], []] };
+    render(
+      <BlockCard
+        step={step}
+        onChange={vi.fn()}
+        tokens={[TODAY]}
+        catalog={NO_CATALOG}
+        issues={[]}
+        depth={0}
+        onDragStart={vi.fn()}
+        onDragEnd={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Run in parallel')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-parallel-branch-p1-0')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-parallel-branch-p1-1')).toBeInTheDocument();
   });
 });

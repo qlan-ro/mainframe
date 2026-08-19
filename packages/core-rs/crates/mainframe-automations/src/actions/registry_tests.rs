@@ -25,6 +25,8 @@ impl FakeAction {
                 auth: ActionAuth::None,
                 credential_label_hint: None,
                 params_schema: json!({"type": "object"}),
+                fields: vec![],
+                has_output_as: false,
                 outputs,
                 idempotent,
             },
@@ -150,12 +152,11 @@ fn builtin_catalog_matches_the_contract_output_table() {
     }
 }
 
-/// T7.3 — the wire `ActionCatalogEntry` shape (GET /api/automation-actions):
-/// camelCase keys, `credentialLabelHint` omitted when absent, `idempotent`
-/// dropped (engine-internal), `available` true for an action with no external
-/// prerequisite. The GitHub actions are registered on their own in
-/// github_tests — their availability probe would shell out to the developer's
-/// real `gh`.
+/// T7.3/Part-0 — the wire `ActionCatalogEntry` shape (GET
+/// /api/automation-actions): camelCase keys, `credentialLabelHint` omitted
+/// when absent, `available` true for an action with no external
+/// prerequisite, and `fields`/`hasOutputAs`/`idempotent` now cross the wire
+/// (the bug this test used to assert away).
 #[tokio::test]
 async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let mut registry = ActionRegistry::new();
@@ -185,10 +186,28 @@ async fn wire_catalog_projects_manifests_to_the_contract_shape() {
         run_command.get("unavailableReason").is_none(),
         "reason omitted when the action is available"
     );
-    assert!(
-        run_command.get("idempotent").is_none(),
-        "idempotent never crosses the wire"
+    assert_eq!(
+        run_command["fields"],
+        json!([
+            {"key": "script", "label": "Script", "control": "code", "placeholder": "pnpm test"},
+            {
+                "key": "runIn",
+                "label": "Run in",
+                "control": "select",
+                "options": ["project root", "worktree", "custom"]
+            },
+            {
+                "key": "customPath",
+                "label": "Path",
+                "control": "chip",
+                "placeholder": "~/code/my-project",
+                "showWhen": {"key": "runIn", "equals": "custom"}
+            }
+        ]),
+        "run_command's field schema is the form the editor renders (Part 0)"
     );
+    assert_eq!(run_command["hasOutputAs"], true);
+    assert_eq!(run_command["idempotent"], false);
 
     let add_row = json
         .as_array()
@@ -204,6 +223,7 @@ async fn wire_catalog_projects_manifests_to_the_contract_shape() {
         json!([{"name": "pageUrl", "type": "text"}])
     );
     assert!(add_row["paramsSchema"].is_object());
+    assert_eq!(add_row["idempotent"], false);
 }
 
 /// T7.3 — the MCP catalog-entry seam: an `mcp:<server>:<tool>` id with

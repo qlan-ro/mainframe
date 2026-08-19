@@ -13,7 +13,20 @@
  * design review.
  */
 import type { LucideIcon } from 'lucide-react';
-import { Bell, GitBranch, MessageSquare, Plug, RotateCw, Sparkles, Variable } from 'lucide-react';
+import {
+  Bell,
+  CircleStop,
+  GitBranch,
+  GitFork,
+  MessageSquare,
+  Plug,
+  RefreshCw,
+  Repeat,
+  RotateCw,
+  Sparkles,
+  Timer,
+  Variable,
+} from 'lucide-react';
 import type { AutomationStep } from '../contract';
 import { sourceKindStyle } from '../fields/TokenChip';
 
@@ -85,6 +98,16 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     label: 'Notify me',
     hint: 'Send a desktop / mobile notification',
   },
+  wait: {
+    // Shares notify's amber: both are passive punctuation between real work,
+    // and neither produces a token, so neither earns a source-kind hue.
+    icon: Timer,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Wait',
+    hint: 'Pause for a fixed delay, then carry on',
+  },
   if: {
     icon: GitBranch,
     iconClass: 'text-mf-accent-violet',
@@ -94,6 +117,39 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     label: 'If … otherwise',
     hint: 'Branch on a result',
     block: true,
+  },
+  loop: {
+    // Same green as `repeat` — both are "run these steps more than once", and
+    // splitting the hue would imply a difference in kind rather than in what
+    // decides the next pass.
+    icon: Repeat,
+    iconClass: itemStyle.iconClass,
+    tintClass: itemStyle.tintClass,
+    cardTintClass: 'bg-mf-auto-kind-loop/5',
+    borderClass: itemStyle.borderClass,
+    label: 'Repeat while / until',
+    hint: 'Run steps over and over until a condition is met',
+    block: true,
+  },
+  retry: {
+    // Amber like the other "something went wrong" affordances — a retry is a
+    // failure-handling block, not a control-flow one.
+    icon: RefreshCw,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    cardTintClass: 'bg-mf-accent-amber/5',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Retry on failure',
+    hint: 'Try these steps again if they fail',
+    block: true,
+  },
+  break: {
+    icon: CircleStop,
+    iconClass: 'text-mf-accent-amber',
+    tintClass: 'bg-mf-accent-amber/12',
+    borderClass: 'border-mf-accent-amber/30',
+    label: 'Stop the loop',
+    hint: 'Leave the surrounding loop early',
   },
   repeat: {
     icon: RotateCw,
@@ -105,9 +161,21 @@ export const VERB_META: Record<VerbKind, VerbMeta> = {
     hint: 'Run steps once per item in a list',
     block: true,
   },
+  parallel: {
+    // The pre-seeded `--mf-auto-kind-parallel` token this file's header
+    // comment already reserved for this block.
+    icon: GitFork,
+    iconClass: 'text-mf-auto-kind-parallel',
+    tintClass: 'bg-mf-auto-kind-parallel/12',
+    cardTintClass: 'bg-mf-auto-kind-parallel/5',
+    borderClass: 'border-mf-auto-kind-parallel/30',
+    label: 'Run in parallel',
+    hint: 'Run separate branches of steps at the same time',
+    block: true,
+  },
 };
 
 export const ADD_STEP_GROUPS: Array<{ label: string; kinds: VerbKind[] }> = [
-  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify'] },
-  { label: 'Add structure', kinds: ['if', 'repeat'] },
+  { label: 'Steps', kinds: ['ask_agent', 'ask_me', 'run_action', 'set_variable', 'notify', 'wait'] },
+  { label: 'Add structure', kinds: ['if', 'repeat', 'loop', 'retry', 'parallel', 'break'] },
 ];

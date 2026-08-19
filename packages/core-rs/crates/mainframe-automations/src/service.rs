@@ -11,9 +11,7 @@ use serde_json::{Map, Value};
 use tokio::task::JoinHandle;
 
 use crate::actions::{ActionCatalogEntry, ActionRegistry};
-use crate::credentials::{
-    CredentialError, CredentialKind, CredentialStore, Credentials, FileCredentialStore,
-};
+use crate::credentials::{CredentialError, CredentialKind, CredentialStore, Credentials};
 use crate::domain::{AutomationCreateInput, ValidationError, ValidationLevel, validate};
 use crate::engine::{AgentVerb, Interpreter};
 use crate::error::StoreError;
@@ -51,8 +49,12 @@ pub enum EngineError {
 pub struct AutomationsConfig {
     /// `<dataDir>/automations.db` (contract §3 — its own file).
     pub db_path: PathBuf,
-    /// `<dataDir>/automation-credentials.json` (0600).
-    pub credentials_path: PathBuf,
+    /// Built by the caller — production boots via
+    /// `credentials::build_credential_store` (keychain, falling back to the
+    /// legacy `<dataDir>/automation-credentials.json`); tests build a bare
+    /// `FileCredentialStore` over a tempdir so they never touch a real
+    /// keychain.
+    pub credentials: Arc<dyn CredentialStore>,
 }
 
 pub struct AutomationsPorts {
@@ -77,7 +79,7 @@ pub struct AutomationsEngine {
     interaction_service: InteractionService,
     interpreter: Arc<Interpreter>,
     registry: Arc<ActionRegistry>,
-    credentials: Arc<FileCredentialStore>,
+    credentials: Arc<dyn CredentialStore>,
     webhooks: WebhookProcessor,
     /// T7 — the durable half of webhook state (the sample index is memory).
     webhook_deliveries: WebhookStateStore,
@@ -225,9 +227,8 @@ impl AutomationsEngine {
 
     /// The store the link dialog writes through (`set_credential` above), for
     /// callers outside this crate (the GitHub port adapter). The only other
-    /// permitted credential source: a second `FileCredentialStore` built at
-    /// boot would cache the file once and never see a token connected after
-    /// startup, since `get` reads only that snapshot.
+    /// permitted credential source: a second store built at boot would cache
+    /// its own snapshot and never see a token connected after startup.
     pub fn credentials(&self) -> Arc<dyn CredentialStore> {
         self.credentials.clone()
     }

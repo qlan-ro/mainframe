@@ -6,6 +6,7 @@
  * `fixtures/fixture-gateway.ts` (this phase) implements it in-memory, seeded
  * from the six canonical fixtures, for development ahead of live routes.
  */
+import type { GithubDevicePollResult, GithubDeviceStart } from '@/lib/api/automations';
 import type {
   ActionCatalogEntry,
   AutomationCreateInput,
@@ -55,6 +56,10 @@ export interface AutomationsGateway {
   listCredentialLabels(): Promise<string[]>;
   putCredential(label: string, token: string): Promise<void>;
   deleteCredential(label: string): Promise<void>;
+
+  /** GitHub's device flow (the only OAuth provider) — see `steps/GithubDeviceConnect.tsx`. */
+  startGithubDeviceFlow(): Promise<GithubDeviceStart>;
+  pollGithubDeviceFlow(deviceCode: string): Promise<GithubDevicePollResult>;
 
   /**
    * Subscribe to the 5 `automation.*` DaemonEvent members. The fixture

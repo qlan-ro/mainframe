@@ -23,6 +23,7 @@ dirs = { workspace = true }
 reqwest = { workspace = true }
 nanoid = { workspace = true }
 tracing = { workspace = true }
+keyring = { workspace = true }
 mainframe-types = { workspace = true }
 
 [dev-dependencies]

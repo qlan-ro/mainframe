@@ -7,14 +7,16 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
+use super::manifest::{
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+};
 use super::{Action, ActionAvailability, ActionError};
 
 /// Wire projection of a manifest (types `ActionCatalogEntry`, the
-/// `GET /api/automation-actions` body). Drops the engine-internal
-/// `idempotent` flag; owns dynamic `mcp:<server>:<tool>` ids the static
-/// manifest's `&'static str` cannot carry — that is the whole MCP seam at
-/// launch (contract §9: no client, no discovery, no `actions/mcp.rs`).
+/// `GET /api/automation-actions` body). Owns dynamic `mcp:<server>:<tool>`
+/// ids the static manifest's `&'static str` cannot carry — that is the whole
+/// MCP seam at launch (contract §9: no client, no discovery, no
+/// `actions/mcp.rs`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionCatalogEntry {
@@ -25,6 +27,13 @@ pub struct ActionCatalogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_label_hint: Option<String>,
     pub params_schema: Value,
+    /// The editor's field schema — a sibling of `params_schema`, not a
+    /// translation of it (`manifest.rs` module doc, Part 0 of the
+    /// 2026-08-18 automations-provider-connections plan).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<ActionField>,
+    #[serde(default)]
+    pub has_output_as: bool,
     pub outputs: Vec<ActionOutput>,
     /// False when a prerequisite is missing (e.g. the GitHub CLI): the editor
     /// shows the action muted with `unavailable_reason` instead of letting a
@@ -34,6 +43,13 @@ pub struct ActionCatalogEntry {
     pub available: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unavailable_reason: Option<String>,
+    /// Decision 12, now on the wire so the editor can warn a `retry` block
+    /// by name instead of blanket-warning every one. Opposite default from
+    /// `available`: absent reads as **not** idempotent, so an older daemon's
+    /// catalog warns conservatively about a step that could double-fire
+    /// rather than silently reading as safe to retry.
+    #[serde(default)]
+    pub idempotent: bool,
 }
 
 fn available_by_default() -> bool {
@@ -49,17 +65,21 @@ impl ActionCatalogEntry {
             auth: manifest.auth,
             credential_label_hint: manifest.credential_label_hint.map(str::to_string),
             params_schema: manifest.params_schema.clone(),
+            fields: manifest.fields.clone(),
+            has_output_as: manifest.has_output_as,
             outputs: manifest.outputs.clone(),
             available: matches!(availability, ActionAvailability::Available),
             unavailable_reason: match availability {
                 ActionAvailability::Available => None,
                 ActionAvailability::Unavailable(reason) => Some(reason.clone()),
             },
+            idempotent: manifest.idempotent,
         }
     }
 
     /// The reserved shape a live MCP tool would occupy post-launch (R5):
-    /// `mcp:<server>:<tool>`, output `{result: text}` (contract §5).
+    /// `mcp:<server>:<tool>`, output `{result: text}` (contract §5). No field
+    /// schema — MCP tool schemas aren't known until discovery ships.
     pub fn mcp_seam(server: &str, tool: &str) -> Self {
         Self {
             id: format!("mcp:{server}:{tool}"),
@@ -68,9 +88,12 @@ impl ActionCatalogEntry {
             auth: ActionAuth::None,
             credential_label_hint: None,
             params_schema: json!({"type": "object", "additionalProperties": true}),
+            fields: Vec::new(),
+            has_output_as: false,
             outputs: vec![ActionOutput::new("result", ActionOutputType::Text)],
             available: true,
             unavailable_reason: None,
+            idempotent: false,
         }
     }
 }

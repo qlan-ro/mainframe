@@ -50,6 +50,18 @@ function walk(
       const repeatResult = walk(step.steps, innerScope, targetStepId, catalog);
       if (repeatResult.found) return repeatResult;
       // Isolated: no leak after the block, even though repeatResult.scope may hold Current item.
+    } else if (step.kind === 'loop' || step.kind === 'retry') {
+      // Isolated like Repeat, but with no Current item — a condition loop has
+      // no per-pass value, so nothing extra enters the body's scope.
+      const loopResult = walk(step.steps, running, targetStepId, catalog);
+      if (loopResult.found) return loopResult;
+    } else if (step.kind === 'parallel') {
+      // Isolated per branch too — a branch never sees a sibling's outputs,
+      // and nothing leaks after the block once every branch has run.
+      for (const branch of step.branches) {
+        const branchResult = walk(branch, running, targetStepId, catalog);
+        if (branchResult.found) return branchResult;
+      }
     } else {
       running = running.concat(stepProduces(step, catalog));
     }
