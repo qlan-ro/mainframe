@@ -11,8 +11,9 @@
  * ever mounted out of sync with the parent's client-ID check.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Plug } from 'lucide-react';
+import { Check, Copy, ExternalLink, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { openExternal } from '@/lib/tauri/bridge';
 import type { GithubDeviceStart } from '@/lib/api/automations';
 import { ApiRequestError } from '@/lib/api/http';
 import { useAutomationsStore } from '../data/use-automations-store';
@@ -49,6 +50,14 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
     },
     [],
   );
+
+  // Copy-then-open: `openExternal` reaches the system browser via Tauri's
+  // opener, where a bare anchor would open inside the webview — a bad place
+  // to type GitHub credentials.
+  async function openVerification(userCode: string, verificationUri: string) {
+    await copyCode(userCode);
+    await openExternal(verificationUri);
+  }
 
   function schedulePoll(deviceCode: string, intervalSeconds: number) {
     timer.current = setTimeout(() => void poll(deviceCode, intervalSeconds), intervalSeconds * 1000);
@@ -126,12 +135,7 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
         data-testid={`${testId}-waiting`}
         className="flex flex-col gap-1.5 rounded-md border-[0.5px] border-border bg-card p-2.5"
       >
-        <span className="text-xs text-muted-foreground">
-          Enter this code at{' '}
-          <a href={phase.start.verificationUri} target="_blank" rel="noreferrer" className="text-primary underline">
-            {phase.start.verificationUri}
-          </a>
-        </span>
+        <span className="text-xs text-muted-foreground">Copy this code, then approve it on GitHub:</span>
         <div className="flex items-center gap-1.5">
           <span
             data-testid={`${testId}-code`}
@@ -148,6 +152,19 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
           >
             {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
           </button>
+          {/* One action, not three: GitHub has no verification_uri_complete, so
+              the code can't ride in the URL — copying it as we open the page is
+              the closest we get to a single click. */}
+          <Button
+            type="button"
+            size="sm"
+            data-testid={`${testId}-open`}
+            onClick={() => void openVerification(phase.start.userCode, phase.start.verificationUri)}
+            className="h-[26px] gap-1.5 px-2.5 text-xs"
+          >
+            <ExternalLink size={12} aria-hidden />
+            Copy &amp; open GitHub
+          </Button>
         </div>
         <span className="text-xs text-muted-foreground">Waiting for authorization…</span>
       </div>

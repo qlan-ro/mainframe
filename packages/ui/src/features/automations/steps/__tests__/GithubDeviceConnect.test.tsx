@@ -11,6 +11,9 @@ import { useAutomationsStore } from '../../data/use-automations-store';
 import { createFakeGateway as fakeGateway } from '../../data/__tests__/fake-gateway';
 import { ApiRequestError } from '@/lib/api/http';
 import { GithubDeviceConnect } from '../GithubDeviceConnect';
+import { openExternal } from '@/lib/tauri/bridge';
+
+vi.mock('@/lib/tauri/bridge', () => ({ openExternal: vi.fn(async () => {}) }));
 
 const START = {
   deviceCode: 'dc-1',
@@ -30,7 +33,7 @@ describe('GithubDeviceConnect', () => {
     vi.useRealTimers();
   });
 
-  it('starting shows the user code and verification URL', async () => {
+  it('starting shows the user code and the approve-on-GitHub action', async () => {
     const user = userEvent.setup({ delay: null });
     const startGithubDeviceFlow = vi.fn(async () => START);
     const pollGithubDeviceFlow = vi.fn(async () => ({ status: 'pending' as const }));
@@ -40,7 +43,7 @@ describe('GithubDeviceConnect', () => {
     await user.click(screen.getByTestId('automations-credential-a-connect'));
 
     expect(await screen.findByTestId('automations-credential-a-code')).toHaveTextContent('WDJB-MJHT');
-    expect(screen.getByText('https://github.com/login/device')).toBeInTheDocument();
+    expect(screen.getByTestId('automations-credential-a-open')).toBeInTheDocument();
   });
 
   it('a pending poll keeps polling at the given interval', async () => {
@@ -150,5 +153,26 @@ describe('GithubDeviceConnect', () => {
     const unavailable = await screen.findByTestId('automations-credential-a-unavailable');
     expect(unavailable).toHaveTextContent("GitHub connection isn't available yet");
     expect(unavailable).not.toHaveTextContent(/administrator/i);
+  });
+
+  it('copies the code and opens GitHub in the system browser from one click', async () => {
+    const user = userEvent.setup({ delay: null });
+    // jsdom exposes navigator.clipboard as a getter, and userEvent.setup()
+    // installs its own stub — so redefine after setup, not before.
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const startGithubDeviceFlow = vi.fn(async () => START);
+    const pollGithubDeviceFlow = vi.fn(async () => ({ status: 'pending' as const }));
+    useAutomationsStore.setState({ gateway: fakeGateway({ startGithubDeviceFlow, pollGithubDeviceFlow }) });
+    render(<GithubDeviceConnect onChange={vi.fn()} testId="automations-credential-a" />);
+
+    await user.click(screen.getByTestId('automations-credential-a-connect'));
+    await user.click(await screen.findByTestId('automations-credential-a-open'));
+
+    // One action has to do both, because GitHub has no verification_uri_complete
+    // to carry the code — and it must use the app's opener, not an anchor, or
+    // the user types GitHub credentials inside our webview.
+    expect(writeText).toHaveBeenCalledWith('WDJB-MJHT');
+    expect(vi.mocked(openExternal)).toHaveBeenCalledWith('https://github.com/login/device');
   });
 });
