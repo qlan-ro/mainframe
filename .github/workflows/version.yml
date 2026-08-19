@@ -33,7 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create or update version PR
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           title: 'chore: version packages'
           commit: 'chore: version packages'
