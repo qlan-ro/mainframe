@@ -217,10 +217,25 @@ impl AutomationsEngine {
     }
 
     pub async fn set_credential(&self, label: &str, token: String) -> Result<(), CredentialError> {
+        self.set_credential_full(label, token, None, None).await
+    }
+
+    /// Used by the GitHub device-flow route to persist a GitHub-App token's
+    /// refresh material alongside it; every other caller (a pasted PAT) goes
+    /// through `set_credential` above, which leaves both fields `None`.
+    pub async fn set_credential_full(
+        &self,
+        label: &str,
+        token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<i64>,
+    ) -> Result<(), CredentialError> {
         let creds = Credentials {
             kind: CredentialKind::Token,
             token,
             extra: None,
+            refresh_token,
+            expires_at,
         };
         self.credentials.set(label, creds).await
     }

@@ -39,6 +39,8 @@ impl CredentialStore for MutableCredentialStore {
                 kind: CredentialKind::Token,
                 token,
                 extra: None,
+                refresh_token: None,
+                expires_at: None,
             })
         })
     }

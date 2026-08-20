@@ -6,7 +6,9 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::actions::{ActionRegistry, register_all_actions};
-use crate::credentials::{CredentialKind, CredentialStore, Credentials, FileCredentialStore};
+use crate::credentials::{
+    CredentialKind, CredentialStore, Credentials, FileCredentialStore, RefreshingCredentialStore,
+};
 use crate::domain::{OutputAs, RunActionStep};
 use crate::engine::run_action_verb::{RunActionVerb, build_action_input};
 use crate::engine::test_support::{FakeClock, harness, text, token};
@@ -110,7 +112,10 @@ async fn missing_credential_fails_with_an_actionable_error() {
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        credentials,
+        Arc::new(RefreshingCredentialStore::new(
+            credentials,
+            Arc::new(FakeClock),
+        )),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,
@@ -189,6 +194,8 @@ async fn a_pre_migration_github_step_resolves_the_default_credential_label() {
                 kind: CredentialKind::Token,
                 token: "ghp_migrated".to_string(),
                 extra: None,
+                refresh_token: None,
+                expires_at: None,
             },
         )
         .await
@@ -196,7 +203,10 @@ async fn a_pre_migration_github_step_resolves_the_default_credential_label() {
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        credentials,
+        Arc::new(RefreshingCredentialStore::new(
+            credentials,
+            Arc::new(FakeClock),
+        )),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,
@@ -237,7 +247,10 @@ async fn a_pre_migration_github_step_with_no_connection_names_the_default_label(
     let automations = crate::store::AutomationStore::new(h.db.clone());
     let verb = RunActionVerb::new(
         Arc::new(registry),
-        credentials,
+        Arc::new(RefreshingCredentialStore::new(
+            credentials,
+            Arc::new(FakeClock),
+        )),
         Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
         h.store.clone(),
         automations,

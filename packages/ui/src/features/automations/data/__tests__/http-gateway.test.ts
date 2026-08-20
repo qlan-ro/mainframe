@@ -41,6 +41,7 @@ vi.mock('@/lib/api/automations', () => ({
   deleteAutomationCredential: vi.fn(),
   startGithubDeviceFlow: vi.fn(),
   pollGithubDeviceFlow: vi.fn(),
+  getGithubDeviceFlowStatus: vi.fn(),
 }));
 
 import * as api from '@/lib/api/automations';

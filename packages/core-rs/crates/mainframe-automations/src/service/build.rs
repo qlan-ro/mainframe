@@ -4,6 +4,7 @@
 use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::actions::{ActionRegistry, register_all_actions};
+use crate::credentials::RefreshingCredentialStore;
 use crate::engine::{AgentVerb, Interpreter, InterpreterDeps, NotifyVerb, RunActionVerb};
 use crate::error::StoreError;
 use crate::interactions::{AskMeVerb, InteractionService};
@@ -34,6 +35,13 @@ pub(super) async fn build(
         }
     };
     let credentials = config.credentials;
+    // Only the execution path needs expiry-refresh — the admin/UI accessor
+    // (`AutomationsEngine::credentials()`) and webhook secrets keep reading
+    // `credentials` raw.
+    let refreshing_credentials = Arc::new(RefreshingCredentialStore::new(
+        credentials.clone(),
+        ports.clock.clone(),
+    ));
 
     let agent_verb = AgentVerb::new(ports.agent, runs.clone(), ports.events.clone());
     let verb_ports = EngineVerbPorts {
@@ -48,7 +56,7 @@ pub(super) async fn build(
         notify: NotifyVerb::new(runs.clone(), automations.clone(), ports.notifier.clone()),
         run_action: RunActionVerb::new(
             registry.clone(),
-            credentials.clone(),
+            refreshing_credentials,
             ports.projects.clone(),
             runs.clone(),
             automations.clone(),

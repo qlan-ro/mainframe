@@ -1,18 +1,24 @@
-//! GitHub OAuth device flow routes (2026-08-19 provider-connections plan,
-//! Deliverable 3) — the one connector that gets a real OAuth flow. `start`
-//! and `poll` each make exactly one call to GitHub; the client (the editor's
-//! connect UI) owns the interval-respecting retry loop. A successful poll
-//! persists the token under the well-known `github` credential label and
-//! never echoes it back — same rule as `PUT /api/automation-credentials`.
+//! GitHub App device flow routes (2026-08-19 provider-connections plan,
+//! Deliverable 3; token-refresh fields added by the GitHub-App-with-refresh
+//! plan) — the one connector that gets a real OAuth flow. `start` and `poll`
+//! each make exactly one call to GitHub; the client (the editor's connect
+//! UI) owns the interval-respecting retry loop. A successful poll persists
+//! the token (plus, for a GitHub App, its refresh token and expiry) under
+//! the well-known `github` credential label and never echoes it back — same
+//! rule as `PUT /api/automation-credentials`. `device/status` is a separate,
+//! no-op-cheap route the UI probes on mount to decide whether to offer the
+//! sign-in-with-GitHub button alongside the always-available token field
+//! (`GithubCredentialConnect.tsx`) — it never touches GitHub.
 
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::routing::post;
+use axum::routing::{get, post};
 use mainframe_automations::AutomationsEngine;
 use mainframe_automations::github_device::{
     DeviceFlowError, DeviceStart, GithubDeviceFlow, PollOutcome,
@@ -26,6 +32,17 @@ use crate::routes::automations::{engine, unavailable};
 use crate::routes::projects::parse_body;
 
 const GITHUB_CREDENTIAL_LABEL: &str = "github";
+
+async fn device_flow_status() -> Response {
+    device_flow_status_for(&GithubDeviceFlow::new()).await
+}
+
+/// Split from the handler so a test can pin the unconfigured contract with an
+/// injected client ID instead of depending on this repo's own app never being
+/// registered.
+async fn device_flow_status_for(flow: &GithubDeviceFlow) -> Response {
+    ok(json!({ "configured": flow.is_configured() }))
+}
 
 async fn start_device_flow(State(ctx): State<Arc<AppCtx>>) -> Response {
     if engine(&ctx).is_none() {
@@ -83,8 +100,16 @@ async fn poll_and_respond(
     engine: &AutomationsEngine,
 ) -> Response {
     match flow.poll_once(device_code).await {
-        Ok(PollOutcome::Connected { token }) => {
-            match engine.set_credential(GITHUB_CREDENTIAL_LABEL, token).await {
+        Ok(PollOutcome::Connected {
+            token,
+            expires_in,
+            refresh_token,
+        }) => {
+            let expires_at = expires_in.map(epoch_ms_after);
+            match engine
+                .set_credential_full(GITHUB_CREDENTIAL_LABEL, token, refresh_token, expires_at)
+                .await
+            {
                 Ok(()) => ok(json!({ "status": "connected" })),
                 Err(err) => {
                     tracing::error!(error = %err, "failed to persist the GitHub device-flow token");
@@ -106,8 +131,22 @@ async fn poll_and_respond(
     }
 }
 
+/// Wall-clock ms this many seconds from now, for a GitHub-App token's
+/// `expires_at` — GitHub reports expiry as a duration, not an instant.
+fn epoch_ms_after(seconds: u64) -> i64 {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    now_ms + seconds as i64 * 1000
+}
+
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
+        .route(
+            "/api/automation-credentials/github/device/status",
+            get(device_flow_status),
+        )
         .route(
             "/api/automation-credentials/github/device/start",
             post(start_device_flow),

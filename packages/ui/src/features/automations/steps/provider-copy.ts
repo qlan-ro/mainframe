@@ -13,11 +13,12 @@ export interface ProviderCopy {
 }
 
 export const PROVIDER_COPY: Record<string, ProviderCopy> = {
-  // No description/link: GitHub connects via device flow (`GithubDeviceConnect`),
-  // which owns its own explanatory copy — this entry exists only so the
-  // display name resolves to "GitHub", not the raw storage label.
   github: {
     displayName: 'GitHub',
+    description:
+      'Needs a personal access token that can create and list pull requests — classic tokens need the repo scope; fine-grained tokens need Contents: Read and write and Pull requests: Read and write.',
+    linkLabel: 'Create a GitHub personal access token',
+    linkHref: 'https://github.com/settings/tokens',
   },
   notion: {
     displayName: 'Notion',

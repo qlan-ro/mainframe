@@ -22,6 +22,8 @@ async fn credentials_accessor_sees_writes_made_through_the_engine_instance() {
                 kind: CredentialKind::Token,
                 token: "ghp_test".to_string(),
                 extra: None,
+                refresh_token: None,
+                expires_at: None,
             },
         )
         .await

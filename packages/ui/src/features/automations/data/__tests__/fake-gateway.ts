@@ -47,6 +47,7 @@ export function createFakeGateway(overrides: Partial<AutomationsGateway> = {}): 
     pollGithubDeviceFlow: async () => {
       throw new Error('not implemented');
     },
+    githubDeviceFlowStatus: async () => ({ configured: false }),
     onEvent: () => () => {},
     ...overrides,
   };

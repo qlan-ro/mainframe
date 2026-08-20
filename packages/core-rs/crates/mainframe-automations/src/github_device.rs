@@ -1,29 +1,45 @@
-//! GitHub OAuth device flow (2026-08-19 provider-connections plan,
-//! Deliverable 3) — the one provider that gets real OAuth, because device
-//! flow's token exchange needs only `client_id`, `device_code`, and
-//! `grant_type`; GitHub's docs state the client secret is "not needed for
-//! the device flow". No redirect URI, no PKCE, no `state` — none of that
-//! applies to a flow that never redirects.
+//! GitHub App device flow (2026-08-19 provider-connections plan, Deliverable
+//! 3; reversed from OAuth App to GitHub App for token refresh — 2026-08-19
+//! GitHub-App-with-refresh plan). Device flow's token exchange needs only
+//! `client_id`, `device_code`, and `grant_type`; GitHub's docs state the
+//! client secret is "not needed for the device flow". No redirect URI, no
+//! PKCE, no `state` — none of that applies to a flow that never redirects.
 //!
-//! `GITHUB_OAUTH_CLIENT_ID` is the single place the registered OAuth App's
+//! **Load-bearing fact:** GitHub's refresh-token docs list `client_secret`
+//! as "Required unless the user access token was generated using the device
+//! flow." Because token generation here IS device flow, `credentials::
+//! refreshing` can refresh with `client_id` alone — no secret ships in the
+//! binary. Moving token generation off device flow would make refresh start
+//! requiring a secret, and the no-secret design collapses.
+//!
+//! `GITHUB_APP_CLIENT_ID` is the single place the registered GitHub App's
 //! client ID goes once it exists; empty means "not configured yet" and
 //! `start()` reports that explicitly rather than making a doomed request.
 //!
 //! `poll_once` makes exactly one probe against GitHub's token endpoint and
 //! maps the response to a `PollOutcome` — it does not loop or sleep itself.
 //! The caller (the daemon route) drives the interval; `SlowDown` carries the
-//! new interval GitHub asked for, per the docs' "5 extra seconds" rule.
+//! new interval GitHub asked for, per the docs' "5 extra seconds" rule. A
+//! GitHub App's response additionally carries `expires_in`/`refresh_token`
+//! (a plain OAuth App's does not) — `Connected` carries both as optional so
+//! the route can persist them without this module caring which app kind is
+//! configured.
 
 use serde::Deserialize;
 
 use crate::USER_AGENT;
 
-/// Set this once the GitHub OAuth App (device flow enabled) is registered —
-/// see the daemon operator docs. Empty = device flow is unavailable.
-pub const GITHUB_OAUTH_CLIENT_ID: &str = "";
+/// The registered GitHub App's client ID. Public by design — it ships in the
+/// binary and identifies the app on GitHub's consent screen; the secret it is
+/// paired with never leaves GitHub, because device flow does not use one.
+/// Empty = device flow is unavailable and the editor falls back to the token
+/// field.
+pub const GITHUB_APP_CLIENT_ID: &str = "Iv23liJciR5mmjd0cFYE";
 
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
-const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+/// Also the refresh-token endpoint (`credentials::refreshing`) — GitHub
+/// reuses one token endpoint for both the initial exchange and refresh.
+pub(crate) const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
 const GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +62,7 @@ struct DeviceStartBody {
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum DeviceFlowError {
-    #[error("GitHub connection isn't set up yet — no OAuth App client ID is configured")]
+    #[error("GitHub connection isn't set up yet — no GitHub App client ID is configured")]
     NotConfigured,
     #[error("GitHub device flow request failed: {0}")]
     Network(String),
@@ -60,13 +76,17 @@ pub enum DeviceFlowError {
 pub enum PollOutcome {
     Connected {
         token: String,
+        /// Seconds until the token expires — set for a GitHub App user
+        /// token (8h), absent for a plain OAuth App token (never expires).
+        expires_in: Option<u64>,
+        /// Present alongside `expires_in` on a GitHub App token; absent
+        /// means the caller must not attempt to refresh this credential.
+        refresh_token: Option<String>,
     },
     /// The user hasn't entered the code yet — keep polling at `interval`.
     Pending,
     /// Poll faster than allowed; wait `new_interval` seconds from now on.
-    SlowDown {
-        new_interval: u64,
-    },
+    SlowDown { new_interval: u64 },
     /// The device/user code expired (15 minutes) — start over.
     Expired,
     /// The user clicked cancel.
@@ -84,7 +104,14 @@ pub struct GithubDeviceFlow {
 
 impl GithubDeviceFlow {
     pub fn new() -> Self {
-        Self::with_urls(DEVICE_CODE_URL, TOKEN_URL, GITHUB_OAUTH_CLIENT_ID)
+        Self::with_urls(DEVICE_CODE_URL, TOKEN_URL, GITHUB_APP_CLIENT_ID)
+    }
+
+    /// Whether a GitHub App client ID is registered — the UI's signal for
+    /// whether to offer sign-in-with-GitHub alongside the always-available
+    /// pasted-token path (`GithubCredentialConnect.tsx`).
+    pub fn is_configured(&self) -> bool {
+        !self.client_id.is_empty()
     }
 
     pub fn with_urls(
@@ -166,13 +193,19 @@ struct PollBody {
     access_token: Option<String>,
     error: Option<String>,
     interval: Option<u64>,
+    expires_in: Option<u64>,
+    refresh_token: Option<String>,
 }
 
 fn parse_poll_response(body: &str) -> Result<PollOutcome, DeviceFlowError> {
     let parsed: PollBody = serde_json::from_str(body)
         .map_err(|err| DeviceFlowError::UnexpectedResponse(format!("{err}: {body}")))?;
     if let Some(token) = parsed.access_token {
-        return Ok(PollOutcome::Connected { token });
+        return Ok(PollOutcome::Connected {
+            token,
+            expires_in: parsed.expires_in,
+            refresh_token: parsed.refresh_token,
+        });
     }
     Ok(match parsed.error.as_deref() {
         Some("authorization_pending") => PollOutcome::Pending,

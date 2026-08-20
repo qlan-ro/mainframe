@@ -29,6 +29,27 @@ pub(super) fn parse_json<T: serde::de::DeserializeOwned>(
         .map_err(|err| ActionError(format!("{op} failed: unexpected response ({err})")))
 }
 
+/// A GitHub App must be INSTALLED on a repo/org, not just authorized — a
+/// user can finish device flow and still get a bare 404 from every repo
+/// endpoint if installation never happened. A 404 against a GitHub-App-
+/// issued token (`expires_at` set — a pasted PAT has no such concept) is
+/// mapped to this actionable message instead of the generic `http_failure`;
+/// a real "repo doesn't exist" 404 reads identically from the HTTP layer,
+/// but "app not installed" is by far the likelier cause for a token this
+/// connector itself just minted.
+fn not_installed_error(op: &str, repo: &str) -> ActionError {
+    let org = repo.split('/').next().unwrap_or(repo);
+    ActionError(format!(
+        "{op} failed: Mainframe isn't installed on '{org}' — install it at https://github.com/settings/installations"
+    ))
+}
+
+fn is_app_issued(ctx: &ActionCtx) -> bool {
+    ctx.creds
+        .as_ref()
+        .is_some_and(|creds| creds.expires_at.is_some())
+}
+
 /// `owner/repo`, the only shape a `/repos/<repo>/…` path segment can take.
 /// Rejecting anything else keeps a user-supplied value from reshaping the
 /// endpoint path (extra segments, `..`, a query string).
@@ -166,6 +187,9 @@ impl Action for GithubCreatePrAction {
                 .text()
                 .await
                 .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
+            if status == 404 && is_app_issued(ctx) {
+                return Err(not_installed_error(OP, &input.repo));
+            }
             if status >= 400 {
                 return Err(http_failure(OP, status, ctx, &body));
             }
