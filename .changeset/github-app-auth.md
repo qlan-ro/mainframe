@@ -1,6 +1,6 @@
 ---
-'@qlan-ro/mainframe-types': minor
-'@qlan-ro/mainframe-ui': minor
+'@qlan-ro/mainframe-types': patch
+'@qlan-ro/mainframe-ui': patch
 ---
 
 Connect GitHub by signing in, or by pasting a token.
