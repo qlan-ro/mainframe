@@ -16,10 +16,6 @@ import { clampSidebarWidth } from '@/components/ui/sidebar';
 /** Matches the v2 sidebar's `SIDEBAR_WIDTH` (16rem) — the un-dragged default. */
 const SIDEBAR_DEFAULT_WIDTH = 256;
 
-/** The collapsible sidebar sections. Only Projects survived the v2 shell —
- *  Sessions/Tasks scroll as one region and Tags lives in the footer now. */
-export type SidebarSection = 'projects';
-
 /** The rail's independent stacked panels, in rail/stack order. Declared here
  *  rather than in `features/session-panel/` because this store persists their
  *  open-state and `store/` must not import from `features/`. */
@@ -61,13 +57,8 @@ export function isSessionPanelSectionOpen(sections: SessionPanelSections, id: Se
 interface UiPrefsState {
   sidebarVisible: boolean;
   sidebarWidth: number;
-  /** Once true, the one-time "Right-click for options" pill hint is suppressed for good. */
-  rightClickHintDismissed: boolean;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
   dontWarnOnTuningChange: boolean;
-  /** Per-section collapse state for the left sidebar's four root sections.
-   *  Absent keys read as expanded (false) — see isSidebarSectionCollapsed. */
-  collapsedSidebarSections: Partial<Record<SidebarSection, boolean>>;
   /** Which stacked panels are open. This store is the sole owner — absent keys
    *  read as the panel's default; see isSessionPanelOpen. */
   sessionPanelOpen: SessionPanelOpen;
@@ -77,21 +68,11 @@ interface UiPrefsState {
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
-  dismissRightClickHint: () => void;
   dismissTuningChangeWarning: () => void;
-  toggleSidebarSection: (section: SidebarSection) => void;
   toggleSessionPanel: (id: SessionPanelId) => void;
   /** Idempotent open — for controls that navigate to a panel's content. */
   openSessionPanel: (id: SessionPanelId) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
-}
-
-/** Selector helper: a section with no recorded state is expanded by default. */
-export function isSidebarSectionCollapsed(
-  collapsed: Partial<Record<SidebarSection, boolean>>,
-  section: SidebarSection,
-): boolean {
-  return collapsed[section] ?? false;
 }
 
 /** The persisted subset. */
@@ -99,9 +80,7 @@ function partializeUiPrefs(s: UiPrefsState) {
   return {
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
-    rightClickHintDismissed: s.rightClickHintDismissed,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
-    collapsedSidebarSections: s.collapsedSidebarSections,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
   };
@@ -114,23 +93,13 @@ export const useUiPrefs = create<UiPrefsState>()(
     (set) => ({
       sidebarVisible: true,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-      rightClickHintDismissed: false,
       dontWarnOnTuningChange: false,
-      collapsedSidebarSections: {},
       sessionPanelOpen: {},
       sessionPanelSections: {},
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
-      dismissRightClickHint: () => set({ rightClickHintDismissed: true }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
-      toggleSidebarSection: (section) =>
-        set((s) => ({
-          collapsedSidebarSections: {
-            ...s.collapsedSidebarSections,
-            [section]: !isSidebarSectionCollapsed(s.collapsedSidebarSections, section),
-          },
-        })),
       toggleSessionPanel: (id) =>
         set((s) => ({
           sessionPanelOpen: { ...s.sessionPanelOpen, [id]: !isSessionPanelOpen(s.sessionPanelOpen, id) },
@@ -146,10 +115,10 @@ export const useUiPrefs = create<UiPrefsState>()(
     }),
     {
       name: 'mf:ui-prefs',
-      version: 5,
+      version: 6,
       partialize: partializeUiPrefs,
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 5 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 6 || persisted === null || typeof persisted !== 'object') {
           return persisted as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
@@ -168,19 +137,25 @@ export const useUiPrefs = create<UiPrefsState>()(
           delete next.inspectorVisible;
           delete next.workspaceFilesCollapsed;
         }
-        // v5 split Activity/Launch out of the session card into stacked panels:
-        // their old section bits become panel bits, and the whole-card collapse
-        // becomes the session panel's own open bit.
-        const sections = { ...(next.sessionPanelSections as Record<string, unknown> | undefined) };
-        next.sessionPanelOpen = {
-          ...(typeof sections.activity === 'boolean' ? { activity: sections.activity } : {}),
-          ...(typeof sections.launch === 'boolean' ? { launch: sections.launch } : {}),
-          ...(next.sessionPanelCollapsed === true ? { session: false } : {}),
-        };
-        delete sections.activity;
-        delete sections.launch;
-        next.sessionPanelSections = sections;
-        delete next.sessionPanelCollapsed;
+        if (version < 5) {
+          // v5 split Activity/Launch out of the session card into stacked panels:
+          // their old section bits become panel bits, and the whole-card collapse
+          // becomes the session panel's own open bit.
+          const sections = { ...(next.sessionPanelSections as Record<string, unknown> | undefined) };
+          next.sessionPanelOpen = {
+            ...(typeof sections.activity === 'boolean' ? { activity: sections.activity } : {}),
+            ...(typeof sections.launch === 'boolean' ? { launch: sections.launch } : {}),
+            ...(next.sessionPanelCollapsed === true ? { session: false } : {}),
+          };
+          delete sections.activity;
+          delete sections.launch;
+          next.sessionPanelSections = sections;
+          delete next.sessionPanelCollapsed;
+        }
+        // v6 replaced the Projects section with the scope-selector dropdown: no
+        // collapsible sidebar sections and no right-click affordance remain.
+        delete next.collapsedSidebarSections;
+        delete next.rightClickHintDismissed;
         return next as PersistedUiPrefs;
       },
     },

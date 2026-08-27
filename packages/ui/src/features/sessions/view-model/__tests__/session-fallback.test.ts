@@ -5,7 +5,12 @@ import { describe, it, expect } from 'vitest';
 import type { SessionItem } from '../chat-to-thread-custom';
 import { pickArchiveFallback } from '../session-fallback';
 
-function item(id: string, updatedAt: number, projectId: string, status: 'regular' | 'archived' = 'regular'): SessionItem {
+function item(
+  id: string,
+  updatedAt: number,
+  projectId: string,
+  status: 'regular' | 'archived' = 'regular',
+): SessionItem {
   return {
     id,
     remoteId: id,
@@ -28,24 +33,31 @@ function item(id: string, updatedAt: number, projectId: string, status: 'regular
 describe('pickArchiveFallback', () => {
   it('picks the most-recently-updated non-archived session', () => {
     const items = [item('a', 3000, 'p1', 'archived'), item('b', 1000, 'p1'), item('c', 2000, 'p1')];
-    expect(pickArchiveFallback(items, null, null)).toBe('c');
+    expect(pickArchiveFallback(items, new Set(), null)).toBe('c');
   });
 
   it('prefers the last-used session when it is still live', () => {
     const items = [item('b', 1000, 'p1'), item('c', 2000, 'p1')];
     // preferred matches remoteId 'b' even though 'c' is newer.
-    expect(pickArchiveFallback(items, null, 'b')).toBe('b');
+    expect(pickArchiveFallback(items, new Set(), 'b')).toBe('b');
   });
 
-  it('stays within the active project filter, widening only when it has none left', () => {
+  it('stays within the active project scope, widening only when it has none left', () => {
     const items = [item('a', 4000, 'p1', 'archived'), item('b', 1000, 'p1'), item('other', 9000, 'p2')];
-    expect(pickArchiveFallback(items, 'p1', null)).toBe('b');
+    expect(pickArchiveFallback(items, new Set(['p1']), null)).toBe('b');
     // p3 has no sessions → widen to the newest overall non-archived.
-    expect(pickArchiveFallback(items, 'p3', null)).toBe('other');
+    expect(pickArchiveFallback(items, new Set(['p3']), null)).toBe('other');
+  });
+
+  it('stays within a two-project scope, widening only when both have none left', () => {
+    const items = [item('a', 4000, 'p1', 'archived'), item('b', 1000, 'p2'), item('other', 9000, 'p3')];
+    expect(pickArchiveFallback(items, new Set(['p1', 'p2']), null)).toBe('b');
+    // Neither p4 nor p5 has sessions → widen to the newest overall non-archived.
+    expect(pickArchiveFallback(items, new Set(['p4', 'p5']), null)).toBe('other');
   });
 
   it('returns null when nothing non-archived remains', () => {
     const items = [item('a', 4000, 'p1', 'archived')];
-    expect(pickArchiveFallback(items, null, null)).toBeNull();
+    expect(pickArchiveFallback(items, new Set(), null)).toBeNull();
   });
 });

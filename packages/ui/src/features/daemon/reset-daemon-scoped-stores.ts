@@ -52,7 +52,7 @@ export function resetDaemonScopedStores(): void {
   });
 
   useSessionFilters.setState({
-    filterProjectId: null,
+    filterProjectIds: new Set<string>(),
     selectedTags: new Set<string>(),
     selectedSynthetic: new Set(),
   });

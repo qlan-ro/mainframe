@@ -35,7 +35,7 @@ function spyGateway(calls: (string | null | undefined)[]) {
 
 beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: undefined } as ReturnType<typeof useActiveIdentity>);
-  useSessionFilters.setState({ filterProjectId: null });
+  useSessionFilters.setState({ filterProjectIds: new Set() });
   // The store is module-global: a spy left installed by one test would answer
   // for every later one.
   useAutomationsStore.setState({ scopeProjectId: null, gateway: createFixtureGateway() });
@@ -113,7 +113,7 @@ it('holds no scope while closed, whatever the active session does, and takes the
   await vi.waitFor(() => expect(useAutomationsStore.getState().interactions.length).toBeGreaterThan(0));
   act(() => {
     vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
-    useSessionFilters.setState({ filterProjectId: 'proj-1' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });
   });
   expect(useAutomationsStore.getState().scopeProjectId).toBeNull();
   expect(calls).toEqual([]);

@@ -44,7 +44,7 @@ describe('filterArchivedSessions — keeps only items with status === "archived"
       item('c', 'regular', 'proj-1', BASE_UPDATED_AT),
     ];
 
-    const result = filterArchivedSessions(items, null);
+    const result = filterArchivedSessions(items, new Set());
 
     expect(result.map((i) => i.id)).toEqual(['a']);
   });
@@ -55,7 +55,7 @@ describe('filterArchivedSessions — keeps only items with status === "archived"
       item('y', 'archived', 'proj-1', BASE_UPDATED_AT + 1),
     ];
 
-    const result = filterArchivedSessions(items, null);
+    const result = filterArchivedSessions(items, new Set());
 
     // Both returned — order tested in the sort section below
     expect(result).toHaveLength(2);
@@ -64,19 +64,19 @@ describe('filterArchivedSessions — keeps only items with status === "archived"
   it('returns [] when no items are archived', () => {
     const items = [item('a', 'regular', 'proj-1', BASE_UPDATED_AT), item('b', 'regular', 'proj-2', BASE_UPDATED_AT)];
 
-    expect(filterArchivedSessions(items, null)).toEqual([]);
+    expect(filterArchivedSessions(items, new Set())).toEqual([]);
   });
 
   it('returns [] for an empty input', () => {
-    expect(filterArchivedSessions([], null)).toEqual([]);
+    expect(filterArchivedSessions([], new Set())).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// project narrowing when filterProjectId is provided
+// project narrowing when the scope is non-empty
 // ---------------------------------------------------------------------------
 
-describe('filterArchivedSessions — narrows by projectId when filterProjectId is not null', () => {
+describe('filterArchivedSessions — narrows by project when the scope is non-empty', () => {
   it('keeps only archived items matching the given projectId', () => {
     const items = [
       item('a', 'archived', 'proj-1', BASE_UPDATED_AT + 3),
@@ -85,15 +85,28 @@ describe('filterArchivedSessions — narrows by projectId when filterProjectId i
       item('d', 'regular', 'proj-1', BASE_UPDATED_AT),
     ];
 
-    const result = filterArchivedSessions(items, 'proj-1');
+    const result = filterArchivedSessions(items, new Set(['proj-1']));
 
     expect(result.map((i) => i.id)).toEqual(['a', 'c']);
   });
 
-  it('returns [] when the projectId matches no archived items', () => {
+  it('returns [] when the scoped project matches no archived items', () => {
     const items = [item('a', 'archived', 'proj-2', BASE_UPDATED_AT), item('b', 'regular', 'proj-1', BASE_UPDATED_AT)];
 
-    expect(filterArchivedSessions(items, 'proj-1')).toEqual([]);
+    expect(filterArchivedSessions(items, new Set(['proj-1']))).toEqual([]);
+  });
+
+  it('keeps archived items from either of two scoped projects', () => {
+    const items = [
+      item('a', 'archived', 'proj-1', BASE_UPDATED_AT + 3),
+      item('b', 'archived', 'proj-2', BASE_UPDATED_AT + 2),
+      item('c', 'archived', 'proj-3', BASE_UPDATED_AT + 1),
+      item('d', 'regular', 'proj-1', BASE_UPDATED_AT),
+    ];
+
+    const result = filterArchivedSessions(items, new Set(['proj-1', 'proj-2']));
+
+    expect(result.map((i) => i.id)).toEqual(['a', 'b']);
   });
 });
 
@@ -109,19 +122,19 @@ describe('filterArchivedSessions — sorts by custom.updatedAt descending', () =
       item('middle', 'archived', 'proj-1', 200),
     ];
 
-    const result = filterArchivedSessions(items, null);
+    const result = filterArchivedSessions(items, new Set());
 
     expect(result.map((i) => i.id)).toEqual(['newest', 'middle', 'oldest']);
   });
 
-  it('applies project filter before sorting (proj-1 only, desc)', () => {
+  it('applies the project scope before sorting (proj-1 only, desc)', () => {
     const items = [
       item('p2-late', 'archived', 'proj-2', 900),
       item('p1-early', 'archived', 'proj-1', 100),
       item('p1-late', 'archived', 'proj-1', 800),
     ];
 
-    const result = filterArchivedSessions(items, 'proj-1');
+    const result = filterArchivedSessions(items, new Set(['proj-1']));
 
     expect(result.map((i) => i.id)).toEqual(['p1-late', 'p1-early']);
   });

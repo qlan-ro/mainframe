@@ -20,14 +20,14 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { ArchivedSessionsDialog } from './ArchivedSessionsDialog';
 import { ImportSessionsDialog } from './ImportSessionsDialog';
 
 export function SessionsMoreMenu() {
   const port = useDaemonPort();
   const { projects } = useProjects();
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
   const [importOpen, setImportOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
@@ -70,14 +70,14 @@ export function SessionsMoreMenu() {
         onOpenChange={setArchivedOpen}
         port={port}
         projects={projects}
-        filterProjectId={filterProjectId}
+        filterProjectIds={filterProjectIds}
       />
       <ImportSessionsDialog
         open={importOpen}
         onOpenChange={setImportOpen}
         port={port}
         projects={projects}
-        filterProjectId={filterProjectId}
+        filterProjectId={soleProjectId(filterProjectIds)}
       />
     </>
   );

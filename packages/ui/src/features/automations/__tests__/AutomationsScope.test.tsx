@@ -127,7 +127,7 @@ async function openPicker(testId: string) {
 
 beforeEach(() => {
   vi.mocked(useActiveIdentity).mockReturnValue({ projectId: undefined } as ReturnType<typeof useActiveIdentity>);
-  useSessionFilters.setState({ filterProjectId: null });
+  useSessionFilters.setState({ filterProjectIds: new Set() });
   useAutomationsNav.setState({
     open: false,
     editorTarget: null,
@@ -152,7 +152,7 @@ afterEach(() => {
 describe('AutomationsHost — session in A, filter on B', () => {
   it('lists B’s automations plus the unscoped one, and names B', async () => {
     vi.mocked(useActiveIdentity).mockReturnValue({ projectId: 'proj-1' } as ReturnType<typeof useActiveIdentity>);
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
     useAutomationsNav.setState({ open: true });
 
     renderHost();
@@ -171,7 +171,7 @@ describe('AutomationsHost — session in A, filter on B', () => {
 describe('AutomationsHost — the header picker', () => {
   it('re-scopes the library, drops the previous project’s rows, and leaves the sidebar filter untouched', async () => {
     const user = userEvent.setup();
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
     useAutomationsNav.setState({ open: true });
 
     renderHost();
@@ -186,7 +186,7 @@ describe('AutomationsHost — the header picker', () => {
     expect(screen.getByTestId('automations-project-picker')).toHaveTextContent('Mainframe');
 
     // AC5 — the sidebar filter never moves.
-    expect(useSessionFilters.getState().filterProjectId).toBe('proj-2');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
   });
 });
 
@@ -197,7 +197,7 @@ describe('AutomationsHost — the header picker', () => {
 describe('AutomationsHost — after an override made in the Kanban modal', () => {
   it('still opens on the sidebar filter’s project, not the board’s override', async () => {
     const user = userEvent.setup();
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
 
     render(
       <TooltipProvider>
@@ -226,7 +226,7 @@ describe('AutomationsHost — after an override made in the Kanban modal', () =>
 
 describe('AutomationsHost — a sub-view is open', () => {
   it('disables the picker, then re-enables it on return to the library', async () => {
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
     useAutomationsNav.setState({ open: true });
 
     renderHost();
@@ -246,7 +246,7 @@ describe('AutomationsHost — a sub-view is open', () => {
     ['describe', { describeOpen: true }],
     ['details', { detailsAutomationId: 'auto-b' }],
   ])('stays disabled while %s owns the modal', async (_label, nav) => {
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
     useAutomationsNav.setState({ open: true });
 
     renderHost();
@@ -267,7 +267,7 @@ describe('AutomationsHost — creating an automation', () => {
     const user = userEvent.setup();
     const created: AutomationCreateInput[] = [];
     useAutomationsStore.setState({ gateway: stubGateway((input) => created.push(input)) });
-    useSessionFilters.setState({ filterProjectId: 'proj-2' });
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
     useAutomationsNav.setState({ open: true });
 
     renderHost();
@@ -303,7 +303,7 @@ describe('AutomationsHost — the sidebar’s pending badge', () => {
     const countAtBoot = useAutomationsStore.getState().interactions.length;
 
     act(() => {
-      useSessionFilters.setState({ filterProjectId: 'proj-2' });
+      useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) });
       useAutomationsNav.setState({ open: true });
     });
     await screen.findByTestId('automations-library-row-auto-b');

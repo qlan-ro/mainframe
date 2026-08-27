@@ -13,8 +13,8 @@ import { openNewThreadDraft, type OpenNewThreadDraftDeps } from '../open-new-thr
 
 function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThreadDraftDeps {
   return {
-    filterProjectId: null,
-    setFilterProjectId: vi.fn(),
+    filterProjectIds: new Set(),
+    clearProjectFilter: vi.fn(),
     runtimeThreads: {
       getState: vi.fn(() => ({ newThreadId: undefined, mainThreadId: null })),
       switchToNewThread: vi.fn(async () => {}),
@@ -29,9 +29,9 @@ function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThrea
 }
 
 describe('openNewThreadDraft — project filter clearing', () => {
-  it('clears the filter when it is set and differs from the target project', async () => {
+  it('clears the filter when the scope is set and does not contain the target project', async () => {
     const deps = makeDeps({
-      filterProjectId: 'proj-old',
+      filterProjectIds: new Set(['proj-old']),
       runtimeThreads: {
         getState: vi.fn(() => ({ newThreadId: 'id-1', mainThreadId: null })),
         switchToNewThread: vi.fn(async () => {}),
@@ -40,19 +40,31 @@ describe('openNewThreadDraft — project filter clearing', () => {
 
     await openNewThreadDraft({ projectId: 'proj-new' }, deps);
 
-    expect(deps.setFilterProjectId).toHaveBeenCalledWith(null);
+    expect(deps.clearProjectFilter).toHaveBeenCalledTimes(1);
   });
 
-  it('does not clear the filter when it is already null', async () => {
-    const deps = makeDeps({ filterProjectId: null });
+  it('does not clear the filter when the scope is empty', async () => {
+    const deps = makeDeps({ filterProjectIds: new Set() });
     await openNewThreadDraft({ projectId: 'proj-new' }, deps);
-    expect(deps.setFilterProjectId).not.toHaveBeenCalled();
+    expect(deps.clearProjectFilter).not.toHaveBeenCalled();
   });
 
-  it('does not clear the filter when it already matches the target project', async () => {
-    const deps = makeDeps({ filterProjectId: 'proj-new' });
+  it('does not clear the filter when the scope already contains the target project', async () => {
+    const deps = makeDeps({ filterProjectIds: new Set(['proj-new']) });
     await openNewThreadDraft({ projectId: 'proj-new' }, deps);
-    expect(deps.setFilterProjectId).not.toHaveBeenCalled();
+    expect(deps.clearProjectFilter).not.toHaveBeenCalled();
+  });
+
+  it('does not clear the filter when the target project is among several scoped projects', async () => {
+    const deps = makeDeps({ filterProjectIds: new Set(['proj-other', 'proj-new']) });
+    await openNewThreadDraft({ projectId: 'proj-new' }, deps);
+    expect(deps.clearProjectFilter).not.toHaveBeenCalled();
+  });
+
+  it('clears the filter when the scope names several projects, none of them the target', async () => {
+    const deps = makeDeps({ filterProjectIds: new Set(['proj-other', 'proj-another']) });
+    await openNewThreadDraft({ projectId: 'proj-new' }, deps);
+    expect(deps.clearProjectFilter).toHaveBeenCalledTimes(1);
   });
 });
 

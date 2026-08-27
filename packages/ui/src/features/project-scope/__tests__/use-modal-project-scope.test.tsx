@@ -8,7 +8,7 @@
  *
  * Behaviors covered:
  *  (a) open flips false → true seeds from the filter.
- *  (b) filterProjectId changes while open — scope does not follow it.
+ *  (b) the sidebar's project scope changes while open — scope does not follow it.
  *  (c) the active identity changes while open — scope does not follow it.
  *  (d) setProjectId overrides locally and never touches the sidebar filter
  *      store or its localStorage key.
@@ -68,12 +68,12 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 import { useModalProjectScope } from '../use-modal-project-scope';
 import { useSessionFilters } from '@/store/session-filters';
 
-const SCOPED_KEY = 'mf:filterProjectId::local';
+const SCOPED_KEY = 'mf:filterProjectIds::local';
 
 beforeEach(() => {
   setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
   useSessionFilters.setState({
-    filterProjectId: null,
+    filterProjectIds: new Set(),
     selectedTags: new Set(),
     selectedSynthetic: new Set(),
     sortMode: 'recent',
@@ -90,7 +90,7 @@ beforeEach(() => {
 
 describe('useModalProjectScope — open flips false to true', () => {
   it('seeds projectId from the sidebar filter', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
 
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: false },
@@ -102,6 +102,21 @@ describe('useModalProjectScope — open flips false to true', () => {
 
     expect(result.current.projectId).toBe('proj-a');
   });
+
+  it('does not resolve a project when the sidebar scope names two or more projects', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-b');
+
+    const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
+      initialProps: { open: false },
+    });
+
+    act(() => rerender({ open: true }));
+
+    // Ambiguous scope (soleProjectId returns null) falls through to the
+    // session/sole-project rule, which also has nothing to resolve here.
+    expect(result.current.projectId).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -110,14 +125,14 @@ describe('useModalProjectScope — open flips false to true', () => {
 
 describe('useModalProjectScope — the sidebar filter changes while the modal is open', () => {
   it('leaves the resolved projectId unchanged', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
     const { result } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
     });
     expect(result.current.projectId).toBe('proj-a');
 
     act(() => {
-      useSessionFilters.getState().setFilterProjectId('proj-b');
+      useSessionFilters.setState({ filterProjectIds: new Set(['proj-b']) });
     });
 
     expect(result.current.projectId).toBe('proj-a');
@@ -154,7 +169,7 @@ describe('useModalProjectScope — the active session project changes while the 
 
 describe('useModalProjectScope — setProjectId', () => {
   it('changes the returned projectId and leaves the sidebar filter store and its localStorage key untouched', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
     const { result } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
     });
@@ -165,8 +180,8 @@ describe('useModalProjectScope — setProjectId', () => {
     });
 
     expect(result.current.projectId).toBe('proj-b');
-    expect(useSessionFilters.getState().filterProjectId).toBe('proj-a');
-    expect(localStorage.getItem(SCOPED_KEY)).toBe('proj-a');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-a']));
+    expect(localStorage.getItem(SCOPED_KEY)).toBe('["proj-a"]');
   });
 });
 
@@ -176,7 +191,7 @@ describe('useModalProjectScope — setProjectId', () => {
 
 describe('useModalProjectScope — closing and reopening', () => {
   it('re-seeds from the filter current value, discarding a prior override', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
     });
@@ -190,7 +205,7 @@ describe('useModalProjectScope — closing and reopening', () => {
     act(() => rerender({ open: false }));
     expect(result.current.projectId).toBeNull();
 
-    useSessionFilters.getState().setFilterProjectId('proj-b');
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-b']) });
     act(() => rerender({ open: true }));
 
     expect(result.current.projectId).toBe('proj-b');
@@ -204,7 +219,7 @@ describe('useModalProjectScope — closing and reopening', () => {
 describe('useModalProjectScope — the project list is still empty at open-time', () => {
   it('seeds once from the resolved list and does not re-seed again afterward', () => {
     fakeProjects = [];
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
 
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
@@ -215,7 +230,7 @@ describe('useModalProjectScope — the project list is still empty at open-time'
     act(() => rerender({ open: true }));
     expect(result.current.projectId).toBe('proj-a');
 
-    useSessionFilters.getState().setFilterProjectId('proj-b');
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-b']) });
     act(() => rerender({ open: true }));
 
     expect(result.current.projectId).toBe('proj-a');
@@ -228,7 +243,7 @@ describe('useModalProjectScope — the project list is still empty at open-time'
 
 describe('useModalProjectScope — mounting with open already true', () => {
   it('seeds on the first render, not only on a later transition', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
 
     const { result } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
@@ -244,7 +259,7 @@ describe('useModalProjectScope — mounting with open already true', () => {
 
 describe('useModalProjectScope — a local pick made before the project list refreshes', () => {
   it('is not overwritten once the fresher list arrives', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
     });
@@ -269,7 +284,7 @@ describe('useModalProjectScope — a local pick made before the project list ref
 
 describe('useModalProjectScope — the sidebar filter changes before a pending reseed resolves', () => {
   it('reseeds against the values captured at open, not the live ones', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-a');
+    useSessionFilters.getState().toggleFilterProject('proj-a');
     fakeProjects = [];
     const { result, rerender } = renderHook(({ open }) => useModalProjectScope(open), {
       initialProps: { open: true },
@@ -278,7 +293,7 @@ describe('useModalProjectScope — the sidebar filter changes before a pending r
 
     // Sidebar filter moves to B in the background — a live re-read here would
     // leak it into an open modal, violating AC8.
-    useSessionFilters.getState().setFilterProjectId('proj-b');
+    useSessionFilters.setState({ filterProjectIds: new Set(['proj-b']) });
     fakeProjects = [makeProject('proj-a'), makeProject('proj-b')];
     act(() => rerender({ open: true }));
 
@@ -292,7 +307,7 @@ describe('useModalProjectScope — the sidebar filter changes before a pending r
 
 describe('useModalProjectScope — the rising edge of open', () => {
   it('reloads the project list once, and a project added while closed is seedable on the next open', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-c');
+    useSessionFilters.getState().toggleFilterProject('proj-c');
     // The seed filter points at a project this open's list doesn't know
     // about yet — the todo #326 Kanban blocker: added mid-session, invisible
     // until reloadProjects catches it up.

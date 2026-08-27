@@ -12,7 +12,8 @@ import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 
 export interface SessionFilters {
-  filterProjectId: string | null;
+  /** Project scope; empty = all projects. */
+  filterProjectIds: ReadonlySet<string>;
   selectedTags: Set<string>;
   selectedSynthetic: Set<SyntheticTag>;
 }
@@ -32,7 +33,7 @@ function matchesSynthetic(item: SessionItem, selectedSynthetic: Set<SyntheticTag
 
 export function applySessionFilters(items: SessionItem[], f: SessionFilters): SessionItem[] {
   return items.filter((item) => {
-    if (f.filterProjectId !== null && item.custom.projectId !== f.filterProjectId) return false;
+    if (f.filterProjectIds.size > 0 && !f.filterProjectIds.has(item.custom.projectId)) return false;
     if (!matchesTags(item, f.selectedTags)) return false;
     if (!matchesSynthetic(item, f.selectedSynthetic)) return false;
     return true;

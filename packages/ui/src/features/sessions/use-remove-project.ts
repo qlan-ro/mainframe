@@ -23,7 +23,7 @@ export function useRemoveProject(
   removeProjectFromList: (projectId: string) => void,
 ): (project: Project) => Promise<void> {
   const port = useDaemonPort();
-  const { filterProjectId, setFilterProjectId } = useSessionFilters();
+  const removeFilterProject = useSessionFilters((s) => s.removeFilterProject);
 
   return useCallback(
     async (project: Project) => {
@@ -39,7 +39,7 @@ export function useRemoveProject(
       try {
         await removeProject(port, project.id);
         removeProjectFromList(project.id);
-        if (filterProjectId === project.id) setFilterProjectId(null);
+        removeFilterProject(project.id);
         mfToast.success('Project removed', { description: project.name });
       } catch (error) {
         console.warn('[sessions] remove project failed', error);
@@ -48,6 +48,6 @@ export function useRemoveProject(
         });
       }
     },
-    [filterProjectId, port, removeProjectFromList, setFilterProjectId],
+    [port, removeProjectFromList, removeFilterProject],
   );
 }

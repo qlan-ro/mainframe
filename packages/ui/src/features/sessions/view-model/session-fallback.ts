@@ -16,9 +16,9 @@ import { pickInitialSession } from './initial-session';
 
 export function pickArchiveFallback(
   items: readonly SessionItem[],
-  filterProjectId: string | null,
+  projectIds: ReadonlySet<string>,
   preferredRemoteId?: string | null,
 ): string | null {
-  const inProject = filterProjectId != null ? items.filter((i) => i.custom.projectId === filterProjectId) : items;
+  const inProject = projectIds.size > 0 ? items.filter((i) => projectIds.has(i.custom.projectId)) : items;
   return pickInitialSession(inProject, preferredRemoteId) ?? pickInitialSession(items, preferredRemoteId);
 }

@@ -30,7 +30,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
@@ -94,7 +94,10 @@ export function ChatSurface() {
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const draftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.get(mainThreadId) : undefined));
   const { projects, loading } = useProjects();
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  // Paired with use-new-thread-auto-config's seed condition: both read the SOLE
+  // scoped project, so a multi-project scope can never show "Initializing…" for
+  // a seed that will not fire.
+  const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
   const initialization = useNewThreadReady((s) =>
     mainThreadId ? s.getInitialization(mainThreadId) : IDLE_INITIALIZATION,
   );

@@ -1,23 +1,25 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { setActiveDaemon } from '@/lib/daemon/active-daemon';
-import { useSessionFilters } from '../session-filters';
+import { useSessionFilters, soleProjectId } from '../session-filters';
 
-// The active daemon defaults to 'local', so the scoped key is 'mf:filterProjectId::local'.
-const SCOPED_KEY = 'mf:filterProjectId::local';
+// The active daemon defaults to 'local', so the scoped key is 'mf:filterProjectIds::local'.
+const SCOPED_KEY = 'mf:filterProjectIds::local';
+const OLD_SCOPED_KEY = 'mf:filterProjectId::local';
 
 // Reset the singleton store and localStorage between tests so each test starts
-// with a clean slate. Behavior 1 uses vi.resetModules() + dynamic import
-// instead, so this beforeEach covers behaviors 2–9 only.
+// with a clean slate. The initial-read-from-localStorage and old-key-migration
+// behaviors live in session-filters-migration.test.ts (they need vi.resetModules()).
 beforeEach(() => {
   setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
   useSessionFilters.setState({
-    filterProjectId: null,
+    filterProjectIds: new Set(),
     selectedTags: new Set(),
     selectedSynthetic: new Set(),
     sortMode: 'recent',
   });
   localStorage.removeItem(SCOPED_KEY);
+  localStorage.removeItem(OLD_SCOPED_KEY);
 });
 
 // ---------------------------------------------------------------------------
@@ -29,10 +31,6 @@ describe('session-filters — sortMode defaults to recent', () => {
     expect(useSessionFilters.getState().sortMode).toBe('recent');
   });
 });
-
-// ---------------------------------------------------------------------------
-// session-filters — setSortMode updates sortMode
-// ---------------------------------------------------------------------------
 
 describe('session-filters — setSortMode updates the sort mode', () => {
   it('sets sortMode to "name"', () => {
@@ -47,52 +45,121 @@ describe('session-filters — setSortMode updates the sort mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 1: initial filterProjectId reads localStorage
+// session-filters — filterProjectIds defaults to an empty set
 // ---------------------------------------------------------------------------
 
-describe('session-filters — initial filterProjectId reads localStorage on module import', () => {
-  it('initialises to the value seeded in localStorage before module load', async () => {
-    localStorage.setItem(SCOPED_KEY, 'proj-seed');
-    vi.resetModules();
-
-    const { useSessionFilters: freshStore } = await import('../session-filters');
-
-    expect(freshStore.getState().filterProjectId).toBe('proj-seed');
-
-    // Cleanup: remove the seeded key so subsequent tests start clean.
-    localStorage.removeItem(SCOPED_KEY);
+describe('session-filters — filterProjectIds defaults to an empty set', () => {
+  it('starts empty (meaning "all projects")', () => {
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
   });
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 2: setFilterProjectId writes state + localStorage
+// session-filters — toggleFilterProject
 // ---------------------------------------------------------------------------
 
-describe('session-filters — setFilterProjectId updates state and persists to localStorage', () => {
-  it('sets filterProjectId to proj-1 and writes proj-1 to localStorage under the scoped key', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-1');
+describe('session-filters — toggleFilterProject adds an absent id', () => {
+  it('adds proj-1 to an empty set', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-1']));
+  });
 
-    expect(useSessionFilters.getState().filterProjectId).toBe('proj-1');
-    expect(localStorage.getItem(SCOPED_KEY)).toBe('proj-1');
+  it('adds a second id alongside the first, keeping both', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-1', 'proj-2']));
+  });
+});
+
+describe('session-filters — toggleFilterProject removes a present id (round trip)', () => {
+  it('removes proj-1 on the second toggle, leaving an empty set', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
+  });
+
+  it('removing one id of two leaves the other in place', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
   });
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 3: setFilterProjectId(null) clears state + key
+// session-filters — clearProjectFilter
 // ---------------------------------------------------------------------------
 
-describe('session-filters — setFilterProjectId(null) clears state and removes localStorage key', () => {
-  it('sets filterProjectId to null and removes the scoped localStorage key', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-1');
-    useSessionFilters.getState().setFilterProjectId(null);
+describe('session-filters — clearProjectFilter empties the set', () => {
+  it('empties a two-id set and removes the scoped localStorage key', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
 
-    expect(useSessionFilters.getState().filterProjectId).toBe(null);
-    expect(localStorage.getItem(SCOPED_KEY)).toBe(null);
+    useSessionFilters.getState().clearProjectFilter();
+
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
+    expect(localStorage.getItem(SCOPED_KEY)).toBeNull();
+  });
+
+  it('is a no-op on an already-empty set', () => {
+    useSessionFilters.getState().clearProjectFilter();
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
   });
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 4: toggleTag adds a tag
+// session-filters — removeFilterProject
+// ---------------------------------------------------------------------------
+
+describe('session-filters — removeFilterProject', () => {
+  it('removes a present id, keeping the other scoped project', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
+
+    useSessionFilters.getState().removeFilterProject('proj-1');
+
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
+  });
+
+  it('is a no-op when the id is absent from the set', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+
+    useSessionFilters.getState().removeFilterProject('proj-missing');
+
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-1']));
+  });
+
+  it('is a no-op on an already-empty set', () => {
+    useSessionFilters.getState().removeFilterProject('proj-1');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// session-filters — filterProjectIds persistence
+// ---------------------------------------------------------------------------
+
+describe('session-filters — filterProjectIds persists to localStorage', () => {
+  it('writes a single id as a one-element JSON array', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    expect(localStorage.getItem(SCOPED_KEY)).toBe('["proj-1"]');
+  });
+
+  it('writes two ids as a two-element JSON array, in insertion order', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
+    expect(localStorage.getItem(SCOPED_KEY)).toBe('["proj-1","proj-2"]');
+  });
+
+  it('removes the localStorage key once the set becomes empty again, rather than writing "[]"', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    expect(localStorage.getItem(SCOPED_KEY)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// session-filters — toggleTag
 // ---------------------------------------------------------------------------
 
 describe('session-filters — toggleTag adds the tag to selectedTags', () => {
@@ -103,10 +170,6 @@ describe('session-filters — toggleTag adds the tag to selectedTags', () => {
     expect(useSessionFilters.getState().selectedTags.size).toBe(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// session-filters — Behavior 5: toggleTag removes on second call (toggle off)
-// ---------------------------------------------------------------------------
 
 describe('session-filters — toggleTag removes the tag on a second call', () => {
   it('selectedTags does not contain rust and has size 0 after two toggleTag calls', () => {
@@ -119,7 +182,7 @@ describe('session-filters — toggleTag removes the tag on a second call', () =>
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 6: toggleSynthetic adds has-pr
+// session-filters — toggleSynthetic
 // ---------------------------------------------------------------------------
 
 describe('session-filters — toggleSynthetic adds has-pr to selectedSynthetic', () => {
@@ -136,16 +199,8 @@ describe('session-filters — toggleSynthetic adds has-pr to selectedSynthetic',
   });
 });
 
-// ---------------------------------------------------------------------------
-// session-filters — Behavior 7: toggleSynthetic removes on second call
-// ---------------------------------------------------------------------------
-
 describe('session-filters — toggleSynthetic removes has-pr on a second call', () => {
   it('selectedSynthetic does not contain has-pr and has size 0 after two toggleSynthetic calls', () => {
-    // Guardrail: verify the literal values match the types package at runtime.
-    expect(SYNTHETIC_TAGS).toContain('has-pr');
-    expect(SYNTHETIC_TAGS).toContain('has-worktree');
-
     useSessionFilters.getState().toggleSynthetic('has-pr');
     useSessionFilters.getState().toggleSynthetic('has-pr');
 
@@ -155,34 +210,39 @@ describe('session-filters — toggleSynthetic removes has-pr on a second call', 
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 8: clearFilters resets all three fields
+// session-filters — clearFilters resets filterProjectIds, tags, and synthetic
 // ---------------------------------------------------------------------------
 
-describe('session-filters — clearFilters resets filterProjectId, selectedTags, and selectedSynthetic', () => {
-  it('all three fields are empty/null and scoped localStorage key is removed after clearFilters', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-1');
+describe('session-filters — clearFilters resets filterProjectIds, selectedTags, and selectedSynthetic', () => {
+  it('all three fields are empty and the scoped localStorage key is removed after clearFilters', () => {
+    useSessionFilters.getState().toggleFilterProject('proj-1');
+    useSessionFilters.getState().toggleFilterProject('proj-2');
     useSessionFilters.getState().toggleTag('go');
     useSessionFilters.getState().toggleSynthetic('has-worktree');
 
     useSessionFilters.getState().clearFilters();
 
-    expect(useSessionFilters.getState().filterProjectId).toBe(null);
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set());
     expect(useSessionFilters.getState().selectedTags.size).toBe(0);
     expect(useSessionFilters.getState().selectedSynthetic.size).toBe(0);
-    expect(localStorage.getItem(SCOPED_KEY)).toBe(null);
+    expect(localStorage.getItem(SCOPED_KEY)).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// session-filters — Behavior 9: setFilterProjectId cross-project update
+// soleProjectId — pure helper
 // ---------------------------------------------------------------------------
 
-describe('session-filters — setFilterProjectId updates from one project to another', () => {
-  it('state and scoped localStorage reflect proj-B after switching from proj-A', () => {
-    useSessionFilters.getState().setFilterProjectId('proj-A');
-    useSessionFilters.getState().setFilterProjectId('proj-B');
+describe('soleProjectId', () => {
+  it('returns null for an empty set', () => {
+    expect(soleProjectId(new Set())).toBeNull();
+  });
 
-    expect(useSessionFilters.getState().filterProjectId).toBe('proj-B');
-    expect(localStorage.getItem(SCOPED_KEY)).toBe('proj-B');
+  it('returns the id for a single-element set', () => {
+    expect(soleProjectId(new Set(['proj-1']))).toBe('proj-1');
+  });
+
+  it('returns null for a two-element set', () => {
+    expect(soleProjectId(new Set(['proj-1', 'proj-2']))).toBeNull();
   });
 });

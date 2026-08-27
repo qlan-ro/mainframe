@@ -11,9 +11,9 @@
  * initializeDraft) stays mocked, matching the sibling suite's harness.
  *
  * Behavior covered:
- *  1. A fresh __LOCALID_* draft with a project filter active and
+ *  1. A fresh __LOCALID_* draft with a one-project scope active and
  *     initializeDraft in flight: two re-renders that change nothing about
- *     localId/filterProjectId/the adapter catalog must not restart
+ *     localId/the project scope/the adapter catalog must not restart
  *     initialization (initializeDraft is called exactly once).
  *  2. The same scenario must not rewrite the useNewThreadReady store (state
  *     identity unchanged across the re-renders).
@@ -31,7 +31,7 @@ let fakeAuiState: FakeAuiState = {
   threadListItem: { id: '__LOCALID_x', status: 'new' },
   thread: { messages: [] },
 };
-let fakeFilterProjectId: string | null = 'proj-42';
+let fakeFilterProjectIds: Set<string> = new Set(['proj-42']);
 
 const initializeDraftSpy = vi.fn();
 let getDraftConfigResult: unknown = undefined;
@@ -58,8 +58,9 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 vi.mock('@/store/session-filters', () => ({
-  useSessionFilters: (selector: (s: { filterProjectId: string | null }) => unknown) =>
-    selector({ filterProjectId: fakeFilterProjectId }),
+  useSessionFilters: (selector: (s: { filterProjectIds: Set<string> }) => unknown) =>
+    selector({ filterProjectIds: fakeFilterProjectIds }),
+  soleProjectId: (ids: ReadonlySet<string>) => (ids.size === 1 ? [...ids][0]! : null),
 }));
 
 vi.mock('@/store/settings', () => ({
@@ -111,7 +112,7 @@ beforeEach(() => {
   initializeDraftSpy.mockReset();
   getDraftConfigResult = undefined;
   initializationGate = null;
-  fakeFilterProjectId = 'proj-42';
+  fakeFilterProjectIds = new Set(['proj-42']);
   fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [] } };
   resetAdapters();
   seedAdapters([

@@ -12,9 +12,10 @@
  *    setDraftConfig and setDraftConfig are the observable side-effects asserted.
  *
  * Behaviors covered:
- *  1. New local thread + filterProjectId set → setDraftConfig with the right config
- *     and the store's readyIds gains the localId.
- *  2. filterProjectId is null → setDraftConfig not called.
+ *  1. New local thread + a one-project scope → setDraftConfig with the right
+ *     config and the store's readyIds gains the localId.
+ *  2. The project scope is empty, or names two or more projects → setDraftConfig
+ *     not called (soleProjectId returns null in both cases).
  *  3. Thread is already ready → setDraftConfig not called.
  *  4. Draft already exists for localId → setDraftConfig not called (no overwrite).
  *  5. Not a __LOCALID_* id → setDraftConfig not called.
@@ -49,7 +50,7 @@ let fakeAuiState: FakeAuiState = {
   thread: { messages: [] },
 };
 
-let fakeFilterProjectId: string | null = null;
+let fakeFilterProjectIds: Set<string> = new Set();
 let fakeDefaultAdapterId: string | null = null;
 let fakeAdapters: { id: string; installed: boolean }[] = [];
 
@@ -78,8 +79,9 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 
 vi.mock('@/store/session-filters', () => ({
-  useSessionFilters: (selector: (s: { filterProjectId: string | null }) => unknown) =>
-    selector({ filterProjectId: fakeFilterProjectId }),
+  useSessionFilters: (selector: (s: { filterProjectIds: Set<string> }) => unknown) =>
+    selector({ filterProjectIds: fakeFilterProjectIds }),
+  soleProjectId: (ids: ReadonlySet<string>) => (ids.size === 1 ? [...ids][0]! : null),
 }));
 
 vi.mock('@/store/settings', () => ({
@@ -130,7 +132,7 @@ beforeEach(() => {
   setDraftConfigSpy.mockReset();
   getDraftConfigResult = undefined;
   initializationGate = null;
-  fakeFilterProjectId = null;
+  fakeFilterProjectIds = new Set();
   fakeDefaultAdapterId = null;
   fakeAdapters = [{ id: 'claude', installed: true }];
   fakeAuiState = {
@@ -150,7 +152,7 @@ function setLocalThreadWithProject(localId = '__LOCALID_x', projectId = 'proj-42
     threadListItem: { id: localId, status: 'new' },
     thread: { messages: [] },
   };
-  fakeFilterProjectId = projectId;
+  fakeFilterProjectIds = new Set([projectId]);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,10 +222,18 @@ describe('useNewThreadAutoConfig — project filter active on new local thread',
 
 const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] = [
   {
-    name: 'filterProjectId is null (All view)',
+    name: 'the project scope is empty (All view)',
     setup: () => {
       fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [] } };
-      fakeFilterProjectId = null;
+      fakeFilterProjectIds = new Set();
+    },
+    expectedReady: false,
+  },
+  {
+    name: 'the project scope names two or more projects (ambiguous)',
+    setup: () => {
+      fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [] } };
+      fakeFilterProjectIds = new Set(['proj-42', 'proj-43']);
     },
     expectedReady: false,
   },
@@ -247,7 +257,7 @@ const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] 
     name: 'the thread id is not a __LOCALID_* draft (a regular chat id)',
     setup: () => {
       fakeAuiState = { threadListItem: { id: 'chat-server-123', status: 'regular' }, thread: { messages: [] } };
-      fakeFilterProjectId = 'proj-42';
+      fakeFilterProjectIds = new Set(['proj-42']);
     },
     expectedReady: false,
   },
@@ -255,7 +265,7 @@ const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] 
     name: 'the thread status is not "new"',
     setup: () => {
       fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'regular' }, thread: { messages: [] } };
-      fakeFilterProjectId = 'proj-42';
+      fakeFilterProjectIds = new Set(['proj-42']);
     },
     expectedReady: false,
   },
@@ -263,7 +273,7 @@ const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] 
     name: 'the thread already has messages',
     setup: () => {
       fakeAuiState = { threadListItem: { id: '__LOCALID_x', status: 'new' }, thread: { messages: [{ id: 'm1' }] } };
-      fakeFilterProjectId = 'proj-42';
+      fakeFilterProjectIds = new Set(['proj-42']);
     },
     expectedReady: false,
   },

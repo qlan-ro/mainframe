@@ -14,7 +14,7 @@ import { renderHook } from '@testing-library/react';
 
 let __newThreadId: string | null = '__LOCALID_1';
 let __mainThreadId: string | null = 'chat-7';
-let __filterProjectId: string | null = null;
+let __filterProjectIds: Set<string> = new Set();
 let __initError: Error | null = null;
 
 const baseInitialize = async (_args: unknown) => {
@@ -23,7 +23,7 @@ const baseInitialize = async (_args: unknown) => {
 };
 
 const switchToNewThread = vi.fn();
-const setFilterProjectId = vi.fn();
+const clearProjectFilter = vi.fn();
 const resetNewThreadDraft = vi.fn((_newThreadId: string | null | undefined) => undefined);
 const initializeDraft = vi.fn(baseInitialize);
 const toastError = vi.fn((_message: string, _options?: { description: string }) => undefined);
@@ -42,7 +42,7 @@ vi.mock('@/lib/toast', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/store/session-filters', () => ({
   useSessionFilters: (selector: (s: unknown) => unknown) =>
-    selector({ filterProjectId: __filterProjectId, setFilterProjectId }),
+    selector({ filterProjectIds: __filterProjectIds, clearProjectFilter }),
 }));
 vi.mock('@/store/settings', () => ({
   useSettingsStore: (selector: (s: unknown) => unknown) => selector({ general: { defaultAdapterId: 'gemini' } }),
@@ -60,10 +60,10 @@ const select = () => renderHook(() => useSelectDraftProject()).result.current;
 beforeEach(() => {
   __newThreadId = '__LOCALID_1';
   __mainThreadId = 'chat-7';
-  __filterProjectId = null;
+  __filterProjectIds = new Set();
   __initError = null;
   switchToNewThread.mockReset();
-  setFilterProjectId.mockReset();
+  clearProjectFilter.mockReset();
   resetNewThreadDraft.mockReset();
   initializeDraft.mockReset();
   initializeDraft.mockImplementation(baseInitialize);
@@ -122,37 +122,45 @@ describe('useSelectDraftProject', () => {
   it('does nothing when there is no thread to scope', async () => {
     __newThreadId = null;
     __mainThreadId = null;
-    __filterProjectId = 'proj-a';
+    __filterProjectIds = new Set(['proj-a']);
 
     await select()('proj-b');
 
     expect(resetNewThreadDraft).not.toHaveBeenCalled();
     expect(initializeDraft).not.toHaveBeenCalled();
-    expect(setFilterProjectId).not.toHaveBeenCalled();
+    expect(clearProjectFilter).not.toHaveBeenCalled();
   });
 
   it('clears a project filter that points somewhere else', async () => {
-    __filterProjectId = 'proj-a';
+    __filterProjectIds = new Set(['proj-a']);
 
     await select()('proj-b');
 
-    expect(setFilterProjectId).toHaveBeenCalledExactlyOnceWith(null);
+    expect(clearProjectFilter).toHaveBeenCalledExactlyOnceWith();
   });
 
   it('keeps a project filter that already points at the picked project', async () => {
-    __filterProjectId = 'proj-b';
+    __filterProjectIds = new Set(['proj-b']);
 
     await select()('proj-b');
 
-    expect(setFilterProjectId).not.toHaveBeenCalled();
+    expect(clearProjectFilter).not.toHaveBeenCalled();
+  });
+
+  it('does not clear when the picked project is among several scoped projects', async () => {
+    __filterProjectIds = new Set(['proj-a', 'proj-b']);
+
+    await select()('proj-b');
+
+    expect(clearProjectFilter).not.toHaveBeenCalled();
   });
 
   it('leaves the "All projects" view alone', async () => {
-    __filterProjectId = null;
+    __filterProjectIds = new Set();
 
     await select()('proj-b');
 
-    expect(setFilterProjectId).not.toHaveBeenCalled();
+    expect(clearProjectFilter).not.toHaveBeenCalled();
   });
 
   it('toasts and resolves when initialization fails', async () => {

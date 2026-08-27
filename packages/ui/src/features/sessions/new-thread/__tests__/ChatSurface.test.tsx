@@ -34,7 +34,7 @@ let __loading = false;
 let __draftMap = new Map<string, { projectId: string; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
-let __filterProjectId: string | null = null;
+let __filterProjectIds: Set<string> = new Set();
 let __initialization: { status: 'idle' | 'initializing' | 'ready' | 'error'; retry?: () => Promise<unknown> } = {
   status: 'ready',
 };
@@ -62,8 +62,9 @@ vi.mock('../../runtime/new-thread-ready-store', () => ({
     }),
 }));
 vi.mock('@/store/session-filters', () => ({
-  useSessionFilters: (sel: (s: { filterProjectId: string | null }) => unknown) =>
-    sel({ filterProjectId: __filterProjectId }),
+  useSessionFilters: (sel: (s: { filterProjectIds: Set<string> }) => unknown) =>
+    sel({ filterProjectIds: __filterProjectIds }),
+  soleProjectId: (ids: ReadonlySet<string>) => (ids.size === 1 ? [...ids][0]! : null),
 }));
 vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => undefined }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
@@ -103,7 +104,7 @@ describe('ChatSurface', () => {
     __messageCount = 0;
     __projects = [{ id: 'proj-a' }];
     __loading = false;
-    __filterProjectId = null;
+    __filterProjectIds = new Set();
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
     __initialization = { status: 'ready' };
   });
@@ -132,7 +133,7 @@ describe('ChatSurface', () => {
 
   it('renders the welcome empty-state with no project for a projectless new local thread', () => {
     __draftMap = new Map();
-    __filterProjectId = null;
+    __filterProjectIds = new Set();
     __initialization = { status: 'idle' };
     render(<ChatSurface />);
 
@@ -162,12 +163,25 @@ describe('ChatSurface', () => {
 
   it('hides ChatThread during the initial idle render for a project-filtered draft', () => {
     __draftMap = new Map();
-    __filterProjectId = 'proj-a';
+    __filterProjectIds = new Set(['proj-a']);
     __initialization = { status: 'idle' };
     render(<ChatSurface />);
 
     expect(screen.getByText('Initializing session…')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('renders the welcome empty-state with no project when the scope names two or more projects', () => {
+    __draftMap = new Map();
+    __filterProjectIds = new Set(['proj-a', 'proj-b']);
+    __initialization = { status: 'idle' };
+    render(<ChatSurface />);
+
+    // A multi-project scope is ambiguous (soleProjectId returns null), so the
+    // draft is treated the same as an unresolved one: no boot-settle wait.
+    expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
+    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.queryByText('Initializing session…')).toBeNull();
   });
 
   it('hides ChatThread on error and retries the same initialization', async () => {

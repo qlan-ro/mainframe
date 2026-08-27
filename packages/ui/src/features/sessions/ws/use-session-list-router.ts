@@ -66,12 +66,12 @@ function rememberActiveSession(active: SessionItem | undefined, items: readonly 
   useLayoutStore.getState().setActiveSession(active.remoteId);
 }
 
-/** Clear the project filter when the activated chat belongs to a different project. */
+/** Clear the project scope when the activated chat's project falls outside it. */
 function clearFilterOnCrossProject(active: SessionItem | undefined): void {
-  const { filterProjectId, setFilterProjectId } = useSessionFilters.getState();
+  const { filterProjectIds, clearProjectFilter } = useSessionFilters.getState();
   const projectId = active?.custom?.projectId;
-  if (filterProjectId != null && projectId != null && projectId !== filterProjectId) {
-    setFilterProjectId(null);
+  if (filterProjectIds.size > 0 && projectId != null && !filterProjectIds.has(projectId)) {
+    clearProjectFilter();
   }
 }
 
@@ -177,7 +177,7 @@ export function useSessionListRouter(): void {
     const fallback = (): string | null =>
       pickArchiveFallback(
         items,
-        useSessionFilters.getState().filterProjectId,
+        useSessionFilters.getState().filterProjectIds,
         useLastSessionStore.getState().lastSessionId,
       );
 

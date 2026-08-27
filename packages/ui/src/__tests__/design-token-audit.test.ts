@@ -81,12 +81,13 @@ describe('design token audit', () => {
     'features/session-panel/AgentPlan.tsx',
     // Scanned since the 2026-08-09 v2 fold removed the tree-level skip:
     // tracking-widest is the STOCK radix-vega shortcut-kbd treatment shipped
-    // by the registry primitives, and ProjectRow's text-[10px] is the
-    // tiny-avatar idiom already documented for SettingsSidebar above.
+    // by the registry primitives, and ProjectScopeSelector's text-[10px]
+    // (inherited from the deleted ProjectRow) is the tiny-avatar idiom
+    // already documented for SettingsSidebar above.
     'components/ui/command.tsx',
     'components/ui/context-menu.tsx',
     'components/ui/dropdown-menu.tsx',
-    'features/sessions/ProjectRow.tsx',
+    'features/sessions/ProjectScopeSelector.tsx',
   ]);
 
   // Stock text-xs/sm/base/… ARE the app's typography scale since the v2 body

@@ -8,8 +8,8 @@ export interface DraftRowModel {
   projectId: string;
 }
 
-export function draftRowVisible(model: DraftRowModel | null, filterProjectId: string | null): boolean {
+export function draftRowVisible(model: DraftRowModel | null, projectIds: ReadonlySet<string>): boolean {
   if (model == null) return false;
-  if (filterProjectId == null) return true;
-  return filterProjectId === model.projectId;
+  if (projectIds.size === 0) return true;
+  return projectIds.has(model.projectId);
 }

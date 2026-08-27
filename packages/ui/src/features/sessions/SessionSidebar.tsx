@@ -7,7 +7,7 @@
  * rebuild, so every non-visual module is imported from `@/features/sessions`.
  */
 import { useMemo } from 'react';
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,6 @@ import { Sidebar, SidebarFooter, SidebarHeader, SidebarRail, SidebarTrigger } fr
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { pickProjectSession } from '@/features/sessions/view-model/initial-session';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { attentionCount } from '@/features/sessions/view-model/attention-counts';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
@@ -29,14 +27,14 @@ import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 // The auto-updater pill (renders null unless an update exists).
 import { UpdatePill } from '@/layout/UpdatePill';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { DaemonSwitcher } from '../daemon/DaemonSwitcher';
 import { QuotaFooter } from '../quota/QuotaFooter';
-import { ProjectSection } from './ProjectSection';
+import { ProjectScopeSelector } from './ProjectScopeSelector';
 import { SessionsSection } from './SessionsSection';
 import { SidebarActions } from './SidebarActions';
 import { TagFilterBar } from './TagFilterBar';
@@ -81,27 +79,15 @@ function HeaderActions() {
 }
 
 export function SessionSidebar({ className }: { className?: string }) {
-  const aui = useAui();
   const threadItems = useAuiState((s) => s.threads.threadItems);
-  const { projectId: activeProjectId } = useActiveIdentity();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const allItems = useMemo<SessionItem[]>(() => regularThreadItemsToSessionItems(threadItems), [threadItems]);
 
-  const { filterProjectId, selectedTags, selectedSynthetic, sortMode, setFilterProjectId } = useSessionFilters();
+  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode, toggleFilterProject, clearProjectFilter } =
+    useSessionFilters();
 
-  // Selecting a project the active session does not belong to also activates
-  // that project's most recent session, so dependent context (todos scope,
-  // session panel) follows the selection. The filter is set FIRST: the
-  // cross-project-activate reconciliation clears the filter only when the
-  // activated chat's project differs from it, and here they match.
-  const handleSelectProject = (id: string | null) => {
-    setFilterProjectId(id);
-    if (id === null || id === activeProjectId) return;
-    const target = pickProjectSession(allItems, id);
-    if (target !== null) aui.threads.switchToThread(target);
-  };
-  const hasFilters = filterProjectId != null || selectedTags.size > 0 || selectedSynthetic.size > 0;
+  const hasFilters = filterProjectIds.size > 0 || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const isUnread = useUnreadStore((s) => s.isUnread);
   const registry = useTagRegistry(useDaemonPort());
   const { projects, removeProjectFromList, reloadProjects } = useProjects();
@@ -109,8 +95,8 @@ export function SessionSidebar({ className }: { className?: string }) {
   const onAddProject = useAddProject(reloadProjects);
 
   const filteredItems = useMemo(
-    () => applySessionFilters(allItems, { filterProjectId, selectedTags, selectedSynthetic }),
-    [allItems, filterProjectId, selectedTags, selectedSynthetic],
+    () => applySessionFilters(allItems, { filterProjectIds, selectedTags, selectedSynthetic }),
+    [allItems, filterProjectIds, selectedTags, selectedSynthetic],
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
@@ -132,17 +118,17 @@ export function SessionSidebar({ className }: { className?: string }) {
     return map;
   }, [sortedProjects]);
 
-  const draft = useDraftRow(allItems, filterProjectId);
+  const draft = useDraftRow(allItems, filterProjectIds);
 
-  const tagNames = useMemo(() => tagsInUse(allItems, filterProjectId), [allItems, filterProjectId]);
+  const tagNames = useMemo(() => tagsInUse(allItems, filterProjectIds), [allItems, filterProjectIds]);
   const syntheticTags = useMemo(() => SYNTHETIC_TAGS.filter((kind) => hasSynthetic(allItems, kind)), [allItems]);
   const showTags = tagNames.length > 0 || syntheticTags.length > 0;
 
   return (
     <Sidebar collapsible="offcanvas" className={className}>
-      {/* The projects switcher lives here, not in the scrolling body: shadcn
-          documents the header as the home for a workspace switcher, and it is
-          the one thing a long session list must not scroll away. */}
+      {/* The project scope selector lives here, not in the scrolling body:
+          shadcn documents the header as the home for a workspace switcher, and
+          it is the one thing a long session list must not scroll away. */}
       <SidebarHeader>
         {/* data-drag-region: the traffic-light strip is title-bar chrome — its
             empty run drags the window (buttons are auto-excluded by the host
@@ -158,12 +144,13 @@ export function SessionSidebar({ className }: { className?: string }) {
           </div>
           <HeaderActions />
         </div>
-        <SidebarActions filterProjectId={filterProjectId} />
-        <ProjectSection
+        <SidebarActions filterProjectId={soleProjectId(filterProjectIds)} />
+        <ProjectScopeSelector
           projects={sortedProjects}
           attention={attention}
-          activeId={filterProjectId}
-          onSelect={handleSelectProject}
+          scope={filterProjectIds}
+          onToggle={toggleFilterProject}
+          onClear={clearProjectFilter}
           onRemoveProject={onRemoveProject}
           onAddProject={() => void onAddProject()}
         />

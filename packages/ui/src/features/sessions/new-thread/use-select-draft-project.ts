@@ -21,8 +21,8 @@ import { resetNewThreadDraft } from './reset-new-thread-draft';
 export function useSelectDraftProject(): (projectId: string) => Promise<void> {
   const aui = useAui();
   const port = useDaemonPort();
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
-  const setFilterProjectId = useSessionFilters((s) => s.setFilterProjectId);
+  const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
+  const clearProjectFilter = useSessionFilters((s) => s.clearProjectFilter);
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
 
@@ -30,7 +30,7 @@ export function useSelectDraftProject(): (projectId: string) => Promise<void> {
     const threads = aui.threads.getState();
     const localId = threads.newThreadId ?? threads.mainThreadId;
     if (localId == null) return;
-    if (filterProjectId != null && filterProjectId !== projectId) setFilterProjectId(null);
+    if (filterProjectIds.size > 0 && !filterProjectIds.has(projectId)) clearProjectFilter();
     resetNewThreadDraft(threads.newThreadId);
     try {
       await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters });

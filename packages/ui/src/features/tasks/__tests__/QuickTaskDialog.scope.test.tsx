@@ -99,7 +99,7 @@ beforeEach(() => {
   localStorage.clear();
   act(() => {
     useTasksModal.setState({ open: false, quickOpen: false });
-    useSessionFilters.setState({ filterProjectId: null });
+    useSessionFilters.setState({ filterProjectIds: new Set() });
     useTodosStore.setState({ entries: {} });
   });
 });
@@ -118,7 +118,7 @@ async function openPicker(testId: string) {
 
 describe('QuickTaskDialog — ⌘⇧T with a project resolvable', () => {
   it('opens the dialog and names the scoped project', async () => {
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<Harness />);
     pressQuickAddShortcut();
@@ -154,7 +154,7 @@ describe('QuickTaskDialog — ⌘⇧T with no project resolvable', () => {
 describe('QuickTaskDialog — independence from the board’s scope (spec decision 11)', () => {
   it('is unaffected by an override made in the board, and seeds from the filter on its own open', async () => {
     const user = userEvent.setup();
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<Harness />);
     act(() => useTasksModal.getState().openModal());

@@ -10,9 +10,10 @@
  *  - onMarkUnread → calls unreadStore.markUnread with the chatId
  *  - onOsNotify → calls the host bridge's notify(), even on the active thread
  *  - active thread change → calls clearUnread with the active id
- *  - cross-project activate → calls setFilterProjectId(null)
- *  - same-project activate → does NOT call setFilterProjectId
- *  - null filter → does NOT call setFilterProjectId
+ *  - cross-project activate (scope set, does not contain the project) → calls clearProjectFilter()
+ *  - same-project activate → does NOT call clearProjectFilter
+ *  - the project is among several scoped projects → does NOT call clearProjectFilter
+ *  - empty scope → does NOT call clearProjectFilter
  *  - archived-active → calls switchToThread with most-recently-updated non-archived thread id
  *  - archived-active with no other thread → does NOT call switchToThread
  *  - unmount → calls router.dispose() exactly once
@@ -34,12 +35,12 @@ import { useZonesStore } from '../../../chat/zones/zones-store';
 
 let markUnreadSpy: ReturnType<typeof vi.fn>;
 let clearUnreadSpy: ReturnType<typeof vi.fn>;
-let setFilterProjectIdSpy: ReturnType<typeof vi.fn>;
+let clearProjectFilterSpy: ReturnType<typeof vi.fn>;
 let switchSpy: ReturnType<typeof vi.fn<(id: string) => void>>;
 let reloadSpy: ReturnType<typeof vi.fn<() => void>>;
 
 // Values that tests can mutate before re-render to control hook behaviour
-let filterProjectIdValue: string | null;
+let filterProjectIdsValue: Set<string>;
 let mainThreadIdValue: string | null;
 let lastSessionIdValue: string | null;
 let setLastSessionIdSpy: ReturnType<typeof vi.fn>;
@@ -96,8 +97,8 @@ vi.mock('../../../../store/unread-store', () => ({
 vi.mock('../../../../store/session-filters', () => ({
   useSessionFilters: Object.assign(vi.fn(), {
     getState: () => ({
-      filterProjectId: filterProjectIdValue,
-      setFilterProjectId: setFilterProjectIdSpy,
+      filterProjectIds: filterProjectIdsValue,
+      clearProjectFilter: clearProjectFilterSpy,
     }),
   }),
 }));
@@ -149,13 +150,13 @@ import { useSessionListRouter } from '../use-session-list-router';
 beforeEach(() => {
   markUnreadSpy = vi.fn();
   clearUnreadSpy = vi.fn();
-  setFilterProjectIdSpy = vi.fn();
+  clearProjectFilterSpy = vi.fn();
   switchSpy = vi.fn();
   reloadSpy = vi.fn();
   disposeSpy = vi.fn();
   notifySpy = vi.fn().mockResolvedValue(undefined);
 
-  filterProjectIdValue = null;
+  filterProjectIdsValue = new Set();
   mainThreadIdValue = null;
   lastSessionIdValue = null;
   setLastSessionIdSpy = vi.fn();
@@ -310,35 +311,44 @@ describe('useSessionListRouter — active thread change clears unread', () => {
   });
 });
 
-it('calls setFilterProjectIdSpy(null) when active chat is in a different project', () => {
-  filterProjectIdValue = 'p-OLD';
+it('calls clearProjectFilterSpy when the scope is set and does not contain the active chat’s project', () => {
+  filterProjectIdsValue = new Set(['p-OLD']);
   mainThreadIdValue = 'chat-A';
   fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
 
   renderHook(() => useSessionListRouter());
 
-  expect(setFilterProjectIdSpy).toHaveBeenCalledTimes(1);
-  expect(setFilterProjectIdSpy).toHaveBeenCalledWith(null);
+  expect(clearProjectFilterSpy).toHaveBeenCalledTimes(1);
 });
 
-it('does NOT call setFilterProjectIdSpy when active chat is in the same project', () => {
-  filterProjectIdValue = 'p-NEW';
+it('does NOT call clearProjectFilterSpy when the scope already contains the active chat’s project', () => {
+  filterProjectIdsValue = new Set(['p-NEW']);
   mainThreadIdValue = 'chat-A';
   fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
 
   renderHook(() => useSessionListRouter());
 
-  expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
+  expect(clearProjectFilterSpy).not.toHaveBeenCalled();
 });
 
-it('does NOT call setFilterProjectIdSpy when filterProjectId is null', () => {
-  filterProjectIdValue = null;
+it('does NOT call clearProjectFilterSpy when the scope contains the active project among others', () => {
+  filterProjectIdsValue = new Set(['p-OTHER', 'p-NEW']);
   mainThreadIdValue = 'chat-A';
   fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
 
   renderHook(() => useSessionListRouter());
 
-  expect(setFilterProjectIdSpy).not.toHaveBeenCalled();
+  expect(clearProjectFilterSpy).not.toHaveBeenCalled();
+});
+
+it('does NOT call clearProjectFilterSpy when the scope is empty', () => {
+  filterProjectIdsValue = new Set();
+  mainThreadIdValue = 'chat-A';
+  fakeThreadItems = [{ id: 'chat-A', remoteId: 'chat-A', custom: { projectId: 'p-NEW' } }];
+
+  renderHook(() => useSessionListRouter());
+
+  expect(clearProjectFilterSpy).not.toHaveBeenCalled();
 });
 
 it('calls switchSpy with the most-recently-updated non-archived thread (not list order)', () => {
@@ -363,7 +373,7 @@ it('calls switchSpy with the most-recently-updated non-archived thread (not list
 
 describe('useSessionListRouter — archived-active fallback respects the project filter', () => {
   it('picks the most-recent session IN the filtered project even when another project has a newer one', () => {
-    filterProjectIdValue = 'p1';
+    filterProjectIdsValue = new Set(['p1']);
     mainThreadIdValue = 'chat-A';
     // chat-OTHER (p2) is the newest overall, but the filter is on p1 —
     // the fallback must pick chat-B (newest within p1).
@@ -380,7 +390,7 @@ describe('useSessionListRouter — archived-active fallback respects the project
   });
 
   it('falls back to the most-recent session overall when the filtered project has none left', () => {
-    filterProjectIdValue = 'p1';
+    filterProjectIdsValue = new Set(['p1']);
     mainThreadIdValue = 'chat-A';
     fakeThreadItems = [
       { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 4000 } },
@@ -392,6 +402,21 @@ describe('useSessionListRouter — archived-active fallback respects the project
 
     expect(switchSpy).toHaveBeenCalledTimes(1);
     expect(switchSpy).toHaveBeenCalledWith('chat-Y');
+  });
+
+  it('picks the most-recent session in EITHER of two scoped projects', () => {
+    filterProjectIdsValue = new Set(['p1', 'p2']);
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'archived', custom: { projectId: 'p1', updatedAt: 4000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p2', updatedAt: 1000 } },
+      { id: 'chat-OTHER', remoteId: 'chat-OTHER', status: 'regular', custom: { projectId: 'p3', updatedAt: 9000 } },
+    ];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-B');
   });
 });
 

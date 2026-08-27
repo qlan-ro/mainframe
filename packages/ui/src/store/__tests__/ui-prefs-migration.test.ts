@@ -20,6 +20,48 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+describe('useUiPrefs v5 → v6 migration', () => {
+  it('strips the retired sidebar-section keys from an old payload', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: {
+          sidebarWidth: 300,
+          collapsedSidebarSections: { projects: true },
+          rightClickHintDismissed: true,
+        },
+        version: 5,
+      }),
+    );
+    const fresh = await reloadStore();
+    // Proves hydration actually ran, so the next assertions aren't vacuous.
+    expect(fresh.getState().sidebarWidth).toBe(300);
+    // v6 replaced the Projects section with the scope-selector dropdown: no
+    // collapsible sidebar sections and no right-click affordance remain.
+    const state = fresh.getState() as unknown as Record<string, unknown>;
+    expect(state.collapsedSidebarSections).toBeUndefined();
+    expect(state.rightClickHintDismissed).toBeUndefined();
+    // ...and neither gets written back out on the next persist.
+    fresh.getState().setSidebarWidth(320);
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.collapsedSidebarSections).toBeUndefined();
+    expect(parsed.state.rightClickHintDismissed).toBeUndefined();
+  });
+
+  it('leaves a v6 payload untouched', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        state: { sidebarWidth: 300, sessionPanelOpen: { tasks: true }, sessionPanelSections: {} },
+        version: 6,
+      }),
+    );
+    const fresh = await reloadStore();
+    expect(fresh.getState().sidebarWidth).toBe(300);
+    expect(fresh.getState().sessionPanelOpen).toEqual({ tasks: true });
+  });
+});
+
 describe('useUiPrefs v4 → v5 migration', () => {
   it('turns the Activity/Launch section bits and the card collapse into panel bits', async () => {
     localStorage.setItem(
