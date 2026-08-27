@@ -6,6 +6,10 @@
  * The token path is never hidden behind the nicer one — this restores the
  * only way to authenticate GitHub left after a prior release shipped
  * device-flow-only with no client ID configured (2026-08-19 regression fix).
+ *
+ * Both paths visible means both need labels that say which is which: sign-in
+ * leads as the primary action, and the token trigger drops the generic
+ * `Connect GitHub…` the two shared when device flow is present.
  */
 import { useEffect, useState } from 'react';
 import { useAutomationsStore } from '../data/use-automations-store';
@@ -33,8 +37,13 @@ export function GithubCredentialConnect({ onChange, testId }: GithubCredentialCo
 
   return (
     <div className="flex flex-col gap-1.5">
-      <TokenCredentialField service="github" onChange={onChange} testId={testId} />
       {deviceFlowConfigured && <GithubDeviceConnect onChange={onChange} testId={`${testId}-device`} />}
+      <TokenCredentialField
+        service="github"
+        onChange={onChange}
+        testId={testId}
+        connectLabel={deviceFlowConfigured ? 'Use a personal access token…' : undefined}
+      />
     </div>
   );
 }

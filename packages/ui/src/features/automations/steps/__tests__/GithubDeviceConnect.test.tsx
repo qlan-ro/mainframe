@@ -33,6 +33,12 @@ describe('GithubDeviceConnect', () => {
     vi.useRealTimers();
   });
 
+  it('names the action, not the provider, so it never collides with the token trigger', () => {
+    render(<GithubDeviceConnect onChange={vi.fn()} testId="automations-credential-a" />);
+
+    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Sign in with GitHub');
+  });
+
   it('starting shows the user code and the approve-on-GitHub action', async () => {
     const user = userEvent.setup({ delay: null });
     const startGithubDeviceFlow = vi.fn(async () => START);
@@ -151,8 +157,11 @@ describe('GithubDeviceConnect', () => {
     await user.click(screen.getByTestId('automations-credential-a-connect'));
 
     const unavailable = await screen.findByTestId('automations-credential-a-unavailable');
-    expect(unavailable).toHaveTextContent("GitHub connection isn't available yet");
+    expect(unavailable).toHaveTextContent("Signing in with GitHub isn't available yet");
     expect(unavailable).not.toHaveTextContent(/administrator/i);
+    // The token field renders under this fallback, so pointing "above" would
+    // send the user the wrong way.
+    expect(unavailable).toHaveTextContent(/token below/i);
   });
 
   it('copies the code and opens GitHub in the system browser from one click', async () => {

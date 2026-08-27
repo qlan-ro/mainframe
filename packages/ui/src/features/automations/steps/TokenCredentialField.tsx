@@ -18,13 +18,15 @@ export interface TokenCredentialFieldProps {
   service: string;
   onChange: (label: string | undefined) => void;
   testId: string;
+  /** Overrides the collapsed trigger's `Connect {name}…`, for a provider that offers a second connect path this one has to be distinguishable from. */
+  connectLabel?: string;
 }
 
 function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-export function TokenCredentialField({ service, onChange, testId }: TokenCredentialFieldProps) {
+export function TokenCredentialField({ service, onChange, testId, connectLabel }: TokenCredentialFieldProps) {
   const gateway = useAutomationsStore((s) => s.gateway);
   const addCredential = useAutomationsStore((s) => s.addCredential);
   const [open, setOpen] = useState(false);
@@ -60,7 +62,7 @@ export function TokenCredentialField({ service, onChange, testId }: TokenCredent
         className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
       >
         <Plug size={12} aria-hidden />
-        Connect {displayName}…
+        {connectLabel ?? `Connect ${displayName}…`}
       </Button>
     );
   }

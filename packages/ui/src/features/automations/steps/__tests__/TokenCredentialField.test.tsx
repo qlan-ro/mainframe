@@ -27,6 +27,19 @@ describe('TokenCredentialField', () => {
     expect(screen.getByText(/server-side secret/i)).toBeInTheDocument();
   });
 
+  it('takes a caller-supplied trigger label, for a provider that offers a second connect path', () => {
+    render(
+      <TokenCredentialField
+        service="github"
+        onChange={vi.fn()}
+        testId="automations-credential-a"
+        connectLabel="Use a personal access token…"
+      />,
+    );
+
+    expect(screen.getByTestId('automations-credential-a-connect')).toHaveTextContent('Use a personal access token…');
+  });
+
   it("ado's copy names the org-scoped requirement and the PAT deprecation dates", async () => {
     const user = userEvent.setup();
     render(<TokenCredentialField service="ado" onChange={vi.fn()} testId="automations-credential-a" />);
