@@ -21,7 +21,7 @@ import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useModalProjectScope } from '@/features/project-scope/use-modal-project-scope';
 import { ProjectPickList } from '@/features/project-scope/ProjectPickList';
@@ -38,7 +38,7 @@ interface Props {
 export function TasksModalHost({ port }: Props): React.ReactElement {
   const { open, quickOpen, closeModal, openModal, openQuick, closeQuick } = useTasksModal();
   const { projects, reloadProjects } = useProjects();
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
   const board = useModalProjectScope(open);
   const quick = useModalProjectScope(quickOpen);
   const view = useTodosStore((s) => s.view);

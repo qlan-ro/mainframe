@@ -8,7 +8,7 @@
  *  3. active-bases-store resets bases to {} and scopeKey to null
  *  4. sandbox store resets processStatuses / logsOutput / captures / selectedConfigByScope / lastStartedProcess
  *  5. settings store clears providers, resets general to defaults, sets loading true, clears selectedProvider
- *  6. session-filters store clears filterProjectId, selectedTags, selectedSynthetic
+ *  6. session-filters store resets filterProjectIds to an empty set, clears selectedTags, selectedSynthetic
  *  7. quota store clears byId (a daemon switch never shows the previous daemon's quota)
  *  8. Integration: switchTo invokes the reset (useUnreadStore is empty after a switch)
  *  9. composer-segments store resets byThread to {} (a seeded segment composition is gone)
@@ -97,7 +97,7 @@ function seedStores() {
     loading: false,
   });
   useSessionFilters.setState({
-    filterProjectId: 'proj-1',
+    filterProjectIds: new Set(['proj-1', 'proj-2']),
     selectedTags: new Set(['tag-a']),
     selectedSynthetic: new Set(['unread'] as any),
   });
@@ -168,10 +168,10 @@ describe('resetDaemonScopedStores — settings', () => {
 });
 
 describe('resetDaemonScopedStores — session-filters', () => {
-  it('resets filterProjectId to null, clears selectedTags and selectedSynthetic', () => {
+  it('resets filterProjectIds to an empty set, clears selectedTags and selectedSynthetic', () => {
     resetDaemonScopedStores();
     const state = useSessionFilters.getState();
-    expect(state.filterProjectId).toBeNull();
+    expect(state.filterProjectIds).toEqual(new Set());
     expect([...state.selectedTags]).toEqual([]);
     expect([...state.selectedSynthetic]).toEqual([]);
   });

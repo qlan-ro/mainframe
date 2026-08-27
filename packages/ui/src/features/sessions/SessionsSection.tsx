@@ -13,7 +13,7 @@ import { SidebarMenu } from '@/components/ui/sidebar';
 import { SidebarJumpSection } from '../shared/SidebarJumpSection';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
 import type { DraftRowState } from '@/features/sessions/sidebar/use-draft-row';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { DraftSessionRow } from './DraftSessionRow';
 import { SessionList } from './SessionList';
 import { SessionSortMenu } from './SessionSortMenu';
@@ -31,17 +31,18 @@ interface SessionsSectionProps {
 }
 
 export function SessionsSection({ groups, projectNames, colorOf, draft, hasFilters }: SessionsSectionProps) {
-  const { filterProjectId, sortMode, setSortMode } = useSessionFilters();
+  const { filterProjectIds, sortMode, setSortMode } = useSessionFilters();
+  const soleProject = soleProjectId(filterProjectIds);
 
-  // "All" view is the only one where a row has to name its project; a filter
-  // already answers the question for every row at once.
-  const showProject = filterProjectId == null;
+  // A single-project scope is the only view where every row shares one project;
+  // "All" and a multi-project scope both need the rows to name theirs.
+  const showProject = soleProject == null;
 
   const actions = (
     <>
       <SessionsNewButton
-        filterProjectId={filterProjectId}
-        filterProjectName={filterProjectId != null ? (projectNames[filterProjectId] ?? null) : null}
+        filterProjectId={soleProject}
+        filterProjectName={soleProject != null ? (projectNames[soleProject] ?? null) : null}
       />
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />

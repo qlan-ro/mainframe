@@ -1,34 +1,49 @@
 /**
- * §sessions-filters — Sessions sidebar project switcher + tag filter bar +
+ * §sessions-filters — Sessions sidebar project SCOPE selector + tag filter bar +
  * sort menu + empty-state specs for app-tauri browser mode.
  *
  * Ported from plan spec #3 (docs/plans/2026-07-03-tauri-e2e-test-plan.md,
  * Cluster A). All tests run in E2E_MODE=mock (no AI turn needed — these are
  * UI-only sidebar interactions over REST-seeded projects/chats).
  *
- * The project bar is a vertical LIST in the sidebar header since the v2 shell
- * integration (`@v2/features/sessions/ProjectSection.tsx` + `ProjectRow.tsx`),
- * not the `ProjectFilterPillBar` pill cloud: every project has a row, the tail
- * collapses behind "Show N more" past a COUNT (VISIBLE_LIMIT = 3), and nothing
- * measures available width any more. The old width-driven `expandProjectPills`
- * helper is therefore gone — with two projects both rows are always rendered.
+ * The inline projects list (a vertical row-per-project list in the sidebar
+ * header) was replaced (2026-08-27) by `ProjectScopeSelector.tsx` — one header
+ * dropdown trigger that opens a checkbox-item menu. Scope, not switcher: any
+ * number of projects can be checked and the sessions list shows their union; an
+ * empty scope means "All projects". The old width/count-driven "Show N more"
+ * tail collapse is gone with the row list it belonged to.
  *
- * Testid reference (verified against packages/ui/src/v2/features/sessions/):
- *   sidebar-project-all               — "All projects" row (was `sessions-filter-pill-all`)
- *   sidebar-project-<projectId>       — one project row (was `sessions-filter-pill-<id>`);
- *                                       aria-pressed carries the selection
- *   sidebar-project-badge-<projectId> — attention count on a row (was
- *                                       `sessions-filter-pill-attn-<id>`)
- *   sidebar-project-badge-all         — attention count on the "All projects" row
- *   sidebar-project-rename-menu-<id>  — context menu "Rename Project" (always disabled)
- *   sidebar-project-remove-menu-<id>  — context menu "Remove Project"
- *   sidebar-project-remove-<id>       — the same action, hover-revealed on the row
- *   sidebar-project-hint-dismiss      — "Don't show anymore" inside the right-click hint
- *                                       tooltip (DismissibleHint, was `sessions-pill-hint-dismiss`)
- *   sidebar-projects-add              — the header's "+" add-project action (was the dashed
- *                                       `sessions-add-project` pill)
- *   sidebar-project-more              — "Show N more"/"Show less" tail toggle (was
- *                                       `sessions-projects-more`); count-driven, not width-driven
+ * Testid reference (verified against packages/ui/src/features/sessions/ProjectScopeSelector.tsx):
+ *   sidebar-project-scope-trigger     — the header dropdown trigger. Its label is
+ *                                       "All projects" (empty scope), the sole
+ *                                       project's name (scope of one), or "N
+ *                                       projects" (scope of two or more)
+ *   sidebar-project-scope-badge       — the trigger's count badge: attention
+ *                                       HIDDEN by the scope (sum over unchecked
+ *                                       projects); absent when the scope is empty
+ *   sidebar-project-scope-clear       — the trigger's hover ✕; clears the whole
+ *                                       scope WITHOUT opening the menu
+ *   sidebar-project-scope-menu        — the dropdown's content root. Opens on a
+ *                                       trigger click; toggling a project inside
+ *                                       it does NOT close it (multi-select) — only
+ *                                       Escape (or an outside click) closes it
+ *   sidebar-project-all               — "All projects" checkbox item inside the
+ *                                       menu; clears the scope
+ *   sidebar-project-<projectId>       — one project's checkbox item inside the
+ *                                       menu; TOGGLES that project in/out of the
+ *                                       scope (checking an already-checked item
+ *                                       unchecks it — this is multi-select, not a
+ *                                       single-select switcher)
+ *   sidebar-project-badge-<projectId> — a project item's own attention count
+ *   sidebar-project-unavailable-<id>  — "Unavailable" badge for a project whose
+ *                                       directory is missing on disk
+ *   sidebar-project-remove-<id>       — hover-revealed remove affordance inside a
+ *                                       project's menu item (the right-click
+ *                                       context menu that used to carry this is
+ *                                       deleted)
+ *   sidebar-projects-add              — the header's standalone "+" add-project
+ *                                       button, beside the trigger (unchanged)
+ *   sidebar-project-scope-add         — the menu's own "Add project" item
  *   sessions-remove-project-dialog / -confirm / -cancel — in-app confirm dialog
  *                                       (ConfirmDialogHost → v2 ConfirmDialog, testid from
  *                                       use-remove-project.ts's requestConfirm)
@@ -53,19 +68,30 @@
  *   directory-picker / directory-picker-cancel — DirectoryPickerModal (add-project flow)
  *   TOAST.root (helpers/tauri/testids.ts) — native sonner toast; WsToastCard is gone
  *
- * NOTE: the shared page object is `sessionsSidebar().projectRow(id)` /
- * `.allProjectsRow()` now (the old `projectFilterPill` pointed at the deleted
- * `sessions-filter-pill-<id>`); this file keeps its own local `projectRow()` because
- * every test here needs the row directly.
+ * DELETED with the inline row list, no successor: the right-click hint dismiss
+ * (`sidebar-project-hint-dismiss`), the row's right-click context menu
+ * (`sidebar-project-rename-menu-<id>` / `sidebar-project-remove-menu-<id>` —
+ * remove is now the menu item's own hover affordance, see above), the
+ * "Show N more"/"Show less" tail toggle (`sidebar-project-more`), and the "All
+ * projects" row's own attention badge (`sidebar-project-badge-all` — the
+ * trigger's `sidebar-project-scope-badge` now shows only attention the scope
+ * HIDES, which is by definition 0 while unscoped).
  *
- * PICKING A PROJECT ALSO ACTIVATES ITS MOST RECENT SESSION (supersedes the old
- * view-only D12 reading): `SessionSidebar.handleSelectProject` sets the filter AND —
- * when the chosen project is not the active session's — switches to
- * `pickProjectSession(allItems, id)`, the project's most-recently-updated
- * non-archived session, so dependent context (todos scope, session panel) follows
- * the selection. A project with no live sessions leaves the active thread alone.
- * Clearing the filter ("All projects", id === null) only WIDENS the list — it never
- * switches. Assertions below pin both halves.
+ * NOTE: this file keeps its own local `projectRow()` + `openProjectScope()`
+ * rather than the shared `sessionsSidebar()` page object, because every test
+ * here drives the menu directly.
+ *
+ * SCOPE CHANGES NEVER SWITCH THE ACTIVE SESSION (BEHAVIOR CHANGE, deliberate,
+ * 2026-08-27 — supersedes the old "picking a project also activates its most
+ * recent session" reading). Checking or unchecking a project in the scope menu,
+ * or clearing the scope via "All projects", only narrows or widens which
+ * sessions the sidebar SHOWS; the active thread is never touched. A session
+ * whose row the scope currently hides can still be the active one — assertions
+ * below pin that by widening back to "All projects" and finding the original
+ * active session's row still marked active, exactly as it was before scoping.
+ * The scope is also multi-select now: checking an already-checked project
+ * unchecks it (never a no-op), and two projects can be checked at once with
+ * their sessions shown as a union.
  */
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
@@ -74,14 +100,19 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { closeMenus } from '../helpers/tauri/menus.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-import { waitConnected } from '../helpers/tauri/wait.js';
 import { openBackgroundClient } from '../helpers/tauri/background-client.js';
 
 const TAG_NAME = 'e2e-filter';
 
-/** One row of the project switcher list. */
+/** A project's checkbox item inside the (open) project scope menu. */
 function projectRow(page: Page, projectId: string): Locator {
   return page.getByTestId(`sidebar-project-${projectId}`);
+}
+
+/** Open the header's project scope dropdown. */
+async function openProjectScope(page: Page): Promise<void> {
+  await page.getByTestId('sidebar-project-scope-trigger').click();
+  await expect(page.getByTestId('sidebar-project-scope-menu')).toBeVisible({ timeout: 5_000 });
 }
 
 /**
@@ -140,16 +171,19 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await closeTauriApp(app);
   });
 
-  test('"All projects" is selected by default and shows every session', async () => {
+  test('"All projects" is checked by default and shows every session', async () => {
     const { page } = app;
 
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
-    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'false');
-    await expect(projectRow(page, projectB.projectId)).toHaveAttribute('aria-pressed', 'false');
+    await openProjectScope(page);
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('data-state', 'checked');
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'unchecked');
+    await expect(projectRow(page, projectB.projectId)).toHaveAttribute('data-state', 'unchecked');
+    await closeMenus(page);
+
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
   });
 
-  test("clicking a project row filters the list and activates that project's most recent session", async () => {
+  test('checking a project narrows the list without switching the active session', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
@@ -157,111 +191,75 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     // active thread on entry.
     await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
+    await openProjectScope(page);
     await projectRow(page, projectA.projectId).click();
-
-    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'false');
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'checked');
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('data-state', 'unchecked');
+    await closeMenus(page);
 
     const rows = page.getByTestId('sessions-row');
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
     await expect(rows.first()).toHaveAttribute('data-chat-id', chatIdA);
-    // The active session followed the selection: A's only session is now the
-    // active thread, so the one visible row carries the active flag.
-    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    // Scoping never activates a session: A's row is the only one visible, but it
+    // is NOT active — B (now hidden by the scope) still is, underneath.
+    // `ThreadListItemPrimitive.Root` only spreads `data-active="true"` for the
+    // main thread; an inactive row carries no `data-active` attribute at all
+    // (never `"false"`), so a not-true check is the correct negative here.
+    await expect(rows.first()).not.toHaveAttribute('data-active', 'true');
   });
 
-  test('clicking the already-active project row is a no-op (single-select switcher, not a toggle)', async () => {
+  test('clicking a checked project again unchecks it (multi-select toggle, never a no-op)', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
-    await projectRow(page, projectA.projectId).click();
-    await projectRow(page, projectA.projectId).click();
-
-    // The project switcher is a single-select list — only the "All projects" row
-    // clears the filter, a second click on the active row no longer deselects it
-    // (that toggle-off behavior belonged to the old pill-cloud bar).
-    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'false');
+    // Continuing from the previous test: the scope is {A}, one row visible.
     await expect(page.getByTestId('sessions-row')).toHaveCount(1, { timeout: 10_000 });
 
-    // A's session is already active (the previous test's selection activated it),
-    // and re-picking the active project is inert — no switch, no filter change.
-    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    await openProjectScope(page);
+    await projectRow(page, projectA.projectId).click();
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'unchecked');
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('data-state', 'checked');
+    await closeMenus(page);
 
-    await page.getByTestId('sidebar-project-all').click();
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('sessions-row')).toHaveCount(2, { timeout: 10_000 });
-
-    // "All projects" only widens the list: clearing the filter never switches
-    // the active thread, so A's session is still the active one.
-    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
-  });
-
-  test("switching to a different project re-narrows the list and activates that project's session", async () => {
-    const { page } = app;
-    const sidebar = sessionsSidebar(page);
-
-    // A's session is active on entry (the previous test left it selected).
-    await expect(sidebar.row(chatIdA)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
-
-    await projectRow(page, projectB.projectId).click();
-    const rows = page.getByTestId('sessions-row');
-    await expect(rows).toHaveCount(1, { timeout: 10_000 });
-    await expect(rows.first()).toHaveAttribute('data-chat-id', chatIdB);
-    // The hop carried the active session with it — B's most recent session.
-    await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
-
-    await page.getByTestId('sidebar-project-all').click();
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
-    await expect(rows).toHaveCount(2, { timeout: 10_000 });
-    // Widening back to "All" leaves the active thread where the B hop put it.
+    // Definitive proof for the previous test's claim: B was the active thread
+    // the whole time its row was hidden, and unchecking A (widening back to
+    // "All") never had to switch anything to reveal it as active again.
     await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 5_000 });
   });
 
-  test('right-click hint dismiss persists across reload', async () => {
+  test('checking a second project adds it to the scope — a union, not a switch', async () => {
     const { page } = app;
-    // The hint now wraps the project ROW itself (ProjectRow.tsx puts
-    // DismissibleHint around the ContextMenuTrigger), so there is no separate
-    // `-wrap` element to hover.
-    await projectRow(page, projectA.projectId).hover();
-    // Radix `TooltipContent` renders `children` TWICE — the real interactive
-    // popper content, plus an SR-only `VisuallyHidden` accessibility echo
-    // (`@radix-ui/react-tooltip` TooltipContentImpl) carrying the identical
-    // subtree, so an interactive/testid-bearing child like our dismiss button
-    // always resolves to 2 DOM matches. The real (clickable) copy renders
-    // first in `TooltipContentImpl`'s children array — `.first()` targets it.
-    const dismissBtn = page.getByTestId('sidebar-project-hint-dismiss').first();
-    await expect(dismissBtn).toBeVisible({ timeout: 10_000 });
-    await dismissBtn.click();
+    const sidebar = sessionsSidebar(page);
 
-    await page.reload();
-    await waitConnected(page);
+    // Continuing from the previous test: scope is empty, and B has been the
+    // active thread since this describe block started — it has never moved,
+    // through every scope change above.
+    await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
-    await projectRow(page, projectA.projectId).waitFor({ timeout: 10_000 });
-    await projectRow(page, projectA.projectId).hover();
-    // Dismissed hints render the bare child — the tooltip infrastructure (and
-    // its dismiss button, both DOM copies) is never mounted, so this is a
-    // structural absence, not a timing race.
-    await expect(page.getByTestId('sidebar-project-hint-dismiss')).toHaveCount(0);
-  });
+    await openProjectScope(page);
+    await projectRow(page, projectA.projectId).click();
+    await projectRow(page, projectB.projectId).click();
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'checked');
+    await expect(projectRow(page, projectB.projectId)).toHaveAttribute('data-state', 'checked');
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('data-state', 'unchecked');
+    await closeMenus(page);
 
-  test('right-click menu shows Rename disabled and Remove enabled', async () => {
-    const { page } = app;
+    const rows = page.getByTestId('sessions-row');
+    await expect(rows).toHaveCount(2, { timeout: 10_000 });
+    // Both sessions show as the union of the two checked projects, and the
+    // active thread is still exactly B — checking either box never touched it.
+    // (See the previous test for why this is `not.toHaveAttribute(..., 'true')`
+    // rather than asserting `'false'`: the attribute is absent, not falsy.)
+    await expect(sidebar.row(chatIdB)).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
+    await expect(sidebar.row(chatIdA)).not.toHaveAttribute('data-active', 'true');
 
-    await projectRow(page, projectA.projectId).click({ button: 'right' });
-
-    const renameItem = page.getByTestId(`sidebar-project-rename-menu-${projectA.projectId}`);
-    await expect(renameItem).toBeVisible({ timeout: 5_000 });
-    await expect(renameItem).toContainText('Rename Project');
-    await expect(renameItem).toHaveAttribute('data-disabled');
-
-    const removeItem = page.getByTestId(`sidebar-project-remove-menu-${projectA.projectId}`);
-    await expect(removeItem).toBeVisible();
-    await expect(removeItem).toContainText('Remove Project');
-    await expect(removeItem).not.toHaveAttribute('data-disabled');
-
-    await page.keyboard.press('Escape');
-    await expect(renameItem).toHaveCount(0, { timeout: 5_000 });
+    // Clear back to "All projects" for the tests that follow.
+    await openProjectScope(page);
+    await page.getByTestId('sidebar-project-all').click();
+    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('data-state', 'checked');
+    await closeMenus(page);
+    await expect(rows).toHaveCount(2, { timeout: 10_000 });
   });
 
   test('the add-project action opens the directory picker', async () => {
@@ -350,21 +348,6 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await expect(parkedGroupLabel(page)).toHaveText('Today', { timeout: 10_000 });
   });
 
-  test('project switcher overflow "Show N more"/"Show less" toggle', async () => {
-    // Half of what this covered no longer exists: TagFilterBar (v2) has NO
-    // overflow toggle at all — past three rows of chips the grid scrolls
-    // (GRID_MAX_HEIGHT), so there is no `sessions-tag-filter-more` successor.
-    //
-    // The project half is still real and no longer width-dependent:
-    // `ProjectSection.tsx` collapses the tail behind `sidebar-project-more`
-    // once projects.length > VISIBLE_LIMIT (3), which needs a 4-project
-    // fixture — this describe seeds 2.
-    test.skip(
-      true,
-      'TODO(app-tauri): `sidebar-project-more` needs a 4+-project fixture (VISIBLE_LIMIT = 3); the tag-bar overflow toggle was deleted in favour of a scrolling chip grid',
-    );
-  });
-
   // Attention badges are driven by useUnreadStore.markUnread, which is only
   // called by the session-list-router on a `chat.notification` /
   // `permission.requested{notify:true}` WS event. Previously that event never
@@ -378,25 +361,32 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   // hover-card flake). `openBackgroundClient` sends from a second daemon
   // connection instead, so A is never the active chat and there is nothing to
   // outrun.
-  test('attention badges appear on non-filtered project rows', async () => {
+  test('attention badges appear on a project item inside the scope menu', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     await selectRow(page, sidebar.row(chatIdB));
 
-    const background = await openBackgroundClient();
+    await openProjectScope(page);
     const badgeA = page.getByTestId(`sidebar-project-badge-${projectA.projectId}`);
+
+    const background = await openBackgroundClient();
     try {
       background.send(chatIdA, 'What is 2 + 2? Reply with just the number.');
 
+      // The menu stays open and mounted throughout — the badge is live React
+      // state, not something that needs a reopen to pick up.
       await expect(badgeA).toBeVisible({ timeout: 45_000 });
       await expect(badgeA).toHaveText('1');
     } finally {
       background.close();
     }
+    await closeMenus(page);
 
-    // Selecting A's chat clears the unread flag, and with it the row badge.
+    // Selecting A's chat clears the unread flag, and with it the item's badge.
     await selectRow(page, sidebar.row(chatIdA));
+    await openProjectScope(page);
     await expect(badgeA).toHaveCount(0, { timeout: 10_000 });
+    await closeMenus(page);
   });
 
   test('synthetic has-pr/has-worktree chips render once a session carries one', async () => {
@@ -407,11 +397,16 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     test.skip(true, 'TODO(app-tauri): synthetic has-pr/has-worktree chips need a worktree/PR fixture');
   });
 
-  test('right-click Remove Project removes it after confirm, with a toast', async () => {
+  test('the hover remove affordance removes the project after confirm, with a toast', async () => {
     const { page } = app;
 
-    await projectRow(page, projectB.projectId).click({ button: 'right' });
-    await page.getByTestId(`sidebar-project-remove-menu-${projectB.projectId}`).click();
+    await openProjectScope(page);
+    // Hover-revealed via CSS group-hover in a real browser — hover the item to
+    // trigger the reveal, then dispatch the pointerdown its handler listens for
+    // directly (its onSelect is stopped via stopPropagation, same as the
+    // trigger's clear ✕, so a plain `.click()` would hit the checkbox instead).
+    await projectRow(page, projectB.projectId).hover();
+    await page.getByTestId(`sidebar-project-remove-${projectB.projectId}`).dispatchEvent('pointerdown');
 
     await expect(page.getByTestId('sessions-remove-project-dialog')).toBeVisible();
     await page.getByTestId('sessions-remove-project-dialog-confirm').click();
@@ -420,6 +415,7 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
     await expect(page.locator(TOAST.root).filter({ hasText: 'Project removed' })).toBeVisible({
       timeout: 10_000,
     });
+    await closeMenus(page);
   });
 });
 
@@ -450,7 +446,9 @@ test.describe('§sessions-filters Empty state', () => {
   test('shows "No sessions match these filters." once a filter is active', async () => {
     const { page } = app;
 
+    await openProjectScope(page);
     await projectRow(page, project.projectId).click();
+    await closeMenus(page);
 
     const empty = page.getByTestId('sidebar-sessions-empty');
     await expect(empty).toBeVisible({ timeout: 10_000 });

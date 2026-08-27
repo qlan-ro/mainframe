@@ -38,34 +38,41 @@ function item(
 const s1 = item('s1', 'proj-a', ['bug', 'urgent']);
 const s2 = item('s2', 'proj-b', ['perf']);
 const s3 = item('s3', 'proj-a', ['bug', 'docs']);
+const s4 = item('s4', 'proj-c', ['ops']);
 
 // ---------------------------------------------------------------------------
 // tagsInUse
 // ---------------------------------------------------------------------------
 
 describe('tagsInUse', () => {
-  it.each<[name: string, items: SessionItem[], projectId: string | null, expected: string[]]>([
+  it.each<[name: string, items: SessionItem[], projectIds: string[], expected: string[]]>([
     [
       'returns sorted deduped tags for items in the given project only',
       [s1, s2, s3],
-      'proj-a',
+      ['proj-a'],
       ['bug', 'docs', 'urgent'],
     ],
     [
-      'returns sorted deduped tags across all items when projectId is null',
+      'returns sorted deduped tags across all items when the scope is empty',
       [s1, s2, s3],
-      null,
+      [],
       ['bug', 'docs', 'perf', 'urgent'],
     ],
-    ['returns empty array when no items belong to the given project', [s2], 'proj-a', []],
+    ['returns empty array when no items belong to the given project', [s2], ['proj-a'], []],
     [
       'returns tags sorted alphabetically regardless of input order',
       [item('s', 'proj-x', ['z-tag', 'a-tag', 'm-tag'])],
-      'proj-x',
+      ['proj-x'],
       ['a-tag', 'm-tag', 'z-tag'],
     ],
-  ])('%s', (_name, items, projectId, expected) => {
-    expect(tagsInUse(items, projectId)).toEqual(expected);
+    [
+      'unions tags across a two-project scope',
+      [s1, s2, s3, s4],
+      ['proj-a', 'proj-c'],
+      ['bug', 'docs', 'ops', 'urgent'],
+    ],
+  ])('%s', (_name, items, projectIds, expected) => {
+    expect(tagsInUse(items, new Set(projectIds))).toEqual(expected);
   });
 });
 

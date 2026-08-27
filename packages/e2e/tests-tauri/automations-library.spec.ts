@@ -23,11 +23,15 @@
  *   automations-library-project-<id> — a row's project badge
  *   automations-delete-confirm       — the shared ConfirmDialog root the row raises
  *   automations-delete-confirm-confirm / -cancel — its derived button pair
- *   sidebar-project-<projectId>      — sidebar project-switcher row (also
- *                                       activates that project's most recent
- *                                       session — see below)
- *   sidebar-project-all              — clears the project filter WITHOUT
- *                                       switching the active session
+ *   sidebar-project-scope-trigger     — the header's project scope dropdown trigger
+ *   sidebar-project-scope-menu       — the dropdown's content root
+ *   sidebar-project-<projectId>      — a project's checkbox item inside that menu
+ *                                       (multi-select scope; never switches the
+ *                                       active session — universal now, not a
+ *                                       special case of "All projects")
+ *   sidebar-project-all              — "All projects" checkbox item; clears the
+ *                                       project scope WITHOUT switching the
+ *                                       active session
  *
  * Three facts every test here leans on — read before "simplifying" a scenario:
  *
@@ -56,6 +60,7 @@ import {
   type TauriProject,
 } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { closeMenus } from '../helpers/tauri/menus.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 /**
@@ -74,8 +79,12 @@ async function openLibraryFor(page: Page, chatId: string): Promise<void> {
   await waitConnected(page);
 
   // Widens the sidebar to both projects' rows without switching the active
-  // session, so the target chat's row is guaranteed clickable next.
+  // session — scope changes never switch the active session now, so this is
+  // just the ordinary "clear the scope" path, not a special case.
+  await page.getByTestId('sidebar-project-scope-trigger').click();
+  await expect(page.getByTestId('sidebar-project-scope-menu')).toBeVisible({ timeout: 5_000 });
   await page.getByTestId('sidebar-project-all').click();
+  await closeMenus(page);
 
   const row = sessionsSidebar(page).row(chatId);
   await expect(async () => {

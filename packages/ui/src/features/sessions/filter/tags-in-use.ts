@@ -2,7 +2,7 @@
  * Pure helpers for computing the tag filter bar options.
  *
  * tagsInUse: union of custom.tags for items in scope, sorted and deduped.
- *   Real tags are project-scoped (or all when filterProjectId is null).
+ *   Real tags are project-scoped (or all when the project scope is empty).
  *
  * hasSynthetic: presence of 'has-pr' / 'has-worktree' ACROSS ALL items
  *   (synthetic chips are global, not project-scoped — matches desktop
@@ -14,8 +14,8 @@
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 
-export function tagsInUse(items: SessionItem[], projectId: string | null): string[] {
-  const scoped = projectId === null ? items : items.filter((i) => i.custom.projectId === projectId);
+export function tagsInUse(items: SessionItem[], projectIds: ReadonlySet<string>): string[] {
+  const scoped = projectIds.size === 0 ? items : items.filter((i) => projectIds.has(i.custom.projectId));
   const seen = new Set<string>();
   for (const item of scoped) {
     for (const tag of item.custom.tags) {

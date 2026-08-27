@@ -19,6 +19,7 @@ import { unarchiveChat } from '@/lib/api/chats';
 import { DialogRowList } from './DialogRowList';
 import { archivedThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { filterArchivedSessions } from '@/features/sessions/view-model/archived-sessions';
+import { soleProjectId } from '@/store/session-filters';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 
 interface ArchivedRowProps {
@@ -72,7 +73,7 @@ interface ArchivedSessionsDialogProps {
   onOpenChange: (open: boolean) => void;
   port: number;
   projects: Project[];
-  filterProjectId: string | null;
+  filterProjectIds: ReadonlySet<string>;
 }
 
 export function ArchivedSessionsDialog({
@@ -80,7 +81,7 @@ export function ArchivedSessionsDialog({
   onOpenChange,
   port,
   projects,
-  filterProjectId,
+  filterProjectIds,
 }: ArchivedSessionsDialogProps) {
   const aui = useAui();
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -95,8 +96,8 @@ export function ArchivedSessionsDialog({
   const items = useMemo(() => {
     if (!open) return [];
     const all = archivedThreadItemsToSessionItems(aui.threads.getState().threadItems);
-    return filterArchivedSessions(all, filterProjectId).filter((item) => !restoredIds.has(item.id));
-  }, [open, aui, filterProjectId, restoredIds]);
+    return filterArchivedSessions(all, filterProjectIds).filter((item) => !restoredIds.has(item.id));
+  }, [open, aui, filterProjectIds, restoredIds]);
 
   const handleRestore = useCallback(
     async (chatId: string) => {
@@ -134,7 +135,9 @@ export function ArchivedSessionsDialog({
                 id={item.id}
                 title={item.title ?? 'Untitled session'}
                 projectName={
-                  filterProjectId === null ? (projectNames.get(item.custom.projectId) ?? 'Unknown project') : null
+                  soleProjectId(filterProjectIds) === null
+                    ? (projectNames.get(item.custom.projectId) ?? 'Unknown project')
+                    : null
                 }
                 updatedAt={item.custom.updatedAt}
                 restoring={restoring}

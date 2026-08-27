@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import { useUiPrefs, isSidebarSectionCollapsed, isSessionPanelOpen, isSessionPanelSectionOpen } from '../ui-prefs';
+import { useUiPrefs, isSessionPanelOpen, isSessionPanelSectionOpen } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
@@ -13,9 +13,7 @@ beforeEach(() => {
   useUiPrefs.setState({
     sidebarVisible: true,
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
-    rightClickHintDismissed: false,
     dontWarnOnTuningChange: false,
-    collapsedSidebarSections: {},
     sessionPanelOpen: {},
     sessionPanelSections: {},
   });
@@ -26,9 +24,7 @@ describe('useUiPrefs defaults', () => {
     const s = useUiPrefs.getState();
     expect(s.sidebarVisible).toBe(true);
     expect(s.sidebarWidth).toBe(SIDEBAR_DEFAULT_WIDTH);
-    expect(s.rightClickHintDismissed).toBe(false);
     expect(s.dontWarnOnTuningChange).toBe(false);
-    expect(s.collapsedSidebarSections).toEqual({});
     expect(s.sessionPanelOpen).toEqual({});
     expect(s.sessionPanelSections).toEqual({});
   });
@@ -135,12 +131,6 @@ describe('useUiPrefs actions', () => {
     expect(useUiPrefs.getState().sidebarWidth).toBe(480);
   });
 
-  it('dismissRightClickHint permanently suppresses the hint', () => {
-    expect(useUiPrefs.getState().rightClickHintDismissed).toBe(false);
-    useUiPrefs.getState().dismissRightClickHint();
-    expect(useUiPrefs.getState().rightClickHintDismissed).toBe(true);
-  });
-
   it('dismissTuningChangeWarning permanently suppresses the mid-session tuning warning', () => {
     expect(useUiPrefs.getState().dontWarnOnTuningChange).toBe(false);
     useUiPrefs.getState().dismissTuningChangeWarning();
@@ -151,24 +141,6 @@ describe('useUiPrefs actions', () => {
     useUiPrefs.getState().dismissTuningChangeWarning();
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.dontWarnOnTuningChange).toBe(true);
-  });
-
-  it('toggleSidebarSection flips a section from expanded to collapsed and back', () => {
-    useUiPrefs.getState().toggleSidebarSection('projects');
-    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBe(true);
-    useUiPrefs.getState().toggleSidebarSection('projects');
-    expect(useUiPrefs.getState().collapsedSidebarSections.projects).toBe(false);
-  });
-});
-
-describe('isSidebarSectionCollapsed', () => {
-  it('treats a section with no recorded state as expanded (false)', () => {
-    expect(isSidebarSectionCollapsed({}, 'projects')).toBe(false);
-  });
-
-  it('returns the recorded value when present', () => {
-    expect(isSidebarSectionCollapsed({ projects: true }, 'projects')).toBe(true);
-    expect(isSidebarSectionCollapsed({ projects: false }, 'projects')).toBe(false);
   });
 });
 
@@ -181,15 +153,7 @@ describe('useUiPrefs persistence', () => {
     // zustand persist wraps as { state, version }.
     expect(parsed.state.sidebarWidth).toBe(300);
     expect(Object.keys(parsed.state).sort()).toEqual(
-      [
-        'collapsedSidebarSections',
-        'dontWarnOnTuningChange',
-        'rightClickHintDismissed',
-        'sessionPanelOpen',
-        'sessionPanelSections',
-        'sidebarVisible',
-        'sidebarWidth',
-      ].sort(),
+      ['dontWarnOnTuningChange', 'sessionPanelOpen', 'sessionPanelSections', 'sidebarVisible', 'sidebarWidth'].sort(),
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();

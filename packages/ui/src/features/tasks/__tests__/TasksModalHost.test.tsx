@@ -121,7 +121,7 @@ beforeEach(() => {
   localStorage.clear();
   act(() => {
     useTasksModal.setState({ open: false, quickOpen: false });
-    useSessionFilters.setState({ filterProjectId: null });
+    useSessionFilters.setState({ filterProjectIds: new Set() });
     useTodosStore.setState({ entries: {} });
   });
 });
@@ -215,7 +215,7 @@ describe('TasksModalHost — a project added after boot', () => {
 describe('TasksModalHost — seeding', () => {
   it('opens on the sidebar filter, not on the active session, when the two differ', async () => {
     vi.mocked(todosApi.listTodos).mockResolvedValue([]);
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());

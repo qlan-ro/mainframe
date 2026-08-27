@@ -120,7 +120,7 @@ beforeEach(() => {
   localStorage.clear();
   act(() => {
     useTasksModal.setState({ open: false, quickOpen: false });
-    useSessionFilters.setState({ filterProjectId: null });
+    useSessionFilters.setState({ filterProjectIds: new Set() });
     useTodosStore.setState({ entries: {} });
   });
 });
@@ -143,7 +143,7 @@ async function openPicker(testId: string) {
 
 describe('TasksModalHost — session in A, filter on B', () => {
   it('opens the board scoped to B and names B in the header', async () => {
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -161,7 +161,7 @@ describe('TasksModalHost — session in A, filter on B', () => {
 describe('TasksModalHost — the in-modal picker', () => {
   it('re-scopes the list, drops the previous project’s rows, and leaves the sidebar filter untouched', async () => {
     const user = userEvent.setup();
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -176,7 +176,7 @@ describe('TasksModalHost — the in-modal picker', () => {
     expect(screen.getByTestId('tasks-board-project-picker')).toHaveTextContent('Mainframe');
 
     // AC5 — the sidebar filter never moves.
-    expect(useSessionFilters.getState().filterProjectId).toBe('proj-2');
+    expect(useSessionFilters.getState().filterProjectIds).toEqual(new Set(['proj-2']));
   });
 });
 
@@ -186,7 +186,7 @@ describe('TasksModalHost — the in-modal picker', () => {
 
 describe('TasksModalHost — a background change while the modal is open', () => {
   it('leaves the open board unchanged, and the next open takes the new seed', async () => {
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -194,7 +194,7 @@ describe('TasksModalHost — a background change while the modal is open', () =>
     vi.mocked(todosApi.listTodos).mockClear();
 
     act(() => {
-      useSessionFilters.setState({ filterProjectId: 'proj-1' });
+      useSessionFilters.setState({ filterProjectIds: new Set(['proj-1']) });
       vi.mocked(useActiveIdentity).mockReturnValue(identity('proj-1'));
     });
 
@@ -217,7 +217,7 @@ describe('TasksModalHost — a background change while the modal is open', () =>
 describe('TasksModalHost — close and reopen after an in-modal override', () => {
   it('discards the override and re-seeds from the sidebar filter', async () => {
     const user = userEvent.setup();
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -243,7 +243,7 @@ describe('TasksModalHost — mutations follow the scoped project', () => {
   it('create sends the scoped projectId', async () => {
     const user = userEvent.setup();
     vi.mocked(todosApi.createTodo).mockResolvedValue(makeTodo({ id: 'new', number: 3, project_id: 'proj-2' }));
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -261,7 +261,7 @@ describe('TasksModalHost — mutations follow the scoped project', () => {
   it('move (status cycle) refetches the scoped project', async () => {
     const user = userEvent.setup();
     vi.mocked(todosApi.moveTodo).mockResolvedValue(B_TODO);
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());
@@ -277,7 +277,7 @@ describe('TasksModalHost — mutations follow the scoped project', () => {
   it('delete refetches the scoped project', async () => {
     const user = userEvent.setup();
     vi.mocked(todosApi.deleteTodo).mockResolvedValue(undefined);
-    act(() => useSessionFilters.setState({ filterProjectId: 'proj-2' }));
+    act(() => useSessionFilters.setState({ filterProjectIds: new Set(['proj-2']) }));
 
     render(<TasksModalHost port={PORT} />);
     act(() => useTasksModal.getState().openModal());

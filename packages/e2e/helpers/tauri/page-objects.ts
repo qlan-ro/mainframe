@@ -17,11 +17,17 @@ export function sessionsSidebar(page: Page) {
       await page.getByTestId('sessions-more-archived').click();
     },
     importProjectOption: (projectId: string) => page.getByTestId(`sessions-import-project-${projectId}`),
-    /** One row of the sidebar's project switcher. The v1 pill cloud
-     *  (`sessions-filter-pill-<id>`) died with ProjectFilterPillBar; v2's
-     *  ProjectSection renders a vertical list of `sidebar-project-<id>` rows,
-     *  plus `sidebar-project-all` for the clear-filter row. */
+    /** Open the header's project scope dropdown (`ProjectScopeSelector.tsx`,
+     *  2026-08-27) — its checkbox items only exist in the DOM while open. */
+    async openProjectScope() {
+      await page.getByTestId('sidebar-project-scope-trigger').click();
+    },
+    /** A project's checkbox item inside the (open) project scope menu. The
+     *  inline row list this replaced (`ProjectFilterPillBar`/`ProjectSection`,
+     *  a standalone `sidebar-project-<id>` row) is gone; toggling this item
+     *  never switches the active session (scope, not switcher). */
     projectRow: (projectId: string) => page.getByTestId(`sidebar-project-${projectId}`),
+    /** "All projects" checkbox item inside the menu; clears the scope. */
     allProjectsRow: () => page.getByTestId('sidebar-project-all'),
   };
 }

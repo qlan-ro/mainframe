@@ -59,7 +59,7 @@ describe('useDraftRow — discards an unsent draft on navigation-away', () => {
     setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
     useDraftReturnTarget.getState().setReturnTarget('chat-prev');
 
-    const { rerender } = renderHook(() => useDraftRow([], null));
+    const { rerender } = renderHook(() => useDraftRow([], new Set()));
     expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
 
     // The user selects a different session while the draft is still unsent.
@@ -76,7 +76,7 @@ describe('useDraftRow — regression guard: first-send commit is not mistaken fo
   it('does not invoke resetNewThreadDraft when the draft commits (config cleared, id unchanged)', () => {
     setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
 
-    const { rerender } = renderHook(() => useDraftRow([], null));
+    const { rerender } = renderHook(() => useDraftRow([], new Set()));
     expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
 
     // Mirrors new-thread-coordinator.createForLocal's success path: the draft
@@ -93,7 +93,7 @@ describe('useDraftRow — no-op while still composing the draft (no navigation)'
   it('does not reset while mainThreadId still equals the unsent draft thread', () => {
     setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
 
-    renderHook(() => useDraftRow([], null));
+    renderHook(() => useDraftRow([], new Set()));
 
     expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
     expect(getDraftConfig('__LOCALID_draft')).toBeDefined();
@@ -105,7 +105,7 @@ describe('useDraftRow — no-op at boot before a main thread is selected', () =>
     fakeAuiState = { threads: { mainThreadId: '', newThreadId: '__LOCALID_draft' } };
     setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
 
-    renderHook(() => useDraftRow([], null));
+    renderHook(() => useDraftRow([], new Set()));
 
     expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
     expect(getDraftConfig('__LOCALID_draft')).toBeDefined();
@@ -134,7 +134,7 @@ describe('useDraftRow — regression: pending create-to-switch handoff is not mi
     // new-thread slot is a different, not-yet-selected id.
     fakeAuiState = { threads: { mainThreadId: 'chat-existing', newThreadId: '__LOCALID_pending' } };
 
-    const { rerender } = renderHook(() => useDraftRow([], null));
+    const { rerender } = renderHook(() => useDraftRow([], new Set()));
     expect(mockResetNewThreadDraft).not.toHaveBeenCalled();
 
     // pick() fires: setDraftConfig lands synchronously, but
@@ -170,7 +170,7 @@ describe('useDraftRow — onDiscard marks the local id as discarded', () => {
     setDraftConfig('__LOCALID_draft', { projectId: 'proj-a', adapterId: 'claude' });
     expect(isDraftDiscarded('__LOCALID_draft')).toBe(false);
 
-    const { result } = renderHook(() => useDraftRow([], 'proj-a'));
+    const { result } = renderHook(() => useDraftRow([], new Set(['proj-a'])));
     act(() => {
       result.current.onDiscard();
     });

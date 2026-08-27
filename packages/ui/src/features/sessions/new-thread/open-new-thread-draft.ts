@@ -7,8 +7,8 @@
  * captured once, because a call site can unmount mid-await.
  */
 export interface OpenNewThreadDraftDeps {
-  filterProjectId: string | null;
-  setFilterProjectId: (id: string | null) => void;
+  filterProjectIds: ReadonlySet<string>;
+  clearProjectFilter: () => void;
   /**
    * Widened to accept the aui `threads` scope as-is: it declares `newThreadId`
    * as `string | null`, `mainThreadId` as `string`, and `switchToNewThread()`
@@ -33,8 +33,8 @@ export interface OpenNewThreadDraftArgs {
 export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: OpenNewThreadDraftDeps): Promise<void> {
   const { projectId, prefill } = args;
   const {
-    filterProjectId,
-    setFilterProjectId,
+    filterProjectIds,
+    clearProjectFilter,
     runtimeThreads,
     setReturnTarget,
     resetNewThreadDraft,
@@ -43,8 +43,8 @@ export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: Ope
     mfToastError,
   } = deps;
 
-  if (filterProjectId != null && filterProjectId !== projectId) {
-    setFilterProjectId(null);
+  if (filterProjectIds.size > 0 && !filterProjectIds.has(projectId)) {
+    clearProjectFilter();
   }
 
   setReturnTarget(runtimeThreads.getState().mainThreadId ?? null);

@@ -16,16 +16,16 @@ import { mfToast } from '@/lib/toast';
 
 export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promise<void> {
   const aui = useAui();
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
-  const setFilterProjectId = useSessionFilters((s) => s.setFilterProjectId);
+  const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
+  const clearProjectFilter = useSessionFilters((s) => s.clearProjectFilter);
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
   const port = useDaemonPort();
 
   return (args: OpenNewThreadDraftArgs) =>
     openNewThreadDraft(args, {
-      filterProjectId,
-      setFilterProjectId,
+      filterProjectIds,
+      clearProjectFilter,
       runtimeThreads: aui.threads,
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,

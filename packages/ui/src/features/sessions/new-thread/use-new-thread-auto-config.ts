@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
 import { getDraftConfig } from '../runtime/draft-config';
@@ -23,7 +23,9 @@ export function useNewThreadAutoConfig(): void {
   const localId = useAuiState((s) => s.threadListItem?.id ?? null);
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const messageCount = useAuiState((s) => s.thread.messages.length);
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  // Auto-seeding needs ONE unambiguous project — a multi-project scope seeds
+  // nothing and the draft falls back to the explicit picker.
+  const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
   const adaptersRef = useRef(adapters);

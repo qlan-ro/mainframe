@@ -25,7 +25,7 @@ export interface DraftRowState {
   onDiscard: () => void;
 }
 
-export function useDraftRow(allItems: SessionItem[], filterProjectId: string | null): DraftRowState {
+export function useDraftRow(allItems: SessionItem[], filterProjectIds: ReadonlySet<string>): DraftRowState {
   const aui = useAui();
   const newThreadId = useAuiState((s) => s.threads.newThreadId);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
@@ -33,7 +33,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectId: string | n
 
   const model: DraftRowModel | null =
     draftCfg != null && newThreadId != null ? { newThreadId, projectId: draftCfg.projectId } : null;
-  const visible = draftRowVisible(model, filterProjectId);
+  const visible = draftRowVisible(model, filterProjectIds);
   const selected = model != null && mainThreadId === model.newThreadId;
 
   // Discard-on-navigate-away: the draft is unsent (draftCfg still exists) and the

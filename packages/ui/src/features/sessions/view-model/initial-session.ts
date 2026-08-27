@@ -35,21 +35,3 @@ export function pickInitialSession(items: readonly SessionItem[], preferredRemot
   }
   return best?.id ?? null;
 }
-
-/**
- * The most-recently-updated non-archived session OF ONE PROJECT — what the
- * sidebar activates when the user selects a project the active session does
- * not belong to, so dependent context (todos scope, session panel) follows
- * the selection. Null when the project has no live sessions; the caller
- * leaves the current session active and shows the filtered (empty) list.
- */
-export function pickProjectSession(items: readonly SessionItem[], projectId: string): string | null {
-  let best: SessionItem | null = null;
-  for (const item of items) {
-    if (item.status === 'archived' || item.custom.projectId !== projectId) continue;
-    if (best === null || item.custom.updatedAt > best.custom.updatedAt) {
-      best = item;
-    }
-  }
-  return best?.id ?? null;
-}

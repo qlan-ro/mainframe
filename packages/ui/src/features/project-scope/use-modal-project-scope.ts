@@ -26,7 +26,7 @@
  * resolve out from under a choice the user already made.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useSessionFilters } from '@/store/session-filters';
+import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useProjects } from '@/features/sessions/use-projects';
 import { seedProjectScope } from './seed-project-scope';
@@ -44,7 +44,9 @@ interface SeedRecord {
 }
 
 export function useModalProjectScope(open: boolean): ModalProjectScope {
-  const filterProjectId = useSessionFilters((s) => s.filterProjectId);
+  // Modal seeding wants ONE unambiguous project — a multi-project sidebar scope
+  // seeds nothing and the seed chain falls through to the session's project.
+  const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
   const sessionProjectId = useActiveIdentity().projectId ?? null;
   const { projects, reloadProjects } = useProjects();
   // `reloadProjects` is a fresh function every render — a ref keeps the

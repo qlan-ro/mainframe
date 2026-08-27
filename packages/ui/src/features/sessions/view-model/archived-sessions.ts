@@ -11,10 +11,8 @@ import type { SessionItem } from './chat-to-thread-custom';
  * Keep items whose status === 'archived', optionally narrowed to a single
  * project, sorted by updatedAt descending (most recently touched first).
  */
-export function filterArchivedSessions(items: SessionItem[], filterProjectId: string | null): SessionItem[] {
+export function filterArchivedSessions(items: SessionItem[], projectIds: ReadonlySet<string>): SessionItem[] {
   return items
-    .filter(
-      (item) => item.status === 'archived' && (filterProjectId === null || item.custom.projectId === filterProjectId),
-    )
+    .filter((item) => item.status === 'archived' && (projectIds.size === 0 || projectIds.has(item.custom.projectId)))
     .sort((a, b) => b.custom.updatedAt - a.custom.updatedAt);
 }

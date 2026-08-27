@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
-import { pickInitialSession, pickProjectSession } from '../initial-session';
+import { pickInitialSession } from '../initial-session';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -142,36 +142,5 @@ describe('pickInitialSession — pinned state does not affect selection', () => 
       item('unpinned-new', { pinned: false, updatedAt: 1500 }),
     ];
     expect(pickInitialSession(items)).toBe('unpinned-new');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// pickProjectSession — the sidebar's project-switch activation target
-// ---------------------------------------------------------------------------
-
-describe('pickProjectSession', () => {
-  it('picks the most-recently-updated session OF that project only', () => {
-    const items = [
-      item('a-old', { projectId: 'proj-a', updatedAt: 1000 }),
-      item('a-new', { projectId: 'proj-a', updatedAt: 3000 }),
-      item('b-newest', { projectId: 'proj-b', updatedAt: 9000 }),
-    ];
-    expect(pickProjectSession(items, 'proj-a')).toBe('a-new');
-  });
-
-  it('skips archived sessions of the project', () => {
-    const items = [
-      item('a-archived', { projectId: 'proj-a', status: 'archived', updatedAt: 9000 }),
-      item('a-live', { projectId: 'proj-a', updatedAt: 1000 }),
-    ];
-    expect(pickProjectSession(items, 'proj-a')).toBe('a-live');
-  });
-
-  it('returns null when the project has no live sessions', () => {
-    const items = [
-      item('b-1', { projectId: 'proj-b', updatedAt: 1000 }),
-      item('a-archived', { projectId: 'proj-a', status: 'archived', updatedAt: 2000 }),
-    ];
-    expect(pickProjectSession(items, 'proj-a')).toBeNull();
   });
 });
