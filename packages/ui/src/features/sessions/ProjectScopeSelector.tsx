@@ -12,8 +12,9 @@
  * unchecked projects) — unscoped, nothing is hidden and no badge shows. The
  * hover ✕ clears the whole scope without opening the menu; it swaps in for the
  * chevron so the trigger never grows a second trailing slot. Add-project stays
- * a standalone button beside the trigger: it keeps its one-click path, its
- * first-run tour anchor, and the e2e testid.
+ * a standalone button in the "Scope" label row (the same label+actions shape
+ * as the Sessions section): it keeps its one-click path, its first-run tour
+ * anchor, and the e2e testid.
  */
 import type { Project } from '@qlan-ro/mainframe-types';
 import { ChevronsUpDownIcon, FolderPlus, LayoutGridIcon, Trash2Icon, XIcon } from 'lucide-react';
@@ -28,7 +29,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Hint } from '@/components/ui/hint';
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { ProjectAvatar } from './ProjectAvatar';
@@ -53,29 +60,36 @@ export function ProjectScopeSelector(props: ProjectScopeSelectorProps) {
     scope.size === 0 ? 0 : projects.reduce((sum, p) => (scope.has(p.id) ? sum : sum + (attention[p.id] ?? 0)), 0);
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem className="flex items-center gap-0.5">
-        <DropdownMenu>
-          <ScopeTrigger projects={projects} scope={scope} hiddenAttention={hiddenAttention} onClear={props.onClear} />
-          <ScopeMenu {...props} />
-        </DropdownMenu>
+    <SidebarGroup className="p-0" data-testid="sidebar-scope-section">
+      <SidebarGroupLabel>
+        <span className="min-w-0 flex-1 truncate">Scope</span>
         {onAddProject != null && (
-          <Hint label="Add project">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              data-testid="sidebar-projects-add"
-              data-tut="add-project"
-              aria-label="Add project"
-              className="size-6 shrink-0 text-muted-foreground"
-              onClick={onAddProject}
-            >
-              <FolderPlus />
-            </Button>
-          </Hint>
+          <span className="flex shrink-0 items-center gap-0.5">
+            <Hint label="Add project">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-testid="sidebar-projects-add"
+                data-tut="add-project"
+                aria-label="Add project"
+                className="size-6 shrink-0 text-muted-foreground"
+                onClick={onAddProject}
+              >
+                <FolderPlus />
+              </Button>
+            </Hint>
+          </span>
         )}
-      </SidebarMenuItem>
-    </SidebarMenu>
+      </SidebarGroupLabel>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <DropdownMenu>
+            <ScopeTrigger projects={projects} scope={scope} hiddenAttention={hiddenAttention} onClear={props.onClear} />
+            <ScopeMenu {...props} />
+          </DropdownMenu>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarGroup>
   );
 }
 
@@ -97,7 +111,7 @@ function ScopeTrigger({
         size="sm"
         data-testid="sidebar-project-scope-trigger"
         aria-label="Project scope"
-        className="flex-1 data-[state=open]:bg-sidebar-accent"
+        className="data-[state=open]:bg-sidebar-accent"
       >
         <TriggerLabel projects={projects} scope={scope} />
         {hiddenAttention > 0 && (

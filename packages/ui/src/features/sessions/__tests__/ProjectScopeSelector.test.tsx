@@ -13,6 +13,8 @@
  * behavior over styling is the contract here, not a jsdom quirk workaround.
  *
  * Behaviors covered:
+ *  0. Scope section: renders a visible "Scope" label and the project-scope
+ *     trigger under one `sidebar-scope-section` root.
  *  1. Trigger label: empty scope → "All projects"; one project → its name;
  *     two projects → "2 projects".
  *  2. Trigger hidden-attention badge: sum of attention OUTSIDE the scope;
@@ -26,8 +28,9 @@
  *  6. Clicking "All projects" calls onClear.
  *  7. The remove affordance: pointerdown calls onRemoveProject(project), never
  *     onToggle; absent when onRemoveProject is omitted.
- *  8. Add project: the standalone button and the menu item both call
- *     onAddProject; neither renders when onAddProject is omitted.
+ *  8. Add project: the standalone button renders inside the scope section
+ *     and, along with the menu item, calls onAddProject; neither renders
+ *     when onAddProject is omitted.
  */
 import type { ComponentProps } from 'react';
 import { describe, it, expect, vi } from 'vitest';
@@ -76,6 +79,24 @@ function renderSelector(overrides: Partial<ProjectScopeSelectorProps> = {}) {
 async function openMenu() {
   await userEvent.click(screen.getByTestId('sidebar-project-scope-trigger'));
 }
+
+// ---------------------------------------------------------------------------
+// Scope section
+// ---------------------------------------------------------------------------
+
+describe('ProjectScopeSelector — scope section', () => {
+  it('renders a visible "Scope" label', () => {
+    renderSelector();
+    const section = screen.getByTestId('sidebar-scope-section');
+    expect(within(section).getByText('Scope')).toBeInTheDocument();
+  });
+
+  it('renders the project-scope trigger within the same section', () => {
+    renderSelector();
+    const section = screen.getByTestId('sidebar-scope-section');
+    expect(within(section).getByTestId('sidebar-project-scope-trigger')).toBeInTheDocument();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Trigger label
@@ -242,11 +263,13 @@ describe('ProjectScopeSelector — remove affordance', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProjectScopeSelector — add project', () => {
-  it('the standalone button calls onAddProject', () => {
+  it('the standalone button renders inside the scope section and calls onAddProject on click', () => {
     const onAddProject = vi.fn();
     renderSelector({ onAddProject });
 
-    fireEvent.click(screen.getByTestId('sidebar-projects-add'));
+    const section = screen.getByTestId('sidebar-scope-section');
+    const button = within(section).getByTestId('sidebar-projects-add');
+    fireEvent.click(button);
 
     expect(onAddProject).toHaveBeenCalledTimes(1);
   });
