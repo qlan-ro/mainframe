@@ -66,7 +66,7 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
 
 let __skills: { name: string; displayName: string; description: string; invocationName?: string }[] = [];
 vi.mock('@/features/skills/use-chat-skills', () => ({
-  useChatSkills: () => ({ skills: __skills, agents: [], loading: false }),
+  useChatSkills: () => ({ skills: __skills, agents: [], commands: [], loading: false }),
   useChatAgents: () => [],
 }));
 

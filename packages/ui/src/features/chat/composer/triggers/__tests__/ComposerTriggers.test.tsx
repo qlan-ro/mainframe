@@ -12,7 +12,7 @@
  * useChatAgents, and the `@/lib/api/files` REST wrappers.
  */
 import { useRef } from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AssistantRuntimeProvider, ComposerPrimitive, useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessage } from '@assistant-ui/react';
@@ -34,8 +34,9 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
 }));
 
 let __skills: { name: string; displayName: string; description: string; invocationName?: string }[] = [];
+let __commands: { name: string; description: string; source: string }[] = [];
 vi.mock('@/features/skills/use-chat-skills', () => ({
-  useChatSkills: () => ({ skills: __skills, agents: [], loading: false }),
+  useChatSkills: () => ({ skills: __skills, agents: [], commands: __commands, loading: false }),
   useChatAgents: () => [],
 }));
 
@@ -181,6 +182,55 @@ describe('ComposerTriggers — popover closes after picking a skill', () => {
     await waitFor(() => {
       expect(input.value).toBe('/my-skill ');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Daemon commands share the `/` trigger with skills. They were unreachable
+// between the Electron→Tauri port and this wiring: the daemon served them and
+// nothing in the renderer asked.
+// ---------------------------------------------------------------------------
+
+describe('ComposerTriggers — daemon commands under `/`', () => {
+  beforeEach(() => {
+    __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
+    __commands = [{ name: 'launch-config', description: 'Generate .mainframe/launch.json', source: 'mainframe' }];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+  });
+
+  // Every other block asserts on a skills-only `/` list — leaking a command
+  // into them would change the row order they expect.
+  afterEach(() => {
+    __commands = [];
+  });
+
+  it('lists a command under its own test id, above the skills', async () => {
+    render(<Harness />);
+    typeInto(screen.getByTestId('composer-input'), '/');
+
+    const command = await screen.findByTestId('composer-command-item-launch-config');
+    const skill = screen.getByTestId('composer-skill-item-my-skill');
+    expect(command.compareDocumentPosition(skill)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('inserts the literal command text, which the send path matches on', async () => {
+    render(<Harness />);
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+
+    typeInto(input, '/');
+    fireEvent.click(await screen.findByTestId('composer-command-item-launch-config'));
+
+    await waitFor(() => {
+      expect(input.value).toBe('/launch-config ');
+    });
+  });
+
+  it('filters commands and skills together', async () => {
+    render(<Harness />);
+    typeInto(screen.getByTestId('composer-input'), '/launch');
+
+    expect(await screen.findByTestId('composer-command-item-launch-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-skill-item-my-skill')).not.toBeInTheDocument();
   });
 });
 

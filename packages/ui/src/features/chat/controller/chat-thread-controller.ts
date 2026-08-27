@@ -31,6 +31,7 @@ import {
 } from './chat-thread-state';
 import { ChatWsSubscription, type ChatWsHost } from './chat-ws-subscription';
 import { buildPendingMessage, parseSendInput, reconcilePendings } from './chat-reconcile';
+import { matchCommandInvocation } from '../commands/command-registry';
 import { PermissionReplyTracker } from './permission-reply-tracker';
 import { routeDaemonEvent } from './chat-event-router';
 
@@ -300,11 +301,18 @@ export class ChatThreadController {
     try {
       attachmentIds =
         uploadItems.length > 0 ? await uploadAttachments(this.port, this.daemonId, uploadItems) : undefined;
+      // A draft that is exactly `/<command>` is an invocation, not prose: the
+      // daemon resolves the command by name and — for a Mainframe one —
+      // substitutes its prompt template for `content`. Without this metadata the
+      // same text takes the plain-text path and the model receives the literal
+      // "/launch-config" string.
+      const command = matchCommandInvocation(text);
       this.ws.send({
         type: 'message.send',
         chatId: this.daemonId,
         content: text,
         ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
+        ...(command ? { metadata: { command } } : {}),
       });
     } catch (error) {
       const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
