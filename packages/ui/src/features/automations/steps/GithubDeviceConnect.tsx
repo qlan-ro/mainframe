@@ -11,7 +11,7 @@
  * ever mounted out of sync with the parent's client-ID check.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink, Plug } from 'lucide-react';
+import { Check, Copy, ExternalLink, LogIn, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { openExternal } from '@/lib/tauri/bridge';
 import type { GithubDeviceStart } from '@/lib/api/automations';
@@ -123,8 +123,8 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
         data-testid={`${testId}-unavailable`}
         className="flex flex-col gap-1 rounded-md border-[0.5px] border-border bg-card p-2.5 text-xs text-muted-foreground"
       >
-        <span className="font-medium text-foreground">GitHub connection isn't available yet</span>
-        <span>Use the token field above — sign-in with GitHub is coming soon.</span>
+        <span className="font-medium text-foreground">Signing in with GitHub isn't available yet</span>
+        <span>Use the personal access token below instead.</span>
       </div>
     );
   }
@@ -197,17 +197,19 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
     );
   }
 
+  // Named for what it does, not for the provider: the token field next to it
+  // also connects GitHub, and two buttons reading "Connect GitHub…" left the
+  // user with no way to tell them apart.
   return (
     <Button
-      variant="outline"
       size="sm"
       data-testid={`${testId}-connect`}
       onClick={() => void start()}
       disabled={phase.kind === 'starting'}
-      className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
+      className="gap-1.5 font-semibold"
     >
-      <Plug size={12} aria-hidden />
-      Connect GitHub…
+      <LogIn size={12} aria-hidden />
+      Sign in with GitHub
     </Button>
   );
 }
