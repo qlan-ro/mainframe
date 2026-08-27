@@ -30,7 +30,8 @@ import { resolveDraftChatContext } from './resolve-draft-chat-context';
 import { useSessionMentionSource } from '../sessions/use-session-mention-source';
 import { createSessionInsertion, sessionItemGlyph, sessionItemTestId } from '../sessions/session-trigger-wiring';
 import { searchFiles, getFileTree, browseFilesystem } from '@/lib/api/files';
-import { buildSkillsTriggerAdapter } from './skills-trigger-adapter';
+import { buildSlashTriggerAdapter } from './slash-trigger-adapter';
+import { commandItemGlyph, commandItemTestId } from './command-trigger-wiring';
 import { createMentionCache } from './mention-adapter';
 import { useMentionTriggerAdapter } from './use-mention-trigger-adapter';
 import {
@@ -58,9 +59,9 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
   const draft = useDraftConfig(activeChatId != null && chatConfig == null ? activeChatId : null);
   const { projectId, fileChatId: chatId } = resolveDraftChatContext(activeChatId, chatConfig, draft);
 
-  const { skills } = useChatSkills();
+  const { skills, commands } = useChatSkills();
   const agents = useChatAgents();
-  const skillsAdapter = useMemo(() => buildSkillsTriggerAdapter(skills), [skills]);
+  const slashAdapter = useMemo(() => buildSlashTriggerAdapter(skills, commands), [skills, commands]);
 
   const mentionCache = useMemo(
     () =>
@@ -95,9 +96,11 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
     () => [
       {
         char: '/',
-        adapter: skillsAdapter,
+        adapter: slashAdapter,
         formatter: literalDirectiveFormatter('/'),
         itemTestIdPrefix: 'composer-skill-item',
+        itemTestId: commandItemTestId,
+        itemGlyph: commandItemGlyph,
       },
       {
         char: '@',
@@ -110,7 +113,7 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
         closeOnInsert: shouldCloseTriggerOnInsert,
       },
     ],
-    [skillsAdapter, mentionAdapter, insertion],
+    [slashAdapter, mentionAdapter, insertion],
   );
 
   return { triggers, refreshSessions: sessions.refresh };

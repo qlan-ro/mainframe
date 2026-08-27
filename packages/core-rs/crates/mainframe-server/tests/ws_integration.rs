@@ -94,11 +94,15 @@ async fn file_subscribe_absolute_acks_and_receives_file_changed() {
     // The cadence must exceed the watcher's 200ms trailing debounce (each new
     // event resets it): a 200ms cadence phase-locks with the debounce on Linux
     // CI and the emit can lose the reset race every cycle, timing this test out.
+    // `loop` with its own counter, not `for i in 0..`: the task runs until it is
+    // aborted below, and an unbounded integer range is a wrapping loop to clippy.
     let writer_file = file.clone();
     let writer = tokio::spawn(async move {
-        for i in 0.. {
+        let mut i: u64 = 0;
+        loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let _ = std::fs::write(&writer_file, format!("// changed {i}"));
+            i += 1;
         }
     });
 

@@ -17,10 +17,12 @@
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Skill, AgentConfig } from '@qlan-ro/mainframe-types';
+import type { Skill, AgentConfig, CustomCommand } from '@qlan-ro/mainframe-types';
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
+import { getCommands } from '@/lib/api/commands';
+import { publishCommands } from '../chat/commands/command-registry';
 import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
 import { useDraftConfig } from '../sessions/runtime/draft-config';
 import { resolveDraftChatContext } from '../chat/composer/triggers/resolve-draft-chat-context';
@@ -33,10 +35,12 @@ import { useSkillsNonce } from './use-skills-revalidation';
 interface ChatSkills {
   skills: Skill[];
   agents: AgentConfig[];
+  /** Daemon slash commands. Global, so they survive an adapter/project change. */
+  commands: CustomCommand[];
   loading: boolean;
 }
 
-const DEFAULT: ChatSkills = { skills: [], agents: [], loading: false };
+const DEFAULT: ChatSkills = { skills: [], agents: [], commands: [], loading: false };
 const Ctx = createContext<ChatSkills>(DEFAULT);
 
 // ---------------------------------------------------------------------------
@@ -69,8 +73,31 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
 
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [commands, setCommands] = useState<CustomCommand[]>([]);
   const [loading, setLoading] = useState(false);
   const nonce = useSkillsNonce();
+
+  // Commands need only the port — the registry behind `/api/commands` is static
+  // and takes no project. Kept off the skills effect so the `/` picker offers
+  // them on a fresh draft, before an adapter or project has been chosen.
+  // Published to the module registry as well: the send path matches an
+  // invocation from there, outside React (see command-registry).
+  useEffect(() => {
+    if (port == null) return;
+    let cancelled = false;
+    void loadList(
+      'commands',
+      () => getCommands(port),
+      (items) => {
+        if (cancelled) return;
+        setCommands(items);
+        publishCommands(items);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [port]);
 
   useEffect(() => {
     if (port == null || !adapterId || !projectId) return;
@@ -125,7 +152,7 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
     };
   }, [port, adapterId, projectId, nonce]);
 
-  return <Ctx.Provider value={{ skills, agents, loading }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ skills, agents, commands, loading }}>{children}</Ctx.Provider>;
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,13 @@
 //! layer, the response envelope, and path validation.
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+// A route helper that fails returns the `Response` it wants sent — that IS the
+// error here, and `respond.rs`'s `fail`/`ok` pair is built around it. Boxing it
+// to satisfy `result_large_err` would put an allocation on every error path to
+// silence a lint about a type axum hands us. The toolchain is unpinned
+// (`rust-toolchain.toml` tracks `stable`), so this fires whenever clippy lowers
+// the threshold rather than when the code changes.
+#![allow(clippy::result_large_err)]
 
 pub mod async_err;
 pub mod automations_deps;
