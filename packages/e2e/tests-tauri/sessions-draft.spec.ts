@@ -34,9 +34,17 @@
  *   sessions-draft-row-discard       — the ✕. It is a `SidebarMenuAction`, i.e. a SIBLING of
  *                                      `sessions-draft-row` inside the list item — not a
  *                                      descendant, so it can only be reached from the page.
- *   sidebar-project-<id>             — one project row in the switcher list (was
- *                                      `sessions-filter-pill-<id>`)
- *   sidebar-project-all              — "All projects" row (was `sessions-filter-pill-all`)
+ *   sidebar-project-scope-trigger     — the header's project scope dropdown trigger
+ *                                      (replaced the inline project-row list, 2026-08-27)
+ *   sidebar-project-scope-menu       — the dropdown's content root; opens on a trigger
+ *                                      click, stays open across picks (multi-select), and
+ *                                      closes only on Escape
+ *   sidebar-project-<id>             — a project's checkbox item inside that menu
+ *                                      (was a standalone row); toggles it in/out of scope
+ *                                      and never switches the active session
+ *   sidebar-project-all              — "All projects" checkbox item inside the menu;
+ *                                      clears the whole scope, also without switching
+ *                                      the active session
  *   project-avatar                   — the coloured initial the draft row shows in "All" view.
  *                                      The draft row no longer prints the project NAME (v2
  *                                      DraftSessionRow renders a `ProjectAvatar`), so the
@@ -63,14 +71,21 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
+import { closeMenus } from '../helpers/tauri/menus.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { TOAST } from '../helpers/tauri/testids.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
-/** One row of the project switcher list (page-objects' `projectFilterPill` is stale). */
+/** A project's checkbox item inside the (open) project scope menu. */
 function projectRow(page: Page, projectId: string): Locator {
   return page.getByTestId(`sidebar-project-${projectId}`);
+}
+
+/** Open the header's project scope dropdown. */
+async function openProjectScope(page: Page): Promise<void> {
+  await page.getByTestId('sidebar-project-scope-trigger').click();
+  await expect(page.getByTestId('sidebar-project-scope-menu')).toBeVisible({ timeout: 5_000 });
 }
 
 /**
@@ -416,10 +431,12 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     const { page } = app;
     const sidebar = sessionsSidebar(page);
 
+    await openProjectScope(page);
     await projectRow(page, projectA.projectId).click();
-    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('aria-pressed', 'true', {
+    await expect(projectRow(page, projectA.projectId)).toHaveAttribute('data-state', 'checked', {
       timeout: 5_000,
     });
+    await closeMenus(page);
 
     await sidebar.newButton().click();
 
@@ -437,13 +454,15 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     await expect(draftRow.getByTestId('project-avatar')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(projectA.projectPath));
 
-    // Clean up: discard, then clear the filter for the next test. The project
-    // switcher list is single-select (not a toggle) — only the "All projects"
-    // row clears the filter, a second click on the active row no longer does.
+    // Clean up: discard, then clear the scope for the next test via the menu's
+    // "All projects" item (unchecking A's own item would work too — either
+    // clears it, since scope is multi-select now).
     await draftRow.hover();
     await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
+    await openProjectScope(page);
     await page.getByTestId('sidebar-project-all').click();
+    await closeMenus(page);
   });
 
   test('abandoning a draft in project A does not leak into a second New picking project B', async () => {
@@ -514,8 +533,9 @@ test.describe('§sessions-draft — ⌘N opens the welcome project picker (no pr
   test('⌘N opens the same welcome picker as the "+" button; nothing is sendable until a project is picked', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
-    // Guarantee "All" view (no project selected).
-    await expect(page.getByTestId('sidebar-project-all')).toHaveAttribute('aria-pressed', 'true');
+    // Guarantee "All" view (no project selected) — the trigger reads "All
+    // projects" when the scope is empty.
+    await expect(page.getByTestId('sidebar-project-scope-trigger')).toContainText('All projects');
 
     await page.keyboard.press('ControlOrMeta+n');
 
@@ -554,10 +574,12 @@ test.describe('§sessions-draft — ⌘N opens the welcome project picker (no pr
   test('with a project selected, ⌘N skips the project pick and seeds that project directly', async () => {
     const { page } = app;
 
+    await openProjectScope(page);
     await projectRow(page, project.projectId).click();
-    await expect(projectRow(page, project.projectId)).toHaveAttribute('aria-pressed', 'true', {
+    await expect(projectRow(page, project.projectId)).toHaveAttribute('data-state', 'checked', {
       timeout: 5_000,
     });
+    await closeMenus(page);
 
     await page.keyboard.press('ControlOrMeta+n');
 
@@ -567,12 +589,13 @@ test.describe('§sessions-draft — ⌘N opens the welcome project picker (no pr
     await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
 
-    // Clean up: discard, then clear the filter. The project switcher list is
-    // single-select (not a toggle) — only "All projects" clears it.
+    // Clean up: discard, then clear the scope via "All projects".
     await draftRow.hover();
     await page.getByTestId('sessions-draft-row-discard').click();
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 10_000 });
+    await openProjectScope(page);
     await page.getByTestId('sidebar-project-all').click();
+    await closeMenus(page);
   });
 });
 
