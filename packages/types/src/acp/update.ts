@@ -24,7 +24,22 @@ export const MessageUpsertSchema = z
   .loose();
 export type MessageUpsert = z.infer<typeof MessageUpsertSchema>;
 
-export const StopReasonSchema = z.enum(['end_turn', 'max_tokens', 'max_turn_requests', 'refusal', 'cancelled']);
+/**
+ * Schema `StopReason` is `end_turn | max_tokens | max_turn_requests |
+ * refusal | cancelled` plus an "other" catch-all for `_`-prefixed
+ * implementation extensions — it has no built-in error reason. The spec
+ * requires one ("Turns end with an explicit stop reason (completed,
+ * cancelled, **error**)"), so `_mainframe.dev/error` is added as that
+ * extension — see `mainframe-types/src/acp/update.rs`'s `StopReason::Error`.
+ */
+export const StopReasonSchema = z.enum([
+  'end_turn',
+  'max_tokens',
+  'max_turn_requests',
+  'refusal',
+  'cancelled',
+  '_mainframe.dev/error',
+]);
 export type StopReason = z.infer<typeof StopReasonSchema>;
 
 export const IdleStateUpdateSchema = z

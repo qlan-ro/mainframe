@@ -41,6 +41,13 @@ pub struct MessageUpsert {
     pub meta: Option<Option<Value>>,
 }
 
+/// Schema `StopReason` is `end_turn | max_tokens | max_turn_requests |
+/// refusal | cancelled` plus an "other" catch-all reserved for `_`-prefixed
+/// implementation extensions — it has **no built-in error reason**. The spec
+/// requires one ("Turns end with an explicit stop reason (completed,
+/// cancelled, **error**)"; edge case: "Adapter process dies mid-turn: the
+/// turn ends with an error stop reason"), so `Error` is added here as that
+/// extension, namespaced per the schema's own discipline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StopReason {
@@ -49,6 +56,8 @@ pub enum StopReason {
     MaxTurnRequests,
     Refusal,
     Cancelled,
+    #[serde(rename = "_mainframe.dev/error")]
+    Error,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
