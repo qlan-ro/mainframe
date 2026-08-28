@@ -1374,6 +1374,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         self.deps.on_provider_quota(adapter_id, quota);
     }
 
+    fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        self.notify_surface(ChatSurfaceEvent::Retry {
+            chat_id: self.chat_id.clone(),
+            attempt,
+            reason,
+        });
+    }
+
     fn on_attention_request(&self, message: &str) {
         let Some(attention) = normalize_attention_body(message) else {
             return;

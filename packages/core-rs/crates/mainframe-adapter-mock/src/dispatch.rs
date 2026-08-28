@@ -65,6 +65,9 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         "onProviderQuota" => {
             sink.on_provider_quota(&arg::<String>(event, 0)?, arg::<ProviderQuota>(event, 1)?)
         }
+        // todo #350 group D task 11: extends the fixture vocabulary so a
+        // captured `api_error` retry can be replayed through the sink.
+        "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
         method => tracing::warn!(%method, "mock-cli ignored unknown recorded sink method"),
     }
     Ok(())
@@ -98,6 +101,7 @@ mod tests {
     #[derive(Default)]
     struct RecordingSink {
         cancelled: Mutex<Vec<String>>,
+        api_retries: Mutex<Vec<(i64, Option<String>)>>,
     }
     impl SessionSink for RecordingSink {
         fn on_init(&self, _session_id: &str) {}
@@ -124,6 +128,12 @@ mod tests {
         fn on_cli_message(&self, _text: &str) {}
         fn on_skill_loaded(&self, _entry: LoadedSkill) {}
         fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
+        fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+            self.api_retries
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((attempt, reason));
+        }
     }
 
     fn recorded(method: &str, args: Vec<Value>) -> RecordedEvent {
@@ -148,6 +158,20 @@ mod tests {
         assert_eq!(
             *sink.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
             vec!["req_1".to_string()]
+        );
+    }
+
+    #[test]
+    fn dispatches_a_recorded_on_api_retry() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded("onApiRetry", vec![json!(2), json!("overloaded_error")]);
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        assert_eq!(
+            *sink.api_retries.lock().unwrap_or_else(|e| e.into_inner()),
+            vec![(2, Some("overloaded_error".to_string()))]
         );
     }
 

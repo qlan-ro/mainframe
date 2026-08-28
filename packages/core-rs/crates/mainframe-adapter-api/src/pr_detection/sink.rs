@@ -156,4 +156,8 @@ impl SessionSink for PrDetectionSink {
     fn on_attention_request(&self, message: &str) {
         self.inner.on_attention_request(message);
     }
+
+    fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        self.inner.on_api_retry(attempt, reason);
+    }
 }

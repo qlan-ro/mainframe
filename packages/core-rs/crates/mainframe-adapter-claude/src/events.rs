@@ -104,6 +104,22 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             sink.on_init(&session_id);
         }
         Some("compact_boundary") => sink.on_compact(),
+        // `system`/`api_error` — CLAUDE-JSONL-SCHEMA.md's `api_error` section
+        // (`retryAttempt`/`error`; `retryInMs`/`maxRetries` are not surfaced —
+        // the facade models retry as a content-replacing patch, not a
+        // countdown, per spec decision 10). Previously dropped entirely
+        // (fact 1); this is todo #350 group D task 11's wiring.
+        Some("api_error") => {
+            let attempt = event
+                .get("retryAttempt")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            let reason = event
+                .get("error")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            sink.on_api_retry(attempt, reason);
+        }
         Some("task_started") => {
             let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
             let task_id = event
@@ -485,6 +501,7 @@ mod tests {
         cancelled: Vec<String>,
         provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
         attention_requests: Vec<String>,
+        api_retries: Vec<(i64, Option<String>)>,
     }
 
     #[derive(Default)]
@@ -573,6 +590,9 @@ mod tests {
         fn on_attention_request(&self, message: &str) {
             self.r().attention_requests.push(message.to_string());
         }
+        fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+            self.r().api_retries.push((attempt, reason));
+        }
     }
 
     fn session_at(path: &str, tracker: Arc<BackgroundTaskTracker>) -> Arc<ClaudeSession> {
@@ -612,6 +632,32 @@ mod tests {
             serde_json::json!({ "type": "system", "subtype": "init", "session_id": "s1" }),
         );
         assert_eq!(sink.r().init, vec!["s1".to_string()]);
+    }
+
+    // Captured shape: docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md's
+    // `api_error` section (a real transcript line, not the informal
+    // "api_retry" naming the todo brief used).
+    #[test]
+    fn parses_a_captured_api_error_line_into_on_api_retry() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "system",
+                "subtype": "api_error",
+                "level": "error",
+                "error": "{status: 529, headers: {...}}",
+                "retryInMs": 538.28,
+                "retryAttempt": 1,
+                "maxRetries": 10
+            }),
+        );
+        assert_eq!(
+            sink.r().api_retries,
+            vec![(1, Some("{status: 529, headers: {...}}".to_string()))]
+        );
     }
 
     #[test]

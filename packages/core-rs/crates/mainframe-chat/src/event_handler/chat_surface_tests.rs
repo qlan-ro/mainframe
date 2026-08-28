@@ -241,6 +241,17 @@ fn on_context_usage_notifies_usage() {
 }
 
 #[test]
+fn on_api_retry_notifies_retry() {
+    let (sink, surface) = sink_with_surface(ProcessState::Working);
+    sink.on_api_retry(2, Some("overloaded_error".to_string()));
+
+    assert!(surface.events().iter().any(|e| matches!(
+        e,
+        ChatSurfaceEvent::Retry { attempt: 2, reason: Some(r), .. } if r == "overloaded_error"
+    )));
+}
+
+#[test]
 fn on_message_notifies_display_revision_with_the_legacy_emitter_snapshot() {
     let (sink, surface) = sink_with_surface(ProcessState::Idle);
     sink.on_message(

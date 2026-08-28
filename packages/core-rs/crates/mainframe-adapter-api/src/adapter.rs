@@ -115,6 +115,14 @@ pub trait SessionSink: Send + Sync {
     /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
     /// with no such tool need not implement it.
     fn on_attention_request(&self, _message: &str) {}
+    /// The CLI retried an API call after a transient error (Claude's
+    /// `system`/`api_error` transcript entry — see
+    /// `docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md`'s `api_error`
+    /// section; todo #350 group D task 11). `reason` is the adapter's raw
+    /// error text, not a categorized taxonomy. Default no-op: adapters with
+    /// no retry-reporting event need not implement it, and today's daemon
+    /// drops it exactly as before (fact 1) until a sink overrides this.
+    fn on_api_retry(&self, _attempt: i64, _reason: Option<String>) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored
