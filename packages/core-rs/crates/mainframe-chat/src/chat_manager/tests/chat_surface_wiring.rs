@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::chat_surface::{ChatSurface, ChatSurfaceEvent, TurnStopReason};
-use mainframe_types::adapter::{ControlRequest, SessionResult};
+use mainframe_types::adapter::{ControlBehavior, ControlRequest, SessionResult};
 
 #[derive(Default)]
 struct RecordingSurface {
@@ -145,4 +145,94 @@ async fn interrupt_ends_the_turn_cancelled_and_leaves_no_answerable_gate() {
         .filter(|e| matches!(e, ChatSurfaceEvent::GateResolved { .. }))
         .count();
     assert_eq!(resolved_count, 0, "interrupt_chat already cleared the gate");
+}
+
+fn allow_response(request_id: &str, tool_use_id: &str) -> ControlResponse {
+    ControlResponse {
+        request_id: request_id.to_string(),
+        tool_use_id: tool_use_id.to_string(),
+        tool_name: Some("Bash".to_string()),
+        behavior: ControlBehavior::Allow,
+        updated_input: None,
+        updated_permissions: None,
+        message: None,
+        execution_mode: None,
+        clear_context: None,
+    }
+}
+
+fn control_request(request_id: &str) -> ControlRequest {
+    ControlRequest {
+        request_id: request_id.to_string(),
+        tool_name: "Bash".to_string(),
+        tool_use_id: format!("{request_id}-tool"),
+        input: HashMap::new(),
+        suggestions: Vec::new(),
+        decision_reason: None,
+    }
+}
+
+/// Plan task 17: the facade's cross-surface gate resolution relies on the
+/// chat surface hearing about a permission answered *normally* (not just a
+/// CLI-cancelled one, which `on_permission_cancelled` already covered above)
+/// — a legacy-surface answer is the only way a facade session's pending gate
+/// ever resolves, since `respond_to_permission` is the single entry point
+/// both surfaces call.
+#[tokio::test]
+async fn answering_a_permission_normally_emits_gate_resolved_on_the_chat_surface() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+    let sink = mgr.event_handler.build_sink("c1", None);
+    sink.on_permission(control_request("req_1"));
+
+    mgr.respond_to_permission("c1", allow_response("req_1", "req_1-tool"))
+        .await
+        .unwrap();
+
+    assert!(
+        surface.events().iter().any(|e| matches!(
+            e,
+            ChatSurfaceEvent::GateResolved { request_id, .. } if request_id == "req_1"
+        )),
+        "a legacy-surface answer must reach the chat surface, or a facade \
+         gate registry can never learn the request resolved elsewhere"
+    );
+}
+
+/// The other half of task 17's promotion path: answering the front of a
+/// multi-request queue must raise the newly-promoted request on the chat
+/// surface too, not just via the legacy `DaemonEvent`.
+#[tokio::test]
+async fn answering_the_front_request_raises_the_promoted_one_on_the_chat_surface() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+    let sink = mgr.event_handler.build_sink("c1", None);
+    sink.on_permission(control_request("req_1"));
+    sink.on_permission(control_request("req_2"));
+
+    mgr.respond_to_permission("c1", allow_response("req_1", "req_1-tool"))
+        .await
+        .unwrap();
+
+    assert!(
+        surface.events().iter().any(|e| matches!(
+            e,
+            ChatSurfaceEvent::GateRaised { request, .. } if request.request_id == "req_2"
+        )),
+        "the promoted request must be raised on the chat surface for a facade to redeliver it"
+    );
 }

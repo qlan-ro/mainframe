@@ -112,6 +112,22 @@ impl ChatManager {
         build_history_session(&self.deps, &chat, chat_id)
     }
 
+    /// Resume-replay snapshot (todo #350, plan task 15): display history plus
+    /// any still-open gate for `chat_id`, gathered in one call so the ACP
+    /// facade's `session/resume` doesn't have to sequence
+    /// `get_display_messages`/`get_pending_permission` itself.
+    pub async fn get_resume_snapshot(
+        &self,
+        chat_id: &str,
+    ) -> (
+        Vec<DisplayMessage>,
+        Option<mainframe_types::adapter::ControlRequest>,
+    ) {
+        let payload = self.get_display_messages(chat_id).await;
+        let pending = self.get_pending_permission(chat_id).await;
+        (payload.messages, pending)
+    }
+
     pub async fn get_session_context(&self, chat_id: &str, project_path: &str) -> SessionContext {
         let session = self.get_session_for_chat(chat_id);
         let adapter_id = self.get_chat(chat_id).map(|c| c.adapter_id);

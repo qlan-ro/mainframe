@@ -1,6 +1,6 @@
 //! Ported from `packages/core/src/chat/permission-handler.ts`.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
@@ -9,6 +9,7 @@ use mainframe_types::content::LeafContent;
 use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::event_handler::{EventChatUpdate, PushOut};
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
@@ -61,6 +62,13 @@ pub struct ChatPermissionHandler<D: PermissionHandlerDeps> {
     permissions: Arc<Mutex<PermissionManager>>,
     messages: Arc<Mutex<MessageCache>>,
     deps: D,
+    /// The chat-surface observer (todo #350, plan task 17): unlike
+    /// `EventHandler`, this handler owns the normal (non-cancelled)
+    /// permission-answer path, so it needs its own attach point to emit
+    /// `GateResolved`/`GateRaised` there — mirrors `chat_surface.rs`'s
+    /// documented constructor-injection pattern (a handler with none
+    /// attached is a silent no-op, not a construction-time obligation).
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 fn is_exit_plan_mode(response: &ControlResponse) -> bool {
@@ -77,7 +85,18 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             permissions,
             messages,
             deps,
+            chat_surface: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Attach the chat-surface observer. Idempotent-once, matching
+    /// `EventHandler::set_chat_surface`.
+    pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
+        let _ = self.chat_surface.set(surface);
+    }
+
+    fn notify_surface(&self, event: ChatSurfaceEvent) {
+        chat_surface::notify(self.chat_surface.get(), event);
     }
 
     fn has_pending(&self, chat_id: &str) -> bool {
@@ -291,6 +310,14 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             chat_id: chat_id.to_string(),
             request_id: response.request_id.clone(),
         });
+        // The chat-surface twin of the event above (todo #350, plan task 17):
+        // a facade session's gate registry needs this to resolve the SAME
+        // request across surfaces, since a legacy-surface answer never
+        // otherwise reaches the facade.
+        self.notify_surface(ChatSurfaceEvent::GateResolved {
+            chat_id: chat_id.to_string(),
+            request_id: response.request_id.clone(),
+        });
 
         let next_request = self
             .permissions
@@ -305,6 +332,10 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
                 chat_id: chat_id.to_string(),
                 request: next_request.clone(),
                 notify,
+            });
+            self.notify_surface(ChatSurfaceEvent::GateRaised {
+                chat_id: chat_id.to_string(),
+                request: next_request.clone(),
             });
             if notify {
                 self.deps.send_push(PushOut {

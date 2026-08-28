@@ -118,8 +118,11 @@ impl ChatManager {
     /// legacy WS surface and the ACP facade can be driven from. A manager
     /// built with none attached (most tests) behaves exactly as before —
     /// `EventHandler::notify_chat_surface` is a no-op until this runs.
+    /// `permission_handler` gets the same surface (plan task 17): it owns
+    /// the normal permission-answer path, which `EventHandler` never sees.
     pub fn with_chat_surface(self, surface: Arc<dyn crate::chat_surface::ChatSurface>) -> Self {
-        self.event_handler.set_chat_surface(surface);
+        self.event_handler.set_chat_surface(surface.clone());
+        self.permission_handler.set_chat_surface(surface);
         self
     }
 
