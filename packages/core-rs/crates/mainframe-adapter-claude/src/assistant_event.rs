@@ -172,20 +172,32 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
         }
     }
 
+    // The first event of each API message adopts `message.id` as its vendor
+    // id; later blocks fall back to the transcript-entry envelope's `uuid`
+    // (present on live stream-json events too — SESSIONS_JSONL.md: stable
+    // across live and on-disk). `message.id` is what makes partial streaming's
+    // item ids stable: it is known at `message_start`, before any block
+    // completes, and history reconstruction derives the same id from the same
+    // field (history_converters.rs).
+    let api_message_id = message
+        .and_then(|m| m.get("id"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    let vendor_id = match api_message_id {
+        Some(mid) if st.seen_api_message_ids.insert(mid.to_string()) => Some(mid.to_string()),
+        _ => event
+            .get("uuid")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+    };
     let metadata = MessageMetadata {
         model: message
             .and_then(|m| m.get("model"))
             .and_then(Value::as_str)
             .map(str::to_string),
         usage: usage.and_then(|u| serde_json::from_value::<MessageUsage>(u.clone()).ok()),
-        // Same source as history's `id_or_nanoid(entry)` (history_converters.rs) —
-        // the transcript-entry envelope's `uuid`, present on live stream-json
-        // events too (SESSIONS_JSONL.md: stable across live and on-disk).
-        vendor_id: event
-            .get("uuid")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
+        vendor_id,
     };
     let blocks = blocks_to_message_content(content);
     drop(guard);

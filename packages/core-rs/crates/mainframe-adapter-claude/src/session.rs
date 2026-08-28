@@ -209,6 +209,11 @@ pub struct ClaudeSessionState {
     pub task_events: ClaudeTaskEvents,
     /// In-flight `stream_event` accumulation (`--include-partial-messages`).
     pub partial: crate::partial_stream::PartialMessageState,
+    /// API message ids already seen on top-level assistant events: the first
+    /// event of each API message adopts `message.id` as its vendor id — the
+    /// stable-ID anchor partial streaming needs, since it is the only vendor
+    /// identifier known at `message_start` time. Later blocks keep entry uuids.
+    pub seen_api_message_ids: std::collections::HashSet<String>,
 }
 
 /// set_model/apply_flag_settings/stop_task signal success/failure via the OUTER
@@ -386,6 +391,7 @@ impl ClaudeSession {
                 task_v2_events: Vec::new(),
                 task_events: ClaudeTaskEvents::new(background_tasks, workflow_store),
                 partial: crate::partial_stream::PartialMessageState::default(),
+                seen_api_message_ids: std::collections::HashSet::new(),
             })),
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),

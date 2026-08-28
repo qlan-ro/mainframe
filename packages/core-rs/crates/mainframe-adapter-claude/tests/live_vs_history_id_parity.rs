@@ -98,8 +98,9 @@ fn an_assistant_messages_live_id_matches_its_history_reconstruction_id() {
         .expect("fixture must contain an assistant entry");
 
     // History path: the same reload conversion `AdapterSession::load_history` runs.
-    let history_message = convert_history_entry(assistant_entry, "c1")
-        .expect("assistant entry must convert to a history ChatMessage");
+    let history_message =
+        convert_history_entry(assistant_entry, "c1", &mut std::collections::HashSet::new())
+            .expect("assistant entry must convert to a history ChatMessage");
     assert_eq!(history_message.r#type, ChatMessageType::Assistant);
 
     // Live path: replay the identical JSON line through the same NDJSON
@@ -120,4 +121,46 @@ fn an_assistant_messages_live_id_matches_its_history_reconstruction_id() {
         live_id, NO_VENDOR_ID_SENTINEL,
         "the fixture entry must carry a uuid for this parity check to be meaningful"
     );
+}
+
+/// The partial-streaming anchor rule on both paths: the first entry of an API
+/// message claims `message.id` as its id, later blocks of the same message
+/// keep their entry uuids — identically live and in reconstruction.
+#[test]
+fn per_api_message_first_entry_ids_match_between_live_and_history() {
+    let entries: Vec<Value> = vec![
+        serde_json::json!({
+            "type": "assistant", "uuid": "entry-1",
+            "message": { "id": "msg_A", "model": "claude",
+                "content": [{ "type": "text", "text": "hello" }] }
+        }),
+        serde_json::json!({
+            "type": "assistant", "uuid": "entry-2",
+            "message": { "id": "msg_A", "model": "claude",
+                "content": [{ "type": "tool_use", "id": "tu_1", "name": "Bash", "input": {} }] }
+        }),
+        serde_json::json!({
+            "type": "assistant", "uuid": "entry-3",
+            "message": { "id": "msg_B", "model": "claude",
+                "content": [{ "type": "text", "text": "done" }] }
+        }),
+    ];
+
+    let mut seen = std::collections::HashSet::new();
+    let history_ids: Vec<String> = entries
+        .iter()
+        .map(|e| convert_history_entry(e, "c1", &mut seen).unwrap().id)
+        .collect();
+
+    let session = session();
+    let sink = IdRecordingSink::default();
+    let mut live_ids = Vec::new();
+    for entry in &entries {
+        let line = format!("{}\n", serde_json::to_string(entry).unwrap());
+        handle_stdout(&session, line.as_bytes(), &sink);
+        live_ids.push(sink.live_message_id.lock().unwrap().clone().unwrap());
+    }
+
+    assert_eq!(live_ids, vec!["msg_A", "entry-2", "msg_B"]);
+    assert_eq!(live_ids, history_ids);
 }
