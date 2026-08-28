@@ -1544,6 +1544,7 @@ dependencies = [
  "axum",
  "dashmap",
  "dirs",
+ "mainframe-acp",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",

@@ -390,6 +390,8 @@ async fn run_daemon() {
         resolved_path: resolved_path.clone(),
         tunnel_url: Arc::new(RwLock::new(None)),
         ws_clients: Arc::clone(&ws_clients),
+        facade_clients: Arc::new(dashmap::DashMap::new()),
+        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),
         claude_workflows: Arc::clone(&claude_workflows),

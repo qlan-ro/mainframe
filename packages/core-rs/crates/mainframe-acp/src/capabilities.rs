@@ -1,10 +1,12 @@
 //! Mainframe's `_mainframe.dev` capability advertisement, riding
-//! `initialize`'s response `_meta` (todo #350, plan task 8; extended by task
-//! 9 for the heartbeat notification builder). Every value is fixture-pinned
-//! in `mainframe-types`' `extensions.capabilities.json` /
-//! `initialize.response.json` — this module only assembles them.
+//! `initialize`'s response `_meta` (todo #350, plan task 8), plus the
+//! `_mainframe.dev/heartbeat` notification builder (task 9). Every value is
+//! fixture-pinned in `mainframe-types`' `extensions.capabilities.json` /
+//! `initialize.response.json` / `heartbeat.notification.json` — this module
+//! only assembles them.
 
-use mainframe_types::acp::extensions::MainframeCapabilities;
+use mainframe_types::acp::extensions::{HeartbeatParams, MainframeCapabilities};
+use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 
 /// Production default heartbeat cadence, matching the vendored fixtures
 /// (`heartbeat.notification.json`'s sibling `initialize.response.json`
@@ -22,6 +24,17 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         queued_prompts: Some(true),
         retry_markers: Some(true),
         heartbeat_interval_ms: Some(heartbeat_interval_ms as i64),
+    }
+}
+
+/// The `_mainframe.dev/heartbeat` notification (plan task 9): `sequence` lets
+/// a client detect a gap (a jump larger than one) and resume instead of
+/// heuristically refetching (spec decision 13).
+pub fn heartbeat_notification(sequence: u64) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/heartbeat".into(),
+        params: Some(serde_json::json!(HeartbeatParams { sequence })),
     }
 }
 
@@ -45,5 +58,13 @@ mod tests {
         assert_eq!(value["queuedPrompts"], fixture["queuedPrompts"]);
         assert_eq!(value["retryMarkers"], fixture["retryMarkers"]);
         assert_eq!(value["heartbeatIntervalMs"], fixture["heartbeatIntervalMs"]);
+    }
+
+    #[test]
+    fn heartbeat_notification_matches_the_pinned_method_name() {
+        let note = heartbeat_notification(42);
+        let value = serde_json::to_value(&note).unwrap();
+        assert_eq!(value["method"], "_mainframe.dev/heartbeat");
+        assert_eq!(value["params"]["sequence"], serde_json::json!(42));
     }
 }

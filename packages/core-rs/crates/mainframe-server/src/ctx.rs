@@ -22,6 +22,7 @@ use mainframe_services::quota::QuotaService;
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
 
+use crate::acp_ws::FacadeClients;
 use crate::db::Db;
 use crate::websocket::WsClients;
 
@@ -104,6 +105,16 @@ pub struct AppCtx {
     /// The live WS client registry (tsv SHARED_MAP `clients`), consulted by the
     /// broadcast fan-out and populated per connection.
     pub ws_clients: WsClients,
+    /// The ACP facade connection registry (todo #350 group C), parallel to
+    /// `ws_clients` but scoped to `/acp/{profile}` connections. Session-attach
+    /// state is filled by group D; this task only registers/unregisters the
+    /// connection.
+    pub facade_clients: FacadeClients,
+    /// Heartbeat cadence advertised in `initialize`'s `_meta` and used by the
+    /// facade socket loop. Production default is
+    /// `mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS`; test harnesses shrink
+    /// it to stay inside their timeout budget.
+    pub facade_heartbeat_interval_ms: u64,
     /// The `AdapterRegistry` (contract `adapters` handle). Backs `GET /api/adapters`
     /// (`list()` with installed/version probing) and the agents/skills routes'
     /// existence check. Cheap to construct (`AdapterRegistry::new()`), so it is a
@@ -260,6 +271,8 @@ impl AppCtx {
             resolved_path: ResolvedPath::from_value("/usr/bin:/bin"),
             tunnel_url: Arc::new(RwLock::new(None)),
             ws_clients: Arc::new(DashMap::new()),
+            facade_clients: Arc::new(DashMap::new()),
+            facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
         })
     }
 }

@@ -96,6 +96,8 @@ pub(crate) async fn automations_ctx() -> AutomationsHarness {
         services: base.services.clone(),
         broadcast: base.broadcast.clone(),
         ws_clients: base.ws_clients.clone(),
+        facade_clients: base.facade_clients.clone(),
+        facade_heartbeat_interval_ms: base.facade_heartbeat_interval_ms,
         adapter_registry: base.adapter_registry.clone(),
         background_tasks: base.background_tasks.clone(),
         claude_workflows: base.claude_workflows.clone(),

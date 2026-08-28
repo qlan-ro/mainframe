@@ -23,6 +23,7 @@ reqwest = { workspace = true }
 qrcode = { workspace = true }
 nanoid = { workspace = true }
 mainframe-server = { workspace = true }
+mainframe-acp = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-services = { workspace = true }

@@ -41,7 +41,6 @@ pub enum TunnelStub {
     Silent,
 }
 
-#[derive(Default)]
 pub struct TestServerOptions {
     pub auth_secret: Option<String>,
     /// `Some` wires a `PortTunnelRegistry` over a `TunnelManager` driving the stub.
@@ -49,6 +48,21 @@ pub struct TestServerOptions {
     /// `AppCtx::port`. The tunnel routes gate on it being non-zero and report it
     /// as `daemonPort`.
     pub port: u16,
+    /// `AppCtx::facade_heartbeat_interval_ms`. Defaults to the production
+    /// cadence; facade heartbeat tests shrink this so they observe multiple
+    /// ticks inside a bounded timeout.
+    pub facade_heartbeat_interval_ms: u64,
+}
+
+impl Default for TestServerOptions {
+    fn default() -> Self {
+        Self {
+            auth_secret: None,
+            tunnel: None,
+            port: 0,
+            facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
+        }
+    }
 }
 
 /// Spawn `build_app` on `127.0.0.1:0` with a fully real AppCtx (in-memory SQLite
@@ -67,6 +81,7 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         auth_secret,
         tunnel,
         port,
+        facade_heartbeat_interval_ms,
     } = opts;
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
@@ -105,6 +120,8 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
+        facade_clients: Arc::new(DashMap::new()),
+        facade_heartbeat_interval_ms,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 

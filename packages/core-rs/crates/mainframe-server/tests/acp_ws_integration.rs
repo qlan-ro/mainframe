@@ -1,15 +1,17 @@
-//! `/acp/{adapter-profile}` integration tests (todo #350, plan task 8): auth
-//! parity with `/`, profile validation, and the `initialize` handshake's both
-//! branches (criterion 1: supported version succeeds, unsupported gets a
-//! structured error with the connection still open). Heartbeat + the facade
-//! connection registry are task 9.
+//! `/acp/{adapter-profile}` integration tests (todo #350, plan tasks 8-9):
+//! auth parity with `/`, profile validation, the `initialize` handshake's
+//! both branches (criterion 1: supported version succeeds, unsupported gets a
+//! structured error with the connection still open), the heartbeat cadence,
+//! and the facade connection registry (criterion 11's daemon half).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
 
+use std::time::Duration;
+
 use mainframe_adapter_mock::MockCliAdapter;
 use serde_json::json;
-use support::{TestServer, WsClient, spawn_test_server};
+use support::{TestServer, TestServerOptions, WsClient, spawn_test_server, spawn_test_server_with};
 
 async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
@@ -138,4 +140,57 @@ async fn malformed_frame_gets_a_parse_error_and_the_connection_stays_open() {
     ws.send_json(&initialize_request(1, 2)).await;
     let ok_reply = ws.read_event().await;
     assert!(ok_reply.get("result").is_some());
+}
+
+// ── heartbeat ────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
+    let server = spawn_test_server_with(TestServerOptions {
+        facade_heartbeat_interval_ms: 50,
+        ..TestServerOptions::default()
+    })
+    .await;
+    server
+        .ctx
+        .adapter_registry
+        .register(std::sync::Arc::new(MockCliAdapter::default()));
+    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
+        .await
+        .unwrap();
+
+    let first = tokio::time::timeout(Duration::from_secs(2), ws.read_event())
+        .await
+        .expect("first heartbeat must arrive within the timeout");
+    assert_eq!(first["method"], json!("_mainframe.dev/heartbeat"));
+    assert_eq!(first["params"]["sequence"], json!(1));
+
+    let second = tokio::time::timeout(Duration::from_secs(2), ws.read_event())
+        .await
+        .expect("second heartbeat must arrive within the timeout");
+    assert_eq!(second["params"]["sequence"], json!(2));
+}
+
+// ── connection registry ──────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it() {
+    let server = server_with_mock_adapter().await;
+    assert_eq!(server.ctx.facade_clients.len(), 0);
+
+    let ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
+        .await
+        .unwrap();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while server.ctx.facade_clients.is_empty() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(server.ctx.facade_clients.len(), 1);
+
+    drop(ws);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while !server.ctx.facade_clients.is_empty() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(server.ctx.facade_clients.len(), 0);
 }
