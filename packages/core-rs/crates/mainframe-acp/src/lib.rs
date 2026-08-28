@@ -7,4 +7,9 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod capabilities;
+pub mod connection;
 pub mod rpc;
+
+pub use capabilities::{DEFAULT_HEARTBEAT_INTERVAL_MS, mainframe_capabilities};
+pub use connection::{DaemonInfo, handle_frame};

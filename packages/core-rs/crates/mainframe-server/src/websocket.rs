@@ -79,6 +79,35 @@ pub fn is_ws_auth_required(ip: &str, secret: Option<&str>) -> bool {
     }
 }
 
+/// Shared upgrade-auth check for every self-authenticating WS route (`/`,
+/// `/lsp/:projectId/:language`, `/acp/:profile`): a token query param unless
+/// the peer is loopback. Extracted once a third route needed the identical
+/// block (repo rule: extract shared helpers at 3+ duplications).
+pub(crate) async fn authenticate_ws_upgrade(
+    ctx: &AppCtx,
+    peer: &SocketAddr,
+    headers: &HeaderMap,
+    token: Option<String>,
+) -> bool {
+    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
+    let ip = client_ip(&peer.ip().to_string(), forwarded);
+    let secret = ctx.auth_secret.clone();
+
+    if !is_ws_auth_required(&ip, secret.as_deref()) {
+        return true;
+    }
+    let authed = match (token, secret) {
+        (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
+            .await
+            .is_some(),
+        _ => false,
+    };
+    if !authed {
+        tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
+    }
+    authed
+}
+
 /// The `/` WS route handler: authenticates the upgrade (token query param unless
 /// loopback), then upgrades. Mirrors `setupUpgradeAuth` + the `connection` setup.
 pub(crate) async fn ws_handler(
@@ -88,21 +117,8 @@ pub(crate) async fn ws_handler(
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let ip = client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
-
-    if is_ws_auth_required(&ip, secret.as_deref()) {
-        let authed = match (query.token, secret) {
-            (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
-                .await
-                .is_some(),
-            _ => false,
-        };
-        if !authed {
-            tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
-            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        }
+    if !authenticate_ws_upgrade(&ctx, &peer, &headers, query.token).await {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
     // LSP upgrades (`/lsp/:projectId/:language`) are a separate axum route
@@ -161,21 +177,8 @@ pub(crate) async fn lsp_ws_handler(
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let ip = client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
-
-    if is_ws_auth_required(&ip, secret.as_deref()) {
-        let authed = match (query.token, secret) {
-            (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
-                .await
-                .is_some(),
-            _ => false,
-        };
-        if !authed {
-            tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
-            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        }
+    if !authenticate_ws_upgrade(&ctx, &peer, &headers, query.token).await {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
     let Some(manager) = ctx.lsp_manager.clone() else {

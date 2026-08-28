@@ -1694,6 +1694,7 @@ dependencies = [
  "hex",
  "hmac",
  "ignore",
+ "mainframe-acp",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
  "mainframe-adapter-codex",

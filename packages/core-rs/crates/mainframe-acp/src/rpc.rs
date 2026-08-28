@@ -80,6 +80,14 @@ pub fn method_not_found(method: &str) -> JsonRpcErrorObject {
     }
 }
 
+pub fn invalid_params(reason: &str) -> JsonRpcErrorObject {
+    JsonRpcErrorObject {
+        code: error_codes::INVALID_PARAMS,
+        message: format!("invalid params: {reason}"),
+        data: None,
+    }
+}
+
 pub fn success_response(id: Option<RequestId>, result: Value) -> JsonRpcResponse {
     JsonRpcResponse {
         jsonrpc: "2.0".into(),

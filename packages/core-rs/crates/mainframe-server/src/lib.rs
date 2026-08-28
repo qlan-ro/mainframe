@@ -10,6 +10,7 @@
 // the threshold rather than when the code changes.
 #![allow(clippy::result_large_err)]
 
+pub mod acp_ws;
 pub mod async_err;
 pub mod automations_deps;
 pub mod chat_deps;

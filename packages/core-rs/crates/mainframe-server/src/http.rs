@@ -19,6 +19,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use tower_http::limit::RequestBodyLimitLayer;
 
+use crate::acp_ws::acp_ws_handler;
 use crate::cors_origin::is_allowed_origin;
 use crate::ctx::AppCtx;
 use crate::middleware::auth::auth_middleware;
@@ -115,6 +116,9 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // LSP WS upgrade (`/lsp/:projectId/:language`) — self-authenticates like
         // the generic WS route, then proxies to the spawned language server.
         .route("/lsp/{project_id}/{language}", any(lsp_ws_handler))
+        // ACP v2 chat-facade WS upgrade (todo #350) — self-authenticates like
+        // the routes above; `{profile}` must name a registered adapter.
+        .route("/acp/{profile}", any(acp_ws_handler))
         // axum's built-in 2 MB extractor limit shadows the layer below unless
         // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
         // base64-inflated) gets an empty-bodied 413 before the handler runs.
