@@ -464,7 +464,9 @@ mod tests {
     struct Rec {
         init: Vec<String>,
         messages: usize,
+        last_message_metadata: Option<MessageMetadata>,
         tool_results: usize,
+        last_tool_result_vendor_id: Option<String>,
         skill_files: Vec<SkillFileEntry>,
         skill_loaded: Vec<mainframe_adapter_api::LoadedSkill>,
         cli_messages: Vec<String>,
@@ -498,11 +500,15 @@ mod tests {
         fn on_init(&self, session_id: &str) {
             self.r().init.push(session_id.to_string());
         }
-        fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {
-            self.r().messages += 1;
+        fn on_message(&self, _content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
+            let mut r = self.r();
+            r.messages += 1;
+            r.last_message_metadata = metadata;
         }
-        fn on_tool_result(&self, _content: Vec<MessageContent>) {
-            self.r().tool_results += 1;
+        fn on_tool_result(&self, _content: Vec<MessageContent>, vendor_id: Option<String>) {
+            let mut r = self.r();
+            r.tool_results += 1;
+            r.last_tool_result_vendor_id = vendor_id;
         }
         fn on_permission(&self, request: ControlRequest) {
             self.r().permissions.push(request);
@@ -631,6 +637,69 @@ mod tests {
         handle_stdout(&s, b"\n\n\n", &sink);
         assert!(sink.r().init.is_empty());
         assert_eq!(sink.r().messages, 0);
+    }
+
+    // ---- stable ids (todo #350 group B, task 5) ----
+    #[test]
+    fn assistant_event_entry_uuid_becomes_the_message_metadata_vendor_id() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "uuid": "entry-uuid-1",
+                "message": { "model": "claude", "content": [
+                    { "type": "text", "text": "hi" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_message_metadata.as_ref().unwrap().vendor_id,
+            Some("entry-uuid-1".to_string())
+        );
+    }
+
+    #[test]
+    fn assistant_event_without_a_uuid_leaves_vendor_id_absent() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "message": { "model": "claude", "content": [
+                    { "type": "text", "text": "hi" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_message_metadata.as_ref().unwrap().vendor_id,
+            None
+        );
+    }
+
+    #[test]
+    fn user_event_entry_uuid_becomes_the_tool_result_vendor_id() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "user",
+                "uuid": "entry-uuid-2",
+                "message": { "role": "user", "content": [
+                    { "type": "tool_result", "tool_use_id": "tu_1", "content": "done" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_tool_result_vendor_id,
+            Some("entry-uuid-2".to_string())
+        );
     }
 
     // ---- skill detection ----

@@ -96,8 +96,24 @@ impl MessageCache {
         content: Vec<MessageContent>,
         metadata: Option<HashMap<String, serde_json::Value>>,
     ) -> ChatMessage {
+        self.create_transient_message_with_vendor_id(chat_id, r#type, content, metadata, None)
+    }
+
+    /// `create_transient_message`, with an adapter-supplied id (the transcript
+    /// uuid / thread-item id) in place of a minted nanoid — todo #350 group B,
+    /// stable-ids task 5. `None` falls back to the nanoid path unchanged, so
+    /// this is additive: every existing caller of `create_transient_message`
+    /// keeps its current behavior verbatim.
+    pub fn create_transient_message_with_vendor_id(
+        &self,
+        chat_id: &str,
+        r#type: ChatMessageType,
+        content: Vec<MessageContent>,
+        metadata: Option<HashMap<String, serde_json::Value>>,
+        vendor_id: Option<String>,
+    ) -> ChatMessage {
         ChatMessage {
-            id: nanoid::nanoid!(),
+            id: vendor_id.unwrap_or_else(|| nanoid::nanoid!()),
             chat_id: chat_id.to_string(),
             r#type,
             content,

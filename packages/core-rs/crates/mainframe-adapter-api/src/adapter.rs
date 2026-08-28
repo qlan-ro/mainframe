@@ -77,7 +77,10 @@ pub struct LoadedSkill {
 pub trait SessionSink: Send + Sync {
     fn on_init(&self, session_id: &str);
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>);
-    fn on_tool_result(&self, content: Vec<MessageContent>);
+    /// `vendor_id` mirrors `on_message`'s `MessageMetadata::vendor_id` — the
+    /// adapter's own stable id for this tool-result entry, used as the
+    /// `ChatMessage.id` in place of a minted nanoid (todo #350 group B).
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>);
     fn on_permission(&self, request: ControlRequest);
     /// The CLI withdrew a control request it already sent
     /// (`control_cancel_request`). Implementations remove the named pending

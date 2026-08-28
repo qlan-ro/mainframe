@@ -108,7 +108,12 @@ impl SessionSink for NoopSink {
         _metadata: Option<mainframe_types::adapter::MessageMetadata>,
     ) {
     }
-    fn on_tool_result(&self, _content: Vec<mainframe_types::chat::MessageContent>) {}
+    fn on_tool_result(
+        &self,
+        _content: Vec<mainframe_types::chat::MessageContent>,
+        _vendor_id: Option<String>,
+    ) {
+    }
     fn on_permission(&self, _request: mainframe_types::adapter::ControlRequest) {}
     fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}

@@ -173,6 +173,14 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
             .and_then(Value::as_str)
             .map(str::to_string),
         usage: usage.and_then(|u| serde_json::from_value::<MessageUsage>(u.clone()).ok()),
+        // Same source as history's `id_or_nanoid(entry)` (history_converters.rs) —
+        // the transcript-entry envelope's `uuid`, present on live stream-json
+        // events too (SESSIONS_JSONL.md: stable across live and on-disk).
+        vendor_id: event
+            .get("uuid")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
     };
     let blocks = blocks_to_message_content(content);
     drop(guard);

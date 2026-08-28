@@ -6,6 +6,11 @@
 //! `mainframe-adapter-claude::history_converters`, which this crate cannot
 //! depend on — fact 9); task 6 adds the cross-path equality test once both
 //! halves derive ids the same way.
+//!
+//! Task 5 landed `MessageMetadata::vendor_id` / `on_tool_result`'s vendor-id
+//! parameter (this crate's half of the retrofit): the no-vendor-id fallback
+//! below is unchanged (still nanoid, still fresh per call), and a new test
+//! pins the added invariant — same vendor id in, same `ChatMessage.id` out.
 
 use super::*;
 use crate::test_support::test_chat;
@@ -132,6 +137,7 @@ fn assistant_metadata() -> mainframe_types::adapter::MessageMetadata {
     mainframe_types::adapter::MessageMetadata {
         model: Some("claude-3-5-sonnet".to_string()),
         usage: None,
+        vendor_id: None,
     }
 }
 
@@ -181,7 +187,7 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
     let sink = sink(deps.clone());
 
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
-    sink.on_tool_result(vec![bash_tool_result()]);
+    sink.on_tool_result(vec![bash_tool_result()], None);
 
     // `on_message`'s drain-turn re-entry also flips a non-Working chat back to
     // Working on the first call, emitting a leading `ChatUpdated` — the two
@@ -235,4 +241,24 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
     assert_eq!(*r#type, ChatMessageType::ToolResult);
     assert_eq!(content, &vec![bash_tool_result()]);
     assert_eq!(metadata, &None);
+}
+
+/// Task 5: a vendor id threaded through `MessageMetadata`/`on_tool_result`
+/// becomes the `ChatMessage.id` verbatim — the invariant that falsifies this
+/// file's first (pre-task-5) assertion once an adapter actually supplies one.
+#[test]
+fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result() {
+    let deps = ShapeDeps::new();
+    let sink = sink(deps.clone());
+    let mut metadata = assistant_metadata();
+    metadata.vendor_id = Some("entry-uuid-1".to_string());
+
+    sink.on_message(vec![bash_tool_use()], Some(metadata));
+    sink.on_tool_result(vec![bash_tool_result()], Some("entry-uuid-1".to_string()));
+
+    let ids = message_ids(&deps.events());
+    assert_eq!(
+        ids,
+        vec!["entry-uuid-1".to_string(), "entry-uuid-1".to_string()]
+    );
 }

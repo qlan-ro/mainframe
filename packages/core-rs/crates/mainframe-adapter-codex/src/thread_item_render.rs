@@ -12,7 +12,7 @@ use crate::collab_card;
 use crate::event_mapper::CodexSessionState;
 use crate::history::{
     bash_input, file_change_input, is_exec_error, mcp_result_content, parse_unified_diff,
-    reasoning_text, text_block, thinking_block, tool_result_block, tool_use_block,
+    reasoning_text, text_block, thinking_block, tool_result_block, tool_use_block, vendor_metadata,
 };
 use crate::image_generation_render::handle_image_generation;
 use crate::item_types::{
@@ -32,7 +32,7 @@ pub(crate) fn render_completed_item(
     state: &mut CodexSessionState,
 ) {
     match item {
-        ThreadItem::AgentMessage(m) => render_agent_message(&m.text, thread_id, sink, state),
+        ThreadItem::AgentMessage(m) => render_agent_message(&m.id, &m.text, thread_id, sink, state),
         ThreadItem::Reasoning(r) => render_reasoning(&r, sink),
         ThreadItem::CommandExecution(c) => render_command_execution(&c, sink),
         ThreadItem::FileChange(f) => render_file_change(&f, sink),
@@ -63,12 +63,13 @@ pub(crate) fn render_completed_item(
 /// the card's closing content if nothing else resolves the card first (spec
 /// decision 5).
 fn render_agent_message(
+    id: &str,
     text: &str,
     thread_id: Option<&str>,
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    sink.on_message(vec![text_block(text)], None);
+    sink.on_message(vec![text_block(text)], vendor_metadata(id));
     if let Some(tid) = thread_id {
         collab_card::record_child_message(tid, text, state);
     }
@@ -100,27 +101,33 @@ fn dynamic_tool_call_input(arguments: &serde_json::Value) -> HashMap<String, ser
 fn render_dynamic_tool_call(d: &DynamicToolCallItem, sink: &Arc<dyn SessionSink>) {
     let name = dynamic_tool_call_name(d);
     let input = dynamic_tool_call_input(&d.arguments);
-    sink.on_message(vec![tool_use_block(&d.id, &name, input)], None);
+    sink.on_message(
+        vec![tool_use_block(&d.id, &name, input)],
+        vendor_metadata(&d.id),
+    );
 }
 
 fn render_reasoning(r: &ReasoningItem, sink: &Arc<dyn SessionSink>) {
     sink.on_message(
         vec![thinking_block(&reasoning_text(&r.summary, &r.content))],
-        None,
+        vendor_metadata(&r.id),
     );
 }
 
 fn render_command_execution(c: &CommandExecutionItem, sink: &Arc<dyn SessionSink>) {
     sink.on_message(
         vec![tool_use_block(&c.id, "Bash", bash_input(&c.command))],
-        None,
+        vendor_metadata(&c.id),
     );
-    sink.on_tool_result(vec![tool_result_block(
-        &c.id,
-        &c.aggregated_output,
-        is_exec_error(c.exit_code),
-        None,
-    )]);
+    sink.on_tool_result(
+        vec![tool_result_block(
+            &c.id,
+            &c.aggregated_output,
+            is_exec_error(c.exit_code),
+            None,
+        )],
+        Some(format!("{}:result", c.id)),
+    );
 }
 
 fn render_file_change(f: &FileChangeItem, sink: &Arc<dyn SessionSink>) {
@@ -131,11 +138,17 @@ fn render_file_change(f: &FileChangeItem, sink: &Arc<dyn SessionSink>) {
         let is_add = matches!(change.kind, crate::item_types::PatchChangeKind::Add);
         let tool_name = if is_add { "Write" } else { "Edit" };
         let input = file_change_input(is_add, &change.path, &change.diff, &change.kind);
-        sink.on_message(vec![tool_use_block(&tool_id, tool_name, input)], None);
+        sink.on_message(
+            vec![tool_use_block(&tool_id, tool_name, input)],
+            vendor_metadata(&tool_id),
+        );
         if is_completed {
             let sp = parse_unified_diff(&change.diff);
             let sp = if sp.is_empty() { None } else { Some(sp) };
-            sink.on_tool_result(vec![tool_result_block(&tool_id, "OK", is_error, sp)]);
+            sink.on_tool_result(
+                vec![tool_result_block(&tool_id, "OK", is_error, sp)],
+                Some(format!("{tool_id}:result")),
+            );
         }
     }
 }
@@ -145,15 +158,13 @@ fn render_mcp_tool_call(m: &McpToolCallItem, sink: &Arc<dyn SessionSink>) {
     let tool_name = format!("mcp__{server}__{}", m.tool);
     sink.on_message(
         vec![tool_use_block(&m.id, &tool_name, m.arguments.clone())],
-        None,
+        vendor_metadata(&m.id),
     );
     let content = mcp_result_content(m.result.as_ref().map(|r| &r.content), m.error.as_ref());
-    sink.on_tool_result(vec![tool_result_block(
-        &m.id,
-        &content,
-        m.error.is_some(),
-        None,
-    )]);
+    sink.on_tool_result(
+        vec![tool_result_block(&m.id, &content, m.error.is_some(), None)],
+        Some(format!("{}:result", m.id)),
+    );
 }
 
 fn render_todo_list(item: &TodoListItem, sink: &Arc<dyn SessionSink>) {

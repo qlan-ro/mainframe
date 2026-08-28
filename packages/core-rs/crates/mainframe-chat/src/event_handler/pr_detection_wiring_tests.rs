@@ -135,7 +135,7 @@ fn a_bash_pr_create_and_its_result_persist_and_emit_through_the_wired_sink() {
     let sink = sink(deps.clone());
 
     sink.on_message(vec![bash_create_tool_use()], None);
-    sink.on_tool_result(vec![pr_url_tool_result()]);
+    sink.on_tool_result(vec![pr_url_tool_result()], None);
 
     let expected = DetectedPr {
         url: "https://github.com/acme/repo/pull/7".to_string(),

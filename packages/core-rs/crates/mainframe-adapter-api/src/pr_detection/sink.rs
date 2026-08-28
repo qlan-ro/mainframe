@@ -73,9 +73,9 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_message(content, metadata);
     }
 
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         let hits = self.observe_tool_results(&content);
-        self.inner.on_tool_result(content);
+        self.inner.on_tool_result(content, vendor_id);
         for pr in hits {
             self.inner.on_pr_detected(pr);
         }

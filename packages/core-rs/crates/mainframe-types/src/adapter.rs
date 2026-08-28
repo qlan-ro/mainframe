@@ -30,6 +30,12 @@ pub struct MessageMetadata {
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<MessageUsage>,
+    /// The adapter's own stable id for this message (Claude: transcript
+    /// `uuid`; Codex: thread-item id) — never serialized to the wire, only
+    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`
+    /// (todo #350 group B, stable-ids). `None` falls back to a minted nanoid.
+    #[serde(skip)]
+    pub vendor_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

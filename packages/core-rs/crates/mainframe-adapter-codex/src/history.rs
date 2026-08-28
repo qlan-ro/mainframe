@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use mainframe_types::adapter::MessageMetadata;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, DiffHunk, MessageContent};
 use mainframe_types::content::LeafContent;
 use serde_json::{Value, json};
@@ -15,6 +16,18 @@ use crate::item_types::PatchChangeKind;
 
 pub use crate::history_convert::convert_thread_items;
 pub(crate) use crate::unified_diff::parse_unified_diff;
+
+/// The live-path counterpart to `make_message`'s id: wraps a Codex thread
+/// item's stable id as `on_message`'s vendor id, so the live `ChatMessage`
+/// gets the same id `make_message(id, ..)` would give it on history reload
+/// (todo #350 group B, stable-ids task 5).
+pub(crate) fn vendor_metadata(id: &str) -> Option<MessageMetadata> {
+    Some(MessageMetadata {
+        model: None,
+        usage: None,
+        vendor_id: Some(id.to_string()),
+    })
+}
 
 /// Build a `ChatMessage` with a CALLER-SUPPLIED deterministic id (derived from the
 /// Codex thread item's stable `id`), so reconstructing the same items yields the

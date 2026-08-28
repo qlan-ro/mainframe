@@ -39,7 +39,7 @@ impl SessionSink for RecordingSink {
         self.push("message");
     }
 
-    fn on_tool_result(&self, _content: Vec<MessageContent>) {
+    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {
         self.push("tool-result");
     }
 

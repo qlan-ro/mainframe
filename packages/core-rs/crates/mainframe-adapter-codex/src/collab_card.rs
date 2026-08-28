@@ -17,7 +17,7 @@ use crate::collab_protocol::{
     classify_sub_agent_kind,
 };
 use crate::collab_resolve::{Outcome, on_wait_completed, on_wait_started, resolve_card};
-use crate::history::collab_agent_tool_use;
+use crate::history::{collab_agent_tool_use, vendor_metadata};
 use crate::item_types::{CollabAgentToolCallItem, SubAgentActivityItem};
 use crate::session_state::{CodexSessionState, SubAgentCard};
 use crate::thread_registry::lookup_agent_metadata_with;
@@ -100,7 +100,7 @@ pub(crate) fn open_card(
             &description,
             &title,
         )],
-        None,
+        vendor_metadata(&card_id),
     );
     open_activity(child_thread_id, &card_id, &title, state);
 }

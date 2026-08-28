@@ -326,10 +326,28 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         content: Vec<MessageContent>,
         metadata: Option<HashMap<String, serde_json::Value>>,
     ) -> ChatMessage {
+        self.transient_with_id(r#type, content, metadata, None)
+    }
+
+    /// `transient`, with an adapter-supplied id in place of a minted nanoid
+    /// (todo #350 group B, stable-ids task 5).
+    fn transient_with_id(
+        &self,
+        r#type: ChatMessageType,
+        content: Vec<MessageContent>,
+        metadata: Option<HashMap<String, serde_json::Value>>,
+        vendor_id: Option<String>,
+    ) -> ChatMessage {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .create_transient_message(&self.chat_id, r#type, content, metadata)
+            .create_transient_message_with_vendor_id(
+                &self.chat_id,
+                r#type,
+                content,
+                metadata,
+                vendor_id,
+            )
     }
 
     /// `MessageCache` exposes only immutable `get`; in-place message mutation
@@ -561,7 +579,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         if let Some(a) = adapter_id {
             meta.insert("adapterId".to_string(), serde_json::Value::String(a));
         }
+        let mut vendor_id = None;
         if let Some(m) = metadata {
+            vendor_id = m.vendor_id;
             if let Some(model) = m.model {
                 meta.insert("model".to_string(), serde_json::Value::String(model));
             }
@@ -571,11 +591,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 meta.insert("usage".to_string(), v);
             }
         }
-        let message = self.transient(ChatMessageType::Assistant, cleaned, Some(meta));
+        let message =
+            self.transient_with_id(ChatMessageType::Assistant, cleaned, Some(meta), vendor_id);
         self.append_and_emit(message);
     }
 
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         let mut edited_paths: Vec<String> = Vec::new();
         let mut subagent_completed = false;
         let mut worktree_trigger = false;
@@ -620,7 +641,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             self.deps.on_worktree_trigger(&self.chat_id);
         }
 
-        let message = self.transient(ChatMessageType::ToolResult, content, None);
+        let message = self.transient_with_id(ChatMessageType::ToolResult, content, None, vendor_id);
         self.append_and_emit(message);
 
         if !edited_paths.is_empty() {

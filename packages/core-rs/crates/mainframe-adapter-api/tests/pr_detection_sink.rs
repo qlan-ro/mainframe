@@ -31,7 +31,7 @@ impl RecordingSink {
 impl SessionSink for RecordingSink {
     fn on_init(&self, _session_id: &str) {}
     fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-    fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
     fn on_permission(&self, _request: ControlRequest) {}
     fn on_result(&self, _data: SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
@@ -84,7 +84,7 @@ fn drive(tool_use_block: MessageContent, result_block: MessageContent) -> Vec<De
     let inner = Arc::new(RecordingSink::default());
     let sink = PrDetectionSink::new(inner.clone());
     sink.on_message(vec![tool_use_block], None);
-    sink.on_tool_result(vec![result_block]);
+    sink.on_tool_result(vec![result_block], None);
     inner.prs()
 }
 
@@ -188,11 +188,14 @@ fn task_tool_result_containing_pr_url_yields_mentioned() {
 fn tool_result_with_no_registered_tool_use_emits_nothing() {
     let inner = Arc::new(RecordingSink::default());
     let sink = PrDetectionSink::new(inner.clone());
-    sink.on_tool_result(vec![tool_result(
-        "tu-unregistered",
-        "https://github.com/acme/repo/pull/8",
-        false,
-    )]);
+    sink.on_tool_result(
+        vec![tool_result(
+            "tu-unregistered",
+            "https://github.com/acme/repo/pull/8",
+            false,
+        )],
+        None,
+    );
     assert!(inner.prs().is_empty());
 }
 
@@ -334,20 +337,26 @@ fn tool_result_reusing_a_consumed_tool_use_id_emits_nothing_the_second_time() {
     let sink = PrDetectionSink::new(inner.clone());
 
     sink.on_message(vec![bash_tool_use("tu1", "gh pr create --title x")], None);
-    sink.on_tool_result(vec![tool_result(
-        "tu1",
-        "Created https://github.com/acme/repo/pull/7",
-        false,
-    )]);
+    sink.on_tool_result(
+        vec![tool_result(
+            "tu1",
+            "Created https://github.com/acme/repo/pull/7",
+            false,
+        )],
+        None,
+    );
     assert_eq!(inner.prs().len(), 1);
 
     // Same tool_use_id, no matching on_message this time — the meta from the
     // first result was evicted (mirrors user_event.rs:465-467).
-    sink.on_tool_result(vec![tool_result(
-        "tu1",
-        "Created https://github.com/acme/repo/pull/99",
-        false,
-    )]);
+    sink.on_tool_result(
+        vec![tool_result(
+            "tu1",
+            "Created https://github.com/acme/repo/pull/99",
+            false,
+        )],
+        None,
+    );
 
     assert_eq!(inner.prs().len(), 1);
 }

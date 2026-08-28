@@ -33,7 +33,15 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
             arg::<Vec<MessageContent>>(event, 0)?,
             arg::<Option<MessageMetadata>>(event, 1)?,
         ),
-        "onToolResult" => sink.on_tool_result(arg(event, 0)?),
+        // `args[1]` (the vendor id) is optional so pre-existing recorded
+        // fixtures that predate it keep replaying unchanged.
+        "onToolResult" => sink.on_tool_result(
+            arg(event, 0)?,
+            match event.args.get(1) {
+                Some(_) => arg::<Option<String>>(event, 1)?,
+                None => None,
+            },
+        ),
         "onPermission" => sink.on_permission(arg::<ControlRequest>(event, 0)?),
         "onPermissionCancelled" => sink.on_permission_cancelled(&arg::<String>(event, 0)?),
         "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
@@ -94,7 +102,7 @@ mod tests {
     impl SessionSink for RecordingSink {
         fn on_init(&self, _session_id: &str) {}
         fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-        fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+        fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
         fn on_permission(&self, _request: ControlRequest) {}
         fn on_permission_cancelled(&self, request_id: &str) {
             self.cancelled

@@ -31,6 +31,10 @@ pub struct Recorded {
     /// in emission order — `nested_blocks`/`top_level_blocks` read this.
     pub ordered_blocks: Vec<MessageContent>,
     pub cli_messages: Vec<String>,
+    /// `vendor_id`s from every `on_message`/`on_tool_result` call, in order —
+    /// todo #350 group B, stable-ids task 5.
+    pub message_vendor_ids: Vec<Option<String>>,
+    pub tool_result_vendor_ids: Vec<Option<String>>,
 }
 
 #[derive(Clone, Default)]
@@ -70,6 +74,12 @@ impl Recorder {
     pub fn cli_messages(&self) -> Vec<String> {
         self.0.lock().unwrap().cli_messages.clone()
     }
+    pub fn message_vendor_ids(&self) -> Vec<Option<String>> {
+        self.0.lock().unwrap().message_vendor_ids.clone()
+    }
+    pub fn tool_result_vendor_ids(&self) -> Vec<Option<String>> {
+        self.0.lock().unwrap().tool_result_vendor_ids.clone()
+    }
     /// Every recorded message/tool-result block whose `parentToolUseId` equals
     /// `card_id`, in emission order.
     pub fn nested_blocks(&self, card_id: &str) -> Vec<Value> {
@@ -101,15 +111,19 @@ impl SessionSink for RecordingSink {
     fn on_init(&self, session_id: &str) {
         self.0.lock().unwrap().inits.push(session_id.to_string());
     }
-    fn on_message(&self, content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {
+    fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
         let mut recorded = self.0.lock().unwrap();
         recorded.ordered_blocks.extend(content.iter().cloned());
         recorded.messages.push(content);
+        recorded
+            .message_vendor_ids
+            .push(metadata.and_then(|m| m.vendor_id));
     }
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         let mut recorded = self.0.lock().unwrap();
         recorded.ordered_blocks.extend(content.iter().cloned());
         recorded.tool_results.push(content);
+        recorded.tool_result_vendor_ids.push(vendor_id);
     }
     fn on_permission(&self, request: ControlRequest) {
         self.0.lock().unwrap().permissions.push(request);

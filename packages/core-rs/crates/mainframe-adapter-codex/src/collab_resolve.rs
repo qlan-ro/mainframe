@@ -47,7 +47,10 @@ pub(crate) fn resolve_card(
         ),
         Outcome::Error(message) => (message, true),
     };
-    sink.on_tool_result(vec![tool_result_block(&card_id, &content, is_error, None)]);
+    sink.on_tool_result(
+        vec![tool_result_block(&card_id, &content, is_error, None)],
+        Some(format!("{card_id}:result")),
+    );
     if let Some(card) = state.sub_agent_cards.get_mut(child_thread_id) {
         card.open = false;
         card.resolved = true;

@@ -516,6 +516,24 @@ fn dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source() {
 }
 
 #[test]
+fn dynamic_tool_call_vendor_id_matches_the_item_id_history_reload_would_use() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "dyn_1",
+            "type": "dynamicToolCall",
+            "tool": "search",
+            "arguments": {},
+            "status": "completed",
+        }),
+    );
+    assert_eq!(rec.message_vendor_ids(), vec![Some("dyn_1".to_string())]);
+}
+
+#[test]
 fn dynamic_tool_call_without_a_namespace_uses_the_bare_tool_name() {
     let rec = Recorder::new();
     let mut state = state();
@@ -569,6 +587,14 @@ fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
             "content": "",
             "isError": false,
         }])
+    );
+    // Matches `web_search_history.rs`'s `make_message(&w.id, ..)` /
+    // `make_message(&format!("{}:result", w.id), ..)` id scheme (todo #350
+    // group B, stable-ids task 5).
+    assert_eq!(rec.message_vendor_ids(), vec![Some("ws_1".to_string())]);
+    assert_eq!(
+        rec.tool_result_vendor_ids(),
+        vec![Some("ws_1:result".to_string())]
     );
 }
 
