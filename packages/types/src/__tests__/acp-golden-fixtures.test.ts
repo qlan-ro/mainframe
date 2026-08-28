@@ -14,10 +14,12 @@ import type { z } from 'zod';
 import {
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
+  ItemMetaSchema,
   JsonRpcNotificationSchema,
   JsonRpcRequestSchema,
   JsonRpcResponseSchema,
   MainframeCapabilitiesSchema,
+  PromptSendMetaSchema,
   QueuedPromptStateSchema,
   RetryMarkerSchema,
   RichPermissionAnswerSchema,
@@ -59,6 +61,8 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'gate-resolved.params.json') return GateResolvedParamsSchema;
   if (name.startsWith('extensions.capabilities')) return MainframeCapabilitiesSchema;
   if (name.startsWith('extensions.retry-marker')) return RetryMarkerSchema;
+  if (name.startsWith('extensions.item-meta')) return ItemMetaSchema;
+  if (name.startsWith('extensions.prompt-send-meta')) return PromptSendMetaSchema;
   if (name.startsWith('extensions.queued-state')) return QueuedPromptStateSchema;
   if (name.startsWith('extensions.rich-permission-answer')) return RichPermissionAnswerSchema;
   if (name.startsWith('extensions.structured-diff')) return StructuredDiffSchema;

@@ -114,7 +114,7 @@ pub async fn dispatch_resume(
 
     let response = ResumeSessionResponse {
         config_options: None,
-        meta: full_replay.then(full_replay_meta),
+        meta: Some(resume_meta(items.len(), full_replay)),
     };
     let result = serde_json::to_value(response).unwrap_or(Value::Null);
     (
@@ -128,8 +128,18 @@ pub async fn dispatch_resume(
     )
 }
 
-fn full_replay_meta() -> Value {
-    serde_json::json!({ MAINFRAME_META_NAMESPACE: { "fullReplay": true } })
+/// `itemCount` is the size of the server's full snapshot (not the post-cursor
+/// delta): a client holding items can tell an intentionally empty transcript
+/// apart from the "no history session yet" degenerate read and refuse the
+/// blanking re-seed (the legacy `refusesEmptyRefresh` guard, kept on the
+/// facade). `fullReplay` marks an unknown/pre-compaction cursor fallback.
+fn resume_meta(item_count: usize, full_replay: bool) -> Value {
+    let mut ns = serde_json::Map::new();
+    ns.insert("itemCount".into(), serde_json::json!(item_count));
+    if full_replay {
+        ns.insert("fullReplay".into(), Value::Bool(true));
+    }
+    serde_json::json!({ MAINFRAME_META_NAMESPACE: ns })
 }
 
 enum ResolvedCursor {

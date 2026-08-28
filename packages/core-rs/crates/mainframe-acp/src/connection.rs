@@ -152,6 +152,7 @@ mod tests {
             &'a self,
             _session_id: &'a str,
             _text: &'a str,
+            _send_meta: mainframe_types::acp::extensions::PromptSendMeta,
         ) -> BoxFuture<'a, Result<crate::prompt::PromptAcceptance, crate::prompt::PromptError>>
         {
             unreachable!("no test in this module sends a prompt")

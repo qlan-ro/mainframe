@@ -1,0 +1,24 @@
+{
+  "_provenance": "synthetic",
+  "timestamp": "2026-08-28T09:15:00.000Z",
+  "containerId": "dmsg_01HZY3",
+  "parentToolCallId": "toolu_task_01",
+  "kind": "system",
+  "errorText": "CLI exited unexpectedly",
+  "skillLoaded": {
+    "skillName": "tdd",
+    "path": "/skills/tdd/SKILL.md",
+    "content": "always red first"
+  },
+  "isCompacted": true,
+  "messageMeta": {
+    "cost_usd": 0.42,
+    "turnDurationMs": 5120,
+    "queued": false,
+    "cleanText": "run the tests",
+    "command": { "name": "launch-config", "source": "mainframe" },
+    "attachments": [{ "name": "notes.md", "kind": "file", "sizeBytes": 1024 }]
+  },
+  "groupId": "toolu_grp_01",
+  "subagent": true
+}

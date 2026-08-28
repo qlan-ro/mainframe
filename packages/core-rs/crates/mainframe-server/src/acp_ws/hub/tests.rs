@@ -268,10 +268,11 @@ async fn a_retry_marker_lands_on_the_next_upsert_for_attached_sessions() {
 
     let frames = drain(&mut rx);
     assert_eq!(frames.len(), 1);
-    assert_eq!(
-        frames[0]["params"]["update"]["_meta"]["_mainframe.dev"],
-        json!({ "attempt": 1, "reason": "overloaded_error" })
-    );
+    // The marker shares the namespace object with the encoder's ItemMeta
+    // (timestamp/containerId/…), so assert its keys rather than the whole map.
+    let ns = &frames[0]["params"]["update"]["_meta"]["_mainframe.dev"];
+    assert_eq!(ns["attempt"], json!(1));
+    assert_eq!(ns["reason"], json!("overloaded_error"));
 }
 
 #[tokio::test]

@@ -1,0 +1,5 @@
+{
+  "_provenance": "synthetic",
+  "attachmentIds": ["att_01HZY3A", "att_01HZY3B"],
+  "command": { "name": "review", "source": "project", "args": "HEAD~1" }
+}

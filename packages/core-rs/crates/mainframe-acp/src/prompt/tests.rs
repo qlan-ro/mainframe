@@ -7,7 +7,7 @@ use crate::connection::{DaemonInfo, handle_frame_with_prompt};
 
 #[derive(Default)]
 struct FakePort {
-    sent: Mutex<Vec<(String, String)>>,
+    sent: Mutex<Vec<(String, String, PromptSendMeta)>>,
     cancelled: Mutex<Vec<String>>,
     /// When set, `send_prompt` returns this queued position instead of `None`.
     queue_next_at: Option<i64>,
@@ -20,6 +20,7 @@ impl PromptPort for FakePort {
         &'a self,
         session_id: &'a str,
         text: &'a str,
+        send_meta: PromptSendMeta,
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>> {
         Box::pin(async move {
             if let Some(message) = &self.fails_with {
@@ -30,7 +31,7 @@ impl PromptPort for FakePort {
             self.sent
                 .lock()
                 .unwrap()
-                .push((session_id.to_string(), text.to_string()));
+                .push((session_id.to_string(), text.to_string(), send_meta));
             Ok(PromptAcceptance {
                 queued_position: self.queue_next_at,
             })
@@ -75,7 +76,11 @@ async fn an_immediate_prompt_accepts_with_no_meta_no_queue_frame_family() {
     assert_eq!(result, json!({}));
     assert_eq!(
         *port.sent.lock().unwrap(),
-        vec![("chat_1".to_string(), "run the tests".to_string())]
+        vec![(
+            "chat_1".to_string(),
+            "run the tests".to_string(),
+            PromptSendMeta::default()
+        )]
     );
 }
 
@@ -164,7 +169,11 @@ async fn handle_frame_with_prompt_routes_session_prompt_through_the_port() {
     assert!(value.get("result").is_some());
     assert_eq!(
         *port.sent.lock().unwrap(),
-        vec![("chat_1".to_string(), "hi".to_string())]
+        vec![(
+            "chat_1".to_string(),
+            "hi".to_string(),
+            PromptSendMeta::default()
+        )]
     );
 }
 

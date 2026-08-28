@@ -8,13 +8,93 @@
 //! experience (spec: "Generic ACP clients that advertise no Mainframe
 //! capabilities get a degraded but coherent chat experience").
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::adapter::ControlResponse;
 use crate::chat::DiffHunk;
+use crate::events::MessageSendCommand;
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
+
+/// Display-fidelity payload riding every encoded item's
+/// `_meta["_mainframe.dev"]` (desktop-cutover pass): the legacy
+/// `DisplayMessage` context the core ACP item grammar has no field for.
+/// Generic ACP clients ignore it; the Mainframe client reaggregates items
+/// into per-container messages from `container_id` and renders timestamps,
+/// attachments, cost, and error/system framing from the rest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemMeta {
+    /// The containing `DisplayMessage.timestamp` (ISO-8601).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    /// The containing `DisplayMessage.id` — the reaggregation key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_id: Option<String>,
+    /// Subagent attribution: the launching Task tool call's id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_tool_call_id: Option<String>,
+    /// Container refinement beyond user/agent roles (message items only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<ItemContainerKind>,
+    /// An error container's message (`DisplayNode::Error`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_text: Option<String>,
+    /// A system container's skill-load record (`LeafContent::SkillLoaded`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_loaded: Option<SkillLoadedMeta>,
+    /// True when the system container carries a compaction marker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_compacted: Option<bool>,
+    /// The containing `DisplayMessage.metadata` map, passed through verbatim
+    /// (attachments, command, cost_usd, turnDurationMs, …) — the same data
+    /// the legacy dialect already serializes on every display frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_meta: Option<HashMap<String, Value>>,
+    /// The daemon's `tool_group` membership: members share the first
+    /// member's id as their group id (tool-call items only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
+    /// True on the tool-call item that represents a subagent task group —
+    /// its `title` is the task description, not a tool name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagent: Option<bool>,
+}
+
+/// [`ItemMeta::kind`] — `user`/`agent` ride the item role; these mark the
+/// containers the role pair cannot express.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemContainerKind {
+    System,
+    Error,
+}
+
+/// [`ItemMeta::skill_loaded`] — mirrors `LeafContent::SkillLoaded`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillLoadedMeta {
+    pub skill_name: String,
+    pub path: String,
+    pub content: String,
+}
+
+/// The send context a `session/prompt`'s `_meta["_mainframe.dev"]` carries
+/// (desktop-cutover pass): uploaded attachment ids and the slash-command
+/// invocation — the two fields the legacy `message.send` frame carried that
+/// the core ACP prompt has no construct for.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSendMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<MessageSendCommand>,
+}
 
 /// Mainframe's agent-capabilities extension, advertised in `initialize`'s
 /// response under `_meta["_mainframe.dev"]`. Generic ACP clients see none of

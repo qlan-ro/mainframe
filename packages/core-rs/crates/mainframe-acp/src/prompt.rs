@@ -17,7 +17,9 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, QueuedPromptState};
+use mainframe_types::acp::extensions::{
+    MAINFRAME_META_NAMESPACE, PromptSendMeta, QueuedPromptState,
+};
 use mainframe_types::acp::jsonrpc::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, error_codes,
 };
@@ -53,6 +55,7 @@ pub trait PromptPort: Send + Sync {
         &'a self,
         session_id: &'a str,
         text: &'a str,
+        send_meta: PromptSendMeta,
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>>;
     /// End the turn (cancelled stop reason) and cancel open gates —
     /// `ChatManager::interrupt_chat` already does both (`lifecycle_manager.rs`:
@@ -74,7 +77,8 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
         Err(err) => return rpc::error_response(id, rpc::invalid_params(&err.to_string())),
     };
     let text = extract_text(&prompt.prompt);
-    match port.send_prompt(&prompt.session_id, &text).await {
+    let send_meta = extract_send_meta(prompt.meta.as_ref());
+    match port.send_prompt(&prompt.session_id, &text, send_meta).await {
         Ok(acceptance) => {
             let meta = acceptance.queued_position.map(
                 |position| json!({ MAINFRAME_META_NAMESPACE: QueuedPromptState { position } }),
@@ -95,6 +99,16 @@ pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
         return;
     };
     let _ = port.cancel(&notification.session_id).await;
+}
+
+/// The Mainframe send context riding `PromptRequest._meta` (desktop-cutover
+/// pass): uploaded attachment ids + the slash-command invocation. Absent or
+/// unparseable meta degrades to a plain text send — never an error, since a
+/// generic ACP client sends no meta at all.
+fn extract_send_meta(meta: Option<&Value>) -> PromptSendMeta {
+    meta.and_then(|value| value.get(MAINFRAME_META_NAMESPACE))
+        .and_then(|ns| serde_json::from_value(ns.clone()).ok())
+        .unwrap_or_default()
 }
 
 /// Inbound prompts reach the CLI as text; a non-text block (e.g. `image`)

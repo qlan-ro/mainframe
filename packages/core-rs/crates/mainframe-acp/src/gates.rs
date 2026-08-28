@@ -86,7 +86,13 @@ pub fn build_request(session_id: &str, id: RequestId, request: &ControlRequest) 
         description: None,
         subject: Some(subject_for(request)),
         options: offered_options(),
-        meta: None,
+        // The full `ControlRequest` (input, suggestions, decision reason) —
+        // what the rich gate cards render and what `rich_answer` below
+        // validates a rich reply against. Generic ACP clients ignore it and
+        // render the option list (desktop-cutover pass).
+        meta: Some(serde_json::json!({
+            MAINFRAME_META_NAMESPACE: { "controlRequest": request }
+        })),
     };
     JsonRpcRequest {
         jsonrpc: "2.0".into(),

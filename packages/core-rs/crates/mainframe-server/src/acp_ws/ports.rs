@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use mainframe_acp::prompt::{BoxFuture, PromptAcceptance, PromptError, PromptPort};
 use mainframe_acp::resume::ResumePort;
-use mainframe_chat::chat_manager::ChatManager;
+use mainframe_chat::chat_manager::{ChatManager, CommandMeta};
+use mainframe_types::acp::extensions::PromptSendMeta;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::display::DisplayMessage;
 
@@ -33,11 +34,22 @@ impl PromptPort for ManagerPorts {
         &'a self,
         session_id: &'a str,
         text: &'a str,
+        send_meta: PromptSendMeta,
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>> {
         Box::pin(async move {
             let manager = self.require()?;
+            let command = send_meta.command.map(|c| CommandMeta {
+                name: c.name,
+                source: c.source,
+                args: c.args,
+            });
             manager
-                .send_message(session_id, text, None, None)
+                .send_message(
+                    session_id,
+                    text,
+                    send_meta.attachment_ids.as_deref(),
+                    command,
+                )
                 .await
                 .map_err(|err| PromptError {
                     message: err.to_string(),

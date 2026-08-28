@@ -793,10 +793,10 @@ queued-turn metadata).
 | Method / notification | Direction | Purpose |
 |---|---|---|
 | `initialize` | client → daemon | Version negotiation + capability advertisement. |
-| `session/prompt` | client → daemon | Send a turn; response is acceptance (immediate or queued via `_meta`), never turn completion — no `queue.*` frame family. |
+| `session/prompt` | client → daemon | Send a turn; the request's `_meta["_mainframe.dev"]` may carry `PromptSendMeta` (`attachmentIds` from the upload REST route, plus the slash-`command` invocation); response is acceptance (immediate or queued via `_meta`), never turn completion — no `queue.*` frame family. |
 | `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
-| `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); unknown/pre-compaction cursor falls back to a full replay carrying `_meta["_mainframe.dev"].fullReplay: true`. |
-| `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); a plain `{outcome:"selected", optionId}` answer is always valid, a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
+| `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor falls back to a full replay adding `fullReplay: true`. |
+| `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); the request's `_meta["_mainframe.dev"].controlRequest` carries the raw `ControlRequest` (input, suggestions, decision reason) the rich desktop gate cards render. A plain `{outcome:"selected", optionId}` answer is always valid; a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
 | `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
 | `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, the legacy surface, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
@@ -829,9 +829,27 @@ interrupt, adapter death) emits one content-clearing upsert (`content: []`)
 so no client keeps text the transcript never got; tool-input streaming
 (`input_json_delta`) is not consumed yet.
 
+**Item display fidelity (`ItemMeta`).** Every encoded item's
+`_meta["_mainframe.dev"]` carries the display context the core grammar has
+no fields for: `timestamp` and `containerId` (the containing
+`DisplayMessage`'s id — the client's reaggregation key, folding items back
+into per-message rendering), `messageMeta` (the raw `DisplayMessage.metadata`
+map: attachment previews, command invocation, `cost_usd`,
+`turnDurationMs`, …), `kind: "system" | "error"` with `errorText`,
+`skillLoaded`, and `isCompacted` markers, `groupId` (the daemon's
+`tool_group` membership: members share the first visible member's id), and
+`subagent: true` on a task-group tool call, whose `title` is the task
+description rather than a tool name. A message item sits at the position of
+its first content contribution, so text-before-tools order survives
+flattening. Hidden-category tool calls are not encoded at all. Generic ACP
+clients ignore all of it. The retry marker shares this namespace object —
+its `attempt`/`reason` keys merge into it, never replace it.
+
 **Subagents.** Flatten to ordinary tool-call items carrying
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
-on the facade (`mainframe-acp::encoder`).
+on the facade (`mainframe-acp::encoder`). A subagent's own text/thought
+items suffix their container id (`{agentId}-message`) so they can never
+collide with the launching Task tool-call item in an id-keyed accumulator.
 
 **Edit/Write fidelity.** A tool result carrying structured hunks adds a
 `diff` entry to the tool call's `content` (spec Decision 15): `changes`

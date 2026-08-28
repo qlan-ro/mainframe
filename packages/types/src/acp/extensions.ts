@@ -183,6 +183,54 @@ export const GateResolvedParamsSchema = z
   .loose();
 export type GateResolvedParams = z.infer<typeof GateResolvedParamsSchema>;
 
+/** `ItemMetaSchema.skillLoaded` — mirrors `LeafContent.SkillLoaded`. */
+export const SkillLoadedMetaSchema = z
+  .object({
+    skillName: z.string(),
+    path: z.string(),
+    content: z.string(),
+  })
+  .loose();
+export type SkillLoadedMeta = z.infer<typeof SkillLoadedMetaSchema>;
+
+/**
+ * Display-fidelity payload riding every encoded item's
+ * `_meta["_mainframe.dev"]` (desktop-cutover pass): the legacy
+ * `DisplayMessage` context the core ACP item grammar has no field for.
+ * `containerId` is the reaggregation key — the client folds items back into
+ * per-container messages; `messageMeta` is the raw `DisplayMessage.metadata`
+ * map passed through verbatim (attachments, command, cost_usd, …).
+ */
+export const ItemMetaSchema = z
+  .object({
+    timestamp: z.string().optional(),
+    containerId: z.string().optional(),
+    parentToolCallId: z.string().optional(),
+    kind: z.enum(['system', 'error']).optional(),
+    errorText: z.string().optional(),
+    skillLoaded: SkillLoadedMetaSchema.optional(),
+    isCompacted: z.boolean().optional(),
+    messageMeta: z.record(z.string(), z.unknown()).optional(),
+    groupId: z.string().optional(),
+    subagent: z.boolean().optional(),
+  })
+  .loose();
+export type ItemMeta = z.infer<typeof ItemMetaSchema>;
+
+/**
+ * The send context a `session/prompt`'s `_meta["_mainframe.dev"]` carries
+ * (desktop-cutover pass): uploaded attachment ids and the slash-command
+ * invocation — the two fields the legacy `message.send` frame carried that
+ * the core ACP prompt has no construct for.
+ */
+export const PromptSendMetaSchema = z
+  .object({
+    attachmentIds: z.array(z.string()).optional(),
+    command: z.object({ name: z.string(), source: z.string(), args: z.string().optional() }).loose().optional(),
+  })
+  .loose();
+export type PromptSendMeta = z.infer<typeof PromptSendMetaSchema>;
+
 /**
  * The marker a truncated tool-result text block carries in its own
  * `_meta["_mainframe.dev"]` (spec decision 20): the legacy pipeline's

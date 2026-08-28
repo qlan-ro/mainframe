@@ -40,6 +40,24 @@ fn image(data: &str, media_type: &str) -> DisplayContent {
     })
 }
 
+/// The uniform per-item meta every encoder item now carries (desktop-cutover
+/// pass): timestamp + container id under the namespace, plus any extras.
+fn base_meta(container: &str) -> Value {
+    json!({ MAINFRAME_META_NAMESPACE: {
+        "timestamp": "2026-08-28T00:00:00.000Z",
+        "containerId": container,
+    }})
+}
+
+fn meta_with(container: &str, extras: &[(&str, Value)]) -> Value {
+    let mut v = base_meta(container);
+    let ns = v[MAINFRAME_META_NAMESPACE].as_object_mut().unwrap();
+    for (k, val) in extras {
+        ns.insert((*k).to_string(), val.clone());
+    }
+    v
+}
+
 fn text_block(s: &str) -> ContentBlock {
     ContentBlock::Text {
         text: s.to_string(),
@@ -87,7 +105,7 @@ fn encodes_a_user_text_message() {
             id: "dmsg_1".to_string(),
             role: ItemRole::User,
             content: vec![text_block("hi")],
-            meta: None,
+            meta: Some(base_meta("dmsg_1")),
         }]
     );
 }
@@ -118,7 +136,7 @@ fn interleaved_text_and_image_leaves_encode_as_an_ordered_block_list() {
                 image_block("iVBORw0KGgo=", "image/png"),
                 text_block("Thanks."),
             ],
-            meta: None,
+            meta: Some(base_meta("dmsg_img")),
         }]
     );
 }
@@ -136,7 +154,7 @@ fn an_image_only_message_encodes_a_single_image_block() {
             id: "dmsg_img2".to_string(),
             role: ItemRole::User,
             content: vec![image_block("aGk=", "image/jpeg")],
-            meta: None,
+            meta: Some(base_meta("dmsg_img2")),
         }]
     );
 }
@@ -150,19 +168,21 @@ fn encodes_an_assistant_thinking_block_as_a_separate_thought_item() {
     )];
     let items = encode(&messages);
 
+    // First-contribution ordering: the thinking leaf precedes the text leaf,
+    // so the thought item sits before the message item.
     assert_eq!(
         items,
         vec![
+            EncodedItem::Thought {
+                id: "dmsg_2-thought".to_string(),
+                content: vec![text_block("hmm")],
+                meta: Some(base_meta("dmsg_2")),
+            },
             EncodedItem::Message {
                 id: "dmsg_2".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("done")],
-                meta: None,
-            },
-            EncodedItem::Thought {
-                id: "dmsg_2-thought".to_string(),
-                content: vec![text_block("hmm")],
-                meta: None,
+                meta: Some(base_meta("dmsg_2")),
             },
         ]
     );
@@ -185,7 +205,7 @@ fn encodes_a_tool_call_in_progress_and_completed() {
             status: ToolCallStatus::InProgress,
             raw_input: json!({}),
             content: Vec::new(),
-            meta: None,
+            meta: Some(base_meta("dmsg_3")),
         }]
     );
 
@@ -214,7 +234,7 @@ fn encodes_a_tool_call_in_progress_and_completed() {
                     meta: None,
                 }
             }],
-            meta: None,
+            meta: Some(base_meta("dmsg_3")),
         }]
     );
 }
@@ -256,15 +276,33 @@ fn flattens_a_subagent_task_group_to_tool_call_items_with_a_parent_relation() {
         matches!(parent, EncodedItem::ToolCall { kind: ToolKind::Think, title, .. } if title == "Investigate flake")
     );
 
+    let EncodedItem::ToolCall {
+        meta: task_meta, ..
+    } = parent
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        task_meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE]["subagent"],
+        json!(true)
+    );
+
     let subagent_text = items
         .iter()
         .find(|i| matches!(i, EncodedItem::Message { .. }))
         .expect("subagent text item");
+    // Suffixed: an unsuffixed child message item would collide with (and
+    // clobber) the Task tool-call item in any id-keyed accumulator.
+    assert_eq!(subagent_text.id(), "toolu_task_1-message");
     let EncodedItem::Message { meta, .. } = subagent_text else {
         unreachable!()
     };
     assert_eq!(
         meta.as_ref().unwrap()["_mainframe.dev"]["parentToolCallId"],
+        json!("toolu_task_1")
+    );
+    assert_eq!(
+        meta.as_ref().unwrap()["_mainframe.dev"]["containerId"],
         json!("toolu_task_1")
     );
 
@@ -427,7 +465,7 @@ fn flattens_task_progress_items_to_tool_call_items() {
             status: ToolCallStatus::InProgress,
             raw_input: json!({}),
             content: Vec::new(),
-            meta: None,
+            meta: Some(base_meta("dmsg_5")),
         }]
     );
 }
@@ -539,4 +577,146 @@ fn live_and_history_snapshots_with_matching_ids_encode_identically() {
     )];
 
     assert_eq!(encode(&live), encode(&history));
+}
+
+#[test]
+fn a_text_leaf_before_a_tool_call_keeps_its_position() {
+    let items = encode(&[dmsg(
+        "dmsg_ord",
+        DisplayMessageType::Assistant,
+        vec![
+            text("Let me read the file."),
+            tool_call("toolu_ord", "Read", ToolCategory::Explore, None),
+        ],
+    )]);
+
+    assert_eq!(items.len(), 2);
+    assert!(matches!(&items[0], EncodedItem::Message { .. }));
+    assert_eq!(items[1].id(), "toolu_ord");
+}
+
+#[test]
+fn hidden_category_tool_calls_are_not_encoded() {
+    let items = encode(&[dmsg(
+        "dmsg_hidden",
+        DisplayMessageType::Assistant,
+        vec![
+            tool_call(
+                "toolu_hidden",
+                "TodoWrite",
+                ToolCategory::Hidden,
+                Some("ok"),
+            ),
+            tool_call("toolu_shown", "Read", ToolCategory::Explore, None),
+        ],
+    )]);
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].id(), "toolu_shown");
+}
+
+#[test]
+fn tool_group_members_share_the_first_visible_member_id_as_group_id() {
+    let items = encode(&[dmsg(
+        "dmsg_grp",
+        DisplayMessageType::Assistant,
+        vec![DisplayContent::Node(DisplayNode::ToolGroup {
+            calls: vec![
+                tool_call("toolu_g1", "Read", ToolCategory::Explore, Some("a")),
+                tool_call("toolu_g2", "Grep", ToolCategory::Explore, Some("b")),
+            ],
+        })],
+    )]);
+
+    assert_eq!(items.len(), 2);
+    for item in &items {
+        let EncodedItem::ToolCall { meta, .. } = item else {
+            panic!("expected tool-call items");
+        };
+        assert_eq!(
+            meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE]["groupId"],
+            json!("toolu_g1")
+        );
+    }
+}
+
+#[test]
+fn a_system_message_carries_skill_and_compaction_markers_in_meta() {
+    let items = encode(&[dmsg(
+        "dmsg_sys",
+        DisplayMessageType::System,
+        vec![
+            DisplayContent::Leaf(LeafContent::SkillLoaded {
+                skill_name: "tdd".to_string(),
+                path: "/skills/tdd".to_string(),
+                content: "always red first".to_string(),
+                parent_tool_use_id: None,
+            }),
+            DisplayContent::Node(DisplayNode::Compaction {
+                parent_tool_use_id: None,
+            }),
+        ],
+    )]);
+
+    assert_eq!(items.len(), 1);
+    let EncodedItem::Message { content, meta, .. } = &items[0] else {
+        panic!("expected a message item");
+    };
+    // Markers ride meta, not bracket-text placeholders.
+    assert!(content.is_empty());
+    let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];
+    assert_eq!(ns["kind"], json!("system"));
+    assert_eq!(ns["isCompacted"], json!(true));
+    assert_eq!(
+        ns["skillLoaded"],
+        json!({ "skillName": "tdd", "path": "/skills/tdd", "content": "always red first" })
+    );
+}
+
+#[test]
+fn an_error_message_carries_error_text_in_meta_and_as_a_text_block() {
+    let items = encode(&[dmsg(
+        "dmsg_err",
+        DisplayMessageType::Error,
+        vec![DisplayContent::Node(DisplayNode::Error {
+            message: "CLI died".to_string(),
+        })],
+    )]);
+
+    let EncodedItem::Message { content, meta, .. } = &items[0] else {
+        panic!("expected a message item");
+    };
+    assert_eq!(content, &vec![text_block("CLI died")]);
+    let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];
+    assert_eq!(ns["kind"], json!("error"));
+    assert_eq!(ns["errorText"], json!("CLI died"));
+}
+
+#[test]
+fn display_metadata_rides_every_item_of_the_container() {
+    let mut metadata = HashMap::new();
+    metadata.insert("cost_usd".to_string(), json!(0.42));
+    let mut message = dmsg(
+        "dmsg_meta",
+        DisplayMessageType::Assistant,
+        vec![
+            text("done"),
+            tool_call("toolu_m1", "Read", ToolCategory::Explore, Some("x")),
+        ],
+    );
+    message.metadata = Some(metadata);
+
+    let items = encode(&[message]);
+    assert_eq!(items.len(), 2);
+    for item in &items {
+        let meta = match item {
+            EncodedItem::Message { meta, .. }
+            | EncodedItem::Thought { meta, .. }
+            | EncodedItem::ToolCall { meta, .. } => meta,
+        };
+        assert_eq!(
+            meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE]["messageMeta"]["cost_usd"],
+            json!(0.42)
+        );
+    }
 }
