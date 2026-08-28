@@ -28,7 +28,9 @@ use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
 const CLAUDE_ADAPTER_NAME: &str = "Claude Code";
 
 /// `\d+\.\d+\.\d+` — the first N.N.N triple in `stdout` (no regex crate).
-fn first_version_triple(stdout: &str) -> Option<String> {
+/// `pub(crate)`: `partial_stream::supports_partial_messages` parses the same
+/// `--version` output for its capability gate.
+pub(crate) fn first_version_triple(stdout: &str) -> Option<String> {
     let bytes = stdout.as_bytes();
     let n = bytes.len();
     let mut i = 0;

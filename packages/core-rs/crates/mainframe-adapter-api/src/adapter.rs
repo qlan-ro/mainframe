@@ -123,6 +123,15 @@ pub trait SessionSink: Send + Sync {
     /// no retry-reporting event need not implement it, and today's daemon
     /// drops it exactly as before (fact 1) until a sink overrides this.
     fn on_api_retry(&self, _attempt: i64, _reason: Option<String>) {}
+    /// The in-flight assistant message's partial content, re-sent accumulated
+    /// on every call (Claude's `--include-partial-messages` stream deltas,
+    /// todo #350: AGENT-SDK-PARITY B4). `api_message_id` is the provider
+    /// message id (`message_start`'s `message.id`) — the one vendor identifier
+    /// known before the block completes, and the id `on_message` will carry as
+    /// `vendor_id` for that message's first completed block, so a sink can
+    /// anchor partial content to the item the completed message becomes.
+    /// Default no-op: adapters without partial streaming need not implement it.
+    fn on_message_partial(&self, _api_message_id: &str, _content: Vec<MessageContent>) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored

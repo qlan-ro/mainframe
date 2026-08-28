@@ -106,6 +106,11 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
         return;
     }
 
+    // This top-level event delivers the completed block the partial overlay
+    // was accumulating (`--include-partial-messages`); later blocks of the
+    // same message re-open accumulation via their content_block_start.
+    st.partial.clear_block();
+
     for block in content {
         if block.get("type").and_then(Value::as_str) != Some("tool_use") {
             continue;

@@ -118,6 +118,14 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
                 .get("error")
                 .and_then(Value::as_str)
                 .map(str::to_string);
+            // The aborted API call's partial accumulation is stale — the
+            // retry is a fresh call with a fresh message id.
+            session
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .partial
+                .clear();
             sink.on_api_retry(attempt, reason);
         }
         Some("task_started") => {
@@ -357,12 +365,10 @@ fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
     }
 
     let last_usage = {
-        session
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .last_assistant_usage
-            .take()
+        let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+        // Turn over: whatever partial accumulation is left never completes.
+        st.partial.clear();
+        st.last_assistant_usage.take()
     };
     // Context size comes ONLY from the last parent assistant usage. The result
     // event's own `usage` is the QueryEngine total accumulated across every API
@@ -437,6 +443,9 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         Some("control_cancel_request") => handle_control_cancel_request_event(event, sink),
         Some("control_response") => handle_control_response_event(session, event, sink),
         Some("rate_limit_event") => handle_rate_limit_event(session, event, sink),
+        Some("stream_event") => {
+            crate::partial_stream::handle_stream_event(session, event, sink);
+        }
         Some("result") => {
             // Subagent result events (parent_tool_use_id present) are inner
             // sub-turns — dropping them keeps the parent processState 'working'.

@@ -207,6 +207,8 @@ pub struct ClaudeSessionState {
     pub skill_path_cache: HashMap<String, String>,
     pub task_v2_events: Vec<Value>,
     pub task_events: ClaudeTaskEvents,
+    /// In-flight `stream_event` accumulation (`--include-partial-messages`).
+    pub partial: crate::partial_stream::PartialMessageState,
 }
 
 /// set_model/apply_flag_settings/stop_task signal success/failure via the OUTER
@@ -275,7 +277,11 @@ fn build_spawn_command(
 
 /// Build the spawn argv (VERBATIM order) + the base (non-plan) permission mode.
 /// Extracted so `session-spawn-args.test.ts` can assert on it directly.
-fn build_args(options: &SessionSpawnOptions, resume: &Option<String>) -> (Vec<String>, String) {
+fn build_args(
+    options: &SessionSpawnOptions,
+    resume: &Option<String>,
+    include_partial_messages: bool,
+) -> (Vec<String>, String) {
     let mut args: Vec<String> = [
         "--output-format",
         "stream-json",
@@ -290,6 +296,13 @@ fn build_args(options: &SessionSpawnOptions, resume: &Option<String>) -> (Vec<St
     .iter()
     .map(|s| s.to_string())
     .collect();
+
+    // Version-gated (partial_stream::supports_partial_messages): an older CLI
+    // rejects unknown flags at spawn, so absence degrades to block-granularity
+    // streaming instead of a failed session.
+    if include_partial_messages {
+        args.push("--include-partial-messages".to_string());
+    }
 
     if options.system_prompt.as_deref() == Some("enabled") {
         args.push("--append-system-prompt".to_string());
@@ -372,6 +385,7 @@ impl ClaudeSession {
                 skill_path_cache: HashMap::new(),
                 task_v2_events: Vec::new(),
                 task_events: ClaudeTaskEvents::new(background_tasks, workflow_store),
+                partial: crate::partial_stream::PartialMessageState::default(),
             })),
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),
@@ -502,16 +516,21 @@ impl ClaudeSession {
             .endpoint
             .store(endpoint_model.is_some(), Ordering::SeqCst);
 
-        let (args, base_mode) = build_args(&options, &self.resume_session_id);
-        *self
-            .base_permission_mode
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = base_mode;
-
         let executable = options
             .executable_path
             .clone()
             .unwrap_or_else(|| "claude".to_string());
+
+        let include_partial = crate::partial_stream::supports_partial_messages(
+            &executable,
+            self.resolved_path.as_str(),
+        )
+        .await;
+        let (args, base_mode) = build_args(&options, &self.resume_session_id, include_partial);
+        *self
+            .base_permission_mode
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = base_mode;
 
         let real = tokio::fs::canonicalize(&self.project_path)
             .await
@@ -1313,7 +1332,7 @@ mod tests {
     // --- session-spawn-args.test.ts ---
     #[test]
     fn default_mode_passes_permission_mode_default() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Default)), &None);
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Default)), &None, false);
         assert_eq!(mode_arg(&args), "default");
         assert!(
             args.iter()
@@ -1326,7 +1345,7 @@ mod tests {
     fn plan_mode_passes_permission_mode_plan() {
         let mut o = spawn_opts(Some(ExecutionMode::Default));
         o.plan_mode = Some(true);
-        let (args, _) = build_args(&o, &None);
+        let (args, _) = build_args(&o, &None, false);
         assert_eq!(mode_arg(&args), "plan");
         assert!(
             args.iter()
@@ -1336,25 +1355,25 @@ mod tests {
 
     #[test]
     fn accept_edits_mode_passes_permission_mode_accept_edits() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::AcceptEdits)), &None);
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::AcceptEdits)), &None, false);
         assert_eq!(mode_arg(&args), "acceptEdits");
     }
 
     #[test]
     fn auto_mode_passes_permission_mode_auto() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None);
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None, false);
         assert_eq!(mode_arg(&args), "auto");
     }
 
     #[test]
     fn yolo_mode_passes_permission_mode_bypass_permissions() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None);
+        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None, false);
         assert_eq!(mode_arg(&args), "bypassPermissions");
     }
 
     #[test]
     fn undefined_permission_mode_defaults_to_default() {
-        let (args, _) = build_args(&spawn_opts(None), &None);
+        let (args, _) = build_args(&spawn_opts(None), &None, false);
         assert_eq!(mode_arg(&args), "default");
         assert!(
             args.iter()
@@ -1364,15 +1383,29 @@ mod tests {
 
     #[test]
     fn omits_append_system_prompt_by_default() {
-        let (args, _) = build_args(&spawn_opts(None), &None);
+        let (args, _) = build_args(&spawn_opts(None), &None, false);
         assert!(!args.iter().any(|a| a == "--append-system-prompt"));
+    }
+
+    #[test]
+    fn includes_partial_messages_flag_only_when_supported() {
+        let (without, _) = build_args(&spawn_opts(None), &None, false);
+        assert!(!without.iter().any(|a| a == "--include-partial-messages"));
+        let (with, _) = build_args(&spawn_opts(None), &None, true);
+        let i = with
+            .iter()
+            .position(|a| a == "--include-partial-messages")
+            .unwrap();
+        // Right after the static block: the CLI validates it against
+        // --output-format stream-json + non-TTY stdout, both always present.
+        assert_eq!(with[i - 1], "--replay-user-messages");
     }
 
     #[test]
     fn includes_append_system_prompt_when_enabled() {
         let mut o = spawn_opts(None);
         o.system_prompt = Some("enabled".to_string());
-        let (args, _) = build_args(&o, &None);
+        let (args, _) = build_args(&o, &None, false);
         let i = args
             .iter()
             .position(|a| a == "--append-system-prompt")
@@ -1390,7 +1423,7 @@ mod tests {
             ultracode: false,
             adaptive_thinking: false,
         });
-        let (args, _) = build_args(&o, &None);
+        let (args, _) = build_args(&o, &None, false);
         assert!(!args.iter().any(|a| a == "--effort"));
         assert!(args.iter().any(|a| a == "--model"));
     }
