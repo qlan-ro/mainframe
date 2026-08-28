@@ -1,0 +1,14 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "agent_message",
+    "messageId": "msg_agent_01",
+    "content": [
+      {
+        "type": "text",
+        "text": "Looking into it further"
+      }
+    ]
+  }
+}

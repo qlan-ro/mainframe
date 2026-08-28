@@ -1,0 +1,16 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "chat_9f2a3b1c",
+    "update": {
+      "sessionUpdate": "agent_message_chunk",
+      "messageId": "msg_01",
+      "content": {
+        "type": "text",
+        "text": "Hello"
+      }
+    }
+  }
+}

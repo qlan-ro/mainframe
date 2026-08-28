@@ -1,0 +1,19 @@
+{
+  "_provenance": "synthetic",
+  "protocolVersion": 2,
+  "info": {
+    "name": "mainframe-daemon",
+    "version": "1.0.0"
+  },
+  "capabilities": {
+    "session": {}
+  },
+  "_meta": {
+    "_mainframe.dev": {
+      "richPermissionAnswers": true,
+      "queuedPrompts": true,
+      "retryMarkers": true,
+      "heartbeatIntervalMs": 15000
+    }
+  }
+}

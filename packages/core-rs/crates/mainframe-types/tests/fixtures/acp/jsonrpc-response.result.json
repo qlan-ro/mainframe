@@ -1,0 +1,12 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": 2,
+    "info": {
+      "name": "mainframe-daemon",
+      "version": "1.0.0"
+    }
+  }
+}

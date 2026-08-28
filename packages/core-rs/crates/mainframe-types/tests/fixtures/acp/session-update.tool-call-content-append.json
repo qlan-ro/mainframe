@@ -1,0 +1,15 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_content_chunk",
+    "toolCallId": "toolu_01A",
+    "content": {
+      "type": "content",
+      "content": {
+        "type": "text",
+        "text": "{\n  \"name\": \"mainframe\"\n"
+      }
+    }
+  }
+}

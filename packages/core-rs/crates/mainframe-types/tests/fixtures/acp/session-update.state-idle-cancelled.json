@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "state_update",
+    "state": "idle",
+    "stopReason": "cancelled"
+  }
+}
