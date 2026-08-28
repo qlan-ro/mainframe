@@ -122,6 +122,44 @@ describe('convertAcpItem — message/thought/tool-call kinds', () => {
     const part = convertAcpItem(item, createdAt).content[0] as { result?: unknown };
     expect(part.result).toBe('OK');
   });
+
+  it('a text block with the _mainframe.dev truncation marker yields the legacy truncated result shape', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't4',
+      title: 'Bash',
+      toolKind: 'execute',
+      status: 'completed',
+      content: [
+        {
+          type: 'content',
+          content: {
+            type: 'text',
+            text: 'head\n…[truncated · 142 KB — expand]…\ntail',
+            _meta: { '_mainframe.dev': { truncated: true, fullBytes: 145728 } },
+          },
+        },
+      ],
+    };
+    const part = convertAcpItem(item, createdAt).content[0] as { result?: unknown };
+    expect(part.result).toEqual({
+      content: 'head\n…[truncated · 142 KB — expand]…\ntail',
+      truncated: true,
+      fullBytes: 145728,
+    });
+  });
+
+  it('a text block without the truncation marker keeps the plain string result', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't5',
+      title: 'Bash',
+      status: 'completed',
+      content: [{ type: 'content', content: { type: 'text', text: 'short output' } }],
+    };
+    const part = convertAcpItem(item, createdAt).content[0] as { result?: unknown };
+    expect(part.result).toBe('short output');
+  });
 });
 
 describe('convertAcpItem — subagent attribution via _meta, not task_group nesting', () => {

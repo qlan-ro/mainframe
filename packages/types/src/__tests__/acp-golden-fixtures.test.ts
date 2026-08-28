@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import {
+  GateResolvedParamsSchema,
   HeartbeatParamsSchema,
   JsonRpcNotificationSchema,
   JsonRpcRequestSchema,
@@ -21,6 +22,7 @@ import {
   RetryMarkerSchema,
   RichPermissionAnswerSchema,
   StructuredDiffSchema,
+  TruncationMarkerSchema,
 } from '../acp/index.js';
 import {
   CancelSessionNotificationSchema,
@@ -53,11 +55,14 @@ function readFixture(name: string): Record<string, unknown> {
 function schemaFor(name: string): z.ZodType {
   if (name === 'heartbeat.notification.json') return JsonRpcNotificationSchema;
   if (name === 'heartbeat.params.json') return HeartbeatParamsSchema;
+  if (name === 'gate-resolved.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'gate-resolved.params.json') return GateResolvedParamsSchema;
   if (name.startsWith('extensions.capabilities')) return MainframeCapabilitiesSchema;
   if (name.startsWith('extensions.retry-marker')) return RetryMarkerSchema;
   if (name.startsWith('extensions.queued-state')) return QueuedPromptStateSchema;
   if (name.startsWith('extensions.rich-permission-answer')) return RichPermissionAnswerSchema;
   if (name.startsWith('extensions.structured-diff')) return StructuredDiffSchema;
+  if (name.startsWith('extensions.truncation-marker')) return TruncationMarkerSchema;
   if (name.startsWith('jsonrpc-request.')) return JsonRpcRequestSchema;
   if (name.startsWith('jsonrpc-response.')) return JsonRpcResponseSchema;
   if (name.startsWith('jsonrpc-notification.')) return JsonRpcNotificationSchema;

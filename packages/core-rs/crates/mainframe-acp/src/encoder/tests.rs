@@ -138,6 +138,7 @@ fn encodes_a_tool_call_in_progress_and_completed() {
             content: vec![ToolCallContent::Content {
                 content: ContentBlock::Text {
                     text: "package contents".to_string(),
+                    meta: None,
                 }
             }],
             meta: None,
@@ -356,6 +357,70 @@ fn flattens_task_progress_items_to_tool_call_items() {
             meta: None,
         }]
     );
+}
+
+#[test]
+fn a_truncated_result_marks_its_text_block_with_the_namespaced_marker() {
+    let messages = vec![dmsg(
+        "dmsg_7",
+        DisplayMessageType::Assistant,
+        vec![DisplayContent::Node(DisplayNode::ToolCall {
+            id: "toolu_9".to_string(),
+            name: "Bash".to_string(),
+            input: HashMap::new(),
+            category: ToolCategory::Default,
+            result: Some(ToolCallResult {
+                content: "head\n…[truncated · 142 KB — expand]…\ntail".to_string(),
+                is_error: false,
+                structured_patch: None,
+                original_file: None,
+                modified_file: None,
+                truncated: Some(true),
+                full_bytes: Some(145_728),
+                ask_user_question: None,
+            }),
+            parent_tool_use_id: None,
+        })],
+    )];
+
+    let items = encode(&messages);
+    let EncodedItem::ToolCall { content, .. } = &items[0] else {
+        panic!("expected a tool call");
+    };
+    let ToolCallContent::Content {
+        content: ContentBlock::Text { meta, .. },
+    } = &content[0]
+    else {
+        panic!("expected a text content entry");
+    };
+    assert_eq!(
+        meta.as_ref().unwrap()["_mainframe.dev"],
+        json!({ "truncated": true, "fullBytes": 145_728 })
+    );
+}
+
+#[test]
+fn an_untruncated_result_text_block_carries_no_meta() {
+    let items = encode(&[dmsg(
+        "dmsg_8",
+        DisplayMessageType::Assistant,
+        vec![tool_call(
+            "toolu_1",
+            "Read",
+            ToolCategory::Explore,
+            Some("ok"),
+        )],
+    )]);
+    let EncodedItem::ToolCall { content, .. } = &items[0] else {
+        panic!("expected a tool call");
+    };
+    let ToolCallContent::Content {
+        content: ContentBlock::Text { meta, .. },
+    } = &content[0]
+    else {
+        panic!("expected a text content entry");
+    };
+    assert_eq!(meta, &None);
 }
 
 #[test]

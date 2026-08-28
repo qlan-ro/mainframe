@@ -10,10 +10,17 @@ use serde_json::Value;
 
 pub type MessageId = String;
 
+/// `_meta` mirrors the schema's discipline of reserving it on essentially
+/// every nested struct; Mainframe uses it for the namespaced truncation
+/// marker on tool-result text (`extensions::TruncationMarker`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlock {
-    Text { text: String },
+    Text {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]
+        meta: Option<Value>,
+    },
 }
 
 /// One streamed item of message content (schema `ContentChunk`) — the

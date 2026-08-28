@@ -64,6 +64,15 @@ impl FacadeConnection {
         self.locked_gates().remove(rpc_id)
     }
 
+    /// Chat teardown (`ChatSurfaceEvent::ChatEnded`): drop the session's
+    /// stream state and any gates delivered for it — otherwise both outlive
+    /// the chat for the connection's whole lifetime.
+    pub fn forget_chat(&self, chat_id: &str) {
+        self.locked_sessions().remove(chat_id);
+        self.locked_gates()
+            .retain(|_, gate| gate.chat_id != chat_id);
+    }
+
     fn send_frame(&self, payload: String) {
         // A send error means the socket loop is gone; the unregister race is
         // benign — the frame has nowhere to go. /* expected */

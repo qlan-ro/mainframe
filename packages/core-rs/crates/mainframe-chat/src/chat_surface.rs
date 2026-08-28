@@ -75,6 +75,13 @@ pub enum ChatSurfaceEvent {
         chat_id: String,
         usage: ContextUsage,
     },
+    /// The chat was torn down — archived, ended, or removed with its project.
+    /// Observers drop every per-chat bookkeeping they hold (the facade hub's
+    /// gate registry and per-connection session state), which nothing else
+    /// ever clears.
+    ChatEnded {
+        chat_id: String,
+    },
 }
 
 /// The observer trait itself. `Send + Sync` so it can be stored behind an

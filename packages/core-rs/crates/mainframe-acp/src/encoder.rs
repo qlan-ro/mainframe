@@ -19,7 +19,9 @@ use mainframe_types::display::{
 };
 
 use mainframe_types::acp::content::ContentBlock;
-use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, StructuredDiff};
+use mainframe_types::acp::extensions::{
+    MAINFRAME_META_NAMESPACE, StructuredDiff, TruncationMarker,
+};
 use mainframe_types::acp::tool_call::{
     Diff, DiffChange, DiffFileType, DiffOperation, DiffPatch, DiffPatchFormat, ToolCallContent,
     ToolCallStatus, ToolKind,
@@ -219,10 +221,27 @@ fn result_content(
     let mut out = vec![ToolCallContent::Content {
         content: ContentBlock::Text {
             text: r.content.clone(),
+            meta: truncation_meta(r),
         },
     }];
     out.extend(diff_content(name, input, r));
     out
+}
+
+/// A daemon-truncated result marks its preview text block with the
+/// namespaced `truncated`/`fullBytes` pair (spec Decision 20) — the joined
+/// text alone cannot say "this is a preview of N bytes", which the legacy
+/// dialect's `ToolCallResult` carries inline and the expand affordance needs.
+fn truncation_meta(result: &ToolCallResult) -> Option<Value> {
+    if result.truncated != Some(true) {
+        return None;
+    }
+    let full_bytes = result.full_bytes?;
+    let marker = TruncationMarker {
+        truncated: true,
+        full_bytes,
+    };
+    Some(json!({ MAINFRAME_META_NAMESPACE: marker }))
 }
 
 /// A result carrying structured hunks becomes a `diff` content entry after

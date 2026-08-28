@@ -6,6 +6,7 @@ fn chunk(text: &str) -> SessionUpdate {
         message_id: "msg_1".to_string(),
         content: ContentBlock::Text {
             text: text.to_string(),
+            meta: None,
         },
         meta: None,
     })
@@ -15,7 +16,7 @@ fn chunk_text(update: &SessionUpdate) -> &str {
     let SessionUpdate::AgentMessageChunk(c) = update else {
         panic!("expected an AgentMessageChunk");
     };
-    let ContentBlock::Text { text } = &c.content;
+    let ContentBlock::Text { text, .. } = &c.content;
     text.as_str()
 }
 
@@ -50,6 +51,7 @@ fn non_chunk_updates_pass_through_unmerged() {
         message_id: "msg_2".to_string(),
         content: Some(Some(vec![ContentBlock::Text {
             text: "full".to_string(),
+            meta: None,
         }])),
         meta: None,
     });
@@ -100,7 +102,7 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
         match update {
             SessionUpdate::AgentMessage(upsert) => {
                 let content = upsert.content.clone().flatten().unwrap_or_default();
-                let mainframe_types::acp::content::ContentBlock::Text { text } = &content[0];
+                let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &content[0];
                 assert_eq!(
                     i, 0,
                     "only the very first frame may carry full content, got it at index {i}"

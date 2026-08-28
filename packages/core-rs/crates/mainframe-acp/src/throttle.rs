@@ -116,7 +116,7 @@ fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str)> {
         | SessionUpdate::AgentThoughtChunk(c) => c,
         _ => return None,
     };
-    let ContentBlock::Text { text } = &chunk.content;
+    let ContentBlock::Text { text, .. } = &chunk.content;
     Some((&chunk.message_id, text.as_str()))
 }
 
@@ -127,7 +127,7 @@ fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String)> {
         | SessionUpdate::AgentThoughtChunk(c) => c,
         _ => return None,
     };
-    let ContentBlock::Text { text } = &mut chunk.content;
+    let ContentBlock::Text { text, .. } = &mut chunk.content;
     Some((&chunk.message_id, text))
 }
 

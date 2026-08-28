@@ -227,8 +227,14 @@ impl ChatSurface for FacadeHub {
             } => {
                 self.locked_registry().mark_resolved(&chat_id, &request_id);
                 let rpc_id = rpc_id_string(&request_id);
+                // A connection still holding the delivered gate did not answer
+                // it (the answer path removes its own entry first) — push the
+                // resolution so it clears now, not on its next resume (spec
+                // criterion 8).
+                let note = mainframe_acp::gate_resolved_notification(&chat_id, &rpc_id);
                 for entry in self.connections.iter() {
                     if entry.value().remove_gate(&rpc_id).is_some() {
+                        entry.value().send_json(&note);
                         debug!(chat_id, request_id, "acp facade: pending gate resolved");
                     }
                 }
@@ -253,6 +259,14 @@ impl ChatSurface for FacadeHub {
                 self.for_each_attached_session(&chat_id, |stream, now| {
                     stream.on_usage(update.clone(), now)
                 });
+            }
+            // Chat teardown: nothing else ever clears the gate registry's
+            // per-chat bookkeeping or a connection's per-chat session state.
+            ChatSurfaceEvent::ChatEnded { chat_id } => {
+                self.locked_registry().forget_chat(&chat_id);
+                for entry in self.connections.iter() {
+                    entry.value().forget_chat(&chat_id);
+                }
             }
         }
     }

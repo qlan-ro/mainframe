@@ -91,6 +91,32 @@ pub struct HeartbeatParams {
     pub sequence: u64,
 }
 
+/// Params for the daemon's custom `_mainframe.dev/gate_resolved` notification
+/// (spec decision 19): pushed to every attached connection still holding the
+/// gate when it resolves elsewhere — another facade client's answer, a
+/// legacy-surface answer, or the CLI cancelling it — so a pending gate clears
+/// immediately instead of on the next resume. `requestId` is the JSON-RPC id
+/// the gate's `session/request_permission` traveled under (`gate-{id}`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GateResolvedParams {
+    pub session_id: String,
+    pub request_id: String,
+}
+
+/// The marker a truncated tool-result text block carries in its own
+/// `_meta["_mainframe.dev"]` (spec decision 20): the legacy display
+/// pipeline's `truncated`/`fullBytes` pair (`truncate_tool_content`), which
+/// the joined content text cannot express — clients use it to offer the
+/// on-demand full-output fetch (`GET /api/chats/{id}/tool-result/{toolUseId}`),
+/// the same affordance the legacy dialect's `ToolCallResult` carries inline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TruncationMarker {
+    pub truncated: bool,
+    pub full_bytes: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

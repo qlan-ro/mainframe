@@ -746,7 +746,7 @@ Source: `packages/core-rs/crates/mainframe-acp` (pure dispatch, no socket
 code) and `packages/core-rs/crates/mainframe-server/src/acp_ws.rs` (the axum
 upgrade shell); vendored wire types in
 `packages/core-rs/crates/mainframe-types/src/acp/` and
-`packages/types/src/acp.ts`.
+`packages/types/src/acp/`.
 
 The daemon exposes a second, additive-only chat surface: an [ACP
 v2](https://agentclientprotocol.com) server facade, frozen against snapshot
@@ -793,6 +793,7 @@ queued-turn metadata).
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); a plain `{outcome:"selected", optionId}` answer is always valid, a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
 | `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
+| `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, the legacy surface, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
 
 **Subagents.** Flatten to ordinary tool-call items carrying
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
@@ -805,6 +806,14 @@ text a generic ACP client can render, and the diff's own
 `_meta["_mainframe.dev"]` carries the `structuredPatch`/`originalFile`/
 `modifiedFile` payload the desktop Edit/Write cards consume.
 
+**Truncated tool results.** When the daemon truncates an oversized tool
+output for display, the result's text content block carries
+`_meta["_mainframe.dev"]: {truncated: true, fullBytes}` (spec Decision 20) —
+the same pair the legacy dialect's `ToolCallResult` carries inline — so a
+client can offer the on-demand full-output fetch
+(`GET /api/chats/{chatId}/tool-result/{toolUseId}`). Generic ACP clients
+ignore the marker and render the truncated preview text.
+
 **Multi-client + cross-surface gates.** A gate raised on a chat broadcasts
 to every facade connection attached to it, under the shared correlation id
 `gate-{requestId}`; only the first answer applies
@@ -814,10 +823,10 @@ implements (`mainframe-chat::permission_handler`), so a legacy-surface
 answer drops the facade's pending delivery and a late facade answer is
 rejected as resolved — one observer, no separate synchronization. A
 still-open gate is redelivered by `session/resume` under the same id.
-Known gap vs. the spec's criterion 8: resolution is not yet *pushed* to
-other attached facade clients as a frame (no vendored notification models
-it, and `acp-client.ts` has no handler); a client learns of the resolution
-on its next resume.
+Resolution is pushed: every connection still holding the delivered gate
+receives `_mainframe.dev/gate_resolved` the moment it resolves (criterion
+8), so a second client's pending gate clears immediately; resume redelivery
+remains the fallback for a client that was disconnected at that moment.
 
 **Migration window.** The legacy dialect above stays byte-frozen for the
 duration; desktop cuts over first, `packages/mobile` follows in its own PR

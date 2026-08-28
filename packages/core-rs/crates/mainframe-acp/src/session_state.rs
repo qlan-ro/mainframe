@@ -66,6 +66,7 @@ fn upsert_variant(role: ItemRole, is_thought: bool) -> fn(MessageUpsert) -> Sess
 fn text_block(text: &str) -> Vec<ContentBlock> {
     vec![ContentBlock::Text {
         text: text.to_string(),
+        meta: None,
     }]
 }
 
@@ -182,6 +183,7 @@ fn text_revision(
             message_id: id.to_string(),
             content: ContentBlock::Text {
                 text: delta.to_string(),
+                meta: None,
             },
             meta: new_meta.clone().filter(|_| new_meta != prev_meta),
         })];

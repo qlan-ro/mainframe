@@ -167,3 +167,33 @@ export const HeartbeatParamsSchema = z
   })
   .loose();
 export type HeartbeatParams = z.infer<typeof HeartbeatParamsSchema>;
+
+/**
+ * Params for the daemon's custom `_mainframe.dev/gate_resolved` notification
+ * (spec decision 19): pushed to every attached connection still holding the
+ * gate when it resolves elsewhere, so a pending gate clears immediately
+ * instead of on the next resume. `requestId` is the JSON-RPC id the gate's
+ * `session/request_permission` traveled under (`gate-{id}`).
+ */
+export const GateResolvedParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    requestId: z.string(),
+  })
+  .loose();
+export type GateResolvedParams = z.infer<typeof GateResolvedParamsSchema>;
+
+/**
+ * The marker a truncated tool-result text block carries in its own
+ * `_meta["_mainframe.dev"]` (spec decision 20): the legacy pipeline's
+ * `truncated`/`fullBytes` pair, which clients use to offer the on-demand
+ * full-output fetch — the same affordance the legacy dialect's
+ * `ToolCallResult` carries inline.
+ */
+export const TruncationMarkerSchema = z
+  .object({
+    truncated: z.boolean(),
+    fullBytes: z.number().int().nonnegative(),
+  })
+  .loose();
+export type TruncationMarker = z.infer<typeof TruncationMarkerSchema>;

@@ -142,6 +142,11 @@ impl ChatManager {
                 .forget(&chat.id);
             self.deps.tracker_remove_chat(&chat.id);
             self.event_handler.clear_display_cache(&chat.id);
+            self.event_handler.notify_chat_surface(
+                crate::chat_surface::ChatSurfaceEvent::ChatEnded {
+                    chat_id: chat.id.clone(),
+                },
+            );
         }
         self.deps.projects_remove(project_id)?;
         info!(project_id, "project removed");

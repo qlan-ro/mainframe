@@ -8,6 +8,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import type {
   GapListener,
+  GateResolvedListener,
   PermissionRequestListener,
   ReplayCursor,
   SessionUpdateListener,
@@ -24,6 +25,7 @@ import { AcpFacadeSession, type AcpSessionClientPort } from '../acp-facade-sessi
 class FakeClient implements AcpSessionClientPort {
   private sessionUpdateListener: SessionUpdateListener | null = null;
   private permissionListener: PermissionRequestListener | null = null;
+  private gateResolvedListener: GateResolvedListener | null = null;
   private gapListener: GapListener | null = null;
   resumeCalls: Array<{ sessionId: string; cwd: string; replayFrom?: ReplayCursor }> = [];
   promptCalls: Array<{ sessionId: string; text: string }> = [];
@@ -39,6 +41,10 @@ class FakeClient implements AcpSessionClientPort {
   onPermissionRequest(listener: PermissionRequestListener): () => void {
     this.permissionListener = listener;
     return () => (this.permissionListener = null);
+  }
+  onGateResolved(listener: GateResolvedListener): () => void {
+    this.gateResolvedListener = listener;
+    return () => (this.gateResolvedListener = null);
   }
   onGap(listener: GapListener): () => void {
     this.gapListener = listener;
@@ -64,6 +70,9 @@ class FakeClient implements AcpSessionClientPort {
   }
   emitPermissionRequest(id: unknown, request: RequestPermissionRequest): void {
     this.permissionListener?.(id as never, request);
+  }
+  emitGateResolved(sessionId: string, requestId: string): void {
+    this.gateResolvedListener?.(sessionId, requestId);
   }
   emitGap(): void {
     this.gapListener?.();
@@ -177,6 +186,36 @@ describe('AcpFacadeSession — permission gates (pending-permission recovery fal
     const { client, session: s } = session();
     s.respondPermission({ outcome: { outcome: 'selected', optionId: 'allow-once' } });
     expect(client.respondCalls).toEqual([]);
+  });
+
+  it('a _mainframe.dev/gate_resolved push clears the matching pending gate without a resume', () => {
+    const { client, session: s } = session();
+    client.emitPermissionRequest('gate-1', {
+      sessionId: 'chat_1',
+      title: 'x',
+      options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+    });
+    expect(s.getState().pendingPermission).not.toBeNull();
+
+    client.emitGateResolved('chat_1', 'gate-1');
+
+    expect(s.getState().pendingPermission).toBeNull();
+    expect(client.resumeCalls).toEqual([]);
+    expect(client.respondCalls).toEqual([]);
+  });
+
+  it('a gate_resolved for another session or another request leaves the pending gate alone', () => {
+    const { client, session: s } = session();
+    client.emitPermissionRequest('gate-1', {
+      sessionId: 'chat_1',
+      title: 'x',
+      options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+    });
+
+    client.emitGateResolved('chat_other', 'gate-1');
+    client.emitGateResolved('chat_1', 'gate-2');
+
+    expect(s.getState().pendingPermission?.id).toBe('gate-1');
   });
 });
 

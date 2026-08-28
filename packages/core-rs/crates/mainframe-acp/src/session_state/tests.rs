@@ -36,7 +36,8 @@ fn a_new_id_produces_a_full_upsert_with_content() {
     assert_eq!(
         upsert.content,
         Some(Some(vec![ContentBlock::Text {
-            text: "hello".to_string()
+            text: "hello".to_string(),
+            meta: None
         }]))
     );
 }
@@ -64,7 +65,8 @@ fn a_pure_suffix_growth_produces_a_chunk_with_only_the_delta() {
     assert_eq!(
         chunk.content,
         ContentBlock::Text {
-            text: "ing into it".to_string()
+            text: "ing into it".to_string(),
+            meta: None
         }
     );
 }
@@ -86,7 +88,8 @@ fn a_non_append_change_is_a_full_revision_not_a_chunk() {
     assert_eq!(
         upsert.content,
         Some(Some(vec![ContentBlock::Text {
-            text: "Retried from scratch".to_string()
+            text: "Retried from scratch".to_string(),
+            meta: None
         }]))
     );
 }
@@ -102,6 +105,7 @@ fn a_tool_call_status_change_patches_only_the_changed_field() {
         vec![ToolCallContent::Content {
             content: ContentBlock::Text {
                 text: "done".to_string(),
+                meta: None,
             },
         }],
     )]);

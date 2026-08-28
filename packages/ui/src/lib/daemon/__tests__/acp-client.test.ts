@@ -184,6 +184,32 @@ describe('AcpFacadeClient — session/request_permission (daemon-initiated)', ()
   });
 });
 
+describe('AcpFacadeClient — _mainframe.dev/gate_resolved (criterion 8 client half)', () => {
+  it('delivers a validated gate resolution to listeners', async () => {
+    const { client, socket } = await connectedClient();
+    const resolutions: Array<{ sessionId: string; requestId: string }> = [];
+    client.onGateResolved((sessionId, requestId) => resolutions.push({ sessionId, requestId }));
+
+    socket.receive({
+      jsonrpc: '2.0',
+      method: '_mainframe.dev/gate_resolved',
+      params: { sessionId: 'chat_1', requestId: 'gate-req_001' },
+    });
+
+    expect(resolutions).toEqual([{ sessionId: 'chat_1', requestId: 'gate-req_001' }]);
+  });
+
+  it('drops a gate_resolved notification that fails schema validation', async () => {
+    const { client, socket } = await connectedClient();
+    const resolutions = vi.fn();
+    client.onGateResolved(resolutions);
+
+    socket.receive({ jsonrpc: '2.0', method: '_mainframe.dev/gate_resolved', params: { sessionId: 42 } });
+
+    expect(resolutions).not.toHaveBeenCalled();
+  });
+});
+
 describe('AcpFacadeClient — heartbeat + gap detection (criterion 11 client half)', () => {
   it('does not signal a gap for consecutive heartbeat sequences', async () => {
     const { client, socket } = await connectedClient();

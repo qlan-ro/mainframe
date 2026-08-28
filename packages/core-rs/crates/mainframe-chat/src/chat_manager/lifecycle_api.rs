@@ -88,6 +88,10 @@ impl ChatManager {
         self.deps.tracker_remove_chat(chat_id);
         self.event_handler.clear_display_cache(chat_id);
         self.worktree_offers.forget(chat_id);
+        self.event_handler
+            .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
+                chat_id: chat_id.to_string(),
+            });
     }
 
     pub async fn end_chat(&self, chat_id: &str) {
@@ -95,6 +99,10 @@ impl ChatManager {
         self.deps.tracker_remove_chat(chat_id);
         self.event_handler.clear_display_cache(chat_id);
         self.worktree_offers.forget(chat_id);
+        self.event_handler
+            .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
+                chat_id: chat_id.to_string(),
+            });
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {

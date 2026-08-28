@@ -219,7 +219,12 @@ test.describe('§facade-protocol streaming', () => {
 
     // Criterion 5: no queue.* frame family exists on the facade — every
     // notification method is from the facade vocabulary.
-    const allowedMethods = ['session/update', 'session/request_permission', '_mainframe.dev/heartbeat'];
+    const allowedMethods = [
+      'session/update',
+      'session/request_permission',
+      '_mainframe.dev/heartbeat',
+      '_mainframe.dev/gate_resolved',
+    ];
     for (const frame of frames) {
       if (frame.method !== undefined) expect(allowedMethods).toContain(frame.method);
     }

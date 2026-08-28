@@ -46,7 +46,7 @@ fn a_growing_message_creates_once_then_chunks_the_delta() {
     let SessionUpdate::AgentMessageChunk(chunk) = &second[0] else {
         panic!("expected a chunk, got {:?}", second[0]);
     };
-    let mainframe_types::acp::content::ContentBlock::Text { text } = &chunk.content;
+    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content;
     assert_eq!(text, "lo");
 }
 
@@ -62,7 +62,7 @@ fn seeding_replayed_items_makes_the_next_revision_a_pure_delta() {
     let SessionUpdate::AgentMessageChunk(chunk) = &updates[0] else {
         panic!("expected a chunk, got {:?}", updates[0]);
     };
-    let mainframe_types::acp::content::ContentBlock::Text { text } = &chunk.content;
+    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content;
     assert_eq!(text, " world");
 }
 

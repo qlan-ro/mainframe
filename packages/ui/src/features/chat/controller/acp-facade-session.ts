@@ -1,14 +1,11 @@
 /**
  * Facade-mode chat session (todo #350, plan task 20) — the ACP counterpart
- * of `chat-thread-controller.ts`. A new module, not a rewrite of that
- * controller: the daemon's facade endpoints are pure, unit-tested dispatch
- * functions with no live `ChatManager`/socket wiring yet
- * (`docs/API-REFERENCE.md` § ACP Chat Facade, "Status: not yet live" —
- * confirmed against `mainframe-server/src/acp_ws.rs`, which calls only
- * `handle_frame`, never `handle_frame_with_prompt`/`dispatch_resume`).
- * Cutting the production controller over to a transport the daemon can't yet
- * serve would ship a broken chat surface; `chat-controller-registry.ts` and
- * the legacy dialect are untouched.
+ * of `chat-thread-controller.ts`. The daemon facade is live
+ * (`docs/API-REFERENCE.md` § ACP Chat Facade: `/acp/{profile}` serves
+ * prompt/cancel/resume against the real `ChatManager`); this module is the
+ * client half of that seam. The desktop UI still ships on the legacy
+ * controller — switching `chat-controller-registry.ts` over is the separate
+ * desktop cutover, and the legacy dialect stays untouched until then.
  *
  * Maps the four legacy reconnect re-seed paths onto the facade's single
  * primitive, `session/resume`:
@@ -33,6 +30,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import type {
   GapListener,
+  GateResolvedListener,
   PermissionRequestListener,
   ReplayCursor,
   SessionUpdateListener,
@@ -44,6 +42,7 @@ import { convertAcpItems } from '../view-model/convert-acp-item';
 export interface AcpSessionClientPort {
   onSessionUpdate(listener: SessionUpdateListener): () => void;
   onPermissionRequest(listener: PermissionRequestListener): () => void;
+  onGateResolved(listener: GateResolvedListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -92,6 +91,9 @@ export class AcpFacadeSession {
       }),
       deps.client.onPermissionRequest((id, request) => {
         if (request.sessionId === deps.sessionId) this.setPendingPermission({ id, request });
+      }),
+      deps.client.onGateResolved((sessionId, requestId) => {
+        if (sessionId === deps.sessionId) this.clearResolvedPermission(requestId);
       }),
       deps.client.onGap(() => void this.resumeFromGap()),
     ];
@@ -178,6 +180,13 @@ export class AcpFacadeSession {
 
   private setPendingPermission(pending: AcpPendingPermission): void {
     this.update({ ...this.state, pendingPermission: pending });
+  }
+
+  /** The gate resolved elsewhere (`_mainframe.dev/gate_resolved`) — drop it if it is the one we're showing. */
+  private clearResolvedPermission(requestId: string): void {
+    const pending = this.state.pendingPermission;
+    if (!pending || String(pending.id) !== requestId) return;
+    this.update({ ...this.state, pendingPermission: null });
   }
 
   private refreshMessages(): void {

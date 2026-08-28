@@ -9,10 +9,16 @@ import { z } from 'zod';
 
 export type MessageId = string;
 
+/**
+ * `_meta` mirrors the schema's discipline of reserving it on essentially
+ * every nested struct; Mainframe uses it for the namespaced truncation
+ * marker on tool-result text (`extensions.ts`'s `TruncationMarker`).
+ */
 export const ContentBlockSchema = z
   .object({
     type: z.literal('text'),
     text: z.string(),
+    _meta: z.record(z.string(), z.unknown()).optional(),
   })
   .loose();
 export type ContentBlock = z.infer<typeof ContentBlockSchema>;

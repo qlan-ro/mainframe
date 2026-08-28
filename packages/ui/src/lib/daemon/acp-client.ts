@@ -26,6 +26,7 @@ import type {
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import {
+  GateResolvedParamsSchema,
   HeartbeatParamsSchema,
   InitializeResponseSchema,
   MAINFRAME_META_NAMESPACE,
@@ -49,6 +50,8 @@ const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
 
 export type SessionUpdateListener = (sessionId: string, update: SessionUpdate) => void;
 export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestPermissionRequest) => void;
+/** `requestId` is the JSON-RPC id the gate's `session/request_permission` traveled under. */
+export type GateResolvedListener = (sessionId: string, requestId: string) => void;
 export type GapListener = () => void;
 export type CloseListener = () => void;
 
@@ -82,6 +85,7 @@ export class AcpFacadeClient {
   private capabilities: MainframeCapabilities | null = null;
   private readonly sessionUpdateListeners = new Set<SessionUpdateListener>();
   private readonly permissionRequestListeners = new Set<PermissionRequestListener>();
+  private readonly gateResolvedListeners = new Set<GateResolvedListener>();
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 
@@ -155,6 +159,12 @@ export class AcpFacadeClient {
     return () => this.permissionRequestListeners.delete(listener);
   }
 
+  /** Fires when a gate this client did not answer resolved elsewhere (another client, the legacy surface, or the CLI). */
+  onGateResolved(listener: GateResolvedListener): () => void {
+    this.gateResolvedListeners.add(listener);
+    return () => this.gateResolvedListeners.delete(listener);
+  }
+
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
@@ -203,6 +213,15 @@ export class AcpFacadeClient {
         return;
       }
       this.watchdog?.observe(parsed.data.sequence);
+      return;
+    }
+    if (notification.method === '_mainframe.dev/gate_resolved') {
+      const parsed = GateResolvedParamsSchema.safeParse(notification.params);
+      if (!parsed.success) {
+        console.warn('[acp-client] dropped malformed gate_resolved', notification.params);
+        return;
+      }
+      this.gateResolvedListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.requestId));
     }
   }
 

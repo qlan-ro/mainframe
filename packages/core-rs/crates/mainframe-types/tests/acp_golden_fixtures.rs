@@ -16,8 +16,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
-    HeartbeatParams, MainframeCapabilities, QueuedPromptState, RetryMarker, RichPermissionAnswer,
-    StructuredDiff,
+    GateResolvedParams, HeartbeatParams, MainframeCapabilities, QueuedPromptState, RetryMarker,
+    RichPermissionAnswer, StructuredDiff, TruncationMarker,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -96,6 +96,12 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     if name == "heartbeat.params.json" {
         return roundtrip_as::<HeartbeatParams>(body);
     }
+    if name == "gate-resolved.notification.json" {
+        return roundtrip_as::<JsonRpcNotification>(body);
+    }
+    if name == "gate-resolved.params.json" {
+        return roundtrip_as::<GateResolvedParams>(body);
+    }
     if name.starts_with("extensions.capabilities") {
         return roundtrip_as::<MainframeCapabilities>(body);
     }
@@ -110,6 +116,9 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name.starts_with("extensions.structured-diff") {
         return roundtrip_as::<StructuredDiff>(body);
+    }
+    if name.starts_with("extensions.truncation-marker") {
+        return roundtrip_as::<TruncationMarker>(body);
     }
     if name.starts_with("jsonrpc-request.") {
         return roundtrip_as::<JsonRpcRequest>(body);

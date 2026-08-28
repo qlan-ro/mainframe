@@ -5,7 +5,9 @@
 //! `initialize.response.json` / `heartbeat.notification.json` — this module
 //! only assembles them.
 
-use mainframe_types::acp::extensions::{HeartbeatParams, MainframeCapabilities};
+use mainframe_types::acp::extensions::{
+    GateResolvedParams, HeartbeatParams, MainframeCapabilities,
+};
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 
 /// Production default heartbeat cadence, matching the vendored fixtures
@@ -38,6 +40,23 @@ pub fn heartbeat_notification(sequence: u64) -> JsonRpcNotification {
     }
 }
 
+/// The `_mainframe.dev/gate_resolved` notification (spec decision 19): sent
+/// to every attached connection still holding a pending gate when it resolves
+/// elsewhere, so the client clears it immediately instead of on its next
+/// resume. `rpc_id` is the string form of the gate's `session/request_permission`
+/// JSON-RPC id (`gate-{requestId}`) — exactly what the client keyed the
+/// pending gate under.
+pub fn gate_resolved_notification(session_id: &str, rpc_id: &str) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/gate_resolved".into(),
+        params: Some(serde_json::json!(GateResolvedParams {
+            session_id: session_id.to_string(),
+            request_id: rpc_id.to_string(),
+        })),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,5 +85,17 @@ mod tests {
         let value = serde_json::to_value(&note).unwrap();
         assert_eq!(value["method"], "_mainframe.dev/heartbeat");
         assert_eq!(value["params"]["sequence"], serde_json::json!(42));
+    }
+
+    #[test]
+    fn gate_resolved_notification_matches_the_pinned_fixture_shape() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../mainframe-types/tests/fixtures/acp/gate-resolved.notification.json"
+        ))
+        .unwrap();
+        let note = gate_resolved_notification("chat_1", "gate-req_1");
+        let mut value = serde_json::to_value(&note).unwrap();
+        value["_provenance"] = fixture["_provenance"].clone();
+        assert_eq!(value, fixture);
     }
 }

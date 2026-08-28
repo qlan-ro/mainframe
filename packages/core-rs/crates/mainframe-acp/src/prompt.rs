@@ -101,7 +101,7 @@ fn extract_text(prompt: &[mainframe_types::acp::content::ContentBlock]) -> Strin
     prompt
         .iter()
         .map(|block| {
-            let mainframe_types::acp::content::ContentBlock::Text { text } = block;
+            let mainframe_types::acp::content::ContentBlock::Text { text, .. } = block;
             text.as_str()
         })
         .collect::<Vec<_>>()

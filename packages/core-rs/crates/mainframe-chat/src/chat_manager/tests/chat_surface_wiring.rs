@@ -236,3 +236,52 @@ async fn answering_the_front_request_raises_the_promoted_one_on_the_chat_surface
         "the promoted request must be raised on the chat surface for a facade to redeliver it"
     );
 }
+
+/// Teardown reaches the chat surface: the facade hub's `GateRegistry` and
+/// per-connection session state are cleared only by `ChatEnded` — without
+/// this emission `GateRegistry::forget_chat` has no production caller.
+#[tokio::test]
+async fn ending_a_chat_emits_chat_ended_on_the_chat_surface() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+
+    mgr.end_chat("c1").await;
+
+    assert!(
+        surface
+            .events()
+            .iter()
+            .any(|e| matches!(e, ChatSurfaceEvent::ChatEnded { chat_id } if chat_id == "c1")),
+        "end_chat must announce teardown on the chat surface"
+    );
+}
+
+#[tokio::test]
+async fn archiving_a_chat_emits_chat_ended_on_the_chat_surface() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+
+    mgr.archive_chat("c1", false).await;
+
+    assert!(
+        surface
+            .events()
+            .iter()
+            .any(|e| matches!(e, ChatSurfaceEvent::ChatEnded { chat_id } if chat_id == "c1")),
+        "archive_chat must announce teardown on the chat surface"
+    );
+}
