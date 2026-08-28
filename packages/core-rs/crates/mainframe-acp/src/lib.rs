@@ -9,9 +9,11 @@
 
 pub mod capabilities;
 pub mod connection;
+pub mod encoder;
 pub mod rpc;
 
 pub use capabilities::{
     DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeat_notification, mainframe_capabilities,
 };
 pub use connection::{DaemonInfo, handle_frame};
+pub use encoder::{EncodedItem, ItemRole, encode};
