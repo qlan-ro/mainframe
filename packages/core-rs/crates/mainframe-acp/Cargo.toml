@@ -11,3 +11,6 @@ workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 mainframe-types = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

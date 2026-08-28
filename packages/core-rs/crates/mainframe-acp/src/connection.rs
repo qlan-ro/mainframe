@@ -15,6 +15,7 @@ use mainframe_types::acp::session::{
 use serde_json::{Value, json};
 
 use crate::capabilities::mainframe_capabilities;
+use crate::prompt::{self, PromptPort};
 use crate::rpc::{self, InboundFrame};
 
 /// The daemon identity and configured heartbeat cadence threaded in from
@@ -30,6 +31,31 @@ pub struct DaemonInfo {
 /// notification's sender does not expect an answer to be listening for).
 pub fn handle_frame(text: &str, daemon: &DaemonInfo) -> Option<String> {
     match rpc::parse_frame(text) {
+        Ok(InboundFrame::Request(request)) => Some(to_wire(&dispatch_request(request, daemon))),
+        Ok(InboundFrame::Notification(_)) => None,
+        Ok(InboundFrame::Response(_)) => None,
+        Err(error) => Some(to_wire(&rpc::error_response(None, error))),
+    }
+}
+
+/// [`handle_frame`], extended with `session/prompt`/`session/cancel` routing
+/// through a [`PromptPort`] (plan task 14). A separate entry point from
+/// `handle_frame` rather than a signature change to it: every other method
+/// (`initialize`, unknown-method, malformed-frame) is still synchronous, and
+/// group C's existing `handle_frame` tests must keep passing unchanged.
+pub async fn handle_frame_with_prompt(
+    text: &str,
+    daemon: &DaemonInfo,
+    port: &dyn PromptPort,
+) -> Option<String> {
+    match rpc::parse_frame(text) {
+        Ok(InboundFrame::Request(request)) if request.method == "session/prompt" => {
+            Some(to_wire(&prompt::dispatch_prompt(request, port).await))
+        }
+        Ok(InboundFrame::Notification(note)) if note.method == "session/cancel" => {
+            prompt::dispatch_cancel(note.params, port).await;
+            None
+        }
         Ok(InboundFrame::Request(request)) => Some(to_wire(&dispatch_request(request, daemon))),
         Ok(InboundFrame::Notification(_)) => None,
         Ok(InboundFrame::Response(_)) => None,
