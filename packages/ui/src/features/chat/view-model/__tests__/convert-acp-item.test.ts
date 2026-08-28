@@ -74,6 +74,54 @@ describe('convertAcpItem — message/thought/tool-call kinds', () => {
       { type: 'tool-call', toolCallId: 't1', toolName: 't1', args: {}, result: undefined, isError: true },
     ]);
   });
+
+  it('a diff content entry with the _mainframe.dev fidelity payload yields the legacy structured result shape', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't2',
+      title: 'Edit',
+      toolKind: 'edit',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'Applied 1 edit' } },
+        {
+          type: 'diff',
+          changes: [{ operation: 'modify', path: '/w/src/config.json', fileType: 'text' }],
+          patch: { format: 'git_patch', text: 'diff --git /w/src/config.json /w/src/config.json\n' },
+          _meta: {
+            '_mainframe.dev': {
+              structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-false', '+true'] }],
+              originalFile: 'false',
+              modifiedFile: 'true',
+            },
+          },
+        },
+      ],
+      rawInput: { file_path: '/w/src/config.json' },
+    };
+    const part = convertAcpItem(item, createdAt).content[0] as { result?: unknown };
+    expect(part.result).toEqual({
+      content: 'Applied 1 edit',
+      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-false', '+true'] }],
+      originalFile: 'false',
+      modifiedFile: 'true',
+    });
+  });
+
+  it('a diff entry without the fidelity payload degrades to the joined text result', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't3',
+      title: 'Edit',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'OK' } },
+        { type: 'diff', changes: [{ operation: 'add', path: '/w/new.ts' }] },
+      ],
+    };
+    const part = convertAcpItem(item, createdAt).content[0] as { result?: unknown };
+    expect(part.result).toBe('OK');
+  });
 });
 
 describe('convertAcpItem — subagent attribution via _meta, not task_group nesting', () => {

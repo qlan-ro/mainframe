@@ -2,11 +2,10 @@
 //! is required. Other fields have patch semantics: omitted fields leave the
 //! existing tool call value unchanged, `null` clears or unsets the value, and
 //! concrete values replace the previous value") and its streamed-append
-//! sibling `ToolCallContentChunk`. `ToolCallContent` is scoped to the
-//! `content` (block) variant — `diff`/`terminal` are deferred (see decisions:
-//! v2's `Diff` grew a structured `DiffChange[]` shape beyond v1's flat
-//! `{path, oldText, newText}`, and `terminal` content is moot without the
-//! declined `terminal/*` client services).
+//! sibling `ToolCallContentChunk`. `ToolCallContent` carries the `content`
+//! (block) and `diff` variants; `terminal` is an explicit deviation — the
+//! facade declines the `terminal/*` client services a `terminalId` would
+//! point into (spec Decision 16).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -52,10 +51,84 @@ pub struct ToolCallLocation {
     pub line: Option<u32>,
 }
 
+/// Kind of file content represented by a diff change (schema `DiffFileType`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffFileType {
+    Text,
+    Binary,
+    Directory,
+    Symlink,
+}
+
+/// Renderable patch text format (schema `DiffPatchFormat`) — `git_patch` is
+/// the only ACP-defined value: `diff --git` sections in Git's `--patch` text
+/// format with absolute paths and no commit metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiffPatchFormat {
+    GitPatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffPatch {
+    pub format: DiffPatchFormat,
+    pub text: String,
+}
+
+/// The `operation` discriminant of a [`DiffChange`] plus its path payload:
+/// `add`/`delete`/`modify` carry `path` (schema `DiffPathChange`), `move`/
+/// `copy` carry `oldPath` + `path` (schema `DiffPathPairChange`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "operation",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum DiffOperation {
+    Add { path: String },
+    Delete { path: String },
+    Modify { path: String },
+    Move { old_path: String, path: String },
+    Copy { old_path: String, path: String },
+}
+
+/// One file-level change described by a [`Diff`] (schema `DiffChange`):
+/// "structured change metadata lets clients identify affected files and
+/// operations without parsing the text patch".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffChange {
+    #[serde(flatten)]
+    pub operation: DiffOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<DiffFileType>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]
+    pub meta: Option<Value>,
+}
+
+/// File changes produced by a tool call (schema `Diff`): `changes` is
+/// authoritative for affected paths and operations; `patch` optionally
+/// carries renderable text and MUST be consistent with `changes` (omitted
+/// and `null` are equivalent — no patch text was provided).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diff {
+    pub changes: Vec<DiffChange>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patch: Option<DiffPatch>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]
+    pub meta: Option<Value>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolCallContent {
     Content { content: ContentBlock },
+    Diff(Diff),
 }
 
 /// Tool-call upsert/patch. Every field but `toolCallId` uses the
@@ -99,4 +172,53 @@ pub struct ToolCallContentChunk {
     pub content: ToolCallContent,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]
     pub meta: Option<Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn roundtrip(v: serde_json::Value) {
+        let parsed: ToolCallContent = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), v);
+    }
+
+    #[test]
+    fn diff_content_with_modify_change_and_patch_round_trips() {
+        roundtrip(json!({
+            "type": "diff",
+            "changes": [
+                { "operation": "modify", "path": "/w/src/a.ts", "fileType": "text" }
+            ],
+            "patch": {
+                "format": "git_patch",
+                "text": "diff --git /w/src/a.ts /w/src/a.ts\n"
+            }
+        }));
+    }
+
+    #[test]
+    fn diff_move_change_carries_old_path_and_path() {
+        roundtrip(json!({
+            "type": "diff",
+            "changes": [
+                { "operation": "move", "oldPath": "/w/old.ts", "path": "/w/new.ts" }
+            ]
+        }));
+    }
+
+    #[test]
+    fn diff_with_explicit_null_patch_deserializes_to_none() {
+        let parsed: ToolCallContent = serde_json::from_value(json!({
+            "type": "diff",
+            "changes": [{ "operation": "add", "path": "/w/new.ts" }],
+            "patch": null
+        }))
+        .unwrap();
+        let ToolCallContent::Diff(diff) = &parsed else {
+            panic!("expected diff variant");
+        };
+        assert_eq!(diff.patch, None);
+    }
 }

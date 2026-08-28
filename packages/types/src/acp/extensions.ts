@@ -127,6 +127,35 @@ export const RichPermissionAnswerSchema: z.ZodType<{ controlResponse: ControlRes
   .loose();
 export type RichPermissionAnswer = z.infer<typeof RichPermissionAnswerSchema>;
 
+// `chat.ts` has no Zod schema for `DiffHunk` to import — same mirror
+// rationale as `ControlResponseSchema` above.
+const DiffHunkSchema = z
+  .object({
+    oldStart: z.number().int(),
+    oldLines: z.number().int(),
+    newStart: z.number().int(),
+    newLines: z.number().int(),
+    lines: z.array(z.string()),
+  })
+  .loose();
+
+/**
+ * The fidelity payload a `diff` tool-call content entry carries in its own
+ * `_meta["_mainframe.dev"]` (spec Decision 15): the legacy display
+ * pipeline's structured hunks plus the full before/after file text —
+ * neither survives a round trip through git-patch text, and the desktop
+ * Edit/Write cards consume exactly this shape (`mapToolResult`). Generic
+ * ACP clients ignore it and render the sibling `patch` text.
+ */
+export const StructuredDiffSchema = z
+  .object({
+    structuredPatch: z.array(DiffHunkSchema),
+    originalFile: z.string().optional(),
+    modifiedFile: z.string().optional(),
+  })
+  .loose();
+export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
+
 /**
  * Params for the daemon's custom `_mainframe.dev/heartbeat` notification
  * (spec decision 13). `sequence` lets a client detect a gap and resume

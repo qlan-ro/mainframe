@@ -1,10 +1,9 @@
 //! ACP content blocks (schema `ContentBlock`) and streamed chunks
-//! (`ContentChunk`), scoped to the `text` variant — the only block kind the
-//! chat facade's text/thought streaming needs (spec: "Tool-input token deltas
-//! beyond text/reasoning chunking" and image/audio prompt capabilities are
-//! out of this task's frame list). `image`/`audio`/`resource`/`resource_link`
-//! are not modeled; adding them is additive to this enum when a later task
-//! needs them.
+//! (`ContentChunk`), scoped to the `text` variant — an explicit deviation
+//! (spec Decision 17): `image` is blocked on the delta engine's single-text-
+//! block chunk grammar (deferred with the partial-message phase), and
+//! `audio`/`resource`/`resource_link` have no producer in any adapter
+//! pipeline. Adding a variant is additive to this enum.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -1,0 +1,18 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_content_chunk",
+    "toolCallId": "toolu_03W",
+    "content": {
+      "type": "diff",
+      "changes": [
+        {
+          "operation": "add",
+          "path": "/Users/dev/code/mainframe/src/new-module.ts",
+          "fileType": "text"
+        }
+      ]
+    }
+  }
+}

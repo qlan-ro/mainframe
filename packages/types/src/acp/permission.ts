@@ -39,8 +39,9 @@ export type ToolCallPermissionSubject = z.infer<typeof ToolCallPermissionSubject
 
 /**
  * The operation requiring permission, scoped to the `tool_call` variant —
- * `command` (a bare-shell-command subject with no associated tool call) is
- * not on Mainframe's permission path today and is deferred.
+ * `command` (a bare-shell-command subject with no associated tool call) has
+ * no producer here: every Mainframe gate originates from an adapter
+ * `ControlRequest` bound to a tool use (spec Decision 18).
  */
 export const RequestPermissionSubjectSchema = z.union([
   ToolCallPermissionSubjectSchema.extend({ type: z.literal('tool_call') }),

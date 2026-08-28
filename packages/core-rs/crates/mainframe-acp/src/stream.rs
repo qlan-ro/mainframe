@@ -126,15 +126,26 @@ fn upsert_meta_slot(update: &mut SessionUpdate) -> Option<&mut Option<Option<Val
     }
 }
 
-/// Set `_meta["_mainframe.dev"] = value` on top of whatever meta the frame
-/// already carries, preserving sibling keys (e.g. the encoder's
-/// `parentToolCallId`).
+/// Merge `value`'s keys into `_meta["_mainframe.dev"]` on top of whatever
+/// the frame already carries — the encoder's parent relation and the retry
+/// marker share the namespace object, so a marker must extend it, never
+/// replace it.
 fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
     let mut map = match existing {
         Some(Value::Object(map)) => map,
         _ => Map::new(),
     };
-    map.insert(MAINFRAME_META_NAMESPACE.to_string(), value);
+    let mut namespace = match map.remove(MAINFRAME_META_NAMESPACE) {
+        Some(Value::Object(namespace)) => namespace,
+        _ => Map::new(),
+    };
+    if let Value::Object(new_keys) = value {
+        namespace.extend(new_keys);
+    }
+    map.insert(
+        MAINFRAME_META_NAMESPACE.to_string(),
+        Value::Object(namespace),
+    );
     Value::Object(map)
 }
 

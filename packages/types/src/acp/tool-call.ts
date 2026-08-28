@@ -1,8 +1,10 @@
 /**
  * Tool calls: the `ToolCallUpdate` upsert/patch and its streamed-append
  * sibling `ToolCallContentChunk` (todo #350). Mirrors
- * `mainframe-types/src/acp/tool_call.rs` — see that file for why `diff`/
- * `terminal` content variants are deferred.
+ * `mainframe-types/src/acp/tool_call.rs`. `ToolCallContent` carries the
+ * `content` and `diff` variants; `terminal` is an explicit deviation — the
+ * facade declines the `terminal/*` client services a `terminalId` would
+ * point into (spec Decision 16).
  *
  * Patch fields use Zod's `.nullish()` (optional + nullable): JSON's
  * property-presence already distinguishes omitted from `null`, so — unlike
@@ -41,12 +43,61 @@ export const ToolCallLocationSchema = z
   .loose();
 export type ToolCallLocation = z.infer<typeof ToolCallLocationSchema>;
 
-export const ToolCallContentSchema = z
+/** Schema `DiffFileType` — kind of file content represented by a diff change. */
+export const DiffFileTypeSchema = z.enum(['text', 'binary', 'directory', 'symlink']);
+export type DiffFileType = z.infer<typeof DiffFileTypeSchema>;
+
+/** Schema `DiffPatch` — renderable patch text; `git_patch` is the only ACP-defined format. */
+export const DiffPatchSchema = z
   .object({
-    type: z.literal('content'),
-    content: ContentBlockSchema,
+    format: z.literal('git_patch'),
+    text: z.string(),
   })
   .loose();
+export type DiffPatch = z.infer<typeof DiffPatchSchema>;
+
+const diffChangeShared = {
+  fileType: DiffFileTypeSchema.nullish(),
+  mimeType: z.string().nullish(),
+  _meta: z.record(z.string(), z.unknown()).nullish(),
+};
+
+/**
+ * Schema `DiffChange` — one file-level change: `add`/`delete`/`modify` carry
+ * `path`, `move`/`copy` carry `oldPath` + `path`.
+ */
+export const DiffChangeSchema = z.discriminatedUnion('operation', [
+  z.object({ operation: z.literal('add'), path: z.string(), ...diffChangeShared }).loose(),
+  z.object({ operation: z.literal('delete'), path: z.string(), ...diffChangeShared }).loose(),
+  z.object({ operation: z.literal('modify'), path: z.string(), ...diffChangeShared }).loose(),
+  z.object({ operation: z.literal('move'), oldPath: z.string(), path: z.string(), ...diffChangeShared }).loose(),
+  z.object({ operation: z.literal('copy'), oldPath: z.string(), path: z.string(), ...diffChangeShared }).loose(),
+]);
+export type DiffChange = z.infer<typeof DiffChangeSchema>;
+
+/**
+ * Schema `Diff` — `changes` is authoritative for affected paths/operations;
+ * `patch` optionally carries renderable text consistent with `changes`
+ * (omitted and `null` both mean no patch text was provided).
+ */
+export const DiffSchema = z
+  .object({
+    changes: z.array(DiffChangeSchema),
+    patch: DiffPatchSchema.nullish(),
+    _meta: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .loose();
+export type Diff = z.infer<typeof DiffSchema>;
+
+export const ToolCallContentSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('content'),
+      content: ContentBlockSchema,
+    })
+    .loose(),
+  z.object({ type: z.literal('diff'), ...DiffSchema.shape }).loose(),
+]);
 export type ToolCallContent = z.infer<typeof ToolCallContentSchema>;
 
 /**

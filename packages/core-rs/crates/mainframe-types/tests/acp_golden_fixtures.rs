@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
     HeartbeatParams, MainframeCapabilities, QueuedPromptState, RetryMarker, RichPermissionAnswer,
+    StructuredDiff,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -106,6 +107,9 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name.starts_with("extensions.rich-permission-answer") {
         return roundtrip_as::<RichPermissionAnswer>(body);
+    }
+    if name.starts_with("extensions.structured-diff") {
+        return roundtrip_as::<StructuredDiff>(body);
     }
     if name.starts_with("jsonrpc-request.") {
         return roundtrip_as::<JsonRpcRequest>(body);

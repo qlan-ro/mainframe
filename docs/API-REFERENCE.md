@@ -798,6 +798,13 @@ queued-turn metadata).
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
 on the facade (`mainframe-acp::encoder`).
 
+**Edit/Write fidelity.** A tool result carrying structured hunks adds a
+`diff` entry to the tool call's `content` (spec Decision 15): `changes`
+names the affected absolute path and operation, `patch` carries git-patch
+text a generic ACP client can render, and the diff's own
+`_meta["_mainframe.dev"]` carries the `structuredPatch`/`originalFile`/
+`modifiedFile` payload the desktop Edit/Write cards consume.
+
 **Multi-client + cross-surface gates.** A gate raised on a chat broadcasts
 to every facade connection attached to it, under the shared correlation id
 `gate-{requestId}`; only the first answer applies

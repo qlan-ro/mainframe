@@ -16,6 +16,7 @@
  * inventing one.
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
+import { MAINFRAME_META_NAMESPACE, StructuredDiffSchema } from '@qlan-ro/mainframe-types';
 import type { AccumulatedItem } from './acp-item-accumulator';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 
@@ -32,14 +33,28 @@ function withParentAttribution(id: string | undefined): { metadata: Record<strin
 }
 
 /**
- * The vendored `ContentBlock` is text-only (`content.ts`'s module doc), so a
- * tool call's result content — unlike the legacy `mapToolResult` — has no
- * structured-diff/truncation shape yet on this wire grammar; joining its text
- * blocks is the whole of what the facade can express today.
+ * Rebuild the legacy `mapToolResult` shape from the item's content entries:
+ * `content` blocks join into the result text, and a `diff` entry carrying
+ * the `_mainframe.dev` fidelity payload (spec Decision 15) contributes the
+ * structured hunks and before/after file text the Edit/Write cards consume —
+ * the facade path's parity with the legacy structured-diff rendering.
  */
-function toolCallResultText(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): string | undefined {
-  if (item.content.length === 0) return undefined;
-  return item.content.map((entry) => entry.content.text).join('');
+function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): unknown {
+  const text = item.content
+    .filter((entry) => entry.type === 'content')
+    .map((entry) => entry.content.text)
+    .join('');
+  const diff = item.content.find((entry) => entry.type === 'diff');
+  const fidelity = diff ? StructuredDiffSchema.safeParse(diff._meta?.[MAINFRAME_META_NAMESPACE]) : undefined;
+  if (fidelity?.success) {
+    return {
+      content: text,
+      structuredPatch: fidelity.data.structuredPatch,
+      originalFile: fidelity.data.originalFile,
+      modifiedFile: fidelity.data.modifiedFile,
+    };
+  }
+  return text.length > 0 ? text : undefined;
 }
 
 export function convertAcpItem(item: AccumulatedItem, createdAt: Date): ThreadMessageLike {
@@ -67,7 +82,7 @@ export function convertAcpItem(item: AccumulatedItem, createdAt: Date): ThreadMe
           toolCallId: item.id,
           toolName: item.title ?? item.id,
           args: toJsonArgs((item.rawInput ?? {}) as object),
-          result: toolCallResultText(item),
+          result: toolCallResult(item),
           isError: item.status === 'failed',
         },
       ];

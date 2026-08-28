@@ -19,7 +19,12 @@ use mainframe_types::display::{
 };
 
 use mainframe_types::acp::content::ContentBlock;
-use mainframe_types::acp::tool_call::{ToolCallContent, ToolCallStatus, ToolKind};
+use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, StructuredDiff};
+use mainframe_types::acp::tool_call::{
+    Diff, DiffChange, DiffFileType, DiffOperation, DiffPatch, DiffPatchFormat, ToolCallContent,
+    ToolCallStatus, ToolKind,
+};
+use mainframe_types::chat::DiffHunk;
 use serde_json::{Value, json};
 
 /// The `_mainframe.dev`-namespaced parent-tool-call relation a flattened
@@ -85,7 +90,7 @@ fn role_for(t: DisplayMessageType) -> ItemRole {
 }
 
 fn parent_meta(parent_tool_call_id: Option<&str>) -> Option<Value> {
-    parent_tool_call_id.map(|id| json!({ PARENT_TOOL_CALL_KEY: id }))
+    parent_tool_call_id.map(|id| json!({ MAINFRAME_META_NAMESPACE: { PARENT_TOOL_CALL_KEY: id } }))
 }
 
 /// Encode one content list (a `DisplayMessage`'s top-level content, or a
@@ -203,17 +208,84 @@ fn status_for(result: &Option<ToolCallResult>) -> ToolCallStatus {
     }
 }
 
-fn result_content(result: &Option<ToolCallResult>) -> Vec<ToolCallContent> {
-    result
-        .as_ref()
-        .map(|r| {
-            vec![ToolCallContent::Content {
-                content: ContentBlock::Text {
-                    text: r.content.clone(),
-                },
-            }]
-        })
-        .unwrap_or_default()
+fn result_content(
+    name: &str,
+    input: &HashMap<String, Value>,
+    result: &Option<ToolCallResult>,
+) -> Vec<ToolCallContent> {
+    let Some(r) = result else {
+        return Vec::new();
+    };
+    let mut out = vec![ToolCallContent::Content {
+        content: ContentBlock::Text {
+            text: r.content.clone(),
+        },
+    }];
+    out.extend(diff_content(name, input, r));
+    out
+}
+
+/// A result carrying structured hunks becomes a `diff` content entry after
+/// the text block: `changes` + `patch` are the ACP-conformant surface a
+/// generic client renders, and the hunks/full-file text the desktop Edit/
+/// Write cards consume ride the diff's own `_meta["_mainframe.dev"]`
+/// (spec Decision 15).
+fn diff_content(
+    name: &str,
+    input: &HashMap<String, Value>,
+    result: &ToolCallResult,
+) -> Option<ToolCallContent> {
+    let hunks = result.structured_patch.as_ref()?;
+    let path = input.get("file_path").and_then(Value::as_str)?;
+    // A `Write` with no pre-image created the file; anything else that
+    // produced hunks modified one in place.
+    let is_add = name == "Write" && result.original_file.is_none();
+    let operation = if is_add {
+        DiffOperation::Add {
+            path: path.to_string(),
+        }
+    } else {
+        DiffOperation::Modify {
+            path: path.to_string(),
+        }
+    };
+    let fidelity = StructuredDiff {
+        structured_patch: hunks.clone(),
+        original_file: result.original_file.clone(),
+        modified_file: result.modified_file.clone(),
+    };
+    Some(ToolCallContent::Diff(Diff {
+        changes: vec![DiffChange {
+            operation,
+            file_type: Some(DiffFileType::Text),
+            mime_type: None,
+            meta: None,
+        }],
+        patch: Some(DiffPatch {
+            format: DiffPatchFormat::GitPatch,
+            text: git_patch_text(path, is_add, hunks),
+        }),
+        meta: Some(json!({ MAINFRAME_META_NAMESPACE: fidelity })),
+    }))
+}
+
+/// Git `--patch` text per the pinned v2 doc example: bare absolute paths (no
+/// `a/`/`b/` prefixes), `/dev/null` as the pre-image of an added file, no
+/// commit metadata. `DiffHunk.lines` already carry their `+`/`-`/` ` prefix.
+fn git_patch_text(path: &str, is_add: bool, hunks: &[DiffHunk]) -> String {
+    let old = if is_add { "/dev/null" } else { path };
+    let mut text = format!("diff --git {path} {path}\n--- {old}\n+++ {path}\n");
+    for h in hunks {
+        text.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            h.old_start, h.old_lines, h.new_start, h.new_lines
+        ));
+        for line in &h.lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+    }
+    text
 }
 
 fn tool_call_item(
@@ -230,7 +302,7 @@ fn tool_call_item(
         kind: category_to_kind(category),
         status: status_for(result),
         raw_input: json!(input),
-        content: result_content(result),
+        content: result_content(name, input, result),
         meta,
     }
 }
@@ -256,7 +328,7 @@ fn task_group_item(
         kind: ToolKind::Think,
         status: status_for(result),
         raw_input: json!(task_args),
-        content: result_content(result),
+        content: result_content("Task", task_args, result),
         meta,
     }
 }

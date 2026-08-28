@@ -91,7 +91,7 @@ fn a_retry_marker_rides_the_next_upsert_meta_and_is_consumed_once() {
 }
 
 #[test]
-fn a_retry_marker_preserves_sibling_meta_keys() {
+fn a_retry_marker_extends_the_namespace_without_clobbering_the_parent_relation() {
     let mut stream = stream();
     stream.on_retry(marker());
 
@@ -99,7 +99,7 @@ fn a_retry_marker_preserves_sibling_meta_keys() {
         &[message_with_meta(
             "m1",
             "content",
-            json!({ "parentToolCallId": "tool-9" }),
+            json!({ MAINFRAME_META_NAMESPACE: { "parentToolCallId": "tool-9" } }),
         )],
         0,
     );
@@ -107,7 +107,10 @@ fn a_retry_marker_preserves_sibling_meta_keys() {
         panic!("expected an upsert, got {:?}", updates[0]);
     };
     let meta = upsert.meta.clone().flatten().expect("meta expected");
-    assert_eq!(meta["parentToolCallId"], json!("tool-9"));
+    assert_eq!(
+        meta[MAINFRAME_META_NAMESPACE]["parentToolCallId"],
+        json!("tool-9")
+    );
     assert_eq!(meta[MAINFRAME_META_NAMESPACE]["attempt"], json!(2));
 }
 

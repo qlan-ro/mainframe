@@ -190,7 +190,7 @@ fn flattens_a_subagent_task_group_to_tool_call_items_with_a_parent_relation() {
         unreachable!()
     };
     assert_eq!(
-        meta.as_ref().unwrap()["parentToolCallId"],
+        meta.as_ref().unwrap()["_mainframe.dev"]["parentToolCallId"],
         json!("toolu_task_1")
     );
 
@@ -202,8 +202,127 @@ fn flattens_a_subagent_task_group_to_tool_call_items_with_a_parent_relation() {
         unreachable!()
     };
     assert_eq!(
-        meta.as_ref().unwrap()["parentToolCallId"],
+        meta.as_ref().unwrap()["_mainframe.dev"]["parentToolCallId"],
         json!("toolu_task_1")
+    );
+}
+
+#[test]
+fn an_edit_result_with_structured_hunks_encodes_a_diff_content_entry() {
+    let mut input = HashMap::new();
+    input.insert("file_path".to_string(), json!("/w/src/config.json"));
+    input.insert("old_string".to_string(), json!("false"));
+    input.insert("new_string".to_string(), json!("true"));
+    let messages = vec![dmsg(
+        "dmsg_6",
+        DisplayMessageType::Assistant,
+        vec![DisplayContent::Node(DisplayNode::ToolCall {
+            id: "toolu_edit_1".to_string(),
+            name: "Edit".to_string(),
+            input,
+            category: ToolCategory::Default,
+            result: Some(ToolCallResult {
+                content: "Applied 1 edit".to_string(),
+                is_error: false,
+                structured_patch: Some(vec![mainframe_types::chat::DiffHunk {
+                    old_start: 1,
+                    old_lines: 1,
+                    new_start: 1,
+                    new_lines: 1,
+                    lines: vec!["-false".to_string(), "+true".to_string()],
+                }]),
+                original_file: Some("false".to_string()),
+                modified_file: Some("true".to_string()),
+                truncated: None,
+                full_bytes: None,
+                ask_user_question: None,
+            }),
+            parent_tool_use_id: None,
+        })],
+    )];
+
+    let items = encode(&messages);
+    let EncodedItem::ToolCall { content, .. } = &items[0] else {
+        panic!("expected a tool-call item");
+    };
+
+    assert_eq!(content.len(), 2);
+    assert!(matches!(&content[0], ToolCallContent::Content { .. }));
+    let ToolCallContent::Diff(diff) = &content[1] else {
+        panic!("expected a diff content entry");
+    };
+    assert_eq!(
+        serde_json::to_value(&diff.changes).unwrap(),
+        json!([{ "operation": "modify", "path": "/w/src/config.json", "fileType": "text" }])
+    );
+    let patch = diff.patch.as_ref().expect("patch text expected");
+    assert_eq!(
+        patch.text,
+        "diff --git /w/src/config.json /w/src/config.json\n\
+         --- /w/src/config.json\n\
+         +++ /w/src/config.json\n\
+         @@ -1,1 +1,1 @@\n\
+         -false\n\
+         +true\n"
+    );
+    let fidelity = &diff.meta.as_ref().unwrap()["_mainframe.dev"];
+    assert_eq!(
+        fidelity["structuredPatch"][0]["lines"],
+        json!(["-false", "+true"])
+    );
+    assert_eq!(fidelity["originalFile"], json!("false"));
+    assert_eq!(fidelity["modifiedFile"], json!("true"));
+}
+
+#[test]
+fn a_write_result_with_hunks_and_no_pre_image_encodes_an_add_diff() {
+    let mut input = HashMap::new();
+    input.insert("file_path".to_string(), json!("/w/src/new.ts"));
+    let messages = vec![dmsg(
+        "dmsg_7",
+        DisplayMessageType::Assistant,
+        vec![DisplayContent::Node(DisplayNode::ToolCall {
+            id: "toolu_write_1".to_string(),
+            name: "Write".to_string(),
+            input,
+            category: ToolCategory::Default,
+            result: Some(ToolCallResult {
+                content: "OK".to_string(),
+                is_error: false,
+                structured_patch: Some(vec![mainframe_types::chat::DiffHunk {
+                    old_start: 0,
+                    old_lines: 0,
+                    new_start: 1,
+                    new_lines: 1,
+                    lines: vec!["+const a = 1".to_string()],
+                }]),
+                original_file: None,
+                modified_file: None,
+                truncated: None,
+                full_bytes: None,
+                ask_user_question: None,
+            }),
+            parent_tool_use_id: None,
+        })],
+    )];
+
+    let items = encode(&messages);
+    let EncodedItem::ToolCall { content, .. } = &items[0] else {
+        panic!("expected a tool-call item");
+    };
+    let ToolCallContent::Diff(diff) = &content[1] else {
+        panic!("expected a diff content entry");
+    };
+    assert_eq!(
+        serde_json::to_value(&diff.changes).unwrap(),
+        json!([{ "operation": "add", "path": "/w/src/new.ts", "fileType": "text" }])
+    );
+    assert!(
+        diff.patch
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("--- /dev/null\n")
     );
 }
 

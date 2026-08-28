@@ -46,8 +46,9 @@ pub struct ToolCallPermissionSubject {
 
 /// The operation requiring permission (schema `RequestPermissionSubject`),
 /// scoped to the `tool_call` variant — `command` (a bare-shell-command
-/// subject with no associated tool call) is not on Mainframe's permission
-/// path today and is deferred.
+/// subject with no associated tool call) has no producer here: every
+/// Mainframe gate originates from an adapter `ControlRequest` bound to a
+/// tool use (spec Decision 18).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RequestPermissionSubject {

@@ -11,6 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::adapter::ControlResponse;
+use crate::chat::DiffHunk;
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
@@ -61,6 +62,23 @@ pub struct QueuedPromptState {
 #[serde(rename_all = "camelCase")]
 pub struct RichPermissionAnswer {
     pub control_response: ControlResponse,
+}
+
+/// The fidelity payload a `diff` tool-call content entry carries in its own
+/// `_meta["_mainframe.dev"]` (spec Decision 15): the legacy display
+/// pipeline's structured hunks plus the full before/after file text —
+/// neither survives a round trip through git-patch text (the full files
+/// aren't in it at all), and the desktop Edit/Write cards consume exactly
+/// this shape (`mapToolResult`). Generic ACP clients ignore it and render
+/// the sibling `patch` text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StructuredDiff {
+    pub structured_patch: Vec<DiffHunk>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modified_file: Option<String>,
 }
 
 /// Params for the daemon's custom `_mainframe.dev/heartbeat` notification

@@ -20,6 +20,7 @@ import {
   QueuedPromptStateSchema,
   RetryMarkerSchema,
   RichPermissionAnswerSchema,
+  StructuredDiffSchema,
 } from '../acp/index.js';
 import {
   CancelSessionNotificationSchema,
@@ -56,6 +57,7 @@ function schemaFor(name: string): z.ZodType {
   if (name.startsWith('extensions.retry-marker')) return RetryMarkerSchema;
   if (name.startsWith('extensions.queued-state')) return QueuedPromptStateSchema;
   if (name.startsWith('extensions.rich-permission-answer')) return RichPermissionAnswerSchema;
+  if (name.startsWith('extensions.structured-diff')) return StructuredDiffSchema;
   if (name.startsWith('jsonrpc-request.')) return JsonRpcRequestSchema;
   if (name.startsWith('jsonrpc-response.')) return JsonRpcResponseSchema;
   if (name.startsWith('jsonrpc-notification.')) return JsonRpcNotificationSchema;

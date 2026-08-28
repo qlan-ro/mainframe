@@ -1,8 +1,9 @@
 /**
  * ACP content blocks and streamed chunks (todo #350), scoped to the `text`
- * variant — the only block kind the chat facade's text/thought streaming
- * needs. Mirrors `mainframe-types/src/acp/content.rs`; see that file for why
- * `image`/`audio`/`resource`/`resource_link` are deferred.
+ * variant — an explicit deviation (spec Decision 17): `image` is blocked on
+ * the delta engine's single-text-block chunk grammar, and `audio`/`resource`/
+ * `resource_link` have no producer in any adapter pipeline. Mirrors
+ * `mainframe-types/src/acp/content.rs`.
  */
 import { z } from 'zod';
 

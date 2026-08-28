@@ -1,0 +1,14 @@
+{
+  "_provenance": "synthetic",
+  "structuredPatch": [
+    {
+      "oldStart": 4,
+      "oldLines": 1,
+      "newStart": 4,
+      "newLines": 2,
+      "lines": ["-const a = 1", "+const a = 2", "+const b = 3"]
+    }
+  ],
+  "originalFile": "const a = 1\n",
+  "modifiedFile": "const a = 2\nconst b = 3\n"
+}
