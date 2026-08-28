@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use mainframe_types::acp::jsonrpc::RequestId;
 use mainframe_types::acp::update::SessionUpdate;
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};
 use serde_json::json;

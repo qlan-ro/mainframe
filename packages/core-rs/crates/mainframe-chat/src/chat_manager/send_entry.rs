@@ -218,6 +218,18 @@ impl ChatManager {
         Ok(())
     }
 
+    /// How many accepted prompts are queued behind this chat's running turn.
+    /// The ACP facade's prompt port reads this right after `send_message` to
+    /// fill the queued-state extension metadata (spec decision 11).
+    pub fn queued_message_count(&self, chat_id: &str) -> usize {
+        self.queued_refs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .filter(|r| r.chat_id == chat_id)
+            .count()
+    }
+
     fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
         self.queued_refs
             .lock()

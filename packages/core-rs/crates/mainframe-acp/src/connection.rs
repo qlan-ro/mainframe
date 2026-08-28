@@ -1,9 +1,11 @@
-//! Per-frame ACP facade dispatch (todo #350, plan task 8): a pure function
-//! from one WS text frame to the reply (if any) to write back. Parameterized
-//! on `DaemonInfo` rather than reading any daemon state directly, so this
-//! stays unit-testable without a socket — `mainframe-server`'s `acp_ws`
-//! module is the thin axum shell that owns the socket loop and heartbeat
-//! ticker (task 9) and calls `handle_frame` once per inbound frame.
+//! Per-frame ACP facade dispatch (todo #350, plan tasks 8 + 14): a pure
+//! function from one WS text frame to the reply (if any) to write back.
+//! Parameterized on `DaemonInfo` and a [`PromptPort`] rather than reading any
+//! daemon state directly, so this stays unit-testable without a socket —
+//! `mainframe-server`'s `acp_ws` module is the axum shell that owns the
+//! socket loop, peels off the stateful methods (`session/resume`, gate-answer
+//! responses), and routes every remaining frame through
+//! [`dispatch_with_prompt`].
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::jsonrpc::{
@@ -25,41 +27,43 @@ pub struct DaemonInfo {
     pub heartbeat_interval_ms: u64,
 }
 
-/// Handle one inbound WS text frame. `Some` is the JSON to write back;
-/// notifications and daemon-initiated-request responses never get one, per
-/// JSON-RPC 2.0 (even when the notification names an unknown method — a
-/// notification's sender does not expect an answer to be listening for).
-pub fn handle_frame(text: &str, daemon: &DaemonInfo) -> Option<String> {
-    match rpc::parse_frame(text) {
-        Ok(InboundFrame::Request(request)) => Some(to_wire(&dispatch_request(request, daemon))),
-        Ok(InboundFrame::Notification(_)) => None,
-        Ok(InboundFrame::Response(_)) => None,
-        Err(error) => Some(to_wire(&rpc::error_response(None, error))),
-    }
-}
-
-/// [`handle_frame`], extended with `session/prompt`/`session/cancel` routing
-/// through a [`PromptPort`] (plan task 14). A separate entry point from
-/// `handle_frame` rather than a signature change to it: every other method
-/// (`initialize`, unknown-method, malformed-frame) is still synchronous, and
-/// group C's existing `handle_frame` tests must keep passing unchanged.
+/// Handle one inbound WS text frame, with `session/prompt`/`session/cancel`
+/// routed through a [`PromptPort`] (plan task 14). `Some` is the JSON to
+/// write back; notifications and daemon-initiated-request responses never get
+/// one, per JSON-RPC 2.0 (even when the notification names an unknown method
+/// — a notification's sender does not expect an answer to be listening for).
 pub async fn handle_frame_with_prompt(
     text: &str,
     daemon: &DaemonInfo,
     port: &dyn PromptPort,
 ) -> Option<String> {
     match rpc::parse_frame(text) {
-        Ok(InboundFrame::Request(request)) if request.method == "session/prompt" => {
+        Ok(frame) => dispatch_with_prompt(frame, daemon, port).await,
+        Err(error) => Some(to_wire(&rpc::error_response(None, error))),
+    }
+}
+
+/// The parsed-frame half of [`handle_frame_with_prompt`], for callers that
+/// classify the frame themselves first — the live socket loop
+/// (`mainframe-server`'s `acp_ws`) peels off `session/resume` and gate-answer
+/// responses before falling through to this dispatcher, and must not pay (or
+/// diverge on) a second parse.
+pub async fn dispatch_with_prompt(
+    frame: InboundFrame,
+    daemon: &DaemonInfo,
+    port: &dyn PromptPort,
+) -> Option<String> {
+    match frame {
+        InboundFrame::Request(request) if request.method == "session/prompt" => {
             Some(to_wire(&prompt::dispatch_prompt(request, port).await))
         }
-        Ok(InboundFrame::Notification(note)) if note.method == "session/cancel" => {
+        InboundFrame::Notification(note) if note.method == "session/cancel" => {
             prompt::dispatch_cancel(note.params, port).await;
             None
         }
-        Ok(InboundFrame::Request(request)) => Some(to_wire(&dispatch_request(request, daemon))),
-        Ok(InboundFrame::Notification(_)) => None,
-        Ok(InboundFrame::Response(_)) => None,
-        Err(error) => Some(to_wire(&rpc::error_response(None, error))),
+        InboundFrame::Request(request) => Some(to_wire(&dispatch_request(request, daemon))),
+        InboundFrame::Notification(_) => None,
+        InboundFrame::Response(_) => None,
     }
 }
 
@@ -129,6 +133,7 @@ fn to_wire(response: &JsonRpcResponse) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prompt::BoxFuture;
 
     fn daemon() -> DaemonInfo {
         DaemonInfo {
@@ -137,12 +142,39 @@ mod tests {
         }
     }
 
-    #[test]
-    fn initialize_at_the_pinned_version_returns_a_result_with_capabilities_meta() {
+    /// None of these tests exercise the prompt path — `prompt/tests.rs` owns
+    /// that — so a port that panics on contact proves the dispatcher never
+    /// touches it for the handshake/error/unknown-method flows.
+    struct UnusedPort;
+
+    impl PromptPort for UnusedPort {
+        fn send_prompt<'a>(
+            &'a self,
+            _session_id: &'a str,
+            _text: &'a str,
+        ) -> BoxFuture<'a, Result<crate::prompt::PromptAcceptance, crate::prompt::PromptError>>
+        {
+            unreachable!("no test in this module sends a prompt")
+        }
+
+        fn cancel<'a>(
+            &'a self,
+            _session_id: &'a str,
+        ) -> BoxFuture<'a, Result<(), crate::prompt::PromptError>> {
+            unreachable!("no test in this module cancels")
+        }
+    }
+
+    async fn handle(text: &str) -> Option<String> {
+        handle_frame_with_prompt(text, &daemon(), &UnusedPort).await
+    }
+
+    #[tokio::test]
+    async fn initialize_at_the_pinned_version_returns_a_result_with_capabilities_meta() {
         let text = include_str!(
             "../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json"
         );
-        let reply = handle_frame(text, &daemon()).expect("initialize must reply");
+        let reply = handle(text).await.expect("initialize must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
 
         assert_eq!(value["id"], json!(1));
@@ -157,10 +189,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn unsupported_version_gets_the_structured_error_and_a_still_open_connection() {
+    #[tokio::test]
+    async fn unsupported_version_gets_the_structured_error_and_a_still_open_connection() {
         let text = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":99,"info":{"name":"x","version":"1"}}}"#;
-        let reply = handle_frame(text, &daemon()).expect("initialize must reply");
+        let reply = handle(text).await.expect("initialize must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
 
         assert_eq!(
@@ -175,28 +207,32 @@ mod tests {
         // The connection stays open: a second, valid frame on the same
         // (simulated) socket still gets a proper reply.
         let ok = r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":2,"info":{"name":"x","version":"1"}}}"#;
-        let second = handle_frame(ok, &daemon()).expect("a later frame must still be handled");
+        let second = handle(ok)
+            .await
+            .expect("a later frame must still be handled");
         let second_value: Value = serde_json::from_str(&second).unwrap();
         assert!(second_value.get("result").is_some());
     }
 
-    #[test]
-    fn unknown_method_request_gets_method_not_found() {
-        let text = r#"{"jsonrpc":"2.0","id":1,"method":"session/prompt","params":{}}"#;
-        let reply = handle_frame(text, &daemon()).unwrap();
+    #[tokio::test]
+    async fn unknown_method_request_gets_method_not_found() {
+        let text = r#"{"jsonrpc":"2.0","id":1,"method":"definitely/not-a-method","params":{}}"#;
+        let reply = handle(text).await.unwrap();
         let value: Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(value["error"]["code"], json!(error_codes::METHOD_NOT_FOUND));
     }
 
-    #[test]
-    fn unadvertised_notification_gets_no_reply() {
+    #[tokio::test]
+    async fn unadvertised_notification_gets_no_reply() {
         let text = r#"{"jsonrpc":"2.0","method":"session/update","params":{}}"#;
-        assert_eq!(handle_frame(text, &daemon()), None);
+        assert_eq!(handle(text).await, None);
     }
 
-    #[test]
-    fn malformed_frame_gets_a_null_id_error_and_the_loop_can_continue() {
-        let reply = handle_frame("{not json", &daemon()).expect("malformed frame must reply");
+    #[tokio::test]
+    async fn malformed_frame_gets_a_null_id_error_and_the_loop_can_continue() {
+        let reply = handle("{not json")
+            .await
+            .expect("malformed frame must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(value["id"], Value::Null);
         assert_eq!(value["error"]["code"], json!(error_codes::PARSE_ERROR));

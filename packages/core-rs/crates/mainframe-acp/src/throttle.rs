@@ -39,6 +39,18 @@ impl Throttle {
         self.last_flush_ms = Some(now_ms);
         coalesce(std::mem::take(&mut self.pending))
     }
+
+    /// Drain whatever the window is still holding, coalesced. `push` only
+    /// flushes when a *later* update arrives after the window elapses, so a
+    /// trailing burst would otherwise sit buffered forever — the socket
+    /// loop's periodic flush tick calls this to bound that tail latency.
+    pub fn flush(&mut self, now_ms: i64) -> Vec<SessionUpdate> {
+        if self.pending.is_empty() {
+            return Vec::new();
+        }
+        self.last_flush_ms = Some(now_ms);
+        coalesce(std::mem::take(&mut self.pending))
+    }
 }
 
 /// Merge same-id consecutive chunk frames by concatenating their deltas —

@@ -277,6 +277,11 @@ async fn run_daemon() {
     quota_manager.load_from_disk().await;
     register_quota_pullers(&quota_manager, &db, &resolved_path);
 
+    // ACP facade hub (todo #350): built before the ChatManager so it can ride
+    // in as the chat-surface observer; the same Arc lands on AppCtx for the
+    // `/acp/{profile}` socket loops.
+    let facade_hub = Arc::new(mainframe_server::FacadeHub::default());
+
     // ChatManager: constructed after the AdapterRegistry + BackgroundTaskTracker
     // (its DB accessors reach the single WAL connection through the Db actor's
     // sync bridge; launch/todos/notifications wire through the ported services and
@@ -298,6 +303,7 @@ async fn run_daemon() {
         Arc::clone(&quota_manager),
         Arc::clone(&claude_workflows),
         resolved_path.clone(),
+        Some(facade_hub.as_chat_surface()),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
@@ -390,7 +396,7 @@ async fn run_daemon() {
         resolved_path: resolved_path.clone(),
         tunnel_url: Arc::new(RwLock::new(None)),
         ws_clients: Arc::clone(&ws_clients),
-        facade_clients: Arc::new(dashmap::DashMap::new()),
+        facade_hub,
         facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
         adapter_registry: Arc::clone(&adapters),
         background_tasks: Arc::clone(&background_tasks),

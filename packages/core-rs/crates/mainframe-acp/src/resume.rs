@@ -11,7 +11,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
-use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse, RequestId};
+use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::session::{ResumeSessionRequest, ResumeSessionResponse};
 use mainframe_types::acp::update::SessionUpdate;
 use mainframe_types::adapter::ControlRequest;
@@ -56,6 +56,15 @@ pub trait ResumePort: Send + Sync {
 pub struct ResumeReplay {
     pub updates: Vec<SessionUpdate>,
     pub pending_permission_request: Option<JsonRpcRequest>,
+    /// The raw `ControlRequest` behind `pending_permission_request` — the
+    /// caller registers it against the redelivered request's id so the
+    /// client's answer can be parsed (`gates::parse_answer`) later.
+    pub pending_gate: Option<ControlRequest>,
+    /// The full encoded item sequence the snapshot produced (not just the
+    /// post-cursor `updates`) — the caller seeds its live diff state with
+    /// this so streaming after a resume deltas against what the client now
+    /// holds.
+    pub items: Vec<EncodedItem>,
 }
 
 /// `session/resume` dispatch. Malformed params get the same structured
@@ -71,6 +80,8 @@ pub async fn dispatch_resume(
     let empty = ResumeReplay {
         updates: Vec::new(),
         pending_permission_request: None,
+        pending_gate: None,
+        items: Vec::new(),
     };
     let Some(params) = request.params else {
         return (
@@ -96,7 +107,7 @@ pub async fn dispatch_resume(
     let pending_permission_request = pending.as_ref().map(|request| {
         gates::build_request(
             &resume.session_id,
-            RequestId::Str(format!("gate-{}", request.request_id)),
+            gates::gate_request_id(&request.request_id),
             request,
         )
     });
@@ -111,6 +122,8 @@ pub async fn dispatch_resume(
         ResumeReplay {
             updates,
             pending_permission_request,
+            pending_gate: pending,
+            items,
         },
     )
 }

@@ -59,6 +59,16 @@ impl GateRegistry {
         }
     }
 
+    /// Undo a [`GateRegistry::claim`] whose apply failed (e.g.
+    /// `respond_to_permission` errored) so a retried answer is not wedged
+    /// behind `AlreadyResolved` until chat teardown. A no-op unless this
+    /// `request_id` holds the chat's current claim.
+    pub fn release(&mut self, chat_id: &str, request_id: &str) {
+        if self.claimed.get(chat_id).is_some_and(|id| id == request_id) {
+            self.claimed.remove(chat_id);
+        }
+    }
+
     /// The request resolved — from this claim, from the legacy surface, or
     /// from the CLI cancelling it. Idempotent: marking an already-resolved
     /// id again is a no-op past the bounded memory.

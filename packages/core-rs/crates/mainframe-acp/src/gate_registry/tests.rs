@@ -69,3 +69,28 @@ fn resolved_memory_is_bounded_per_chat() {
     assert_eq!(reg.claim("c1", "req_0"), AnswerOutcome::Apply);
     assert!(reg.is_resolved("c1", "req_39"));
 }
+
+#[test]
+fn release_reopens_a_failed_claim_without_touching_resolved_memory() {
+    let mut registry = GateRegistry::new();
+    assert_eq!(registry.claim("chat-1", "req-1"), AnswerOutcome::Apply);
+
+    // The apply failed: release lets the retried answer claim again.
+    registry.release("chat-1", "req-1");
+    assert_eq!(registry.claim("chat-1", "req-1"), AnswerOutcome::Apply);
+
+    // Releasing someone else's claim is a no-op.
+    registry.release("chat-1", "req-other");
+    assert_eq!(
+        registry.claim("chat-1", "req-1"),
+        AnswerOutcome::AlreadyResolved
+    );
+
+    // A genuinely resolved request stays resolved through release.
+    registry.mark_resolved("chat-1", "req-1");
+    registry.release("chat-1", "req-1");
+    assert_eq!(
+        registry.claim("chat-1", "req-1"),
+        AnswerOutcome::AlreadyResolved
+    );
+}

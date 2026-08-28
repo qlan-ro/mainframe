@@ -185,6 +185,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
         quota,
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        None,
     );
 
     Harness {

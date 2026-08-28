@@ -16,19 +16,21 @@ pub mod prompt;
 pub mod resume;
 pub mod rpc;
 pub mod session_state;
+pub mod stream;
 pub mod throttle;
 
 pub use capabilities::{
     DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeat_notification, mainframe_capabilities,
 };
-pub use connection::{DaemonInfo, handle_frame, handle_frame_with_prompt};
+pub use connection::{DaemonInfo, dispatch_with_prompt, handle_frame_with_prompt};
 pub use encoder::{EncodedItem, ItemRole, encode};
 pub use gate_registry::{AnswerOutcome, GateRegistry};
 pub use gates::{
-    GateAnswerError, build_request as build_permission_request,
+    GateAnswerError, build_request as build_permission_request, gate_request_id,
     parse_answer as parse_permission_answer,
 };
 pub use prompt::{PromptAcceptance, PromptError, PromptPort};
 pub use resume::{ReplayCursor, ResumePort, ResumeReplay, dispatch_resume};
 pub use session_state::SessionState;
+pub use stream::SessionStream;
 pub use throttle::Throttle;

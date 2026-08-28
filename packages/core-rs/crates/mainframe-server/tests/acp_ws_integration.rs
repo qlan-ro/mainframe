@@ -118,12 +118,62 @@ async fn unknown_method_gets_method_not_found() {
     ws.send_json(&json!({
         "jsonrpc": "2.0",
         "id": 1,
-        "method": "session/prompt",
+        "method": "definitely/not-a-method",
         "params": {}
     }))
     .await;
     let reply = ws.read_event().await;
     assert_eq!(reply["error"]["code"], json!(-32601));
+}
+
+/// `session/prompt` is wired to the prompt port, not method-not-found. This
+/// harness runs with no `ChatManager`, so the port answers with the
+/// structured session-unavailable error (-32002) — the same code a prompt to
+/// a dead chat gets — never -32601.
+#[tokio::test]
+async fn session_prompt_reaches_the_prompt_port() {
+    let server = server_with_mock_adapter().await;
+    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
+        .await
+        .unwrap();
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "session/prompt",
+        "params": {
+            "sessionId": "no-such-chat",
+            "prompt": [{ "type": "text", "text": "hi" }]
+        }
+    }))
+    .await;
+    let reply = ws.read_event().await;
+    assert_eq!(reply["id"], json!(1));
+    assert_eq!(reply["error"]["code"], json!(-32002));
+}
+
+/// `session/resume` is wired: with no `ChatManager` the snapshot is empty, so
+/// the reply is a plain success (an empty replay), never -32601.
+#[tokio::test]
+async fn session_resume_reaches_the_resume_port() {
+    let server = server_with_mock_adapter().await;
+    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
+        .await
+        .unwrap();
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "session/resume",
+        "params": { "sessionId": "no-such-chat", "cwd": "/tmp" }
+    }))
+    .await;
+    let reply = ws.read_event().await;
+    assert_eq!(reply["id"], json!(7));
+    assert!(
+        reply.get("result").is_some(),
+        "resume must succeed with an empty replay, got {reply}"
+    );
 }
 
 #[tokio::test]
@@ -176,21 +226,21 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
 #[tokio::test]
 async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it() {
     let server = server_with_mock_adapter().await;
-    assert_eq!(server.ctx.facade_clients.len(), 0);
+    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
 
     let ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
         .await
         .unwrap();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.facade_clients.is_empty() && tokio::time::Instant::now() < deadline {
+    while server.ctx.facade_hub.connection_count() == 0 && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert_eq!(server.ctx.facade_clients.len(), 1);
+    assert_eq!(server.ctx.facade_hub.connection_count(), 1);
 
     drop(ws);
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while !server.ctx.facade_clients.is_empty() && tokio::time::Instant::now() < deadline {
+    while server.ctx.facade_hub.connection_count() != 0 && tokio::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert_eq!(server.ctx.facade_clients.len(), 0);
+    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
 }

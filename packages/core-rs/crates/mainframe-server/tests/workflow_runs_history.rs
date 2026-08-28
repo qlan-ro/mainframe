@@ -129,6 +129,7 @@ async fn harness(session_id: &str) -> Harness {
         quota,
         Arc::clone(&store),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        None,
     );
 
     let ctx = Arc::new(AppCtx {
@@ -158,7 +159,7 @@ async fn harness(session_id: &str) -> Harness {
         resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
-        facade_clients: Arc::new(DashMap::new()),
+        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
         facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));

@@ -1,9 +1,16 @@
-//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade (todo #350,
-//! plan tasks 8-9). Self-authenticates like `/` and `/lsp/:projectId/
-//! :language`; the profile segment must name a registered adapter. Frame
-//! handling delegates to the pure `mainframe_acp::connection::handle_frame`
-//! state machine (task 8) — this module is the axum socket shell plus the
-//! heartbeat ticker (task 9) and the facade connection registry.
+//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade (todo #350).
+//! Self-authenticates like `/` and `/lsp/:projectId/:language`; the profile
+//! segment must name a registered adapter. This module is only the axum
+//! socket shell: inbound frames route through `dispatch::handle_inbound`
+//! (prompt/cancel/resume/gate answers over the live `ChatManager`), outbound
+//! frames arrive from the `FacadeHub` — the `ChatSurface` observer attached
+//! at boot — via the per-connection channel, and two tickers drive the
+//! heartbeat and the throttle flush.
+
+mod dispatch;
+mod facade_conn;
+mod hub;
+mod ports;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -13,22 +20,13 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use dashmap::DashMap;
-use mainframe_acp::{DaemonInfo, handle_frame, heartbeat_notification};
+use mainframe_acp::{DaemonInfo, heartbeat_notification};
 use serde::Deserialize;
+
+pub use hub::{FACADE_THROTTLE_INTERVAL_MS, FacadeHub};
 
 use crate::ctx::AppCtx;
 use crate::websocket::authenticate_ws_upgrade;
-
-/// One attached facade connection. `profile` records which adapter the
-/// connection negotiated against; group D fills in session-attach state.
-pub struct FacadeClientHandle {
-    pub profile: String,
-}
-
-/// The facade connection registry — parallel to `WsClients` but scoped to
-/// `/acp/{profile}` connections.
-pub type FacadeClients = Arc<DashMap<String, FacadeClientHandle>>;
 
 /// `?token=` on the upgrade URL, matching the other self-authenticating WS
 /// routes.
@@ -58,13 +56,11 @@ pub(crate) async fn acp_ws_handler(
     upgrade.on_upgrade(move |socket| handle_acp_socket(socket, ctx, profile))
 }
 
-/// Drive one accepted facade connection: register it, then `select!` between
-/// inbound frames (dispatched through `handle_frame`) and the heartbeat
-/// ticker until either side closes.
+/// Drive one accepted facade connection: register it on the hub, then
+/// `select!` between inbound frames, hub-pushed outbound frames, the
+/// heartbeat ticker, and the throttle flush tick until either side closes.
 async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: String) {
-    let client_id = nanoid::nanoid!();
-    ctx.facade_clients
-        .insert(client_id.clone(), FacadeClientHandle { profile });
+    let (client_id, connection, mut outbound) = ctx.facade_hub.register(profile);
 
     let daemon = DaemonInfo {
         version: ctx.version.clone(),
@@ -77,6 +73,10 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
     // is periodic (one per configured cadence) rather than an extra frame at
     // connect time — `connection.ready`'s WS twin already marks connect.
     heartbeat.tick().await;
+    let mut flush = tokio::time::interval(Duration::from_millis(
+        FACADE_THROTTLE_INTERVAL_MS.max(1) as u64,
+    ));
+    flush.tick().await;
     let mut sequence: u64 = 0;
 
     loop {
@@ -84,7 +84,12 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
             incoming = socket.recv() => {
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
-                        if let Some(reply) = handle_frame(text.as_str(), &daemon)
+                        let reply =
+                            dispatch::handle_inbound(text.as_str(), &daemon, &ctx, &connection)
+                                .await;
+                        // Written before the next outbound drain, so a reply
+                        // can never trail frames its own request caused.
+                        if let Some(reply) = reply
                             && socket.send(Message::Text(reply.into())).await.is_err()
                         {
                             break;
@@ -95,6 +100,16 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
                     Some(Err(_)) => break,
                 }
             }
+            frame = outbound.recv() => {
+                match frame {
+                    Some(payload) => {
+                        if socket.send(Message::Text(payload.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
             _ = heartbeat.tick() => {
                 sequence += 1;
                 let note = heartbeat_notification(sequence);
@@ -103,8 +118,11 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
                     break;
                 }
             }
+            _ = flush.tick() => {
+                ctx.facade_hub.flush_connection(&connection);
+            }
         }
     }
 
-    ctx.facade_clients.remove(&client_id);
+    ctx.facade_hub.unregister(&client_id);
 }

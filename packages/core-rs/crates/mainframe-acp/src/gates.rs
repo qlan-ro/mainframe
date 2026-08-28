@@ -68,6 +68,14 @@ fn subject_for(request: &ControlRequest) -> RequestPermissionSubject {
     })
 }
 
+/// The JSON-RPC request id a `session/request_permission` for `request_id`
+/// travels under — one scheme shared by the live raise path (the facade hub)
+/// and resume redelivery, so a client answering a redelivered gate correlates
+/// against the same id it would have seen live.
+pub fn gate_request_id(request_id: &str) -> RequestId {
+    RequestId::Str(format!("gate-{request_id}"))
+}
+
 /// Build the `session/request_permission` request a facade connection sends
 /// the client. `id` is the JSON-RPC request id the caller correlates the
 /// answer against — this function stays agnostic to how that id is chosen.

@@ -120,7 +120,7 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
-        facade_clients: Arc::new(DashMap::new()),
+        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
         facade_heartbeat_interval_ms,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));

@@ -120,3 +120,20 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
     }
     assert_eq!(&reconstructed, full);
 }
+
+#[test]
+fn flush_drains_a_trailing_held_burst_and_is_a_noop_when_empty() {
+    let mut throttle = Throttle::new(50);
+    assert_eq!(throttle.push(1_000, chunk("a")).len(), 1);
+
+    // Held inside the window; no later push arrives to flush it.
+    assert!(throttle.push(1_010, chunk("b")).is_empty());
+    assert!(throttle.push(1_020, chunk("c")).is_empty());
+
+    let out = throttle.flush(1_030);
+    assert_eq!(out.len(), 1);
+    assert_eq!(chunk_text(&out[0]), "bc");
+
+    // Nothing pending: flush stays silent and does not reset the window.
+    assert!(throttle.flush(1_040).is_empty());
+}

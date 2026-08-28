@@ -88,7 +88,7 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
 
 /// `session/cancel` is a notification (no reply per JSON-RPC 2.0) — a
 /// malformed or unparseable payload is silently dropped rather than crashing
-/// the connection, matching `handle_frame`'s existing notification handling.
+/// the connection, matching the dispatcher's existing notification handling.
 pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
     let Some(params) = params else { return };
     let Ok(notification) = serde_json::from_value::<CancelSessionNotification>(params) else {
