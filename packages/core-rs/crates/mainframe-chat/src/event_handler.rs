@@ -34,6 +34,31 @@ const PUSH_BODY_MAX_LENGTH: usize = 200;
 /// Shared display-delta base cache, keyed by chat (never shared cross-chat).
 pub type DisplayCache = Arc<Mutex<HashMap<String, Vec<DisplayMessage>>>>;
 
+/// The in-flight assistant message's accumulated partial content
+/// (`SessionSink::on_message_partial`), keyed by chat. Merged into the
+/// display computation as a synthetic tail `ChatMessage` — under the API
+/// message id, so the item keeps its id when the completed message replaces
+/// it — and dropped the moment a completed block, retry, result, or exit
+/// supersedes it. Never enters the `MessageCache`.
+pub type PartialOverlays = Arc<Mutex<HashMap<String, PartialOverlay>>>;
+
+#[derive(Debug, Clone)]
+pub struct PartialOverlay {
+    pub message_id: String,
+    pub content: Vec<MessageContent>,
+}
+
+fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
+    ChatMessage {
+        id: overlay.message_id.clone(),
+        chat_id: chat_id.to_string(),
+        r#type: ChatMessageType::Assistant,
+        content: overlay.content.clone(),
+        timestamp: now_iso8601(),
+        metadata: None,
+    }
+}
+
 /// A fire-and-forget push notification (`pushService.sendPush`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PushOut {
@@ -184,6 +209,7 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     display_cache: DisplayCache,
+    partial_overlays: PartialOverlays,
     deps: Arc<D>,
     /// Survives a session resume (plan decision P3) — kept on the handler,
     /// not the per-session sink `build_sink` recreates.
@@ -206,6 +232,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             messages,
             permissions,
             display_cache: Arc::new(Mutex::new(HashMap::new())),
+            partial_overlays: Arc::new(Mutex::new(HashMap::new())),
             deps,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
             chat_surface: Arc::new(OnceLock::new()),
@@ -240,6 +267,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             messages: self.messages.clone(),
             permissions: self.permissions.clone(),
             display_cache: self.display_cache.clone(),
+            partial_overlays: self.partial_overlays.clone(),
             deps: self.deps.clone(),
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
@@ -260,15 +288,21 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             chat_id,
             &self.messages,
             &self.display_cache,
+            &self.partial_overlays,
             categories.as_ref(),
             self.deps.as_ref(),
             self.chat_surface.get(),
         );
     }
 
-    /// Remove display cache entry for a chat (call on chat end/archive).
+    /// Remove display cache + partial-overlay entries for a chat (call on
+    /// chat end/archive) — nothing else clears this per-chat bookkeeping.
     pub fn clear_display_cache(&self, chat_id: &str) {
         self.display_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(chat_id);
+        self.partial_overlays
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(chat_id);
@@ -283,16 +317,39 @@ fn emit_display_for<D: EventHandlerDeps>(
     chat_id: &str,
     messages: &Arc<Mutex<MessageCache>>,
     display_cache: &DisplayCache,
+    partial_overlays: &PartialOverlays,
     categories: Option<&ToolCategories>,
     deps: &D,
     surface: Option<&Arc<dyn ChatSurface>>,
 ) {
     let msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
     let mut cache = display_cache.lock().unwrap_or_else(|e| e.into_inner());
+    let raw: &[ChatMessage] = msgs.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
+    // Append the in-flight partial content as a synthetic tail message: it
+    // groups into the current assistant turn (or opens it, under the API
+    // message id the completed message will keep), so both surfaces stream
+    // the growing block instead of waiting for its completion.
+    let overlay = partial_overlays
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(chat_id)
+        .map(|o| overlay_message(chat_id, o));
+    let with_overlay: Vec<ChatMessage>;
+    let raw = match overlay {
+        Some(synthetic) => {
+            with_overlay = raw
+                .iter()
+                .cloned()
+                .chain(std::iter::once(synthetic))
+                .collect();
+            &with_overlay[..]
+        }
+        None => raw,
+    };
     let prepare =
         |raw: &[ChatMessage], c: Option<&ToolCategories>| deps.prepare_messages_for_client(raw, c);
     let mut emit = |e: DaemonEvent| deps.emit_event(e);
-    emit_display_delta(chat_id, &msgs, &mut cache, categories, &prepare, &mut emit);
+    emit_display_delta(chat_id, raw, &mut cache, categories, &prepare, &mut emit);
     // The cache now holds exactly `new_display` (`emit_display_delta`'s last
     // line) — reread it rather than recomputing, so the legacy branches above
     // stay untouched (group B's frame-shape guard covers them).
@@ -326,6 +383,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     display_cache: DisplayCache,
+    partial_overlays: PartialOverlays,
     deps: Arc<D>,
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
@@ -341,10 +399,21 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             &self.chat_id,
             &self.messages,
             &self.display_cache,
+            &self.partial_overlays,
             categories.as_ref(),
             self.deps.as_ref(),
             self.chat_surface.get(),
         );
+    }
+
+    /// Remove the chat's partial overlay; reports whether one was present so
+    /// abort paths (retry, result, exit) only re-emit when content vanishes.
+    fn take_partial_overlay(&self) -> bool {
+        self.partial_overlays
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.chat_id)
+            .is_some()
     }
 
     fn notify_surface(&self, event: ChatSurfaceEvent) {
@@ -509,6 +578,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             block_count = content.len(),
             "assistant message received"
         );
+
+        // A completed block supersedes the partial overlay: it lands in the
+        // cache under the same item id (the API message id for a message's
+        // first block), so the emit below converges the display in place —
+        // no id change, no reset frame.
+        self.take_partial_overlay();
 
         // Drain-turn re-entry: a background task's completion re-invokes the turn
         // (task_notification → fresh init → assistant message → second result)
@@ -773,6 +848,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_result(&self, data: SessionResult) {
+        // A turn that ends with an unfinished block (interrupt, error) leaves
+        // its partial content dangling — drop it and re-emit so no surface
+        // keeps text the transcript never got.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
         let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
             return;
         };
@@ -1104,6 +1185,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         let session_id = session_id.unwrap_or_default();
         debug!(session_id, chat_id = self.chat_id, "session exited");
 
+        // The process died mid-block: its partial content will never complete.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
+
         let had_queued = self
             .mutate_messages(|v| {
                 let mut had = false;
@@ -1375,11 +1461,46 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        // The retried API call re-streams from scratch under a fresh message
+        // id — the aborted call's partial content must disappear now, not
+        // linger until the retry's first block lands.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
         self.notify_surface(ChatSurfaceEvent::Retry {
             chat_id: self.chat_id.clone(),
             attempt,
             reason,
         });
+    }
+
+    fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+        // Same tag stripping the completed path applies (`on_message`), so
+        // the completed block extends the partial text instead of revising it.
+        let stripped: Vec<MessageContent> = content
+            .into_iter()
+            .map(|block| match block {
+                MessageContent::Leaf(LeafContent::Text {
+                    text,
+                    parent_tool_use_id,
+                }) => MessageContent::Leaf(LeafContent::Text {
+                    text: self.deps.strip_command_tags(&text),
+                    parent_tool_use_id,
+                }),
+                other => other,
+            })
+            .collect();
+        self.partial_overlays
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                self.chat_id.clone(),
+                PartialOverlay {
+                    message_id: api_message_id.to_string(),
+                    content: stripped,
+                },
+            );
+        self.emit_display();
     }
 
     fn on_attention_request(&self, message: &str) {
@@ -1423,6 +1544,9 @@ mod attention_tests;
 
 #[cfg(test)]
 mod chat_surface_tests;
+
+#[cfg(test)]
+mod partial_overlay_tests;
 
 #[cfg(test)]
 mod worktree_trigger_tests;

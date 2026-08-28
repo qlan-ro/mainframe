@@ -6,8 +6,6 @@ use mainframe_types::chat::ChatMessage;
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::events::DaemonEvent;
 
-use crate::message_cache::MessageCache;
-
 /// The Claude-specific display pipeline (`prepareMessagesForClient`) lives in
 /// `mainframe-adapter-claude` (crate map §2.5/§2.7), which this crate cannot depend
 /// on without a cycle. It is therefore INJECTED — chat_manager passes the adapter's
@@ -17,16 +15,18 @@ pub type PrepareFn<'a> =
 
 /// Compares old and new display message arrays and emits the appropriate
 /// display.message.added / display.message.updated / display.messages.set
-/// events. Updates the display cache in place.
+/// events. Updates the display cache in place. `raw` is the chat's message
+/// list, possibly extended with the partial-streaming overlay tail
+/// (`event_handler::emit_display_for`) — this function no longer reads the
+/// cache itself so the caller owns that composition.
 pub fn emit_display_delta(
     chat_id: &str,
-    messages: &MessageCache,
+    raw: &[ChatMessage],
     display_cache: &mut HashMap<String, Vec<DisplayMessage>>,
     categories: Option<&ToolCategories>,
     prepare: &PrepareFn<'_>,
     emit_event: &mut dyn FnMut(DaemonEvent),
 ) {
-    let raw: &[ChatMessage] = messages.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
     let new_display = prepare(raw, categories);
     let old_display = display_cache.get(chat_id).cloned().unwrap_or_default();
 

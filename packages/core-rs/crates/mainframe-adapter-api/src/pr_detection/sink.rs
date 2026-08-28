@@ -160,4 +160,10 @@ impl SessionSink for PrDetectionSink {
     fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
         self.inner.on_api_retry(attempt, reason);
     }
+
+    fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+        // Pass through unscanned: partial text is a prefix of the completed
+        // block `on_message` will scan — detecting on both would double-count.
+        self.inner.on_message_partial(api_message_id, content);
+    }
 }
