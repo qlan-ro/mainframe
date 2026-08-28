@@ -50,6 +50,7 @@ Path parameters use axum's `{param}` syntax (the old Express docs wrote
   - [Automations v2](#automations-v2)
   - [Plugins](#plugins)
 - [WebSocket Protocol](#websocket-protocol)
+  - [ACP Chat Facade (`/acp/{profile}`)](#acp-chat-facade-acpprofile)
 - [What's Not Verified or Not Mounted](#whats-not-verified-or-not-mounted)
 
 ## Transport
@@ -730,6 +731,89 @@ at all (adapter/provider/automation-level events) also reaches everyone.
 distinct from `claude_workflow.run.updated`, which describes a Claude CLI
 `/workflows` run folded in from disk. Neither has a matching HTTP route — see
 the note at the end of [Automations v2](#automations-v2).
+
+**Frozen for the chat-facade migration window (todo #350):** every chat-scoped
+row above (`message.*`, `display.*`, `messages.cleared`, `permission.*`,
+`chat.compacting`/`chat.compactDone`/`chat.contextUsage`,
+`message.queued.*`) is byte-frozen — no shape change until both the desktop
+UI and the `packages/mobile` client cut over to the [ACP chat
+facade](#acp-chat-facade-acpprofile) below. Non-chat rows (projects, git,
+launch, automations, plugins, …) are unaffected and evolve normally.
+
+### ACP Chat Facade (`/acp/{profile}`)
+
+Source: `packages/core-rs/crates/mainframe-acp` (pure dispatch, no socket
+code) and `packages/core-rs/crates/mainframe-server/src/acp_ws.rs` (the axum
+upgrade shell); vendored wire types in
+`packages/core-rs/crates/mainframe-types/src/acp/` and
+`packages/types/src/acp.ts`.
+
+The daemon exposes a second, additive-only chat surface: an [ACP
+v2](https://agentclientprotocol.com) server facade, frozen against snapshot
+`d0370de50e16` (`docs/research/ACP-EVALUATION.md`), plus a `_mainframe.dev`
+extension namespace for what ACP has no construct for. It replaces the legacy
+dialect's whole-message resends, `task_group` double-encoding, and four
+separate reconnect re-seed paths with versioned, delta-streamed, explicitly
+framed turns — see `docs/specs/2026-08-28-todo-350-wire-protocol-payload-grammar.md`
+for the full grammar rationale.
+
+**Status: not yet live.** `/acp/{profile}` upgrades, authenticates (same rule
+as `/`), and serves `initialize` today. `session/prompt`, `session/cancel`,
+`session/resume`, and `session/request_permission` exist as pure,
+unit-tested dispatch functions (`mainframe-acp::prompt`, `::resume`,
+`::gates`) but are **not yet wired to a live `ChatManager`** or pushed over
+the socket — no connection currently streams `session/update`. Cutover
+(wiring a real `PromptPort`/`ResumePort`, attaching the chat-surface observer
+to push notifications, and switching the desktop UI's controller) is
+follow-up work; this section documents the shipped grammar so it can be
+implemented against, not a live substitute for the WebSocket protocol above.
+
+**Connecting.** `GET /acp/{profile}` (upgrade), where `profile` names a
+registered adapter (`claude`, `codex`, `mock-cli`, …) — unregistered profiles
+get `404`, matching the auth-then-existence check order the legacy route
+uses. `?token=` works exactly as it does on `/`.
+
+**Handshake.** The client sends `initialize` with `protocolVersion: 2`
+(`PINNED_PROTOCOL_VERSION`); a mismatched version gets a structured
+`-32001` error (`data.supported: [2]`) and the connection stays open. The
+response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
+(`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
+`heartbeatIntervalMs`) — a generic ACP client that ignores this namespace
+gets a degraded but coherent experience (plain option-only gates, no
+queued-turn metadata).
+
+**Methods and notifications (shipped grammar):**
+
+| Method / notification | Direction | Purpose |
+|---|---|---|
+| `initialize` | client → daemon | Version negotiation + capability advertisement. |
+| `session/prompt` | client → daemon | Send a turn; response is acceptance (immediate or queued via `_meta`), never turn completion — no `queue.*` frame family. |
+| `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
+| `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); unknown/pre-compaction cursor falls back to a full replay carrying `_meta["_mainframe.dev"].fullReplay: true`. |
+| `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); a plain `{outcome:"selected", optionId}` answer is always valid, a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
+| `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
+| `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
+
+**Subagents.** Flatten to ordinary tool-call items carrying
+`_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
+on the facade (`mainframe-acp::encoder`).
+
+**Multi-client + cross-surface gates.** A gate raised on a chat is meant to
+broadcast to every attached facade session for it; only the first answer
+applies (`mainframe-acp::gate_registry`) — a second facade answer, or a
+legacy-surface answer for the same request, gets a structured "resolved"
+outcome rather than being reapplied. Answering a gate on the legacy `/`
+route already raises `GateResolved`/`GateRaised` on the same chat-surface
+observer the facade would read from (`mainframe-chat::permission_handler`),
+so once the facade is wired to a live connection registry, cross-surface
+consistency falls out of that single observer rather than needing its own
+synchronization.
+
+**Migration window.** The legacy dialect above stays byte-frozen for the
+duration; desktop cuts over first, `packages/mobile` follows in its own PR
+against this same pinned `protocolVersion: 2`. Both dialects run
+side by side until both clients have migrated, at which point the legacy
+chat events are removed (tracked as a follow-up todo, not part of #350).
 
 ### LSP WebSocket
 
