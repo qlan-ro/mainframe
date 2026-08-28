@@ -18,6 +18,7 @@
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { MAINFRAME_META_NAMESPACE, StructuredDiffSchema, TruncationMarkerSchema } from '@qlan-ro/mainframe-types';
+import type { ContentBlock } from '@qlan-ro/mainframe-types';
 import type { AccumulatedItem } from './acp-item-accumulator';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 
@@ -43,10 +44,12 @@ function withParentAttribution(id: string | undefined): { metadata: Record<strin
  * cards consume — the facade path's parity with the legacy rendering.
  */
 function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): unknown {
-  const textEntries = item.content.filter((entry) => entry.type === 'content');
-  const text = textEntries.map((entry) => entry.content.text).join('');
-  const truncation = textEntries.flatMap((entry) => {
-    const parsed = TruncationMarkerSchema.safeParse(entry.content._meta?.[MAINFRAME_META_NAMESPACE]);
+  const textBlocks = item.content.flatMap((entry) =>
+    entry.type === 'content' && entry.content.type === 'text' ? [entry.content] : [],
+  );
+  const text = textBlocks.map((block) => block.text).join('');
+  const truncation = textBlocks.flatMap((block) => {
+    const parsed = TruncationMarkerSchema.safeParse(block._meta?.[MAINFRAME_META_NAMESPACE]);
     return parsed.success && parsed.data.truncated ? [parsed.data] : [];
   })[0];
   const diff = item.content.find((entry) => entry.type === 'diff');
@@ -67,22 +70,40 @@ function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): 
   return text.length > 0 ? text : undefined;
 }
 
+/**
+ * Ordered blocks → aui parts: text renders as a text part, image as a native
+ * image part carrying the same data URL the legacy `convert-message.ts`
+ * builds (`data:<mimeType>;base64,<data>`), so `InlineImageThumbs` renders
+ * both paths identically.
+ */
+function messageParts(content: readonly ContentBlock[]): ContentPart[] {
+  return content.map((block) =>
+    block.type === 'text'
+      ? { type: 'text', text: block.text }
+      : { type: 'image', image: `data:${block.mimeType};base64,${block.data}` },
+  );
+}
+
+/** Thoughts are text-only by construction (the encoder routes only thinking leaves here). */
+function thoughtText(content: readonly ContentBlock[]): string {
+  return content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
+}
+
 export function convertAcpItem(item: AccumulatedItem, createdAt: Date): ThreadMessageLike {
   const base = { id: item.id, createdAt };
   const attribution = withParentAttribution(parentToolCallId(item.meta));
 
   switch (item.kind) {
     case 'message': {
-      const parts: ContentPart[] = [{ type: 'text', text: item.text }];
       return {
         role: item.role === 'user' ? 'user' : 'assistant',
-        content: ensureNonEmpty(parts),
+        content: ensureNonEmpty(messageParts(item.content)),
         ...base,
         ...attribution,
       };
     }
     case 'thought': {
-      const parts: ContentPart[] = [{ type: 'reasoning', text: item.text }];
+      const parts: ContentPart[] = [{ type: 'reasoning', text: thoughtText(item.content) }];
       return { role: 'assistant', content: ensureNonEmpty(parts), ...base, ...attribution };
     }
     case 'tool-call': {

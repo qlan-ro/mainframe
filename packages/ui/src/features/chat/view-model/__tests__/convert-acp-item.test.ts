@@ -4,9 +4,13 @@ import { convertAcpItem, convertAcpItems } from '../convert-acp-item';
 
 const createdAt = new Date('2026-08-28T00:00:00.000Z');
 
+function textBlock(text: string) {
+  return { type: 'text' as const, text };
+}
+
 describe('convertAcpItem — message/thought/tool-call kinds', () => {
   it('a user message item becomes a user text message', () => {
-    const item: AccumulatedItem = { kind: 'message', id: 'u1', role: 'user', text: 'hello' };
+    const item: AccumulatedItem = { kind: 'message', id: 'u1', role: 'user', content: [textBlock('hello')] };
     expect(convertAcpItem(item, createdAt)).toEqual({
       role: 'user',
       content: [{ type: 'text', text: 'hello' }],
@@ -16,7 +20,7 @@ describe('convertAcpItem — message/thought/tool-call kinds', () => {
   });
 
   it('an agent message item becomes an assistant text message', () => {
-    const item: AccumulatedItem = { kind: 'message', id: 'a1', role: 'agent', text: 'answer' };
+    const item: AccumulatedItem = { kind: 'message', id: 'a1', role: 'agent', content: [textBlock('answer')] };
     expect(convertAcpItem(item, createdAt)).toEqual({
       role: 'assistant',
       content: [{ type: 'text', text: 'answer' }],
@@ -25,8 +29,23 @@ describe('convertAcpItem — message/thought/tool-call kinds', () => {
     });
   });
 
+  it('an image block becomes a native image part with the legacy data URL (convert-message parity)', () => {
+    const item: AccumulatedItem = {
+      kind: 'message',
+      id: 'u2',
+      role: 'user',
+      content: [textBlock('What does this show?'), { type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png' }],
+    };
+    // Same shape convert-message.ts builds for a DisplayMessage image block:
+    // `{ type: 'image', image: 'data:<mediaType>;base64,<data>' }`.
+    expect(convertAcpItem(item, createdAt).content).toEqual([
+      { type: 'text', text: 'What does this show?' },
+      { type: 'image', image: 'data:image/png;base64,iVBORw0KGgo=' },
+    ]);
+  });
+
   it('a thought item becomes an assistant message with a reasoning part', () => {
-    const item: AccumulatedItem = { kind: 'thought', id: 'a1-thought', text: 'reasoning' };
+    const item: AccumulatedItem = { kind: 'thought', id: 'a1-thought', content: [textBlock('reasoning')] };
     expect(convertAcpItem(item, createdAt)).toEqual({
       role: 'assistant',
       content: [{ type: 'reasoning', text: 'reasoning' }],
@@ -35,8 +54,8 @@ describe('convertAcpItem — message/thought/tool-call kinds', () => {
     });
   });
 
-  it('an empty message text still yields one content part (ensureNonEmpty)', () => {
-    const item: AccumulatedItem = { kind: 'message', id: 'a1', role: 'agent', text: '' };
+  it('an empty message block list still yields one content part (ensureNonEmpty)', () => {
+    const item: AccumulatedItem = { kind: 'message', id: 'a1', role: 'agent', content: [] };
     expect(convertAcpItem(item, createdAt).content).toEqual([{ type: 'text', text: '' }]);
   });
 
@@ -183,8 +202,8 @@ describe('convertAcpItem — subagent attribution via _meta, not task_group nest
 
 describe('convertAcpItem — patch-revised items convert identically to a directly-created equivalent', () => {
   it('a revised message (content replaced wholesale) converts the same as if it had arrived whole', () => {
-    const revised: AccumulatedItem = { kind: 'message', id: 'm1', role: 'agent', text: 'final text' };
-    const direct: AccumulatedItem = { kind: 'message', id: 'm1', role: 'agent', text: 'final text' };
+    const revised: AccumulatedItem = { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('final text')] };
+    const direct: AccumulatedItem = { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('final text')] };
     expect(convertAcpItem(revised, createdAt)).toEqual(convertAcpItem(direct, createdAt));
   });
 
@@ -203,8 +222,8 @@ describe('convertAcpItem — patch-revised items convert identically to a direct
 describe('convertAcpItems', () => {
   it('converts a full item list, resolving createdAt per id', () => {
     const items: AccumulatedItem[] = [
-      { kind: 'message', id: 'u1', role: 'user', text: 'hi' },
-      { kind: 'message', id: 'a1', role: 'agent', text: 'hello' },
+      { kind: 'message', id: 'u1', role: 'user', content: [textBlock('hi')] },
+      { kind: 'message', id: 'a1', role: 'agent', content: [textBlock('hello')] },
     ];
     const stamps: Record<string, Date> = {
       u1: new Date('2026-08-28T00:00:00.000Z'),

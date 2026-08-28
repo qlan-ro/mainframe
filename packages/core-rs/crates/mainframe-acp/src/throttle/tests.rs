@@ -12,11 +12,26 @@ fn chunk(text: &str) -> SessionUpdate {
     })
 }
 
+fn image_chunk(data: &str) -> SessionUpdate {
+    SessionUpdate::AgentMessageChunk(ContentChunk {
+        message_id: "msg_1".to_string(),
+        content: ContentBlock::Image {
+            data: data.to_string(),
+            mime_type: "image/png".to_string(),
+            uri: None,
+            meta: None,
+        },
+        meta: None,
+    })
+}
+
 fn chunk_text(update: &SessionUpdate) -> &str {
     let SessionUpdate::AgentMessageChunk(c) = update else {
         panic!("expected an AgentMessageChunk");
     };
-    let ContentBlock::Text { text, .. } = &c.content;
+    let ContentBlock::Text { text, .. } = &c.content else {
+        panic!("expected a text chunk, got {:?}", c.content);
+    };
     text.as_str()
 }
 
@@ -84,7 +99,10 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
         let item = EncodedItem::Message {
             id: "msg_1".to_string(),
             role: ItemRole::Agent,
-            text: text.to_string(),
+            content: vec![ContentBlock::Text {
+                text: text.to_string(),
+                meta: None,
+            }],
             meta: None,
         };
         for update in state.diff(std::slice::from_ref(&item)) {
@@ -102,7 +120,10 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
         match update {
             SessionUpdate::AgentMessage(upsert) => {
                 let content = upsert.content.clone().flatten().unwrap_or_default();
-                let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &content[0];
+                let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &content[0]
+                else {
+                    panic!("expected a text block, got {:?}", content[0]);
+                };
                 assert_eq!(
                     i, 0,
                     "only the very first frame may carry full content, got it at index {i}"
@@ -121,6 +142,23 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
         }
     }
     assert_eq!(&reconstructed, full);
+}
+
+#[test]
+fn an_image_chunk_never_merges_and_blocks_the_text_merge_around_it() {
+    let mut throttle = Throttle::new(50);
+    assert_eq!(throttle.push(1_000, chunk("a")).len(), 1);
+
+    assert!(throttle.push(1_010, chunk("b")).is_empty());
+    assert!(throttle.push(1_020, image_chunk("aGk=")).is_empty());
+    assert!(throttle.push(1_030, chunk("c")).is_empty());
+
+    let out = throttle.push(1_060, chunk("d"));
+    // "b" cannot merge across the image; "c"+"d" merge behind it.
+    assert_eq!(out.len(), 3);
+    assert_eq!(chunk_text(&out[0]), "b");
+    assert_eq!(out[1], image_chunk("aGk="));
+    assert_eq!(chunk_text(&out[2]), "cd");
 }
 
 #[test]

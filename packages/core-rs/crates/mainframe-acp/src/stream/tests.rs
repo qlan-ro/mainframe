@@ -3,11 +3,18 @@ use serde_json::json;
 use super::*;
 use crate::encoder::ItemRole;
 
+fn text_blocks(text: &str) -> Vec<mainframe_types::acp::content::ContentBlock> {
+    vec![mainframe_types::acp::content::ContentBlock::Text {
+        text: text.to_string(),
+        meta: None,
+    }]
+}
+
 fn message(id: &str, text: &str) -> EncodedItem {
     EncodedItem::Message {
         id: id.to_string(),
         role: ItemRole::Agent,
-        text: text.to_string(),
+        content: text_blocks(text),
         meta: None,
     }
 }
@@ -16,7 +23,7 @@ fn message_with_meta(id: &str, text: &str, meta: Value) -> EncodedItem {
     EncodedItem::Message {
         id: id.to_string(),
         role: ItemRole::Agent,
-        text: text.to_string(),
+        content: text_blocks(text),
         meta: Some(meta),
     }
 }
@@ -46,7 +53,9 @@ fn a_growing_message_creates_once_then_chunks_the_delta() {
     let SessionUpdate::AgentMessageChunk(chunk) = &second[0] else {
         panic!("expected a chunk, got {:?}", second[0]);
     };
-    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content;
+    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content else {
+        panic!("expected a text delta, got {:?}", chunk.content);
+    };
     assert_eq!(text, "lo");
 }
 
@@ -62,7 +71,9 @@ fn seeding_replayed_items_makes_the_next_revision_a_pure_delta() {
     let SessionUpdate::AgentMessageChunk(chunk) = &updates[0] else {
         panic!("expected a chunk, got {:?}", updates[0]);
     };
-    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content;
+    let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content else {
+        panic!("expected a text delta, got {:?}", chunk.content);
+    };
     assert_eq!(text, " world");
 }
 

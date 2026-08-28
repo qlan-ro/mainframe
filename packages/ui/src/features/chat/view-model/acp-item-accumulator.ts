@@ -8,6 +8,11 @@
  * it, a value replaces it. JSON can't carry a literal `undefined`, so after
  * `JSON.parse` those three states are exactly `undefined` / `null` / value —
  * no separate presence check is needed.
+ *
+ * Message/thought items hold an ordered `ContentBlock` list (spec Decision
+ * 22). A chunk appends to it, coalescing text into a trailing text block —
+ * lossless because the encoder never emits adjacent text blocks — while an
+ * upsert replaces the whole list.
  */
 import type {
   ContentBlock,
@@ -26,14 +31,14 @@ export interface AccumulatedMessageItem {
   kind: 'message';
   id: string;
   role: AccumulatedItemRole;
-  text: string;
+  content: ContentBlock[];
   meta?: Record<string, unknown>;
 }
 
 export interface AccumulatedThoughtItem {
   kind: 'thought';
   id: string;
-  text: string;
+  content: ContentBlock[];
   meta?: Record<string, unknown>;
 }
 
@@ -52,8 +57,13 @@ export interface AccumulatedToolCallItem {
 
 export type AccumulatedItem = AccumulatedMessageItem | AccumulatedThoughtItem | AccumulatedToolCallItem;
 
-function textFromBlocks(blocks: ContentBlock[]): string {
-  return blocks.map((block) => block.text).join('');
+/** Append a chunk's block, coalescing text into a trailing text block. */
+function appendBlock(blocks: ContentBlock[], incoming: ContentBlock): ContentBlock[] {
+  const tail = blocks[blocks.length - 1];
+  if (incoming.type === 'text' && tail?.type === 'text') {
+    return [...blocks.slice(0, -1), { ...tail, text: tail.text + incoming.text }];
+  }
+  return [...blocks, incoming];
 }
 
 /** `undefined` = leave unchanged, `null` = clear, value = replace — the wire patch grammar, applied generically. */
@@ -135,11 +145,12 @@ export class AcpItemAccumulator {
   ): void {
     this.ensureOrdered(id);
     const prior = this.items.get(id);
-    const priorText = prior && prior.kind !== 'tool-call' ? prior.text : '';
+    const priorContent = prior && prior.kind !== 'tool-call' ? prior.content : [];
     const priorMeta = prior && prior.kind !== 'tool-call' ? prior.meta : undefined;
+    const blocks = appendBlock(priorContent, content);
     const item: AccumulatedMessageItem | AccumulatedThoughtItem = isThought
-      ? { kind: 'thought', id, text: priorText + content.text, meta: patchField(priorMeta, meta) }
-      : { kind: 'message', id, role, text: priorText + content.text, meta: patchField(priorMeta, meta) };
+      ? { kind: 'thought', id, content: blocks, meta: patchField(priorMeta, meta) }
+      : { kind: 'message', id, role, content: blocks, meta: patchField(priorMeta, meta) };
     this.items.set(id, item);
   }
 
@@ -152,12 +163,12 @@ export class AcpItemAccumulator {
   ): void {
     this.ensureOrdered(id);
     const prior = this.items.get(id);
-    const priorText = prior && prior.kind !== 'tool-call' ? prior.text : '';
+    const priorContent = prior && prior.kind !== 'tool-call' ? prior.content : [];
     const priorMeta = prior && prior.kind !== 'tool-call' ? prior.meta : undefined;
-    const text = content === undefined ? priorText : content === null ? '' : textFromBlocks(content);
+    const blocks = content === undefined ? priorContent : (content ?? []);
     const item: AccumulatedMessageItem | AccumulatedThoughtItem = isThought
-      ? { kind: 'thought', id, text, meta: patchField(priorMeta, meta) }
-      : { kind: 'message', id, role, text, meta: patchField(priorMeta, meta) };
+      ? { kind: 'thought', id, content: blocks, meta: patchField(priorMeta, meta) }
+      : { kind: 'message', id, role, content: blocks, meta: patchField(priorMeta, meta) };
     this.items.set(id, item);
   }
 

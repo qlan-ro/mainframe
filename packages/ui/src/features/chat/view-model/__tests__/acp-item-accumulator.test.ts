@@ -6,6 +6,10 @@ function textBlock(text: string) {
   return { type: 'text' as const, text };
 }
 
+function imageBlock(data: string) {
+  return { type: 'image' as const, data, mimeType: 'image/png' };
+}
+
 describe('AcpItemAccumulator — message/thought chunk + upsert', () => {
   it('a chunk creates the item, then appends on each subsequent chunk', () => {
     const acc = new AcpItemAccumulator();
@@ -13,13 +17,47 @@ describe('AcpItemAccumulator — message/thought chunk + upsert', () => {
     acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('into it') });
 
     expect(acc.itemsInOrder).toEqual([
-      { kind: 'message', id: 'm1', role: 'agent', text: 'Looking into it', meta: undefined },
+      { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('Looking into it')], meta: undefined },
     ]);
   });
 
-  it('an upsert with content replaces the accumulated text wholesale (the retry case)', () => {
+  it('an image chunk appends a new block; later text starts a new block, then coalesces into it', () => {
+    const acc = new AcpItemAccumulator();
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('Here:') });
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: imageBlock('aGk=') });
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('And ') });
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('after.') });
+
+    expect(acc.itemsInOrder).toEqual([
+      {
+        kind: 'message',
+        id: 'm1',
+        role: 'agent',
+        content: [textBlock('Here:'), imageBlock('aGk='), textBlock('And after.')],
+        meta: undefined,
+      },
+    ]);
+  });
+
+  it('a multi-block upsert (resume replay) equals the same content accumulated by chunks', () => {
+    const chunked = new AcpItemAccumulator();
+    chunked.apply({ sessionUpdate: 'user_message_chunk', messageId: 'm1', content: textBlock('Look: ') });
+    chunked.apply({ sessionUpdate: 'user_message_chunk', messageId: 'm1', content: imageBlock('aGk=') });
+
+    const replayed = new AcpItemAccumulator();
+    replayed.apply({
+      sessionUpdate: 'user_message',
+      messageId: 'm1',
+      content: [textBlock('Look: '), imageBlock('aGk=')],
+    });
+
+    expect(replayed.itemsInOrder).toEqual(chunked.itemsInOrder);
+  });
+
+  it('an upsert with content replaces the accumulated blocks wholesale (the retry case)', () => {
     const acc = new AcpItemAccumulator();
     acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('stale draft') });
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: imageBlock('aGk=') });
     acc.apply({
       sessionUpdate: 'agent_message',
       messageId: 'm1',
@@ -32,27 +70,27 @@ describe('AcpItemAccumulator — message/thought chunk + upsert', () => {
         kind: 'message',
         id: 'm1',
         role: 'agent',
-        text: 'replacement text',
+        content: [textBlock('replacement text')],
         meta: { '_mainframe.dev': { attempt: 2 } },
       },
     ]);
   });
 
-  it('an upsert with content: null clears the accumulated text', () => {
+  it('an upsert with content: null clears the accumulated blocks', () => {
     const acc = new AcpItemAccumulator();
     acc.apply({ sessionUpdate: 'user_message_chunk', messageId: 'm1', content: textBlock('hello') });
     acc.apply({ sessionUpdate: 'user_message', messageId: 'm1', content: null });
 
-    expect(acc.itemsInOrder).toEqual([{ kind: 'message', id: 'm1', role: 'user', text: '', meta: undefined }]);
+    expect(acc.itemsInOrder).toEqual([{ kind: 'message', id: 'm1', role: 'user', content: [], meta: undefined }]);
   });
 
-  it('an upsert with content omitted leaves the accumulated text unchanged (only meta patched)', () => {
+  it('an upsert with content omitted leaves the accumulated blocks unchanged (only meta patched)', () => {
     const acc = new AcpItemAccumulator();
     acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('unchanged') });
     acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', _meta: { flag: true } });
 
     expect(acc.itemsInOrder).toEqual([
-      { kind: 'message', id: 'm1', role: 'agent', text: 'unchanged', meta: { flag: true } },
+      { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('unchanged')], meta: { flag: true } },
     ]);
   });
 
@@ -62,8 +100,8 @@ describe('AcpItemAccumulator — message/thought chunk + upsert', () => {
     acc.apply({ sessionUpdate: 'agent_thought_chunk', messageId: 'm1-thought', content: textBlock('reasoning') });
 
     expect(acc.itemsInOrder).toEqual([
-      { kind: 'message', id: 'm1', role: 'agent', text: 'answer', meta: undefined },
-      { kind: 'thought', id: 'm1-thought', text: 'reasoning', meta: undefined },
+      { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('answer')], meta: undefined },
+      { kind: 'thought', id: 'm1-thought', content: [textBlock('reasoning')], meta: undefined },
     ]);
   });
 });

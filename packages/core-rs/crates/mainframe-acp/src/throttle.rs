@@ -109,6 +109,10 @@ fn same_chunk_kind(a: &SessionUpdate, b: &SessionUpdate) -> bool {
     )
 }
 
+/// Only text chunks merge — an image chunk appends a whole block, so
+/// concatenation has no meaning for it (and an image sitting between two
+/// text chunks correctly blocks their merge, since merging is
+/// adjacent-only).
 fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str)> {
     let chunk = match update {
         SessionUpdate::AgentMessageChunk(c)
@@ -116,8 +120,10 @@ fn chunk_parts(update: &SessionUpdate) -> Option<(&str, &str)> {
         | SessionUpdate::AgentThoughtChunk(c) => c,
         _ => return None,
     };
-    let ContentBlock::Text { text, .. } = &chunk.content;
-    Some((&chunk.message_id, text.as_str()))
+    match &chunk.content {
+        ContentBlock::Text { text, .. } => Some((&chunk.message_id, text.as_str())),
+        _ => None,
+    }
 }
 
 fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String)> {
@@ -127,8 +133,10 @@ fn chunk_parts_mut(update: &mut SessionUpdate) -> Option<(&str, &mut String)> {
         | SessionUpdate::AgentThoughtChunk(c) => c,
         _ => return None,
     };
-    let ContentBlock::Text { text, .. } = &mut chunk.content;
-    Some((&chunk.message_id, text))
+    match &mut chunk.content {
+        ContentBlock::Text { text, .. } => Some((&chunk.message_id, text)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

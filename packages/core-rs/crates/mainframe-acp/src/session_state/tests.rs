@@ -2,11 +2,31 @@ use super::*;
 use crate::encoder::{EncodedItem, ItemRole};
 use mainframe_types::acp::tool_call::{ToolCallContent, ToolCallStatus, ToolKind};
 
+fn text_block(text: &str) -> ContentBlock {
+    ContentBlock::Text {
+        text: text.to_string(),
+        meta: None,
+    }
+}
+
+fn image_block(data: &str) -> ContentBlock {
+    ContentBlock::Image {
+        data: data.to_string(),
+        mime_type: "image/png".to_string(),
+        uri: None,
+        meta: None,
+    }
+}
+
 fn msg(id: &str, text: &str) -> EncodedItem {
+    msg_blocks(id, vec![text_block(text)])
+}
+
+fn msg_blocks(id: &str, content: Vec<ContentBlock>) -> EncodedItem {
     EncodedItem::Message {
         id: id.to_string(),
         role: ItemRole::Agent,
-        text: text.to_string(),
+        content,
         meta: None,
     }
 }
@@ -91,6 +111,91 @@ fn a_non_append_change_is_a_full_revision_not_a_chunk() {
             text: "Retried from scratch".to_string(),
             meta: None
         }]))
+    );
+}
+
+#[test]
+fn tail_text_growth_plus_an_appended_image_emits_a_delta_chunk_then_an_image_chunk() {
+    let mut state = SessionState::new();
+    state.diff(&[msg("m1", "Here is the shot")]);
+
+    let updates = state.diff(&[msg_blocks(
+        "m1",
+        vec![text_block("Here is the shot:"), image_block("aGk=")],
+    )]);
+
+    assert_eq!(updates.len(), 2);
+    let SessionUpdate::AgentMessageChunk(delta) = &updates[0] else {
+        panic!("expected a text delta chunk first");
+    };
+    assert_eq!(delta.content, text_block(":"));
+    let SessionUpdate::AgentMessageChunk(image) = &updates[1] else {
+        panic!("expected the appended image chunk second");
+    };
+    assert_eq!(image.content, image_block("aGk="));
+}
+
+#[test]
+fn text_growth_after_an_image_block_emits_the_new_text_block_as_a_chunk() {
+    let mut state = SessionState::new();
+    state.diff(&[msg_blocks(
+        "m1",
+        vec![text_block("Before"), image_block("aGk=")],
+    )]);
+
+    let updates = state.diff(&[msg_blocks(
+        "m1",
+        vec![
+            text_block("Before"),
+            image_block("aGk="),
+            text_block("After"),
+        ],
+    )]);
+
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessageChunk(chunk) = &updates[0] else {
+        panic!("expected a chunk");
+    };
+    // The client's trailing block is the image, so this text chunk starts a
+    // new block rather than coalescing — the multi-block append case.
+    assert_eq!(chunk.content, text_block("After"));
+
+    // ...and that new trailing text block then grows by delta chunks.
+    let updates = state.diff(&[msg_blocks(
+        "m1",
+        vec![
+            text_block("Before"),
+            image_block("aGk="),
+            text_block("After all"),
+        ],
+    )]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessageChunk(chunk) = &updates[0] else {
+        panic!("expected a chunk");
+    };
+    assert_eq!(chunk.content, text_block(" all"));
+}
+
+#[test]
+fn a_mid_list_divergence_is_a_full_multi_block_upsert() {
+    let mut state = SessionState::new();
+    state.diff(&[msg_blocks(
+        "m1",
+        vec![text_block("draft"), image_block("aGk=")],
+    )]);
+
+    // The retry rewrote the first block — not expressible as appends.
+    let updates = state.diff(&[msg_blocks(
+        "m1",
+        vec![text_block("final"), image_block("aGk=")],
+    )]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+        panic!("a mid-list divergence must be a full upsert, not chunks");
+    };
+    assert_eq!(
+        upsert.content,
+        Some(Some(vec![text_block("final"), image_block("aGk=")]))
     );
 }
 

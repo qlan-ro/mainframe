@@ -97,12 +97,15 @@ pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
     let _ = port.cancel(&notification.session_id).await;
 }
 
+/// Inbound prompts reach the CLI as text; a non-text block (e.g. `image`)
+/// contributes nothing here — image *input* is the composer-attachment
+/// path, outside the facade's prompt seam today.
 fn extract_text(prompt: &[mainframe_types::acp::content::ContentBlock]) -> String {
     prompt
         .iter()
-        .map(|block| {
-            let mainframe_types::acp::content::ContentBlock::Text { text, .. } = block;
-            text.as_str()
+        .filter_map(|block| match block {
+            mainframe_types::acp::content::ContentBlock::Text { text, .. } => Some(text.as_str()),
+            _ => None,
         })
         .collect::<Vec<_>>()
         .join("\n")

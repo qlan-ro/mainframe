@@ -32,6 +32,30 @@ fn thinking(s: &str) -> DisplayContent {
     })
 }
 
+fn image(data: &str, media_type: &str) -> DisplayContent {
+    DisplayContent::Leaf(LeafContent::Image {
+        media_type: media_type.to_string(),
+        data: data.to_string(),
+        parent_tool_use_id: None,
+    })
+}
+
+fn text_block(s: &str) -> ContentBlock {
+    ContentBlock::Text {
+        text: s.to_string(),
+        meta: None,
+    }
+}
+
+fn image_block(data: &str, mime_type: &str) -> ContentBlock {
+    ContentBlock::Image {
+        data: data.to_string(),
+        mime_type: mime_type.to_string(),
+        uri: None,
+        meta: None,
+    }
+}
+
 fn tool_call(id: &str, name: &str, category: ToolCategory, result: Option<&str>) -> DisplayContent {
     DisplayContent::Node(DisplayNode::ToolCall {
         id: id.to_string(),
@@ -62,7 +86,56 @@ fn encodes_a_user_text_message() {
         vec![EncodedItem::Message {
             id: "dmsg_1".to_string(),
             role: ItemRole::User,
-            text: "hi".to_string(),
+            content: vec![text_block("hi")],
+            meta: None,
+        }]
+    );
+}
+
+#[test]
+fn interleaved_text_and_image_leaves_encode_as_an_ordered_block_list() {
+    let messages = vec![dmsg(
+        "dmsg_img",
+        DisplayMessageType::User,
+        vec![
+            text("What does "),
+            text("this show?"),
+            image("iVBORw0KGgo=", "image/png"),
+            text("Thanks."),
+        ],
+    )];
+    let items = encode(&messages);
+
+    // Adjacent text leaves coalesce into one block (the no-adjacent-text-
+    // blocks invariant); the image sits between text blocks in leaf order.
+    assert_eq!(
+        items,
+        vec![EncodedItem::Message {
+            id: "dmsg_img".to_string(),
+            role: ItemRole::User,
+            content: vec![
+                text_block("What does this show?"),
+                image_block("iVBORw0KGgo=", "image/png"),
+                text_block("Thanks."),
+            ],
+            meta: None,
+        }]
+    );
+}
+
+#[test]
+fn an_image_only_message_encodes_a_single_image_block() {
+    let messages = vec![dmsg(
+        "dmsg_img2",
+        DisplayMessageType::User,
+        vec![image("aGk=", "image/jpeg")],
+    )];
+    assert_eq!(
+        encode(&messages),
+        vec![EncodedItem::Message {
+            id: "dmsg_img2".to_string(),
+            role: ItemRole::User,
+            content: vec![image_block("aGk=", "image/jpeg")],
             meta: None,
         }]
     );
@@ -83,12 +156,12 @@ fn encodes_an_assistant_thinking_block_as_a_separate_thought_item() {
             EncodedItem::Message {
                 id: "dmsg_2".to_string(),
                 role: ItemRole::Agent,
-                text: "done".to_string(),
+                content: vec![text_block("done")],
                 meta: None,
             },
             EncodedItem::Thought {
                 id: "dmsg_2-thought".to_string(),
-                text: "hmm".to_string(),
+                content: vec![text_block("hmm")],
                 meta: None,
             },
         ]
