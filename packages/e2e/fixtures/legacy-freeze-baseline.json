@@ -1,0 +1,157 @@
+[
+  {
+    "type": "subscribe:ack",
+    "chatId": "ID"
+  },
+  {
+    "type": "message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Summarize our conversation so far and keep going"
+        }
+      ],
+      "timestamp": "TIME"
+    }
+  },
+  {
+    "type": "display.messages.set",
+    "chatId": "ID",
+    "messages": [
+      {
+        "id": "ID",
+        "chatId": "ID",
+        "type": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Summarize our conversation so far and keep going"
+          }
+        ],
+        "timestamp": "TIME"
+      }
+    ]
+  },
+  {
+    "type": "message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "system",
+      "content": [
+        {
+          "type": "compaction"
+        }
+      ],
+      "timestamp": "TIME"
+    }
+  },
+  {
+    "type": "display.message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "system",
+      "content": [
+        {
+          "type": "compaction"
+        }
+      ],
+      "timestamp": "TIME"
+    }
+  },
+  {
+    "type": "message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Context compacted. Picking up where we left off — the project's `index.ts` exports a `greeting` constant."
+        }
+      ],
+      "timestamp": "TIME",
+      "metadata": {
+        "model": "claude-haiku-4-5-20251001",
+        "usage": {
+          "input_tokens": 8,
+          "output_tokens": 8
+        },
+        "adapterId": "ID"
+      }
+    }
+  },
+  {
+    "type": "display.message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Context compacted. Picking up where we left off — the project's `index.ts` exports a `greeting` constant."
+        }
+      ],
+      "timestamp": "TIME",
+      "metadata": {
+        "model": "claude-haiku-4-5-20251001",
+        "usage": {
+          "input_tokens": 8,
+          "output_tokens": 8
+        },
+        "adapterId": "ID"
+      }
+    }
+  },
+  {
+    "type": "message.added",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "system",
+      "content": [],
+      "timestamp": "TIME",
+      "metadata": {
+        "turnDurationMs": "TIME"
+      }
+    }
+  },
+  {
+    "type": "display.message.updated",
+    "chatId": "ID",
+    "message": {
+      "id": "ID",
+      "chatId": "ID",
+      "type": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Context compacted. Picking up where we left off — the project's `index.ts` exports a `greeting` constant."
+        }
+      ],
+      "timestamp": "TIME",
+      "metadata": {
+        "model": "claude-haiku-4-5-20251001",
+        "usage": {
+          "input_tokens": 8,
+          "output_tokens": 8
+        },
+        "adapterId": "ID",
+        "turnDurationMs": "TIME"
+      }
+    }
+  }
+]
