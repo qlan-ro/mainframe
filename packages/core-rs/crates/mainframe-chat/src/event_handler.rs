@@ -1316,6 +1316,9 @@ mod permission_cancel_tests;
 mod pr_detection_wiring_tests;
 
 #[cfg(test)]
+mod stable_id_characterization_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::test_chat;
