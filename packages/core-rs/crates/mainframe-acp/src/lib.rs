@@ -10,7 +10,10 @@
 pub mod capabilities;
 pub mod connection;
 pub mod encoder;
+pub mod gate_registry;
+pub mod gates;
 pub mod prompt;
+pub mod resume;
 pub mod rpc;
 pub mod session_state;
 pub mod throttle;
@@ -20,6 +23,12 @@ pub use capabilities::{
 };
 pub use connection::{DaemonInfo, handle_frame, handle_frame_with_prompt};
 pub use encoder::{EncodedItem, ItemRole, encode};
+pub use gate_registry::{AnswerOutcome, GateRegistry};
+pub use gates::{
+    GateAnswerError, build_request as build_permission_request,
+    parse_answer as parse_permission_answer,
+};
 pub use prompt::{PromptAcceptance, PromptError, PromptPort};
+pub use resume::{ReplayCursor, ResumePort, ResumeReplay, dispatch_resume};
 pub use session_state::SessionState;
 pub use throttle::Throttle;
