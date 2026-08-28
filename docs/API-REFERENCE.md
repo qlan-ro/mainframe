@@ -741,9 +741,9 @@ facade](#acp-chat-facade-acpprofile) below. Cadence is NOT frozen (spec
 Decision 23, user-relaxed 2026-08-28): with partial-message streaming a
 growing assistant message emits `display.message.added` on its first delta
 and whole-message `display.message.updated` frames at up to ~20/s while a
-block streams, instead of one frame per completed block. Clients that treat
-`display.message.updated` as idempotent replacement (both existing clients
-do) need no change. Non-chat rows (projects, git, launch, automations,
+block streams, instead of one frame per completed block. Clients must treat
+`display.message.updated` as idempotent replacement (desktop already does;
+mobile must verify when it updates). Non-chat rows (projects, git, launch, automations,
 plugins, …) are unaffected and evolve normally.
 
 ### ACP Chat Facade (`/acp/{profile}`)
