@@ -83,6 +83,7 @@ mainframe-lsp = { path = "crates/mainframe-lsp" }
 mainframe-automations = { path = "crates/mainframe-automations" }
 mainframe-services = { path = "crates/mainframe-services" }
 mainframe-server = { path = "crates/mainframe-server" }
+mainframe-acp = { path = "crates/mainframe-acp" }
 
 # clippy::unwrap_used and clippy::expect_used are enforced as deny at the workspace
 # level. Test code is exempted via `#![cfg_attr(test, allow(clippy::unwrap_used,
