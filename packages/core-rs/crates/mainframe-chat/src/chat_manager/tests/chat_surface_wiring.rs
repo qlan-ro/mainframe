@@ -264,6 +264,34 @@ async fn ending_a_chat_emits_chat_ended_on_the_chat_surface() {
 }
 
 #[tokio::test]
+async fn removing_a_project_emits_chat_ended_for_each_of_its_chats() {
+    let mut c1 = test_chat("c1");
+    c1.project_id = "p1".to_string();
+    let mut c2 = test_chat("c2");
+    c2.project_id = "p1".to_string();
+    let deps = StoreDeps::with_chats(vec![c1, c2]);
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+
+    mgr.remove_project("p1").await.unwrap();
+
+    let mut ended: Vec<String> = surface
+        .events()
+        .iter()
+        .filter_map(|e| match e {
+            ChatSurfaceEvent::ChatEnded { chat_id } => Some(chat_id.clone()),
+            _ => None,
+        })
+        .collect();
+    ended.sort(); // chats_list order is storage-defined, not part of the contract
+    assert_eq!(
+        ended,
+        vec!["c1".to_string(), "c2".to_string()],
+        "project removal must announce teardown for every chat it tears down"
+    );
+}
+
+#[tokio::test]
 async fn archiving_a_chat_emits_chat_ended_on_the_chat_surface() {
     let deps = StoreDeps::arc();
     let surface = RecordingSurface::arc();
