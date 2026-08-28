@@ -792,6 +792,8 @@ queued-turn metadata).
 | `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); unknown/pre-compaction cursor falls back to a full replay carrying `_meta["_mainframe.dev"].fullReplay: true`. |
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); a plain `{outcome:"selected", optionId}` answer is always valid, a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
+| `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
+| `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, the legacy surface, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
 
 **Message content grammar.** A message/thought item's content is an ordered
 `ContentBlock` list; the vendored variants are `text` and `image` (base64
@@ -805,8 +807,6 @@ revision that is not a pure tail extension (a provider retry rewriting
 earlier blocks) is sent as a full-replacement upsert, never as chunks.
 There is no block index on the wire — the pinned schema's `ContentChunk`
 has none.
-| `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
-| `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, the legacy surface, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
 
 **Subagents.** Flatten to ordinary tool-call items carrying
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
