@@ -2,9 +2,12 @@
  * §legacy-freeze — todo #350 task 24, criterion 12's e2e form.
  *
  * The legacy `/` WS dialect (`DaemonEvent`/`ClientEvent`, mainframe-types/src/events.rs)
- * must stay byte-compatible while the ACP facade (`/acp/{profile}`) is built alongside it —
- * mobile (a separate repo) depends on the frozen shape until it migrates. This spec captures
- * one recorded mock-adapter turn's legacy chat frames, masks nondeterministic fields (ids,
+ * keeps its frame SHAPES while the ACP facade (`/acp/{profile}`) is built alongside it.
+ * Cadence is no longer frozen (spec Decision 23, user-relaxed 2026-08-28): partial-message
+ * streaming makes live Claude chats emit finer-grained display.message.* frames. This spec
+ * stays valid because it drives the mock adapter, which replays sink-level recordings and
+ * emits no partial deltas — the captured turn's frames are unchanged. It captures one
+ * recorded mock-adapter turn's legacy chat frames, masks nondeterministic fields (ids,
  * timestamps, the e2e temp project path), and diffs the result against a committed baseline.
  *
  * Backstops group B's unit-level shape guard (plan task 4, `mainframe-chat`) at the transport

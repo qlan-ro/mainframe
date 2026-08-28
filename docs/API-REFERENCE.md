@@ -732,13 +732,19 @@ distinct from `claude_workflow.run.updated`, which describes a Claude CLI
 `/workflows` run folded in from disk. Neither has a matching HTTP route — see
 the note at the end of [Automations v2](#automations-v2).
 
-**Frozen for the chat-facade migration window (todo #350):** every chat-scoped
-row above (`message.*`, `display.*`, `messages.cleared`, `permission.*`,
-`chat.compacting`/`chat.compactDone`/`chat.contextUsage`,
-`message.queued.*`) is byte-frozen — no shape change until both the desktop
-UI and the `packages/mobile` client cut over to the [ACP chat
-facade](#acp-chat-facade-acpprofile) below. Non-chat rows (projects, git,
-launch, automations, plugins, …) are unaffected and evolve normally.
+**Shape-frozen for the chat-facade migration window (todo #350):** every
+chat-scoped row above (`message.*`, `display.*`, `messages.cleared`,
+`permission.*`, `chat.compacting`/`chat.compactDone`/`chat.contextUsage`,
+`message.queued.*`) keeps its frame shape until both the desktop UI and the
+`packages/mobile` client cut over to the [ACP chat
+facade](#acp-chat-facade-acpprofile) below. Cadence is NOT frozen (spec
+Decision 23, user-relaxed 2026-08-28): with partial-message streaming a
+growing assistant message emits `display.message.added` on its first delta
+and whole-message `display.message.updated` frames at up to ~20/s while a
+block streams, instead of one frame per completed block. Clients that treat
+`display.message.updated` as idempotent replacement (both existing clients
+do) need no change. Non-chat rows (projects, git, launch, automations,
+plugins, …) are unaffected and evolve normally.
 
 ### ACP Chat Facade (`/acp/{profile}`)
 
@@ -808,6 +814,21 @@ earlier blocks) is sent as a full-replacement upsert, never as chunks.
 There is no block index on the wire — the pinned schema's `ContentChunk`
 has none.
 
+**Streaming granularity (spec Decision 23).** Text and thought chunks are
+token-granularity when the Claude CLI supports `--include-partial-messages`
+(version-gated ≥ 1.0.109; the adapter probes and caches `claude --version`
+per executable): the in-flight block streams as tail-text chunks while it
+generates, throttled adapter-side (~50ms) and coalesced again per
+connection. On an older CLI, or for adapters without partial streaming,
+chunks degrade to one per completed content block — same grammar, coarser
+cadence. Message/thought item ids are the provider message id (`msg_*`,
+claimed by the message's first block; later blocks keep transcript-entry
+uuids), identical across live streaming, resume replay, and history
+reconstruction. A partial block aborted mid-stream (provider retry,
+interrupt, adapter death) emits one content-clearing upsert (`content: []`)
+so no client keeps text the transcript never got; tool-input streaming
+(`input_json_delta`) is not consumed yet.
+
 **Subagents.** Flatten to ordinary tool-call items carrying
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
 on the facade (`mainframe-acp::encoder`).
@@ -841,11 +862,13 @@ receives `_mainframe.dev/gate_resolved` the moment it resolves (criterion
 8), so a second client's pending gate clears immediately; resume redelivery
 remains the fallback for a client that was disconnected at that moment.
 
-**Migration window.** The legacy dialect above stays byte-frozen for the
-duration; desktop cuts over first, `packages/mobile` follows in its own PR
-against this same pinned `protocolVersion: 2`. Both dialects run
-side by side until both clients have migrated, at which point the legacy
-chat events are removed (tracked as a follow-up todo, not part of #350).
+**Migration window.** The legacy dialect above stays shape-frozen for the
+duration (cadence changed with partial streaming — see the note in the
+legacy event catalog); desktop cuts over first, `packages/mobile` follows
+in its own PR against this same pinned `protocolVersion: 2`. Both dialects
+run side by side until both clients have migrated, at which point the
+legacy chat events are removed (tracked as a follow-up todo, not part
+of #350).
 
 ### LSP WebSocket
 
