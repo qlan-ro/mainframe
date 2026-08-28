@@ -35,10 +35,15 @@ impl SessionState {
 
     /// Diff a fresh encoder snapshot against the last one seen, returning the
     /// `session/update` payloads needed to converge a client from the old
-    /// state to the new one. Items no longer present are left as-is (removal
-    /// framing is not in this task's scope; encoder inputs only grow).
+    /// state to the new one. A message/thought item missing from the snapshot
+    /// gets one content-clearing upsert and is forgotten — the
+    /// partial-streaming overlay can vanish wholesale (an `api_error` retry
+    /// or an interrupt aborts the in-flight block), and a client must not
+    /// keep text the transcript never got. Tool calls are still left as-is:
+    /// they are never overlay-created, and the flows that remove them
+    /// (truncation, `/clear`) re-seed every attached session via resume.
     pub fn diff(&mut self, new_items: &[EncodedItem]) -> Vec<SessionUpdate> {
-        let mut updates = Vec::new();
+        let mut updates = self.clear_vanished(new_items);
         for item in new_items {
             match self.items.get(item.id()) {
                 None => updates.push(create_update(item)),
@@ -49,6 +54,43 @@ impl SessionState {
         }
         updates
     }
+
+    fn clear_vanished(&mut self, new_items: &[EncodedItem]) -> Vec<SessionUpdate> {
+        let new_ids: std::collections::HashSet<&str> =
+            new_items.iter().map(EncodedItem::id).collect();
+        let mut vanished: Vec<String> = self
+            .items
+            .iter()
+            .filter(|(id, item)| {
+                !new_ids.contains(id.as_str()) && !matches!(item, EncodedItem::ToolCall { .. })
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        // HashMap order is arbitrary; sort so multi-item clears are stable.
+        vanished.sort();
+        vanished
+            .into_iter()
+            .filter_map(|id| self.items.remove(&id))
+            .map(|item| clear_update(&item))
+            .collect()
+    }
+}
+
+/// The clearing upsert for a vanished item: content replaced with the empty
+/// list (patch semantics: `Some` = replace), meta untouched. Should the item
+/// later reappear it is a fresh creation — the clear removed it from state.
+fn clear_update(item: &EncodedItem) -> SessionUpdate {
+    let (id, role, is_thought) = match item {
+        EncodedItem::Message { id, role, .. } => (id, *role, false),
+        EncodedItem::Thought { id, .. } => (id, ItemRole::Agent, true),
+        // Filtered out by the caller.
+        EncodedItem::ToolCall { id, .. } => (id, ItemRole::Agent, false),
+    };
+    upsert_variant(role, is_thought)(MessageUpsert {
+        message_id: id.clone(),
+        content: create_patch(Some(Vec::new())),
+        meta: None,
+    })
 }
 
 fn message_variant(role: ItemRole, is_thought: bool) -> fn(ContentChunk) -> SessionUpdate {

@@ -242,3 +242,68 @@ fn a_fresh_session_state_creates_every_item_even_ones_seen_by_another_session() 
     assert_eq!(updates.len(), 1);
     assert!(matches!(updates[0], SessionUpdate::AgentMessage(_)));
 }
+
+#[test]
+fn a_vanished_message_item_gets_one_clearing_upsert_then_is_forgotten() {
+    let mut state = SessionState::new();
+    state.diff(&[msg("m1", "doomed partial")]);
+
+    // The overlay aborted (retry/interrupt): the item is gone wholesale.
+    let updates = state.diff(&[]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+        panic!("expected a clearing AgentMessage upsert");
+    };
+    assert_eq!(upsert.message_id, "m1");
+    assert_eq!(upsert.content, Some(Some(Vec::new())));
+    assert_eq!(upsert.meta, None);
+
+    // Forgotten: staying absent is quiet, reappearing is a fresh creation.
+    assert!(state.diff(&[]).is_empty());
+    let recreated = state.diff(&[msg("m1", "retried text")]);
+    assert_eq!(recreated.len(), 1);
+    assert!(matches!(recreated[0], SessionUpdate::AgentMessage(_)));
+}
+
+#[test]
+fn a_vanished_thought_item_clears_as_a_thought() {
+    let mut state = SessionState::new();
+    state.diff(&[EncodedItem::Thought {
+        id: "m1-thought".to_string(),
+        content: vec![text_block("thinking...")],
+        meta: None,
+    }]);
+
+    let updates = state.diff(&[]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentThought(upsert) = &updates[0] else {
+        panic!("expected a clearing AgentThought upsert");
+    };
+    assert_eq!(upsert.content, Some(Some(Vec::new())));
+}
+
+#[test]
+fn a_vanished_tool_call_is_left_as_is() {
+    let mut state = SessionState::new();
+    state.diff(&[tool("t1", ToolCallStatus::InProgress, Vec::new())]);
+
+    assert!(state.diff(&[]).is_empty());
+}
+
+#[test]
+fn a_retry_replacing_the_partial_item_clears_the_old_and_creates_the_new() {
+    let mut state = SessionState::new();
+    state.diff(&[msg("msg_A", "partial before retry")]);
+
+    let updates = state.diff(&[msg("msg_B", "retried")]);
+    assert_eq!(updates.len(), 2);
+    let SessionUpdate::AgentMessage(clear) = &updates[0] else {
+        panic!("expected the clear first");
+    };
+    assert_eq!(clear.message_id, "msg_A");
+    assert_eq!(clear.content, Some(Some(Vec::new())));
+    let SessionUpdate::AgentMessage(create) = &updates[1] else {
+        panic!("expected the creation second");
+    };
+    assert_eq!(create.message_id, "msg_B");
+}
