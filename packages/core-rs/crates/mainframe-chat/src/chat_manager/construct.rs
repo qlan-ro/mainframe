@@ -114,6 +114,15 @@ impl ChatManager {
         self
     }
 
+    /// Attach the chat-surface observer (todo #350 plan task 10) both the
+    /// legacy WS surface and the ACP facade can be driven from. A manager
+    /// built with none attached (most tests) behaves exactly as before —
+    /// `EventHandler::notify_chat_surface` is a no-op until this runs.
+    pub fn with_chat_surface(self, surface: Arc<dyn crate::chat_surface::ChatSurface>) -> Self {
+        self.event_handler.set_chat_surface(surface);
+        self
+    }
+
     /// Lets `PlanHostImpl::send_message` reach back into this manager for the
     /// clear-context follow-up send. Must run once, after the manager is behind
     /// an `Arc` (can't use `Arc::new_cyclic` without touching every `ChatManager::new`

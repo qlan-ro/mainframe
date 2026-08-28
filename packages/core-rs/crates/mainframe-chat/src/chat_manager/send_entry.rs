@@ -35,6 +35,14 @@ impl ChatManager {
         post.lock()
             .unwrap_or_else(|e| e.into_inner())
             .turn_started_at = Some(now_ms());
+        // The manager has taken ownership of this prompt — accepted whether it
+        // dispatches immediately or lands behind a running turn (plan task 10;
+        // `send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
+                chat_id: chat_id.to_string(),
+            },
+        );
 
         if let Some(cmd) = command {
             return self

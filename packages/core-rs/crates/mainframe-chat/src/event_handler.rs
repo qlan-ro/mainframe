@@ -1,7 +1,7 @@
 //! Ported from `packages/core/src/chat/event-handler.ts`.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
@@ -23,6 +23,7 @@ use mainframe_types::events::{
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, TurnStopReason};
 use crate::display_emitter::emit_display_delta;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
@@ -187,6 +188,12 @@ pub struct EventHandler<D: EventHandlerDeps + 'static> {
     /// Survives a session resume (plan decision P3) — kept on the handler,
     /// not the per-session sink `build_sink` recreates.
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
+    /// The chat-surface observer (todo #350 plan task 10), attached after
+    /// construction via [`EventHandler::set_chat_surface`] — mirrors
+    /// `ChatManager::attach_self`'s `OnceLock` pattern so a handler built with
+    /// no surface attached (most tests) is a silent no-op, not a construction
+    /// error.
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: EventHandlerDeps + 'static> EventHandler<D> {
@@ -201,7 +208,22 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             display_cache: Arc::new(Mutex::new(HashMap::new())),
             deps,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
+            chat_surface: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Attach the chat-surface observer. Idempotent-once: a second call is a
+    /// no-op (the `OnceLock` already holds the first surface), matching
+    /// `attach_self`'s convention elsewhere in this crate.
+    pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
+        let _ = self.chat_surface.set(surface);
+    }
+
+    /// Notify the attached surface (a no-op when none is attached). Public so
+    /// `ChatManager`'s send path (turn accepted/started, outside the sink)
+    /// can drive the same observer the sink drives.
+    pub fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
+        chat_surface::notify(self.chat_surface.get(), event);
     }
 
     /// `buildSink(chatId, sessionId, respondToPermission)`. The TS sink never calls
@@ -223,6 +245,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
             attention_dedupe: self.attention_dedupe.clone(),
+            chat_surface: self.chat_surface.clone(),
         });
         // PR detection is adapter-neutral (todo #339): wrapping here, the one
         // construction point every session's sink comes from, is what makes
@@ -239,6 +262,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             &self.display_cache,
             categories.as_ref(),
             self.deps.as_ref(),
+            self.chat_surface.get(),
         );
     }
 
@@ -261,6 +285,7 @@ fn emit_display_for<D: EventHandlerDeps>(
     display_cache: &DisplayCache,
     categories: Option<&ToolCategories>,
     deps: &D,
+    surface: Option<&Arc<dyn ChatSurface>>,
 ) {
     let msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
     let mut cache = display_cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -268,6 +293,18 @@ fn emit_display_for<D: EventHandlerDeps>(
         |raw: &[ChatMessage], c: Option<&ToolCategories>| deps.prepare_messages_for_client(raw, c);
     let mut emit = |e: DaemonEvent| deps.emit_event(e);
     emit_display_delta(chat_id, &msgs, &mut cache, categories, &prepare, &mut emit);
+    // The cache now holds exactly `new_display` (`emit_display_delta`'s last
+    // line) — reread it rather than recomputing, so the legacy branches above
+    // stay untouched (group B's frame-shape guard covers them).
+    if let Some(new_display) = cache.get(chat_id) {
+        chat_surface::notify(
+            surface,
+            ChatSurfaceEvent::DisplayRevision {
+                chat_id: chat_id.to_string(),
+                messages: new_display.clone(),
+            },
+        );
+    }
 }
 
 /// A `git worktree` shell call, or Claude's own worktree tool. Neither result is
@@ -294,6 +331,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -305,7 +343,12 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             &self.display_cache,
             categories.as_ref(),
             self.deps.as_ref(),
+            self.chat_surface.get(),
         );
+    }
+
+    fn notify_surface(&self, event: ChatSurfaceEvent) {
+        chat_surface::notify(self.chat_surface.get(), event);
     }
 
     fn append_and_emit(&self, message: ChatMessage) {
@@ -371,6 +414,10 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
                 chat_id: self.chat_id.clone(),
                 request: next.clone(),
                 notify,
+            });
+            self.notify_surface(ChatSurfaceEvent::GateRaised {
+                chat_id: self.chat_id.clone(),
+                request: next.clone(),
             });
             if notify {
                 let tool = &next.tool_name;
@@ -670,6 +717,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 request: request.clone(),
                 notify,
             });
+            self.notify_surface(ChatSurfaceEvent::GateRaised {
+                chat_id: self.chat_id.clone(),
+                request: request.clone(),
+            });
             if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
                 let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
                 self.deps
@@ -709,6 +760,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         };
 
         self.deps.emit_event(DaemonEvent::PermissionResolved {
+            chat_id: self.chat_id.clone(),
+            request_id: request_id.to_string(),
+        });
+        self.notify_surface(ChatSurfaceEvent::GateResolved {
             chat_id: self.chat_id.clone(),
             request_id: request_id.to_string(),
         });
@@ -891,6 +946,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             chat,
             reason: Some(reason),
         });
+        self.notify_surface(ChatSurfaceEvent::TurnFinished {
+            chat_id: self.chat_id.clone(),
+            stop_reason: match reason {
+                ChatUpdatedReason::Interrupted => TurnStopReason::Cancelled,
+                ChatUpdatedReason::Error => TurnStopReason::Error,
+                ChatUpdatedReason::Completed => TurnStopReason::Completed,
+            },
+        });
 
         // Turn duration for the MessageTiming pill.
         let turn_started_at = cell
@@ -1004,6 +1067,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
         if found_id.is_some() {
             self.emit_display();
+            // A queued prompt's `TurnAccepted` (send_entry.rs) is not
+            // `TurnStarted` until the CLI actually dequeues it — this is that
+            // signal (plan task 10's queued-turn start point).
+            self.notify_surface(ChatSurfaceEvent::TurnStarted {
+                chat_id: self.chat_id.clone(),
+            });
         } else {
             warn!(
                 chat_id = self.chat_id,
@@ -1067,10 +1136,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         self.deps.workflow_runs_stop_all(&self.chat_id);
 
         if let Some(cell) = &cell {
-            let chat = {
+            let (chat, was_working) = {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let was_working = guard.chat.process_state == Some(Some(ProcessState::Working));
                 guard.chat.process_state = Some(None);
-                guard.chat.clone()
+                (guard.chat.clone(), was_working)
             };
             self.deps.chats_update(
                 &self.chat_id,
@@ -1081,6 +1151,15 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             );
             self.deps
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            // Adapter process death mid-turn (plan task 10 edge case): no
+            // `on_result` will ever arrive for this turn, so this is its only
+            // stop signal.
+            if was_working {
+                self.notify_surface(ChatSurfaceEvent::TurnFinished {
+                    chat_id: self.chat_id.clone(),
+                    stop_reason: TurnStopReason::Error,
+                });
+            }
         }
         self.deps.emit_event(DaemonEvent::ProcessStopped {
             process_id: session_id,
@@ -1111,6 +1190,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             message,
         });
         self.deps.emit_event(DaemonEvent::ChatCompactDone {
+            chat_id: self.chat_id.clone(),
+        });
+        self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
         });
         self.emit_display();
@@ -1152,6 +1234,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             percentage: usage.percentage,
             total_tokens: usage.total_tokens,
             max_tokens: usage.max_tokens,
+        });
+        self.notify_surface(ChatSurfaceEvent::Usage {
+            chat_id: self.chat_id.clone(),
+            usage,
         });
     }
 
@@ -1326,6 +1412,9 @@ fn now_ms() -> i64 {
 
 #[cfg(test)]
 mod attention_tests;
+
+#[cfg(test)]
+mod chat_surface_tests;
 
 #[cfg(test)]
 mod worktree_trigger_tests;

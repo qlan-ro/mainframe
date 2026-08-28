@@ -239,6 +239,13 @@ impl ChatManager {
         self.set_working(post, chat_id, &now);
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        // Commands are never queued behind a running turn, so acceptance
+        // (send_entry.rs) and start are the same moment.
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                chat_id: chat_id.to_string(),
+            },
+        );
         Ok(())
     }
 
@@ -286,6 +293,14 @@ impl ChatManager {
 
         if let Some(uuid) = message_uuid {
             self.record_queued_ref(chat_id, &message, uuid, content, attachment_ids);
+            // Queued: `TurnStarted` waits for the CLI to dequeue it
+            // (event_handler.rs's `on_queued_processed`).
+        } else {
+            self.event_handler.notify_chat_surface(
+                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                    chat_id: chat_id.to_string(),
+                },
+            );
         }
         Ok(())
     }
