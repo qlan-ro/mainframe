@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["Trigger a retry then finish"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-retry-sess-1"],"delayMs":20}
+{"dir":"out","method":"onQueuedProcessed","args":["e2e-retry-sess-1"],"delayMs":40}
+{"dir":"out","method":"onApiRetry","args":[1,"overloaded_error"],"delayMs":60}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Retried once after an overloaded_error and completed."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":8}}],"delayMs":300}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":340}
