@@ -757,16 +757,16 @@ separate reconnect re-seed paths with versioned, delta-streamed, explicitly
 framed turns — see `docs/specs/2026-08-28-todo-350-wire-protocol-payload-grammar.md`
 for the full grammar rationale.
 
-**Status: not yet live.** `/acp/{profile}` upgrades, authenticates (same rule
-as `/`), and serves `initialize` today. `session/prompt`, `session/cancel`,
-`session/resume`, and `session/request_permission` exist as pure,
-unit-tested dispatch functions (`mainframe-acp::prompt`, `::resume`,
-`::gates`) but are **not yet wired to a live `ChatManager`** or pushed over
-the socket — no connection currently streams `session/update`. Cutover
-(wiring a real `PromptPort`/`ResumePort`, attaching the chat-surface observer
-to push notifications, and switching the desktop UI's controller) is
-follow-up work; this section documents the shipped grammar so it can be
-implemented against, not a live substitute for the WebSocket protocol above.
+**Status: live on the daemon.** `/acp/{profile}` serves the full facade:
+`session/prompt`/`session/cancel` run against the live `ChatManager`
+(`mainframe-server/src/acp_ws/ports.rs`), `session/resume` replays from the
+cursor and seeds the connection's diff state, gates raise/resolve through
+the chat-surface observer (`FacadeHub`, attached at boot), and attached
+connections stream `session/update` with server-side coalescing
+(`FACADE_THROTTLE_INTERVAL_MS`). A connection observes a session once it has
+prompted or resumed it; one connection multiplexes any number of sessions.
+The desktop UI still speaks the legacy dialect — switching its controller to
+`acp-client.ts` is the remaining cutover work, tracked separately.
 
 **Connecting.** `GET /acp/{profile}` (upgrade), where `profile` names a
 registered adapter (`claude`, `codex`, `mock-cli`, …) — unregistered profiles
@@ -798,16 +798,19 @@ queued-turn metadata).
 `_meta["_mainframe.dev"].parentToolCallId` — there is no `task_group` frame
 on the facade (`mainframe-acp::encoder`).
 
-**Multi-client + cross-surface gates.** A gate raised on a chat is meant to
-broadcast to every attached facade session for it; only the first answer
-applies (`mainframe-acp::gate_registry`) — a second facade answer, or a
-legacy-surface answer for the same request, gets a structured "resolved"
-outcome rather than being reapplied. Answering a gate on the legacy `/`
-route already raises `GateResolved`/`GateRaised` on the same chat-surface
-observer the facade would read from (`mainframe-chat::permission_handler`),
-so once the facade is wired to a live connection registry, cross-surface
-consistency falls out of that single observer rather than needing its own
-synchronization.
+**Multi-client + cross-surface gates.** A gate raised on a chat broadcasts
+to every facade connection attached to it, under the shared correlation id
+`gate-{requestId}`; only the first answer applies
+(`mainframe-acp::gate_registry`). Answering a gate on the legacy `/` route
+raises `GateResolved` on the same chat-surface observer the facade hub
+implements (`mainframe-chat::permission_handler`), so a legacy-surface
+answer drops the facade's pending delivery and a late facade answer is
+rejected as resolved — one observer, no separate synchronization. A
+still-open gate is redelivered by `session/resume` under the same id.
+Known gap vs. the spec's criterion 8: resolution is not yet *pushed* to
+other attached facade clients as a frame (no vendored notification models
+it, and `acp-client.ts` has no handler); a client learns of the resolution
+on its next resume.
 
 **Migration window.** The legacy dialect above stays byte-frozen for the
 duration; desktop cuts over first, `packages/mobile` follows in its own PR

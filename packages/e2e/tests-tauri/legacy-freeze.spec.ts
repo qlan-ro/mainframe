@@ -25,7 +25,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { startDaemon, stopDaemon, type DaemonHandle } from '../fixtures/daemon.js';
 import { createHeadlessProject, createHeadlessChat, cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
-import { openSocket, sendJson, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
+import { openSocket, sendJson, collectUntilQuiet, closeSocket, collectFrames } from '../helpers/tauri/raw-ws-client.js';
 import { normalizeFrames } from '../helpers/tauri/normalize-frame.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,19 +85,92 @@ test.describe('§legacy-freeze', () => {
     const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
     expect(masked).toEqual(baseline);
   });
+});
 
-  // ── dual-surface: same chat on a legacy client and a facade client ─────────
-  //
-  // Blocked: the facade socket loop (mainframe-server/src/acp_ws.rs) dispatches only
-  // `initialize` and the heartbeat ticker — `session/prompt`/`session/new`/
-  // `session/request_permission` are unwired (mainframe-acp/src/connection.rs's
-  // `handle_frame_with_prompt` has zero callers outside its own crate; see
-  // acp_ws_integration.rs:111-127, which pins `session/prompt` -> method-not-found on the
-  // LIVE route today). No group in the plan's file list owns wiring prompt/resume/gates
-  // into the socket, so a gate cannot be raised or answered on the facade at all yet.
-  // Un-skip once that wiring lands; this test's shape (answer on legacy, assert resolution
-  // reaches a facade `session/update` for the same gate id) is otherwise ready to fill in.
+// Dual-surface (todo #350 task 24's second half): same chat on a legacy client
+// and a facade client during the migration window. Its own daemon — the gate
+// flow needs the `permissions-interactive` recording, and a fresh chat on the
+// baseline describe's daemon would consume a `compaction.1.ndjson` that does
+// not exist.
+test.describe('§legacy-freeze dual-surface', () => {
+  let handle: DaemonHandle;
+
+  test.beforeAll(async () => {
+    handle = await startDaemon({ recordingKey: 'permissions-interactive' });
+  });
+
+  test.afterAll(async () => {
+    await stopDaemon(handle);
+  });
+
+  // The migration-window guarantee: a gate raised mid-turn reaches both
+  // surfaces, an answer on the LEGACY surface resolves it for the facade too
+  // (one chat-surface observer — `FacadeHub` — behind both), and the turn
+  // then completes on the facade rather than hanging on a phantom gate.
   test('gate answered on the legacy surface resolves consistently on the facade', async () => {
-    test.skip(true, 'TODO(#350): facade session/prompt + gates are unwired on the live socket — see comment above');
+    test.setTimeout(60_000);
+    const project = await createHeadlessProject();
+    // The recording's first prompt opens a Write gate and waits at the answer.
+    const chatId = await createHeadlessChat(project.projectId);
+
+    // Both sockets need buffering readers from the start: the gate lands on
+    // both surfaces near-simultaneously, so a per-await listener would drop
+    // whichever side's frame arrived while the test awaited the other.
+    const legacy = await openSocket('/');
+    const legacyFrames = collectFrames(legacy);
+    sendJson(legacy, { type: 'subscribe', chatId });
+    const facade = await openSocket('/acp/mock-cli');
+    const facadeFrames = collectFrames(facade);
+    sendJson(facade, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: 2, info: { name: 'mainframe-e2e', version: '0.0.0' } },
+    });
+    await facadeFrames.next((f) => f['id'] === 1);
+
+    sendJson(facade, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'session/prompt',
+      params: {
+        sessionId: chatId,
+        prompt: [{ type: 'text', text: 'Create a file at /tmp/mf-e2e-test.txt with content "hello"' }],
+      },
+    });
+
+    // The gate must reach both surfaces.
+    const facadeGate = await facadeFrames.next((f) => f['method'] === 'session/request_permission');
+    const legacyGate = await legacyFrames.next((f) => f['type'] === 'permission.requested');
+    const request = legacyGate['request'] as {
+      requestId: string;
+      toolUseId: string;
+      toolName: string;
+      input: Record<string, unknown>;
+    };
+    expect(facadeGate['id']).toBe(`gate-${request.requestId}`);
+
+    // Answer on the legacy surface (the recording's deny), then the facade
+    // must see the turn proceed to its end — not hang on the open gate.
+    sendJson(legacy, {
+      type: 'permission.respond',
+      chatId,
+      response: {
+        requestId: request.requestId,
+        toolUseId: request.toolUseId,
+        toolName: request.toolName,
+        behavior: 'deny',
+        updatedInput: request.input,
+      },
+    });
+    const idle = await facadeFrames.next((f) => {
+      const update = (f['params'] as { update?: { sessionUpdate?: string; state?: string } } | undefined)?.update;
+      return update?.sessionUpdate === 'state_update' && update.state === 'idle';
+    });
+    expect(idle).toBeDefined();
+
+    await closeSocket(facade);
+    await closeSocket(legacy);
+    cleanupHeadlessProject(project);
   });
 });

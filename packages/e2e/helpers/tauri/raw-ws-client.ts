@@ -65,6 +65,56 @@ export function collectUntilQuiet(ws: WebSocket, quietMs: number, hardTimeoutMs:
   });
 }
 
+/**
+ * A persistent, buffering reader for one socket. `nextJsonMessage` attaches a
+ * listener per call, so a frame that arrives while the test is awaiting a
+ * DIFFERENT socket (or between two calls) is silently lost — fatal for
+ * dual-socket specs where both sides emit concurrently. This attaches one
+ * listener at creation and buffers everything; `next` consumes from the
+ * buffer in arrival order.
+ */
+export interface FrameCollector {
+  /** Resolve with the earliest not-yet-consumed frame matching `matches`. */
+  next(matches: (frame: Record<string, unknown>) => boolean, timeoutMs?: number): Promise<Record<string, unknown>>;
+}
+
+export function collectFrames(ws: WebSocket): FrameCollector {
+  const buffer: Record<string, unknown>[] = [];
+  const waiters: (() => void)[] = [];
+  ws.addEventListener('message', (ev: MessageEvent) => {
+    buffer.push(JSON.parse(ev.data as string) as Record<string, unknown>);
+    waiters.splice(0).forEach((wake) => wake());
+  });
+
+  return {
+    next(matches, timeoutMs = 30_000) {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => scan(), timeoutMs);
+        const deadline = Date.now() + timeoutMs;
+        function scan(): void {
+          if (settled) return;
+          const index = buffer.findIndex(matches);
+          if (index !== -1) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(buffer.splice(index, 1)[0]!);
+            return;
+          }
+          if (Date.now() >= deadline) {
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error(`no matching frame arrived within ${timeoutMs}ms`));
+            return;
+          }
+          waiters.push(scan);
+        }
+        scan();
+      });
+    },
+  };
+}
+
 export async function closeSocket(ws: WebSocket): Promise<void> {
   if (ws.readyState === WebSocket.CLOSED) return;
   await new Promise<void>((resolve) => {

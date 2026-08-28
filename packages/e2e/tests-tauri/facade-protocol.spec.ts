@@ -3,31 +3,49 @@
  *
  * Connects directly to `/acp/{profile}` over a raw WS client (no browser `page` — these are
  * protocol invariants, not DOM behaviors) against a real spawned daemon in E2E_MODE=mock.
+ * The live route dispatches the full facade: `session/prompt`/`session/cancel` through the
+ * `ChatManager` prompt port, `session/resume` replay with stream seeding, and permission
+ * gates (`mainframe-server/src/acp_ws/`).
  *
- * FINDING (blocks 5 of the 6 task-23 criteria + resume itself): the live socket loop only
- * dispatches `initialize` and the heartbeat ticker.
- * `packages/core-rs/crates/mainframe-server/src/acp_ws.rs:88` calls `handle_frame` (the
- * sync, `initialize`-only variant), never `handle_frame_with_prompt`
- * (`mainframe-acp/src/connection.rs:46`), which has zero callers outside its own crate's unit
- * tests. `session/resume` isn't handled by either function. This is confirmed on the LIVE
- * route by `acp_ws_integration.rs:111-127`
- * (`unknown_method_gets_method_not_found`, which sends `session/prompt` and asserts -32601).
- * The plan assigns no group's file list `mainframe-server/src/acp_ws.rs` past group C's
- * initialize+heartbeat wiring, so nobody owns assembling prompt/resume/gates into the socket
- * — this is a plan gap, not a sibling regression. Desktop chat is unaffected: `chat-thread-
- * controller.ts` never imports `acp-client.ts`/`acp-facade-session.ts` (grep confirmed), so
- * the legacy dialect stays the app's only live path.
- *
- * Criteria 3, 4, 5, 7, 9, and the client half of 11 are `test.skip`'d below with the receipt
- * above and a tripwire assertion (session/prompt must not reply -32601) — real assertions
- * belong in the un-skipping session once the wiring lands, not written speculatively against
- * a route that cannot run them today.
+ * One daemon per describe: the mock adapter replays `E2E_RECORDING_KEY` per spawned session
+ * and each fresh chat consumes the next fixture index (`{key}.{n}.ndjson`), so criteria that
+ * need different recordings get their own daemon, and tests inside a describe share one
+ * chat's single recording in order.
  */
 import { test, expect } from '@playwright/test';
 import { startDaemon, stopDaemon, type DaemonHandle } from '../fixtures/daemon.js';
-import { openSocket, sendJson, nextJsonMessage, closeSocket } from '../helpers/tauri/raw-ws-client.js';
+import {
+  createHeadlessProject,
+  createHeadlessChat,
+  cleanupHeadlessProject,
+  type HeadlessProject,
+} from '../helpers/tauri/headless-chat.js';
+import {
+  openSocket,
+  sendJson,
+  nextJsonMessage,
+  collectUntilQuiet,
+  collectFrames,
+  closeSocket,
+} from '../helpers/tauri/raw-ws-client.js';
 
 const PROFILE = 'mock-cli';
+
+interface SessionUpdateFrame {
+  method?: string;
+  id?: unknown;
+  params?: {
+    sessionId?: string;
+    update?: {
+      sessionUpdate?: string;
+      messageId?: string;
+      toolCallId?: string;
+      content?: unknown;
+      rawInput?: unknown;
+      _meta?: Record<string, { attempt?: number; reason?: string }>;
+    };
+  };
+}
 
 function initializeRequest(id: number) {
   return {
@@ -38,7 +56,44 @@ function initializeRequest(id: number) {
   };
 }
 
-test.describe('§facade-protocol', () => {
+function promptRequest(id: number, sessionId: string, text: string) {
+  return {
+    jsonrpc: '2.0',
+    id,
+    method: 'session/prompt',
+    params: { sessionId, prompt: [{ type: 'text', text }] },
+  };
+}
+
+function resumeRequest(id: number, sessionId: string, replayFrom?: unknown) {
+  return {
+    jsonrpc: '2.0',
+    id,
+    method: 'session/resume',
+    params: { sessionId, cwd: '/tmp', ...(replayFrom !== undefined ? { replayFrom } : {}) },
+  };
+}
+
+function updates(frames: unknown[]): SessionUpdateFrame[] {
+  return (frames as SessionUpdateFrame[]).filter((f) => f.method === 'session/update');
+}
+
+function itemId(frame: SessionUpdateFrame): string | undefined {
+  return frame.params?.update?.messageId ?? frame.params?.update?.toolCallId;
+}
+
+function itemIds(frames: SessionUpdateFrame[]): Set<string> {
+  return new Set(frames.map(itemId).filter((id): id is string => id !== undefined));
+}
+
+async function connectAndInitialize(id = 1): Promise<WebSocket> {
+  const ws = await openSocket(`/acp/${PROFILE}`);
+  sendJson(ws, initializeRequest(id));
+  await nextJsonMessage(ws);
+  return ws;
+}
+
+test.describe('§facade-protocol handshake', () => {
   let handle: DaemonHandle;
 
   test.beforeAll(async () => {
@@ -123,36 +178,211 @@ test.describe('§facade-protocol', () => {
     expect(heartbeat.method).toBe('_mainframe.dev/heartbeat');
     expect(heartbeat.params?.sequence).toBe(1);
   });
+});
 
-  // ── blocked criteria: session/prompt, session/resume, gates are unwired ─────
+test.describe('§facade-protocol streaming', () => {
+  let handle: DaemonHandle;
+  let project: HeadlessProject;
+  let chatId: string;
+  /** Frames captured by the criterion-3/5 test, reused by the resume tests. */
+  let liveFrames: SessionUpdateFrame[] = [];
 
-  test("criterion 3: no full-content resend after an item's first frame", async () => {
-    test.skip(true, 'TODO(#350): session/prompt is unwired on the live socket — see file header');
+  test.beforeAll(async () => {
+    handle = await startDaemon({ recordingKey: 'messaging' });
+    project = await createHeadlessProject();
+    chatId = await createHeadlessChat(project.projectId);
+  });
+
+  test.afterAll(async () => {
+    await stopDaemon(handle);
+    cleanupHeadlessProject(project);
+  });
+
+  test('criteria 3 + 5: chunk/patch-only streaming, prompt-during-turn, no queue.* frames', async () => {
+    const ws = await connectAndInitialize();
+
+    sendJson(ws, promptRequest(2, chatId, 'What is 2 + 2? Reply with just the number.'));
+    const first = (await nextJsonMessage(ws)) as { id?: number; result?: unknown; error?: unknown };
+    expect(first.error).toBeUndefined();
+
+    // Criterion 5: a prompt sent while the first turn is replaying is accepted
+    // immediately (a result, not an error) — acceptance is distinct from
+    // turn completion.
+    sendJson(ws, promptRequest(3, chatId, 'List the files in this project using bash ls.'));
+    const frames = (await collectUntilQuiet(ws, 1_500, 25_000)) as SessionUpdateFrame[];
+    await closeSocket(ws);
+
+    const promptReply = frames.find((f) => (f as { id?: number }).id === 3) as
+      { result?: unknown; error?: unknown } | undefined;
+    expect(promptReply, 'the mid-turn prompt must get a reply').toBeDefined();
+    expect(promptReply?.error).toBeUndefined();
+
+    // Criterion 5: no queue.* frame family exists on the facade — every
+    // notification method is from the facade vocabulary.
+    const allowedMethods = ['session/update', 'session/request_permission', '_mainframe.dev/heartbeat'];
+    for (const frame of frames) {
+      if (frame.method !== undefined) expect(allowedMethods).toContain(frame.method);
+    }
+
+    liveFrames = updates(frames);
+    expect(liveFrames.length).toBeGreaterThan(0);
+
+    // Criterion 3: after an item's first frame no later frame repeats its full
+    // accumulated content — per message id at most ONE content-carrying
+    // upsert, and per tool call at most one frame re-stating rawInput
+    // (omitted = unchanged in the patch grammar).
+    const contentUpserts = new Map<string, number>();
+    const rawInputFrames = new Map<string, number>();
+    for (const frame of liveFrames) {
+      const update = frame.params?.update;
+      const id = itemId(frame);
+      if (update === undefined || id === undefined) continue;
+      if (['agent_message', 'user_message', 'agent_thought'].includes(update.sessionUpdate ?? '') && update.content) {
+        contentUpserts.set(id, (contentUpserts.get(id) ?? 0) + 1);
+      }
+      if (update.sessionUpdate === 'tool_call_update' && update.rawInput !== undefined) {
+        rawInputFrames.set(id, (rawInputFrames.get(id) ?? 0) + 1);
+      }
+    }
+    for (const [id, count] of contentUpserts) {
+      expect(count, `message ${id} must not re-send full content`).toBe(1);
+    }
+    for (const [id, count] of rawInputFrames) {
+      expect(count, `tool call ${id} must not re-send rawInput`).toBe(1);
+    }
   });
 
   test('criterion 4: item ids are stable between the live stream and session/resume', async () => {
-    test.skip(true, 'TODO(#350): session/prompt and session/resume are unwired on the live socket — see file header');
+    const ws = await connectAndInitialize();
+    sendJson(ws, resumeRequest(2, chatId));
+    const reply = (await nextJsonMessage(ws)) as { result?: unknown; error?: unknown };
+    expect(reply.error).toBeUndefined();
+
+    const replayFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    await closeSocket(ws);
+
+    const liveIds = itemIds(liveFrames);
+    const replayIds = itemIds(replayFrames);
+    expect(liveIds.size).toBeGreaterThan(0);
+    expect(replayIds).toEqual(liveIds);
   });
 
-  test('criterion 5: prompting during an open turn emits no queue.* frames', async () => {
-    test.skip(true, 'TODO(#350): session/prompt is unwired on the live socket — see file header');
+  test('criterion 11 (client half) + criterion 9 (unknown cursor): resume-after-silence converges', async () => {
+    // A client that went silent (missed heartbeats, dropped socket) converges
+    // by resuming from its last item — only post-cursor items are replayed.
+    const orderedIds = [...itemIds(liveFrames)];
+    expect(orderedIds.length).toBeGreaterThan(1);
+    const cursorId = orderedIds[0];
+
+    const ws = await connectAndInitialize();
+    sendJson(ws, resumeRequest(2, chatId, { type: 'item', itemId: cursorId }));
+    const reply = (await nextJsonMessage(ws)) as {
+      result?: { _meta?: Record<string, { fullReplay?: boolean }> };
+    };
+    expect(reply.result?._meta?.['_mainframe.dev']?.fullReplay).toBeUndefined();
+
+    const partialFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    const partialIds = itemIds(partialFrames);
+    expect(partialIds.has(cursorId!)).toBe(false);
+    for (const id of partialIds) expect(itemIds(liveFrames)).toContain(id);
+
+    // Unknown cursor: full replay, flagged, no error (criterion 9's fallback).
+    sendJson(ws, resumeRequest(3, chatId, { type: 'item', itemId: 'no-such-item' }));
+    const fullReply = (await nextJsonMessage(ws)) as {
+      result?: { _meta?: Record<string, { fullReplay?: boolean }> };
+    };
+    expect(fullReply.result?._meta?.['_mainframe.dev']?.fullReplay).toBe(true);
+    const fullFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    await closeSocket(ws);
+    expect(itemIds(fullFrames)).toEqual(itemIds(liveFrames));
+  });
+});
+
+test.describe('§facade-protocol gates', () => {
+  let handle: DaemonHandle;
+  let project: HeadlessProject;
+  let chatId: string;
+
+  test.beforeAll(async () => {
+    handle = await startDaemon({ recordingKey: 'permissions-interactive' });
+    project = await createHeadlessProject();
+    chatId = await createHeadlessChat(project.projectId);
   });
 
-  test('criterion 7: a replayed api_retry surfaces as a patch, not a duplicate item', async () => {
-    test.skip(
-      true,
-      'TODO(#350): session/prompt is unwired on the live socket — see file header. Fixture ready: fixtures/recordings/retry.0.ndjson',
-    );
+  test.afterAll(async () => {
+    await stopDaemon(handle);
+    cleanupHeadlessProject(project);
   });
 
   test('criterion 9: session/resume redelivers an open permission gate', async () => {
-    test.skip(
-      true,
-      'TODO(#350): session/prompt, session/resume, and gates are unwired on the live socket — see file header',
-    );
+    test.setTimeout(45_000);
+    const ws = await openSocket(`/acp/${PROFILE}`);
+    const frames = collectFrames(ws);
+    sendJson(ws, initializeRequest(1));
+    await frames.next((f) => f['id'] === 1);
+    sendJson(ws, promptRequest(2, chatId, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"'));
+
+    // The recording stops at an open Write gate; wait for its live delivery.
+    const liveGate = (await frames.next((f) => f['method'] === 'session/request_permission')) as SessionUpdateFrame;
+    expect(liveGate.params?.sessionId).toBe(chatId);
+
+    // The client "reconnects": a second connection resumes and must get the
+    // still-open gate redelivered under the same correlation id, after the
+    // item replay.
+    const ws2 = await connectAndInitialize();
+    sendJson(ws2, resumeRequest(2, chatId));
+    const replayFrames = await collectUntilQuiet(ws2, 1_500, 15_000);
+    await closeSocket(ws);
+    await closeSocket(ws2);
+
+    const redelivered = (replayFrames as SessionUpdateFrame[]).find((f) => f.method === 'session/request_permission');
+    expect(redelivered, 'resume must redeliver the open gate').toBeDefined();
+    expect(redelivered?.id).toEqual(liveGate?.id);
+    expect(updates(replayFrames).length).toBeGreaterThan(0);
+  });
+});
+
+test.describe('§facade-protocol retry', () => {
+  let handle: DaemonHandle;
+  let project: HeadlessProject;
+  let chatId: string;
+
+  test.beforeAll(async () => {
+    handle = await startDaemon({ recordingKey: 'retry' });
+    project = await createHeadlessProject();
+    chatId = await createHeadlessChat(project.projectId);
   });
 
-  test('criterion 11 (client half): a heartbeat gap triggers resume-after-silence', async () => {
-    test.skip(true, 'TODO(#350): session/resume is unwired on the live socket — see file header');
+  test.afterAll(async () => {
+    await stopDaemon(handle);
+    cleanupHeadlessProject(project);
+  });
+
+  test('criterion 7: a replayed api_retry surfaces as a retry-marked patch, not a duplicate item', async () => {
+    const ws = await connectAndInitialize();
+    sendJson(ws, promptRequest(2, chatId, 'Trigger a retry then finish'));
+    const frames = updates(await collectUntilQuiet(ws, 1_500, 20_000));
+    await closeSocket(ws);
+
+    // The daemon no longer drops api_retry: the marker rides the next
+    // content-carrying upsert's namespaced _meta (spec decision 10).
+    const marked = frames.find((f) => f.params?.update?._meta?.['_mainframe.dev']?.attempt !== undefined);
+    expect(marked, 'a retry marker must appear on the stream').toBeDefined();
+    expect(marked?.params?.update?._meta?.['_mainframe.dev']?.attempt).toBe(1);
+    expect(marked?.params?.update?._meta?.['_mainframe.dev']?.reason).toBe('overloaded_error');
+
+    // No duplicated items: content-carrying upserts stay unique per item.
+    const contentUpserts = new Map<string, number>();
+    for (const frame of frames) {
+      const update = frame.params?.update;
+      const id = itemId(frame);
+      if (update === undefined || id === undefined) continue;
+      if (['agent_message', 'user_message', 'agent_thought'].includes(update.sessionUpdate ?? '') && update.content) {
+        contentUpserts.set(id, (contentUpserts.get(id) ?? 0) + 1);
+      }
+    }
+    for (const [id, count] of contentUpserts) {
+      expect(count, `item ${id} must appear once, not duplicated`).toBe(1);
+    }
   });
 });

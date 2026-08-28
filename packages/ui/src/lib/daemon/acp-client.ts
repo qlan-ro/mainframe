@@ -4,9 +4,10 @@
  * gates, and the heartbeat/gap-resume sync contract. Session-state
  * accumulation lives in `features/chat/view-model/acp-item-accumulator.ts`;
  * this module only speaks the wire protocol. `lib/daemon/ws-client.ts`
- * (the legacy dialect) is untouched — the daemon side is not yet wired to a
- * live `ChatManager` (`docs/API-REFERENCE.md` § ACP Chat Facade, "Status:
- * not yet live"), so this client has no production call site yet either.
+ * (the legacy dialect) is untouched and remains the controller's live path —
+ * the daemon facade is live (`docs/API-REFERENCE.md` § ACP Chat Facade), but
+ * switching `chat-thread-controller` to this client is the separate desktop
+ * cutover.
  */
 import type {
   CancelSessionNotification,
