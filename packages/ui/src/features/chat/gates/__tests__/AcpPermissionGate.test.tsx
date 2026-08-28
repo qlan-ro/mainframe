@@ -87,6 +87,9 @@ describe('AcpPermissionGate', () => {
     expect(screen.getByTestId('chat-acp-permission-option-allow-once')).toHaveTextContent('Allow once');
     expect(screen.getByTestId('chat-acp-permission-option-allow-always')).toHaveTextContent('Always allow');
     expect(screen.getByTestId('chat-acp-permission-option-reject-once')).toHaveTextContent('Reject');
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Allow once', 'Always allow', 'Reject']);
   });
 
   it('clicking an option calls reply once with the plain selected-outcome answer', () => {
