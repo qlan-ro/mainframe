@@ -49,15 +49,19 @@ export function ChatGateMount() {
   const adapterId = extras?.state.chatConfig?.adapterId;
   const adapter = adapters.find((a) => a.id === adapterId);
 
+  // A synthesized request (no daemon _meta.controlRequest) never carries the
+  // `input` the rich Plan/AskUserQuestion cards read — route it to the
+  // generic options-only card regardless of toolName (spec decision 27).
   const { toolName } = front.request;
-  const card =
-    toolName === 'AskUserQuestion' ? (
-      <AskUserQuestionGate entry={front} reply={reply} />
-    ) : toolName === 'ExitPlanMode' ? (
-      <PlanGate entry={front} reply={reply} autoAllowed={adapter?.capabilities.autoMode === true} />
-    ) : (
-      <PermissionGate entry={front} reply={reply} />
-    );
+  const card = front.synthesizedRequest ? (
+    <PermissionGate entry={front} reply={reply} />
+  ) : toolName === 'AskUserQuestion' ? (
+    <AskUserQuestionGate entry={front} reply={reply} />
+  ) : toolName === 'ExitPlanMode' ? (
+    <PlanGate entry={front} reply={reply} autoAllowed={adapter?.capabilities.autoMode === true} />
+  ) : (
+    <PermissionGate entry={front} reply={reply} />
+  );
 
   return (
     <div

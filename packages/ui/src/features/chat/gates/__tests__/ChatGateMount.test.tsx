@@ -84,6 +84,7 @@ function extrasWithAdapter(adapterId: string): ChatRuntimeExtras {
 const permissionEntry = entry('Bash', { command: 'ls' });
 const askEntry = entry('AskUserQuestion', { questions: [{ question: 'Pick', options: [{ label: 'A' }] }] });
 const planEntry = entry('ExitPlanMode', { plan: '1. step' });
+const synthesizedAskEntry: ChatPermissionEntry = { ...askEntry, synthesizedRequest: true };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -144,6 +145,17 @@ describe('ChatGateMount', () => {
     expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
+  });
+
+  // --- A synthesized request (no daemon _meta) always renders the generic
+  // options card, even for a toolName the router would otherwise dispatch to
+  // a rich Plan/AskUserQuestion card (spec decision 27) ---
+
+  it('routes a synthesized AskUserQuestion entry to chat-permission-gate, not chat-question-gate', () => {
+    mockFront.mockReturnValue({ front: synthesizedAskEntry, reply });
+    wrap(<ChatGateMount />);
+    expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-question-gate')).toBeNull();
   });
 
   // --- Behavior 5: reply forwarded to PermissionGate's chosen-option action ---

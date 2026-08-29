@@ -56,6 +56,14 @@ export interface ChatPermissionEntry {
    * infer an option's effect from its id or label, only from `kind`.
    */
   options: PermissionOption[];
+  /**
+   * `true` when the daemon's `_meta.controlRequest` was absent/unparseable and
+   * `request` is the client's own stand-in (spec decision 27) — `ChatGateMount`
+   * routes these to the generic `PermissionGate` regardless of `toolName`,
+   * since a synthesized request never carries real `input` for the rich
+   * Plan/AskUserQuestion cards to read.
+   */
+  synthesizedRequest?: boolean;
 }
 
 export type LoadState = { type: 'idle' } | { type: 'loading' } | { type: 'ready' } | { type: 'error'; error: unknown };
@@ -107,7 +115,13 @@ export type ChatStateEvent =
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
-  | { type: 'permission.requested'; requestId: string; request: ControlRequest; options: PermissionOption[] }
+  | {
+      type: 'permission.requested';
+      requestId: string;
+      request: ControlRequest;
+      options: PermissionOption[];
+      synthesizedRequest?: boolean;
+    }
   | { type: 'permission.resolved'; requestId: string }
   | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
   | { type: 'chat.id.adopted'; chatId: string }
@@ -188,6 +202,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         request: event.request,
         askedAt: Date.now(),
         options: event.options,
+        synthesizedRequest: event.synthesizedRequest,
       };
       return {
         ...state,

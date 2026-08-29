@@ -39,6 +39,7 @@ import { AcpItemAccumulator } from '../view-model/acp-item-accumulator';
 import { convertAcpItems } from '../view-model/convert-acp-item';
 import { buildAcpRichAnswer } from '../gates/build-acp-permission-response';
 import type { ChatStateEvent } from './chat-thread-state';
+import { resolveGateControlRequest } from './synthesize-control-request';
 
 const ResumeMetaSchema = z
   .object({ itemCount: z.number().int().optional(), fullReplay: z.boolean().optional() })
@@ -258,24 +259,24 @@ export class AcpSessionPlane {
   }
 
   /**
-   * `session/request_permission` → the legacy `ChatPermissionEntry` shape, from the
-   * carried `ControlRequest` (spec: rich cards render it), plus the top-level
-   * `options` the adapter offered — the gate renders those verbatim rather than a
-   * client-guessed triad (spec decision 12).
+   * `session/request_permission` → `ChatPermissionEntry`: the carried `ControlRequest`
+   * (rich cards render it) plus the wire-level `options` (rendered verbatim, spec
+   * decision 12). A missing/unparseable `_meta` — version-skewed daemon, or a
+   * non-Mainframe ACP agent — synthesizes a stand-in `ControlRequest` rather than
+   * dropping the gate: `options` alone is the presentation floor (spec decision 27).
    */
   private handleGate(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): void {
     const parsed = GateMetaSchema.safeParse(request._meta?.[MAINFRAME_META_NAMESPACE]);
-    if (!parsed.success) {
-      console.warn('[acp-session] gate without a controlRequest payload dropped', request);
-      return;
-    }
-    const control = parsed.data.controlRequest as unknown as ControlRequest;
+    const carried = parsed.success ? (parsed.data.controlRequest as unknown as ControlRequest) : undefined;
+    const { control, synthesized } = resolveGateControlRequest(rpcId, request, carried);
+    if (synthesized) console.warn('[acp-session] gate has no usable controlRequest — rendering from options alone');
     this.gateRpcIds.set(control.requestId, rpcId);
     this.host.dispatch({
       type: 'permission.requested',
       requestId: control.requestId,
       request: control,
       options: request.options,
+      synthesizedRequest: synthesized,
     });
   }
 

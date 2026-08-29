@@ -316,24 +316,58 @@ describe('AcpSessionPlane — gates', () => {
         requestId: 'req-1',
         request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: { command: 'ls' }, suggestions: [] },
         options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }],
+        synthesizedRequest: false,
       },
     ]);
   });
 
-  it('drops a gate whose _meta carries no controlRequest', async () => {
+  it('renders a gate from options alone when _meta carries no controlRequest (spec decision 27)', async () => {
     const client = makeFakeAcpClient();
     const host = makeHost();
     const plane = new AcpSessionPlane(host);
     await plane.attach(client);
     host.dispatch.mockClear();
 
-    client.emitPermissionRequest('rpc-1', {
+    client.emitPermissionRequest('gate-req-bare', {
       sessionId: CHAT_ID,
       title: 'Run',
       options: [{ optionId: 'a', name: 'A', kind: 'allow_once' as const }],
     });
 
-    expect(host.dispatch).not.toHaveBeenCalled();
+    expect(eventsOf(host)).toEqual([
+      {
+        type: 'permission.requested',
+        requestId: 'req-bare',
+        request: {
+          requestId: 'req-bare',
+          toolName: '(unknown tool)',
+          toolUseId: 'req-bare',
+          input: {},
+          suggestions: [],
+        },
+        options: [{ optionId: 'a', name: 'A', kind: 'allow_once' }],
+        synthesizedRequest: true,
+      },
+    ]);
+  });
+
+  it('a synthesized gate still replies under the arrival rpc id with a plain-mappable optionId', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    client.emitPermissionRequest('gate-req-bare', {
+      sessionId: CHAT_ID,
+      title: 'Run',
+      options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' as const }],
+    });
+
+    plane.replyToPermission({ requestId: 'req-bare', toolUseId: 'req-bare', behavior: 'allow' }, 'allow-once');
+
+    expect(client.respondCalls).toHaveLength(1);
+    expect(client.respondCalls[0]!.id).toBe('gate-req-bare');
+    expect(client.respondCalls[0]!.response.outcome).toEqual({ outcome: 'selected', optionId: 'allow-once' });
   });
 
   it('replyToPermission answers under the rpc id the gate arrived on, and dispatches permission.resolved', async () => {
