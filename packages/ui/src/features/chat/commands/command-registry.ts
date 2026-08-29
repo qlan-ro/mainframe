@@ -3,7 +3,7 @@
  * imperatively when a message is sent.
  *
  * A module-level store rather than context because the reader is
- * `ChatThreadController`, which is not a React component and cannot take one —
+ * `AcpChatController`, which is not a React component and cannot take one —
  * the same shape `session-reference-store` uses for the `@` references folded
  * in at submit.
  */

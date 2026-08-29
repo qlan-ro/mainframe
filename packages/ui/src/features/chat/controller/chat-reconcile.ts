@@ -8,7 +8,6 @@
  * and the full history re-seed feed the SAME matcher (one message vs many).
  */
 import type { AppendMessage } from '@assistant-ui/react';
-import type { DisplayContent } from '@qlan-ro/mainframe-types';
 import type { PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
@@ -33,8 +32,14 @@ export function reconcileKey(text: string): string {
   return fp.length > 0 ? fp : ATTACHMENT_KEY;
 }
 
-export function contentKey(content: DisplayContent[]): string {
-  const textBlock = content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
+/** Any part list with `{type:'text', text}` members — DisplayContent and aui parts both qualify. */
+export interface ReconcilableContent {
+  readonly type: string;
+  readonly text?: string;
+}
+
+export function contentKey(content: readonly ReconcilableContent[]): string {
+  const textBlock = content.find((c) => c.type === 'text' && typeof c.text === 'string');
   return reconcileKey(textBlock?.text ?? '');
 }
 
@@ -71,7 +76,7 @@ export function buildPendingMessage(chatId: string, text: string): PendingUserMe
 
 export function reconcilePendings(
   pendings: Readonly<Record<string, PendingUserMessage>>,
-  serverMessages: readonly { content: DisplayContent[] }[],
+  serverMessages: readonly { content: readonly ReconcilableContent[] }[],
 ): string[] {
   const remaining = new Map<string, number>();
   for (const m of serverMessages) {

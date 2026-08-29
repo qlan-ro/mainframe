@@ -1,5 +1,5 @@
 /**
- * Global controller registry — one ChatThreadController per thread id, shared
+ * Global controller registry — one AcpChatController per thread id, shared
  * across the whole app. assistant-ui keeps every visited thread's subtree
  * mounted, so the registry is the keep-warm store: controllers persist until
  * an explicit dispose() (delete/detach), never on plain switchToThread.
@@ -16,17 +16,17 @@
  * StrictMode-safe: getOrCreate is idempotent per id, so a double-invoke mount
  * returns the same controller rather than spawning a duplicate.
  */
-import { ChatThreadController } from '../../chat/controller/chat-thread-controller';
+import { AcpChatController } from '../../chat/controller/acp-chat-controller';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 
 class ChatControllerRegistry {
-  private readonly controllers = new Map<string, ChatThreadController>();
+  private readonly controllers = new Map<string, AcpChatController>();
 
-  getOrCreate(chatId: string, port: number): ChatThreadController {
+  getOrCreate(chatId: string, port: number): AcpChatController {
     const existing = this.controllers.get(chatId);
     if (existing) return existing;
 
-    const controller = new ChatThreadController(chatId, port, daemonWs);
+    const controller = new AcpChatController(chatId, port, daemonWs);
     this.controllers.set(chatId, controller);
     return controller;
   }
@@ -37,7 +37,7 @@ class ChatControllerRegistry {
    * first-send handoff onto the canonical remote item reuses it — pending
    * message, WS subscription and transcript intact.
    */
-  adopt(controller: ChatThreadController, remoteId: string): void {
+  adopt(controller: AcpChatController, remoteId: string): void {
     const stale = this.controllers.get(remoteId);
     if (stale && stale !== controller) {
       stale.dispose();

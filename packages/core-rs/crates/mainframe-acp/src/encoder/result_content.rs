@@ -37,16 +37,29 @@ pub(super) fn result_content(
 /// namespaced `truncated`/`fullBytes` pair (spec Decision 20) — the joined
 /// text alone cannot say "this is a preview of N bytes", which the legacy
 /// dialect's `ToolCallResult` carries inline and the expand affordance needs.
+/// An AskUserQuestion result's collected answers ride the same namespace
+/// (desktop-cutover pass): the answered-question card renders them, and the
+/// joined text cannot express the question/answer structure.
 fn truncation_meta(result: &ToolCallResult) -> Option<Value> {
-    if result.truncated != Some(true) {
+    let mut ns = serde_json::Map::new();
+    if result.truncated == Some(true)
+        && let Some(full_bytes) = result.full_bytes
+    {
+        let marker = TruncationMarker {
+            truncated: true,
+            full_bytes,
+        };
+        if let Ok(Value::Object(fields)) = serde_json::to_value(marker) {
+            ns.extend(fields);
+        }
+    }
+    if let Some(answers) = &result.ask_user_question {
+        ns.insert("askUserQuestion".to_string(), json!(answers));
+    }
+    if ns.is_empty() {
         return None;
     }
-    let full_bytes = result.full_bytes?;
-    let marker = TruncationMarker {
-        truncated: true,
-        full_bytes,
-    };
-    Some(json!({ MAINFRAME_META_NAMESPACE: marker }))
+    Some(json!({ MAINFRAME_META_NAMESPACE: ns }))
 }
 
 /// A result carrying structured hunks becomes a `diff` content entry after

@@ -151,6 +151,12 @@ async fn messages(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Res
     ok(payload)
 }
 
+/// The desktop's facade path seeds `workflowRuns` from here — its transcript
+/// comes over `/acp/{profile}` resume, which has no history-payload fold.
+async fn workflow_runs(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+    ok(crate::routes::chat_workflow_runs::workflow_runs_for_chat(&ctx, &id).await)
+}
+
 async fn pending_permission(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     if id.is_empty() {
         return fail(
@@ -478,6 +484,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}", get(get_one))
         .route("/api/chats/{id}/archive", post(archive))
         .route("/api/chats/{id}/messages", get(messages))
+        .route("/api/chats/{id}/workflow-runs", get(workflow_runs))
         .route(
             "/api/chats/{id}/pending-permission",
             get(pending_permission),

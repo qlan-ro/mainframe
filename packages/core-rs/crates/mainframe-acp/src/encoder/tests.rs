@@ -720,3 +720,48 @@ fn display_metadata_rides_every_item_of_the_container() {
         );
     }
 }
+
+#[test]
+fn an_ask_user_question_result_carries_its_answers_in_the_text_block_meta() {
+    let messages = vec![dmsg(
+        "dmsg_ask",
+        DisplayMessageType::Assistant,
+        vec![DisplayContent::Node(DisplayNode::ToolCall {
+            id: "toolu_ask".to_string(),
+            name: "AskUserQuestion".to_string(),
+            input: HashMap::new(),
+            category: ToolCategory::Default,
+            result: Some(ToolCallResult {
+                content: "answered".to_string(),
+                is_error: false,
+                structured_patch: None,
+                original_file: None,
+                modified_file: None,
+                truncated: None,
+                full_bytes: None,
+                ask_user_question: Some(vec![mainframe_types::display::AskUserQuestionAnswer {
+                    question: "Which db?".to_string(),
+                    answer: vec!["sqlite".to_string()],
+                    preview: None,
+                    notes: None,
+                }]),
+            }),
+            parent_tool_use_id: None,
+        })],
+    )];
+
+    let items = encode(&messages);
+    let EncodedItem::ToolCall { content, .. } = &items[0] else {
+        panic!("expected a tool call");
+    };
+    let ToolCallContent::Content {
+        content: ContentBlock::Text { meta, .. },
+    } = &content[0]
+    else {
+        panic!("expected a text content entry");
+    };
+    assert_eq!(
+        meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE]["askUserQuestion"][0]["question"],
+        json!("Which db?")
+    );
+}

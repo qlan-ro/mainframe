@@ -1,13 +1,15 @@
 /**
- * ACP v2 chat-facade client (todo #350, plan task 19): `/acp/{profile}`
- * JSON-RPC-over-WS, handshake, session prompt/cancel/resume, permission
- * gates, and the heartbeat/gap-resume sync contract. Session-state
- * accumulation lives in `features/chat/view-model/acp-item-accumulator.ts`;
- * this module only speaks the wire protocol. `lib/daemon/ws-client.ts`
- * (the legacy dialect) is untouched and remains the controller's live path —
- * the daemon facade is live (`docs/API-REFERENCE.md` § ACP Chat Facade), but
- * switching `chat-thread-controller` to this client is the separate desktop
- * cutover.
+ * ACP v2 chat-facade client (todo #350): `/acp/{profile}` JSON-RPC-over-WS,
+ * handshake, session prompt/cancel/resume, permission gates, reconnect with
+ * backoff, and the heartbeat/gap-resume sync contract. This IS the desktop
+ * chat transcript path (`docs/API-REFERENCE.md` § ACP Chat Facade); the
+ * legacy `lib/daemon/ws-client.ts` dialect remains only for the side-band
+ * event families the facade does not model (chat.updated config, queued
+ * refs, background tasks, worktree offers, workflow runs, compaction
+ * markers) until the daemon retires it. Session-state accumulation lives in
+ * `features/chat/view-model/acp-item-accumulator.ts`; this module only
+ * speaks the wire protocol. One client per adapter profile, shared by every
+ * chat of that adapter (`acp-clients.ts`), multiplexing N sessions.
  */
 import type {
   CancelSessionNotification,
@@ -79,10 +81,17 @@ function parseCapabilities(response: InitializeResponse): MainframeCapabilities 
   return parsed.success ? parsed.data : null;
 }
 
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 15_000;
+
 export class AcpFacadeClient {
   private connection: RpcConnection | null = null;
   private watchdog: HeartbeatWatchdog | null = null;
   private capabilities: MainframeCapabilities | null = null;
+  private connectPromise: Promise<InitializeResponse> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+  private manuallyClosed = false;
   private readonly sessionUpdateListeners = new Set<SessionUpdateListener>();
   private readonly permissionRequestListeners = new Set<PermissionRequestListener>();
   private readonly gateResolvedListeners = new Set<GateResolvedListener>();
@@ -96,6 +105,26 @@ export class AcpFacadeClient {
 
   get mainframeCapabilities(): MainframeCapabilities | null {
     return this.capabilities;
+  }
+
+  get connected(): boolean {
+    return this.connection !== null;
+  }
+
+  /**
+   * Idempotent connect: concurrent callers share one in-flight handshake, and
+   * a client that already initialized resolves immediately. This is the entry
+   * the per-chat controllers use — the first attach dials, the rest join.
+   */
+  ensureConnected(): Promise<InitializeResponse> {
+    this.manuallyClosed = false;
+    if (this.connectPromise) return this.connectPromise;
+    const attempt = this.connect().catch((error: unknown) => {
+      if (this.connectPromise === attempt) this.connectPromise = null;
+      throw error;
+    });
+    this.connectPromise = attempt;
+    return attempt;
   }
 
   async connect(): Promise<InitializeResponse> {
@@ -117,19 +146,30 @@ export class AcpFacadeClient {
       throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
     }
     this.capabilities = parseCapabilities(response);
+    this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
     this.armWatchdog(this.capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
     return response;
   }
 
   disconnect(): void {
+    this.manuallyClosed = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.connectPromise = null;
     this.watchdog?.stop();
     this.watchdog = null;
     this.connection?.close();
     this.connection = null;
   }
 
-  async prompt(sessionId: string, text: string): Promise<PromptResponse> {
-    const request: PromptRequest = { sessionId, prompt: [{ type: 'text', text }] };
+  async prompt(
+    sessionId: string,
+    text: string,
+    extra?: Pick<PromptRequest, '_meta'>,
+  ): Promise<PromptResponse> {
+    const request: PromptRequest = { sessionId, prompt: [{ type: 'text', text }], ...extra };
     const result = await this.requireConnection().sendRequest('session/prompt', request);
     return PromptResponseSchema.parse(result);
   }
@@ -190,10 +230,32 @@ export class AcpFacadeClient {
     this.gapListeners.forEach((fn) => fn());
   }
 
+  /**
+   * Socket death: reconnect with backoff, and only THEN fire the gap
+   * listeners — a gap fired while the socket is down would make every
+   * session's `resume()` throw. The watchdog's silence gap (socket alive)
+   * still fires immediately via `notifyGap`.
+   */
   private handleClose(): void {
     this.watchdog?.stop();
+    this.watchdog = null;
+    this.connection = null;
+    this.connectPromise = null;
     this.closeListeners.forEach((fn) => fn());
-    this.notifyGap();
+    if (this.manuallyClosed) return;
+    this.scheduleReconnect();
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer !== null) return;
+    const delay = this.reconnectDelayMs;
+    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.ensureConnected()
+        .then(() => this.notifyGap())
+        .catch(() => this.scheduleReconnect());
+    }, delay);
   }
 
   private handleNotification(notification: JsonRpcNotification): void {

@@ -1,36 +1,34 @@
 /**
  * Daemon-event routing — the controller's side-effect dispatch for a single
- * daemon event, extracted so the controller stays under the 300-line limit.
+ * SIDE-BAND daemon event, extracted so the controller stays under the
+ * 300-line limit. The transcript/run/gate planes live on the ACP facade
+ * (`acp-session-plane.ts`), not here.
  *
- * Owns NO state. It mirrors live chat.updated into the composer config, surfaces
- * a failed queued-cancel, runs the pure `handleDaemonEvent` mapper, and on a
- * user `message.added` runs the count-aware optimistic reconcile. The host
- * (ChatThreadController) feeds it the chat id + the dispatch/refresh callbacks
- * and live reads of the reducer state (messagesById / pendingUserMessages).
+ * Owns NO state. It mirrors live chat.updated into the composer config,
+ * surfaces trust/run-failure toasts, and runs the pure `handleDaemonEvent`
+ * mapper. A `messages.cleared` additionally triggers the facade re-replay
+ * through the host, so the item accumulator converges with the emptied
+ * transcript.
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { mfToast } from '@/lib/toast';
 import { trustWorkspace } from '@/lib/api/chats';
-import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
+import type { ChatStateEvent } from './chat-thread-state';
 import { handleDaemonEvent } from './handle-daemon-event';
-import { reconcilePendings } from './chat-reconcile';
 
 export interface DaemonEventRouterHost {
   /** The daemon chat id at routing time (read lazily — it can flip via setRemoteId). */
   getChatId: () => string;
-  /** Live read of the current reducer state (messagesById + pendingUserMessages). */
-  getState: () => ChatThreadState;
   /** Apply a state event through the reducer. */
   dispatch: (event: ChatStateEvent) => void;
-  /** Background refetch-on-gap when the mapper reports an unknown-id delta. */
-  refreshInBackground: () => void;
+  /** `/clear` landed: re-replay the facade session so tool-call items drop too. */
+  onTranscriptCleared: () => void;
 }
 
 export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost): void {
   // subscribe:ack is consumed by ChatWsSubscription before it reaches here, so
   // routing only sees real daemon events (ack-gating lives in the helper now).
   const chatId = host.getChatId();
-  const state = host.getState();
 
   // Keep the composer config (model/plan/permission/effort/features) live:
   // mirror the daemon's chat metadata into state so the toolbar reflects
@@ -64,36 +62,9 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
     mfToast.error('Agent run failed', description !== undefined ? { description } : undefined);
   }
 
-  const result = handleDaemonEvent(event, chatId, state.messagesById);
-
-  if (result.kind === 'refresh') {
-    host.refreshInBackground();
-    return;
-  }
-
+  const result = handleDaemonEvent(event, chatId);
   if (result.kind === 'event') {
-    // Optimistic reconcile: on display.message.added with user content,
-    // try to match and remove the pending entry.
-    if (result.event.type === 'message.added' && result.event.message.type === 'user') {
-      for (const clientId of reconcilePendings(state.pendingUserMessages, [result.event.message])) {
-        host.dispatch({ type: 'local.message.reconciled', clientId });
-      }
-    }
-
-    // A live display.messages.set routes here as history.loaded — the added-path
-    // reconcile above never sees it, so reconcile the optimistic pendings against
-    // the user messages in the set too (count-aware), or the optimistic copy
-    // lingers next to the server echo as a duplicate user bubble. This is NOT a
-    // rare path: the daemon emits a full set whenever it can't detect a pure
-    // append, and the Codex adapter regenerates every display id (nanoid) on each
-    // reconstruction, so it re-sets on essentially every turn of a live session.
-    if (result.event.type === 'history.loaded') {
-      const userMessages = result.event.messages.filter((m) => m.type === 'user');
-      for (const clientId of reconcilePendings(state.pendingUserMessages, userMessages)) {
-        host.dispatch({ type: 'local.message.reconciled', clientId });
-      }
-    }
-
+    if (result.event.type === 'transcript.cleared') host.onTranscriptCleared();
     host.dispatch(result.event);
   }
 }

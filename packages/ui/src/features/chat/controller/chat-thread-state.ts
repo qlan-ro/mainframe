@@ -1,26 +1,27 @@
 /**
  * Pure state shape + reducer for a single chat thread.
  *
- * Mirrors react-opencode's `openCodeThreadState.ts` but adapted to our
- * daemon protocol: messages arrive as whole DisplayMessage objects
- * (display.message.added / display.message.updated), not as part-level
- * deltas. The reducer only handles message-level upsert and a REST
- * refetch-on-gap trigger — no part.delta/part.updated paths.
- *
- * State holds:
- *  - messagesById / messageOrder — the daemon's display list
- *  - loadState — REST seed status
- *  - runState — derived from daemon chat.updated events + the optimistic send
- *  - interactions.permissions — from permission.requested / permission.resolved
- *  - interactions.queued — from message.queued.* events
+ * Mirrors react-opencode's `openCodeThreadState.ts`, adapted to the two
+ * planes the controller composes (desktop-cutover pass):
+ *  - messages — the CONVERTED transcript, dispatched whole by the ACP
+ *    session plane (`transcript.updated`) each time the item accumulator
+ *    changes; the reducer never sees raw wire frames
+ *  - loadState — facade attach status
+ *  - runState — facade `state_update` frames + legacy chat.updated
+ *    isRunning (both derive from the same ChatManager truth) + the
+ *    optimistic send
+ *  - interactions.permissions — facade `session/request_permission` /
+ *    `gate_resolved`, still keyed by `ControlRequest.requestId`
+ *  - interactions.queued — legacy side-band message.queued.* events (the
+ *    facade has no queue-list surface yet)
  *  - pendingUserMessages — optimistic send, reconciled on echo
  */
+import type { ThreadMessageLike } from '@assistant-ui/react';
 import type {
   BackgroundActivityTask,
   Chat,
   ClaudeWorkflowRun,
   ControlRequest,
-  DisplayMessage,
   QueuedMessageRef,
   WorktreeSwitchOffer,
 } from '@qlan-ro/mainframe-types';
@@ -64,8 +65,8 @@ export interface ChatThreadState {
   readonly chatId: string;
   readonly loadState: LoadState;
   readonly runState: RunState;
-  readonly messagesById: Readonly<Record<string, DisplayMessage>>;
-  readonly messageOrder: readonly string[];
+  /** The converted transcript, projected as-is into the message repository. */
+  readonly messages: readonly ThreadMessageLike[];
   readonly interactions: {
     readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
     readonly queued: Readonly<Record<string, QueuedMessageRef>>;
@@ -122,20 +123,15 @@ export interface ChatThreadState {
 export type ChatStateEvent =
   | { type: 'history.loading' }
   | { type: 'history.refresh.refused' }
-  | {
-      type: 'history.loaded';
-      messages: DisplayMessage[];
-      transcriptMissing?: boolean;
-      workflowRuns?: ClaudeWorkflowRun[];
-    }
+  | { type: 'history.ready' }
   | { type: 'history.failed'; error: unknown }
+  | { type: 'transcript.updated'; messages: readonly ThreadMessageLike[] }
+  | { type: 'transcript.cleared' }
+  | { type: 'workflow.runs.seeded'; runs: ClaudeWorkflowRun[] }
   | { type: 'run.started' }
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
-  | { type: 'message.added'; message: DisplayMessage }
-  | { type: 'message.updated'; message: DisplayMessage }
-  | { type: 'messages.cleared' }
   | { type: 'permission.requested'; requestId: string; request: ControlRequest }
   | { type: 'permission.resolved'; requestId: string }
   | { type: 'queued.added'; ref: QueuedMessageRef }
@@ -172,8 +168,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     chatId,
     loadState: { type: 'idle' },
     runState: { type: 'idle' },
-    messagesById: {} as Readonly<Record<string, DisplayMessage>>,
-    messageOrder: [],
+    messages: [],
     interactions: {
       permissions: {} as Readonly<Record<string, ChatPermissionEntry>>,
       queued: {} as Readonly<Record<string, QueuedMessageRef>>,
@@ -192,13 +187,6 @@ export function createChatThreadState(chatId: string): ChatThreadState {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function upsertMessage(state: ChatThreadState, message: DisplayMessage): ChatThreadState {
-  const isNew = !(message.id in state.messagesById);
-  const messagesById = { ...state.messagesById, [message.id]: message };
-  const messageOrder = isNew ? [...state.messageOrder, message.id] : state.messageOrder;
-  return { ...state, messagesById, messageOrder };
-}
 
 function removePending(state: ChatThreadState, clientId: string): ChatThreadState {
   if (!(clientId in state.pendingUserMessages)) return state;
@@ -267,30 +255,17 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'history.refresh.refused':
       return { ...state, loadState: { type: 'ready' } };
 
-    case 'history.loaded': {
-      const messagesById: Record<string, DisplayMessage> = {};
-      const messageOrder: string[] = [];
-      for (const msg of event.messages) {
-        messagesById[msg.id] = msg;
-        messageOrder.push(msg.id);
-      }
-      // Mirror the load-time transcript detection into chatConfig so the
-      // degraded card reacts without waiting for the chat.updated broadcast.
-      const chatConfig =
-        event.transcriptMissing !== undefined &&
-        state.chatConfig !== null &&
-        state.chatConfig.transcriptMissing !== event.transcriptMissing
-          ? { ...state.chatConfig, transcriptMissing: event.transcriptMissing }
-          : state.chatConfig;
-      return {
-        ...state,
-        loadState: { type: 'ready' },
-        messagesById,
-        messageOrder,
-        chatConfig,
-        workflowRuns: seedWorkflowRuns(event.workflowRuns ?? []),
-      };
-    }
+    case 'history.ready':
+      return state.loadState.type === 'ready' ? state : { ...state, loadState: { type: 'ready' } };
+
+    case 'transcript.updated':
+      return { ...state, messages: event.messages };
+
+    case 'transcript.cleared':
+      return state.messages.length === 0 ? state : { ...state, messages: [] };
+
+    case 'workflow.runs.seeded':
+      return { ...state, workflowRuns: seedWorkflowRuns(event.runs) };
 
     case 'history.failed':
       return { ...state, loadState: { type: 'error', error: event.error } };
@@ -335,19 +310,6 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         switching,
       };
     }
-
-    case 'message.added':
-      return upsertMessage(state, event.message);
-
-    case 'message.updated':
-      return upsertMessage(state, event.message);
-
-    case 'messages.cleared':
-      return {
-        ...state,
-        messagesById: {} as Readonly<Record<string, DisplayMessage>>,
-        messageOrder: [],
-      };
 
     case 'permission.requested': {
       const entry: ChatPermissionEntry = {

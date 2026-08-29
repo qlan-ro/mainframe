@@ -6,6 +6,7 @@
 import type {
   Chat,
   ChatHistoryPayload,
+  ClaudeWorkflowRun,
   SessionTuning,
   ExecutionMode,
   PermissionMode,
@@ -32,6 +33,10 @@ export const setChatConfig = (port: number, chatId: string, body: ChatConfigPatc
 /** History + transcript presence — `transcriptMissing` tells an empty thread from a deleted transcript. */
 export const getChatMessages = (port: number, chatId: string): Promise<ChatHistoryPayload> =>
   request<ChatHistoryPayload>('GET', `${apiBase(port)}/api/chats/${chatId}/messages`);
+
+/** Workflow-run seed for the facade path — the transcript itself arrives over `/acp/{profile}`. */
+export const getChatWorkflowRuns = (port: number, chatId: string): Promise<ClaudeWorkflowRun[]> =>
+  request<ClaudeWorkflowRun[]>('GET', `${apiBase(port)}/api/chats/${chatId}/workflow-runs`);
 
 // ── Degraded-chat recovery (missing transcript / missing worktree) ──────────
 

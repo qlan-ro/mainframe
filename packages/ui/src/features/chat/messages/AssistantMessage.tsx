@@ -15,7 +15,6 @@ import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { Message, MessageContent, MessageFooter } from '@/components/ui/message';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
-import { PERMISSION_PLACEHOLDER } from '../view-model/convert-message';
 import { MarkdownText } from '../parts/markdown-text';
 import { ReasoningGroup } from './ReasoningGroup';
 import { MessageToolLeaf, MessageToolGroup } from '../tools/tool-dispatch';
@@ -86,7 +85,9 @@ export function AssistantMessage() {
         switch (part.type) {
           case 'text':
             // MarkdownText reads the text from part context; props satisfy the type.
-            return part.text === PERMISSION_PLACEHOLDER.text ? null : <MarkdownText {...part} />;
+            // (The legacy \0 permission sentinel died with the facade cutover —
+            // gates are out-of-band items the encoder never emits.)
+            return <MarkdownText {...part} />;
           case 'reasoning':
             return <div className="whitespace-pre-wrap">{part.text}</div>;
           case 'tool-call':

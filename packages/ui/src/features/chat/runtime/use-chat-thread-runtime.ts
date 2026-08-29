@@ -3,7 +3,7 @@
 /**
  * Per-chat runtime hook — mirrors react-opencode's `useOpenCodeThreadRuntime`.
  *
- * Wires a ChatThreadController to assistant-ui's `useExternalStoreRuntime`.
+* Wires an AcpChatController to assistant-ui's `useExternalStoreRuntime`.
  * The controller is created once per thread id (global registry) and kept warm
  * across switches via `subscribeState`; `opts.active` gates `subscribeLive` (the
  * live WS sub). `onNew` creates the daemon chat for a `__LOCALID_*` thread
@@ -31,7 +31,7 @@ const ATTACHMENT_ADAPTER = CHAT_ATTACHMENT_ADAPTER;
 import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
-import type { ChatThreadController } from '../controller/chat-thread-controller';
+import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
 import type { QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
 import { projectChatThreadRepository } from '../controller/project-messages';
@@ -75,7 +75,7 @@ function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
  * symbol is module-private on purpose.
  */
 export function buildChatExtras(
-  controller: ChatThreadController,
+  controller: AcpChatController,
   port: number,
   state: ChatThreadState,
 ): ChatRuntimeExtras {
@@ -101,7 +101,7 @@ export function buildChatExtras(
 // Controller state → useSyncExternalStore
 // ---------------------------------------------------------------------------
 
-export function useControllerState(controller: ChatThreadController): ChatThreadState {
+export function useControllerState(controller: AcpChatController): ChatThreadState {
   // The subscribe/getSnapshot callbacks MUST be stable. An inline arrow gets a
   // fresh identity every render, which makes useSyncExternalStore re-subscribe
   // on every render. `subscribeState` only registers a state-change listener
@@ -151,7 +151,7 @@ async function restoreAttachments(
 // ---------------------------------------------------------------------------
 
 export function useChatThreadRuntime(
-  controller: ChatThreadController,
+  controller: AcpChatController,
   port: number,
   opts?: { active?: boolean },
 ): AssistantRuntime {

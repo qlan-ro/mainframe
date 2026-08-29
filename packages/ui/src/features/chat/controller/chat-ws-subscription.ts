@@ -1,54 +1,27 @@
 /**
- * ChatWsSubscription — the controller's WS attachment, extracted so the
- * controller stays under the 300-line limit and the dormancy split (subscribe
- * the WS only when the thread is active) is a single composition point.
+ * ChatWsSubscription — the controller's SIDE-BAND WS attachment (legacy
+ * dialect): config broadcasts, queued refs, background tasks, worktree
+ * offers, workflow runs, context usage, compaction markers. The transcript,
+ * run frames, and gates arrive over the ACP facade (`acp-session-plane.ts`),
+ * which owns its own gap/resume convergence — so the ack-gated resume, the
+ * pending-permission restore, and the reattach re-seed that used to live
+ * here are gone with the mechanisms they served.
  *
- * Pure transport + resume/ack/restore timing; it owns NO reducer state. The
- * host (ChatThreadController) feeds it callbacks: route a daemon event, read
- * the "recently replied" / "held permission ids" sets for the restore-skip
- * checks, dispatch a restored permission, and refresh on reconnect.
+ * What remains: subscribe on attach (the daemon replays queued/worktree
+ * snapshots to a new subscriber), re-subscribe on socket reconnect, and the
+ * `POST /chats/:id/resume` warm-up that keeps the CLI process lifecycle
+ * behavior of the legacy attach path.
  */
-import type { ControlRequest, DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
-import { getPendingPermission, resumeChat } from '../../../lib/api/chats';
-
-// How long to wait for subscribe:ack before falling back to an unconditional resume.
-const SUBSCRIBE_ACK_TIMEOUT_MS = 2000;
+import { resumeChat } from '../../../lib/api/chats';
 
 export interface ChatWsHost {
   readonly chatId: string;
   readonly port: number;
   readonly ws: DaemonWsClient;
-  /** Route a daemon event into the controller (it filters subscribe:ack itself first via onAck). */
+  /** Route a side-band daemon event into the controller. */
   onEvent: (event: DaemonEvent) => void;
-  /** Tool-use ids whose permission reply is still in flight — skip restoring them. */
-  getRecentlyReplied: () => ReadonlySet<string>;
-  /** requestIds the controller already holds — skip a duplicate restore. */
-  getHeldPermissionIds: () => ReadonlySet<string>;
-  /** Seed the gate from a REST-read pending permission. */
-  dispatchPermission: (request: ControlRequest) => void;
-  /**
-   * Background history re-seed after a subscribe:ack. Fires on:
-   *  - a reconnect (the daemon kept emitting while the socket was down — catch up);
-   *  - a reattach after dormancy (`isReattach()`): switching away tears down the
-   *    per-chat sub, so a backgrounded chat receives NOTHING while dormant even
-   *    though the daemon keeps persisting messages — the reattach must re-seed or
-   *    the transcript stays stuck at the pre-dormancy snapshot; and
-   *  - the first-message handoff (`hasUnreconciledPendings()`): the first send
-   *    happens during the __LOCALID_* → remoteId window before the sub attaches,
-   *    so the daemon's `display.messages.set [user]` lands with no subscriber and
-   *    the optimistic pending lingers — a pending at ack time is exactly that signal.
-   *
-   * It does NOT fire on the controller's FIRST-EVER attach with no pending: that
-   * open is already seeded by the mount/setRemoteId `load()`, and re-seeding there
-   * would wholesale-replace messageOrder from a possibly-stale REST snapshot,
-   * clobbering messages an actively-streaming chat just delivered.
-   */
-  onSubscribeRefresh: () => void;
-  /** True when an optimistic send has not yet been reconciled (handoff-gap signal). */
-  hasUnreconciledPendings: () => boolean;
-  /** True when a live sub was previously torn down — this attach is a post-dormancy reattach. */
-  isReattach: () => boolean;
   /** True once the controller is disposed — gates all async tails. */
   isDisposed: () => boolean;
 }
@@ -56,9 +29,6 @@ export interface ChatWsHost {
 export class ChatWsSubscription {
   private unsubscribeFromWs: (() => void) | null = null;
   private unsubscribeFromConn: (() => void) | null = null;
-  private awaitingAck = false;
-  private isReconnect = false;
-  private ackFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly host: ChatWsHost) {}
 
@@ -66,24 +36,22 @@ export class ChatWsSubscription {
     if (this.unsubscribeFromWs) return;
     const { ws } = this.host;
 
-    // Attach the event handler FIRST so the subscribe:ack frame is never missed.
     this.unsubscribeFromWs = ws.onEvent((event: DaemonEvent) => {
       if (this.host.isDisposed()) return;
-      if (this.tryConsumeAck(event)) return;
+      // The ack itself carries nothing the side-band consumes.
+      if (event.type === 'subscribe:ack' && event.chatId === this.host.chatId) return;
       this.host.onEvent(event);
     });
 
-    this.sendSubscribe(false);
+    this.subscribeAndWarm();
 
     this.unsubscribeFromConn = ws.subscribeConnection(() => {
       if (this.host.isDisposed() || !ws.connected) return;
-      this.sendSubscribe(true);
+      this.subscribeAndWarm();
     });
   }
 
   detach(): void {
-    this.clearAckFallback();
-    this.awaitingAck = false;
     this.host.ws.unsubscribe(this.host.chatId);
     this.unsubscribeFromWs?.();
     this.unsubscribeFromWs = null;
@@ -91,65 +59,10 @@ export class ChatWsSubscription {
     this.unsubscribeFromConn = null;
   }
 
-  /** Returns true if the event was a subscribe:ack for this chat (consumed here). */
-  private tryConsumeAck(event: DaemonEvent): boolean {
-    if (event.type !== 'subscribe:ack' || event.chatId !== this.host.chatId) return false;
-    if (this.awaitingAck) {
-      this.clearAckFallback();
-      const wasReconnect = this.isReconnect;
-      this.awaitingAck = false;
-      this.handleSubscribeAck(wasReconnect);
-    }
-    return true;
-  }
-
-  private sendSubscribe(reconnect: boolean): void {
-    this.clearAckFallback();
-    this.awaitingAck = true;
-    this.isReconnect = reconnect;
+  private subscribeAndWarm(): void {
     this.host.ws.subscribe(this.host.chatId);
-
-    this.ackFallbackTimer = setTimeout(() => {
-      if (!this.awaitingAck || this.host.isDisposed()) return;
-      // Socket down → the subscribe frame was dropped; stay armed, reconnect re-sends.
-      if (!this.host.ws.connected) return;
-      this.awaitingAck = false;
-      console.warn('[chat-ws] subscribe:ack not received within timeout — resuming anyway');
-      this.handleSubscribeAck(reconnect);
-    }, SUBSCRIBE_ACK_TIMEOUT_MS);
-  }
-
-  private handleSubscribeAck(reconnect: boolean): void {
     void resumeChat(this.host.port, this.host.chatId).catch((err: unknown) =>
       console.warn('[chat-ws] resumeChat failed', err),
     );
-    this.restorePendingPermission();
-    // Re-seed to catch up on anything received without a live subscriber:
-    //  - reconnect: events missed while the socket was down;
-    //  - reattach after dormancy: events streamed while this chat was backgrounded;
-    //  - unreconciled pending: the first-message handoff gap.
-    // The controller's first-ever attach with no pending is skipped — it is already
-    // seeded by the mount load(), so re-seeding there could clobber a live stream.
-    if (reconnect || this.host.isReattach() || this.host.hasUnreconciledPendings()) {
-      this.host.onSubscribeRefresh();
-    }
-  }
-
-  private restorePendingPermission(): void {
-    void getPendingPermission(this.host.port, this.host.chatId)
-      .then((request) => {
-        if (this.host.isDisposed() || !request) return;
-        if (this.host.getRecentlyReplied().has(request.toolUseId)) return;
-        if (request.requestId && this.host.getHeldPermissionIds().has(request.requestId)) return;
-        this.host.dispatchPermission(request);
-      })
-      .catch((err: unknown) => console.warn('[chat-ws] restore pending-permission failed', err));
-  }
-
-  private clearAckFallback(): void {
-    if (this.ackFallbackTimer !== null) {
-      clearTimeout(this.ackFallbackTimer);
-      this.ackFallbackTimer = null;
-    }
   }
 }

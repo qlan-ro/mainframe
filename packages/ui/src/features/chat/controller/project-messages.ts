@@ -1,45 +1,15 @@
 /**
  * State → ExportedMessageRepository projection.
  *
- * Mirrors react-opencode's `openCodeMessageProjection.ts` but adapted to our
- * ChatThreadState and DisplayMessage types (whole-message daemon protocol).
- *
- * The projection:
- *  1. Walks messageOrder → DisplayMessage → ThreadMessageLike via convertMessage.
- *  2. Inserts pending user messages (optimistic send) interleaved by createdAt.
- *  3. Returns ExportedMessageRepository.fromArray([...]).
- *
- * convertMessage handles all DisplayContent → content-part mapping including
- * the WS14c dual re-encode, \0 permission sentinel, and uniqueId dedup.
- * We delegate to it unchanged so the projection stays thin.
+ * Mirrors react-opencode's `openCodeMessageProjection.ts`. The transcript
+ * arrives already converted (`state.messages`, produced by the ACP session
+ * plane through `convert-acp-item.ts`); the projection appends the pending
+ * (optimistic) user messages and stamps the streaming tail.
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
-import type { DisplayMessage } from '@qlan-ro/mainframe-types';
-import { convertMessage } from '../view-model/convert-message';
 import { describeSendError } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
-
-/**
- * Per-message conversion cache, keyed by DisplayMessage object identity.
- *
- * The reducer's upsert (`{ ...messagesById, [id]: newMsg }`) only replaces the
- * ONE changed message's object; every other DisplayMessage keeps its reference
- * across state updates. convertMessage is pure on its input, so a WeakMap keyed
- * on that object lets a streamed delta reconvert only the single changed message
- * instead of re-running convertMessage (markdown/tool mapping) over the whole
- * history on every event — turning an O(N²)-per-turn reprojection into O(N).
- * WeakMap so evicted messages are GC'd with no manual bookkeeping.
- */
-const convertCache = new WeakMap<DisplayMessage, ThreadMessage>();
-
-function convertMessageCached(message: DisplayMessage): ThreadMessage {
-  const hit = convertCache.get(message);
-  if (hit) return hit;
-  const converted = convertMessage(message) as ThreadMessageLike as ThreadMessage;
-  convertCache.set(message, converted);
-  return converted;
-}
 
 // ---------------------------------------------------------------------------
 // Pending message projection
@@ -84,13 +54,10 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
 // ---------------------------------------------------------------------------
 
 export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage[] {
-  // Server messages in order — convertMessage returns ThreadMessageLike; a single
-  // cast suffices because fromArray also accepts ThreadMessageLike[], but we want
-  // a consistent ThreadMessage[] for downstream hooks.
-  const serverMessages: ThreadMessage[] = state.messageOrder
-    .map((id) => state.messagesById[id])
-    .filter((msg): msg is NonNullable<typeof msg> => msg != null)
-    .map(convertMessageCached);
+  // Already-converted server messages in order — a single cast suffices
+  // because fromArray also accepts ThreadMessageLike[], but we want a
+  // consistent ThreadMessage[] for downstream hooks.
+  const serverMessages: ThreadMessage[] = state.messages.map((m) => m as ThreadMessageLike as ThreadMessage);
 
   // Streaming "typing" reveal: while a run is active, mark the TAIL assistant
   // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)
