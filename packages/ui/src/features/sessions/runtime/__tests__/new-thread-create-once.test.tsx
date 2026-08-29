@@ -40,7 +40,7 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
-import type { Chat, ChatHistoryPayload } from '@qlan-ro/mainframe-types';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import type { AssistantClient } from '@assistant-ui/react';
 
 // ---------------------------------------------------------------------------
@@ -61,11 +61,6 @@ vi.mock('../../../../lib/api/chats', () => ({
   }),
   // Benign reads the controller does on load/seed.
   getChat: vi.fn(async (_port: number, chatId: string): Promise<Chat> => ({ id: chatId }) as Chat),
-  getChatMessages: vi.fn(async (): Promise<ChatHistoryPayload> => ({
-    messages: [],
-    transcriptMissing: false,
-    workflowRuns: [],
-  })),
   listChats: vi.fn(async (): Promise<Chat[]> => []),
   getChatWorkflowRuns: vi.fn(async () => []),
   resumeChat: vi.fn(async () => undefined),

@@ -12,8 +12,21 @@ import { ToolCallUpdateSchema } from './tool-call.js';
 
 export type PermissionOptionId = string;
 
-export const PermissionOptionKindSchema = z.enum(['allow_once', 'allow_always', 'reject_once', 'reject_always']);
-export type PermissionOptionKind = z.infer<typeof PermissionOptionKindSchema>;
+export const KNOWN_PERMISSION_OPTION_KINDS = ['allow_once', 'allow_always', 'reject_once', 'reject_always'] as const;
+export type PermissionOptionKind = (typeof KNOWN_PERMISSION_OPTION_KINDS)[number];
+
+/**
+ * Deliberately tolerant (spec decision 25): any string passes, typed as the
+ * known kinds plus `string` so styling maps keep autocomplete. The pinned
+ * snapshot's enum is closed, but a strict boundary here would drop the whole
+ * `session/request_permission` at parse time when a newer daemon (remote
+ * daemons can version-skew ahead of the client) offers a novel kind — a
+ * wedged turn. An unknown kind instead renders neutrally and answers as
+ * deny, never approval (`buildOptionResponse`).
+ */
+export const PermissionOptionKindSchema = z.custom<PermissionOptionKind | (string & {})>(
+  (value) => typeof value === 'string',
+);
 
 /**
  * One option the client may pick. The client must not infer a permission's

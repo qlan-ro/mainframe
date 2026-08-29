@@ -320,8 +320,8 @@ export class AcpChatController {
    * socket, the facade reconnect's resume redelivers the still-open gate —
    * the delivery-verify tracker the legacy path needed is retired.
    */
-  public async replyToPermission(response: ControlResponse): Promise<void> {
-    this.plane.replyToPermission(response);
+  public async replyToPermission(response: ControlResponse, selectedOptionId?: string): Promise<void> {
+    this.plane.replyToPermission(response, selectedOptionId);
   }
 
   public async cancelQueued(messageId: string): Promise<void> {

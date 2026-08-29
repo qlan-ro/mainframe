@@ -115,12 +115,13 @@ describe('acp/*.json fixtures validate and round-trip through their Zod schema',
     expect(result.success).toBe(false);
   });
 
-  it('rejects an unknown permission-option kind', () => {
+  it('tolerates an unknown permission-option kind, preserved verbatim (spec decision 25)', () => {
     const result = RequestPermissionRequestSchema.safeParse({
       sessionId: 'chat_1',
       title: 'Allow?',
       options: [{ optionId: 'x', name: 'Allow', kind: 'maybe_once' }],
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.data?.options[0]?.kind).toBe('maybe_once');
   });
 });

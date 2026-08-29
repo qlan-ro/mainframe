@@ -22,6 +22,9 @@ export function buildPermissionResponse(e: ChatPermissionEntry, kind: 'deny' | '
  * A kind this build doesn't recognize resolves to `deny`, mirroring the
  * daemon's own `GateAnswerError::UnknownOption` rule that an unmatched option
  * is never treated as approval (`mainframe-acp/src/gates.rs::parse_answer`).
+ * `reject_always` also lands on that deny fallthrough — a one-shot deny, not
+ * a persisted rule (spec decision 26: no producer offers it and the adapter
+ * `ControlResponse` has no always-deny semantics).
  */
 export function buildOptionResponse(e: ChatPermissionEntry, option: PermissionOption): ControlResponse {
   if (option.kind === 'allow_once') return buildPermissionResponse(e, 'once');

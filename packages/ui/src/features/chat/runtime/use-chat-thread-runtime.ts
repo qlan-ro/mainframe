@@ -3,7 +3,7 @@
 /**
  * Per-chat runtime hook — mirrors react-opencode's `useOpenCodeThreadRuntime`.
  *
-* Wires an AcpChatController to assistant-ui's `useExternalStoreRuntime`.
+ * Wires an AcpChatController to assistant-ui's `useExternalStoreRuntime`.
  * The controller is created once per thread id (global registry) and kept warm
  * across switches via `subscribeState`; `opts.active` gates `subscribeLive` (the
  * live WS sub). `onNew` creates the daemon chat for a `__LOCALID_*` thread
@@ -52,7 +52,7 @@ export interface ChatRuntimeExtras {
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   readonly port: number;
   readonly cancel: () => Promise<void>;
-  readonly replyToPermission: (response: ControlResponse) => Promise<void>;
+  readonly replyToPermission: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
   /** Re-send a failed optimistic user message (the "Failed to send" indicator). */
@@ -86,7 +86,7 @@ export function buildChatExtras(
     queued: state.interactions.queued,
     port,
     cancel: () => controller.cancel(),
-    replyToPermission: (response) => controller.replyToPermission(response),
+    replyToPermission: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
     cancelQueued: (messageId) => controller.cancelQueued(messageId),
     editQueued: (messageId, content) => controller.editQueued(messageId, content),
     retryMessage: (clientId) => controller.retryMessage(clientId),
@@ -286,12 +286,12 @@ async function notReady(): Promise<never> {
 /** Queue-front gate: pending sorted by askedAt asc, take [0]. Stable ref via useMemo([extras]). */
 export function useChatPermissionFront(): {
   front: ChatPermissionEntry | undefined;
-  reply: (response: ControlResponse) => Promise<void>;
+  reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
 } {
   const extras = useChatExtras();
   return useMemo(() => {
     const front = selectPermissionFront(extras?.permissions);
-    const reply: (response: ControlResponse) => Promise<void> =
+    const reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void> =
       extras?.replyToPermission ??
       (async () => {
         throw new Error('Chat runtime not ready');

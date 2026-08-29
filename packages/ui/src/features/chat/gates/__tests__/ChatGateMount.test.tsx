@@ -156,12 +156,15 @@ describe('ChatGateMount', () => {
     fireEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
 
     expect(localReply).toHaveBeenCalledTimes(1);
-    expect(localReply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'deny',
-    });
+    expect(localReply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'deny',
+      },
+      'reject-once',
+    );
   });
 
   // --- Behavior 6: an answered gate unmounts with the queue front ---

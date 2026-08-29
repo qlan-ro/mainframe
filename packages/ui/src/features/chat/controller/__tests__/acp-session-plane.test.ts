@@ -357,6 +357,20 @@ describe('AcpSessionPlane — gates', () => {
     expect(eventsOf(host)).toContainEqual({ type: 'permission.resolved', requestId: 'req-9' });
   });
 
+  it('replyToPermission forwards the clicked optionId instead of synthesizing one (spec decision 12)', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+    client.emitPermissionRequest('rpc-7', permissionRequest({ requestId: 'req-7' }));
+
+    // An allow-behavior response answered via the "allow-always" button must
+    // carry that option's id, not the behavior-derived 'allow-once'.
+    plane.replyToPermission({ requestId: 'req-7', toolUseId: 'tu-1', behavior: 'allow' }, 'allow-always');
+
+    expect(client.respondCalls[0]!.response.outcome).toEqual({ outcome: 'selected', optionId: 'allow-always' });
+  });
+
   it('replyToPermission falls back to gate-{requestId} when the gate was never tracked (redelivered after reload)', async () => {
     const client = makeFakeAcpClient();
     const host = makeHost();

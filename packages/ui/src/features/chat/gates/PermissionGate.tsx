@@ -56,7 +56,8 @@ type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
 /**
  * Visual treatment keyed by `kind`, never by `optionId`/`name` (spec decision
  * 12). A kind outside this map — an adapter extension the client doesn't
- * recognize yet — still renders, styled neutrally by the `secondary` fallback
+ * recognize yet, which the boundary schema deliberately lets through (spec
+ * decision 25) — still renders, styled neutrally by the `secondary` fallback
  * below; it is never dropped, and its styling is never guessed from its id or
  * label.
  */
@@ -79,7 +80,7 @@ function OptionsFooter({
       {options.map((option) => (
         <Button
           key={option.optionId}
-          variant={KIND_VARIANT[option.kind] ?? 'secondary'}
+          variant={KIND_VARIANT[option.kind as PermissionOptionKind] ?? 'secondary'}
           size="sm"
           data-testid={`chat-permission-option-${option.optionId}`}
           onClick={() => onSelect(option)}
@@ -104,7 +105,10 @@ export interface PermissionGateProps {
 export function PermissionGate({ entry, reply }: PermissionGateProps) {
   const { request } = entry;
 
-  const onSelect = (option: PermissionOption) => void reply(buildOptionResponse(entry, option));
+  // The clicked option's own id travels with the answer (spec decision 12 —
+  // the daemon sees which offered option was actually selected, not a
+  // client-synthesized stand-in), alongside the rich ControlResponse it maps to.
+  const onSelect = (option: PermissionOption) => void reply(buildOptionResponse(entry, option), option.optionId);
 
   return (
     <div data-testid="chat-permission-gate">

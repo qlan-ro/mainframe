@@ -190,13 +190,16 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-option-allow-once'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'allow',
-      updatedInput: { command: 'ls -la' },
-    });
+    expect(reply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'allow',
+        updatedInput: { command: 'ls -la' },
+      },
+      'allow-once',
+    );
   });
 
   it('clicking the allow_always option calls reply with updatedPermissions from entry.request.suggestions', () => {
@@ -204,14 +207,17 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-option-allow-always'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'allow',
-      updatedInput: { command: 'ls -la' },
-      updatedPermissions: [SUG],
-    });
+    expect(reply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'allow',
+        updatedInput: { command: 'ls -la' },
+        updatedPermissions: [SUG],
+      },
+      'allow-always',
+    );
   });
 
   it('clicking the reject_once option calls reply with the deny ControlResponse', () => {
@@ -219,12 +225,15 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'deny',
-    });
+    expect(reply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'deny',
+      },
+      'reject-once',
+    );
   });
 
   // --- Behavior 5: kind drives styling, id/name never do ---
@@ -259,11 +268,16 @@ describe('PermissionGate', () => {
     fireEvent.click(unknownButton);
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'deny',
-    });
+    // The response degrades to deny (unknown is never approval), but the
+    // clicked option's own id still travels with the answer.
+    expect(reply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'deny',
+      },
+      'do-something-new',
+    );
   });
 });

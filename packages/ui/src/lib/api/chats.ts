@@ -3,14 +3,7 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type {
-  Chat,
-  ChatHistoryPayload,
-  ClaudeWorkflowRun,
-  SessionTuning,
-  ExecutionMode,
-  PermissionMode,
-} from '@qlan-ro/mainframe-types';
+import type { Chat, ClaudeWorkflowRun, SessionTuning, ExecutionMode, PermissionMode } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -28,10 +21,6 @@ export interface ChatConfigPatch {
  */
 export const setChatConfig = (port: number, chatId: string, body: ChatConfigPatch): Promise<Chat> =>
   request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/config`, body);
-
-/** History + transcript presence — `transcriptMissing` tells an empty thread from a deleted transcript. */
-export const getChatMessages = (port: number, chatId: string): Promise<ChatHistoryPayload> =>
-  request<ChatHistoryPayload>('GET', `${apiBase(port)}/api/chats/${chatId}/messages`);
 
 /** Workflow-run seed for the facade path — the transcript itself arrives over `/acp/{profile}`. */
 export const getChatWorkflowRuns = (port: number, chatId: string): Promise<ClaudeWorkflowRun[]> =>

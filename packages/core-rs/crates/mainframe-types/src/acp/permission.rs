@@ -15,6 +15,10 @@ use super::tool_call::ToolCallUpdate;
 
 pub type PermissionOptionId = String;
 
+/// Closed enum on purpose: the daemon only ever *serializes* kinds (it is
+/// the option producer). The TS client boundary is deliberately tolerant of
+/// kinds outside this set (spec decision 25) so a version-skewed daemon
+/// cannot wedge a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionOptionKind {

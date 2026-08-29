@@ -141,13 +141,16 @@ export class AcpSessionPlane {
 
   /**
    * Answer a gate with the rich `_mainframe.dev` payload (spec decision 12).
-   * The optionId is cosmetic here — the daemon validates and applies the
-   * carried `ControlResponse`, never inferring from the option.
+   * `selectedOptionId` is the offered option the user actually clicked, so
+   * the plain half of the answer is truthful end-to-end; only a gate that
+   * answers without picking an option (Plan, AskUserQuestion) falls back to
+   * a behavior-derived id. The daemon prefers the carried `ControlResponse`
+   * either way, never inferring from the option.
    */
-  replyToPermission(response: ControlResponse): void {
+  replyToPermission(response: ControlResponse, selectedOptionId?: string): void {
     const rpcId = this.gateRpcIds.get(response.requestId) ?? `gate-${response.requestId}`;
     this.gateRpcIds.delete(response.requestId);
-    const optionId = response.behavior === 'deny' ? 'reject-once' : 'allow-once';
+    const optionId = selectedOptionId ?? (response.behavior === 'deny' ? 'reject-once' : 'allow-once');
     this.requireClient().respondPermission(rpcId, buildAcpRichAnswer(optionId, response));
     this.host.dispatch({ type: 'permission.resolved', requestId: response.requestId });
   }
