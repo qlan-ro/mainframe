@@ -22,6 +22,13 @@ impl PlanHost for PlanHostImpl {
     fn clear_display_state(&self, chat_id: &str) {
         self.event_handler.clear_display_state(chat_id);
     }
+    fn notify_transcript_cleared(&self, chat_id: &str) {
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::TranscriptCleared {
+                chat_id: chat_id.to_string(),
+            },
+        );
+    }
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move { self.lifecycle.start_chat(chat_id).await })
     }

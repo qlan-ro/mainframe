@@ -68,6 +68,9 @@ pub trait PlanActionContext: Send + Sync {
     /// `ctx.messages.set(ctx.chatId, [])`.
     fn clear_messages(&self);
     fn clear_display_state(&self);
+    /// Announce the wipe on the chat-surface seam — the facade pushes
+    /// `_mainframe.dev/transcript_cleared` so attached clients re-resume.
+    fn notify_transcript_cleared(&self);
     fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn send_message(&self, content: String) -> BoxFuture<'_, Result<(), AdapterError>>;
 }

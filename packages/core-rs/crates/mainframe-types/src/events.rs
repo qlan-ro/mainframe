@@ -128,8 +128,6 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "process.stopped")]
     ProcessStopped { process_id: String },
-    #[serde(rename = "messages.cleared")]
-    MessagesCleared { chat_id: String },
     #[serde(rename = "context.updated")]
     ContextUpdated {
         chat_id: String,

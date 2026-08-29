@@ -30,6 +30,7 @@ import type {
 import {
   CompactionParamsSchema,
   GateResolvedParamsSchema,
+  TranscriptClearedParamsSchema,
   HeartbeatParamsSchema,
   InitializeResponseSchema,
   MAINFRAME_META_NAMESPACE,
@@ -56,6 +57,7 @@ export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestP
 /** `requestId` is the JSON-RPC id the gate's `session/request_permission` traveled under. */
 export type GateResolvedListener = (sessionId: string, requestId: string) => void;
 export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
+export type TranscriptClearedListener = (sessionId: string) => void;
 export type GapListener = () => void;
 export type CloseListener = () => void;
 
@@ -98,6 +100,7 @@ export class AcpFacadeClient {
   private readonly permissionRequestListeners = new Set<PermissionRequestListener>();
   private readonly gateResolvedListeners = new Set<GateResolvedListener>();
   private readonly compactionListeners = new Set<CompactionListener>();
+  private readonly transcriptClearedListeners = new Set<TranscriptClearedListener>();
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 
@@ -210,6 +213,12 @@ export class AcpFacadeClient {
     return () => this.compactionListeners.delete(listener);
   }
 
+  /** The server wiped a session's transcript (`_mainframe.dev/transcript_cleared`). */
+  onTranscriptCleared(listener: TranscriptClearedListener): () => void {
+    this.transcriptClearedListeners.add(listener);
+    return () => this.transcriptClearedListeners.delete(listener);
+  }
+
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
@@ -280,6 +289,15 @@ export class AcpFacadeClient {
         return;
       }
       this.watchdog?.observe(parsed.data.sequence);
+      return;
+    }
+    if (notification.method === '_mainframe.dev/transcript_cleared') {
+      const parsed = TranscriptClearedParamsSchema.safeParse(notification.params);
+      if (!parsed.success) {
+        console.warn('[acp-client] dropped malformed transcript_cleared', notification.params);
+        return;
+      }
+      this.transcriptClearedListeners.forEach((fn) => fn(parsed.data.sessionId));
       return;
     }
     if (notification.method === '_mainframe.dev/compaction') {

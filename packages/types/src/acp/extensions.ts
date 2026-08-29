@@ -174,6 +174,17 @@ export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
  * instead of heuristically refetching.
  */
 /**
+ * `_mainframe.dev/transcript_cleared`'s params: the server wiped the
+ * session's transcript (plan-mode clear-context) — re-resume to converge.
+ */
+export const TranscriptClearedParamsSchema = z
+  .object({
+    sessionId: z.string(),
+  })
+  .loose();
+export type TranscriptClearedParams = z.infer<typeof TranscriptClearedParamsSchema>;
+
+/**
  * `_mainframe.dev/compaction`'s params: live compaction progress
  * (`chat.compacting`/`chat.compactDone`'s facade successor). The durable
  * transcript marker rides `ItemMeta.isCompacted`; this drives the in-flight

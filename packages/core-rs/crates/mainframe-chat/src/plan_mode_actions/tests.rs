@@ -25,6 +25,7 @@ impl PlanHost for FakeHost {
         self.events.lock().unwrap().push(event);
     }
     fn clear_display_state(&self, _chat_id: &str) {}
+    fn notify_transcript_cleared(&self, _chat_id: &str) {}
     fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }

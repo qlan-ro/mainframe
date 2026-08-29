@@ -7,7 +7,7 @@
 
 use mainframe_types::acp::extensions::{
     CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
-    MainframeCapabilities,
+    MainframeCapabilities, TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 
@@ -71,6 +71,19 @@ pub fn compaction_notification(
         params: Some(serde_json::json!(CompactionParams {
             session_id: session_id.to_string(),
             phase,
+        })),
+    }
+}
+
+/// The `_mainframe.dev/transcript_cleared` notification: the server wiped
+/// the session's transcript (plan-mode clear-context); attached clients
+/// re-resume to converge — the facade successor to `messages.cleared`.
+pub fn transcript_cleared_notification(session_id: &str) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/transcript_cleared".into(),
+        params: Some(serde_json::json!(TranscriptClearedParams {
+            session_id: session_id.to_string(),
         })),
     }
 }

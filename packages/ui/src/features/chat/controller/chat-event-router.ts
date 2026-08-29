@@ -6,9 +6,9 @@
  *
  * Owns NO state. It mirrors live chat.updated into the composer config,
  * surfaces trust/run-failure toasts, and runs the pure `handleDaemonEvent`
- * mapper. A `messages.cleared` additionally triggers the facade re-replay
- * through the host, so the item accumulator converges with the emptied
- * transcript.
+ * mapper. Transcript clearing arrives on the facade
+ * (`_mainframe.dev/transcript_cleared`, handled by the session plane), not
+ * here.
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import { mfToast } from '@/lib/toast';
@@ -21,8 +21,6 @@ export interface DaemonEventRouterHost {
   getChatId: () => string;
   /** Apply a state event through the reducer. */
   dispatch: (event: ChatStateEvent) => void;
-  /** `/clear` landed: re-replay the facade session so tool-call items drop too. */
-  onTranscriptCleared: () => void;
 }
 
 export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost): void {
@@ -64,7 +62,6 @@ export function routeDaemonEvent(event: DaemonEvent, host: DaemonEventRouterHost
 
   const result = handleDaemonEvent(event, chatId);
   if (result.kind === 'event') {
-    if (result.event.type === 'transcript.cleared') host.onTranscriptCleared();
     host.dispatch(result.event);
   }
 }

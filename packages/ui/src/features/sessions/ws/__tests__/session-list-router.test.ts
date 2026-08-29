@@ -11,7 +11,7 @@
  *  - chat.prDetected (source: 'created' | 'mentioned') → onReload called once; onMarkUnread not called
  *  - background_task.started|updated|ended → onReload called; onMarkUnread not called
  *  - dispose() unsubscribes; subsequent dispatched events are ignored
- *  - Unrelated event type (messages.cleared) → no-op
+ *  - Unrelated event type (context.updated) → no-op
  *
  * All tests run against the plain SessionListRouter class — no React, no
  * zustand. A fake DaemonWsClient injects the event handler; deps are vi.fn()
@@ -351,8 +351,8 @@ describe('session-list-router — dispose() unsubscribes the WS handler', () => 
 // ---------------------------------------------------------------------------
 
 describe('session-list-router — unrelated event type is a no-op', () => {
-  it('does not call onReload or onMarkUnread for messages.cleared', () => {
-    dispatch({ type: 'messages.cleared', chatId: 'c9' });
+  it('does not call onReload or onMarkUnread for context.updated', () => {
+    dispatch({ type: 'context.updated', chatId: 'c9' });
 
     expect(onReload).not.toHaveBeenCalled();
     expect(onMarkUnread).not.toHaveBeenCalled();

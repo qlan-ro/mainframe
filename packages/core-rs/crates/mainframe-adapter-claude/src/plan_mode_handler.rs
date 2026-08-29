@@ -86,9 +86,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
 
             ctx.clear_messages();
             ctx.clear_display_state();
-            ctx.emit_event(DaemonEvent::MessagesCleared {
-                chat_id: ctx.chat_id(),
-            });
+            ctx.notify_transcript_cleared();
 
             ctx.start_chat().await?;
             if let Some(plan) = plan {
@@ -145,6 +143,7 @@ mod tests {
         shifts: usize,
         cleared_messages: usize,
         cleared_display: usize,
+        transcript_cleared: usize,
         started: usize,
         sent: Vec<String>,
     }
@@ -217,6 +216,9 @@ mod tests {
         }
         fn clear_display_state(&self) {
             self.rec().cleared_display += 1;
+        }
+        fn notify_transcript_cleared(&self) {
+            self.rec().transcript_cleared += 1;
         }
         fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
             self.rec().started += 1;
@@ -308,11 +310,7 @@ mod tests {
                 && u.plan_mode == Some(false)
                 && u.permission_mode == Some(ExecutionMode::AcceptEdits)
         }));
-        assert!(
-            rec.events
-                .iter()
-                .any(|e| matches!(e, DaemonEvent::MessagesCleared { chat_id } if chat_id == "c1"))
-        );
+        assert_eq!(rec.transcript_cleared, 1);
         assert_eq!(rec.started, 1);
         assert_eq!(rec.cleared_messages, 1);
         assert_eq!(rec.cleared_display, 1);

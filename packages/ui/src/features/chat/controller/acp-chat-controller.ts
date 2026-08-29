@@ -127,7 +127,6 @@ export class AcpChatController {
           routeDaemonEvent(event, {
             getChatId: () => this.daemonId,
             dispatch: (e) => this.dispatch(e),
-            onTranscriptCleared: () => void this.plane.reattach().catch(() => undefined),
           }),
         isDisposed: () => this.disposed,
       });

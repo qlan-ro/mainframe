@@ -28,6 +28,7 @@ pub(crate) type PlanRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 pub(crate) trait PlanHost: Send + Sync {
     fn emit_event(&self, event: DaemonEvent);
     fn clear_display_state(&self, chat_id: &str);
+    fn notify_transcript_cleared(&self, chat_id: &str);
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
     fn send_message<'a>(
         &'a self,
@@ -220,6 +221,10 @@ impl PlanActionContext for ChatPlanActionCtx {
 
     fn clear_display_state(&self) {
         self.host.clear_display_state(&self.chat_id);
+    }
+
+    fn notify_transcript_cleared(&self) {
+        self.host.notify_transcript_cleared(&self.chat_id);
     }
 
     fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>> {

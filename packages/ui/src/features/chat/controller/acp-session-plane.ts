@@ -28,6 +28,7 @@ import { z } from 'zod';
 import type {
   CompactionListener,
   GapListener,
+  TranscriptClearedListener,
   GateResolvedListener,
   PermissionRequestListener,
   ReplayCursor,
@@ -51,6 +52,7 @@ export interface AcpSessionClientPort {
   onPermissionRequest(listener: PermissionRequestListener): () => void;
   onGateResolved(listener: GateResolvedListener): () => void;
   onCompaction(listener: CompactionListener): () => void;
+  onTranscriptCleared(listener: TranscriptClearedListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -96,6 +98,13 @@ export class AcpSessionPlane {
         client.onCompaction((sessionId, phase) => {
           if (sessionId !== this.host.getChatId()) return;
           this.host.dispatch({ type: phase === 'started' ? 'compact.started' : 'compact.done' });
+        }),
+        client.onTranscriptCleared((sessionId) => {
+          if (sessionId !== this.host.getChatId()) return;
+          // The server wiped the transcript (plan-mode clear-context): drop
+          // the local projection and re-replay so tool-call items drop too.
+          this.host.dispatch({ type: 'transcript.cleared' });
+          void this.reattach().catch(() => undefined);
         }),
         client.onGap(() => void this.resumeFromGap()),
       );

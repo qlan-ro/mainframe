@@ -80,6 +80,11 @@ pub enum ChatSurfaceEvent {
         chat_id: String,
         phase: CompactionPhase,
     },
+    /// The transcript was wiped server-side (plan-mode clear-context). A
+    /// facade client re-resumes to converge its accumulator.
+    TranscriptCleared {
+        chat_id: String,
+    },
     Usage {
         chat_id: String,
         usage: ContextUsage,

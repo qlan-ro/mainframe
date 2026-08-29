@@ -257,6 +257,12 @@ impl ChatSurface for FacadeHub {
                     Vec::new()
                 });
             }
+            ChatSurfaceEvent::TranscriptCleared { chat_id } => {
+                let note = mainframe_acp::transcript_cleared_notification(&chat_id);
+                for connection in self.attached_connections(&chat_id) {
+                    connection.send_json(&note);
+                }
+            }
             ChatSurfaceEvent::Compaction { chat_id, phase } => {
                 let wire_phase = match phase {
                     CompactionPhase::Started => CompactionWirePhase::Started,

@@ -15,10 +15,6 @@ export type HandleResult = { kind: 'event'; event: ChatStateEvent } | { kind: 'n
 /** Maps a raw DaemonEvent to a HandleResult for the given chatId. */
 export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleResult {
   switch (event.type) {
-    case 'messages.cleared':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'transcript.cleared' } };
-
     case 'chat.updated': {
       if (event.chat.id !== chatId) return { kind: 'noop' };
       if (event.chat.isRunning === false) {

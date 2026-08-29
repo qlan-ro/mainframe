@@ -22,6 +22,7 @@ import {
   PromptSendMetaSchema,
   QueuedPromptStateSchema,
   CompactionParamsSchema,
+  TranscriptClearedParamsSchema,
   RetryMarkerSchema,
   UsageMetaSchema,
   RichPermissionAnswerSchema,
@@ -57,6 +58,8 @@ function readFixture(name: string): Record<string, unknown> {
 
 /** Filename prefix → Zod schema. Mirrors `acp_golden_fixtures.rs`'s dispatch table. */
 function schemaFor(name: string): z.ZodType {
+  if (name === 'transcript-cleared.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'transcript-cleared.params.json') return TranscriptClearedParamsSchema;
   if (name === 'compaction.notification.json') return JsonRpcNotificationSchema;
   if (name === 'compaction.params.json') return CompactionParamsSchema;
   if (name === 'heartbeat.notification.json') return JsonRpcNotificationSchema;

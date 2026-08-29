@@ -202,6 +202,15 @@ pub struct CompactionParams {
     pub phase: CompactionWirePhase,
 }
 
+/// `_mainframe.dev/transcript_cleared`'s params: the server wiped the
+/// session's transcript (plan-mode clear-context) — a client re-resumes so
+/// its accumulator converges with the emptied history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptClearedParams {
+    pub session_id: String,
+}
+
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

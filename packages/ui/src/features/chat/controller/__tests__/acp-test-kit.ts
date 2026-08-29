@@ -29,6 +29,7 @@ import type {
   ReplayCursor,
   CompactionListener,
   SessionUpdateListener,
+  TranscriptClearedListener,
 } from '../../../../lib/daemon/acp-client';
 import { AcpChatController, type AcpClientHandle } from '../acp-chat-controller';
 
@@ -50,6 +51,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitPermissionRequest(id: JsonRpcRequestId, request: RequestPermissionRequest): void;
   emitGateResolved(sessionId: string, requestId: string): void;
   emitCompaction(sessionId: string, phase: 'started' | 'done'): void;
+  emitTranscriptCleared(sessionId: string): void;
   emitGap(): void;
 }
 
@@ -58,6 +60,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const permissionListeners = new Set<PermissionRequestListener>();
   const gateResolvedListeners = new Set<GateResolvedListener>();
   const compactionListeners = new Set<CompactionListener>();
+  const transcriptClearedListeners = new Set<TranscriptClearedListener>();
   const gapListeners = new Set<GapListener>();
 
   const client: FakeAcpClient = {
@@ -84,6 +87,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onCompaction(listener) {
       compactionListeners.add(listener);
       return () => compactionListeners.delete(listener);
+    },
+    onTranscriptCleared(listener) {
+      transcriptClearedListeners.add(listener);
+      return () => transcriptClearedListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -116,6 +123,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     emitCompaction(sessionId, phase) {
       for (const l of compactionListeners) l(sessionId, phase);
+    },
+    emitTranscriptCleared(sessionId) {
+      for (const l of transcriptClearedListeners) l(sessionId);
     },
     emitGap() {
       for (const l of gapListeners) l();

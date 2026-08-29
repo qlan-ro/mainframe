@@ -15,7 +15,6 @@ export type DaemonEvent =
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
   | { type: 'process.ready'; processId: string; claudeSessionId: string }
   | { type: 'process.stopped'; processId: string }
-  | { type: 'messages.cleared'; chatId: string }
   | { type: 'context.updated'; chatId: string; filePaths?: string[] }
   | { type: 'error'; chatId?: string; error: string }
   | {

@@ -87,6 +87,35 @@ describe('AcpSessionPlane — state_update → run frames', () => {
   });
 });
 
+describe('AcpSessionPlane — transcript cleared', () => {
+  it('dispatches transcript.cleared and re-resumes from the start', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+    const resumesBefore = client.resumeCalls.length;
+
+    client.emitTranscriptCleared(CHAT_ID);
+    await Promise.resolve();
+
+    expect(eventsOf(host)).toContainEqual({ type: 'transcript.cleared' });
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+    expect(client.resumeCalls.at(-1)).toEqual({ sessionId: CHAT_ID, cursor: { type: 'start' } });
+  });
+
+  it('ignores a clear for another session', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+    host.dispatch.mockClear();
+
+    client.emitTranscriptCleared('other-chat');
+
+    expect(host.dispatch).not.toHaveBeenCalled();
+  });
+});
+
 describe('AcpSessionPlane — compaction notifications', () => {
   it('maps started/done phases to compact.started/compact.done for this chat only', async () => {
     const client = makeFakeAcpClient();

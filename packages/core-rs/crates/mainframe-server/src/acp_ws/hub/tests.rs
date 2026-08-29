@@ -276,6 +276,32 @@ async fn a_retry_marker_lands_on_the_next_upsert_for_attached_sessions() {
 }
 
 #[tokio::test]
+async fn transcript_cleared_notifies_attached_connections() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    hub.attach(&conn, "chat-1");
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::TranscriptCleared {
+        chat_id: "chat-1".to_string(),
+    });
+    hub.on_chat_surface_event(ChatSurfaceEvent::TranscriptCleared {
+        chat_id: "chat-2".to_string(),
+    });
+
+    let frames = drain(&mut rx);
+    assert_eq!(
+        frames.len(),
+        1,
+        "only the attached chat notifies: {frames:?}"
+    );
+    assert_eq!(
+        frames[0]["method"],
+        json!("_mainframe.dev/transcript_cleared")
+    );
+    assert_eq!(frames[0]["params"]["sessionId"], json!("chat-1"));
+}
+
+#[tokio::test]
 async fn compaction_events_notify_attached_connections_with_the_phase() {
     let hub = hub();
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
