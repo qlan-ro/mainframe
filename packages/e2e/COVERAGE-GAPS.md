@@ -59,7 +59,7 @@ nondeterminism) **unless recorded via mock-cli (above)**. **~40 ids.**
 |-------|-----|------------------|
 | Plan approval | `chat-plan-approve-button`, `chat-plan-reject-button`, `chat-plan-revise-button`, `chat-plan-cancel-revise-button`, `chat-plan-send-feedback-button`, `chat-plan-feedback-input`, `chat-plan-exec-mode-select`, `chat-plan-clear-context-checkbox` | AI returns an ExitPlanMode plan |
 | Ask-user-question | `chat-question-*` (back/next/skip/submit, option, option-other, other-input) | AI emits an AskUserQuestion turn |
-| Permissions | `chat-permission-allow-once-button`, `chat-permission-always-allow-button`, `chat-permission-deny-button`, `chat-permission-details-toggle` | AI requests a tool permission (today covered via `getByRole`) |
+| Permissions | `chat-permission-option-{optionId}` (allow-once / allow-always / reject-once), `chat-permission-details-toggle` | AI requests a tool permission (today covered via `getByRole`) |
 | Inline review → agent | `editor-inline-comment-send`, `editor-line-comment-send`, `editor-submit-review`, `line-comment-widget` | `sendCommentMessage` dispatches to the chat; the *send* path is AI-coupled (open/type/cancel is not — see §4) |
 | Tool-result UI | `thread-tool-result-collapse`, `thread-tool-result-expand`, `thread-find-prev`, `message-part-thinking-toggle`, `tool-mcp-expand`, `tool-skill-expand`, `tool-schedule-expand`, `tool-task-group-toggle` | AI must invoke the matching tool / emit thinking |
 | Subagents & bg tasks | `task-card`, `task-card-agent`, `task-card-model`, `bg-task-row-${…}`, `bg-task-kill-${…}`, `bg-task-recovered-${…}`, `chat-session-bar-bg-tasks-pill`, `chat-session-bar-bg-tasks-popover` | AI dispatches a Task / background task |

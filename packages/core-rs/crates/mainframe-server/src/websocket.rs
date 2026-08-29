@@ -691,13 +691,12 @@ mod tests {
 // Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
 // file-watch state = task-local (single owner). Broadcast fan-out = one pump task
 // over broadcast::Receiver → per-client mpsc, with the exact chatId-scoped vs
-// connection-global gating. message.send → ChatManager.sendMessage (attachments +
-// command meta), permission.respond → respondToPermission, and subscribe's
-// message.queued.snapshot (real getQueuedForChat refs) are all WIRED — they
-// self-gate on ctx.chat_manager: while it is None (ChatManager construction is a
-// documented daemon-boot blocker) they degrade to empty snapshot / warn-once +
-// ignore, exactly the pre-4.6b behavior the ws_integration tests pin. Once boot
-// sets Some(..) the wired paths run. Adapter-replay (buildConnectReplayEvents over
+// connection-global gating. The legacy chat dialect's client frames
+// (message.send, permission.respond) and subscribe's message.queued.snapshot
+// died with spec decision 24 — chat sends and gates ride the /acp/{profile}
+// facade now; this socket keeps only the non-chat domains and rejects the
+// retired frames at the schema seam (ws_schemas.rs). Adapter-replay
+// (buildConnectReplayEvents over
 // the live registry snapshots) streams right after connection.ready so a
 // reconnecting client's catalog is authoritative. Task 5.5 added lsp_ws_handler:
 // the `/lsp/:projectId/:language` route self-authenticates, validates+spawns via
@@ -706,6 +705,3 @@ mod tests {
 // replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
 // consumes the child's stdout/stderr on first attach, so a reconnect after the
 // first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.
-// message.send also registers the sending connection as a subscriber of its
-// target chat before the seam check, so events emitted in the send-before-
-// subscribe window are no longer dropped (#275).

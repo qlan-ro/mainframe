@@ -542,7 +542,7 @@ test.describe('§composer queue', () => {
     // recording). Consumption relocates the bubble to a real user message and clears the
     // queued badge. Daemon-level queue mechanics: chat-manager-cli-queue.test.ts,
     // event-handler-move-on-process.test.ts (both in packages/core/src/chat/__tests__/).
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
 
     await expect(page.getByTestId('chat-queued-message')).toHaveCount(0, { timeout: 45_000 });
     await expect(page.getByTestId('chat-user-message').filter({ hasText: 'Edited queued note' })).toBeVisible();
@@ -550,7 +550,7 @@ test.describe('§composer queue', () => {
     // The consumed queued message starts a real new turn (interaction #2 in the recording) — it hits another
     // Write permission gate. Answer it so the mock session ends cleanly.
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 60_000);
   });
 });

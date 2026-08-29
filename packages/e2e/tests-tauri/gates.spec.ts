@@ -102,7 +102,7 @@ test.describe('§permission gate details', () => {
     await closeTauriApp(app);
   });
 
-  test('Details toggle reveals the raw tool input; always-allow shown when suggestions exist; the card matches the composer width at both surface widths', async () => {
+  test('Details toggle reveals the raw tool input; the offered options render; the card matches the composer width at both surface widths', async () => {
     const { page } = app;
     await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
     await page.locator('[data-testid="chat-permission-gate"]').waitFor({ timeout: 45_000 });
@@ -118,8 +118,9 @@ test.describe('§permission gate details', () => {
     await expect(pre).toContainText('/tmp/mf-e2e-test.txt');
     await expect(pre).toContainText('hello');
 
-    // Recording's suggestions carry [{type:setMode,...},{type:addDirectories,...}] — non-empty.
-    await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeVisible();
+    // The daemon offers the same three options on every gate (spec decision 12) —
+    // always-allow is no longer gated on the request carrying suggestions.
+    await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
 
     // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
     await page.getByTestId('surface-rail-workspace').click();
@@ -131,12 +132,12 @@ test.describe('§permission gate details', () => {
     await page.getByTestId('surface-rail-workspace').click();
 
     // Clean up: deny so the AI finishes.
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
 
-// ─── Permission gate — always-allow absent without suggestions ──────────────
+// ─── Permission gate — the offered option set is suggestion-independent ──────
 
 test.describe('§permission gate no suggestions', () => {
   let app: TauriAppFixture;
@@ -153,19 +154,21 @@ test.describe('§permission gate no suggestions', () => {
     await closeTauriApp(app);
   });
 
-  test('always-allow is absent when the request carries no suggestions', async () => {
+  // The pre-facade gate hid Always Allow when the request carried no suggestions
+  // (client-side `hasSuggestions` gating). On the facade the daemon supplies the
+  // option list and the client renders it verbatim (spec decision 12) — the
+  // recording's empty `suggestions:[]` must NOT change the offered set.
+  test('all three offered options render even when the request carries no suggestions', async () => {
     const { page } = app;
     await sendMessage(page, 'Run `whoami` to check the current user');
     const gate = page.locator('[data-testid="chat-permission-gate"]');
     await gate.waitFor({ timeout: 45_000 });
 
-    // Recording's onPermission carries suggestions:[] — ActionFooter's `hasSuggestions` gate.
-    await expect(page.locator('[data-testid="chat-permission-always-allow"]')).toBeHidden();
-    // The rest of the footer still renders — this is a targeted absence, not a broken gate.
-    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeVisible();
-    await expect(page.locator('[data-testid="chat-permission-deny"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-permission-option-allow-once"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-permission-option-reject-once"]')).toBeVisible();
 
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -347,8 +350,8 @@ test.describe('§gate queue-front', () => {
   });
 
   // The daemon architecturally serializes stacked control_requests to the client — it never
-  // delivers two simultaneously (permission-manager enqueues the 2nd server-side and only emits
-  // its `permission.requested` after the 1st is resolved). So the observable, reachable behavior
+  // delivers two simultaneously (permission-manager enqueues the 2nd server-side and only raises
+  // its `session/request_permission` after the 1st is resolved). So the observable, reachable behavior
   // per select-front.ts's queue-front design is: exactly one gate is mounted at a time, tool 1's
   // gate resolves first, then tool 2's gate appears — in recorded order. That is what this test
   // asserts (see .superpowers/sdd/reports/recordings-author-report.md's permissions-stacked notes
@@ -362,13 +365,13 @@ test.describe('§gate queue-front', () => {
     await expect(gate).toContainText('Write');
     await expect(gate).toHaveCount(1);
 
-    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
 
     // Tool 2's gate only mounts after tool 1's is answered — same testid, new content.
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await expect(gate).toHaveCount(1);
 
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -424,8 +427,8 @@ test.describe('§gate pinned slot', () => {
     // back down to it.
     await scrollViewportToTop(page);
     await expect(gate).toBeInViewport();
-    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeInViewport();
-    await expect(page.locator('[data-testid="chat-permission-allow-once"]')).toBeEnabled();
+    await expect(page.locator('[data-testid="chat-permission-option-allow-once"]')).toBeInViewport();
+    await expect(page.locator('[data-testid="chat-permission-option-allow-once"]')).toBeEnabled();
     await page.waitForTimeout(300);
     const scrollTopAfterSettle = await page.getByTestId('chat-thread-viewport').evaluate((el) => el.scrollTop);
     expect(scrollTopAfterSettle).toBe(0);
@@ -439,9 +442,9 @@ test.describe('§gate pinned slot', () => {
     await expectGateMatchesComposerWidth(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
-    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -500,7 +503,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     // an expanded gate at floor height can legitimately push its own action row below
     // the slot's internal scroll fold, which is a different contract (internal
     // scrolling) than this test is guarding.
-    const allowOnce = page.locator('[data-testid="chat-permission-allow-once"]');
+    const allowOnce = page.locator('[data-testid="chat-permission-option-allow-once"]');
     await expect(allowOnce).toBeInViewport();
     await expect(allowOnce).toBeEnabled();
 
@@ -542,9 +545,9 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     await assertGateFooterInvariants(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
-    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -618,9 +621,9 @@ test.describe('§gate slot cap with the find bar open', () => {
     await scrollViewportToBottom(page);
     await assertGateFooterInvariants(page);
 
-    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });

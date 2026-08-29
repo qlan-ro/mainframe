@@ -218,12 +218,17 @@ test.describe('§facade-protocol streaming', () => {
     expect(promptReply?.error).toBeUndefined();
 
     // Criterion 5: no queue.* frame family exists on the facade — every
-    // notification method is from the facade vocabulary.
+    // notification method is from the facade vocabulary. The mid-turn prompt
+    // above is what makes `_mainframe.dev/queue_state` appear here: acceptance
+    // while a turn runs snapshots the queued refs (spec decision 24).
     const allowedMethods = [
       'session/update',
       'session/request_permission',
       '_mainframe.dev/heartbeat',
       '_mainframe.dev/gate_resolved',
+      '_mainframe.dev/queue_state',
+      '_mainframe.dev/compaction',
+      '_mainframe.dev/transcript_cleared',
     ];
     for (const frame of frames) {
       if (frame.method !== undefined) expect(allowedMethods).toContain(frame.method);

@@ -425,10 +425,9 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
   // Previously: a backgrounded chat's `chat.notification` WS event never reached
   // the client — `broadcastEvent` scoped delivery to `client.subscriptions.has(chatId)`,
   // and per-chat subscriptions are torn down on deactivation, so the unread dot
-  // never lit up. Fixed by the product-bug-fix campaign: `chat.notification` (and
-  // `permission.requested`) are now connection-global (websocket.ts
-  // `CONNECTION_GLOBAL_EVENT_TYPES`), reaching every client regardless of which
-  // chat it's currently subscribed to.
+  // never lit up. Fixed by the product-bug-fix campaign: `chat.notification` is
+  // now connection-global (websocket.rs `CONNECTION_GLOBAL_EVENT_TYPES`),
+  // reaching every client regardless of which chat it's currently subscribed to.
   test('marks the row unread once a response lands while a different chat is active, and clears it on reselect', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);

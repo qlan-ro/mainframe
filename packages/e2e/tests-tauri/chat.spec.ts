@@ -10,9 +10,9 @@
  *   chat-assistant-message       — assistant reply bubble
  *   chat-bash-card               — rendered Bash tool card
  *   chat-permission-gate         — permission gate container
- *   chat-permission-deny         — deny button
- *   chat-permission-allow-once   — allow-once button
- *   chat-permission-always-allow — always-allow button (only when suggestions present)
+ *   chat-permission-option-{optionId} — one button per adapter-supplied option; the daemon
+ *     offers allow-once / allow-always / reject-once on every gate (mainframe-acp gates.rs
+ *     `offered_options`), and the gate renders exactly what is offered (spec decision 12)
  *   chat-plan-gate               — plan gate container
  *   chat-plan-approve            — approve & run button
  *   chat-plan-keep-planning      — "Keep planning" → opens ReviseRow
@@ -96,7 +96,7 @@ test.describe('§permissions interactive', () => {
 
   test('Deny dismisses the gate and AI becomes idle', async () => {
     const { page } = app;
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
     await expect(page.locator('[data-testid="chat-thread-running"]')).toBeHidden();
   });
@@ -107,7 +107,7 @@ test.describe('§permissions interactive', () => {
     // First: allow-once
     await sendMessage(page, 'Create /tmp/mf-e2e-test.txt again');
     await page.locator('[data-testid="chat-permission-gate"]').waitFor({ timeout: 45_000 });
-    await page.locator('[data-testid="chat-permission-allow-once"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await waitForIdle(page, 60_000);
 
     // Second: gate should appear again (allow-once does not persist)
@@ -116,7 +116,7 @@ test.describe('§permissions interactive', () => {
     await expect(page.locator('[data-testid="chat-permission-gate"]')).toBeVisible();
 
     // Clean up: deny so the AI finishes
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -169,7 +169,7 @@ test.describe('§plan approval', () => {
     // After approval, Claude executes → triggers an Edit permission gate
     await page.locator('[data-testid="chat-permission-gate"]').waitFor({ timeout: 45_000 });
     // suggestions=[{type:setMode,...}] so always-allow button is present
-    await page.locator('[data-testid="chat-permission-always-allow"]').click();
+    await page.locator('[data-testid="chat-permission-option-allow-always"]').click();
     await waitForIdle(page, 90_000);
   });
 });

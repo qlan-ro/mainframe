@@ -16,14 +16,15 @@ it. The session bar status reads "Awaiting" while any card is shown.
 persistent rule is saved (the same tool prompts again next time).
 
 **Starting Conditions:** Chat in `default` permission mode; CLI emits `can_use_tool` for a tool
-other than `AskUserQuestion`/`ExitPlanMode` (e.g. `Bash`); daemon emits `permission.requested`.
+other than `AskUserQuestion`/`ExitPlanMode` (e.g. `Bash`); the daemon raises
+`session/request_permission` on the ACP facade (the legacy `permission.requested` frame is retired).
 
 **User Role:** Developer driving an agent session.
 
 **Test Steps:**
 1. Trigger a tool-permission request → `permission-card` replaces the composer; session bar shows "Awaiting".
 2. Click `chat-permission-details-toggle` → a `<pre>` JSON block of `request.input` expands; click again → collapses (pure UI, no response sent).
-3. Click `chat-permission-allow-once-button` → card disappears, composer re-renders, status clears.
+3. Click `chat-permission-option-allow-once` → card disappears, composer re-renders, status clears.
 4. Cause the same tool to be requested again → the permission card appears once more (no saved rule).
 
 **Expected Outcomes:**
@@ -41,7 +42,7 @@ other than `AskUserQuestion`/`ExitPlanMode` (e.g. `Bash`); daemon emits `permiss
 
 **Test Steps:**
 1. Trigger a tool-permission request → `permission-card` shown.
-2. Click `chat-permission-deny-button` → card disappears, composer returns.
+2. Click `chat-permission-option-reject-once` → card disappears, composer returns.
 
 **Expected Outcomes:**
 - Response sent is `behavior: 'deny'`, no `message` field.
@@ -49,19 +50,21 @@ other than `AskUserQuestion`/`ExitPlanMode` (e.g. `Bash`); daemon emits `permiss
 
 ---
 
-## Scenario C3 (edge) — Always Allow conditional rendering
+## Scenario C3 (edge) — Always Allow is always offered
 
-**Test Objective:** The "Always Allow" button renders **only** when the daemon supplies suggestions,
-and when used it sends those suggestions verbatim as `updatedPermissions`.
+**Test Objective:** The gate renders exactly the daemon's offered option list — allow-once,
+always-allow, and reject — regardless of whether the request carries suggestions (spec
+decision 12); Always Allow sends the request's suggestions verbatim as `updatedPermissions`.
 
 **Test Steps:**
-1. Trigger a permission request with **empty** `suggestions` → assert `chat-permission-always-allow-button` is **absent**; allow-once and deny are present.
-2. Trigger a permission request with non-empty `suggestions` → assert `chat-permission-always-allow-button` is **present**.
-3. Click it → card clears.
+1. Trigger a permission request with **empty** `suggestions` → assert all three
+   `chat-permission-option-{allow-once,allow-always,reject-once}` buttons are present.
+2. Trigger a permission request with non-empty `suggestions` → same three buttons.
+3. Click `chat-permission-option-allow-always` → card clears.
 
 **Expected Outcomes:**
-- Button absent in state 1, present in state 2.
-- Response is `behavior: 'allow'` with `updatedPermissions` equal to `request.suggestions` (unmodified).
+- The offered set never varies with suggestions; the client renders it verbatim.
+- Response is `behavior: 'allow'` with `updatedPermissions` equal to `request.suggestions` (unmodified — `[]` when empty).
 
 ---
 
@@ -70,8 +73,9 @@ and when used it sends those suggestions verbatim as `updatedPermissions`.
 **Test Objective:** Approving a plan sends the chosen execution mode and clear-context flag;
 `yolo` maps to bypass-permissions; clear-context wipes history and restarts the CLI.
 
-**Starting Conditions:** Chat in plan mode; CLI calls `ExitPlanMode`; daemon emits
-`permission.requested` with `toolName === 'ExitPlanMode'` and `request.input.plan` (markdown).
+**Starting Conditions:** Chat in plan mode; CLI calls `ExitPlanMode`; the daemon raises
+`session/request_permission` whose `_meta` `controlRequest` carries `toolName === 'ExitPlanMode'`
+and `request.input.plan` (markdown).
 
 **Test Steps:**
 1. Enter plan mode and let the agent present a plan → `plan-approval-card` shown with a scrollable markdown preview; "Awaiting" status.
@@ -82,7 +86,7 @@ and when used it sends those suggestions verbatim as `updatedPermissions`.
 **Expected Outcomes:**
 - Response: `behavior: 'allow'`, `executionMode: 'yolo'`, `clearContext: true`.
 - `yolo` resumes the session in bypass-permissions (no further tool prompts).
-- With clear-context: `messages.cleared` emitted, `claudeSessionId` reset, fresh process started; if `plan` present it is auto-sent as the first message.
+- With clear-context: `_mainframe.dev/transcript_cleared` emitted on the facade (the client re-resumes), `claudeSessionId` reset, fresh process started; if `plan` present it is auto-sent as the first message.
 - **Variant:** approve with exec-mode `default` and clear-context unchecked → `clearContext` is `undefined` (not `false`); existing CLI executes the plan in place, history retained.
 
 ---
@@ -177,11 +181,12 @@ swaps Next↔Submit correctly.
 
 ---
 
-## Cross-cutting: watchdog re-display (applies to all)
+## Cross-cutting: resume redelivery (applies to all)
 
-**Test Objective:** If a response is lost, the card reappears.
+**Test Objective:** If a response is lost with its socket, the card reappears.
 
-**Test Steps:** Respond to any card, then simulate the daemon still holding the same `requestId`
-after 3s → the same card reappears.
+**Test Steps:** Respond to any card while the facade socket is dying → on reconnect the client's
+`session/resume` replay redelivers the still-open gate under the same correlation id (the legacy
+3s watchdog re-read is retired).
 
 **Expected Outcome:** The card is re-shown for the unresolved `requestId` (optimistic clear is reverted).
