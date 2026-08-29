@@ -6,7 +6,8 @@
 //! only assembles them.
 
 use mainframe_types::acp::extensions::{
-    GateResolvedParams, HeartbeatParams, MainframeCapabilities,
+    CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
+    MainframeCapabilities,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 
@@ -53,6 +54,23 @@ pub fn gate_resolved_notification(session_id: &str, rpc_id: &str) -> JsonRpcNoti
         params: Some(serde_json::json!(GateResolvedParams {
             session_id: session_id.to_string(),
             request_id: rpc_id.to_string(),
+        })),
+    }
+}
+
+/// The `_mainframe.dev/compaction` notification: live compaction progress
+/// (`started`/`done`) for every connection attached to the session — the
+/// facade successor to the legacy `chat.compacting`/`chat.compactDone` pair.
+pub fn compaction_notification(
+    session_id: &str,
+    phase: CompactionWirePhase,
+) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/compaction".into(),
+        params: Some(serde_json::json!(CompactionParams {
+            session_id: session_id.to_string(),
+            phase,
         })),
     }
 }

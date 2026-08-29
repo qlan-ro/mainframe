@@ -191,6 +191,25 @@ pub struct HeartbeatParams {
     pub sequence: u64,
 }
 
+/// `_mainframe.dev/compaction`'s params: live compaction progress for a
+/// session (`chat.compacting`/`chat.compactDone`'s facade successor). The
+/// transcript's durable compaction marker rides `ItemMeta::is_compacted`;
+/// this notification only drives the in-flight indicator.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactionParams {
+    pub session_id: String,
+    pub phase: CompactionWirePhase,
+}
+
+/// [`CompactionParams::phase`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompactionWirePhase {
+    Started,
+    Done,
+}
+
 /// Params for the daemon's custom `_mainframe.dev/gate_resolved` notification
 /// (spec decision 19): pushed to every attached connection still holding the
 /// gate when it resolves elsewhere — another facade client's answer, a

@@ -26,6 +26,7 @@ import type {
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
 import type {
+  CompactionListener,
   GapListener,
   GateResolvedListener,
   PermissionRequestListener,
@@ -49,6 +50,7 @@ export interface AcpSessionClientPort {
   onSessionUpdate(listener: SessionUpdateListener): () => void;
   onPermissionRequest(listener: PermissionRequestListener): () => void;
   onGateResolved(listener: GateResolvedListener): () => void;
+  onCompaction(listener: CompactionListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -90,6 +92,10 @@ export class AcpSessionPlane {
         }),
         client.onGateResolved((sessionId, requestId) => {
           if (sessionId === this.host.getChatId()) this.handleGateResolved(requestId);
+        }),
+        client.onCompaction((sessionId, phase) => {
+          if (sessionId !== this.host.getChatId()) return;
+          this.host.dispatch({ type: phase === 'started' ? 'compact.started' : 'compact.done' });
         }),
         client.onGap(() => void this.resumeFromGap()),
       );

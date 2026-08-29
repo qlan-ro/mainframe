@@ -73,67 +73,6 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
 });
 
 // ---------------------------------------------------------------------------
-// chat.compacting
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — chat.compacting', () => {
-  it('returns compact.started event when chatId matches', () => {
-    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: CHAT_ID }, CHAT_ID);
-
-    expect(result).toEqual({
-      kind: 'event',
-      event: { type: 'compact.started' },
-    });
-  });
-
-  it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: OTHER_CHAT }, CHAT_ID);
-
-    expect(result).toEqual({ kind: 'noop' });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// chat.compactDone
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — chat.compactDone', () => {
-  it('returns compact.done event when chatId matches', () => {
-    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: CHAT_ID }, CHAT_ID);
-
-    expect(result).toEqual({
-      kind: 'event',
-      event: { type: 'compact.done' },
-    });
-  });
-
-  it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: OTHER_CHAT }, CHAT_ID);
-
-    expect(result).toEqual({ kind: 'noop' });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// process.started
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — process.started', () => {
-  it('does not start a run — a spawned CLI is not a turn in flight', () => {
-    const result = handleDaemonEvent(
-      {
-        type: 'process.started',
-        chatId: CHAT_ID,
-        process: { id: 'proc-1' } as never,
-      },
-      CHAT_ID,
-    );
-
-    expect(result).toEqual({ kind: 'noop' });
-  });
-});
-
-// ---------------------------------------------------------------------------
 // error
 // ---------------------------------------------------------------------------
 

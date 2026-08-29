@@ -64,8 +64,6 @@ export type DaemonEvent =
       level: 'success' | 'error';
       kind?: ChatNotificationKind;
     }
-  | { type: 'chat.compacting'; chatId: string }
-  | { type: 'chat.compactDone'; chatId: string }
   | {
       type: 'adapter.models.updated';
       adapterId: string;

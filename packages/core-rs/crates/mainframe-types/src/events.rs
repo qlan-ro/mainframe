@@ -247,10 +247,6 @@ pub enum DaemonEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         kind: Option<ChatNotificationKind>,
     },
-    #[serde(rename = "chat.compacting")]
-    ChatCompacting { chat_id: String },
-    #[serde(rename = "chat.compactDone")]
-    ChatCompactDone { chat_id: String },
     #[serde(rename = "adapter.models.updated")]
     AdapterModelsUpdated {
         adapter_id: String,

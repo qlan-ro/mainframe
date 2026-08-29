@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/compaction",
+  "params": {
+    "sessionId": "chat_1",
+    "phase": "started"
+  }
+}

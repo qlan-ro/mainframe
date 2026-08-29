@@ -276,6 +276,32 @@ async fn a_retry_marker_lands_on_the_next_upsert_for_attached_sessions() {
 }
 
 #[tokio::test]
+async fn compaction_events_notify_attached_connections_with_the_phase() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    hub.attach(&conn, "chat-1");
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::Compaction {
+        chat_id: "chat-1".to_string(),
+        phase: CompactionPhase::Started,
+    });
+    hub.on_chat_surface_event(ChatSurfaceEvent::Compaction {
+        chat_id: "chat-2".to_string(),
+        phase: CompactionPhase::Done,
+    });
+
+    let frames = drain(&mut rx);
+    assert_eq!(
+        frames.len(),
+        1,
+        "only the attached chat notifies: {frames:?}"
+    );
+    assert_eq!(frames[0]["method"], json!("_mainframe.dev/compaction"));
+    assert_eq!(frames[0]["params"]["sessionId"], json!("chat-1"));
+    assert_eq!(frames[0]["params"]["phase"], json!("started"));
+}
+
+#[tokio::test]
 async fn usage_events_become_usage_updates() {
     let hub = hub();
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());

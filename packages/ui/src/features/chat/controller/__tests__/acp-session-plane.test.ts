@@ -87,6 +87,23 @@ describe('AcpSessionPlane — state_update → run frames', () => {
   });
 });
 
+describe('AcpSessionPlane — compaction notifications', () => {
+  it('maps started/done phases to compact.started/compact.done for this chat only', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    client.emitCompaction(CHAT_ID, 'started');
+    client.emitCompaction('other-chat', 'done');
+    client.emitCompaction(CHAT_ID, 'done');
+
+    const events = eventsOf(host);
+    expect(events).toContainEqual({ type: 'compact.started' });
+    expect(events.filter((e) => e.type === 'compact.done')).toHaveLength(1);
+  });
+});
+
 describe('AcpSessionPlane — usage_update → context.usage', () => {
   it('prefers the CLI percentage riding the extension meta', async () => {
     const client = makeFakeAcpClient();

@@ -12,8 +12,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, encoder, gate_request_id};
-use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent, TurnStopReason};
-use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta};
+use mainframe_chat::chat_surface::{
+    ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason,
+};
+use mainframe_types::acp::extensions::{
+    CompactionWirePhase, MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta,
+};
 use mainframe_types::acp::update::{SessionUpdate, StopReason, UsageUpdate};
 use mainframe_types::adapter::ContextUsage;
 use tokio::sync::mpsc;
@@ -253,10 +257,16 @@ impl ChatSurface for FacadeHub {
                     Vec::new()
                 });
             }
-            // Live compaction has no facade frame: a client that must
-            // reconcile a compacted transcript resumes, and resume answers
-            // with the `fullReplay` marker (spec edge cases).
-            ChatSurfaceEvent::Compaction { .. } => {}
+            ChatSurfaceEvent::Compaction { chat_id, phase } => {
+                let wire_phase = match phase {
+                    CompactionPhase::Started => CompactionWirePhase::Started,
+                    CompactionPhase::Done => CompactionWirePhase::Done,
+                };
+                let note = mainframe_acp::compaction_notification(&chat_id, wire_phase);
+                for connection in self.attached_connections(&chat_id) {
+                    connection.send_json(&note);
+                }
+            }
             ChatSurfaceEvent::Usage { chat_id, usage } => {
                 let update = usage_update(&usage);
                 self.for_each_attached_session(&chat_id, |stream, now| {

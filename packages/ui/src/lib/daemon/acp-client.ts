@@ -28,6 +28,7 @@ import type {
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import {
+  CompactionParamsSchema,
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
   InitializeResponseSchema,
@@ -54,6 +55,7 @@ export type SessionUpdateListener = (sessionId: string, update: SessionUpdate) =
 export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestPermissionRequest) => void;
 /** `requestId` is the JSON-RPC id the gate's `session/request_permission` traveled under. */
 export type GateResolvedListener = (sessionId: string, requestId: string) => void;
+export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
 export type GapListener = () => void;
 export type CloseListener = () => void;
 
@@ -95,6 +97,7 @@ export class AcpFacadeClient {
   private readonly sessionUpdateListeners = new Set<SessionUpdateListener>();
   private readonly permissionRequestListeners = new Set<PermissionRequestListener>();
   private readonly gateResolvedListeners = new Set<GateResolvedListener>();
+  private readonly compactionListeners = new Set<CompactionListener>();
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 
@@ -164,11 +167,7 @@ export class AcpFacadeClient {
     this.connection = null;
   }
 
-  async prompt(
-    sessionId: string,
-    text: string,
-    extra?: Pick<PromptRequest, '_meta'>,
-  ): Promise<PromptResponse> {
+  async prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse> {
     const request: PromptRequest = { sessionId, prompt: [{ type: 'text', text }], ...extra };
     const result = await this.requireConnection().sendRequest('session/prompt', request);
     return PromptResponseSchema.parse(result);
@@ -199,10 +198,16 @@ export class AcpFacadeClient {
     return () => this.permissionRequestListeners.delete(listener);
   }
 
-  /** Fires when a gate this client did not answer resolved elsewhere (another client, the legacy surface, or the CLI). */
+  /** Fires when a gate this client did not answer resolved elsewhere (another client or the CLI). */
   onGateResolved(listener: GateResolvedListener): () => void {
     this.gateResolvedListeners.add(listener);
     return () => this.gateResolvedListeners.delete(listener);
+  }
+
+  /** Live compaction progress for a session (`_mainframe.dev/compaction`). */
+  onCompaction(listener: CompactionListener): () => void {
+    this.compactionListeners.add(listener);
+    return () => this.compactionListeners.delete(listener);
   }
 
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
@@ -275,6 +280,15 @@ export class AcpFacadeClient {
         return;
       }
       this.watchdog?.observe(parsed.data.sequence);
+      return;
+    }
+    if (notification.method === '_mainframe.dev/compaction') {
+      const parsed = CompactionParamsSchema.safeParse(notification.params);
+      if (!parsed.success) {
+        console.warn('[acp-client] dropped malformed compaction', notification.params);
+        return;
+      }
+      this.compactionListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.phase));
       return;
     }
     if (notification.method === '_mainframe.dev/gate_resolved') {

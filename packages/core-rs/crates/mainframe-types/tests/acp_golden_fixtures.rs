@@ -16,9 +16,9 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
-    GateResolvedParams, HeartbeatParams, ItemMeta, MainframeCapabilities, PromptSendMeta,
-    QueuedPromptState, RetryMarker, RichPermissionAnswer, StructuredDiff, TruncationMarker,
-    UsageMeta,
+    CompactionParams, GateResolvedParams, HeartbeatParams, ItemMeta, MainframeCapabilities,
+    PromptSendMeta, QueuedPromptState, RetryMarker, RichPermissionAnswer, StructuredDiff,
+    TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -91,6 +91,12 @@ fn read_fixture(path: &Path) -> Value {
 /// order matters where one prefix is a substring of another (`session-new.`
 /// vs `session-update.`), so longer/more-specific prefixes are checked first.
 fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
+    if name == "compaction.notification.json" {
+        return roundtrip_as::<JsonRpcNotification>(body);
+    }
+    if name == "compaction.params.json" {
+        return roundtrip_as::<CompactionParams>(body);
+    }
     if name == "heartbeat.notification.json" {
         return roundtrip_as::<JsonRpcNotification>(body);
     }

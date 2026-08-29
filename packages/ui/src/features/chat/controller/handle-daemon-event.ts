@@ -3,7 +3,7 @@
  * event families only (desktop-cutover pass). The transcript, run frames,
  * and gates arrive over the ACP facade (`acp-session-plane.ts`); this mapper
  * handles what the facade does not model: config, queue refs, background
- * tasks, workflow runs, worktree offers, and compaction.
+ * tasks, workflow runs, and worktree offers.
  * The legacy `display.*` and `permission.*` frames no longer exist — the
  * daemon retired them with the chat dialect (todo #350).
  */
@@ -86,14 +86,6 @@ export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleRes
     case 'worktree.offer.snapshot':
       if (event.chatId !== chatId) return { kind: 'noop' };
       return { kind: 'event', event: { type: 'worktree.offer.snapshot', offers: event.offers } };
-
-    case 'chat.compacting':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'compact.started' } };
-
-    case 'chat.compactDone':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'compact.done' } };
 
     case 'error':
       // chatId is optional on error events. Ignore only when explicitly

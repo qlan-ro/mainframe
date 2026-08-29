@@ -23,7 +23,7 @@ use mainframe_types::events::{
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
-use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, TurnStopReason};
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason};
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
@@ -1228,18 +1228,17 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(&self.chat_id, message);
-        self.deps.emit_event(DaemonEvent::ChatCompactDone {
-            chat_id: self.chat_id.clone(),
-        });
         self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
+            phase: CompactionPhase::Done,
         });
         self.emit_display();
     }
 
     fn on_compact_start(&self) {
-        self.deps.emit_event(DaemonEvent::ChatCompacting {
+        self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
+            phase: CompactionPhase::Started,
         });
     }
 

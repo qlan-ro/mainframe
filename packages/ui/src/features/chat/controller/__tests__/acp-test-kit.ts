@@ -27,6 +27,7 @@ import type {
   GateResolvedListener,
   PermissionRequestListener,
   ReplayCursor,
+  CompactionListener,
   SessionUpdateListener,
 } from '../../../../lib/daemon/acp-client';
 import { AcpChatController, type AcpClientHandle } from '../acp-chat-controller';
@@ -48,6 +49,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitUpdate(sessionId: string, update: SessionUpdate): void;
   emitPermissionRequest(id: JsonRpcRequestId, request: RequestPermissionRequest): void;
   emitGateResolved(sessionId: string, requestId: string): void;
+  emitCompaction(sessionId: string, phase: 'started' | 'done'): void;
   emitGap(): void;
 }
 
@@ -55,6 +57,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const updateListeners = new Set<SessionUpdateListener>();
   const permissionListeners = new Set<PermissionRequestListener>();
   const gateResolvedListeners = new Set<GateResolvedListener>();
+  const compactionListeners = new Set<CompactionListener>();
   const gapListeners = new Set<GapListener>();
 
   const client: FakeAcpClient = {
@@ -77,6 +80,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onGateResolved(listener) {
       gateResolvedListeners.add(listener);
       return () => gateResolvedListeners.delete(listener);
+    },
+    onCompaction(listener) {
+      compactionListeners.add(listener);
+      return () => compactionListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -106,6 +113,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     emitGateResolved(sessionId, requestId) {
       for (const l of gateResolvedListeners) l(sessionId, requestId);
+    },
+    emitCompaction(sessionId, phase) {
+      for (const l of compactionListeners) l(sessionId, phase);
     },
     emitGap() {
       for (const l of gapListeners) l();

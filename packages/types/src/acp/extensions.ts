@@ -173,6 +173,20 @@ export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
  * (spec decision 13). `sequence` lets a client detect a gap and resume
  * instead of heuristically refetching.
  */
+/**
+ * `_mainframe.dev/compaction`'s params: live compaction progress
+ * (`chat.compacting`/`chat.compactDone`'s facade successor). The durable
+ * transcript marker rides `ItemMeta.isCompacted`; this drives the in-flight
+ * indicator only.
+ */
+export const CompactionParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    phase: z.enum(['started', 'done']),
+  })
+  .loose();
+export type CompactionParams = z.infer<typeof CompactionParamsSchema>;
+
 export const HeartbeatParamsSchema = z
   .object({
     sequence: z.number().int().nonnegative(),

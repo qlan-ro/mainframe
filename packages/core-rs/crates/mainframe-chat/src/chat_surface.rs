@@ -17,6 +17,14 @@ use std::sync::Arc;
 use mainframe_types::adapter::{ContextUsage, ControlRequest};
 use mainframe_types::display::DisplayMessage;
 
+/// Compaction progress: `Started` when the CLI begins compacting, `Done`
+/// when the compaction summary lands in the transcript.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompactionPhase {
+    Started,
+    Done,
+}
+
 /// Why a turn ended. `Error` covers both an adapter-reported failure
 /// (`on_result`'s `is_error`) and the adapter process dying mid-turn
 /// (`on_exit` while the turn was still working) — the edge case the plan
@@ -70,6 +78,7 @@ pub enum ChatSurfaceEvent {
     },
     Compaction {
         chat_id: String,
+        phase: CompactionPhase,
     },
     Usage {
         chat_id: String,
