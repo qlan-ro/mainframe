@@ -9,6 +9,8 @@
  */
 export * from './content.js';
 export * from './extensions.js';
+export * from './extensions-notifications.js';
+export * from './extensions-payload.js';
 export * from './jsonrpc.js';
 export * from './permission.js';
 export * from './session.js';

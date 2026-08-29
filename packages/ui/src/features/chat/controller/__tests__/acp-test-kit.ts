@@ -23,16 +23,15 @@ import type {
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
+import type { GapListener, ReplayCursor } from '../../../../lib/daemon/acp-client';
 import type {
-  GapListener,
   GateResolvedListener,
   PermissionRequestListener,
-  ReplayCursor,
   CompactionListener,
   QueueStateListener,
   SessionUpdateListener,
   TranscriptClearedListener,
-} from '../../../../lib/daemon/acp-client';
+} from '../../../../lib/daemon/acp-notification-router';
 import { AcpChatController, type AcpClientHandle } from '../acp-chat-controller';
 
 export const CHAT_ID = 'chat-abc';

@@ -9,42 +9,42 @@
  * markers) until the daemon retires it. Session-state accumulation lives in
  * `features/chat/view-model/acp-item-accumulator.ts`; this module only
  * speaks the wire protocol. One client per adapter profile, shared by every
- * chat of that adapter (`acp-clients.ts`), multiplexing N sessions.
+ * chat of that adapter (`acp-clients.ts`), multiplexing N sessions. Inbound
+ * notification/request parsing and listener fan-out live in
+ * `acp-notification-router.ts` — this file owns connection lifecycle and
+ * reconnect only, delegating its `on*` listener methods to that router.
  */
 import type {
   CancelSessionNotification,
   InitializeRequest,
   InitializeResponse,
-  JsonRpcNotification,
-  JsonRpcRequest,
   JsonRpcRequestId,
   MainframeCapabilities,
   PromptRequest,
   PromptResponse,
-  QueuedMessageRef,
-  RequestPermissionRequest,
   RequestPermissionResponse,
   ResumeSessionRequest,
   ResumeSessionResponse,
-  SessionUpdate,
 } from '@qlan-ro/mainframe-types';
 import {
-  CompactionParamsSchema,
-  GateResolvedParamsSchema,
-  QueueStateParamsSchema,
-  TranscriptClearedParamsSchema,
-  HeartbeatParamsSchema,
   InitializeResponseSchema,
   MAINFRAME_META_NAMESPACE,
   MainframeCapabilitiesSchema,
   PINNED_PROTOCOL_VERSION,
   PromptResponseSchema,
-  RequestPermissionRequestSchema,
   ResumeSessionResponseSchema,
-  UpdateSessionNotificationSchema,
 } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from './active-daemon';
 import { HeartbeatWatchdog } from './acp-heartbeat-watchdog';
+import {
+  AcpNotificationRouter,
+  type CompactionListener,
+  type GateResolvedListener,
+  type PermissionRequestListener,
+  type QueueStateListener,
+  type SessionUpdateListener,
+  type TranscriptClearedListener,
+} from './acp-notification-router';
 import { RpcConnection, type AcpSocketFactory, type AcpSocketLike } from './acp-rpc-connection';
 
 /** Matches `mainframe_acp::resume::ReplayCursor`'s wire shape — opaque on the vendored type by design (session.ts). */
@@ -54,13 +54,6 @@ export type ReplayCursor = { type: 'start' } | { type: 'item'; itemId: string };
 const FALLBACK_HEARTBEAT_INTERVAL_MS = 15_000;
 const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
 
-export type SessionUpdateListener = (sessionId: string, update: SessionUpdate) => void;
-export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestPermissionRequest) => void;
-/** `requestId` is the JSON-RPC id the gate's `session/request_permission` traveled under. */
-export type GateResolvedListener = (sessionId: string, requestId: string) => void;
-export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
-export type TranscriptClearedListener = (sessionId: string) => void;
-export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) => void;
 export type GapListener = () => void;
 export type CloseListener = () => void;
 
@@ -99,12 +92,7 @@ export class AcpFacadeClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
   private manuallyClosed = false;
-  private readonly sessionUpdateListeners = new Set<SessionUpdateListener>();
-  private readonly permissionRequestListeners = new Set<PermissionRequestListener>();
-  private readonly gateResolvedListeners = new Set<GateResolvedListener>();
-  private readonly compactionListeners = new Set<CompactionListener>();
-  private readonly transcriptClearedListeners = new Set<TranscriptClearedListener>();
-  private readonly queueStateListeners = new Set<QueueStateListener>();
+  private readonly router = new AcpNotificationRouter((sequence) => this.watchdog?.observe(sequence));
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 
@@ -140,8 +128,8 @@ export class AcpFacadeClient {
   async connect(): Promise<InitializeResponse> {
     const url = (this.deps.url ?? (() => defaultUrl(this.profile)))();
     const connection = new RpcConnection(url, this.deps.createSocket ?? defaultSocketFactory);
-    connection.onNotification((n) => this.handleNotification(n));
-    connection.onRequest((r) => this.handleRequest(r));
+    connection.onNotification((n) => this.router.handleNotification(n));
+    connection.onRequest((r) => this.router.handleRequest(r));
     connection.onClose(() => this.handleClose());
     this.connection = connection;
     await connection.open();
@@ -196,37 +184,31 @@ export class AcpFacadeClient {
   }
 
   onSessionUpdate(listener: SessionUpdateListener): () => void {
-    this.sessionUpdateListeners.add(listener);
-    return () => this.sessionUpdateListeners.delete(listener);
+    return this.router.onSessionUpdate(listener);
   }
 
   onPermissionRequest(listener: PermissionRequestListener): () => void {
-    this.permissionRequestListeners.add(listener);
-    return () => this.permissionRequestListeners.delete(listener);
+    return this.router.onPermissionRequest(listener);
   }
 
   /** Fires when a gate this client did not answer resolved elsewhere (another client or the CLI). */
   onGateResolved(listener: GateResolvedListener): () => void {
-    this.gateResolvedListeners.add(listener);
-    return () => this.gateResolvedListeners.delete(listener);
+    return this.router.onGateResolved(listener);
   }
 
   /** Live compaction progress for a session (`_mainframe.dev/compaction`). */
   onCompaction(listener: CompactionListener): () => void {
-    this.compactionListeners.add(listener);
-    return () => this.compactionListeners.delete(listener);
+    return this.router.onCompaction(listener);
   }
 
   /** The server wiped a session's transcript (`_mainframe.dev/transcript_cleared`). */
   onTranscriptCleared(listener: TranscriptClearedListener): () => void {
-    this.transcriptClearedListeners.add(listener);
-    return () => this.transcriptClearedListeners.delete(listener);
+    return this.router.onTranscriptCleared(listener);
   }
 
   /** A session's full queued-prompt snapshot (`_mainframe.dev/queue_state`). */
   onQueueState(listener: QueueStateListener): () => void {
-    this.queueStateListeners.add(listener);
-    return () => this.queueStateListeners.delete(listener);
+    return this.router.onQueueState(listener);
   }
 
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
@@ -280,71 +262,5 @@ export class AcpFacadeClient {
         .then(() => this.notifyGap())
         .catch(() => this.scheduleReconnect());
     }, delay);
-  }
-
-  private handleNotification(notification: JsonRpcNotification): void {
-    if (notification.method === 'session/update') {
-      const parsed = UpdateSessionNotificationSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed session/update', notification.params);
-        return;
-      }
-      this.sessionUpdateListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.update));
-      return;
-    }
-    if (notification.method === '_mainframe.dev/heartbeat') {
-      const parsed = HeartbeatParamsSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed heartbeat', notification.params);
-        return;
-      }
-      this.watchdog?.observe(parsed.data.sequence);
-      return;
-    }
-    if (notification.method === '_mainframe.dev/queue_state') {
-      const parsed = QueueStateParamsSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed queue_state', notification.params);
-        return;
-      }
-      this.queueStateListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.refs as QueuedMessageRef[]));
-      return;
-    }
-    if (notification.method === '_mainframe.dev/transcript_cleared') {
-      const parsed = TranscriptClearedParamsSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed transcript_cleared', notification.params);
-        return;
-      }
-      this.transcriptClearedListeners.forEach((fn) => fn(parsed.data.sessionId));
-      return;
-    }
-    if (notification.method === '_mainframe.dev/compaction') {
-      const parsed = CompactionParamsSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed compaction', notification.params);
-        return;
-      }
-      this.compactionListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.phase));
-      return;
-    }
-    if (notification.method === '_mainframe.dev/gate_resolved') {
-      const parsed = GateResolvedParamsSchema.safeParse(notification.params);
-      if (!parsed.success) {
-        console.warn('[acp-client] dropped malformed gate_resolved', notification.params);
-        return;
-      }
-      this.gateResolvedListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.requestId));
-    }
-  }
-
-  private handleRequest(request: JsonRpcRequest): void {
-    if (request.method !== 'session/request_permission' || request.id == null) return;
-    const parsed = RequestPermissionRequestSchema.safeParse(request.params);
-    if (!parsed.success) {
-      console.warn('[acp-client] dropped malformed session/request_permission', request.params);
-      return;
-    }
-    this.permissionRequestListeners.forEach((fn) => fn(request.id as JsonRpcRequestId, parsed.data));
   }
 }

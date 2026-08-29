@@ -25,16 +25,15 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
+import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
 import type {
   CompactionListener,
-  GapListener,
   QueueStateListener,
   TranscriptClearedListener,
   GateResolvedListener,
   PermissionRequestListener,
-  ReplayCursor,
   SessionUpdateListener,
-} from '../../../lib/daemon/acp-client';
+} from '../../../lib/daemon/acp-notification-router';
 import type { JsonRpcRequestId, PromptRequest, PromptResponse, ResumeSessionResponse } from '@qlan-ro/mainframe-types';
 import { AcpItemAccumulator } from '../view-model/acp-item-accumulator';
 import { convertAcpItems } from '../view-model/convert-acp-item';
