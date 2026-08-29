@@ -4,17 +4,17 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 // tinyspy invokes the spy's implementation via Reflect.construct on `new`, and
 // arrow functions are not constructable. A plain function returning an object
 // keeps the same shape ({ chatId, dispose: vi.fn() }) and is `new`-safe.
-vi.mock('../../../chat/controller/chat-thread-controller', () => ({
-  ChatThreadController: vi.fn().mockImplementation(function (chatId: string) {
+vi.mock('../../../chat/controller/acp-chat-controller', () => ({
+  AcpChatController: vi.fn().mockImplementation(function (chatId: string) {
     return { chatId, dispose: vi.fn(), setRemoteId: vi.fn() };
   }),
 }));
 
 // Import AFTER the mock is registered so the registry module picks up the mock.
 import { chatControllerRegistry } from '../chat-controller-registry';
-import { ChatThreadController } from '../../../chat/controller/chat-thread-controller';
+import { AcpChatController } from '../../../chat/controller/acp-chat-controller';
 
-const MockCtor = vi.mocked(ChatThreadController);
+const MockCtor = vi.mocked(AcpChatController);
 
 // The mock factory returns a plain object; cast to access the fields the
 // real class keeps private (`chatId`) or typed as `unknown` (`dispose`).
@@ -28,10 +28,10 @@ function setRemoteIdSpyOf(ctrl: unknown): ReturnType<typeof vi.fn> {
   return (ctrl as { setRemoteId: ReturnType<typeof vi.fn> }).setRemoteId;
 }
 
-// The registry only accepts real ChatThreadControllers; the mock factory returns
+// The registry only accepts real AcpChatControllers; the mock factory returns
 // a structural stand-in, so adopt() takes it through an unknown cast.
 function adopt(ctrl: unknown, remoteId: string): void {
-  chatControllerRegistry.adopt(ctrl as ChatThreadController, remoteId);
+  chatControllerRegistry.adopt(ctrl as AcpChatController, remoteId);
 }
 
 afterEach(() => {

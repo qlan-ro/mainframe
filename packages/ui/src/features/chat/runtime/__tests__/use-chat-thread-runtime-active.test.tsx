@@ -16,7 +16,7 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ChatThreadController } from '../../controller/chat-thread-controller';
+import type { AcpChatController } from '../../controller/acp-chat-controller';
 import type { AppendMessage } from '@assistant-ui/react';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ import type { AssistantRuntime } from '@assistant-ui/react';
 // Cast to the intended post-implementation signature (opts is not wired yet — this
 // test is intentionally failing until Task 4.9 implementation is complete).
 const useChatThreadRuntime = _useChatThreadRuntime as (
-  controller: ChatThreadController,
+  controller: AcpChatController,
   port: number,
   opts?: { active?: boolean },
 ) => AssistantRuntime;
@@ -83,7 +83,7 @@ interface FakeData {
   setRemoteIdCalls: string[];
   sendMessageCalls: AppendMessage[];
   _hasRemoteId: boolean;
-  controller: ChatThreadController;
+  controller: AcpChatController;
 }
 
 function makeFakeController(chatId: string, hasRemoteId = false): FakeData {
@@ -98,7 +98,7 @@ function makeFakeController(chatId: string, hasRemoteId = false): FakeData {
     setRemoteIdCalls: [],
     sendMessageCalls: [],
     _hasRemoteId: hasRemoteId,
-    controller: null as unknown as ChatThreadController,
+    controller: null as unknown as AcpChatController,
   };
 
   const teardown = vi.fn(() => {
@@ -130,7 +130,7 @@ function makeFakeController(chatId: string, hasRemoteId = false): FakeData {
     cancelQueued: vi.fn().mockResolvedValue(undefined),
     editQueued: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
-  } as unknown as ChatThreadController;
+  } as unknown as AcpChatController;
 
   data.controller = ctrl;
   return data;
@@ -265,7 +265,7 @@ describe('useChatThreadRuntime — onNew on a local controller (no remoteId)', (
       cancelQueued: vi.fn().mockResolvedValue(undefined),
       editQueued: vi.fn().mockResolvedValue(undefined),
       refresh: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ChatThreadController;
+    } as unknown as AcpChatController;
 
     const { unmount } = renderHook(() => useChatThreadRuntime(ctrl, PORT, { active: false }));
 

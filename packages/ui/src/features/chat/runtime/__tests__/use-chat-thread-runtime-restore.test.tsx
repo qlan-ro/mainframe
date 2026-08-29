@@ -10,7 +10,7 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ChatThreadController } from '../../controller/chat-thread-controller';
+import type { AcpChatController } from '../../controller/acp-chat-controller';
 import type { AppendMessage } from '@assistant-ui/react';
 
 vi.mock('../../../sessions/runtime/new-thread-coordinator', () => ({
@@ -56,7 +56,7 @@ import type { ChatThreadState } from '../../controller/chat-thread-state';
 import type { AssistantRuntime } from '@assistant-ui/react';
 
 const useChatThreadRuntime = _useChatThreadRuntime as (
-  controller: ChatThreadController,
+  controller: AcpChatController,
   port: number,
   opts?: { active?: boolean },
 ) => AssistantRuntime;
@@ -66,7 +66,7 @@ const PORT = 9999;
 function makeController(
   sendMessage: (msg: AppendMessage) => Promise<void>,
   opts: { hasRemoteId?: boolean } = {},
-): ChatThreadController {
+): AcpChatController {
   const stableState: ChatThreadState = createChatThreadState('chat-existing');
   return {
     subscribeState: (_l: () => void) => () => {},
@@ -83,7 +83,7 @@ function makeController(
     cancelQueued: vi.fn().mockResolvedValue(undefined),
     editQueued: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
-  } as unknown as ChatThreadController;
+  } as unknown as AcpChatController;
 }
 
 function makeFile(name: string): File {
