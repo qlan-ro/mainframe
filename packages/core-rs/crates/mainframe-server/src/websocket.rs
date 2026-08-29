@@ -3,9 +3,9 @@
 //!
 //! Upgrade auth (token query param unless loopback), `connection.ready` first
 //! frame, per-connection chat subscriptions (`subscribe`/`unsubscribe` +
-//! `subscribe:ack`), per-connection file subscriptions wired to the
-//! `FileWatcherService`, and the broadcast fan-out with chatId-scoped vs
-//! connection-global gating.
+//! `subscribe:ack` — the reply carries `worktree.offer.snapshot` then the
+//! ack), per-connection file subscriptions wired to the `FileWatcherService`,
+//! and the broadcast fan-out with chatId-scoped vs connection-global gating.
 //!
 //! **Forced deviation from CONCURRENCY.tsv:** the tsv models each client as a
 //! separate *write task* fed by an mpsc, which requires splitting the axum
@@ -427,22 +427,6 @@ async fn handle_client_event(
     match event {
         ClientEvent::Subscribe { chat_id } => {
             lock(subscriptions).insert(chat_id.clone());
-            // Node emits message.queued.snapshot (refs from getQueuedForChat) BEFORE
-            // subscribe:ack (`sendQueuedSnapshot`). With the ChatManager unwired the
-            // queue is empty, so this degrades to the empty snapshot the daemon sent
-            // before; once `ctx.chat_manager` is Some the real refs flow through.
-            let refs = ctx
-                .chat_manager
-                .as_ref()
-                .map(|cm| cm.get_queued_for_chat(&chat_id))
-                .unwrap_or_default();
-            send(
-                out_tx,
-                &DaemonEvent::MessageQueuedSnapshot {
-                    chat_id: chat_id.clone(),
-                    refs,
-                },
-            );
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
             let offers = ctx

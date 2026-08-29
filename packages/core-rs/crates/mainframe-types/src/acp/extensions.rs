@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::adapter::ControlResponse;
-use crate::chat::DiffHunk;
+use crate::chat::{DiffHunk, QueuedMessageRef};
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
@@ -200,6 +200,18 @@ pub struct HeartbeatParams {
 pub struct CompactionParams {
     pub session_id: String,
     pub phase: CompactionWirePhase,
+}
+
+/// `_mainframe.dev/queue_state`'s params: the FULL queued-prompt snapshot
+/// for a session, pushed on every queue change and after each resume. A
+/// snapshot (never a delta) so a reconnecting client cannot hold stale
+/// queued turns — the facade successor to the `message.queued.*` family
+/// (spec decision 11's cross-client visibility half).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueueStateParams {
+    pub session_id: String,
+    pub refs: Vec<QueuedMessageRef>,
 }
 
 /// `_mainframe.dev/transcript_cleared`'s params: the server wiped the

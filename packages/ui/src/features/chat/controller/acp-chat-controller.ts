@@ -6,9 +6,8 @@
  *    per-adapter `/acp/{profile}` facade client — always attached once
  *    loaded, so a dormant chat's accumulator stays current and switching
  *    back needs no re-seed;
- *  - `ChatWsSubscription` (legacy side-band: config, queued refs,
- *    background, worktree offers, compaction) gated to the active thread
- *    exactly as before.
+ *  - `ChatWsSubscription` (side-band: config, background tasks, worktree
+ *    offers, workflow runs) gated to the active thread exactly as before.
  *
  * Created once per thread id in the global registry and kept warm across
  * switches. A new (`__LOCALID_*`) thread adopts its daemon id via

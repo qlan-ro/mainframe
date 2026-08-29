@@ -7,9 +7,10 @@
 
 use mainframe_types::acp::extensions::{
     CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
-    MainframeCapabilities, TranscriptClearedParams,
+    MainframeCapabilities, QueueStateParams, TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
+use mainframe_types::chat::QueuedMessageRef;
 
 /// Production default heartbeat cadence, matching the vendored fixtures
 /// (`heartbeat.notification.json`'s sibling `initialize.response.json`
@@ -84,6 +85,23 @@ pub fn transcript_cleared_notification(session_id: &str) -> JsonRpcNotification 
         method: "_mainframe.dev/transcript_cleared".into(),
         params: Some(serde_json::json!(TranscriptClearedParams {
             session_id: session_id.to_string(),
+        })),
+    }
+}
+
+/// The `_mainframe.dev/queue_state` notification: the session's full
+/// queued-prompt snapshot, pushed on every queue change and after a resume
+/// (sent even when empty, so a reconnect clears stale queued turns).
+pub fn queue_state_notification(
+    session_id: &str,
+    refs: Vec<QueuedMessageRef>,
+) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/queue_state".into(),
+        params: Some(serde_json::json!(QueueStateParams {
+            session_id: session_id.to_string(),
+            refs,
         })),
     }
 }

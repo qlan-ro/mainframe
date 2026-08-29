@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use mainframe_types::adapter::{ContextUsage, ControlRequest};
+use mainframe_types::chat::QueuedMessageRef;
 use mainframe_types::display::DisplayMessage;
 
 /// Compaction progress: `Started` when the CLI begins compacting, `Done`
@@ -84,6 +85,13 @@ pub enum ChatSurfaceEvent {
     /// facade client re-resumes to converge its accumulator.
     TranscriptCleared {
         chat_id: String,
+    },
+    /// The chat's queued-prompt set changed (enqueue, dequeue, cancel, or
+    /// wholesale clear). Always the FULL current snapshot — never a delta —
+    /// so observers cannot accumulate ordering bugs.
+    QueueChanged {
+        chat_id: String,
+        refs: Vec<QueuedMessageRef>,
     },
     Usage {
         chat_id: String,

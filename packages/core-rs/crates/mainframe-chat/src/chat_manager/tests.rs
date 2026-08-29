@@ -596,11 +596,6 @@ async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
     assert!(calls[0].1.is_some(), "sendMessage carried a uuid");
     drop(calls);
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
-    assert!(
-        deps.events()
-            .iter()
-            .any(|e| matches!(e, DaemonEvent::MessageQueued { .. }))
-    );
 }
 
 #[tokio::test]
@@ -641,11 +636,6 @@ async fn cancel_success_removes_the_bubble_and_emits_cancelled() {
         std::slice::from_ref(&r.uuid)
     );
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 0);
-    assert!(
-        deps.events().iter().any(
-            |e| matches!(e, DaemonEvent::MessageQueuedCancelled { uuid, .. } if *uuid == r.uuid)
-        )
-    );
 }
 
 #[tokio::test]

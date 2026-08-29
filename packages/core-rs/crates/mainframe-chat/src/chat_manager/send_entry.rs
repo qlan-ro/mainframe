@@ -160,10 +160,7 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&r.uuid);
-        self.emit(DaemonEvent::MessageQueuedCancelled {
-            chat_id: chat_id.to_string(),
-            uuid: r.uuid.clone(),
-        });
+        self.notify_queue_changed(chat_id);
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -205,10 +202,7 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove_by_id(chat_id, &r.message_id);
-        self.emit(DaemonEvent::MessageQueuedCancelled {
-            chat_id: chat_id.to_string(),
-            uuid: r.uuid.clone(),
-        });
+        self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
         info!(chat_id, uuid = r.uuid, "queued message cancelled in CLI");
         Ok(())

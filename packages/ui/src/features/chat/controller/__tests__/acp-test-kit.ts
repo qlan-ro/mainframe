@@ -13,6 +13,7 @@ import type {
   Chat,
   ClientEvent,
   DaemonEvent,
+  QueuedMessageRef,
   JsonRpcRequestId,
   PromptRequest,
   PromptResponse,
@@ -28,6 +29,7 @@ import type {
   PermissionRequestListener,
   ReplayCursor,
   CompactionListener,
+  QueueStateListener,
   SessionUpdateListener,
   TranscriptClearedListener,
 } from '../../../../lib/daemon/acp-client';
@@ -52,6 +54,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitGateResolved(sessionId: string, requestId: string): void;
   emitCompaction(sessionId: string, phase: 'started' | 'done'): void;
   emitTranscriptCleared(sessionId: string): void;
+  emitQueueState(sessionId: string, refs: QueuedMessageRef[]): void;
   emitGap(): void;
 }
 
@@ -61,6 +64,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const gateResolvedListeners = new Set<GateResolvedListener>();
   const compactionListeners = new Set<CompactionListener>();
   const transcriptClearedListeners = new Set<TranscriptClearedListener>();
+  const queueStateListeners = new Set<QueueStateListener>();
   const gapListeners = new Set<GapListener>();
 
   const client: FakeAcpClient = {
@@ -91,6 +95,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onTranscriptCleared(listener) {
       transcriptClearedListeners.add(listener);
       return () => transcriptClearedListeners.delete(listener);
+    },
+    onQueueState(listener) {
+      queueStateListeners.add(listener);
+      return () => queueStateListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -126,6 +134,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     emitTranscriptCleared(sessionId) {
       for (const l of transcriptClearedListeners) l(sessionId);
+    },
+    emitQueueState(sessionId, refs) {
+      for (const l of queueStateListeners) l(sessionId, refs);
     },
     emitGap() {
       for (const l of gapListeners) l();

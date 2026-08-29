@@ -22,7 +22,7 @@ function makeRef(uuid: string): QueuedMessageRef {
 // Seed state with a stale item C already in interactions.queued.
 function stateWithC() {
   const base = createChatThreadState(CHAT_ID);
-  return reduceChatThreadState(base, { type: 'queued.added', ref: makeRef('C') });
+  return reduceChatThreadState(base, { type: 'queued.snapshot', refs: [makeRef('C')] });
 }
 
 // ---------------------------------------------------------------------------

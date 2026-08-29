@@ -276,6 +276,43 @@ async fn a_retry_marker_lands_on_the_next_upsert_for_attached_sessions() {
 }
 
 #[tokio::test]
+async fn queue_changes_notify_attached_connections_with_the_full_snapshot() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    hub.attach(&conn, "chat-1");
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::QueueChanged {
+        chat_id: "chat-1".to_string(),
+        refs: vec![mainframe_types::chat::QueuedMessageRef {
+            message_id: "m1".to_string(),
+            chat_id: "chat-1".to_string(),
+            uuid: "u1".to_string(),
+            content: "queued text".to_string(),
+            attachment_ids: None,
+            timestamp: "2026-08-29T00:00:00.000Z".to_string(),
+        }],
+    });
+    hub.on_chat_surface_event(ChatSurfaceEvent::QueueChanged {
+        chat_id: "chat-2".to_string(),
+        refs: Vec::new(),
+    });
+
+    let frames = drain(&mut rx);
+    assert_eq!(
+        frames.len(),
+        1,
+        "only the attached chat notifies: {frames:?}"
+    );
+    assert_eq!(frames[0]["method"], json!("_mainframe.dev/queue_state"));
+    assert_eq!(frames[0]["params"]["sessionId"], json!("chat-1"));
+    assert_eq!(frames[0]["params"]["refs"][0]["uuid"], json!("u1"));
+    assert_eq!(
+        frames[0]["params"]["refs"][0]["content"],
+        json!("queued text")
+    );
+}
+
+#[tokio::test]
 async fn transcript_cleared_notifies_attached_connections() {
     let hub = hub();
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());

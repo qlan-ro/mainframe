@@ -173,6 +173,31 @@ export type StructuredDiff = z.infer<typeof StructuredDiffSchema>;
  * (spec decision 13). `sequence` lets a client detect a gap and resume
  * instead of heuristically refetching.
  */
+/** A queued prompt's ref — mirrors `QueuedMessageRef` (chat.ts) on the facade wire. */
+export const QueuedRefSchema = z
+  .object({
+    messageId: z.string(),
+    chatId: z.string(),
+    uuid: z.string(),
+    content: z.string(),
+    attachmentIds: z.array(z.string()).optional(),
+    timestamp: z.string(),
+  })
+  .loose();
+
+/**
+ * `_mainframe.dev/queue_state`'s params: the FULL queued-prompt snapshot for
+ * a session, pushed on every queue change and after each resume — a snapshot,
+ * never a delta, so a reconnecting client cannot hold stale queued turns.
+ */
+export const QueueStateParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    refs: z.array(QueuedRefSchema),
+  })
+  .loose();
+export type QueueStateParams = z.infer<typeof QueueStateParamsSchema>;
+
 /**
  * `_mainframe.dev/transcript_cleared`'s params: the server wiped the
  * session's transcript (plan-mode clear-context) — re-resume to converge.

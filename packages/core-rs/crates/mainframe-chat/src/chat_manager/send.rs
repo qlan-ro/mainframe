@@ -185,11 +185,8 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(uuid.clone(), r.clone());
-        self.emit(DaemonEvent::MessageQueued {
-            chat_id: chat_id.to_string(),
-            r#ref: r,
-        });
+            .insert(uuid.clone(), r);
+        self.notify_queue_changed(chat_id);
         info!(
             chat_id,
             uuid,

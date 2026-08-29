@@ -37,7 +37,7 @@ async fn connect_receives_connection_ready() {
 }
 
 #[tokio::test]
-async fn subscribe_emits_queued_and_offer_snapshots_then_ack() {
+async fn subscribe_emits_the_offer_snapshot_then_ack() {
     let server = spawn_test_server(None).await;
     let mut ws = WsClient::connect(server.addr, "/", None).await.unwrap();
     ws.wait_for("connection.ready").await;
@@ -45,15 +45,10 @@ async fn subscribe_emits_queued_and_offer_snapshots_then_ack() {
     ws.send_json(&json!({ "type": "subscribe", "chatId": "c1" }))
         .await;
 
-    // Frame order on subscribe: message.queued.snapshot (refs [] for an empty
-    // queue), then worktree.offer.snapshot (offers [] with no pending offers —
-    // this is the UI's only re-seed path, so it must fire even when empty),
-    // then subscribe:ack.
-    let queued_snapshot = ws.read_event().await;
-    assert_eq!(queued_snapshot["type"], "message.queued.snapshot");
-    assert_eq!(queued_snapshot["chatId"], "c1");
-    assert_eq!(queued_snapshot["refs"], json!([]));
-
+    // Frame order on subscribe: worktree.offer.snapshot (offers [] with no
+    // pending offers — this is the UI's only re-seed path, so it must fire
+    // even when empty), then subscribe:ack. Queued prompts ride the facade's
+    // _mainframe.dev/queue_state, not this socket.
     let offer_snapshot = ws.read_event().await;
     assert_eq!(offer_snapshot["type"], "worktree.offer.snapshot");
     assert_eq!(offer_snapshot["chatId"], "c1");

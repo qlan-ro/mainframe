@@ -246,7 +246,11 @@ describe('AcpFacadeClient — heartbeat + gap detection (criterion 11 client hal
     expect(gaps).toHaveBeenCalledTimes(1);
   });
 
-  it('signals a gap when the connection closes', async () => {
+  it('a close fires the close listeners and DEFERS the gap until reconnect', async () => {
+    // A gap fired while the socket is down would make every session's
+    // resume() throw — the client reconnects first and only then signals the
+    // gap (see handleClose). Verify the deferral half here; the fired half
+    // needs a live reconnect and is covered by the resume-after-silence e2e.
     const { client, socket } = await connectedClient();
     const gaps = vi.fn();
     const closed = vi.fn();
@@ -256,7 +260,8 @@ describe('AcpFacadeClient — heartbeat + gap detection (criterion 11 client hal
     socket.close();
 
     expect(closed).toHaveBeenCalledTimes(1);
-    expect(gaps).toHaveBeenCalledTimes(1);
+    expect(gaps).not.toHaveBeenCalled();
+    client.disconnect();
   });
 });
 

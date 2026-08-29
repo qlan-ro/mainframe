@@ -12,8 +12,8 @@
  *    optimistic send
  *  - interactions.permissions — facade `session/request_permission` /
  *    `gate_resolved`, still keyed by `ControlRequest.requestId`
- *  - interactions.queued — legacy side-band message.queued.* events (the
- *    facade has no queue-list surface yet)
+ *  - interactions.queued — facade `_mainframe.dev/queue_state` snapshots
+ *    (full replacements, live and post-resume)
  *  - pendingUserMessages — optimistic send, reconciled on echo
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
@@ -93,7 +93,7 @@ export interface ChatThreadState {
    * chatConfig when null.
    */
   readonly contextUsage: { percentage: number; totalTokens: number; maxTokens: number } | null;
-  /** True between `chat.compacting` and `chat.compactDone` (also cleared on
+  /** True between the compaction `started` and `done` phases (also cleared on
    *  run end) — drives the transcript "Compacting…" pill. */
   readonly compacting: boolean;
   /**
@@ -141,9 +141,6 @@ export type ChatStateEvent =
   | { type: 'run.failed'; error: unknown }
   | { type: 'permission.requested'; requestId: string; request: ControlRequest; options: PermissionOption[] }
   | { type: 'permission.resolved'; requestId: string }
-  | { type: 'queued.added'; ref: QueuedMessageRef }
-  | { type: 'queued.removed'; uuid: string }
-  | { type: 'queued.cleared' }
   | { type: 'queued.snapshot'; refs: QueuedMessageRef[] }
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
@@ -345,33 +342,6 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         interactions: { ...state.interactions, permissions },
       };
     }
-
-    case 'queued.added':
-      return {
-        ...state,
-        interactions: {
-          ...state.interactions,
-          queued: {
-            ...state.interactions.queued,
-            [event.ref.uuid]: event.ref,
-          },
-        },
-      };
-
-    case 'queued.removed': {
-      const queued = { ...state.interactions.queued };
-      delete queued[event.uuid];
-      return { ...state, interactions: { ...state.interactions, queued } };
-    }
-
-    case 'queued.cleared':
-      return {
-        ...state,
-        interactions: {
-          ...state.interactions,
-          queued: {} as Readonly<Record<string, QueuedMessageRef>>,
-        },
-      };
 
     case 'queued.snapshot': {
       // Rehydrates the queued list on open/reconnect: replace the entire queued

@@ -2,8 +2,8 @@
  * Pure function: DaemonEvent → ChatStateEvent | null, for the SIDE-BAND
  * event families only (desktop-cutover pass). The transcript, run frames,
  * and gates arrive over the ACP facade (`acp-session-plane.ts`); this mapper
- * handles what the facade does not model: config, queue refs, background
- * tasks, workflow runs, and worktree offers.
+ * handles what the facade does not model: config, background tasks,
+ * workflow runs, and worktree offers.
  * The legacy `display.*` and `permission.*` frames no longer exist — the
  * daemon retired them with the chat dialect (todo #350).
  */
@@ -32,26 +32,6 @@ export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleRes
     // as `chat.updated` with isRunning, plus the optimistic dispatch on send.
     case 'process.started':
       return { kind: 'noop' };
-
-    case 'message.queued':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.added', ref: event.ref } };
-
-    case 'message.queued.processed':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.removed', uuid: event.uuid } };
-
-    case 'message.queued.cancelled':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.removed', uuid: event.uuid } };
-
-    case 'message.queued.cleared':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.cleared' } };
-
-    case 'message.queued.snapshot':
-      if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'queued.snapshot', refs: event.refs } };
 
     case 'background_task.started':
     case 'background_task.updated':

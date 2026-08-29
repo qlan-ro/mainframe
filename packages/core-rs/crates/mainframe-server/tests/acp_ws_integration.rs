@@ -174,6 +174,13 @@ async fn session_resume_reaches_the_resume_port() {
         reply.get("result").is_some(),
         "resume must succeed with an empty replay, got {reply}"
     );
+
+    // The replay always closes with the queue snapshot — even empty, so a
+    // reconnecting client evicts stale queued turns.
+    let queue_state = ws.read_event().await;
+    assert_eq!(queue_state["method"], json!("_mainframe.dev/queue_state"));
+    assert_eq!(queue_state["params"]["sessionId"], json!("no-such-chat"));
+    assert_eq!(queue_state["params"]["refs"], json!([]));
 }
 
 #[tokio::test]

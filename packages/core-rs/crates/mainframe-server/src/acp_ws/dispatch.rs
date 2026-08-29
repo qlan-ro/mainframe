@@ -101,6 +101,11 @@ async fn handle_resume(
         return;
     };
 
+    let queued = ctx
+        .chat_manager
+        .as_ref()
+        .map(|cm| cm.get_queued_for_chat(&session_id))
+        .unwrap_or_default();
     ctx.facade_hub
         .reset_session(connection, &session_id, &replay.items, |conn| {
             conn.send_json(&response);
@@ -112,6 +117,12 @@ async fn handle_resume(
             {
                 conn.deliver_gate(&session_id, control, frame);
             }
+            // Queue snapshot LAST, and even when empty: resume is the
+            // reconnecting client's only stale-queued-turn eviction.
+            conn.send_json(&mainframe_acp::queue_state_notification(
+                &session_id,
+                queued,
+            ));
         });
 }
 

@@ -879,10 +879,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         uuid = u,
                         "onResult: orphan metadata.queued (no matching ref) — clearing"
                     );
-                    self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-                        chat_id: self.chat_id.clone(),
-                        uuid: u.clone(),
-                    });
                     self.deps.on_queued_processed(&self.chat_id, &u);
                 }
             }
@@ -895,10 +891,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     uuid = r.uuid,
                     "onResult: orphan queuedRef (no matching cached message) — pruning"
                 );
-                self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-                    chat_id: self.chat_id.clone(),
-                    uuid: r.uuid.clone(),
-                });
                 self.deps.on_queued_processed(&self.chat_id, &r.uuid);
             }
         }
@@ -908,7 +900,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
 
         let refs_after = self.deps.get_queued_refs(&self.chat_id);
-        self.deps.emit_event(DaemonEvent::MessageQueuedSnapshot {
+        self.notify_surface(ChatSurfaceEvent::QueueChanged {
             chat_id: self.chat_id.clone(),
             refs: refs_after.clone(),
         });
@@ -1117,11 +1109,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 uuid, "onQueuedProcessed: message not found in cache or already processed"
             );
         }
-        self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-            chat_id: self.chat_id.clone(),
-            uuid: uuid.to_string(),
-        });
         self.deps.on_queued_processed(&self.chat_id, uuid);
+        self.notify_surface(ChatSurfaceEvent::QueueChanged {
+            chat_id: self.chat_id.clone(),
+            refs: self.deps.get_queued_refs(&self.chat_id),
+        });
     }
 
     fn on_exit(&self, _code: Option<i32>) {
@@ -1164,11 +1156,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             .unwrap_or(false);
         if had_queued {
             self.emit_display();
-            self.deps.emit_event(DaemonEvent::MessageQueuedCleared {
-                chat_id: self.chat_id.clone(),
-            });
         }
         self.deps.on_queued_cleared(&self.chat_id);
+        if had_queued {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.deps.get_queued_refs(&self.chat_id),
+            });
+        }
 
         // The CLI process owns every live background task (agents, workflows,
         // bg bash) — none can report completion after it dies. Stop them so
@@ -1539,9 +1534,6 @@ mod tests {
                 quota: Some(quota),
             })
         }
-        fn events(&self) -> Vec<DaemonEvent> {
-            self.events.lock().unwrap().clone()
-        }
     }
 
     impl EventHandlerDeps for FakeDeps {
@@ -1691,6 +1683,27 @@ mod tests {
         assert!(p.ends_with(".jsonl"));
     }
 
+    /// Captures `QueueChanged` snapshots off the chat-surface seam — the
+    /// facade's only queued-prompt signal now that `message.queued.*` is gone.
+    #[derive(Default)]
+    struct QueueSurface {
+        snapshots: Mutex<Vec<Vec<QueuedMessageRef>>>,
+    }
+
+    impl QueueSurface {
+        fn snapshots(&self) -> Vec<Vec<QueuedMessageRef>> {
+            self.snapshots.lock().unwrap().clone()
+        }
+    }
+
+    impl ChatSurface for QueueSurface {
+        fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+            if let ChatSurfaceEvent::QueueChanged { refs, .. } = event {
+                self.snapshots.lock().unwrap().push(refs);
+            }
+        }
+    }
+
     // ── event-handler-move-on-process.test.ts (ack path) ─────────────────────
     #[test]
     fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
@@ -1717,6 +1730,8 @@ mod tests {
             Arc::new(Mutex::new(PermissionManager::new())),
             deps.clone(),
         );
+        let surface = Arc::new(QueueSurface::default());
+        handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("c1", None);
 
         sink.on_queued_processed("u1");
@@ -1739,9 +1754,8 @@ mod tests {
         );
         assert!(m.metadata.as_ref().and_then(|md| md.get("uuid")).is_none());
         assert_eq!(deps.refs.lock().unwrap().len(), 0);
-        assert!(deps.events().iter().any(
-            |e| matches!(e, DaemonEvent::MessageQueuedProcessed { uuid, .. } if uuid == "u1")
-        ));
+        // The seam announces the post-dequeue snapshot (now empty).
+        assert_eq!(surface.snapshots(), vec![Vec::new()]);
     }
 
     // ── session-pushed provider quota (Codex account/rateLimits/updated) ──────
@@ -1933,6 +1947,8 @@ mod tests {
             Arc::new(Mutex::new(PermissionManager::new())),
             deps.clone(),
         );
+        let surface = Arc::new(QueueSurface::default());
+        handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("c1", None);
 
         sink.on_result(SessionResult {
@@ -1960,16 +1976,8 @@ mod tests {
                 .and_then(|md| md.get("queued"))
                 .is_none()
         );
-        let processed: Vec<String> = deps
-            .events()
-            .iter()
-            .filter_map(|e| match e {
-                DaemonEvent::MessageQueuedProcessed { uuid, .. } => Some(uuid.clone()),
-                _ => None,
-            })
-            .collect();
-        assert!(processed.contains(&"u1".to_string()));
-        assert!(processed.contains(&"u2".to_string()));
+        // The turn's final seam snapshot announces the emptied queue.
+        assert_eq!(surface.snapshots().last(), Some(&Vec::new()));
     }
 
     // ── event-handler-turn-timing.test.ts ────────────────────────────────────

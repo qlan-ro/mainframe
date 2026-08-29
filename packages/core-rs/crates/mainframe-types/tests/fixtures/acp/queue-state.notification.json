@@ -1,0 +1,17 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/queue_state",
+  "params": {
+    "sessionId": "chat_1",
+    "refs": [
+      {
+        "messageId": "dmsg_0003",
+        "chatId": "chat_1",
+        "uuid": "a1b2c3d4",
+        "content": "Continue with the fix",
+        "timestamp": "2026-07-08T10:15:30.000Z"
+      }
+    ]
+  }
+}

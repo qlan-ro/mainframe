@@ -4,8 +4,8 @@
  * legacy reconnect re-seed paths with `session/resume`:
  *  - `subscribe:ack` re-seed + REST history refresh → `attach()`'s full
  *    replay / `resumeFromGap()`'s cursor replay;
- *  - queue snapshot → acceptance `_meta` (spec decision 11) + the legacy
- *    side-band queued events until the daemon retires them;
+ *  - queue snapshot → acceptance `_meta` (spec decision 11) + the facade's
+ *    `_mainframe.dev/queue_state` snapshots (live changes and post-resume);
  *  - pending-permission recovery → resume redelivery: a live mid-turn gate
  *    and a redelivered one are the same `session/request_permission`, under
  *    the same `gate-{requestId}` correlation id — which is also why the
@@ -28,6 +28,7 @@ import { z } from 'zod';
 import type {
   CompactionListener,
   GapListener,
+  QueueStateListener,
   TranscriptClearedListener,
   GateResolvedListener,
   PermissionRequestListener,
@@ -53,6 +54,7 @@ export interface AcpSessionClientPort {
   onGateResolved(listener: GateResolvedListener): () => void;
   onCompaction(listener: CompactionListener): () => void;
   onTranscriptCleared(listener: TranscriptClearedListener): () => void;
+  onQueueState(listener: QueueStateListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -106,6 +108,12 @@ export class AcpSessionPlane {
           this.host.dispatch({ type: 'transcript.cleared' });
           void this.reattach().catch(() => undefined);
         }),
+        client.onQueueState((sessionId, refs) => {
+          if (sessionId !== this.host.getChatId()) return;
+          // Always a full snapshot (never a delta) — the reducer replaces the
+          // queued set wholesale, so stale turns cannot survive a reconnect.
+          this.host.dispatch({ type: 'queued.snapshot', refs });
+        }),
         client.onGap(() => void this.resumeFromGap()),
       );
     }
@@ -113,7 +121,7 @@ export class AcpSessionPlane {
     this.hasAttached = true;
   }
 
-  /** Full re-replay of the current transcript (e.g. after `messages.cleared`). */
+  /** Full re-replay of the current transcript (e.g. after a server-side wipe). */
   async reattach(): Promise<void> {
     this.lastSettledItemId = null;
     await this.resume({ type: 'start' });

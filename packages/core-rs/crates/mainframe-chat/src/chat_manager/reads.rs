@@ -77,6 +77,17 @@ impl ChatManager {
         queued_for_chat(&self.queued_refs, chat_id)
     }
 
+    /// Announce the chat's current queued snapshot on the chat-surface seam
+    /// (`_mainframe.dev/queue_state` on the facade). Always the full set.
+    pub(super) fn notify_queue_changed(&self, chat_id: &str) {
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::QueueChanged {
+                chat_id: chat_id.to_string(),
+                refs: self.get_queued_for_chat(chat_id),
+            },
+        );
+    }
+
     pub fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
         handle_queued_processed(&self.queued_refs, chat_id, uuid);
     }

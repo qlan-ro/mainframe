@@ -87,6 +87,33 @@ describe('AcpSessionPlane — state_update → run frames', () => {
   });
 });
 
+describe('AcpSessionPlane — queue state', () => {
+  it('dispatches queued.snapshot with the pushed refs for this chat only', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    const ref = { messageId: 'm1', chatId: CHAT_ID, uuid: 'u1', content: 'queued', timestamp: 't' };
+    client.emitQueueState(CHAT_ID, [ref]);
+    client.emitQueueState('other-chat', []);
+
+    const snapshots = eventsOf(host).filter((e) => e.type === 'queued.snapshot');
+    expect(snapshots).toEqual([{ type: 'queued.snapshot', refs: [ref] }]);
+  });
+
+  it('an empty snapshot replaces the queued set (stale-turn eviction)', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    client.emitQueueState(CHAT_ID, []);
+
+    expect(eventsOf(host)).toContainEqual({ type: 'queued.snapshot', refs: [] });
+  });
+});
+
 describe('AcpSessionPlane — transcript cleared', () => {
   it('dispatches transcript.cleared and re-resumes from the start', async () => {
     const client = makeFakeAcpClient();
@@ -100,7 +127,10 @@ describe('AcpSessionPlane — transcript cleared', () => {
 
     expect(eventsOf(host)).toContainEqual({ type: 'transcript.cleared' });
     expect(client.resumeCalls.length).toBe(resumesBefore + 1);
-    expect(client.resumeCalls.at(-1)).toEqual({ sessionId: CHAT_ID, cursor: { type: 'start' } });
+    expect(client.resumeCalls[client.resumeCalls.length - 1]).toEqual({
+      sessionId: CHAT_ID,
+      cursor: { type: 'start' },
+    });
   });
 
   it('ignores a clear for another session', async () => {

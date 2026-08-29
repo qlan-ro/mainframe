@@ -257,6 +257,12 @@ impl ChatSurface for FacadeHub {
                     Vec::new()
                 });
             }
+            ChatSurfaceEvent::QueueChanged { chat_id, refs } => {
+                let note = mainframe_acp::queue_state_notification(&chat_id, refs);
+                for connection in self.attached_connections(&chat_id) {
+                    connection.send_json(&note);
+                }
+            }
             ChatSurfaceEvent::TranscriptCleared { chat_id } => {
                 let note = mainframe_acp::transcript_cleared_notification(&chat_id);
                 for connection in self.attached_connections(&chat_id) {

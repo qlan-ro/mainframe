@@ -21,6 +21,7 @@ import type {
   MainframeCapabilities,
   PromptRequest,
   PromptResponse,
+  QueuedMessageRef,
   RequestPermissionRequest,
   RequestPermissionResponse,
   ResumeSessionRequest,
@@ -30,6 +31,7 @@ import type {
 import {
   CompactionParamsSchema,
   GateResolvedParamsSchema,
+  QueueStateParamsSchema,
   TranscriptClearedParamsSchema,
   HeartbeatParamsSchema,
   InitializeResponseSchema,
@@ -58,6 +60,7 @@ export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestP
 export type GateResolvedListener = (sessionId: string, requestId: string) => void;
 export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
 export type TranscriptClearedListener = (sessionId: string) => void;
+export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) => void;
 export type GapListener = () => void;
 export type CloseListener = () => void;
 
@@ -101,6 +104,7 @@ export class AcpFacadeClient {
   private readonly gateResolvedListeners = new Set<GateResolvedListener>();
   private readonly compactionListeners = new Set<CompactionListener>();
   private readonly transcriptClearedListeners = new Set<TranscriptClearedListener>();
+  private readonly queueStateListeners = new Set<QueueStateListener>();
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 
@@ -219,6 +223,12 @@ export class AcpFacadeClient {
     return () => this.transcriptClearedListeners.delete(listener);
   }
 
+  /** A session's full queued-prompt snapshot (`_mainframe.dev/queue_state`). */
+  onQueueState(listener: QueueStateListener): () => void {
+    this.queueStateListeners.add(listener);
+    return () => this.queueStateListeners.delete(listener);
+  }
+
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
@@ -289,6 +299,15 @@ export class AcpFacadeClient {
         return;
       }
       this.watchdog?.observe(parsed.data.sequence);
+      return;
+    }
+    if (notification.method === '_mainframe.dev/queue_state') {
+      const parsed = QueueStateParamsSchema.safeParse(notification.params);
+      if (!parsed.success) {
+        console.warn('[acp-client] dropped malformed queue_state', notification.params);
+        return;
+      }
+      this.queueStateListeners.forEach((fn) => fn(parsed.data.sessionId, parsed.data.refs as QueuedMessageRef[]));
       return;
     }
     if (notification.method === '_mainframe.dev/transcript_cleared') {

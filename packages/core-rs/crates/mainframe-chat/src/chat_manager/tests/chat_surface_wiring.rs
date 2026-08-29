@@ -87,6 +87,53 @@ async fn a_queued_prompt_is_accepted_immediately_but_not_started_until_dequeued(
 }
 
 #[tokio::test]
+async fn queue_changes_announce_full_snapshots_on_the_seam() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+
+    mgr.send_message("c1", "hello while busy", None, None)
+        .await
+        .unwrap();
+
+    let snapshots = |surface: &RecordingSurface| -> Vec<Vec<String>> {
+        surface
+            .events()
+            .iter()
+            .filter_map(|e| match e {
+                ChatSurfaceEvent::QueueChanged { refs, .. } => {
+                    Some(refs.iter().map(|r| r.content.clone()).collect())
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        snapshots(&surface),
+        vec![vec!["hello while busy".to_string()]],
+        "enqueue announces the full snapshot"
+    );
+
+    let r = mgr.get_queued_for_chat("c1")[0].clone();
+    mgr.cancel_queued_message("c1", &r.message_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        snapshots(&surface).last(),
+        Some(&Vec::new()),
+        "cancel announces the emptied snapshot"
+    );
+}
+
+#[tokio::test]
 async fn interrupt_ends_the_turn_cancelled_and_leaves_no_answerable_gate() {
     let deps = StoreDeps::arc();
     let surface = RecordingSurface::arc();

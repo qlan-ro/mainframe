@@ -17,7 +17,7 @@ use crate::automation::{
     AutomationRunSummary,
 };
 use crate::background_task::BackgroundTask;
-use crate::chat::{Chat, QueuedMessageRef, TodoItem};
+use crate::chat::{Chat, TodoItem};
 use crate::claude_workflow::ClaudeWorkflowRun;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
@@ -220,22 +220,6 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "sessions.external.count")]
     SessionsExternalCount { project_id: String, count: i64 },
-    #[serde(rename = "message.queued")]
-    MessageQueued {
-        chat_id: String,
-        r#ref: QueuedMessageRef,
-    },
-    #[serde(rename = "message.queued.processed")]
-    MessageQueuedProcessed { chat_id: String, uuid: String },
-    #[serde(rename = "message.queued.cancelled")]
-    MessageQueuedCancelled { chat_id: String, uuid: String },
-    #[serde(rename = "message.queued.cleared")]
-    MessageQueuedCleared { chat_id: String },
-    #[serde(rename = "message.queued.snapshot")]
-    MessageQueuedSnapshot {
-        chat_id: String,
-        refs: Vec<QueuedMessageRef>,
-    },
     #[serde(rename = "chat.notification")]
     ChatNotification {
         chat_id: String,
@@ -485,13 +469,6 @@ mod tests {
     }
 
     #[test]
-    fn fixture_message_queued_snapshot() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.message-queued-snapshot.json"
-        ));
-    }
-
-    #[test]
     fn fixture_workflow_run_updated() {
         assert_daemon_roundtrip(include_str!(
             "../tests/fixtures/event.workflow-run-updated.json"
@@ -544,12 +521,6 @@ mod tests {
         assert_daemon_roundtrip(include_str!(
             "../tests/fixtures/event.workflow-step-updated.json"
         ));
-    }
-
-    #[test]
-    fn fixture_message_queued() {
-        // Exercises the `ref` field (Rust raw identifier `r#ref`).
-        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.message-queued.json"));
     }
 
     #[test]
@@ -829,8 +800,8 @@ mod tests {
 // strings via per-variant rename, fields camelCased via rename_all_fields.
 // Numbers per §6.3: tokens/port/count=i64. workflow.step.updated's `step` is a
 // dedicated WorkflowStepUpdate struct (TS Pick has no direct Rust analog).
-// message.queued uses raw identifier r#ref (serializes "ref"). Golden
-// round-trip tests include_str! the fixtures relative to the workspace root.
+// Golden round-trip tests include_str! the fixtures relative to the workspace
+// root.
 // The golden comparator canonicalizes numbers to f64 so a fixture's
 // integer-literal `0` for an f64 field (Chat.totalCost) matches Rust's `0.0` —
 // see the Phase-B WIRE NOTE in chat.rs (serde_json `0.0` vs Node `0`). The

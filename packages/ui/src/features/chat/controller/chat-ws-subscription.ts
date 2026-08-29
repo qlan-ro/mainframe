@@ -1,16 +1,16 @@
 /**
- * ChatWsSubscription — the controller's SIDE-BAND WS attachment (legacy
- * dialect): config broadcasts, queued refs, background tasks, worktree
- * offers, workflow runs, context usage, compaction markers. The transcript,
- * run frames, and gates arrive over the ACP facade (`acp-session-plane.ts`),
- * which owns its own gap/resume convergence — so the ack-gated resume, the
- * pending-permission restore, and the reattach re-seed that used to live
- * here are gone with the mechanisms they served.
+ * ChatWsSubscription — the controller's SIDE-BAND WS attachment: config
+ * broadcasts, background tasks, worktree offers, workflow runs. The chat
+ * surface itself (transcript, run frames, gates, queue, usage, compaction,
+ * clears) rides the ACP facade (`acp-session-plane.ts`), which owns its own
+ * gap/resume convergence — so the ack-gated resume, the pending-permission
+ * restore, and the reattach re-seed that used to live here are gone with
+ * the mechanisms they served.
  *
- * What remains: subscribe on attach (the daemon replays queued/worktree
- * snapshots to a new subscriber), re-subscribe on socket reconnect, and the
+ * What remains: subscribe on attach (the daemon replays the worktree-offer
+ * snapshot to a new subscriber), re-subscribe on socket reconnect, and the
  * `POST /chats/:id/resume` warm-up that keeps the CLI process lifecycle
- * behavior of the legacy attach path.
+ * behavior of the attach path.
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';

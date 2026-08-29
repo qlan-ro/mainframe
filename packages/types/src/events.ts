@@ -1,4 +1,4 @@
-import type { Chat, QueuedMessageRef } from './chat.js';
+import type { Chat } from './chat.js';
 import type { AdapterProcess } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
@@ -50,11 +50,6 @@ export type DaemonEvent =
   | { type: 'launch.port.timeout'; projectId: string; effectivePath: string; name: string; port: number }
   | { type: 'launch.scopeReleased'; projectId: string; effectivePath: string }
   | { type: 'sessions.external.count'; projectId: string; count: number }
-  | { type: 'message.queued'; chatId: string; ref: QueuedMessageRef }
-  | { type: 'message.queued.processed'; chatId: string; uuid: string }
-  | { type: 'message.queued.cancelled'; chatId: string; uuid: string }
-  | { type: 'message.queued.cleared'; chatId: string }
-  | { type: 'message.queued.snapshot'; chatId: string; refs: QueuedMessageRef[] }
   | {
       type: 'chat.notification';
       chatId: string;
