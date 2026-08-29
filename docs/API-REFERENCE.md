@@ -627,9 +627,12 @@ correct without waiting for the next probe cycle).
 ### Client → Server Events
 
 Every frame is JSON with a `type` discriminant. An unparseable frame (bad
-JSON, or JSON that doesn't match one of these six shapes) gets back `{"type":
-"error", "error": "Invalid JSON"}` or `{"type": "error", "error": "Invalid
-message: <reason>"}` — the connection stays open.
+JSON, or JSON that doesn't match one of these four shapes) gets back
+`{"type": "error", "error": "Invalid JSON"}` or `{"type": "error", "error":
+"Invalid message: <reason>"}` — the connection stays open. Chat sends and
+permission answers do NOT ride this socket: they are the [ACP chat
+facade](#acp-chat-facade-acpprofile)'s `session/prompt` and
+`session/request_permission` exchanges.
 
 | `type` | Fields | Validation |
 |---|---|---|
@@ -637,28 +640,21 @@ message: <reason>"}` — the connection stays open.
 | `unsubscribe` | `chatId` | non-empty |
 | `subscribe:file` | `path`, `projectId?`, `chatId?` | `path` non-empty; a relative `path` requires `projectId` |
 | `unsubscribe:file` | `path`, `projectId?`, `chatId?` | `path` non-empty |
-| `message.send` | `chatId`, `content`, `attachmentIds?`, `metadata?` | `chatId` non-empty; `content` or a non-empty `attachmentIds` required; `metadata.command.name` must match `^[a-zA-Z0-9_-]+$` |
-| `permission.respond` | `chatId`, `response: ControlResponse` | `chatId` non-empty |
 
-`subscribe` registers the connection for a chat's events and immediately
-replies with three frames, in order: `message.queued.snapshot` (any queued
-messages for that chat), `worktree.offer.snapshot` (any pending worktree
-offers — sent even when empty, since this snapshot is the client's only
-re-seed path), then `subscribe:ack`.
-
-`message.send` registers the sending connection as a subscriber of `chatId`
-*before* dispatching, so events emitted in the gap between send and the
-client's own `subscribe` frame are never dropped.
+`subscribe` registers the connection for a chat's side-band events and
+immediately replies with two frames, in order: `worktree.offer.snapshot`
+(any pending worktree offers — sent even when empty, since this snapshot is
+the client's only re-seed path), then `subscribe:ack`.
 
 ### Server → Client Events
 
 Every event is JSON with a `type` discriminant (dot-separated, a few legacy
 colon-separated exceptions noted below) and, where relevant, a `chatId`.
 Delivery is scoped: an event carrying a `chatId` reaches only connections
-subscribed to that chat, *except* three connection-global types that reach
-every connection regardless of subscription: `chat.notification`,
-`permission.requested`, `automation.notification`. An event with no `chatId`
-at all (adapter/provider/automation-level events) also reaches everyone.
+subscribed to that chat, *except* two connection-global types that reach
+every connection regardless of subscription: `chat.notification` and
+`automation.notification`. An event with no `chatId` at all (`chat.updated`,
+adapter/provider/automation-level events) also reaches everyone.
 
 | `type` | Fields (non-`chatId`) |
 |---|---|
@@ -669,14 +665,6 @@ at all (adapter/provider/automation-level events) also reaches everyone.
 | `process.started` | `process: AdapterProcess` |
 | `process.ready` | `processId`, `claudeSessionId` |
 | `process.stopped` | `processId` |
-| `message.added` | `message: ChatMessage` |
-| `message.updated` | `message: ChatMessage` |
-| `display.message.added` | `message: DisplayMessage` |
-| `display.message.updated` | `message: DisplayMessage` |
-| `display.messages.set` | `messages: DisplayMessage[]` |
-| `messages.cleared` | — |
-| `permission.requested` | `request: ControlRequest`, `notify: bool` |
-| `permission.resolved` | `requestId` |
 | `context.updated` | `filePaths?` |
 | `error` | `chatId?`, `error` |
 | `plugin.panel.registered` | `pluginId`, `panelId`, `zone`, `label`, `icon?` |
@@ -691,15 +679,7 @@ at all (adapter/provider/automation-level events) also reaches everyone.
 | `launch.port.timeout` | `projectId`, `effectivePath`, `name`, `port` |
 | `launch.scopeReleased` | `projectId`, `effectivePath` |
 | `sessions.external.count` | `projectId`, `count` |
-| `message.queued` | `ref: QueuedMessageRef` |
-| `message.queued.processed` | `uuid` |
-| `message.queued.cancelled` | `uuid` |
-| `message.queued.cleared` | — |
-| `message.queued.snapshot` | `refs: QueuedMessageRef[]` |
 | `chat.notification` (connection-global) | `title`, `body`, `level`, `kind?` |
-| `chat.compacting` | — |
-| `chat.compactDone` | — |
-| `chat.contextUsage` | `percentage`, `totalTokens`, `maxTokens` |
 | `adapter.models.updated` | `adapterId`, `models: AdapterModel[]`, `modelsRevision`, `installed?` |
 | `provider.quota.updated` (no `chatId`) | `adapterId`, `quota: ProviderQuota` |
 | `todos.updated` | `todos: TodoItem[]` |
@@ -732,19 +712,16 @@ distinct from `claude_workflow.run.updated`, which describes a Claude CLI
 `/workflows` run folded in from disk. Neither has a matching HTTP route — see
 the note at the end of [Automations v2](#automations-v2).
 
-**Shape-frozen for the chat-facade migration window (todo #350):** every
-chat-scoped row above (`message.*`, `display.*`, `messages.cleared`,
-`permission.*`, `chat.compacting`/`chat.compactDone`/`chat.contextUsage`,
-`message.queued.*`) keeps its frame shape until both the desktop UI and the
-`packages/mobile` client cut over to the [ACP chat
-facade](#acp-chat-facade-acpprofile) below. Cadence is NOT frozen (spec
-Decision 23, user-relaxed 2026-08-28): with partial-message streaming a
-growing assistant message emits `display.message.added` on its first delta
-and whole-message `display.message.updated` frames at up to ~20/s while a
-block streams, instead of one frame per completed block. Clients must treat
-`display.message.updated` as idempotent replacement (desktop already does;
-mobile must verify when it updates). Non-chat rows (projects, git, launch, automations,
-plugins, …) are unaffected and evolve normally.
+**The legacy chat dialect is retired (todo #350).** The chat surface —
+transcript, gates, queued prompts, context usage, compaction, transcript
+clears, and sends — rides only the [ACP chat
+facade](#acp-chat-facade-acpprofile) below. This socket carries the
+remaining side-band domains: sessions list (`chat.*`), processes, context
+files, launch/run, worktree offers, background tasks, workflows,
+automations, plugins, tunnels, file watches, quota, and notifications.
+`packages/mobile` still speaks the removed dialect and is broken until its
+own facade migration lands (accepted 2026-08-28: "there are no legacy
+clients").
 
 ### ACP Chat Facade (`/acp/{profile}`)
 
@@ -754,30 +731,31 @@ upgrade shell); vendored wire types in
 `packages/core-rs/crates/mainframe-types/src/acp/` and
 `packages/types/src/acp/`.
 
-The daemon exposes a second, additive-only chat surface: an [ACP
+The daemon's ONLY chat wire protocol: an [ACP
 v2](https://agentclientprotocol.com) server facade, frozen against snapshot
 `d0370de50e16` (`docs/research/ACP-EVALUATION.md`), plus a `_mainframe.dev`
-extension namespace for what ACP has no construct for. It replaces the legacy
-dialect's whole-message resends, `task_group` double-encoding, and four
-separate reconnect re-seed paths with versioned, delta-streamed, explicitly
-framed turns — see `docs/specs/2026-08-28-todo-350-wire-protocol-payload-grammar.md`
-for the full grammar rationale.
+extension namespace for what ACP has no construct for. It replaced the
+legacy dialect's whole-message resends, `task_group` double-encoding, and
+four separate reconnect re-seed paths with versioned, delta-streamed,
+explicitly framed turns — see
+`docs/specs/2026-08-28-todo-350-wire-protocol-payload-grammar.md` for the
+full grammar rationale and Decision 24 for the legacy dialect's retirement.
 
-**Status: live on the daemon.** `/acp/{profile}` serves the full facade:
-`session/prompt`/`session/cancel` run against the live `ChatManager`
+**Status: live, sole chat surface.** `/acp/{profile}` serves the full
+facade: `session/prompt`/`session/cancel` run against the live `ChatManager`
 (`mainframe-server/src/acp_ws/ports.rs`), `session/resume` replays from the
 cursor and seeds the connection's diff state, gates raise/resolve through
 the chat-surface observer (`FacadeHub`, attached at boot), and attached
 connections stream `session/update` with server-side coalescing
 (`FACADE_THROTTLE_INTERVAL_MS`). A connection observes a session once it has
 prompted or resumed it; one connection multiplexes any number of sessions.
-The desktop UI still speaks the legacy dialect — switching its controller to
-`acp-client.ts` is the remaining cutover work, tracked separately.
+The desktop UI's chat controller speaks this protocol (`acp-client.ts` +
+`acp-session-plane.ts`).
 
 **Connecting.** `GET /acp/{profile}` (upgrade), where `profile` names a
 registered adapter (`claude`, `codex`, `mock-cli`, …) — unregistered profiles
-get `404`, matching the auth-then-existence check order the legacy route
-uses. `?token=` works exactly as it does on `/`.
+get `404`, matching the auth-then-existence check order the side-band `/`
+route uses. `?token=` works exactly as it does on `/`.
 
 **Handshake.** The client sends `initialize` with `protocolVersion: 2`
 (`PINNED_PROTOCOL_VERSION`); a mismatched version gets a structured
@@ -799,7 +777,10 @@ queued-turn metadata).
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); the request's `_meta["_mainframe.dev"].controlRequest` carries the raw `ControlRequest` (input, suggestions, decision reason) the rich desktop gate cards render. A plain `{outcome:"selected", optionId}` answer is always valid; a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
 | `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
-| `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, the legacy surface, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
+| `_mainframe.dev/gate_resolved` | daemon → client (notification) | `{sessionId, requestId}` pushed to every connection still holding a delivered gate when it resolves elsewhere (another facade client, or the CLI cancelling it); `requestId` is the gate's `session/request_permission` JSON-RPC id (`gate-{id}`). The answering connection gets its resolution through its own response exchange, not this frame. |
+| `_mainframe.dev/queue_state` | daemon → client (notification) | `{sessionId, refs: QueuedMessageRef[]}` — the session's FULL queued-prompt snapshot, pushed on every queue change (enqueue, dequeue, cancel, clear) and as the last frame of every `session/resume` replay (even when empty, so a reconnect evicts stale queued turns). A snapshot, never a delta. Queued cancel/edit stay REST (`/queued/{messageId}`). |
+| `_mainframe.dev/compaction` | daemon → client (notification) | `{sessionId, phase: "started" \| "done"}` — live compaction progress; the durable transcript marker is `ItemMeta.isCompacted`. |
+| `_mainframe.dev/transcript_cleared` | daemon → client (notification) | `{sessionId}` — the server wiped the session's transcript (plan-mode clear-context); the client re-resumes to converge. |
 
 **Message content grammar.** A message/thought item's content is an ordered
 `ContentBlock` list; the vendored variants are `text` and `image` (base64
@@ -861,32 +842,31 @@ text a generic ACP client can render, and the diff's own
 **Truncated tool results.** When the daemon truncates an oversized tool
 output for display, the result's text content block carries
 `_meta["_mainframe.dev"]: {truncated: true, fullBytes}` (spec Decision 20) —
-the same pair the legacy dialect's `ToolCallResult` carries inline — so a
+the same pair the retired dialect's `ToolCallResult` carried inline — so a
 client can offer the on-demand full-output fetch
 (`GET /api/chats/{chatId}/tool-result/{toolUseId}`). Generic ACP clients
 ignore the marker and render the truncated preview text.
 
-**Multi-client + cross-surface gates.** A gate raised on a chat broadcasts
-to every facade connection attached to it, under the shared correlation id
+**Multi-client gates.** A gate raised on a chat broadcasts to every facade
+connection attached to it, under the shared correlation id
 `gate-{requestId}`; only the first answer applies
-(`mainframe-acp::gate_registry`). Answering a gate on the legacy `/` route
-raises `GateResolved` on the same chat-surface observer the facade hub
-implements (`mainframe-chat::permission_handler`), so a legacy-surface
-answer drops the facade's pending delivery and a late facade answer is
-rejected as resolved — one observer, no separate synchronization. A
-still-open gate is redelivered by `session/resume` under the same id.
-Resolution is pushed: every connection still holding the delivered gate
-receives `_mainframe.dev/gate_resolved` the moment it resolves (criterion
-8), so a second client's pending gate clears immediately; resume redelivery
-remains the fallback for a client that was disconnected at that moment.
+(`mainframe-acp::gate_registry`); a CLI cancellation raises `GateResolved`
+on the same chat-surface observer, so a late answer is rejected as resolved
+— one observer, no separate synchronization. A still-open gate is
+redelivered by `session/resume` under the same id. Resolution is pushed:
+every connection still holding the delivered gate receives
+`_mainframe.dev/gate_resolved` the moment it resolves (criterion 8), so a
+second client's pending gate clears immediately; resume redelivery remains
+the fallback for a client that was disconnected at that moment.
 
-**Migration window.** The legacy dialect above stays shape-frozen for the
-duration (cadence changed with partial streaming — see the note in the
-legacy event catalog); desktop cuts over first, `packages/mobile` follows
-in its own PR against this same pinned `protocolVersion: 2`. Both dialects
-run side by side until both clients have migrated, at which point the
-legacy chat events are removed (tracked as a follow-up todo, not part
-of #350).
+**Context usage.** `session/update`'s `usage_update` carries `used`/`size`
+plus the CLI's own occupancy percentage under `_meta["_mainframe.dev"]`
+(`UsageMeta`) — the percentage is not derivable from `used/size` because the
+CLI accounts for its usable-window buffer.
+
+**Migration.** The legacy chat dialect was removed with todo #350 (spec
+Decision 24); `packages/mobile` migrates to this facade in its own PR
+against the same pinned `protocolVersion: 2` and is broken until then.
 
 ### LSP WebSocket
 
