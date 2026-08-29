@@ -1,6 +1,11 @@
 /**
  * Behavior tests for the workflow-runs slice of the chat-thread reducer.
  * Fixed input events, hardcoded expected state — no production logic re-derived.
+ *
+ * The seed path moved off the deleted `history.loaded` event: the facade
+ * plane has no history-payload frame, so `AcpChatController.attachPlanes()`
+ * backfills workflow runs from a dedicated REST read
+ * (`getChatWorkflowRuns`) and dispatches `workflow.runs.seeded`.
  */
 import { describe, it, expect } from 'vitest';
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
@@ -67,12 +72,11 @@ describe('chat-thread-state — workflow-runs slice', () => {
     expect(s.backgroundTasks).toEqual({ 'a-1': { id: 'a-1', kind: 'agent', description: 'x', startedAt: 0 } });
   });
 
-  it('history.loaded carrying workflowRuns seeds the slice', () => {
+  it('workflow.runs.seeded seeds the slice (the REST backfill path)', () => {
     const s0 = createChatThreadState(CHAT_ID);
     const s1 = reduceChatThreadState(s0, {
-      type: 'history.loaded',
-      messages: [],
-      workflowRuns: [workflowRun('task-1'), workflowRun('task-2', { status: 'completed' })],
+      type: 'workflow.runs.seeded',
+      runs: [workflowRun('task-1'), workflowRun('task-2', { status: 'completed' })],
     });
     expect(s1.workflowRuns).toEqual({
       'task-1': workflowRun('task-1'),
@@ -80,21 +84,17 @@ describe('chat-thread-state — workflow-runs slice', () => {
     });
   });
 
-  it('history.loaded replaces rather than merges the slice on a later reload', () => {
+  it('workflow.runs.seeded replaces rather than merges the slice on a later reload', () => {
     let s = createChatThreadState(CHAT_ID);
     s = reduceChatThreadState(s, { type: 'workflow.run.updated', run: workflowRun('stale-task') });
-    s = reduceChatThreadState(s, {
-      type: 'history.loaded',
-      messages: [],
-      workflowRuns: [workflowRun('task-1')],
-    });
+    s = reduceChatThreadState(s, { type: 'workflow.runs.seeded', runs: [workflowRun('task-1')] });
     expect(s.workflowRuns).toEqual({ 'task-1': workflowRun('task-1') });
   });
 
-  it('history.loaded with no workflowRuns field clears the slice back to empty', () => {
+  it('workflow.runs.seeded with an empty list clears the slice back to empty', () => {
     let s = createChatThreadState(CHAT_ID);
     s = reduceChatThreadState(s, { type: 'workflow.run.updated', run: workflowRun('task-1') });
-    s = reduceChatThreadState(s, { type: 'history.loaded', messages: [] });
+    s = reduceChatThreadState(s, { type: 'workflow.runs.seeded', runs: [] });
     expect(s.workflowRuns).toEqual({});
   });
 });

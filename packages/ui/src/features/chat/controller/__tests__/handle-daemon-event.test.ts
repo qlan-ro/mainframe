@@ -11,8 +11,6 @@ import { handleDaemonEvent } from '../handle-daemon-event';
 
 const CHAT_ID = 'chat-abc';
 const OTHER_CHAT = 'chat-other';
-const EMPTY_MSGS = {} as Readonly<Record<string, unknown>>;
-
 function makeRef(uuid: string): QueuedMessageRef {
   return { uuid, content: `msg-${uuid}` } as unknown as QueuedMessageRef;
 }
@@ -30,7 +28,6 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
         refs: [makeRef('A'), makeRef('B')],
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({
@@ -50,7 +47,6 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
         refs: [makeRef('A')],
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });
@@ -58,7 +54,7 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
 
   it('preserves the refs array exactly — no re-ordering or filtering', () => {
     const refs = [makeRef('Z'), makeRef('M'), makeRef('A')];
-    const result = handleDaemonEvent({ type: 'message.queued.snapshot', chatId: CHAT_ID, refs }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'message.queued.snapshot', chatId: CHAT_ID, refs }, CHAT_ID);
 
     expect(result.kind).toBe('event');
     if (result.kind === 'event' && result.event.type === 'queued.snapshot') {
@@ -67,11 +63,7 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
   });
 
   it('handles an empty refs array', () => {
-    const result = handleDaemonEvent(
-      { type: 'message.queued.snapshot', chatId: CHAT_ID, refs: [] },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+    const result = handleDaemonEvent({ type: 'message.queued.snapshot', chatId: CHAT_ID, refs: [] }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -95,7 +87,6 @@ describe('handleDaemonEvent — chat.contextUsage', () => {
         maxTokens: 200_000,
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({
@@ -119,7 +110,6 @@ describe('handleDaemonEvent — chat.contextUsage', () => {
         maxTokens: 200_000,
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });
@@ -132,7 +122,7 @@ describe('handleDaemonEvent — chat.contextUsage', () => {
 
 describe('handleDaemonEvent — chat.compacting', () => {
   it('returns compact.started event when chatId matches', () => {
-    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: CHAT_ID }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: CHAT_ID }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -141,7 +131,7 @@ describe('handleDaemonEvent — chat.compacting', () => {
   });
 
   it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: OTHER_CHAT }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'chat.compacting', chatId: OTHER_CHAT }, CHAT_ID);
 
     expect(result).toEqual({ kind: 'noop' });
   });
@@ -153,7 +143,7 @@ describe('handleDaemonEvent — chat.compacting', () => {
 
 describe('handleDaemonEvent — chat.compactDone', () => {
   it('returns compact.done event when chatId matches', () => {
-    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: CHAT_ID }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: CHAT_ID }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -162,7 +152,7 @@ describe('handleDaemonEvent — chat.compactDone', () => {
   });
 
   it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: OTHER_CHAT }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'chat.compactDone', chatId: OTHER_CHAT }, CHAT_ID);
 
     expect(result).toEqual({ kind: 'noop' });
   });
@@ -181,7 +171,6 @@ describe('handleDaemonEvent — process.started', () => {
         process: { id: 'proc-1' } as never,
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });
@@ -194,7 +183,7 @@ describe('handleDaemonEvent — process.started', () => {
 
 describe('handleDaemonEvent — error', () => {
   it('returns run.failed when chatId matches this chat', () => {
-    const result = handleDaemonEvent({ type: 'error', chatId: CHAT_ID, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'error', chatId: CHAT_ID, error: 'boom' }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -203,7 +192,7 @@ describe('handleDaemonEvent — error', () => {
   });
 
   it('returns run.failed when chatId is absent (global error applies to current run)', () => {
-    const result = handleDaemonEvent({ type: 'error', error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'error', error: 'boom' }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -212,38 +201,25 @@ describe('handleDaemonEvent — error', () => {
   });
 
   it('returns noop when chatId targets a different chat', () => {
-    const result = handleDaemonEvent({ type: 'error', chatId: OTHER_CHAT, error: 'boom' }, CHAT_ID, EMPTY_MSGS);
+    const result = handleDaemonEvent({ type: 'error', chatId: OTHER_CHAT, error: 'boom' }, CHAT_ID);
 
     expect(result).toEqual({ kind: 'noop' });
   });
 });
 
 // ---------------------------------------------------------------------------
-// permission.resolved — also the daemon's cancel-removal signal (todo #284):
-// a control_cancel_request from the CLI resolves the queue over this same
-// event, so the client needs exactly one routing path for both outcomes.
+// permission.resolved — RETIRED from this mapper (desktop-cutover pass).
+// Gates now arrive over the ACP facade (session/request_permission +
+// _mainframe.dev/gate_resolved), handled entirely in AcpSessionPlane — see
+// acp-session-plane.test.ts's "gates" suite. The side-band `permission.*`
+// DaemonEvent family is intentionally left unmapped here (falls through to
+// `default: noop`); the daemon still emits it only for the un-migrated
+// mobile client (handle-daemon-event.ts's module doc).
 // ---------------------------------------------------------------------------
 
-describe('handleDaemonEvent — permission.resolved', () => {
-  it('permission.resolved maps to a removal for the matching chat', () => {
-    const result = handleDaemonEvent(
-      { type: 'permission.resolved', chatId: CHAT_ID, requestId: 'req-1' },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
-
-    expect(result).toEqual({
-      kind: 'event',
-      event: { type: 'permission.resolved', requestId: 'req-1' },
-    });
-  });
-
-  it('permission.resolved for another chat is a noop', () => {
-    const result = handleDaemonEvent(
-      { type: 'permission.resolved', chatId: OTHER_CHAT, requestId: 'req-1' },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+describe('handleDaemonEvent — permission.resolved (side-band, unmapped)', () => {
+  it('is a noop — the desktop path resolves gates through the ACP facade instead', () => {
+    const result = handleDaemonEvent({ type: 'permission.resolved', chatId: CHAT_ID, requestId: 'req-1' }, CHAT_ID);
 
     expect(result).toEqual({ kind: 'noop' });
   });

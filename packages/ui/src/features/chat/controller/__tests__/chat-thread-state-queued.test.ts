@@ -75,7 +75,7 @@ describe('reduceChatThreadState — queued.snapshot', () => {
     expect(after.chatId).toBe(CHAT_ID);
     expect(after.runState).toBe(before.runState);
     expect(after.loadState).toBe(before.loadState);
-    expect(after.messagesById).toBe(before.messagesById);
+    expect(after.messages).toBe(before.messages);
     expect(after.pendingUserMessages).toBe(before.pendingUserMessages);
   });
 });

@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import { routeDaemonEvent, type DaemonEventRouterHost } from '../chat-event-router';
-import { createChatThreadState, type ChatStateEvent } from '../chat-thread-state';
+import type { ChatStateEvent } from '../chat-thread-state';
 
 vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
@@ -28,9 +28,8 @@ describe('routeDaemonEvent — chat.updated background resync', () => {
     dispatched = [];
     host = {
       getChatId: () => CHAT_ID,
-      getState: () => createChatThreadState(CHAT_ID),
       dispatch: (e) => dispatched.push(e),
-      refreshInBackground: vi.fn(),
+      onTranscriptCleared: vi.fn(),
     };
   });
 

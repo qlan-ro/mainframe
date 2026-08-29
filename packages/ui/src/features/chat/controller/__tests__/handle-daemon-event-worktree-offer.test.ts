@@ -8,8 +8,6 @@ import { handleDaemonEvent } from '../handle-daemon-event';
 
 const CHAT_ID = 'chat-abc';
 const OTHER_CHAT = 'chat-other';
-const EMPTY_MSGS = {} as Readonly<Record<string, unknown>>;
-
 const OFFER: WorktreeSwitchOffer = {
   chatId: CHAT_ID,
   worktreePath: '/wt/alpha',
@@ -26,11 +24,7 @@ const OFFER_FOR_OTHER_CHAT: WorktreeSwitchOffer = {
 
 describe('handleDaemonEvent — worktree.offer.raised', () => {
   it('maps to worktree.offer.added carrying the offer', () => {
-    const result = handleDaemonEvent(
-      { type: 'worktree.offer.raised', chatId: CHAT_ID, offer: OFFER },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+    const result = handleDaemonEvent({ type: 'worktree.offer.raised', chatId: CHAT_ID, offer: OFFER }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -45,7 +39,6 @@ describe('handleDaemonEvent — worktree.offer.raised', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.raised', chatId: OTHER_CHAT, offer: OFFER_FOR_OTHER_CHAT },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });
@@ -57,7 +50,6 @@ describe('handleDaemonEvent — worktree.offer.resolved', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.resolved', chatId: CHAT_ID, worktreePath: '/wt/alpha', outcome: 'dismissed' },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({
@@ -70,7 +62,6 @@ describe('handleDaemonEvent — worktree.offer.resolved', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.resolved', chatId: CHAT_ID, worktreePath: '/wt/beta', outcome: 'accepted' },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({
@@ -83,7 +74,6 @@ describe('handleDaemonEvent — worktree.offer.resolved', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.resolved', chatId: CHAT_ID, worktreePath: '/wt/beta', outcome: 'expired' },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({
@@ -96,7 +86,6 @@ describe('handleDaemonEvent — worktree.offer.resolved', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.resolved', chatId: OTHER_CHAT, worktreePath: '/wt/alpha', outcome: 'dismissed' },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });
@@ -105,11 +94,7 @@ describe('handleDaemonEvent — worktree.offer.resolved', () => {
 
 describe('handleDaemonEvent — worktree.offer.snapshot', () => {
   it('maps to worktree.offer.snapshot carrying the offer list', () => {
-    const result = handleDaemonEvent(
-      { type: 'worktree.offer.snapshot', chatId: CHAT_ID, offers: [OFFER] },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+    const result = handleDaemonEvent({ type: 'worktree.offer.snapshot', chatId: CHAT_ID, offers: [OFFER] }, CHAT_ID);
 
     expect(result).toEqual({
       kind: 'event',
@@ -121,11 +106,7 @@ describe('handleDaemonEvent — worktree.offer.snapshot', () => {
   });
 
   it('maps an empty snapshot through unchanged', () => {
-    const result = handleDaemonEvent(
-      { type: 'worktree.offer.snapshot', chatId: CHAT_ID, offers: [] },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+    const result = handleDaemonEvent({ type: 'worktree.offer.snapshot', chatId: CHAT_ID, offers: [] }, CHAT_ID);
 
     expect(result).toEqual({ kind: 'event', event: { type: 'worktree.offer.snapshot', offers: [] } });
   });
@@ -134,7 +115,6 @@ describe('handleDaemonEvent — worktree.offer.snapshot', () => {
     const result = handleDaemonEvent(
       { type: 'worktree.offer.snapshot', chatId: OTHER_CHAT, offers: [OFFER_FOR_OTHER_CHAT] },
       CHAT_ID,
-      EMPTY_MSGS,
     );
 
     expect(result).toEqual({ kind: 'noop' });

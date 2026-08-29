@@ -40,7 +40,7 @@ describe('reduceChatThreadState — chat.id.adopted', () => {
     const after = reduceChatThreadState(before, { type: 'chat.id.adopted', chatId: REMOTE_ID });
 
     expect(after.runState).toEqual({ type: 'idle' });
-    expect(after.messageOrder).toEqual([]);
+    expect(after.messages).toEqual([]);
     expect(after.interactions).toBe(before.interactions);
     expect(after.chatConfig).toBeNull();
   });
