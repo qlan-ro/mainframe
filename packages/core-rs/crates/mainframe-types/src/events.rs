@@ -251,13 +251,6 @@ pub enum DaemonEvent {
     ChatCompacting { chat_id: String },
     #[serde(rename = "chat.compactDone")]
     ChatCompactDone { chat_id: String },
-    #[serde(rename = "chat.contextUsage")]
-    ChatContextUsage {
-        chat_id: String,
-        percentage: f64,
-        total_tokens: i64,
-        max_tokens: i64,
-    },
     #[serde(rename = "adapter.models.updated")]
     AdapterModelsUpdated {
         adapter_id: String,
@@ -538,13 +531,6 @@ mod tests {
     #[test]
     fn fixture_process_started() {
         assert_daemon_roundtrip(include_str!("../tests/fixtures/event.process-started.json"));
-    }
-
-    #[test]
-    fn fixture_chat_context_usage() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.chat-contextUsage.json"
-        ));
     }
 
     #[test]

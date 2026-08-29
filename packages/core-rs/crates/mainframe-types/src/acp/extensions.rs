@@ -19,6 +19,16 @@ use crate::chat::DiffHunk;
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
 
+/// The CLI's own context-occupancy percentage, riding a `usage_update`'s
+/// `_meta["_mainframe.dev"]`. Not derivable from `used`/`size`: the CLI
+/// accounts for its usable-window buffer (autocompact headroom), and clients
+/// that guessed from catalog windows historically pinned the meter at 100%.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageMeta {
+    pub percentage: f64,
+}
+
 /// A slash-command invocation riding [`PromptSendMeta`] (formerly the legacy
 /// `message.send` frame's `metadata.command`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

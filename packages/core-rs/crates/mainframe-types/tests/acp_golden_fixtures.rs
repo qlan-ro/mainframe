@@ -18,6 +18,7 @@ use serde_json::{Value, json};
 use mainframe_types::acp::extensions::{
     GateResolvedParams, HeartbeatParams, ItemMeta, MainframeCapabilities, PromptSendMeta,
     QueuedPromptState, RetryMarker, RichPermissionAnswer, StructuredDiff, TruncationMarker,
+    UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -104,6 +105,9 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name.starts_with("extensions.capabilities") {
         return roundtrip_as::<MainframeCapabilities>(body);
+    }
+    if name.starts_with("extensions.usage-meta") {
+        return roundtrip_as::<UsageMeta>(body);
     }
     if name.starts_with("extensions.retry-marker") {
         return roundtrip_as::<RetryMarker>(body);

@@ -1,8 +1,0 @@
-{
-  "_provenance": "synthetic",
-  "type": "chat.contextUsage",
-  "chatId": "chat_9f2a3b1c",
-  "percentage": 42.5,
-  "totalTokens": 85000,
-  "maxTokens": 200000
-}

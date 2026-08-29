@@ -95,6 +95,18 @@ export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
  * decision 10), riding a message/tool-call upsert's `_meta["_mainframe.dev"]`
  * alongside the replaced content — never a distinct lifecycle frame.
  */
+/**
+ * The CLI's own context-occupancy percentage riding a `usage_update`'s
+ * `_meta["_mainframe.dev"]` — not derivable from used/size (the CLI accounts
+ * for its usable-window buffer).
+ */
+export const UsageMetaSchema = z
+  .object({
+    percentage: z.number(),
+  })
+  .loose();
+export type UsageMeta = z.infer<typeof UsageMetaSchema>;
+
 export const RetryMarkerSchema = z
   .object({
     attempt: z.number().int(),

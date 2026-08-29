@@ -22,6 +22,7 @@ import {
   PromptSendMetaSchema,
   QueuedPromptStateSchema,
   RetryMarkerSchema,
+  UsageMetaSchema,
   RichPermissionAnswerSchema,
   StructuredDiffSchema,
   TruncationMarkerSchema,
@@ -60,6 +61,7 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'gate-resolved.notification.json') return JsonRpcNotificationSchema;
   if (name === 'gate-resolved.params.json') return GateResolvedParamsSchema;
   if (name.startsWith('extensions.capabilities')) return MainframeCapabilitiesSchema;
+  if (name.startsWith('extensions.usage-meta')) return UsageMetaSchema;
   if (name.startsWith('extensions.retry-marker')) return RetryMarkerSchema;
   if (name.startsWith('extensions.item-meta')) return ItemMetaSchema;
   if (name.startsWith('extensions.prompt-send-meta')) return PromptSendMetaSchema;

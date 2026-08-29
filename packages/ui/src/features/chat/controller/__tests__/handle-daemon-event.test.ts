@@ -73,50 +73,6 @@ describe('handleDaemonEvent — message.queued.snapshot', () => {
 });
 
 // ---------------------------------------------------------------------------
-// chat.contextUsage
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — chat.contextUsage', () => {
-  it('returns context.usage event with all fields when chatId matches', () => {
-    const result = handleDaemonEvent(
-      {
-        type: 'chat.contextUsage',
-        chatId: CHAT_ID,
-        percentage: 38,
-        totalTokens: 76_000,
-        maxTokens: 200_000,
-      },
-      CHAT_ID,
-    );
-
-    expect(result).toEqual({
-      kind: 'event',
-      event: {
-        type: 'context.usage',
-        percentage: 38,
-        totalTokens: 76_000,
-        maxTokens: 200_000,
-      },
-    });
-  });
-
-  it('returns noop when chatId does not match', () => {
-    const result = handleDaemonEvent(
-      {
-        type: 'chat.contextUsage',
-        chatId: OTHER_CHAT,
-        percentage: 38,
-        totalTokens: 76_000,
-        maxTokens: 200_000,
-      },
-      CHAT_ID,
-    );
-
-    expect(result).toEqual({ kind: 'noop' });
-  });
-});
-
-// ---------------------------------------------------------------------------
 // chat.compacting
 // ---------------------------------------------------------------------------
 

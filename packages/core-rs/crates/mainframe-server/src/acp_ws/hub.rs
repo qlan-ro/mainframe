@@ -13,7 +13,7 @@ use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, encoder, gate_request_id};
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent, TurnStopReason};
-use mainframe_types::acp::extensions::RetryMarker;
+use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta};
 use mainframe_types::acp::update::{SessionUpdate, StopReason, UsageUpdate};
 use mainframe_types::adapter::ContextUsage;
 use tokio::sync::mpsc;
@@ -175,11 +175,14 @@ fn stop_reason(reason: TurnStopReason) -> StopReason {
 }
 
 fn usage_update(usage: &ContextUsage) -> UsageUpdate {
+    let meta = serde_json::json!({
+        MAINFRAME_META_NAMESPACE: UsageMeta { percentage: usage.percentage }
+    });
     UsageUpdate {
         used: usage.total_tokens.max(0) as u64,
         size: usage.max_tokens.max(0) as u64,
         cost: None,
-        meta: None,
+        meta: Some(meta),
     }
 }
 

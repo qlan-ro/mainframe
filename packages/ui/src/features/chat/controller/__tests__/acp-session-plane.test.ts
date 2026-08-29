@@ -87,6 +87,45 @@ describe('AcpSessionPlane — state_update → run frames', () => {
   });
 });
 
+describe('AcpSessionPlane — usage_update → context.usage', () => {
+  it('prefers the CLI percentage riding the extension meta', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    client.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'usage_update',
+      used: 3000,
+      size: 200_000,
+      _meta: { '_mainframe.dev': { percentage: 1.5 } },
+    });
+
+    expect(eventsOf(host)).toContainEqual({
+      type: 'context.usage',
+      percentage: 1.5,
+      totalTokens: 3000,
+      maxTokens: 200_000,
+    });
+  });
+
+  it('falls back to used/size when no meta rides the update', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+
+    client.emitUpdate(CHAT_ID, { sessionUpdate: 'usage_update', used: 50_000, size: 200_000 });
+
+    expect(eventsOf(host)).toContainEqual({
+      type: 'context.usage',
+      percentage: 25,
+      totalTokens: 50_000,
+      maxTokens: 200_000,
+    });
+  });
+});
+
 describe('AcpSessionPlane — empty full-replay refusal', () => {
   it('refuses an empty full replay when the transcript already holds items, and leaves them alone', async () => {
     const client = makeFakeAcpClient();

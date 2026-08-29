@@ -88,7 +88,7 @@ export interface ChatThreadState {
    */
   readonly chatConfig: Chat | null;
   /**
-   * CLI-reported context-window usage (daemon `chat.contextUsage`). Null until
+   * CLI-reported context-window usage (facade `usage_update`). Null until
    * the first report; the session bar falls back to a token estimate from
    * chatConfig when null.
    */
@@ -300,7 +300,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       // so the toolbar doesn't re-render on every broadcast. The persisted
       // context totals are adopted separately: they keep the meter truthful on
       // controller seed and after turns completed while this chat was dormant
-      // (chat.contextUsage only reaches subscribers; chat.updated is ungated).
+      // (usage_update only reaches attached facade sessions; chat.updated is ungated).
       const persisted = persistedContextUsage(event.chat);
       const sameUsage =
         persisted == null ||

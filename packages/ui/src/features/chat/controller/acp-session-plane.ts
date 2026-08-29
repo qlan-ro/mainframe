@@ -23,7 +23,7 @@ import type {
   RequestPermissionRequest,
   SessionUpdate,
 } from '@qlan-ro/mainframe-types';
-import { MAINFRAME_META_NAMESPACE } from '@qlan-ro/mainframe-types';
+import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
 import type {
   GapListener,
@@ -197,8 +197,27 @@ export class AcpSessionPlane {
       this.applyStateUpdate(update);
       return;
     }
-    if (update.sessionUpdate === 'usage_update') return;
+    if (update.sessionUpdate === 'usage_update') {
+      this.applyUsageUpdate(update);
+      return;
+    }
     this.refreshMessages();
+  }
+
+  /**
+   * `usage_update` → the context meter. The CLI's own percentage rides
+   * `_meta["_mainframe.dev"]` (it accounts for the usable-window buffer, so
+   * used/size is only the fallback when the meta is absent).
+   */
+  private applyUsageUpdate(update: Extract<SessionUpdate, { sessionUpdate: 'usage_update' }>): void {
+    const meta = UsageMetaSchema.safeParse(update._meta?.[MAINFRAME_META_NAMESPACE]);
+    const percentage = meta.success ? meta.data.percentage : update.size > 0 ? (update.used / update.size) * 100 : 0;
+    this.host.dispatch({
+      type: 'context.usage',
+      percentage,
+      totalTokens: update.used,
+      maxTokens: update.size,
+    });
   }
 
   private applyStateUpdate(update: Extract<SessionUpdate, { sessionUpdate: 'state_update' }>): void {

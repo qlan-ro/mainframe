@@ -7,7 +7,7 @@ import type { ChatThreadState } from '../controller/chat-thread-state';
 
 /**
  * Context-usage percentage. Prefers the CLI-reported usage
- * (daemon `chat.contextUsage`); falls back to a token estimate only when the
+ * (facade `usage_update`); falls back to a token estimate only when the
  * model's context window is known — otherwise the bar would be a guess
  * against a default that may not match the real model (desktop rule).
  */

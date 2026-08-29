@@ -66,7 +66,6 @@ export type DaemonEvent =
     }
   | { type: 'chat.compacting'; chatId: string }
   | { type: 'chat.compactDone'; chatId: string }
-  | { type: 'chat.contextUsage'; chatId: string; percentage: number; totalTokens: number; maxTokens: number }
   | {
       type: 'adapter.models.updated';
       adapterId: string;

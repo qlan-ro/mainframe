@@ -1268,12 +1268,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
             }
         }
-        self.deps.emit_event(DaemonEvent::ChatContextUsage {
-            chat_id: self.chat_id.clone(),
-            percentage: usage.percentage,
-            total_tokens: usage.total_tokens,
-            max_tokens: usage.max_tokens,
-        });
         self.notify_surface(ChatSurfaceEvent::Usage {
             chat_id: self.chat_id.clone(),
             usage,

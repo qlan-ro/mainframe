@@ -298,6 +298,12 @@ async fn usage_events_become_usage_updates() {
     );
     assert_eq!(frames[0]["params"]["update"]["used"], json!(3_000));
     assert_eq!(frames[0]["params"]["update"]["size"], json!(200_000));
+    // The CLI's own percentage rides the extension namespace — it is not
+    // derivable from used/size (usable-window buffer).
+    assert_eq!(
+        frames[0]["params"]["update"]["_meta"]["_mainframe.dev"]["percentage"],
+        json!(1.5)
+    );
 }
 
 #[tokio::test]
