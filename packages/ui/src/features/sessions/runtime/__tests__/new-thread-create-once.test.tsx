@@ -27,7 +27,7 @@
  * within one act() tick, then asserts:
  *   1. `createChat` (the lib/api fn) is called EXACTLY ONCE.
  *   2. The id the controller sends the first message to (its `daemonId`, read
- *      off the captured `message.send` WS frame) === the id aui stamped as
+ *      off the captured facade `session/prompt`) === the id aui stamped as
  *      `mainItem.remoteId`. Both seams converge on the SAME chat.
  *   3. The first message targets the real daemon id, never a `__LOCALID_*`.
  *
@@ -40,7 +40,7 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
-import type { Chat, ChatHistoryPayload, ClientEvent } from '@qlan-ro/mainframe-types';
+import type { Chat, ChatHistoryPayload } from '@qlan-ro/mainframe-types';
 import type { AssistantClient } from '@assistant-ui/react';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +67,11 @@ vi.mock('../../../../lib/api/chats', () => ({
     workflowRuns: [],
   })),
   listChats: vi.fn(async (): Promise<Chat[]> => []),
+  getChatWorkflowRuns: vi.fn(async () => []),
+  resumeChat: vi.fn(async () => undefined),
+  cancelQueuedMessage: vi.fn(async () => undefined),
+  editQueuedMessage: vi.fn(async () => undefined),
+  trustWorkspace: vi.fn(async () => undefined),
   setChatTuning: vi.fn(async () => undefined),
   setChatConfig: vi.fn(async () => undefined),
   archiveChat: vi.fn(async () => undefined),
@@ -76,9 +81,10 @@ vi.mock('../../../../lib/api/attachments', () => ({
   uploadAttachments: vi.fn(async (): Promise<string[]> => []),
 }));
 
-// A daemonWs stub that captures every frame so we can read which chatId the
-// first `message.send` targets (that equals the controller's daemonId).
-const sentFrames: ClientEvent[] = [];
+// A daemonWs stub (side-band only) plus a facade-client stub that captures
+// every `session/prompt` so we can read which sessionId the first prompt
+// targets (that equals the controller's daemonId).
+const sentPrompts: Array<{ sessionId: string; text: string }> = [];
 
 vi.mock('../../../../lib/daemon/ws-client', () => {
   const daemonWs = {
@@ -88,15 +94,34 @@ vi.mock('../../../../lib/daemon/ws-client', () => {
     get connected() {
       return true;
     },
-    send: vi.fn((event: ClientEvent) => {
-      sentFrames.push(event);
-    }),
+    send: vi.fn(),
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
     onEvent: vi.fn(() => () => {}),
     subscribeConnection: vi.fn(() => () => {}),
   };
   return { daemonWs, DaemonWsClient: class {} };
+});
+
+vi.mock('../../../../lib/daemon/acp-clients', () => {
+  const client = {
+    ensureConnected: vi.fn(async () => undefined),
+    onSessionUpdate: vi.fn(() => () => {}),
+    onPermissionRequest: vi.fn(() => () => {}),
+    onGateResolved: vi.fn(() => () => {}),
+    onGap: vi.fn(() => () => {}),
+    prompt: vi.fn(async (sessionId: string, text: string) => {
+      sentPrompts.push({ sessionId, text });
+      return {};
+    }),
+    cancel: vi.fn(),
+    resume: vi.fn(async () => ({})),
+    respondPermission: vi.fn(),
+  };
+  return {
+    getAcpFacadeClient: vi.fn(() => client),
+    resetAcpFacadeClients: vi.fn(),
+  };
 });
 
 // ---------------------------------------------------------------------------
@@ -195,7 +220,7 @@ async function newThreadFirstSend(): Promise<{
 beforeEach(() => {
   createChatCallCount = 0;
   createdIds.length = 0;
-  sentFrames.length = 0;
+  sentPrompts.length = 0;
   vi.clearAllMocks();
 });
 
@@ -223,11 +248,10 @@ describe('new-thread create-once — one POST /api/chats per New+send', () => {
     expect(stampedRemoteId).toBe('chat-server-1');
 
     // The id the controller actually sent the first message to (== its daemonId).
-    const firstSend = sentFrames.find((f) => f.type === 'message.send') as
-      { type: 'message.send'; chatId: string; content: string } | undefined;
+    const firstSend = sentPrompts[0];
     expect(firstSend).toBeDefined();
-    expect(firstSend!.chatId).toBe(stampedRemoteId);
-    expect(firstSend!.chatId).not.toMatch(/^__LOCALID_/);
+    expect(firstSend!.sessionId).toBe(stampedRemoteId);
+    expect(firstSend!.sessionId).not.toMatch(/^__LOCALID_/);
 
     clearDraftConfig(localId);
     unmount();

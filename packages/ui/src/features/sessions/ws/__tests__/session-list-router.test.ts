@@ -7,13 +7,11 @@
  *  - chat.updated  → onReload called once; waiting/completed/error also mark unread
  *  - chat.notification → onMarkUnread called with the chatId; onReload not called
  *  - chat.notification (kind: attention_request) → also calls onOsNotify with title + body
- *  - permission.requested (notify: true)  → onMarkUnread called with chatId; onReload not called
- *  - permission.requested (notify: false) → onMarkUnread called with chatId
- *  - permission.resolved  → neither mock called
+ *  - chat.updated with displayStatus 'waiting' (a raised gate) → onMarkUnread
  *  - chat.prDetected (source: 'created' | 'mentioned') → onReload called once; onMarkUnread not called
  *  - background_task.started|updated|ended → onReload called; onMarkUnread not called
  *  - dispose() unsubscribes; subsequent dispatched events are ignored
- *  - Unrelated event type (display.message.added) → no-op
+ *  - Unrelated event type (messages.cleared) → no-op
  *
  * All tests run against the plain SessionListRouter class — no React, no
  * zustand. A fake DaemonWsClient injects the event handler; deps are vi.fn()
@@ -252,53 +250,18 @@ describe('session-list-router — attention requests also raise an OS notificati
 });
 
 // ---------------------------------------------------------------------------
-// permission.requested with notify: true → markUnread
+// Gate raise reaches the badge via chat.updated (displayStatus 'waiting')
 // ---------------------------------------------------------------------------
 
-describe('session-list-router — permission.requested (notify: true) triggers markUnread', () => {
-  it('calls onMarkUnread with the chatId and does not call onReload', () => {
+describe('session-list-router — a waiting chat.updated (gate raised) triggers markUnread', () => {
+  it('calls onMarkUnread with the chat id', () => {
     dispatch({
-      type: 'permission.requested',
-      chatId: 'c4',
-      notify: true,
-      request: { requestId: 'r1', toolUseId: 't1', toolName: 'Bash', input: {}, suggestions: [] },
+      type: 'chat.updated',
+      chat: { ...MINIMAL_CHAT, id: 'c4', displayStatus: 'waiting' },
     });
 
     expect(onMarkUnread).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).toHaveBeenCalledWith('c4');
-    expect(onReload).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// permission.requested with notify: false → markUnread
-// ---------------------------------------------------------------------------
-
-describe('session-list-router — permission.requested (notify: false) still triggers markUnread', () => {
-  it('calls onMarkUnread with the chatId and does not call onReload', () => {
-    dispatch({
-      type: 'permission.requested',
-      chatId: 'c4',
-      notify: false,
-      request: { requestId: 'r1', toolUseId: 't1', toolName: 'Bash', input: {}, suggestions: [] },
-    });
-
-    expect(onMarkUnread).toHaveBeenCalledTimes(1);
-    expect(onMarkUnread).toHaveBeenCalledWith('c4');
-    expect(onReload).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// permission.resolved → no-op
-// ---------------------------------------------------------------------------
-
-describe('session-list-router — permission.resolved calls neither mock', () => {
-  it('does not call onReload or onMarkUnread', () => {
-    dispatch({ type: 'permission.resolved', chatId: 'c5', requestId: 'r1' });
-
-    expect(onReload).not.toHaveBeenCalled();
-    expect(onMarkUnread).not.toHaveBeenCalled();
   });
 });
 
@@ -388,8 +351,8 @@ describe('session-list-router — dispose() unsubscribes the WS handler', () => 
 // ---------------------------------------------------------------------------
 
 describe('session-list-router — unrelated event type is a no-op', () => {
-  it('does not call onReload or onMarkUnread for display.message.added', () => {
-    dispatch({ type: 'display.message.added' } as DaemonEvent);
+  it('does not call onReload or onMarkUnread for messages.cleared', () => {
+    dispatch({ type: 'messages.cleared', chatId: 'c9' });
 
     expect(onReload).not.toHaveBeenCalled();
     expect(onMarkUnread).not.toHaveBeenCalled();

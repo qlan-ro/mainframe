@@ -61,8 +61,8 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
 
   // Streaming "typing" reveal: while a run is active, mark the TAIL assistant
   // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)
-  // reveals its text character-by-character as the daemon streams
-  // display.message.updated deltas. We use a pre-built messageRepository, which
+  // reveals its text character-by-character as the facade streams
+  // session/update chunks. We use a pre-built messageRepository, which
   // assistant-ui imports verbatim WITHOUT the auto-status it applies on the
   // messages+convertMessage path — so the running status must be set here, or
   // every message stays `complete` and appears instantly. Only the tail streams;

@@ -19,14 +19,13 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, Once, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
-use mainframe_chat::chat_manager::CommandMeta;
 use mainframe_lsp::lsp_connection::attach_client_with_capture;
 use mainframe_lsp::{
     ChatStore, ClientRef, LspConnectionHandler, LspServerHandle, ProjectStore, ReattachAction,
@@ -45,14 +44,10 @@ use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relativ
 use crate::ws_schemas::parse_client_event;
 
 /// Event types delivered to every connected client regardless of per-chat
-/// subscription (unread-dot / attention-badge for backgrounded chats). Verbatim
-/// from `CONNECTION_GLOBAL_EVENT_TYPES` + `automation.notification` (T9.1 —
-/// chatId-less, fans out to all clients).
-const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
-    "chat.notification",
-    "permission.requested",
-    "automation.notification",
-];
+/// subscription (unread-dot / attention-badge for backgrounded chats). A gate
+/// on a backgrounded chat reaches the sessions list through `chat.updated`
+/// (chatId-less on the wire, so global) carrying `displayStatus: waiting`.
+const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 2] = ["chat.notification", "automation.notification"];
 
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).
@@ -486,97 +481,7 @@ async fn handle_client_event(
                 chat_id.as_deref(),
             );
         }
-        ClientEvent::MessageSend {
-            chat_id,
-            content,
-            attachment_ids,
-            metadata,
-        } => {
-            handle_message_send(
-                ctx,
-                out_tx,
-                subscriptions,
-                chat_id,
-                content,
-                attachment_ids,
-                metadata,
-            )
-            .await;
-        }
-        ClientEvent::PermissionRespond { chat_id, response } => {
-            handle_permission_respond(ctx, out_tx, chat_id, response).await;
-        }
     }
-}
-
-/// `message.send` → `ChatManager.sendMessage(chatId, content, attachmentIds,
-/// metadata)`. Registers the sending connection as a subscriber of `chat_id`
-/// first, so events emitted before the client's own `subscribe` frame arrives
-/// still reach it. A rejection logs `ws message handler error` and emits a
-/// chat-scoped error with the underlying reason. Until `ctx.chat_manager` is wired
-/// the seam warns once and drops the send.
-async fn handle_message_send(
-    ctx: &Arc<AppCtx>,
-    out_tx: &mpsc::UnboundedSender<String>,
-    subscriptions: &Arc<Mutex<HashSet<String>>>,
-    chat_id: String,
-    content: String,
-    attachment_ids: Option<Vec<String>>,
-    metadata: Option<mainframe_types::events::MessageSendMetadata>,
-) {
-    // The sender is the one connection guaranteed to care about this chat, and
-    // send_message emits the user message before this task ever reads the client's
-    // `subscribe` frame — without membership here the fan-out drops those events.
-    lock(subscriptions).insert(chat_id.clone());
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        warn_message_send_seam();
-        return;
-    };
-    let command = metadata.and_then(|m| m.command).map(|c| CommandMeta {
-        name: c.name,
-        source: c.source,
-        args: c.args,
-    });
-    if let Err(err) = cm
-        .send_message(&chat_id, &content, attachment_ids.as_deref(), command)
-        .await
-    {
-        tracing::error!(%err, "ws message handler error");
-        send(out_tx, &send_failure_event(&chat_id, &err));
-    }
-}
-
-/// `permission.respond` → `ChatManager.respondToPermission(chatId, response)`,
-/// bracketed by the same received/delivered info logs the TS handler emits. A
-/// rejection logs and emits a chat-scoped error with the underlying reason.
-async fn handle_permission_respond(
-    ctx: &Arc<AppCtx>,
-    out_tx: &mpsc::UnboundedSender<String>,
-    chat_id: String,
-    response: mainframe_types::adapter::ControlResponse,
-) {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        warn_permission_respond_seam();
-        return;
-    };
-    let request_id = response.request_id.clone();
-    tracing::info!(
-        chat_id,
-        request_id = %request_id,
-        tool_name = ?response.tool_name,
-        behavior = ?response.behavior,
-        "permission.respond received from client"
-    );
-    if let Err(err) = cm.respond_to_permission(&chat_id, response).await {
-        tracing::error!(%err, "ws message handler error");
-        send(out_tx, &send_failure_event(&chat_id, &err));
-        return;
-    }
-    tracing::info!(
-        chat_id,
-        request_id = %request_id,
-        "permission.respond delivered to adapter"
-    );
 }
 
 async fn handle_subscribe_file(
@@ -720,13 +625,6 @@ fn build_connect_replay_events(
         .collect()
 }
 
-fn send_failure_event(chat_id: &str, err: &dyn std::fmt::Display) -> DaemonEvent {
-    DaemonEvent::Error {
-        chat_id: Some(chat_id.to_string()),
-        error: err.to_string(),
-    }
-}
-
 fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
     match serde_json::to_string(event) {
         Ok(payload) => {
@@ -738,20 +636,6 @@ fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-fn warn_message_send_seam() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        tracing::warn!("ws message.send received but chat handling is Phase 4 — ignoring");
-    });
-}
-
-fn warn_permission_respond_seam() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        tracing::warn!("ws permission.respond received but chat handling is Phase 4 — ignoring");
-    });
 }
 
 #[cfg(test)]
@@ -791,18 +675,6 @@ mod tests {
                 account_identity: Some("uuid-1".into()),
             },
         }
-    }
-
-    #[test]
-    fn send_failure_event_carries_the_chat_id_and_the_real_message() {
-        let err = "Chat c1 not running".to_string();
-        let event = send_failure_event("c1", &err);
-        let value = serde_json::to_value(event).unwrap();
-
-        assert_eq!(value["chatId"], serde_json::json!("c1"));
-        assert_eq!(value["error"], serde_json::json!("Chat c1 not running"));
-        let old_message = format!("{} {}", "Internal", "error");
-        assert!(!value.to_string().contains(&old_message));
     }
 
     // Seam-3 transport: a harvested quota carries no chatId, so the fan-out must

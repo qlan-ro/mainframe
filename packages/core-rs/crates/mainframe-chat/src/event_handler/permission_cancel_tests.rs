@@ -1,9 +1,45 @@
 //! `SessionSinkImpl::on_permission_cancelled` — resolves the cancelled request,
 //! promotes the next queued one (front cancel only), and never disturbs a
-//! cancel of a request that was not the active one.
+//! cancel of a request that was not the active one. Gate traffic is observed
+//! on the chat-surface seam (the facade's feed); the legacy WS carries only
+//! the `ChatUpdated` re-broadcast.
 
 use super::*;
+use crate::chat_surface::ChatSurface;
 use crate::test_support::test_chat;
+
+#[derive(Default)]
+struct GateSurface {
+    events: Mutex<Vec<ChatSurfaceEvent>>,
+}
+
+impl GateSurface {
+    fn gate_events_since(&self, from: usize) -> Vec<ChatSurfaceEvent> {
+        self.events.lock().unwrap_or_else(|e| e.into_inner())[from..]
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    ChatSurfaceEvent::GateRaised { .. } | ChatSurfaceEvent::GateResolved { .. }
+                )
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn event_count(&self) -> usize {
+        self.events.lock().unwrap_or_else(|e| e.into_inner()).len()
+    }
+}
+
+impl ChatSurface for GateSurface {
+    fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+        self.events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(event);
+    }
+}
 
 struct CancelDeps {
     cell: Arc<Mutex<ActiveChat>>,
@@ -94,9 +130,14 @@ fn cell() -> Arc<Mutex<ActiveChat>> {
     }))
 }
 
-fn sink(deps: Arc<CancelDeps>, permissions: Arc<Mutex<PermissionManager>>) -> Arc<dyn SessionSink> {
+fn sink(
+    deps: Arc<CancelDeps>,
+    permissions: Arc<Mutex<PermissionManager>>,
+) -> (Arc<dyn SessionSink>, Arc<GateSurface>) {
     let handler = EventHandler::new(Arc::new(Mutex::new(MessageCache::new())), permissions, deps);
-    handler.build_sink("chat-1", None)
+    let surface = Arc::new(GateSurface::default());
+    handler.set_chat_surface(surface.clone());
+    (handler.build_sink("chat-1", None), surface)
 }
 
 fn request(request_id: &str) -> ControlRequest {
@@ -114,30 +155,33 @@ fn request(request_id: &str) -> ControlRequest {
 fn cancelling_the_active_request_resolves_it_and_promotes_the_next() {
     let deps = CancelDeps::new();
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let sink = sink(deps.clone(), permissions.clone());
+    let (sink, surface) = sink(deps.clone(), permissions.clone());
     sink.on_permission(request("r1"));
     sink.on_permission(request("r2"));
     let before = deps.event_count();
+    let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r1");
 
     assert_eq!(
-        deps.events_since(before),
+        surface.gate_events_since(surface_before),
         vec![
-            DaemonEvent::PermissionResolved {
+            ChatSurfaceEvent::GateResolved {
                 chat_id: "chat-1".to_string(),
                 request_id: "r1".to_string(),
             },
-            DaemonEvent::PermissionRequested {
+            ChatSurfaceEvent::GateRaised {
                 chat_id: "chat-1".to_string(),
                 request: request("r2"),
-                notify: true,
-            },
-            DaemonEvent::ChatUpdated {
-                chat: deps.cell.lock().unwrap().chat.clone(),
-                reason: None,
             },
         ]
+    );
+    assert_eq!(
+        deps.events_since(before),
+        vec![DaemonEvent::ChatUpdated {
+            chat: deps.cell.lock().unwrap().chat.clone(),
+            reason: None,
+        }]
     );
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
@@ -149,24 +193,26 @@ fn cancelling_the_active_request_resolves_it_and_promotes_the_next() {
 fn cancelling_the_last_request_resolves_it_and_promotes_nothing() {
     let deps = CancelDeps::new();
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let sink = sink(deps.clone(), permissions.clone());
+    let (sink, surface) = sink(deps.clone(), permissions.clone());
     sink.on_permission(request("r1"));
     let before = deps.event_count();
+    let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r1");
 
     assert_eq!(
+        surface.gate_events_since(surface_before),
+        vec![ChatSurfaceEvent::GateResolved {
+            chat_id: "chat-1".to_string(),
+            request_id: "r1".to_string(),
+        }]
+    );
+    assert_eq!(
         deps.events_since(before),
-        vec![
-            DaemonEvent::PermissionResolved {
-                chat_id: "chat-1".to_string(),
-                request_id: "r1".to_string(),
-            },
-            DaemonEvent::ChatUpdated {
-                chat: deps.cell.lock().unwrap().chat.clone(),
-                reason: None,
-            },
-        ]
+        vec![DaemonEvent::ChatUpdated {
+            chat: deps.cell.lock().unwrap().chat.clone(),
+            reason: None,
+        }]
     );
     assert!(!permissions.lock().unwrap().has_pending("chat-1"));
 }
@@ -175,20 +221,22 @@ fn cancelling_the_last_request_resolves_it_and_promotes_nothing() {
 fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
     let deps = CancelDeps::new();
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let sink = sink(deps.clone(), permissions.clone());
+    let (sink, surface) = sink(deps.clone(), permissions.clone());
     sink.on_permission(request("r1"));
     sink.on_permission(request("r2"));
     let before = deps.event_count();
+    let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("r2");
 
     assert_eq!(
-        deps.events_since(before),
-        vec![DaemonEvent::PermissionResolved {
+        surface.gate_events_since(surface_before),
+        vec![ChatSurfaceEvent::GateResolved {
             chat_id: "chat-1".to_string(),
             request_id: "r2".to_string(),
         }]
     );
+    assert!(deps.events_since(before).is_empty());
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r1"))
@@ -200,13 +248,15 @@ fn cancelling_a_queued_request_resolves_it_without_disturbing_the_front() {
 fn cancelling_an_unknown_request_emits_nothing_and_leaves_the_queue() {
     let deps = CancelDeps::new();
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let sink = sink(deps.clone(), permissions.clone());
+    let (sink, surface) = sink(deps.clone(), permissions.clone());
     sink.on_permission(request("r1"));
     let before = deps.event_count();
+    let surface_before = surface.event_count();
 
     sink.on_permission_cancelled("ghost");
 
     assert!(deps.events_since(before).is_empty());
+    assert!(surface.gate_events_since(surface_before).is_empty());
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r1"))
@@ -217,7 +267,7 @@ fn cancelling_an_unknown_request_emits_nothing_and_leaves_the_queue() {
 fn a_cancelled_request_is_remembered_for_the_answer_guard() {
     let deps = CancelDeps::new();
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let sink = sink(deps.clone(), permissions.clone());
+    let (sink, _surface) = sink(deps.clone(), permissions.clone());
     sink.on_permission(request("r1"));
 
     sink.on_permission_cancelled("r1");

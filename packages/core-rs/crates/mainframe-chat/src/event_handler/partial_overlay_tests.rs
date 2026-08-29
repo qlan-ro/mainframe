@@ -1,9 +1,8 @@
 //! Partial-message overlay (todo #350, `--include-partial-messages`): the
 //! sink's `on_message_partial` merges the in-flight block into the display
-//! computation for BOTH surfaces — legacy frames stream the growing message
-//! and the chat-surface revision carries the same snapshot — and the
-//! completed block converges in place because it lands under the same item
-//! id (the API message id), never as a reset.
+//! computation feeding the chat-surface revision stream, and the completed
+//! block converges in place because it lands under the same item id (the API
+//! message id), never as a reset.
 
 use super::*;
 use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
@@ -11,31 +10,12 @@ use crate::test_support::test_chat;
 use mainframe_types::display::DisplayContent;
 
 /// Deps with a 1:1 prepare (each raw message becomes one display message with
-/// the same id) and captured `DaemonEvent`s — enough pipeline to observe id
-/// continuity and frame kinds without the Claude-specific grouping (which the
-/// adapter crate's own suites pin).
+/// the same id) — enough pipeline to observe id continuity on the revision
+/// stream without the Claude-specific grouping (which the adapter crate's own
+/// suites pin).
 #[derive(Default)]
 struct OverlayDeps {
     events: Mutex<Vec<DaemonEvent>>,
-}
-
-impl OverlayDeps {
-    fn display_events(&self) -> Vec<DaemonEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .iter()
-            .filter(|e| {
-                matches!(
-                    e,
-                    DaemonEvent::DisplayMessageAdded { .. }
-                        | DaemonEvent::DisplayMessageUpdated { .. }
-                        | DaemonEvent::DisplayMessagesSet { .. }
-                )
-            })
-            .cloned()
-            .collect()
-    }
 }
 
 impl EventHandlerDeps for OverlayDeps {
@@ -168,8 +148,8 @@ fn first_text(display: &DisplayMessage) -> &str {
 }
 
 #[test]
-fn partials_stream_added_then_updated_and_completion_converges_without_a_reset() {
-    let (sink, deps, surface) = setup();
+fn partials_stream_growing_revisions_and_completion_converges_under_the_same_id() {
+    let (sink, _deps, surface) = setup();
 
     sink.on_message_partial("msg_1", vec![text("Riv")]);
     sink.on_message_partial("msg_1", vec![text("Rivers flow")]);
@@ -184,70 +164,52 @@ fn partials_stream_added_then_updated_and_completion_converges_without_a_reset()
         }),
     );
 
-    let events = deps.display_events();
-    assert!(
-        matches!(&events[0], DaemonEvent::DisplayMessagesSet { messages, .. }
-            if messages.len() == 1 && messages[0].id == "msg_1" && first_text(&messages[0]) == "Riv"),
-        "first partial opens the display with the API message id: {events:?}"
-    );
-    assert!(
-        matches!(&events[1], DaemonEvent::DisplayMessageUpdated { message, .. }
-            if message.id == "msg_1" && first_text(message) == "Rivers flow"),
-        "later partials update the same message in place: {events:?}"
-    );
-    assert!(
-        matches!(&events[2], DaemonEvent::DisplayMessageUpdated { message, .. }
-            if message.id == "msg_1" && first_text(message) == "Rivers flow downhill."),
-        "completion converges under the same id — an id change here would be a Set reset: {events:?}"
-    );
-    assert_eq!(events.len(), 3, "no extra or reset frames: {events:?}");
-
-    // The facade-facing revision stream saw the same three snapshots (tail
-    // growth the diff engine turns into chunks).
+    // Three revisions, one per emit; the id never changes, so the facade's
+    // diff engine sees tail growth (chunks), never an item reset.
     let revisions = surface.revisions();
-    assert_eq!(revisions.len(), 3);
-    assert_eq!(first_text(&revisions[0][0]), "Riv");
-    assert_eq!(first_text(&revisions[2][0]), "Rivers flow downhill.");
+    assert_eq!(revisions.len(), 3, "one revision per emit: {revisions:?}");
+    for (revision, expected) in
+        revisions
+            .iter()
+            .zip(["Riv", "Rivers flow", "Rivers flow downhill."])
+    {
+        assert_eq!(revision.len(), 1);
+        assert_eq!(revision[0].id, "msg_1");
+        assert_eq!(first_text(&revision[0]), expected);
+    }
 }
 
 #[test]
-fn a_retry_drops_the_partial_content_on_both_surfaces() {
-    let (sink, deps, surface) = setup();
+fn a_retry_drops_the_partial_content_from_the_revision_stream() {
+    let (sink, _deps, surface) = setup();
 
     sink.on_message_partial("msg_1", vec![text("doomed partial")]);
     sink.on_api_retry(1, Some("overloaded".to_string()));
 
-    let events = deps.display_events();
-    // The shrink from one display message to zero is a Set reset (legacy
-    // semantics for removals).
-    assert!(
-        matches!(events.last(), Some(DaemonEvent::DisplayMessagesSet { messages, .. })
-            if messages.is_empty()),
-        "retry must clear the partial: {events:?}"
-    );
     let revisions = surface.revisions();
     assert!(
         revisions.last().is_some_and(Vec::is_empty),
-        "the facade revision after the retry no longer carries the partial"
+        "the revision after the retry no longer carries the partial: {revisions:?}"
     );
 }
 
 #[test]
 fn partial_text_gets_the_same_command_tag_stripping_as_completed_text() {
-    let (sink, deps, _surface) = setup();
+    let (sink, _deps, surface) = setup();
     sink.on_message_partial("msg_1", vec![text("before <mainframe-tag/>after")]);
 
-    let events = deps.display_events();
-    assert!(
-        matches!(&events[0], DaemonEvent::DisplayMessagesSet { messages, .. }
-            if first_text(&messages[0]) == "before after"),
-        "overlay text must be stripped like on_message strips: {events:?}"
+    let revisions = surface.revisions();
+    assert_eq!(revisions.len(), 1);
+    assert_eq!(
+        first_text(&revisions[0][0]),
+        "before after",
+        "overlay text must be stripped like on_message strips"
     );
 }
 
 #[test]
 fn result_and_exit_clear_a_dangling_partial() {
-    let (sink, deps, _surface) = setup();
+    let (sink, _deps, surface) = setup();
     sink.on_message_partial("msg_1", vec![text("interrupted")]);
     sink.on_result(SessionResult {
         total_cost_usd: None,
@@ -258,8 +220,7 @@ fn result_and_exit_clear_a_dangling_partial() {
         is_error: None,
     });
     assert!(
-        matches!(deps.display_events().last(), Some(DaemonEvent::DisplayMessagesSet { messages, .. })
-            if messages.is_empty()),
+        surface.revisions().last().is_some_and(Vec::is_empty),
         "an interrupted turn must not leave partial text behind"
     );
 }

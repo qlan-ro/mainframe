@@ -17,7 +17,6 @@ use crate::test_support::test_chat;
 
 struct ShapeDeps {
     cell: Arc<Mutex<ActiveChat>>,
-    events: Mutex<Vec<DaemonEvent>>,
 }
 
 impl ShapeDeps {
@@ -28,15 +27,7 @@ impl ShapeDeps {
                 session: None,
                 turn_started_at: None,
             })),
-            events: Mutex::new(Vec::new()),
         })
-    }
-
-    fn events(&self) -> Vec<DaemonEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
     }
 }
 
@@ -44,12 +35,7 @@ impl EventHandlerDeps for ShapeDeps {
     fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
         Some(self.cell.clone())
     }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(event);
-    }
+    fn emit_event(&self, _event: DaemonEvent) {}
     fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
         None
     }
@@ -98,13 +84,14 @@ impl EventHandlerDeps for ShapeDeps {
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
 }
 
-fn sink(deps: Arc<ShapeDeps>) -> Arc<dyn SessionSink> {
+fn sink(deps: Arc<ShapeDeps>) -> (Arc<dyn SessionSink>, Arc<Mutex<MessageCache>>) {
+    let messages = Arc::new(Mutex::new(MessageCache::new()));
     let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
+        messages.clone(),
         Arc::new(Mutex::new(PermissionManager::new())),
         deps,
     );
-    handler.build_sink("chat-shape", None)
+    (handler.build_sink("chat-shape", None), messages)
 }
 
 fn bash_tool_use() -> MessageContent {
@@ -141,13 +128,19 @@ fn assistant_metadata() -> mainframe_types::adapter::MessageMetadata {
     }
 }
 
-fn message_ids(events: &[DaemonEvent]) -> Vec<String> {
-    events
+fn cached_messages(messages: &Arc<Mutex<MessageCache>>) -> Vec<ChatMessage> {
+    messages
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get("chat-shape")
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn message_ids(messages: &Arc<Mutex<MessageCache>>) -> Vec<String> {
+    cached_messages(messages)
         .iter()
-        .filter_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. } => Some(message.id.clone()),
-            _ => None,
-        })
+        .map(|m| m.id.clone())
         .collect()
 }
 
@@ -161,12 +154,12 @@ fn message_ids(events: &[DaemonEvent]) -> Vec<String> {
 #[test]
 fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
     let deps = ShapeDeps::new();
-    let sink = sink(deps.clone());
+    let (sink, messages) = sink(deps.clone());
 
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
 
-    let ids = message_ids(&deps.events());
+    let ids = message_ids(&messages);
     assert_eq!(ids.len(), 2);
     assert_ne!(
         ids[0], ids[1],
@@ -174,39 +167,27 @@ fn live_path_mints_a_fresh_id_per_call_regardless_of_identical_content() {
     );
 }
 
-/// Criterion 12's unit-level tripwire (plan decision 5): pins the
-/// `message.added` frame shape for an assistant tool_use and its tool_result
-/// so the id-derivation work in tasks 5/6 cannot silently touch anything
-/// else. `ChatMessage` is destructured exhaustively (no `..`) so an
-/// added/removed/renamed field fails to compile; `id`/`timestamp` are the
-/// only two masked (bound to `_`) since they are nondeterministic today and
-/// will change in value (never in shape) once task 5 lands.
+/// Criterion 12's unit-level tripwire (plan decision 5): pins the cached
+/// `ChatMessage` shape for an assistant tool_use and its tool_result so the
+/// id-derivation work cannot silently touch anything else. `ChatMessage` is
+/// destructured exhaustively (no `..`) so an added/removed/renamed field
+/// fails to compile; `id`/`timestamp` are the only two masked (bound to `_`)
+/// since they are nondeterministic when no vendor id is supplied.
 #[test]
-fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
+fn cached_message_shape_is_pinned_for_tool_use_and_tool_result() {
     let deps = ShapeDeps::new();
-    let sink = sink(deps.clone());
+    let (sink, messages) = sink(deps.clone());
 
     sink.on_message(vec![bash_tool_use()], Some(assistant_metadata()));
     sink.on_tool_result(vec![bash_tool_result()], None);
 
-    // `on_message`'s drain-turn re-entry also flips a non-Working chat back to
-    // Working on the first call, emitting a leading `ChatUpdated` — the two
-    // `message.added` events under test follow it.
-    let events: Vec<DaemonEvent> = deps
-        .events()
-        .into_iter()
-        .filter(|e| matches!(e, DaemonEvent::MessageAdded { .. }))
-        .collect();
+    let cached = cached_messages(&messages);
     assert_eq!(
-        events.len(),
+        cached.len(),
         2,
-        "expected exactly one message.added per sink call, got {events:?}"
+        "expected exactly one cached message per sink call, got {cached:?}"
     );
 
-    let DaemonEvent::MessageAdded { chat_id, message } = &events[0] else {
-        panic!("expected message.added, got {:?}", events[0]);
-    };
-    assert_eq!(chat_id.as_str(), "chat-shape");
     let ChatMessage {
         id: _,
         chat_id: msg_chat_id,
@@ -214,7 +195,7 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
         content,
         timestamp: _,
         metadata,
-    } = message;
+    } = &cached[0];
     assert_eq!(msg_chat_id.as_str(), "chat-shape");
     assert_eq!(*r#type, ChatMessageType::Assistant);
     assert_eq!(content, &vec![bash_tool_use()]);
@@ -225,10 +206,6 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
     );
     assert_eq!(metadata, &Some(expected_meta));
 
-    let DaemonEvent::MessageAdded { chat_id, message } = &events[1] else {
-        panic!("expected message.added, got {:?}", events[1]);
-    };
-    assert_eq!(chat_id.as_str(), "chat-shape");
     let ChatMessage {
         id: _,
         chat_id: msg_chat_id,
@@ -236,7 +213,7 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
         content,
         timestamp: _,
         metadata,
-    } = message;
+    } = &cached[1];
     assert_eq!(msg_chat_id.as_str(), "chat-shape");
     assert_eq!(*r#type, ChatMessageType::ToolResult);
     assert_eq!(content, &vec![bash_tool_result()]);
@@ -249,14 +226,14 @@ fn message_added_frame_shape_is_pinned_pre_stable_id_migration() {
 #[test]
 fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result() {
     let deps = ShapeDeps::new();
-    let sink = sink(deps.clone());
+    let (sink, messages) = sink(deps.clone());
     let mut metadata = assistant_metadata();
     metadata.vendor_id = Some("entry-uuid-1".to_string());
 
     sink.on_message(vec![bash_tool_use()], Some(metadata));
     sink.on_tool_result(vec![bash_tool_result()], Some("entry-uuid-1".to_string()));
 
-    let ids = message_ids(&deps.events());
+    let ids = message_ids(&messages);
     assert_eq!(
         ids,
         vec!["entry-uuid-1".to_string(), "entry-uuid-1".to_string()]

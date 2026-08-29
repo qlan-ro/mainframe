@@ -206,21 +206,3 @@ describe('handleDaemonEvent — error', () => {
     expect(result).toEqual({ kind: 'noop' });
   });
 });
-
-// ---------------------------------------------------------------------------
-// permission.resolved — RETIRED from this mapper (desktop-cutover pass).
-// Gates now arrive over the ACP facade (session/request_permission +
-// _mainframe.dev/gate_resolved), handled entirely in AcpSessionPlane — see
-// acp-session-plane.test.ts's "gates" suite. The side-band `permission.*`
-// DaemonEvent family is intentionally left unmapped here (falls through to
-// `default: noop`); the daemon still emits it only for the un-migrated
-// mobile client (handle-daemon-event.ts's module doc).
-// ---------------------------------------------------------------------------
-
-describe('handleDaemonEvent — permission.resolved (side-band, unmapped)', () => {
-  it('is a noop — the desktop path resolves gates through the ACP facade instead', () => {
-    const result = handleDaemonEvent({ type: 'permission.resolved', chatId: CHAT_ID, requestId: 'req-1' }, CHAT_ID);
-
-    expect(result).toEqual({ kind: 'noop' });
-  });
-});

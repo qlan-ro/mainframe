@@ -132,6 +132,29 @@ async fn malformed_prompt_params_get_invalid_params_without_touching_the_port() 
 }
 
 #[tokio::test]
+async fn a_command_name_outside_the_identifier_charset_is_rejected_before_the_port() {
+    let port = FakePort::default();
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Number(1)),
+        method: "session/prompt".to_string(),
+        params: Some(json!({
+            "sessionId": "chat_1",
+            "prompt": [{ "type": "text", "text": "/bad" }],
+            "_meta": { "_mainframe.dev": { "command": { "name": "bad name!", "source": "user" } } },
+        })),
+    };
+    let response = dispatch_prompt(request, &port).await;
+
+    let JsonRpcOutcome::Error { error } = response.outcome else {
+        panic!("expected an error, got {:?}", response.outcome);
+    };
+    assert_eq!(error.code, error_codes::INVALID_PARAMS);
+    assert!(error.message.contains("command.name"));
+    assert!(port.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn session_cancel_notification_routes_to_the_port() {
     let port = FakePort::default();
     dispatch_cancel(Some(json!({ "sessionId": "chat_1" })), &port).await;

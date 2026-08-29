@@ -19,8 +19,8 @@ impl PlanHost for PlanHostImpl {
     fn emit_event(&self, event: DaemonEvent) {
         enrich_and_emit(self.deps.as_ref(), &self.permissions, event);
     }
-    fn clear_display_cache(&self, chat_id: &str) {
-        self.event_handler.clear_display_cache(chat_id);
+    fn clear_display_state(&self, chat_id: &str) {
+        self.event_handler.clear_display_state(chat_id);
     }
     fn start_chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async move { self.lifecycle.start_chat(chat_id).await })

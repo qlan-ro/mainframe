@@ -85,7 +85,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
             ctx.emit_chat_updated();
 
             ctx.clear_messages();
-            ctx.clear_display_cache();
+            ctx.clear_display_state();
             ctx.emit_event(DaemonEvent::MessagesCleared {
                 chat_id: ctx.chat_id(),
             });
@@ -215,7 +215,7 @@ mod tests {
         fn clear_messages(&self) {
             self.rec().cleared_messages += 1;
         }
-        fn clear_display_cache(&self) {
+        fn clear_display_state(&self) {
             self.rec().cleared_display += 1;
         }
         fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>> {

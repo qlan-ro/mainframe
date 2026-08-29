@@ -1,25 +1,24 @@
 //! Ported from `packages/types/src/events.ts`.
 //!
-//! The daemon WebSocket wire contract: `DaemonEvent` (server→client, 63
-//! variants) and `ClientEvent` (client→server, 6 variants). Both are internally
-//! tagged on `type`; tag values are copied verbatim (dotted / colon-delimited)
-//! via per-variant `#[serde(rename = ...)]`, and struct-variant fields are
-//! camelCased via `rename_all_fields`. Cross-checked against
-//! `the frozen wire-contract snapshot from the Node daemon (retired — see git history around the 2026-07-24 Rust cutover, docs/rust-port/CUTOVER.md, for the full record)`.
+//! The daemon WebSocket wire contract: `DaemonEvent` (server→client) and
+//! `ClientEvent` (client→server). Both are internally tagged on `type`; tag
+//! values are copied verbatim (dotted / colon-delimited) via per-variant
+//! `#[serde(rename = ...)]`, and struct-variant fields are camelCased via
+//! `rename_all_fields`. The chat transcript/gate dialect that used to live
+//! here (`display.message.*`, `message.added`/`.updated`, `permission.*`,
+//! `message.send`, `permission.respond`) is retired — the ACP facade
+//! (`crate::acp`, `/acp/{profile}`) is the only chat wire protocol.
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapter::{
-    AdapterModel, AdapterProcess, ControlRequest, ControlResponse, DetectedPr, ProviderQuota,
-};
+use crate::adapter::{AdapterModel, AdapterProcess, DetectedPr, ProviderQuota};
 use crate::automation::{
     AutomationCompletedStatus, AutomationInteractionSummary, AutomationNotificationLinks,
     AutomationRunSummary,
 };
 use crate::background_task::BackgroundTask;
-use crate::chat::{Chat, ChatMessage, QueuedMessageRef, TodoItem};
+use crate::chat::{Chat, QueuedMessageRef, TodoItem};
 use crate::claude_workflow::ClaudeWorkflowRun;
-use crate::display::DisplayMessage;
 use crate::launch::LaunchProcessStatus;
 use crate::plugin::UiZone;
 use crate::workflow::{WorkflowInteractionSummary, WorkflowRunSummary, WorkflowStepStatus};
@@ -87,23 +86,6 @@ pub struct WorkflowStepUpdate {
     pub attempt: i64,
 }
 
-/// Optional per-message metadata carried by `message.send`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageSendMetadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub command: Option<MessageSendCommand>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageSendCommand {
-    pub name: String,
-    pub source: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<String>,
-}
-
 /// `notification.created`'s optional `links` payload. Unlike
 /// `AutomationNotificationLinks` there is no run to key off — a standalone
 /// notification (e.g. from `lane_apply.py`) carries chat ids only.
@@ -146,41 +128,8 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "process.stopped")]
     ProcessStopped { process_id: String },
-    #[serde(rename = "message.added")]
-    MessageAdded {
-        chat_id: String,
-        message: ChatMessage,
-    },
-    #[serde(rename = "message.updated")]
-    MessageUpdated {
-        chat_id: String,
-        message: ChatMessage,
-    },
-    #[serde(rename = "display.message.added")]
-    DisplayMessageAdded {
-        chat_id: String,
-        message: DisplayMessage,
-    },
-    #[serde(rename = "display.message.updated")]
-    DisplayMessageUpdated {
-        chat_id: String,
-        message: DisplayMessage,
-    },
-    #[serde(rename = "display.messages.set")]
-    DisplayMessagesSet {
-        chat_id: String,
-        messages: Vec<DisplayMessage>,
-    },
     #[serde(rename = "messages.cleared")]
     MessagesCleared { chat_id: String },
-    #[serde(rename = "permission.requested")]
-    PermissionRequested {
-        chat_id: String,
-        request: ControlRequest,
-        notify: bool,
-    },
-    #[serde(rename = "permission.resolved")]
-    PermissionResolved { chat_id: String, request_id: String },
     #[serde(rename = "context.updated")]
     ContextUpdated {
         chat_id: String,
@@ -471,20 +420,6 @@ pub enum DaemonEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum ClientEvent {
-    #[serde(rename = "message.send")]
-    MessageSend {
-        chat_id: String,
-        content: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        attachment_ids: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        metadata: Option<MessageSendMetadata>,
-    },
-    #[serde(rename = "permission.respond")]
-    PermissionRespond {
-        chat_id: String,
-        response: ControlResponse,
-    },
     #[serde(rename = "subscribe")]
     Subscribe { chat_id: String },
     #[serde(rename = "unsubscribe")]
@@ -556,21 +491,7 @@ mod tests {
         }
     }
 
-    // ── The six representative fixtures the task pins ───────────────────────
-    #[test]
-    fn fixture_permission_requested() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.permission-requested.json"
-        ));
-    }
-
-    #[test]
-    fn fixture_display_message_added() {
-        assert_daemon_roundtrip(include_str!(
-            "../tests/fixtures/event.display-message-added.json"
-        ));
-    }
-
+    // ── Representative fixtures across variant families ─────────────────────
     #[test]
     fn fixture_chat_updated() {
         assert_daemon_roundtrip(include_str!("../tests/fixtures/event.chat-updated.json"));
@@ -597,7 +518,6 @@ mod tests {
         ));
     }
 
-    // ── A broader sweep across variant families ─────────────────────────────
     #[test]
     fn fixture_connection_ready() {
         assert_daemon_roundtrip(include_str!(
@@ -608,11 +528,6 @@ mod tests {
     #[test]
     fn fixture_chat_created() {
         assert_daemon_roundtrip(include_str!("../tests/fixtures/event.chat-created.json"));
-    }
-
-    #[test]
-    fn fixture_message_added() {
-        assert_daemon_roundtrip(include_str!("../tests/fixtures/event.message-added.json"));
     }
 
     #[test]
@@ -688,22 +603,6 @@ mod tests {
         let parsed: ClientEvent = serde_json::from_value(v.clone()).unwrap();
         let back = serde_json::to_value(&parsed).unwrap();
         assert_eq!(v, back);
-    }
-
-    #[test]
-    fn client_message_send_minimal_and_full() {
-        assert_client_roundtrip(json!({
-            "type": "message.send",
-            "chatId": "chat_1",
-            "content": "hello"
-        }));
-        assert_client_roundtrip(json!({
-            "type": "message.send",
-            "chatId": "chat_1",
-            "content": "run it",
-            "attachmentIds": ["att_1"],
-            "metadata": { "command": { "name": "review", "source": "user", "args": "--fast" } }
-        }));
     }
 
     // ── Automations v2 events (contract §4 — no captured fixtures yet; the
@@ -943,19 +842,18 @@ mod tests {
     }
 }
 
-// PORT STATUS: packages/types/src/events.ts (114 lines)
+// PORT STATUS: packages/types/src/events.ts
 // confidence: high
 // todos: 0
-// notes: DaemonEvent (54 variants) + ClientEvent (6) as internally-tagged enums;
-// dotted/colon tag strings via per-variant rename, fields camelCased via
-// rename_all_fields. Numbers per §6.3: chat.contextUsage.percentage=f64,
-// tokens/port/count=i64. workflow.step.updated's `step` is a dedicated
-// WorkflowStepUpdate struct (TS Pick has no direct Rust analog). message.queued
-// uses raw identifier r#ref (serializes "ref"). Golden round-trip tests
-// include_str! the fixtures relative to the workspace root; the six task-pinned
-// fixtures plus a family sweep + ClientEvent shapes are covered. The golden
-// comparator canonicalizes numbers to f64 so a fixture's integer-literal `0` for
-// an f64 field (Chat.totalCost) matches Rust's `0.0` — see the Phase-B WIRE NOTE
-// in chat.rs (serde_json `0.0` vs Node `0`). References sibling modules
-// crate::{plugin,launch,background_task,workflow} owned by the companion
-// types-port task (UIZone is spelled UiZone there).
+// notes: DaemonEvent + ClientEvent as internally-tagged enums; dotted/colon tag
+// strings via per-variant rename, fields camelCased via rename_all_fields.
+// Numbers per §6.3: tokens/port/count=i64. workflow.step.updated's `step` is a
+// dedicated WorkflowStepUpdate struct (TS Pick has no direct Rust analog).
+// message.queued uses raw identifier r#ref (serializes "ref"). Golden
+// round-trip tests include_str! the fixtures relative to the workspace root.
+// The golden comparator canonicalizes numbers to f64 so a fixture's
+// integer-literal `0` for an f64 field (Chat.totalCost) matches Rust's `0.0` —
+// see the Phase-B WIRE NOTE in chat.rs (serde_json `0.0` vs Node `0`). The
+// legacy chat dialect (display.message.*, message.added/.updated,
+// permission.*, message.send, permission.respond) was retired for the ACP
+// facade (todo #350) — see crate::acp.

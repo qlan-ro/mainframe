@@ -83,10 +83,6 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(chat_id, message.clone());
-        self.emit(DaemonEvent::MessageAdded {
-            chat_id: chat_id.to_string(),
-            message: message.clone(),
-        });
         self.event_handler.emit_display(chat_id);
         if attachment_ids.map(|a| !a.is_empty()).unwrap_or(false) {
             self.emit(DaemonEvent::ContextUpdated {

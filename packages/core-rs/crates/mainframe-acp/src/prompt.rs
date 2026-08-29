@@ -78,6 +78,9 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
     };
     let text = extract_text(&prompt.prompt);
     let send_meta = extract_send_meta(prompt.meta.as_ref());
+    if let Err(reason) = validate_command(&send_meta) {
+        return rpc::error_response(id, rpc::invalid_params(&reason));
+    }
     match port.send_prompt(&prompt.session_id, &text, send_meta).await {
         Ok(acceptance) => {
             let meta = acceptance.queued_position.map(
@@ -99,6 +102,27 @@ pub async fn dispatch_cancel(params: Option<Value>, port: &dyn PromptPort) {
         return;
     };
     let _ = port.cancel(&notification.session_id).await;
+}
+
+/// The `^[a-zA-Z0-9_-]+$` identifier rule the legacy `message.send` frame
+/// enforced (command-injection seam) — a named command reaches the CLI as a
+/// slash invocation, so its name must stay a bare identifier.
+fn validate_command(meta: &PromptSendMeta) -> Result<(), String> {
+    let Some(command) = meta.command.as_ref() else {
+        return Ok(());
+    };
+    let name_ok = !command.name.is_empty()
+        && command
+            .name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !name_ok {
+        return Err("command.name must match ^[a-zA-Z0-9_-]+$".to_string());
+    }
+    if command.source.is_empty() {
+        return Err("command.source must be non-empty".to_string());
+    }
+    Ok(())
 }
 
 /// The Mainframe send context riding `PromptRequest._meta` (desktop-cutover

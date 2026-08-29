@@ -49,15 +49,6 @@ fn base_meta(container: &str) -> Value {
     }})
 }
 
-fn meta_with(container: &str, extras: &[(&str, Value)]) -> Value {
-    let mut v = base_meta(container);
-    let ns = v[MAINFRAME_META_NAMESPACE].as_object_mut().unwrap();
-    for (k, val) in extras {
-        ns.insert((*k).to_string(), val.clone());
-    }
-    v
-}
-
 fn text_block(s: &str) -> ContentBlock {
     ContentBlock::Text {
         text: s.to_string(),

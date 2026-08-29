@@ -4,8 +4,8 @@
  * Reconcile = count-aware + server-authoritative (judo-A): each confirmed
  * server user-message clears at most one optimistic pending, oldest-first, by a
  * normalized-text multiset. No time window, no empty-text wildcard, no
- * over-clearing of legitimate duplicate sends. The single live `message.added`
- * and the full history re-seed feed the SAME matcher (one message vs many).
+ * over-clearing of legitimate duplicate sends. Every facade transcript
+ * refresh feeds the SAME matcher with the full confirmed user-message list.
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { PendingUserMessage } from './chat-thread-state';

@@ -15,10 +15,20 @@ use serde_json::Value;
 
 use crate::adapter::ControlResponse;
 use crate::chat::DiffHunk;
-use crate::events::MessageSendCommand;
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";
+
+/// A slash-command invocation riding [`PromptSendMeta`] (formerly the legacy
+/// `message.send` frame's `metadata.command`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageSendCommand {
+    pub name: String,
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<String>,
+}
 
 /// Display-fidelity payload riding every encoded item's
 /// `_meta["_mainframe.dev"]` (desktop-cutover pass): the legacy

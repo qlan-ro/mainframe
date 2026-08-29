@@ -67,7 +67,7 @@ pub trait PlanActionContext: Send + Sync {
     fn add_plan_file(&self, path: String) -> bool;
     /// `ctx.messages.set(ctx.chatId, [])`.
     fn clear_messages(&self);
-    fn clear_display_cache(&self);
+    fn clear_display_state(&self);
     fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn send_message(&self, content: String) -> BoxFuture<'_, Result<(), AdapterError>>;
 }

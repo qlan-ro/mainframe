@@ -4,8 +4,8 @@
  * and gates arrive over the ACP facade (`acp-session-plane.ts`); this mapper
  * handles what the facade does not model: config, queue refs, background
  * tasks, workflow runs, worktree offers, context usage, and compaction.
- * `display.*` and `permission.*` events are intentionally unmapped — the
- * daemon still emits them for the un-migrated mobile client.
+ * The legacy `display.*` and `permission.*` frames no longer exist — the
+ * daemon retired them with the chat dialect (todo #350).
  */
 import { toActivityTask, type DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { ChatStateEvent } from './chat-thread-state';

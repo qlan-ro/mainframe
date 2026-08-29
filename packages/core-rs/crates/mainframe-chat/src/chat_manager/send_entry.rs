@@ -70,11 +70,7 @@ impl ChatManager {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .append(chat_id, error_msg.clone());
-        self.emit(DaemonEvent::MessageAdded {
-            chat_id: chat_id.to_string(),
-            message: error_msg,
-        });
+            .append(chat_id, error_msg);
         self.event_handler.emit_display(chat_id);
     }
 

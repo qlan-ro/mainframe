@@ -182,11 +182,7 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             self.messages
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .append(chat_id, message.clone());
-            self.deps.emit_event(DaemonEvent::MessageAdded {
-                chat_id: chat_id.to_string(),
-                message,
-            });
+                .append(chat_id, message);
             self.deps.emit_display(chat_id);
         }
 
@@ -306,14 +302,9 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
         session.respond_to_permission(response.clone()).await?;
 
-        self.deps.emit_event(DaemonEvent::PermissionResolved {
-            chat_id: chat_id.to_string(),
-            request_id: response.request_id.clone(),
-        });
-        // The chat-surface twin of the event above (todo #350, plan task 17):
-        // a facade session's gate registry needs this to resolve the SAME
-        // request across surfaces, since a legacy-surface answer never
-        // otherwise reaches the facade.
+        // Resolve the gate on the chat-surface seam (todo #350, plan task 17):
+        // the facade's gate registry clears the SAME request for every
+        // attached connection.
         self.notify_surface(ChatSurfaceEvent::GateResolved {
             chat_id: chat_id.to_string(),
             request_id: response.request_id.clone(),
@@ -328,11 +319,6 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
             let notify = self
                 .deps
                 .should_notify_permission(Some(&next_request.tool_name));
-            self.deps.emit_event(DaemonEvent::PermissionRequested {
-                chat_id: chat_id.to_string(),
-                request: next_request.clone(),
-                notify,
-            });
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: chat_id.to_string(),
                 request: next_request.clone(),

@@ -969,19 +969,9 @@ async fn provider_command_first_message_sets_the_fallback_title() {
     .unwrap();
 
     let events = deps.events();
-    let added: Vec<&ChatMessage> = events
-        .iter()
-        .filter_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. } => Some(message),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        added.len(),
-        1,
-        "the user's message is still stored and emitted"
-    );
-    let msg = added[0];
+    let added = mgr.get_messages("chat-1").await;
+    assert_eq!(added.len(), 1, "the user's message is still stored");
+    let msg = &added[0];
     assert_eq!(msg.r#type, ChatMessageType::User);
     assert!(
         msg.metadata.is_none(),
@@ -1293,14 +1283,7 @@ async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata(
     };
     assert_eq!(session.images_calls.lock().unwrap()[0], 1);
 
-    let added: Vec<ChatMessage> = deps
-        .events()
-        .into_iter()
-        .filter_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. } => Some(message),
-            _ => None,
-        })
-        .collect();
+    let added = mgr.get_messages("c1").await;
     assert_eq!(added.len(), 1);
     let msg = &added[0];
     let texts: Vec<&str> = msg
