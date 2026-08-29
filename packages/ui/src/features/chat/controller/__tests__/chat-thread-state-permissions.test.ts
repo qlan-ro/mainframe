@@ -24,7 +24,12 @@ function makeRequest(id: string): ControlRequest {
 function stateWithThree(): ChatThreadState {
   let state = createChatThreadState(CHAT_ID);
   for (const id of ['r1', 'r2', 'r3']) {
-    state = reduceChatThreadState(state, { type: 'permission.requested', requestId: id, request: makeRequest(id) });
+    state = reduceChatThreadState(state, {
+      type: 'permission.requested',
+      requestId: id,
+      request: makeRequest(id),
+      options: [],
+    });
     vi.advanceTimersByTime(1);
   }
   return state;

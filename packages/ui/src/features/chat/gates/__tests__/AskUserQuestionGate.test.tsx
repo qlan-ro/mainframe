@@ -19,6 +19,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { PermissionOption } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { ReplyFn } from '../gate-types';
 import { AskUserQuestionGate } from '../AskUserQuestionGate';
@@ -30,6 +31,15 @@ import { AskUserQuestionGate } from '../AskUserQuestionGate';
 function wrap(ui: React.ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
 }
+
+// AskUserQuestionGate has its own bespoke wizard UI and never reads `options`
+// (gate presentation from the adapter-supplied option list is PermissionGate's
+// concern) — this fixture only satisfies `ChatPermissionEntry`'s shape.
+const OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
+  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+];
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -47,6 +57,7 @@ const single = (): ChatPermissionEntry => ({
       questions: [{ question: 'Pick a format', header: 'Format', options: [{ label: 'MP4' }, { label: 'GIF' }] }],
     },
   },
+  options: OPTIONS,
 });
 
 const multi = (): ChatPermissionEntry => ({
@@ -63,6 +74,7 @@ const multi = (): ChatPermissionEntry => ({
       ],
     },
   },
+  options: OPTIONS,
 });
 
 const two = (): ChatPermissionEntry => ({
@@ -80,6 +92,7 @@ const two = (): ChatPermissionEntry => ({
       ],
     },
   },
+  options: OPTIONS,
 });
 
 /** Single question with NO header — question text is the title. */
@@ -95,6 +108,7 @@ const singleNoHeader = (): ChatPermissionEntry => ({
       questions: [{ question: 'Which auth approach?', options: [{ label: 'OAuth' }, { label: 'PAT' }] }],
     },
   },
+  options: OPTIONS,
 });
 
 // ---------------------------------------------------------------------------
@@ -315,6 +329,7 @@ describe('AskUserQuestionGate', () => {
           questions: [{ question: 'Which auth approach?', header: 'Auth method', options: [{ label: 'OAuth' }] }],
         },
       },
+      options: OPTIONS,
     };
     wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
 

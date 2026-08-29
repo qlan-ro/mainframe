@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { ChevronRight, ShieldIcon, TerminalIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import type { VariantProps } from 'class-variance-authority';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
-import { buildPermissionResponse } from './build-control-response';
+import { buildOptionResponse } from './build-control-response';
 import type { ReplyFn } from './gate-types';
 
 export type { ReplyFn } from './gate-types';
@@ -49,31 +51,42 @@ function DetailsDisclosure({ input }: { input: Record<string, unknown> }) {
   );
 }
 
-function ActionFooter({
-  hasSuggestions,
-  onDeny,
-  onAllowOnce,
-  onAlwaysAllow,
+type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
+
+/**
+ * Visual treatment keyed by `kind`, never by `optionId`/`name` (spec decision
+ * 12). A kind outside this map — an adapter extension the client doesn't
+ * recognize yet — still renders, styled neutrally by the `secondary` fallback
+ * below; it is never dropped, and its styling is never guessed from its id or
+ * label.
+ */
+const KIND_VARIANT: Partial<Record<PermissionOptionKind, ButtonVariant>> = {
+  allow_once: 'outline',
+  allow_always: 'default',
+  reject_once: 'destructive',
+  reject_always: 'destructive',
+};
+
+function OptionsFooter({
+  options,
+  onSelect,
 }: {
-  hasSuggestions: boolean;
-  onDeny: () => void;
-  onAllowOnce: () => void;
-  onAlwaysAllow: () => void;
+  options: PermissionOption[];
+  onSelect: (option: PermissionOption) => void;
 }) {
   return (
     <div className="flex items-center gap-2 px-4 pb-3">
-      <Button variant="destructive" size="sm" data-testid="chat-permission-deny" onClick={onDeny}>
-        Deny
-      </Button>
-      <div className="flex-1" />
-      <Button variant="outline" size="sm" data-testid="chat-permission-allow-once" onClick={onAllowOnce}>
-        Allow once
-      </Button>
-      {hasSuggestions && (
-        <Button size="sm" data-testid="chat-permission-always-allow" onClick={onAlwaysAllow}>
-          Always allow
+      {options.map((option) => (
+        <Button
+          key={option.optionId}
+          variant={KIND_VARIANT[option.kind] ?? 'secondary'}
+          size="sm"
+          data-testid={`chat-permission-option-${option.optionId}`}
+          onClick={() => onSelect(option)}
+        >
+          {option.name}
         </Button>
-      )}
+      ))}
     </div>
   );
 }
@@ -84,14 +97,14 @@ function ActionFooter({
 
 export interface PermissionGateProps {
   entry: ChatPermissionEntry;
-  /** Called when the user denies / allows-once / always-allows. */
+  /** Called with the response for whichever adapter-supplied option the user picked. */
   reply: ReplyFn;
 }
 
 export function PermissionGate({ entry, reply }: PermissionGateProps) {
   const { request } = entry;
 
-  const send = (kind: 'deny' | 'once' | 'always') => void reply(buildPermissionResponse(entry, kind));
+  const onSelect = (option: PermissionOption) => void reply(buildOptionResponse(entry, option));
 
   return (
     <div data-testid="chat-permission-gate">
@@ -104,12 +117,7 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
         />
         <ToolNameRow toolName={request.toolName} />
         <DetailsDisclosure input={request.input} />
-        <ActionFooter
-          hasSuggestions={request.suggestions.length > 0}
-          onDeny={() => send('deny')}
-          onAllowOnce={() => send('once')}
-          onAlwaysAllow={() => send('always')}
-        />
+        <OptionsFooter options={entry.options} onSelect={onSelect} />
       </GateCardShell>
     </div>
   );

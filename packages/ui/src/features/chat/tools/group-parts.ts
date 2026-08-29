@@ -7,7 +7,7 @@
  * (toolCallId → groupId). This `groupBy` simply ECHOES that decision — no tool-name
  * heuristic, no re-derivation — so grouping is correct across every adapter.
  *
- * A standalone tool (Edit/Write/Bash/Task/_TaskProgress/marker pill) — and a LONE
+ * A standalone tool (Edit/Write/Bash/Task/marker pill) — and a LONE
  * explore tool, which the daemon never groups — has no recorded groupId and renders
  * on its own line. Consecutive reasoning parts coalesce into one `group-reasoning`
  * block (the canonical native pattern: one ReasoningRoot wrapping the leaves).

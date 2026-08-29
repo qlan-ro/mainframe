@@ -23,7 +23,6 @@ import {
 import { EnterWorktreeCard, ExitWorktreeCard } from './cards/WorktreeStatusPillCard';
 import { SlashCommandCard } from './cards/SlashCommandCard';
 import { TaskCard } from './cards/TaskCard';
-import { TaskProgressCard } from './cards/TaskProgressCard';
 import { WebFetchCard } from './cards/WebFetchCard';
 import { PushNotificationCard } from './cards/PushNotificationCard';
 import { WorkflowLauncherRow } from '../workflow/WorkflowLauncherRow';
@@ -57,7 +56,6 @@ Object.assign(TOOL_REGISTRY, {
   // workflow launcher (the run panel opens from the row, never in place)
   Workflow: WorkflowLauncherRow,
   RunWorkflow: WorkflowLauncherRow,
-  // subagent + progress
+  // subagent
   Task: TaskCard,
-  _TaskProgress: TaskProgressCard,
 });

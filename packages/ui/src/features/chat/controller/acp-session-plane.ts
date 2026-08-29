@@ -213,7 +213,12 @@ export class AcpSessionPlane {
     }
   }
 
-  /** `session/request_permission` → the legacy `ChatPermissionEntry` shape, from the carried `ControlRequest` (spec: rich cards render it). */
+  /**
+   * `session/request_permission` → the legacy `ChatPermissionEntry` shape, from the
+   * carried `ControlRequest` (spec: rich cards render it), plus the top-level
+   * `options` the adapter offered — the gate renders those verbatim rather than a
+   * client-guessed triad (spec decision 12).
+   */
   private handleGate(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): void {
     const parsed = GateMetaSchema.safeParse(request._meta?.[MAINFRAME_META_NAMESPACE]);
     if (!parsed.success) {
@@ -222,7 +227,12 @@ export class AcpSessionPlane {
     }
     const control = parsed.data.controlRequest as unknown as ControlRequest;
     this.gateRpcIds.set(control.requestId, rpcId);
-    this.host.dispatch({ type: 'permission.requested', requestId: control.requestId, request: control });
+    this.host.dispatch({
+      type: 'permission.requested',
+      requestId: control.requestId,
+      request: control,
+      options: request.options,
+    });
   }
 
   /** The gate resolved elsewhere (`_mainframe.dev/gate_resolved`); rpc ids are `gate-{requestId}`. */

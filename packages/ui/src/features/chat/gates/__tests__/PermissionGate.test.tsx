@@ -12,17 +12,19 @@
  *  - Root data-testid and tool name visibility.
  *  - Details toggle: pre hidden by default, shown after click, contains
  *    pretty-printed input JSON.
- *  - Deny button: calls reply with hardcoded deny ControlResponse.
- *  - Allow-once button: calls reply with hardcoded allow ControlResponse.
- *  - Always-allow button absent when suggestions array is empty.
- *  - Always-allow button present and calls reply with updatedPermissions when
- *    suggestions are provided.
+ *  - The button set/order/labels come straight from `entry.options` — not a
+ *    hardcoded triad — and are keyed by option id, not array index.
+ *  - allow_once / allow_always / reject_once each call reply with the
+ *    matching ControlResponse, keyed off `kind` alone (never optionId/name).
+ *  - An option whose `kind` this build doesn't recognize still renders and is
+ *    selectable — never dropped, never guessed as an approval (resolves to
+ *    the same response as an explicit reject).
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { ControlUpdate, PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-import type { ControlUpdate } from '@qlan-ro/mainframe-types';
 import { PermissionGate, type ReplyFn } from '../PermissionGate';
 
 // ---------------------------------------------------------------------------
@@ -44,7 +46,18 @@ const SUG: ControlUpdate = {
   destination: 'session',
 };
 
-function makeEntry(suggestions: ControlUpdate[] = []): ChatPermissionEntry {
+// Mirrors mainframe-acp/src/gates.rs::offered_options() — the daemon's real,
+// always-offered vocabulary.
+const STANDARD_OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
+  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+];
+
+function makeEntry(
+  options: PermissionOption[] = STANDARD_OPTIONS,
+  suggestions: ControlUpdate[] = [],
+): ChatPermissionEntry {
   return {
     requestId: 'r1',
     askedAt: 1,
@@ -55,6 +68,7 @@ function makeEntry(suggestions: ControlUpdate[] = []): ChatPermissionEntry {
       input: { command: 'ls -la' },
       suggestions,
     },
+    options,
   };
 }
 
@@ -131,11 +145,78 @@ describe('PermissionGate', () => {
     expect(chevron).toHaveClass('size-3');
   });
 
-  // --- Behavior 3: deny button ---
+  // --- Behavior 3: the button set/order/labels come from entry.options ---
 
-  it('clicking deny calls reply once with the deny ControlResponse', () => {
+  it('renders exactly one button per option, in request order, labeled and keyed by option id', () => {
     wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
-    fireEvent.click(screen.getByTestId('chat-permission-deny'));
+
+    const buttons = screen
+      .getAllByRole('button')
+      .filter((b) => b.dataset.testid?.startsWith('chat-permission-option-'));
+    expect(buttons.map((b) => b.dataset.testid)).toEqual([
+      'chat-permission-option-allow-once',
+      'chat-permission-option-allow-always',
+      'chat-permission-option-reject-once',
+    ]);
+    expect(buttons.map((b) => b.textContent)).toEqual(['Allow once', 'Always allow', 'Reject']);
+  });
+
+  it('renders the options in a different order when the request supplies a different order', () => {
+    const reordered: PermissionOption[] = [
+      { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+      { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+    ];
+    wrap(<PermissionGate entry={makeEntry(reordered)} reply={reply} />);
+
+    const buttons = screen
+      .getAllByRole('button')
+      .filter((b) => b.dataset.testid?.startsWith('chat-permission-option-'));
+    expect(buttons.map((b) => b.dataset.testid)).toEqual([
+      'chat-permission-option-reject-once',
+      'chat-permission-option-allow-once',
+    ]);
+  });
+
+  it('renders only what the request offers — no options means no option buttons', () => {
+    wrap(<PermissionGate entry={makeEntry([])} reply={reply} />);
+    const buttons = screen.queryAllByTestId(/^chat-permission-option-/);
+    expect(buttons).toHaveLength(0);
+  });
+
+  // --- Behavior 4: clicking a known-kind option sends the matching response ---
+
+  it('clicking the allow_once option calls reply with the allow ControlResponse including updatedInput', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    fireEvent.click(screen.getByTestId('chat-permission-option-allow-once'));
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith({
+      requestId: 'r1',
+      toolUseId: 'tu1',
+      toolName: 'Bash',
+      behavior: 'allow',
+      updatedInput: { command: 'ls -la' },
+    });
+  });
+
+  it('clicking the allow_always option calls reply with updatedPermissions from entry.request.suggestions', () => {
+    wrap(<PermissionGate entry={makeEntry(STANDARD_OPTIONS, [SUG])} reply={reply} />);
+    fireEvent.click(screen.getByTestId('chat-permission-option-allow-always'));
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledWith({
+      requestId: 'r1',
+      toolUseId: 'tu1',
+      toolName: 'Bash',
+      behavior: 'allow',
+      updatedInput: { command: 'ls -la' },
+      updatedPermissions: [SUG],
+    });
+  });
+
+  it('clicking the reject_once option calls reply with the deny ControlResponse', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+    fireEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
 
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply).toHaveBeenCalledWith({
@@ -146,45 +227,43 @@ describe('PermissionGate', () => {
     });
   });
 
-  // --- Behavior 4: allow-once button ---
+  // --- Behavior 5: kind drives styling, id/name never do ---
 
-  it('clicking allow-once calls reply once with the allow ControlResponse including updatedInput', () => {
-    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
-    fireEvent.click(screen.getByTestId('chat-permission-allow-once'));
+  it('renders allow_once outline, allow_always default, and reject_once destructive — by kind, not id/name', () => {
+    // Deliberately mismatched id/name so a bug that keys off them would show up here.
+    const scrambled: PermissionOption[] = [
+      { optionId: 'reject-once', name: 'Reject', kind: 'allow_once' },
+      { optionId: 'allow-once', name: 'Allow once', kind: 'reject_once' },
+    ];
+    wrap(<PermissionGate entry={makeEntry(scrambled)} reply={reply} />);
+
+    expect(screen.getByTestId('chat-permission-option-reject-once')).toHaveAttribute('data-variant', 'outline');
+    expect(screen.getByTestId('chat-permission-option-allow-once')).toHaveAttribute('data-variant', 'destructive');
+  });
+
+  // --- Behavior 6: an unrecognized kind still renders and is selectable ---
+
+  it('an option with an unrecognized kind still renders, is clickable, and never resolves to approval', () => {
+    const withUnknown: PermissionOption[] = [
+      ...STANDARD_OPTIONS,
+      { optionId: 'do-something-new', name: 'Do Something New', kind: 'nonstandard_kind' as PermissionOptionKind },
+    ];
+    wrap(<PermissionGate entry={makeEntry(withUnknown)} reply={reply} />);
+
+    const unknownButton = screen.getByTestId('chat-permission-option-do-something-new');
+    expect(unknownButton).toBeInTheDocument();
+    expect(unknownButton).toBeEnabled();
+    expect(unknownButton).toHaveTextContent('Do Something New');
+    expect(unknownButton).toHaveAttribute('data-variant', 'secondary');
+
+    fireEvent.click(unknownButton);
 
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply).toHaveBeenCalledWith({
       requestId: 'r1',
       toolUseId: 'tu1',
       toolName: 'Bash',
-      behavior: 'allow',
-      updatedInput: { command: 'ls -la' },
-    });
-  });
-
-  // --- Behavior 5: always-allow absent with no suggestions ---
-
-  it('does not render always-allow button when suggestions array is empty', () => {
-    wrap(<PermissionGate entry={makeEntry([])} reply={reply} />);
-    expect(screen.queryByTestId('chat-permission-always-allow')).toBeNull();
-  });
-
-  // --- Behavior 6: always-allow present and functional with suggestions ---
-
-  it('renders always-allow when suggestions are present and calls reply with updatedPermissions', () => {
-    wrap(<PermissionGate entry={makeEntry([SUG])} reply={reply} />);
-    expect(screen.getByTestId('chat-permission-always-allow')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('chat-permission-always-allow'));
-
-    expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'allow',
-      updatedInput: { command: 'ls -la' },
-      updatedPermissions: [SUG],
+      behavior: 'deny',
     });
   });
 });

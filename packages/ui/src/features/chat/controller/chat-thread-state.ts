@@ -22,6 +22,7 @@ import type {
   Chat,
   ClaudeWorkflowRun,
   ControlRequest,
+  PermissionOption,
   QueuedMessageRef,
   WorktreeSwitchOffer,
 } from '@qlan-ro/mainframe-types';
@@ -47,6 +48,12 @@ export interface ChatPermissionEntry {
   requestId: string;
   request: ControlRequest;
   askedAt: number;
+  /**
+   * The adapter-supplied, ordered option list off the wire `RequestPermissionRequest`
+   * (spec decision 12) — the gate renders exactly this set/order/labels and must not
+   * infer an option's effect from its id or label, only from `kind`.
+   */
+  options: PermissionOption[];
 }
 
 export type LoadState = { type: 'idle' } | { type: 'loading' } | { type: 'ready' } | { type: 'error'; error: unknown };
@@ -132,7 +139,7 @@ export type ChatStateEvent =
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
-  | { type: 'permission.requested'; requestId: string; request: ControlRequest }
+  | { type: 'permission.requested'; requestId: string; request: ControlRequest; options: PermissionOption[] }
   | { type: 'permission.resolved'; requestId: string }
   | { type: 'queued.added'; ref: QueuedMessageRef }
   | { type: 'queued.removed'; uuid: string }
@@ -316,6 +323,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         requestId: event.requestId,
         request: event.request,
         askedAt: Date.now(),
+        options: event.options,
       };
       return {
         ...state,

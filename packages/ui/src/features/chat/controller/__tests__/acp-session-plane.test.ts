@@ -186,7 +186,7 @@ describe('AcpSessionPlane — gates', () => {
     };
   }
 
-  it('dispatches permission.requested with the carried ControlRequest', async () => {
+  it('dispatches permission.requested with the carried ControlRequest and the wire-level options', async () => {
     const client = makeFakeAcpClient();
     const host = makeHost();
     const plane = new AcpSessionPlane(host);
@@ -200,6 +200,7 @@ describe('AcpSessionPlane — gates', () => {
         type: 'permission.requested',
         requestId: 'req-1',
         request: { requestId: 'req-1', toolName: 'Bash', toolUseId: 'tu-1', input: { command: 'ls' }, suggestions: [] },
+        options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }],
       },
     ]);
   });
