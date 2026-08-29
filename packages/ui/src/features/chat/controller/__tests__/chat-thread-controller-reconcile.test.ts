@@ -1,320 +1,184 @@
 /**
- * Behavior tests for the `reconcilePendingOnAdd` logic (fix #5).
+ * Behavior tests for the optimistic-send reconcile (judo-A, load-bearing
+ * behavior #1): count-aware, server-authoritative, oldest-first, each server
+ * copy clears at most one pending; no time window, no empty-text wildcard,
+ * no over-clearing of legitimate duplicate sends.
  *
- * reconcilePendingOnAdd is private, so we drive it through the controller's
- * public surface:
- *
- *   1. Call sendMessage() to enqueue an optimistic pending entry.
- *   2. Deliver a `display.message.added` DaemonEvent through the ws onEvent
- *      handler (captured from the fake client).
- *   3. Assert on getState().pendingUserMessages.
- *
- * The fake WS client captures the onEvent handler so the test can invoke it
- * directly to simulate the daemon echoing the user message back.
- *
- * Module mocks
- * ------------
- * - lib/api/attachments → uploadAttachments
- * - lib/api/chats       → getChatMessages, resumeChat (and others)
+ * The mechanism moved from a `display.message.added`/`display.messages.set`
+ * DaemonEvent handler to `AcpChatController.dispatchFromPlane`: every ACP
+ * `transcript.updated` re-runs `reconcilePendings` against
+ * `plane.userMessageContents()` (raw text, sentinels intact). Server echoes
+ * are simulated here as `user_message` SessionUpdates on the fake ACP client.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AppendMessage } from '@assistant-ui/react';
-import type { DaemonEvent, DisplayMessage, DisplayContent } from '@qlan-ro/mainframe-types';
-import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
-
-// ---------------------------------------------------------------------------
-// Mocks (hoisted by vitest)
-// ---------------------------------------------------------------------------
 
 vi.mock('../../../../lib/api/attachments', () => ({
   uploadAttachments: vi.fn().mockResolvedValue(['id-1']),
 }));
-
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
-  getChat: vi.fn().mockResolvedValue(null),
-  getPendingPermission: vi.fn().mockResolvedValue(null),
+  getChat: vi.fn().mockResolvedValue({ id: 'chat-abc', adapterId: 'claude' }),
+  getChatWorkflowRuns: vi.fn().mockResolvedValue([]),
   resumeChat: vi.fn().mockResolvedValue(undefined),
-  interruptChat: vi.fn().mockResolvedValue(undefined),
   cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../../../lib/api/git', () => ({
+  acceptWorktreeOffer: vi.fn().mockResolvedValue(undefined),
+  dismissWorktreeOffer: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/toast', () => ({
+  mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
+}));
 
-import { ChatThreadController } from '../chat-thread-controller';
+import { CHAT_ID, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
 
-// ---------------------------------------------------------------------------
-// Fake WS client — exposes captured onEvent handler so tests can push events
-// ---------------------------------------------------------------------------
-
-interface FakeWs {
-  fakeClient: DaemonWsClient;
-  pushEvent: (event: DaemonEvent) => void;
+function pendingTexts(ctrl: ReturnType<typeof makeController>['ctrl']): string[] {
+  return Object.values(ctrl.getState().pendingUserMessages).map((p) => p.text);
 }
 
-function makeFakeWs(): FakeWs {
-  let capturedHandler: ((event: DaemonEvent) => void) | null = null;
-
-  const fakeClient: DaemonWsClient = {
-    get connected() {
-      return false;
-    },
-    send: () => {},
-    onEvent(handler: (event: DaemonEvent) => void) {
-      capturedHandler = handler;
-      return () => {
-        capturedHandler = null;
-      };
-    },
-    subscribe: () => {},
-    unsubscribe: () => {},
-    subscribeConnection: () => () => {},
-    setPort: () => {},
-    connect: () => {},
-    disconnect: () => {},
-  } as unknown as DaemonWsClient;
-
-  function pushEvent(event: DaemonEvent): void {
-    if (!capturedHandler) throw new Error('onEvent handler not yet registered');
-    capturedHandler(event);
-  }
-
-  return { fakeClient, pushEvent };
+function userEcho(messageId: string, text: string) {
+  return { sessionUpdate: 'user_message' as const, messageId, content: [{ type: 'text' as const, text }] };
 }
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-const CHAT_ID = 'chat-rec';
-const PORT = 9999;
-
-function textMsg(text: string): AppendMessage {
+function imageOnlyEcho(messageId: string) {
   return {
-    role: 'user',
-    content: text ? [{ type: 'text', text }] : [],
-    attachments: [],
-    parentId: null,
-  } as unknown as AppendMessage;
-}
-
-function attachOnlyMsg(): AppendMessage {
-  return {
-    role: 'user',
-    content: [],
-    attachments: [
-      {
-        id: 'att-1',
-        type: 'image',
-        name: 'photo.png',
-        contentType: 'image/png',
-        status: { type: 'complete' },
-        content: [{ type: 'image', image: 'data:image/png;base64,aGVsbG8=' }],
-      },
-    ],
-    parentId: null,
-  } as unknown as AppendMessage;
-}
-
-/** Build a display.message.added DaemonEvent for CHAT_ID. */
-function addedEvent(id: string, content: DisplayContent[]): DaemonEvent {
-  const message: DisplayMessage = {
-    id,
-    chatId: CHAT_ID,
-    type: 'user',
-    content,
-    timestamp: new Date().toISOString(),
+    sessionUpdate: 'user_message' as const,
+    messageId,
+    content: [{ type: 'image' as const, mimeType: 'image/png', data: 'aGVsbG8=' }],
   };
-  return { type: 'display.message.added', chatId: CHAT_ID, message };
-}
-
-/** Trigger ensureWsSubscription by subscribing a listener. */
-function activate(ctrl: ChatThreadController): () => void {
-  return ctrl.subscribeLive();
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ---------------------------------------------------------------------------
-// (a) Attachment-only optimistic send reconciles on an image-only echo
-// ---------------------------------------------------------------------------
-
-describe('reconcilePendingOnAdd — attachment-only optimistic send', () => {
-  it('removes the pending entry when the echoed server message has no text block', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
-
-    await ctrl.sendMessage(attachOnlyMsg());
-
-    // One pending entry with empty text must exist before the echo.
-    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
-    expect(beforePending).toHaveLength(1);
-    expect(beforePending[0]!.text).toBe('');
-
-    // Deliver a server user message that has only an image block (no text).
-    pushEvent(addedEvent('srv-msg-1', [{ type: 'image', mediaType: 'image/png', data: 'aGVsbG8=' }]));
-
-    // The pending entry must be reconciled (removed).
-    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// (b) No cross-contamination: text-bearing server message does NOT reconcile
-//     an attachment-only pending
-// ---------------------------------------------------------------------------
-
-describe('reconcilePendingOnAdd — no cross-contamination', () => {
-  it('does NOT reconcile an attachment-only pending when the server message has text', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
-
-    await ctrl.sendMessage(attachOnlyMsg());
-
-    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
-    expect(beforePending).toHaveLength(1);
-    expect(beforePending[0]!.text).toBe('');
-
-    // Deliver a server message WITH text — must not reconcile the empty-text pending.
-    pushEvent(addedEvent('srv-msg-2', [{ type: 'text', text: 'some text from another message' }]));
-
-    // The pending entry must still be present.
+describe('reconcile — attachment-only optimistic send', () => {
+  it('clears the pending when the echo has only an image block (no text)', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('', [makeCompleteAttachment('photo.png')]));
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
-    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('');
-  });
 
-  it('does NOT reconcile a text pending when the server message has no text block', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
+    acpClient.emitUpdate(CHAT_ID, imageOnlyEcho('srv-1'));
 
-    await ctrl.sendMessage(textMsg('hello world'));
-
-    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
-    expect(beforePending).toHaveLength(1);
-    expect(beforePending[0]!.text).toBe('hello world');
-
-    // Deliver a server message with only an image block — must not reconcile
-    // the text-bearing pending entry.
-    pushEvent(addedEvent('srv-msg-3', [{ type: 'image', mediaType: 'image/png', data: 'abc' }]));
-
-    // The text-bearing pending must still be present.
-    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
-    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('hello world');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// (NEW) reconcilePending — live display.messages.set (first message of a chat)
-// ---------------------------------------------------------------------------
-//
-// The daemon broadcasts display.messages.set (instead of display.message.added)
-// for the FIRST message of a chat.  handle-daemon-event maps it to
-// { type: 'history.loaded' }, and the history.loaded reducer replaces the
-// message list but does NOT touch pendingUserMessages — so the optimistic
-// pending is never reconciled, leaving a duplicate user bubble.
-//
-// ---------------------------------------------------------------------------
-
-function setEvent(messages: DisplayMessage[]): DaemonEvent {
-  return { type: 'display.messages.set', chatId: CHAT_ID, messages };
-}
-function userMsg(id: string, text: string): DisplayMessage {
-  return { id, chatId: CHAT_ID, type: 'user', content: [{ type: 'text', text }], timestamp: new Date().toISOString() };
-}
-
-describe('reconcilePending — live display.messages.set (first message of a chat)', () => {
-  it('reconciles the optimistic pending when the user echo arrives via display.messages.set', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
-
-    await ctrl.sendMessage(textMsg('test message'));
-
-    // One pending with the sent text must exist before the echo.
-    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
-    expect(beforePending).toHaveLength(1);
-    expect(beforePending[0]!.text).toBe('test message');
-
-    // Daemon broadcasts display.messages.set with the user echo (first-message path).
-    pushEvent(setEvent([userMsg('srv-1', 'test message')]));
-
-    // Pending must be reconciled — zero pendings, no duplicate bubble.
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
   });
 
-  it('does NOT reconcile when the set carries a different user text (guard)', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
+  it('does NOT clear an attachment-only pending when the echo carries text', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('', [makeCompleteAttachment('photo.png')]));
 
-    await ctrl.sendMessage(textMsg('test message'));
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-2', 'some text from another message'));
 
-    // Echo carries a different text — must not match the pending.
-    pushEvent(setEvent([userMsg('srv-2', 'different text')]));
-
-    // The pending must still be present.
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
-    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('test message');
   });
 
-  it('clears both pendings when the set contains two matching user messages', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
+  it('does NOT clear a text pending when the echo has no text block', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('hello world'));
 
-    await ctrl.sendMessage(textMsg('test message'));
-    await ctrl.sendMessage(textMsg('test message'));
+    acpClient.emitUpdate(CHAT_ID, imageOnlyEcho('srv-3'));
 
-    // Two pendings for the same text must exist before the echo.
+    expect(pendingTexts(ctrl)).toEqual(['hello world']);
+  });
+});
+
+describe('reconcile — text fingerprint match', () => {
+  it('clears a pending when the echoed text normalizes to the same fingerprint', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('  Hello   World  '));
+    expect(pendingTexts(ctrl)).toEqual(['Hello   World']);
+
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-4', 'Hello   World'));
+
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+
+  it('does not clear when the fingerprints differ', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('hello'));
+
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-5', 'goodbye'));
+
+    expect(pendingTexts(ctrl)).toEqual(['hello']);
+  });
+});
+
+describe('reconcile — count-aware (identical text)', () => {
+  it('clears exactly one pending when two identical sends have only one server echo', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('ask me two questions'));
+    await ctrl.sendMessage(makeMsg(' ask me two questions '));
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
 
-    // Daemon broadcasts a set with two matching user echoes.
-    pushEvent(setEvent([userMsg('s1', 'test message'), userMsg('s2', 'test message')]));
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-dbl-1', 'ask me two questions'));
 
-    // Both pendings must be reconciled — zero remaining.
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
+  });
+
+  it('clears both pendings when two identical sends have two server echoes', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('ask me two questions'));
+    await ctrl.sendMessage(makeMsg('ask me two questions'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
+
+    acpClient.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'user_message',
+      messageId: 's1',
+      content: [{ type: 'text', text: 'ask me two questions' }],
+    });
+    acpClient.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'user_message',
+      messageId: 's2',
+      content: [{ type: 'text', text: 'ask me two questions' }],
+    });
+
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// (c) Text-fingerprint match still works
-// ---------------------------------------------------------------------------
+describe('reconcile — partial match: one cleared, one retained', () => {
+  it('clears only the pending whose text echoed, leaving the other intact', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('first question'));
+    await ctrl.sendMessage(makeMsg('second question'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(2);
 
-describe('reconcilePendingOnAdd — text-fingerprint match', () => {
-  it('reconciles a text-bearing pending when the echoed server message text matches', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-p1', 'first question'));
 
-    await ctrl.sendMessage(textMsg('  Hello   World  '));
-
-    const beforePending = Object.values(ctrl.getState().pendingUserMessages);
-    expect(beforePending).toHaveLength(1);
-    expect(beforePending[0]!.text).toBe('Hello   World');
-
-    // Deliver a server message with matching text (normalized: "hello world").
-    pushEvent(addedEvent('srv-msg-4', [{ type: 'text', text: 'Hello   World' }]));
-
-    // The pending entry must be removed.
-    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+    expect(pendingTexts(ctrl)).toEqual(['second question']);
   });
+});
 
-  it('does NOT reconcile when the text fingerprints differ', async () => {
-    const { fakeClient, pushEvent } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
-    activate(ctrl);
+describe('reconcile — no time window', () => {
+  it('clears a pending regardless of elapsed time since it was sent', async () => {
+    vi.useFakeTimers();
+    try {
+      const { ctrl, acpClient } = makeController();
+      await ctrl.sendMessage(makeMsg('delayed echo message'));
+      expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
 
-    await ctrl.sendMessage(textMsg('hello'));
+      vi.advanceTimersByTime(11 * 60 * 1000);
 
-    // Deliver a server message with different text.
-    pushEvent(addedEvent('srv-msg-5', [{ type: 'text', text: 'goodbye' }]));
+      acpClient.emitUpdate(CHAT_ID, userEcho('srv-late-1', 'delayed echo message'));
 
-    // The pending must remain.
-    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(1);
-    expect(Object.values(ctrl.getState().pendingUserMessages)[0]!.text).toBe('hello');
+      expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('reconcile — oldest-first', () => {
+  it('reconciles the oldest matching pending first when only one server copy arrives', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.sendMessage(makeMsg('same text'));
+    const firstClientId = Object.keys(ctrl.getState().pendingUserMessages)[0]!;
+    await ctrl.sendMessage(makeMsg('same text'));
+
+    acpClient.emitUpdate(CHAT_ID, userEcho('srv-oldest', 'same text'));
+
+    const remaining = Object.keys(ctrl.getState().pendingUserMessages);
+    expect(remaining).toHaveLength(1);
+    expect(remaining).not.toContain(firstClientId);
   });
 });

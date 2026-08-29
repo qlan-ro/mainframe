@@ -1,107 +1,62 @@
 /**
- * Behavior tests for ChatThreadController.retryMessage.
+ * Behavior tests for AcpChatController.retryMessage.
  *
- * A failed optimistic send leaves a `status: 'failed'` pending in state (the
- * "Failed to send" indicator). retryMessage re-emits the message.send frame for
- * that pending's text, flips it back to 'pending', clears the error, and returns
- * the run to running. Attachments are NOT re-uploaded (text-only retry).
- *
- * Harness mirrors chat-thread-controller-send.test.ts (fake ws + mocked REST).
+ * A failed optimistic send leaves a `status: 'failed'` pending (the "Failed
+ * to send" indicator). retryMessage re-prompts the plane with that pending's
+ * text, flips it back to 'pending', clears the error, and resumes running.
+ * Attachments are NOT re-uploaded (text-only retry).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AppendMessage } from '@assistant-ui/react';
-import type { ClientEvent } from '@qlan-ro/mainframe-types';
-import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 
-vi.mock('../../../../lib/api/attachments', () => ({
-  uploadAttachments: vi.fn(),
-}));
-
+vi.mock('../../../../lib/api/attachments', () => ({ uploadAttachments: vi.fn() }));
 vi.mock('../../../../lib/api/chats', () => ({
-  getChatMessages: vi.fn().mockResolvedValue({ messages: [], transcriptMissing: false }),
   getChat: vi.fn().mockResolvedValue(null),
-  getPendingPermission: vi.fn().mockResolvedValue(null),
+  getChatWorkflowRuns: vi.fn().mockResolvedValue([]),
   resumeChat: vi.fn().mockResolvedValue(undefined),
-  interruptChat: vi.fn().mockResolvedValue(undefined),
   cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../../../lib/api/git', () => ({
+  acceptWorktreeOffer: vi.fn().mockResolvedValue(undefined),
+  dismissWorktreeOffer: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/toast', () => ({
+  mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
+}));
 
 import { uploadAttachments } from '../../../../lib/api/attachments';
-import { ChatThreadController } from '../chat-thread-controller';
-
-function makeFakeWs(): { sentEvents: ClientEvent[]; fakeClient: DaemonWsClient } {
-  const sentEvents: ClientEvent[] = [];
-  const fakeClient: DaemonWsClient = {
-    get connected() {
-      return false;
-    },
-    send(event: ClientEvent) {
-      sentEvents.push(event);
-    },
-    onEvent: () => () => {},
-    subscribe: () => {},
-    unsubscribe: () => {},
-    subscribeConnection: () => () => {},
-    setPort: () => {},
-    connect: () => {},
-    disconnect: () => {},
-  } as unknown as DaemonWsClient;
-  return { sentEvents, fakeClient };
-}
-
-function makeMsg(text: string, attachments?: NonNullable<AppendMessage['attachments']>): AppendMessage {
-  return {
-    role: 'user',
-    content: text ? [{ type: 'text', text }] : [],
-    attachments: attachments ?? [],
-    parentId: null,
-  } as unknown as AppendMessage;
-}
-
-function makeCompleteAttachment(name: string): NonNullable<AppendMessage['attachments']>[number] {
-  return {
-    id: 'att-1',
-    type: 'image',
-    name,
-    contentType: 'image/png',
-    status: { type: 'complete' },
-    content: [{ type: 'image', image: 'data:image/png;base64,aGVsbG8=' }],
-  };
-}
-
-const CHAT_ID = 'chat-abc';
-const PORT = 9999;
+import { CHAT_ID, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-/** Send a message whose upload rejects, leaving a failed pending; return its clientId. */
-async function seedFailedPending(ctrl: ChatThreadController, text: string): Promise<string> {
+/** Seed a failed pending via an upload rejection, so it carries stage:'upload'. */
+async function seedFailedPending(ctrl: ReturnType<typeof makeController>['ctrl'], text: string): Promise<string> {
   vi.mocked(uploadAttachments).mockRejectedValueOnce(new Error('boom'));
   await ctrl.sendMessage(makeMsg(text, [makeCompleteAttachment('f.png')])).catch(() => {});
   const failed = Object.values(ctrl.getState().pendingUserMessages)[0];
   expect(failed?.status).toBe('failed');
+  expect(failed?.stage).toBe('upload');
   return failed!.clientId;
 }
 
-describe('ChatThreadController.retryMessage', () => {
-  it('re-emits a message.send frame with the failed message text', async () => {
-    const { sentEvents, fakeClient } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+describe('AcpChatController.retryMessage', () => {
+  it('re-prompts with the failed message text', async () => {
+    const { ctrl, acpClient } = makeController();
     const clientId = await seedFailedPending(ctrl, 'retry me');
 
     await ctrl.retryMessage(clientId);
 
-    const sends = sentEvents.filter((e) => e.type === 'message.send');
-    expect(sends).toHaveLength(1);
-    expect(sends[0]).toEqual({ type: 'message.send', chatId: CHAT_ID, content: 'retry me' });
+    expect(acpClient.promptCalls[acpClient.promptCalls.length - 1]).toEqual({
+      sessionId: CHAT_ID,
+      text: 'retry me',
+      extra: {},
+    });
   });
 
   it('flips the pending back to pending, clears the error, and resumes running', async () => {
-    const { fakeClient } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    const { ctrl } = makeController();
     const clientId = await seedFailedPending(ctrl, 'retry me');
 
     await ctrl.retryMessage(clientId);
@@ -113,23 +68,29 @@ describe('ChatThreadController.retryMessage', () => {
   });
 
   it('is a no-op when the clientId is unknown', async () => {
-    const { sentEvents, fakeClient } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    const { ctrl, acpClient } = makeController();
 
     await ctrl.retryMessage('does-not-exist');
 
-    expect(sentEvents.filter((e) => e.type === 'message.send')).toHaveLength(0);
+    expect(acpClient.promptCalls).toHaveLength(0);
+  });
+
+  it('does not re-upload attachments on retry', async () => {
+    vi.mocked(uploadAttachments).mockRejectedValueOnce(new Error('boom'));
+    const { ctrl } = makeController();
+    await ctrl.sendMessage(makeMsg('retry me', [makeCompleteAttachment('f.png')])).catch(() => {});
+    const clientId = Object.values(ctrl.getState().pendingUserMessages)[0]!.clientId;
+    vi.mocked(uploadAttachments).mockClear();
+
+    await ctrl.retryMessage(clientId);
+
+    expect(uploadAttachments).not.toHaveBeenCalled();
   });
 });
 
-// ---------------------------------------------------------------------------
-// Failure stage across a retry (todo #219)
-// ---------------------------------------------------------------------------
-
-describe('ChatThreadController.retryMessage — failure stage', () => {
+describe('AcpChatController.retryMessage — failure stage', () => {
   it('clears the upload stage when the retry is accepted', async () => {
-    const { fakeClient } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+    const { ctrl } = makeController();
     const clientId = await seedFailedPending(ctrl, 'retry me');
     expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBe('upload');
 
@@ -138,14 +99,11 @@ describe('ChatThreadController.retryMessage — failure stage', () => {
     expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBeUndefined();
   });
 
-  it("records stage 'send' when the retry itself throws — a retry never uploads", async () => {
-    const { fakeClient } = makeFakeWs();
-    const ctrl = new ChatThreadController(CHAT_ID, PORT, fakeClient);
+  it("records stage 'send' when the retry prompt itself throws", async () => {
+    const { ctrl, acpClient } = makeController();
     const clientId = await seedFailedPending(ctrl, 'retry me');
+    acpClient.prompt = vi.fn().mockRejectedValueOnce(new Error('socket closed'));
 
-    vi.spyOn(fakeClient, 'send').mockImplementationOnce(() => {
-      throw new Error('socket closed');
-    });
     await ctrl.retryMessage(clientId).catch(() => {});
 
     expect(ctrl.getState().pendingUserMessages[clientId]?.stage).toBe('send');
