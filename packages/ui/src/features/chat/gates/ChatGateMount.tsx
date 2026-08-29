@@ -1,4 +1,4 @@
-import { useChatExtras, useChatPermissionFront } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatPermissionFront } from '../runtime/chat-extras';
 import { useAdapters } from '@/store/adapters';
 import { PermissionGate } from './PermissionGate';
 import { AskUserQuestionGate } from './AskUserQuestionGate';

@@ -53,7 +53,7 @@ function AutomationsField(props: Partial<TriggerTextFieldProps> & { initial?: st
 // than shared, so this file stays free of any file Group 2 edits.
 // ---------------------------------------------------------------------------
 
-vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({
     port: 31415,
     state: { chatId: 'chat-1', chatConfig: { projectId: 'proj-1', adapterId: 'claude' } },

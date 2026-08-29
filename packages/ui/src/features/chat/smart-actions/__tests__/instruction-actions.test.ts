@@ -72,7 +72,7 @@ vi.mock('@/features/sessions/new-thread/reset-new-thread-draft', () => ({
 const ADAPTERS: AdapterInfo[] = [{ id: 'claude', name: 'Claude' } as AdapterInfo];
 let chatConfig: { projectId: string; adapterId: string } | null = { projectId: 'proj-7', adapterId: 'codex' };
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => (chatConfig ? { state: { chatConfig } } : { state: { chatConfig: null } }),
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));

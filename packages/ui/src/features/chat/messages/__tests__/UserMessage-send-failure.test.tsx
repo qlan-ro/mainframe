@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 const { retryMessageSpy } = vi.hoisted(() => ({ retryMessageSpy: vi.fn() }));
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ retryMessage: retryMessageSpy }),
   useChatQueuedMessages: () => [],
 }));

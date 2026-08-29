@@ -56,7 +56,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (selector: (s: typeof fakeAuiState) => unknown) => selector(fakeAuiState),
 }));
 
-vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => fakeExtras,
 }));
 

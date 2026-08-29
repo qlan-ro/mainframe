@@ -24,7 +24,7 @@ vi.mock('@/lib/api/agents', () => ({
   getAgents: vi.fn(),
 }));
 
-vi.mock('../../chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../chat/runtime/chat-extras', () => ({
   useChatExtras: vi.fn(),
 }));
 
@@ -32,7 +32,7 @@ import { SkillsProvider, useChatSkills } from '../use-chat-skills';
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
-import { useChatExtras } from '../../chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../chat/runtime/chat-extras';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { bumpSkillsRevalidation } from '../use-skills-revalidation';
 import type { Skill, Project, AgentConfig } from '@qlan-ro/mainframe-types';

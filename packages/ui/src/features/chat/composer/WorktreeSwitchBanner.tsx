@@ -12,7 +12,7 @@
 import { useEffect } from 'react';
 import { Check, GitBranch, Loader2 } from 'lucide-react';
 import type { WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
-import { useChatExtras, useWorktreeOffer } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras, useWorktreeOffer } from '../runtime/chat-extras';
 
 /** How long the "session is now in …" confirmation stays up before it clears itself. */
 const SETTLED_LINGER_MS = 2000;

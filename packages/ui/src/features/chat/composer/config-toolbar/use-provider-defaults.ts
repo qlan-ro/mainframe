@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import { getProviderSettings } from '@/lib/api/settings';
 import { useSettingsStore } from '@/store/settings';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 
 /**
  * Returns this adapter's ProviderConfig (a structural TuningDefaults, D-D) live from

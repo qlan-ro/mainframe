@@ -8,7 +8,7 @@
  * refresh feeds the SAME matcher with the full confirmed user-message list.
  */
 import type { AppendMessage } from '@assistant-ui/react';
-import type { PendingUserMessage } from './chat-thread-state';
+import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
 
@@ -96,4 +96,76 @@ export function reconcilePendings(
     }
   }
   return matched;
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic-pending reducer slice (delegated to by reduceChatThreadState)
+// ---------------------------------------------------------------------------
+
+export type LocalMessageEvent =
+  | { type: 'local.message.queued'; pending: PendingUserMessage }
+  | { type: 'local.message.reconciled'; clientId: string }
+  | { type: 'local.message.failed'; clientId: string; error: unknown; stage?: 'upload' | 'send' }
+  | { type: 'local.message.attachments_restored'; clientId: string }
+  | { type: 'local.message.retrying'; clientId: string };
+
+function removePending(state: ChatThreadState, clientId: string): ChatThreadState {
+  if (!(clientId in state.pendingUserMessages)) return state;
+  const pendingUserMessages = { ...state.pendingUserMessages };
+  delete pendingUserMessages[clientId];
+  return { ...state, pendingUserMessages };
+}
+
+export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMessageEvent): ChatThreadState {
+  switch (event.type) {
+    case 'local.message.queued':
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.pending.clientId]: event.pending,
+        },
+      };
+
+    case 'local.message.reconciled':
+      return removePending(state, event.clientId);
+
+    case 'local.message.failed': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
+        },
+        runState: { type: 'error', error: event.error },
+      };
+    }
+
+    case 'local.message.attachments_restored': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current || current.attachmentsRestored) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, attachmentsRestored: true },
+        },
+      };
+    }
+
+    case 'local.message.retrying': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current) return state;
+      const { error: _dropped, stage: _dropped2, attachmentsRestored: _dropped3, ...rest } = current;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...rest, status: 'pending' },
+        },
+      };
+    }
+  }
 }

@@ -36,7 +36,7 @@ import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { CompactingPill } from '../messages/SystemMessage';
 import { DegradedChatCard } from './DegradedChatCard';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { useRotatingPhrase } from './use-rotating-phrase';
 import { formatElapsedSeconds } from '../format-duration';
 import { useRunElapsed } from './use-run-elapsed';

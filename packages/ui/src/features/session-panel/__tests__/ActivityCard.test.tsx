@@ -25,7 +25,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 let mockTasks: Record<string, BackgroundActivityTask> = {};
 let mockChatId = 'chat-1';
-vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { chatId: mockChatId, backgroundTasks: mockTasks } }),
 }));
 

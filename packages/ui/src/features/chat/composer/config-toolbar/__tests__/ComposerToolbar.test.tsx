@@ -47,7 +47,7 @@ vi.mock('@/features/sessions/runtime/draft-config', () => ({
   useDraftConfig: vi.fn().mockReturnValue(undefined),
 }));
 
-vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: vi.fn().mockReturnValue(null),
 }));
 

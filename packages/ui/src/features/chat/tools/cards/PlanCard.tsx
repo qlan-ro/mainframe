@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { StatusDot, stripErrorXml } from '../shared';
 import { PlanBubble } from '../../messages/PlanBubble';
 import { parseApprovedPlanResult } from '../../messages/plan-message';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { useAutoOpenOnTransition } from './use-auto-open-on-transition';
 
 // ── PlanCard ──────────────────────────────────────────────────────────────────

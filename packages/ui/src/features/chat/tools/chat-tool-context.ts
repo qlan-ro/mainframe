@@ -5,7 +5,7 @@
  * - `useOpenFile` emits surface intents; only `layout/` subscribes.
  */
 import { useCallback } from 'react';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 
 /** The active chat id, or undefined before the runtime is ready. */

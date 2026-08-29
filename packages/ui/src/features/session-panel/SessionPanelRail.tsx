@@ -16,7 +16,7 @@ import { Info, ListTodo, Logs, Play } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { severityOf } from '@/features/quota/quota-format';
-import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRunControl } from '@/features/run/derive-launch-control';

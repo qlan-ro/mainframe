@@ -14,7 +14,7 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';
 

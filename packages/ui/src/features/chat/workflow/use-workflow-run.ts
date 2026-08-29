@@ -4,7 +4,7 @@
  * with the launch result and some snapshots.
  */
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 
 export function useWorkflowRun(taskId: string | undefined): ClaudeWorkflowRun | undefined {
   const extras = useChatExtras();

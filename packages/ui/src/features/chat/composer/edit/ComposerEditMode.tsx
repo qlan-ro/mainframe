@@ -15,7 +15,7 @@
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
 import type { QueuedEdit } from './composer-edit-context';
 

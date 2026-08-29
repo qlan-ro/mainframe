@@ -40,13 +40,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AdapterInfo, PermissionOption } from '@qlan-ro/mainframe-types';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-import type { ChatRuntimeExtras } from '../../runtime/use-chat-thread-runtime';
+import type { ChatRuntimeExtras } from '../../runtime/chat-extras';
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatPermissionFront: vi.fn(),
   useChatExtras: vi.fn(),
 }));
-import { useChatExtras, useChatPermissionFront } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatPermissionFront } from '../../runtime/chat-extras';
 import { ChatGateMount } from '../ChatGateMount';
 
 const mockFront = vi.mocked(useChatPermissionFront);

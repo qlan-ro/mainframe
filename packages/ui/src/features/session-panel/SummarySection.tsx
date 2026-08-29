@@ -19,7 +19,7 @@ import type { ComponentType } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';

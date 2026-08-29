@@ -22,13 +22,7 @@ import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getAcpFacadeClient } from '../../../lib/daemon/acp-clients';
 import type { AcpSessionClientPort } from './acp-session-plane';
-import { cancelQueuedMessage, editQueuedMessage, getChat, getChatWorkflowRuns } from '../../../lib/api/chats';
-import { uploadAttachments } from '../../../lib/api/attachments';
-import {
-  acceptWorktreeOffer as postAcceptWorktreeOffer,
-  dismissWorktreeOffer as postDismissWorktreeOffer,
-} from '../../../lib/api/git';
-import { mfToast } from '@/lib/toast';
+import { cancelQueuedMessage, editQueuedMessage } from '../../../lib/api/chats';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -37,8 +31,16 @@ import {
 } from './chat-thread-state';
 import { AcpSessionPlane } from './acp-session-plane';
 import { ChatWsSubscription } from './chat-ws-subscription';
-import { buildPendingMessage, parseSendInput, reconcilePendings } from './chat-reconcile';
-import { matchCommandInvocation } from '../commands/command-registry';
+import { reconcilePendings } from './chat-reconcile';
+import {
+  acceptWorktreeOffer,
+  dismissWorktreeOffer,
+  markAttachmentsRestoredForFailure,
+  retryChatMessage,
+  sendChatMessage,
+  type ChatActionHost,
+} from './chat-actions';
+import { ChatPlaneLoader } from './chat-plane-loader';
 import { routeDaemonEvent } from './chat-event-router';
 
 /** What the controller needs from a facade client: the plane's port plus the connect handshake. */
@@ -48,7 +50,7 @@ export class AcpChatController {
   private state: ChatThreadState;
   private readonly listeners = new Set<() => void>();
   private readonly plane: AcpSessionPlane;
-  private loadPromise: Promise<void> | null = null;
+  private readonly loader: ChatPlaneLoader;
   private disposed = false;
   // The id for all network ops: the daemon chat id for pre-existing threads; for a
   // new (__LOCALID_*) thread it starts local and setRemoteId() swaps in the real id
@@ -61,6 +63,8 @@ export class AcpChatController {
   private readonly threadId: string;
   // Side-band WS attachment; constructed lazily in subscribeLive() so it carries the current daemonId.
   private wsSub: ChatWsSubscription | null = null;
+  // The narrow surface the chat-actions module drives (send/retry/worktree offers).
+  private readonly actionHost: ChatActionHost;
 
   constructor(
     chatId: string,
@@ -76,6 +80,24 @@ export class AcpChatController {
       getChatId: () => this.daemonId,
       dispatch: (event) => this.dispatchFromPlane(event),
       isDisposed: () => this.disposed,
+    });
+    this.actionHost = {
+      getPort: () => this.port,
+      getDaemonId: () => this.daemonId,
+      getState: () => this.state,
+      dispatch: (event) => this.dispatch(event),
+      load: () => this.load(),
+      sendPrompt: (text, meta) => this.plane.sendPrompt(text, meta),
+    };
+    this.loader = new ChatPlaneLoader({
+      getPort: () => this.port,
+      getDaemonId: () => this.daemonId,
+      isLocalOnly: () => this.isLocalOnly(),
+      isDisposed: () => this.disposed,
+      isReady: () => this.state.loadState.type === 'ready',
+      dispatch: (event) => this.dispatch(event),
+      resolveClient: (profile) => this.resolveClient(profile),
+      attachPlane: (client) => this.plane.attach(client),
     });
   }
 
@@ -174,132 +196,26 @@ export class AcpChatController {
     this.listeners.clear();
   }
 
-  /**
-   * Seed the config from REST (which names the adapter profile), connect the
-   * shared facade client, and attach the session plane (full replay). Deduped
-   * by loadPromise; `force` re-runs it (extras.retry after a failed load).
-   */
-  public async load(force = false): Promise<void> {
-    if (this.isLocalOnly()) return;
-    if (this.loadPromise && !force) return this.loadPromise;
-    if (!force && this.state.loadState.type === 'ready') return;
-
-    this.dispatch({ type: 'history.loading' });
-
-    const request = this.attachPlanes()
-      .then(() => {
-        if (this.loadPromise !== request) return;
-        this.dispatch({ type: 'history.ready' });
-      })
-      .catch((error: unknown) => {
-        if (this.loadPromise !== request) return;
-        this.dispatch({ type: 'history.failed', error });
-      })
-      .finally(() => {
-        if (this.loadPromise === request) this.loadPromise = null;
-      });
-
-    this.loadPromise = request;
-    return request;
-  }
-
-  private async attachPlanes(): Promise<void> {
-    const chat = await getChat(this.port, this.daemonId);
-    if (this.disposed) return;
-    if (chat) {
-      this.dispatch({ type: 'chat.config.updated', chat });
-      this.dispatch({ type: 'background.snapshot', tasks: chat.backgroundActivity?.tasks ?? [] });
-    }
-    // Workflow runs have no facade frame family; their disk backfill is a
-    // dedicated REST read now that the history payload is no longer fetched.
-    void getChatWorkflowRuns(this.port, this.daemonId)
-      .then((runs) => {
-        if (!this.disposed) this.dispatch({ type: 'workflow.runs.seeded', runs });
-      })
-      .catch((err: unknown) => console.warn('[acp-chat] workflow-runs seed failed', err));
-
-    const profile = chat?.adapterId ?? 'claude';
-    const client = this.resolveClient(profile);
-    await client.ensureConnected();
-    if (this.disposed) return;
-    await this.plane.attach(client);
+  /** REST config seed + facade attach, deduped — see `ChatPlaneLoader`. */
+  public load(force = false): Promise<void> {
+    return this.loader.load(force);
   }
 
   public refresh(): Promise<void> {
     return this.load(true);
   }
 
-  public async sendMessage(message: AppendMessage): Promise<void> {
-    if (this.refuseIfDirectoryMissing()) return;
-
-    const input = parseSendInput(message);
-    if (!input) return;
-    const { text, uploadItems } = input;
-
-    const pending = buildPendingMessage(this.daemonId, text);
-    this.dispatch({ type: 'local.message.queued', pending });
-    this.dispatch({ type: 'run.started' });
-
-    let attachmentIds: string[] | undefined;
-    try {
-      // The prompt needs the facade client, which needs the config seed —
-      // load() is deduped, so repeat sends resolve instantly.
-      await this.load();
-      attachmentIds =
-        uploadItems.length > 0 ? await uploadAttachments(this.port, this.daemonId, uploadItems) : undefined;
-      // A draft that is exactly `/<command>` is an invocation, not prose: the
-      // daemon resolves the command by name and — for a Mainframe one —
-      // substitutes its prompt template for `content`. Without this meta the
-      // same text takes the plain-text path and the model receives the
-      // literal "/launch-config" string.
-      const command = matchCommandInvocation(text);
-      await this.plane.sendPrompt(text, {
-        ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
-        ...(command ? { command: { ...command } } : {}),
-      });
-    } catch (error) {
-      const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
-      this.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage });
-      throw error;
-    }
+  public sendMessage(message: AppendMessage): Promise<void> {
+    return sendChatMessage(this.actionHost, message);
   }
 
   public markAttachmentsRestoredForFailure(error: unknown): void {
-    const failed = Object.values(this.state.pendingUserMessages)
-      .filter((pending) => pending.status === 'failed' && pending.error === error)
-      .sort((a, b) => b.createdAt - a.createdAt)[0];
-    if (failed) this.dispatch({ type: 'local.message.attachments_restored', clientId: failed.clientId });
+    markAttachmentsRestoredForFailure(this.actionHost, error);
   }
 
-  /**
-   * Re-send a failed optimistic user message (the "Failed to send" indicator).
-   * Text-only: attachments are not re-uploaded — the common failure is the live
-   * send, and re-deriving the original upload items isn't tracked on the pending.
-   */
-  public async retryMessage(clientId: string): Promise<void> {
-    const pending = this.state.pendingUserMessages[clientId];
-    if (!pending) return;
-    if (this.refuseIfDirectoryMissing()) return;
-
-    this.dispatch({ type: 'local.message.retrying', clientId });
-    this.dispatch({ type: 'run.started' });
-
-    try {
-      await this.load();
-      await this.plane.sendPrompt(pending.text, {});
-    } catch (error) {
-      this.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send' });
-      throw error;
-    }
-  }
-
-  private refuseIfDirectoryMissing(): boolean {
-    const chat = this.state.chatConfig;
-    if (chat?.directoryMissing !== true) return false;
-    mfToast.error('Can’t send — the working directory is missing', {
-      description: chat.missingDirectoryPath ?? 'The directory this session runs in no longer exists.',
-    });
-    return true;
+  /** Re-send a failed optimistic user message (the "Failed to send" indicator). */
+  public retryMessage(clientId: string): Promise<void> {
+    return retryChatMessage(this.actionHost, clientId);
   }
 
   public async cancel(): Promise<void> {
@@ -332,33 +248,12 @@ export class AcpChatController {
     await editQueuedMessage(this.port, this.daemonId, messageId, content);
   }
 
-  /**
-   * Accept a worktree-switch offer. The offer is left pending: only the daemon's
-   * `worktree.offer.resolved` removes it, so a rebind that fails server-side
-   * still leaves the user something to retry.
-   */
-  public async acceptWorktreeOffer(worktreePath: string): Promise<void> {
-    this.dispatch({ type: 'worktree.switch.started', worktreePath });
-    try {
-      await postAcceptWorktreeOffer(this.port, this.daemonId, worktreePath);
-    } catch (error) {
-      this.dispatch({ type: 'worktree.switch.failed' });
-      mfToast.error('Could not switch worktree', {
-        description: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+  public acceptWorktreeOffer(worktreePath: string): Promise<void> {
+    return acceptWorktreeOffer(this.actionHost, worktreePath);
   }
 
-  public async dismissWorktreeOffer(worktreePath: string): Promise<void> {
-    try {
-      await postDismissWorktreeOffer(this.port, this.daemonId, worktreePath);
-    } catch (error) {
-      mfToast.error('Could not dismiss worktree offer', {
-        description: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+  public dismissWorktreeOffer(worktreePath: string): Promise<void> {
+    return dismissWorktreeOffer(this.actionHost, worktreePath);
   }
 
   /** Drops the settled confirmation once the banner has shown it. */

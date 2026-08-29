@@ -38,7 +38,7 @@ vi.mock('../../composer/edit/composer-edit-context', () => ({
 }));
 vi.mock('../../gates/ChatGateMount', () => ({ ChatGateMount: () => <div data-testid="gate-mount-stub" /> }));
 vi.mock('../DegradedChatCard', () => ({ DegradedChatCard: () => null }));
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({ useChatExtras: () => undefined }));
+vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => undefined }));
 vi.mock('../use-rotating-phrase', () => ({ useRotatingPhrase: () => 'Thinking…' }));
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
