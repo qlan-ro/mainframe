@@ -71,8 +71,9 @@ impl ChatManager {
             .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone())
     }
 
-    /// Return all queued refs for a chat, oldest-first is not guaranteed by the
-    /// HashMap; the TS returns Map-insertion order but callers filter by chat only.
+    /// Return all queued refs for a chat, oldest-first (enqueue order) —
+    /// `queue_state` snapshots render in this order, so it is part of the wire
+    /// contract, not a courtesy.
     pub fn get_queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
         queued_for_chat(&self.queued_refs, chat_id)
     }

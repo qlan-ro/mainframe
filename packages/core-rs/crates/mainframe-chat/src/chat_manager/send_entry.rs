@@ -159,7 +159,7 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&r.uuid);
+            .retain(|q| q.uuid != r.uuid);
         self.notify_queue_changed(chat_id);
         self.messages
             .lock()
@@ -197,7 +197,7 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&r.uuid);
+            .retain(|q| q.uuid != r.uuid);
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -215,7 +215,7 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .values()
+            .iter()
             .filter(|r| r.chat_id == chat_id)
             .count()
     }
@@ -224,7 +224,7 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .values()
+            .iter()
             .find(|r| r.chat_id == chat_id && r.message_id == message_id)
             .cloned()
     }

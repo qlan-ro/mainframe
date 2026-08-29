@@ -69,7 +69,7 @@ impl ChatManager {
         let active_chats: Registry = Arc::new(DashMap::new());
         let messages = Arc::new(Mutex::new(MessageCache::new()));
         let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-        let queued_refs: QueuedRefs = Arc::new(Mutex::new(HashMap::new()));
+        let queued_refs: QueuedRefs = Arc::new(Mutex::new(Vec::new()));
 
         // Unset until `attach_self()` runs (called from `build_chat_manager` once
         // the manager is behind an `Arc`); until then plan-mode's clear-context

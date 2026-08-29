@@ -185,7 +185,7 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(uuid.clone(), r);
+            .push(r);
         self.notify_queue_changed(chat_id);
         info!(
             chat_id,

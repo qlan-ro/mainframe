@@ -121,6 +121,18 @@ async fn queue_changes_announce_full_snapshots_on_the_seam() {
         "enqueue announces the full snapshot"
     );
 
+    mgr.send_message("c1", "second in line", None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshots(&surface).last(),
+        Some(&vec![
+            "hello while busy".to_string(),
+            "second in line".to_string()
+        ]),
+        "snapshots are oldest-first (FIFO), whatever the map iteration order"
+    );
+
     let r = mgr.get_queued_for_chat("c1")[0].clone();
     mgr.cancel_queued_message("c1", &r.message_id)
         .await
@@ -128,8 +140,8 @@ async fn queue_changes_announce_full_snapshots_on_the_seam() {
 
     assert_eq!(
         snapshots(&surface).last(),
-        Some(&Vec::new()),
-        "cancel announces the emptied snapshot"
+        Some(&vec!["second in line".to_string()]),
+        "cancel announces the remaining snapshot"
     );
 }
 

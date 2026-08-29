@@ -89,14 +89,20 @@ pub(super) async fn apply_tuning_impl(
 pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMessageRef> {
     refs.lock()
         .unwrap_or_else(|e| e.into_inner())
-        .values()
+        .iter()
         .filter(|r| r.chat_id == chat_id)
         .cloned()
         .collect()
 }
 
 pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &str) {
-    let removed = refs.lock().unwrap_or_else(|e| e.into_inner()).remove(uuid);
+    let removed = {
+        let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .iter()
+            .position(|r| r.uuid == uuid)
+            .map(|i| guard.remove(i))
+    };
     if let Some(r) = removed {
         info!(
             chat_id,
@@ -110,7 +116,7 @@ pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &s
 pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
     let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
     let before = guard.len();
-    guard.retain(|_, r| r.chat_id != chat_id);
+    guard.retain(|r| r.chat_id != chat_id);
     let removed = before - guard.len();
     drop(guard);
     if removed > 0 {
