@@ -140,12 +140,12 @@ test.describe('§tool-cards — Write (permissions-interactive)', () => {
     // mirrors chat.spec.ts's §permissions-interactive two-turn sequence.
     await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 60_000);
 
     await sendMessage(page, 'Create /tmp/mf-e2e-test.txt again');
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-allow-once').click();
+    await page.getByTestId('chat-permission-option-allow-once').click();
     await waitForIdle(page, 60_000);
 
     const card = page.getByTestId('chat-write-card').first();
@@ -387,7 +387,7 @@ test.describe('§tool-cards — Plan (plan-approval)', () => {
     // Clean up: the approval triggers an Edit permission gate next (plan-approval.0.ndjson) —
     // deny so the mock session ends cleanly.
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 90_000);
   });
 });

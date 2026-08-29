@@ -110,8 +110,9 @@ fn upsert_variant(role: ItemRole, is_thought: bool) -> fn(MessageUpsert) -> Sess
 }
 
 /// `Option<T> -> Option<Option<T>>`: `Some` creates/replaces, `None` omits
-/// (the patch field stays unchanged) — this crate never needs to explicitly
-/// *clear* a field, so the `Some(None)` (`null`) arm is unused here.
+/// (the patch field stays unchanged). Creation-path helper only — revision
+/// meta uses `Some(new_meta.clone())` directly, because a cleared meta must
+/// wire as the explicit `Some(None)` (`null`) this mapping cannot produce.
 fn create_patch<T>(value: Option<T>) -> Option<Option<T>> {
     value.map(Some)
 }
@@ -224,6 +225,17 @@ fn content_revision(
     prev_meta: &Option<Value>,
     new_meta: &Option<Value>,
 ) -> Vec<SessionUpdate> {
+    if prev == new {
+        // Meta-only change (turn end attaching duration, a retry marker
+        // landing, …): patch the meta, leave `content` omitted = unchanged.
+        // `Some(new_meta.clone())` and not `create_patch` — a cleared meta
+        // must wire as an explicit `null`, not vanish from the patch.
+        return vec![upsert_variant(role, is_thought)(MessageUpsert {
+            message_id: id.to_string(),
+            content: None,
+            meta: Some(new_meta.clone()),
+        })];
+    }
     if let Some(deltas) = chunk_extension(prev, new) {
         let variant = message_variant(role, is_thought);
         let meta_changed = new_meta != prev_meta;
@@ -251,7 +263,7 @@ fn content_revision(
         meta: if new_meta == prev_meta {
             None
         } else {
-            create_patch(new_meta.clone())
+            Some(new_meta.clone())
         },
     })]
 }

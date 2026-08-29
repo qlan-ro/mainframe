@@ -389,7 +389,7 @@ test.describe('§sessions-rows Working + waiting status dot during a gate-held r
     await expect(dot).toHaveAttribute('aria-label', 'waiting', { timeout: 5_000 });
 
     // Clean up: deny so the mock session ends cleanly before teardown.
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
     await expect(dot).toHaveAttribute('aria-label', 'idle', { timeout: 10_000 });
   });

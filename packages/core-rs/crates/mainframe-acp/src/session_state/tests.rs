@@ -115,6 +115,77 @@ fn a_non_append_change_is_a_full_revision_not_a_chunk() {
 }
 
 #[test]
+fn a_meta_only_change_patches_meta_without_resending_content() {
+    // The live defect behind e2e criterion 3/7 failures: turn end attaches
+    // `turnDurationMs` to the item meta while content is unchanged — that
+    // must be a meta-only patch, never a full content re-send.
+    let mut state = SessionState::new();
+    state.diff(&[msg("m1", "hello")]);
+
+    let updates = state.diff(&[EncodedItem::Message {
+        id: "m1".to_string(),
+        role: ItemRole::Agent,
+        content: vec![text_block("hello")],
+        meta: Some(serde_json::json!({ "turnDurationMs": 121 })),
+    }]);
+
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+        panic!("expected AgentMessage");
+    };
+    assert_eq!(
+        upsert.content, None,
+        "content must stay omitted (unchanged)"
+    );
+    assert_eq!(
+        upsert.meta,
+        Some(Some(serde_json::json!({ "turnDurationMs": 121 })))
+    );
+}
+
+#[test]
+fn a_meta_only_change_on_a_thought_patches_as_a_thought() {
+    let mut state = SessionState::new();
+    let thought = |meta: Option<Value>| EncodedItem::Thought {
+        id: "m1-thought".to_string(),
+        content: vec![text_block("thinking...")],
+        meta,
+    };
+    state.diff(&[thought(None)]);
+
+    let updates = state.diff(&[thought(Some(serde_json::json!({ "turnDurationMs": 7 })))]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentThought(upsert) = &updates[0] else {
+        panic!("expected AgentThought");
+    };
+    assert_eq!(upsert.content, None);
+    assert_eq!(
+        upsert.meta,
+        Some(Some(serde_json::json!({ "turnDurationMs": 7 })))
+    );
+}
+
+#[test]
+fn a_cleared_meta_wires_as_an_explicit_null_patch() {
+    let mut state = SessionState::new();
+    state.diff(&[EncodedItem::Message {
+        id: "m1".to_string(),
+        role: ItemRole::Agent,
+        content: vec![text_block("hello")],
+        meta: Some(serde_json::json!({ "turnDurationMs": 121 })),
+    }]);
+
+    let updates = state.diff(&[msg("m1", "hello")]);
+    assert_eq!(updates.len(), 1);
+    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+        panic!("expected AgentMessage");
+    };
+    assert_eq!(upsert.content, None);
+    // `Some(None)` serializes as `"_meta": null` — the patch grammar's clear.
+    assert_eq!(upsert.meta, Some(None));
+}
+
+#[test]
 fn tail_text_growth_plus_an_appended_image_emits_a_delta_chunk_then_an_image_chunk() {
     let mut state = SessionState::new();
     state.diff(&[msg("m1", "Here is the shot")]);

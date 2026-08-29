@@ -125,8 +125,15 @@ test.describe('§ADR stress matrix — combined run', () => {
     // id — resume.rs), so every chunk lands exactly once and nothing duplicates.
     await expect(page.getByText('STREAM-COMPLETE', { exact: false })).toBeVisible({ timeout: 45_000 });
     await waitForIdle(page);
+    // The twelve lines render as ONE markdown paragraph (soft line breaks), so
+    // no element's exact text is a single line — count substring occurrences
+    // in the streamed message instead: each chunk exactly once, no loss, no
+    // duplication.
+    const streamedText = await thread.assistantMessages().filter({ hasText: 'STREAM-COMPLETE' }).innerText();
     for (let k = 1; k <= 12; k++) {
-      await expect(page.getByText(`Stream chunk ${k} of 12`, { exact: true })).toHaveCount(1);
+      const chunk = `Stream chunk ${k} of 12`;
+      const occurrences = streamedText.split(chunk).length - 1;
+      expect(occurrences, `"${chunk}" must appear exactly once after the mid-stream resume`).toBe(1);
     }
     // No duplicated earlier content either (accumulator upserts keyed by stable item id).
     await expect(page.getByText('SUBAGENT-DONE', { exact: false })).toHaveCount(1);
