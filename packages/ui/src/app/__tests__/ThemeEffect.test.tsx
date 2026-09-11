@@ -71,6 +71,24 @@ describe('ThemeEffect', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
+  it.each([false, true])('resumes the system cycle after a temporary toggle (initial dark: %s)', (initialDark) => {
+    installMatchMedia(initialDark);
+    useTheme.getState().setMode('system');
+    render(<ThemeEffect />);
+
+    act(() => useTheme.getState().toggle());
+    expect(document.documentElement.classList.contains('dark')).toBe(!initialDark);
+    expect(useTheme.getState().mode).toBe('system');
+    expect(setWindowThemeMock).toHaveBeenLastCalledWith(null);
+
+    act(() => colorSchemeListener?.({ matches: !initialDark } as MediaQueryListEvent));
+    expect(document.documentElement.classList.contains('dark')).toBe(!initialDark);
+
+    act(() => colorSchemeListener?.({ matches: initialDark } as MediaQueryListEvent));
+    expect(document.documentElement.classList.contains('dark')).toBe(initialDark);
+    expect(useTheme.getState().mode).toBe('system');
+  });
+
   it('removes the operating-system theme listener on unmount', () => {
     const { unmount } = render(<ThemeEffect />);
     const registeredListener = colorSchemeListener;

@@ -76,17 +76,46 @@ describe('theme store — system preference resolution', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// theme store — toggle() flips light → dark and persists to localStorage
-// ---------------------------------------------------------------------------
-
-describe('theme store — toggle() selects the opposite fixed resolved mode', () => {
-  it('selects light when System currently resolves dark', async () => {
-    installMatchMedia(true);
+describe('theme store — temporary appearance toggle', () => {
+  it.each([
+    { mode: 'system', matchesDark: true, appearance: 'light' },
+    { mode: 'light', matchesDark: false, appearance: 'dark' },
+    { mode: 'dark', matchesDark: false, appearance: 'light' },
+  ] as const)('preserves the saved $mode preference', async ({ mode, matchesDark, appearance }) => {
+    installMatchMedia(matchesDark);
+    localStorage.setItem('mf-theme', mode);
     const { useTheme } = await import('../theme');
     useTheme.getState().toggle();
+    expect(useTheme.getState()).toMatchObject({ mode, resolvedMode: appearance });
+    expect(localStorage.getItem('mf-theme')).toBe(mode);
+  });
+
+  it('does not persist an override when the preference defaults to System', async () => {
+    const { useTheme } = await import('../theme');
+    useTheme.getState().toggle();
+    expect(useTheme.getState().resolvedMode).toBe('dark');
+    expect(localStorage.getItem('mf-theme')).toBeNull();
+
+    vi.resetModules();
+    const { useTheme: restartedTheme } = await import('../theme');
+    expect(restartedTheme.getState()).toMatchObject({ mode: 'system', resolvedMode: 'light' });
+  });
+
+  it('flips the visible appearance on repeated toggles without changing the preference', async () => {
+    const { useTheme } = await import('../theme');
+    useTheme.getState().toggle();
+    expect(useTheme.getState()).toMatchObject({ mode: 'system', resolvedMode: 'dark' });
+    useTheme.getState().toggle();
+    expect(useTheme.getState()).toMatchObject({ mode: 'system', resolvedMode: 'light' });
+  });
+
+  it('clears the override when a preference is selected', async () => {
+    const { useTheme } = await import('../theme');
+    useTheme.getState().setMode('light');
+    useTheme.getState().toggle();
+    expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'dark' });
+    useTheme.getState().setMode('light');
     expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'light' });
-    expect(localStorage.getItem('mf-theme')).toBe('light');
   });
 });
 

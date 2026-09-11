@@ -98,7 +98,7 @@ export const useTheme = create<ThemeState>((set, get) => {
     mode,
     resolvedMode: resolveMode(mode),
     uiScale: readUiScale(),
-    toggle: () => get().setMode(get().resolvedMode === 'dark' ? 'light' : 'dark'),
+    toggle: () => set({ resolvedMode: get().resolvedMode === 'dark' ? 'light' : 'dark' }),
     setMode: (nextMode) => {
       persist(MODE_KEY, nextMode);
       set({ mode: nextMode, resolvedMode: resolveMode(nextMode) });
