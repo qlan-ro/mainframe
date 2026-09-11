@@ -89,24 +89,26 @@ describe('MainToolbar — search button', () => {
 });
 
 describe('MainToolbar — theme toggle', () => {
-  it('clicking main-toolbar-theme flips the theme mode from light to dark', () => {
+  it('clicking main-toolbar-theme flips the appearance without changing the preference', () => {
     renderToolbar();
 
     expect(useTheme.getState().mode).toBe('light');
 
     fireEvent.click(screen.getByTestId('main-toolbar-theme'));
 
-    expect(useTheme.getState().mode).toBe('dark');
+    expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'dark' });
+    expect(localStorage.getItem('mf-theme')).toBe('light');
   });
 
-  it('uses the resolved System appearance for its icon and fixed override', () => {
+  it('uses the resolved System appearance for its icon and temporary override', () => {
     useTheme.setState({ mode: 'system', resolvedMode: 'dark' });
     renderToolbar();
 
     expect(screen.getByTestId('main-toolbar-theme').querySelector('.lucide-sun')).not.toBeNull();
     fireEvent.click(screen.getByTestId('main-toolbar-theme'));
 
-    expect(useTheme.getState()).toMatchObject({ mode: 'light', resolvedMode: 'light' });
+    expect(useTheme.getState()).toMatchObject({ mode: 'system', resolvedMode: 'light' });
+    expect(screen.getByTestId('main-toolbar-theme').querySelector('.lucide-moon')).not.toBeNull();
   });
 });
 
