@@ -107,7 +107,14 @@ export function reconcilePendings(
 export type LocalMessageEvent =
   | { type: 'local.message.queued'; pending: PendingUserMessage }
   | { type: 'local.message.reconciled'; clientId: string }
-  | { type: 'local.message.failed'; clientId: string; error: unknown; stage?: 'upload' | 'send' }
+  | {
+      type: 'local.message.failed';
+      clientId: string;
+      error: unknown;
+      stage?: 'upload' | 'send';
+      /** Fallback source when the pending was already removed from state (e.g. a race with a correct reconcile) — the failure indicator must still render (R3.3). */
+      pending?: PendingUserMessage;
+    }
   | { type: 'local.message.attachments_restored'; clientId: string }
   | { type: 'local.message.retrying'; clientId: string };
 
@@ -133,7 +140,7 @@ export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMess
       return removePending(state, event.clientId);
 
     case 'local.message.failed': {
-      const current = state.pendingUserMessages[event.clientId];
+      const current = state.pendingUserMessages[event.clientId] ?? event.pending;
       if (!current) return state;
       return {
         ...state,

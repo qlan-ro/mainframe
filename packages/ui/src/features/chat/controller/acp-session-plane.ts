@@ -51,6 +51,8 @@ export class AcpSessionPlane {
   private readonly gateRpcIds = new Map<string, JsonRpcRequestId>();
   /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
   private lastSettledItemId: string | null = null;
+  /** High-water mark for `newUserMessagesSinceLastDispatch()` — see its doc comment. */
+  private lastReconciledUserCount = 0;
   private readonly attachment: AcpSessionAttachment;
 
   constructor(private readonly host: AcpSessionPlaneHost) {
@@ -65,6 +67,12 @@ export class AcpSessionPlane {
       resetAccumulator: () => {
         this.accumulator.reset();
         this.firstSeenAt.clear();
+        // A resume/reattach re-baselines the count to the (now empty)
+        // accumulator rather than leaving it pointing past the end — the
+        // stable-id upsert is idempotent, so a replay that re-establishes
+        // the SAME history never grows the count past this new baseline,
+        // and no reconcile batch fires for it (R3.3).
+        this.lastReconciledUserCount = 0;
       },
       hasAccumulatedItems: () => this.accumulator.itemsInOrder.length > 0,
       onSessionUpdate: (update) => this.handleUpdate(update),
@@ -123,6 +131,22 @@ export class AcpSessionPlane {
       const text = item.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
       return [{ content: [{ type: 'text' as const, text }] }];
     });
+  }
+
+  /**
+   * Only the user messages that appeared since the LAST call to this method
+   * — the reconcile matcher's actual input (R3.3, T25). Feeding it the full
+   * history on every `transcript.updated` let an already-loaded historical
+   * duplicate satisfy a brand-new pending before that pending's own echo
+   * ever arrived (stable ids make replay idempotent, so a resume/reattach
+   * that just re-establishes the same history never grows the count and
+   * emits nothing — `resetAccumulator()` re-baselines to 0 on top of that).
+   */
+  newUserMessagesSinceLastDispatch(): Array<{ content: Array<{ type: 'text'; text: string }> }> {
+    const all = this.userMessageContents();
+    const suffix = all.slice(this.lastReconciledUserCount);
+    this.lastReconciledUserCount = all.length;
+    return suffix;
   }
 
   dispose(): void {

@@ -74,7 +74,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     if (queued) host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
-    host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage });
+    host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage, pending });
     throw error;
   }
 }
@@ -96,7 +96,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string): 
     await host.load();
     await host.sendPrompt(pending.text, pending.sendMeta ?? {});
   } catch (error) {
-    host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send' });
+    host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send', pending });
     throw error;
   }
 }

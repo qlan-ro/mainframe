@@ -30,6 +30,7 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
 }));
 
+import { createChatThreadState, reduceChatThreadState } from '../chat-thread-state';
 import { CHAT_ID, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
 
 function pendingTexts(ctrl: ReturnType<typeof makeController>['ctrl']): string[] {
@@ -180,5 +181,60 @@ describe('reconcile — oldest-first', () => {
     const remaining = Object.keys(ctrl.getState().pendingUserMessages);
     expect(remaining).toHaveLength(1);
     expect(remaining).not.toContain(firstClientId);
+  });
+});
+
+describe('reconcile — suffix-only feed, not the whole history (T25, R3.3, blocker)', () => {
+  it('a history duplicate does not satisfy a new pending — only the live echo does', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.load();
+    // A prior "continue" already sits in the loaded transcript, before any pending exists.
+    acpClient.emitUpdate(CHAT_ID, userEcho('hist-1', 'continue'));
+
+    await ctrl.sendMessage(makeMsg('continue'));
+    const [pendingId] = Object.keys(ctrl.getState().pendingUserMessages);
+    expect(pendingId).toBeDefined();
+
+    // An unrelated transcript.updated (no new user message) must not
+    // re-match the pending against the OLD historical "continue".
+    acpClient.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'a1',
+      content: { type: 'text', text: 'thinking…' },
+    });
+    expect(ctrl.getState().pendingUserMessages[pendingId!]?.status).toBe('pending');
+
+    // The real echo finally arrives.
+    acpClient.emitUpdate(CHAT_ID, userEcho('live-1', 'continue'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});
+
+describe('reconcile — a failed send keeps its failure indicator (T25, R3.3)', () => {
+  it('local.message.failed re-creates a failed entry even when the pending was already removed from state', () => {
+    const state = createChatThreadState('chat-1');
+    const pending = {
+      clientId: 'client-gone',
+      chatId: 'chat-1',
+      text: 'flaky send',
+      createdAt: 1_700_000_000_000,
+      status: 'pending' as const,
+    };
+
+    // No 'local.message.queued' was dispatched onto this state — clientId
+    // is not present, simulating a pending that a correct reconcile already
+    // cleared (or one that never made it into this exact state snapshot).
+    const next = reduceChatThreadState(state, {
+      type: 'local.message.failed',
+      clientId: pending.clientId,
+      error: new Error('socket closed'),
+      stage: 'send',
+      pending,
+    });
+
+    expect(next.pendingUserMessages[pending.clientId]).toMatchObject({
+      status: 'failed',
+      text: 'flaky send',
+    });
   });
 });

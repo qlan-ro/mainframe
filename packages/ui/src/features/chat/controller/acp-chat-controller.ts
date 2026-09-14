@@ -263,13 +263,15 @@ export class AcpChatController {
 
   /**
    * Plane dispatches route through here so the count-aware optimistic
-   * reconcile (judo-A) runs against every transcript refresh: the server's
-   * converted user messages feed the same multiset matcher the legacy
-   * message.added/history.loaded paths fed.
+   * reconcile (judo-A) runs against every transcript refresh — but ONLY the
+   * suffix of user messages that appeared since the last dispatch, not the
+   * whole history (R3.3, T25): feeding the full list let an already-loaded
+   * historical duplicate satisfy a brand-new pending before its own live
+   * echo ever arrived.
    */
   private dispatchFromPlane(event: ChatStateEvent): void {
     if (event.type === 'transcript.updated') {
-      const raw = this.plane.userMessageContents();
+      const raw = this.plane.newUserMessagesSinceLastDispatch();
       for (const clientId of reconcilePendings(this.state.pendingUserMessages, raw)) {
         this.dispatch({ type: 'local.message.reconciled', clientId });
       }
