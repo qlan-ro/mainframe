@@ -121,6 +121,31 @@ impl ChatSurface for RevisionSurface {
     }
 }
 
+/// Every chat-surface event, in call order — for tests asserting relative
+/// ordering across event kinds, which `RevisionSurface` throws away.
+#[derive(Default)]
+struct OrderSurface {
+    events: Mutex<Vec<ChatSurfaceEvent>>,
+}
+
+impl OrderSurface {
+    fn events(&self) -> Vec<ChatSurfaceEvent> {
+        self.events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+}
+
+impl ChatSurface for OrderSurface {
+    fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+        self.events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(event);
+    }
+}
+
 fn text(t: &str) -> MessageContent {
     MessageContent::Leaf(LeafContent::Text {
         text: t.to_string(),
@@ -240,6 +265,41 @@ fn a_superseded_sessions_overlay_is_dropped() {
     assert!(
         revisions[1].is_empty(),
         "s1's own exit must clear its own overlay: {revisions:?}"
+    );
+}
+
+#[test]
+fn retry_precedes_its_clearing_revision() {
+    let deps = Arc::new(OverlayDeps::default());
+    let handler = EventHandler::new(
+        Arc::new(Mutex::new(MessageCache::new())),
+        Arc::new(Mutex::new(PermissionManager::new())),
+        deps,
+    );
+    let surface = Arc::new(OrderSurface::default());
+    handler.set_chat_surface(surface.clone());
+    let sink = handler.build_sink("chat-partial", None);
+
+    sink.on_message_partial("msg_1", vec![text("interrupted")]);
+    let before = surface.events().len();
+
+    sink.on_api_retry(1, Some("overloaded".to_string()));
+
+    let new_events = &surface.events()[before..];
+    assert_eq!(
+        new_events.len(),
+        2,
+        "expected the retry notification then its clearing revision: {new_events:?}"
+    );
+    assert!(
+        matches!(&new_events[0], ChatSurfaceEvent::Retry { attempt: 1, .. }),
+        "expected Retry first, got {:?}",
+        new_events[0]
+    );
+    assert!(
+        matches!(&new_events[1], ChatSurfaceEvent::DisplayRevision { .. }),
+        "expected the clearing DisplayRevision second, got {:?}",
+        new_events[1]
     );
 }
 

@@ -2,6 +2,7 @@ use serde_json::json;
 
 use super::*;
 use crate::encoder::ItemRole;
+use mainframe_types::acp::tool_call::{ToolCallContent, ToolCallStatus, ToolKind};
 
 fn text_blocks(text: &str) -> Vec<mainframe_types::acp::content::ContentBlock> {
     vec![mainframe_types::acp::content::ContentBlock::Text {
@@ -25,6 +26,18 @@ fn message_with_meta(id: &str, text: &str, meta: Value) -> EncodedItem {
         role: ItemRole::Agent,
         content: text_blocks(text),
         meta: Some(meta),
+    }
+}
+
+fn tool(id: &str, status: ToolCallStatus) -> EncodedItem {
+    EncodedItem::ToolCall {
+        id: id.to_string(),
+        title: "Read".to_string(),
+        kind: ToolKind::Read,
+        status,
+        raw_input: Value::Null,
+        content: Vec::<ToolCallContent>::new(),
+        meta: None,
     }
 }
 
@@ -156,6 +169,46 @@ fn a_marker_with_no_carrier_waits_and_turn_end_clears_it() {
         panic!("expected an upsert, got {:?}", next_turn[0]);
     };
     assert_eq!(upsert.meta, None);
+}
+
+#[test]
+fn a_retry_marker_skips_a_clearing_upsert_and_a_tool_call_patch() {
+    let mut stream = stream();
+    let _ = stream.on_revision(
+        &[message("m1", "Hel"), tool("t1", ToolCallStatus::Pending)],
+        0,
+    );
+    stream.on_retry(marker());
+
+    // m1 vanishes (its aborted partial content is cleared) in the same
+    // revision the tool call patches — neither may claim the marker.
+    let batch = stream.on_revision(&[tool("t1", ToolCallStatus::InProgress)], 10);
+    assert_eq!(
+        batch.len(),
+        2,
+        "expected a clear plus a tool patch: {batch:?}"
+    );
+    for frame in &batch {
+        match as_update(frame) {
+            SessionUpdate::AgentMessage(upsert) => assert_eq!(upsert.meta, None),
+            SessionUpdate::ToolCallUpdate(patch) => assert_eq!(patch.meta, None),
+            other => panic!("unexpected frame: {other:?}"),
+        }
+    }
+
+    // The retry's own first content frame is the one that finally carries it.
+    let carrier = stream.on_revision(
+        &[
+            message("m2", "Retried."),
+            tool("t1", ToolCallStatus::InProgress),
+        ],
+        20,
+    );
+    let SessionUpdate::AgentMessage(upsert) = as_update(&carrier[0]) else {
+        panic!("expected an upsert, got {:?}", carrier[0]);
+    };
+    let meta = upsert.meta.clone().flatten().expect("marker meta expected");
+    assert_eq!(meta[MAINFRAME_META_NAMESPACE]["attempt"], json!(2));
 }
 
 #[test]

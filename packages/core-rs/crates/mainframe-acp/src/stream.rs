@@ -118,13 +118,18 @@ impl SessionStream {
         due
     }
 
-    /// Merge the pending marker into the first content-carrying upsert of
-    /// this batch (message/thought upsert or tool-call patch — the frames
-    /// that replace content, per extensions.rs's "riding a message/tool-call
-    /// upsert's `_meta`"). Chunks are pure appends and never carry it. If the
-    /// batch has no carrier the marker stays pending for the next one.
+    /// Merge the pending marker into the first content-carrying message
+    /// upsert of this batch (T16, R1.4). Narrower than "any upsert with a
+    /// meta slot": a `ToolCallUpdate` patch is never a carrier — a tool call
+    /// already in flight when `api_error` fired would otherwise claim the
+    /// marker ahead of the retry's own content, the "later unrelated one"
+    /// bug this closes. Nor is an empty-content clearing upsert (the vanished-
+    /// item frame `session_state.rs::clear_update` emits) — the client
+    /// deletes that item on receipt (T23), so a marker riding it would just
+    /// vanish. Chunks are pure appends and never carry it. If the batch has
+    /// no carrier the marker stays pending for the next one.
     fn attach_retry_marker(&mut self, updates: &mut [SessionUpdate]) {
-        let Some(slot) = updates.iter_mut().find_map(upsert_meta_slot) else {
+        let Some(slot) = updates.iter_mut().find_map(retry_marker_carrier) else {
             return;
         };
         let Some(marker) = self.pending_retry.take() else {
@@ -135,14 +140,26 @@ impl SessionStream {
     }
 }
 
-fn upsert_meta_slot(update: &mut SessionUpdate) -> Option<&mut Option<Option<Value>>> {
+fn retry_marker_carrier(update: &mut SessionUpdate) -> Option<&mut Option<Option<Value>>> {
     match update {
         SessionUpdate::UserMessage(upsert)
         | SessionUpdate::AgentMessage(upsert)
-        | SessionUpdate::AgentThought(upsert) => Some(&mut upsert.meta),
-        SessionUpdate::ToolCallUpdate(patch) => Some(&mut patch.meta),
+        | SessionUpdate::AgentThought(upsert)
+            if !is_empty_content_clear(&upsert.content) =>
+        {
+            Some(&mut upsert.meta)
+        }
         _ => None,
     }
+}
+
+/// True for `session_state.rs::clear_update`'s frame: `content` patched to
+/// an explicit empty list, the vanished-item signal T23's `applyUpsert`
+/// deletes the item on.
+fn is_empty_content_clear(
+    content: &Option<Option<Vec<mainframe_types::acp::content::ContentBlock>>>,
+) -> bool {
+    matches!(content, Some(Some(blocks)) if blocks.is_empty())
 }
 
 /// Merge `value`'s keys into `_meta["_mainframe.dev"]` on top of whatever
