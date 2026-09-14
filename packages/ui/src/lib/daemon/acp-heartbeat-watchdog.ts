@@ -35,6 +35,11 @@ export class HeartbeatWatchdog {
 
   private rearm(): void {
     this.stop();
-    this.timer = setTimeout(() => this.onGap(), this.intervalMs * SILENCE_MULTIPLIER);
+    this.timer = setTimeout(() => {
+      this.onGap();
+      // A wedged-but-open socket (no close event, no further heartbeats)
+      // must keep retrying rather than going quiet after firing once.
+      this.rearm();
+    }, this.intervalMs * SILENCE_MULTIPLIER);
   }
 }
