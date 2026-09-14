@@ -108,6 +108,86 @@ These are reachable with fixture-only setup. Ordered roughly by value. Each row 
 
 ---
 
+## 5. Blocked — the behavior does not exist under `E2E_MODE=mock`
+
+Four of the six e2e scenarios the PR #688 fix plan
+(`docs/plans/2026-09-14-pr-688-review-fixes-plan.md`, Verification step 7) asks for are not
+reachable from this suite. Not "hard to set up" — the code path that produces the behavior is
+never entered when the chat runs on `mock-cli`, or the fixture has no second daemon to switch
+to. A spec written anyway would pass against a broken implementation, so each one is pinned by
+a unit test instead. The other two scenarios ARE covered:
+`tests-tauri/facade-protocol-partial.spec.ts` (no ghost bubble after a retry) and
+`tests-tauri/facade-reconnect-mid-stream.spec.ts` (a mid-turn reconnect resumes running).
+
+### 5.1 Plan-mode clear context empties the transcript and it stays empty
+
+**Why unreachable.** The wipe is an adapter concern. `ChatPlanMode::handle_clear_context`
+resolves a handler through `Adapter::create_plan_mode_handler`, whose trait default is `None`;
+only `ClaudeAdapter` overrides it. `mock-cli` therefore takes the `warn!("no plan-mode handler
+for adapter")` branch, so `clear_messages` / `notify_transcript_cleared` never run and the
+daemon never pushes `_mainframe.dev/transcript_cleared` — the only signal the client wipes on
+(`acp-session-attachment.ts`). Ticking `chat-plan-clear-context` in mock mode is observable
+only as a checkbox state, which is what `gates.spec.ts`'s "§plan gate exec-mode" already
+asserts and why its comment says the approval "never reaches `ClaudePlanModeHandler`".
+
+**Pinned by.**
+- daemon half — `packages/core-rs/crates/mainframe-adapter-claude/src/plan_mode_handler.rs::on_approve_and_clear_context_kills_resets_clears_and_starts`
+- client half — `packages/ui/src/features/chat/controller/__tests__/acp-session-plane.test.ts::"dispatches transcript.cleared and re-resumes from the start"`
+
+**What a covering fixture would need.** `mock-cli` would have to implement
+`create_plan_mode_handler` with a replay-safe `on_approve_and_clear_context` that clears the
+message cache and calls `notify_transcript_cleared`.
+
+### 5.2 A prompt queued behind a running turn appears last and stays last after the dequeue
+
+**Why unreachable.** Nothing is ever queued in mock mode. `queued_message_metadata`
+(`chat_manager/send_queue.rs`) sets `is_queued` only when `session.supports_replay_ack()` is
+true; the trait default in `mainframe-adapter-api/src/adapter.rs` is `false` and only
+`ClaudeSession` overrides it. So a mid-turn prompt on `mock-cli` gets no `queued` metadata, no
+`queuedRefs` entry, and its user message is encoded straight into the transcript at the tail —
+the encoder's D1 drop (`encoder.rs::is_queued`) never fires. Verified on the wire: every
+`_mainframe.dev/queue_state` this suite can produce carries `refs: []`. (The
+`criteria 3 + 5` comment in `tests-tauri/facade-protocol-streaming.spec.ts` overstates this —
+the mid-turn prompt makes the notification appear, but it snapshots an empty list.)
+
+**Pinned by.**
+- encoder half — `packages/core-rs/crates/mainframe-acp/src/encoder/tests.rs::queued_messages_are_not_encoded_as_items`
+- client half — `packages/ui/src/features/chat/controller/__tests__/chat-thread-state-queued.test.ts::"replaces stale queued entries with only the snapshot refs"`
+
+**What a covering fixture would need.** `mock-cli` would have to override
+`supports_replay_ack()` to `true` and hold a turn's output until the recording's
+`onQueuedProcessed` marker, so a second `sendMessage` really sits in `queuedRefs` while the
+first turn replays.
+
+### 5.3 A Codex gate answered with "Always allow" does not re-prompt on the next turn
+
+**Why unreachable.** The session-scoped accept lives in the Codex adapter's approval handler
+(`ApprovalHandler::handle_request`, `acceptForSession`), which mock mode never runs — `mock-cli`
+replays `onPermission` positionally and has no approval policy at all, so "does not re-prompt"
+has nothing to suppress.
+
+**Pinned by.** `packages/core-rs/crates/mainframe-adapter-codex/tests/approval_handler.rs::accept_for_session_reaches_codex`
+
+**What a covering fixture would need.** A live `codex` binary, i.e. the excluded real-adapter
+suite, not a recording.
+
+### 5.4 Switching daemons routes the next prompt to the new daemon
+
+**Why unreachable.** `fixtures/daemon.ts` runs exactly one daemon on one port
+(`assertPortFree` exists to guarantee that), and the renderer bakes that port at build time
+(`VITE_DAEMON_PORT`, checked by `global-setup.ts::assertBundleTargetsTestPort`). With no second
+daemon there is no switch to observe.
+
+**Pinned by.** `packages/ui/src/lib/daemon/__tests__/dispose-daemon-session.test.ts::"a daemon switch drops the cached facade clients — even a switch that lands back on the same daemon id (R1.1)"`
+
+**What a covering fixture would need.** A second `startDaemon` on its own port and data dir,
+plus a renderer bundle that resolves the daemon URL at runtime instead of baking one port — the
+`assertBundleTargetsTestPort` guard is a hard blocker until that resolution moves out of build
+time.
+
+
+---
+
 ## Summary
 
 | Bucket | Count | Action |
@@ -117,4 +197,5 @@ These are reachable with fixture-only setup. Ordered roughly by value. Each row 
 | Blocked — process-heavy (sandbox) | ~13 | needs runnable-app fixture, future |
 | Actionable — deterministic | ~75 | specs `58`–`68` above |
 | Not worth automating | ~4 | none |
+| Blocked — absent under `E2E_MODE=mock` | 4 scenarios | pinned by unit tests, see §5 |
 | False positives (role/helper) | remainder | already covered |
