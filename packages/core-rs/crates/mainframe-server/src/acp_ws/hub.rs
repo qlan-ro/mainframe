@@ -4,7 +4,9 @@
 //! to the `ChatManager` at boot (`build_chat_manager`); it fans every
 //! chat-surface event out to the connections attached to that chat, with the
 //! per-session encode → diff → throttle pipeline delegated to the pure
-//! `mainframe_acp::SessionStream`.
+//! `mainframe_acp::SessionStream`. This file owns the connection registry
+//! and the resume seed/teardown lifecycle; `fanout.rs` owns per-event
+//! delivery and `handlers.rs` the `ChatSurface` sink itself.
 
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -18,6 +20,7 @@ use tokio::sync::mpsc;
 
 use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
+mod fanout;
 mod handlers;
 
 /// Coalescing window for chunk fan-out (spec decision 14) and the cadence of
@@ -97,7 +100,10 @@ impl FacadeHub {
     pub fn begin_resume(&self, connection: &FacadeConnection, chat_id: &str) {
         connection.locked_sessions().insert(
             chat_id.to_string(),
-            SessionSlot::AwaitingSeed { latest: None },
+            SessionSlot::AwaitingSeed {
+                latest: None,
+                raws: Vec::new(),
+            },
         );
     }
 
@@ -132,13 +138,7 @@ impl FacadeHub {
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
         stream.seed(items);
-        let buffered = match previous {
-            SessionSlot::AwaitingSeed { latest } => latest,
-            SessionSlot::Live(_) => None,
-        };
-        let catch_up = buffered
-            .map(|latest| stream.on_revision(&latest, now_ms()))
-            .unwrap_or_default();
+        let catch_up = drain_into(&mut stream, previous);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         connection.send_json(reply);
         replay(connection);
@@ -172,84 +172,24 @@ impl FacadeHub {
     fn locked_registry(&self) -> std::sync::MutexGuard<'_, GateRegistry> {
         self.gates.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
 
-    fn attached_connections(&self, chat_id: &str) -> Vec<Arc<FacadeConnection>> {
-        self.connections
-            .iter()
-            .filter(|entry| entry.value().is_attached(chat_id))
-            .map(|entry| Arc::clone(entry.value()))
-            .collect()
+/// Fold everything a `session/resume` buffered while its snapshot was in
+/// flight into the freshly seeded `stream`: the latest revision as a diff
+/// against the seed, then the raw frames in arrival order behind it, so a
+/// gate raise still cannot precede the tool call it belongs to.
+fn drain_into(stream: &mut SessionStream, buffered: SessionSlot) -> Vec<ThrottledFrame> {
+    let SessionSlot::AwaitingSeed { latest, raws } = buffered else {
+        return Vec::new();
+    };
+    let now = now_ms();
+    let mut frames = latest
+        .map(|latest| stream.on_revision(&latest, now))
+        .unwrap_or_default();
+    for raw in raws {
+        frames.extend(stream.push_raw(raw, now));
     }
-
-    /// Run `per_stream` against every attached, SEEDED session and send its
-    /// updates — diff and publish inside the same per-connection lock (T5,
-    /// R1.2), so a diff can never be computed under the lock and enqueued
-    /// after it, where a second diff for the same session could interleave
-    /// ahead of it. A session still `AwaitingSeed` (a resume in flight) is
-    /// skipped here, same as an unattached one — only
-    /// [`Self::on_display_revision`] buffers for that state.
-    fn for_each_attached_session(
-        &self,
-        chat_id: &str,
-        mut per_stream: impl FnMut(&mut SessionStream, i64) -> Vec<ThrottledFrame>,
-    ) {
-        let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
-                for frame in per_stream(stream, now) {
-                    connection.send_throttled(chat_id, frame);
-                }
-            }
-        }
-    }
-
-    /// [`ChatSurfaceEvent::DisplayRevision`]'s handler: unlike the other
-    /// event kinds, a connection `AwaitingSeed` for this chat must not be
-    /// skipped — its latest item snapshot is buffered so
-    /// [`Self::reset_session`] can diff it against the seed it is about to
-    /// receive (T5, R2.9), instead of the revision vanishing for a
-    /// reconnecting client.
-    fn on_display_revision(&self, chat_id: &str, items: &[EncodedItem]) {
-        let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            match sessions.get_mut(chat_id) {
-                Some(SessionSlot::Live(stream)) => {
-                    for frame in stream.on_revision(items, now) {
-                        connection.send_throttled(chat_id, frame);
-                    }
-                }
-                Some(SessionSlot::AwaitingSeed { latest }) => {
-                    *latest = Some(items.to_vec());
-                }
-                None => {}
-            }
-        }
-    }
-
-    /// A raw out-of-band notification (a gate raise, queue snapshot,
-    /// transcript clear, compaction phase) for every attached connection —
-    /// through the SAME per-session throttle FIFO content updates ride when
-    /// one exists (R2.11), so it cannot arrive ahead of a still-buffered
-    /// update it depends on. A connection with no `Live` stream for this chat
-    /// (unseeded, or genuinely unattached — `attached_connections` also
-    /// counts `AwaitingSeed`) has no queue to order against, so it is sent
-    /// directly, matching the pre-T6 behavior for that narrow window.
-    fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
-        let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            match sessions.get_mut(chat_id) {
-                Some(SessionSlot::Live(stream)) => {
-                    for frame in stream.push_raw(payload.clone(), now) {
-                        connection.send_throttled(chat_id, frame);
-                    }
-                }
-                _ => connection.send_raw(payload.clone()),
-            }
-        }
-    }
+    frames
 }
 
 fn now_ms() -> i64 {

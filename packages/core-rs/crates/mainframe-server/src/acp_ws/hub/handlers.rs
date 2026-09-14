@@ -1,10 +1,7 @@
 //! The `ChatSurface` sink: `on_chat_surface_event`'s dispatch match and one
-//! handler method per event family, split out of `hub.rs` (todo #350, plan
-//! task 37, R2.13). Pure extraction: every method still routes through
-//! `for_each_attached_session`/`on_display_revision`/`push_raw_to_attached`
-//! in the parent module, so the T5/T6 critical section (send inside the
-//! same `locked_sessions()` guard the diff was computed under) is
-//! byte-identical to before the split — nothing here takes a lock itself.
+//! handler method per event family (todo #350, plan task 37, R2.13). Every
+//! method routes through `fanout.rs`, which owns the T5/T6 critical section
+//! — nothing here takes a lock itself.
 
 use mainframe_acp::gate_request_id;
 use mainframe_chat::chat_surface::{
@@ -18,6 +15,7 @@ use mainframe_types::adapter::{ContextUsage, ControlRequest};
 use tracing::{debug, warn};
 
 use super::FacadeHub;
+use super::fanout::RawFrameKind;
 
 fn stop_reason(reason: TurnStopReason) -> StopReason {
     match reason {
@@ -81,7 +79,7 @@ impl FacadeHub {
         for connection in self.attached_connections(chat_id) {
             connection.register_gate(chat_id, &request);
         }
-        self.push_raw_to_attached(chat_id, payload);
+        self.push_raw_to_attached(chat_id, payload, RawFrameKind::Gate);
     }
 
     pub(super) fn handle_gate_resolved(&self, chat_id: &str, request_id: &str) {
@@ -115,14 +113,14 @@ impl FacadeHub {
     ) {
         let note = mainframe_acp::queue_state_notification(chat_id, refs);
         if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload);
+            self.push_raw_to_attached(chat_id, payload, RawFrameKind::QueueState);
         }
     }
 
     pub(super) fn handle_transcript_cleared(&self, chat_id: &str) {
         let note = mainframe_acp::transcript_cleared_notification(chat_id);
         if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload);
+            self.push_raw_to_attached(chat_id, payload, RawFrameKind::TranscriptCleared);
         }
     }
 
@@ -131,7 +129,7 @@ impl FacadeHub {
     pub(super) fn handle_resync(&self, chat_id: &str) {
         let note = mainframe_acp::resync_notification(chat_id);
         if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload);
+            self.push_raw_to_attached(chat_id, payload, RawFrameKind::Resync);
         }
     }
 
@@ -142,7 +140,7 @@ impl FacadeHub {
         };
         let note = mainframe_acp::compaction_notification(chat_id, wire_phase);
         if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload);
+            self.push_raw_to_attached(chat_id, payload, RawFrameKind::Compaction);
         }
     }
 

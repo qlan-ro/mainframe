@@ -26,12 +26,15 @@ pub struct PendingGate {
 /// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
 /// racing that await has nowhere seeded to diff against yet, so its item
 /// snapshot is buffered — overwritten by any later one, since only the
-/// latest matters — instead of diffed and instead of dropped. `reset_session`
-/// drains it once the stream is seeded.
+/// latest matters — instead of diffed and instead of dropped. Raw
+/// out-of-band frames raised in the same window are buffered too, in arrival
+/// order, or they would reach the client ahead of the replay they predate.
+/// `reset_session` drains both once the stream is seeded.
 pub(super) enum SessionSlot {
     Live(SessionStream),
     AwaitingSeed {
         latest: Option<Vec<mainframe_acp::EncodedItem>>,
+        raws: Vec<String>,
     },
 }
 
@@ -162,9 +165,8 @@ impl FacadeConnection {
         }
     }
 
-    /// A pre-serialized frame, sent unthrottled — the fallback
-    /// [`super::hub::FacadeHub::push_raw_to_attached`] uses when this
-    /// connection has no `Live` stream for the chat to queue behind.
+    /// A pre-serialized frame, sent unthrottled — a spawned `session/prompt`
+    /// reply, which belongs to no session's update FIFO.
     pub fn send_raw(&self, payload: String) {
         self.send_frame(payload);
     }
