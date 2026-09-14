@@ -41,7 +41,9 @@ impl SessionSink for RecordingSink {
     fn on_result(&self, _data: SessionResult) {
         self.push("result");
     }
-    fn on_exit(&self, _code: Option<i32>) {}
+    fn on_exit(&self, code: Option<i32>) {
+        self.push(format!("exit:{code:?}"));
+    }
     fn on_error(&self, error: AdapterError) {
         self.push(format!("error:{error}"));
     }
@@ -156,10 +158,43 @@ async fn a_prompt_sent_on_an_idle_session_replays_at_once() {
     let session = spawned_session(sink.clone()).await;
 
     session
-        .send_message("first".to_string(), Vec::new(), Some("u1".to_string()))
+        .send_message("first".to_string(), Vec::new(), None)
         .await
         .unwrap();
 
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(sink.calls(), ["init:recorded-session", "message", "result"]);
+}
+
+/// A uuid means the daemon already filed a `queuedRef` for this prompt. Replaying
+/// it at once leaves no later `onResult` to retire that ref, so the ack has to
+/// come now — before the turn it belongs to.
+#[tokio::test]
+async fn a_uuid_carrying_prompt_replayed_at_once_is_acked() {
+    let sink = Arc::new(RecordingSink::default());
+    let session = spawned_session(sink.clone()).await;
+
+    session
+        .send_message("first".to_string(), Vec::new(), Some("u1".to_string()))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let calls = sink.calls();
+    let ack = calls.iter().position(|call| call == "queued:u1");
+    let message = calls.iter().position(|call| call == "message");
+    assert!(ack < message, "{calls:?}");
+    assert!(ack.is_some(), "{calls:?}");
+}
+
+/// The daemon's exit sweep is what drops stale queued refs and puts the chat back
+/// to idle; Claude gets it from the dying child, a replay session has to say so.
+#[tokio::test]
+async fn killing_the_session_reports_the_exit_the_daemon_sweeps_on() {
+    let sink = Arc::new(RecordingSink::default());
+    let session = spawned_session(sink.clone()).await;
+
+    session.kill().await.unwrap();
+
+    assert!(sink.calls().contains(&"exit:None".to_string()));
 }

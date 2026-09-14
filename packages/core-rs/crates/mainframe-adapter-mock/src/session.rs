@@ -215,6 +215,14 @@ impl ReplaySession {
         true
     }
 
+    /// Forget the turn and anything parked behind it: a killed session replays
+    /// nothing further, so a later spawn must not ack a uuid from the dead one.
+    pub(crate) fn forget_queue(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.turn_in_flight = false;
+        state.queued.clear();
+    }
+
     /// Drop a queued prompt; `false` when it already started or never existed.
     pub(crate) fn drop_queued_prompt(&self, uuid: &str) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -223,7 +231,7 @@ impl ReplaySession {
         before != state.queued.len()
     }
 
-    fn sink(&self) -> Option<Arc<dyn SessionSink>> {
+    pub(crate) fn sink(&self) -> Option<Arc<dyn SessionSink>> {
         self.sink.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }

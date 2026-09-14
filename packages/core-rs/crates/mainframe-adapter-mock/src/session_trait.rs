@@ -63,6 +63,15 @@ impl AdapterSession for ReplaySession {
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
             self.spawned.store(false, Ordering::SeqCst);
+            self.forget_queue();
+            // A killed CLI reports its exit, and that report is what runs the
+            // daemon's sweep: queued refs dropped, process state back to idle.
+            // Claude gets it from the dying child's waiter; a replay session has
+            // no process, so it says so itself — otherwise a chat restarted by
+            // the clear-context path still looks busy and strands every ref.
+            if let Some(sink) = self.sink() {
+                sink.on_exit(None);
+            }
             Ok(())
         })
     }
@@ -78,10 +87,15 @@ impl AdapterSession for ReplaySession {
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            if let Some(uuid) = uuid
-                && self.queue_prompt(uuid)
-            {
-                return Ok(());
+            if let Some(uuid) = uuid {
+                if self.queue_prompt(uuid.clone()) {
+                    return Ok(());
+                }
+                // The daemon filed a queuedRef for this prompt before it knew the
+                // replay would start at once; nothing later would retire it.
+                if let Some(sink) = self.sink() {
+                    sink.on_queued_processed(&uuid);
+                }
             }
             self.advance("sendMessage").await;
             Ok(())
