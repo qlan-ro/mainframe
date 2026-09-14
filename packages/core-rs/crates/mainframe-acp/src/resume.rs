@@ -83,59 +83,24 @@ pub async fn dispatch_resume(
     request: JsonRpcRequest,
     port: &dyn ResumePort,
 ) -> (JsonRpcResponse, ResumeReplay) {
-    let id = request.id;
-    let empty = ResumeReplay {
-        updates: Vec::new(),
-        pending_permission_request: None,
-        pending_gate: None,
-        items: Vec::new(),
-    };
-    let Some(params) = request.params else {
-        return (
-            rpc::error_response(id, rpc::invalid_params("session/resume requires params")),
-            empty,
-        );
-    };
-    let resume: ResumeSessionRequest = match serde_json::from_value(params) {
-        Ok(r) => r,
-        Err(err) => {
-            return (
-                rpc::error_response(id, rpc::invalid_params(&err.to_string())),
-                empty,
-            );
-        }
+    let id = request.id.clone();
+    let resume = match parse_resume_params(request) {
+        Ok(resume) => resume,
+        Err(response) => return (response, empty_replay()),
     };
 
     let (messages, pending) = port.resume_snapshot(&resume.session_id).await;
     let items = encoder::encode(&messages);
     let resolved = resolve_cursor(&items, resume.replay_from.as_ref());
     let (mut updates, full_replay) = replay(&items, resolved);
-    updates.push(SessionUpdate::StateUpdate(
-        if port.is_running(&resume.session_id) {
-            WireSessionState::Running
-        } else {
-            WireSessionState::Idle(IdleStateUpdate {
-                stop_reason: None,
-                meta: None,
-            })
-        },
-    ));
+    updates.push(turn_state_update(port.is_running(&resume.session_id)));
 
-    let pending_permission_request = pending.as_ref().map(|request| {
-        gates::build_request(
-            &resume.session_id,
-            gates::gate_request_id(&request.request_id),
-            request,
-        )
-    });
-
-    let response = ResumeSessionResponse {
-        config_options: None,
-        meta: Some(resume_meta(items.len(), full_replay)),
-    };
-    let result = serde_json::to_value(response).unwrap_or(Value::Null);
+    let pending_permission_request = pending
+        .as_ref()
+        .map(|request| build_pending_permission_request(&resume.session_id, request));
+    let response = success_response(id, items.len(), full_replay);
     (
-        rpc::success_response(id, result),
+        response,
         ResumeReplay {
             updates,
             pending_permission_request,
@@ -143,6 +108,61 @@ pub async fn dispatch_resume(
             items,
         },
     )
+}
+
+fn empty_replay() -> ResumeReplay {
+    ResumeReplay {
+        updates: Vec::new(),
+        pending_permission_request: None,
+        pending_gate: None,
+        items: Vec::new(),
+    }
+}
+
+/// `Err` carries the ready error response — the caller only needs to pair
+/// it with an empty replay, never re-derive `id` or the error shape.
+fn parse_resume_params(request: JsonRpcRequest) -> Result<ResumeSessionRequest, JsonRpcResponse> {
+    let id = request.id;
+    let Some(params) = request.params else {
+        return Err(rpc::error_response(
+            id,
+            rpc::invalid_params("session/resume requires params"),
+        ));
+    };
+    serde_json::from_value(params)
+        .map_err(|err| rpc::error_response(id, rpc::invalid_params(&err.to_string())))
+}
+
+fn turn_state_update(running: bool) -> SessionUpdate {
+    SessionUpdate::StateUpdate(if running {
+        WireSessionState::Running
+    } else {
+        WireSessionState::Idle(IdleStateUpdate {
+            stop_reason: None,
+            meta: None,
+        })
+    })
+}
+
+fn build_pending_permission_request(session_id: &str, request: &ControlRequest) -> JsonRpcRequest {
+    gates::build_request(
+        session_id,
+        gates::gate_request_id(&request.request_id),
+        request,
+    )
+}
+
+fn success_response(
+    id: Option<mainframe_types::acp::jsonrpc::RequestId>,
+    item_count: usize,
+    full_replay: bool,
+) -> JsonRpcResponse {
+    let response = ResumeSessionResponse {
+        config_options: None,
+        meta: Some(resume_meta(item_count, full_replay)),
+    };
+    let result = serde_json::to_value(response).unwrap_or(Value::Null);
+    rpc::success_response(id, result)
 }
 
 /// `itemCount` is the size of the server's full snapshot (not the post-cursor
