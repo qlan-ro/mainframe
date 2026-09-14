@@ -515,8 +515,13 @@ fn dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source() {
     assert!(rec.tool_results().is_empty());
 }
 
+/// R3.17/T35: the original name claimed history-reload parity that this
+/// test never checked — it drives only the live path. That comparison now
+/// has its own test,
+/// `live_vs_history_id_parity.rs::dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`
+/// (T22, fixed); this one is renamed to say what it actually asserts.
 #[test]
-fn dynamic_tool_call_vendor_id_matches_the_item_id_history_reload_would_use() {
+fn dynamic_tool_call_completion_uses_the_item_id_as_its_vendor_id() {
     let rec = Recorder::new();
     let mut state = state();
     item_completed(
