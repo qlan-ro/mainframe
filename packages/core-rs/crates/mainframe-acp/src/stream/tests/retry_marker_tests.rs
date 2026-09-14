@@ -72,11 +72,16 @@ fn a_marker_with_no_carrier_waits_and_turn_end_clears_it() {
     // The turn ends before any upsert appears: the marker must not survive
     // into the next turn's unrelated revision.
     let _ = stream.on_turn_finished(StopReason::EndTurn, 20);
+    // m1 vanishing clears it alongside m2's creation; neither frame may
+    // carry the dropped marker. The clear's own `_meta: null` is the clear
+    // signal, not a payload, so assert on the flattened meta.
     let next_turn = stream.on_revision(&[message("m2", "fresh")], 30);
-    let SessionUpdate::AgentMessage(upsert) = as_update(&next_turn[0]) else {
-        panic!("expected an upsert, got {:?}", next_turn[0]);
-    };
-    assert_eq!(upsert.meta, None);
+    for frame in &next_turn {
+        let SessionUpdate::AgentMessage(upsert) = as_update(frame) else {
+            panic!("expected message upserts, got {frame:?}");
+        };
+        assert_eq!(upsert.meta.clone().flatten(), None);
+    }
 }
 
 #[test]
@@ -98,7 +103,11 @@ fn a_retry_marker_skips_a_clearing_upsert_and_a_tool_call_patch() {
     );
     for frame in &batch {
         match as_update(frame) {
-            SessionUpdate::AgentMessage(upsert) => assert_eq!(upsert.meta, None),
+            // The clear frame's meta is an explicit `null` (the clear
+            // signal); what must be absent is the marker inside it.
+            SessionUpdate::AgentMessage(upsert) => {
+                assert_eq!(upsert.meta.clone().flatten(), None)
+            }
             SessionUpdate::ToolCallUpdate(patch) => assert_eq!(patch.meta, None),
             other => panic!("unexpected frame: {other:?}"),
         }

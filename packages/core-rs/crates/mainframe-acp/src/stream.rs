@@ -123,10 +123,11 @@ impl SessionStream {
     /// meta slot": a `ToolCallUpdate` patch is never a carrier — a tool call
     /// already in flight when `api_error` fired would otherwise claim the
     /// marker ahead of the retry's own content, the "later unrelated one"
-    /// bug this closes. Nor is an empty-content clearing upsert (the vanished-
-    /// item frame `session_state.rs::clear_update` emits) — the client
-    /// deletes that item on receipt (T23), so a marker riding it would just
-    /// vanish. Chunks are pure appends and never carry it. If the batch has
+    /// bug this closes. Nor is any empty-content upsert: the clearing frame
+    /// `session_state.rs::clear_update` emits is deleted by the client on
+    /// receipt, and the one other empty-content shape — a pill whose whole
+    /// payload is its meta — is no place for a retry marker either. Chunks
+    /// are pure appends and never carry it. If the batch has
     /// no carrier the marker stays pending for the next one.
     fn attach_retry_marker(&mut self, updates: &mut [SessionUpdate]) {
         let Some(slot) = updates.iter_mut().find_map(retry_marker_carrier) else {
@@ -153,9 +154,9 @@ fn retry_marker_carrier(update: &mut SessionUpdate) -> Option<&mut Option<Option
     }
 }
 
-/// True for `session_state.rs::clear_update`'s frame: `content` patched to
-/// an explicit empty list, the vanished-item signal T23's `applyUpsert`
-/// deletes the item on.
+/// True for any upsert patching `content` to an explicit empty list: the
+/// vanished-item clear, and the meta-only pills that share its content
+/// shape. Neither carries a retry marker.
 fn is_empty_content_clear(
     content: &Option<Option<Vec<mainframe_types::acp::content::ContentBlock>>>,
 ) -> bool {

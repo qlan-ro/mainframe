@@ -161,11 +161,13 @@ export class AcpItemAccumulator {
     content: ContentBlock[] | null | undefined,
     meta: Record<string, unknown> | null | undefined,
   ): void {
-    // An empty-array upsert forgets the item entirely — mirrors the
-    // daemon's `clear_update` (session_state.rs). An aborted partial stream
-    // must leave no blank bubble above the real answer, so this checks
-    // BEFORE ensureOrdered: an item that was never ordered stays that way.
-    if (content !== undefined && content !== null && content.length === 0) {
+    // The clear frame is empty content AND an explicit `_meta: null` — the
+    // exact shape the daemon's `clear_update` (session_state.rs) sends and
+    // nothing else does. Empty content alone is not enough: a skill-loaded
+    // or compaction pill is a real item whose whole payload is its meta.
+    // Checked BEFORE ensureOrdered so an aborted partial stream that was
+    // never ordered leaves no blank bubble above the real answer.
+    if (content !== undefined && content !== null && content.length === 0 && meta === null) {
       if (this.items.has(id)) {
         this.items.delete(id);
         const index = this.order.indexOf(id);

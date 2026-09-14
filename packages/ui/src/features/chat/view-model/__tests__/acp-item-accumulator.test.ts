@@ -233,27 +233,51 @@ describe('AcpItemAccumulator — ordering and session-level state', () => {
 });
 
 describe('AcpItemAccumulator — empty-content clear (R2.1)', () => {
-  it('an empty content upsert removes the item entirely, leaving no blank bubble', () => {
+  it('a clear frame — empty content with _meta null — removes the item, leaving no blank bubble', () => {
     const acc = new AcpItemAccumulator();
     acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('partial answer')] });
 
-    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [] });
+    // The daemon's `clear_update` is the only sender of this exact shape, and
+    // T16 keeps the retry marker off it — nothing rides a frame the client
+    // deletes on receipt.
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [], _meta: null });
 
     expect(acc.itemsInOrder).toEqual([]);
   });
 
-  it('a clearing upsert carrying only a retry marker still removes the item', () => {
+  it('an empty-content upsert carrying meta is a live item, not a clear (skill-loaded and compaction pills)', () => {
     const acc = new AcpItemAccumulator();
-    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('stale draft')] });
 
     acc.apply({
       sessionUpdate: 'agent_message',
       messageId: 'm1',
       content: [],
-      _meta: { '_mainframe.dev': { retry: true } },
+      _meta: { '_mainframe.dev': { skillLoaded: { skillName: 'brainstorming', path: '/skills/b.md' } } },
     });
 
-    expect(acc.itemsInOrder).toEqual([]);
+    expect(acc.itemsInOrder).toEqual([
+      {
+        kind: 'message',
+        id: 'm1',
+        role: 'agent',
+        content: [],
+        meta: { '_mainframe.dev': { skillLoaded: { skillName: 'brainstorming', path: '/skills/b.md' } } },
+      },
+    ]);
+  });
+
+  it('an empty-content upsert with _meta omitted revises the item rather than clearing it', () => {
+    const acc = new AcpItemAccumulator();
+    acc.apply({
+      sessionUpdate: 'agent_message',
+      messageId: 'm1',
+      content: [textBlock('draft')],
+      _meta: { flag: true },
+    });
+
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [] });
+
+    expect(acc.itemsInOrder).toEqual([{ kind: 'message', id: 'm1', role: 'agent', content: [], meta: { flag: true } }]);
   });
 
   it('an empty-content chunk does NOT clear — only upsert clears (chunks only ever append)', () => {

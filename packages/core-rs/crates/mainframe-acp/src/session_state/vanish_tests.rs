@@ -64,7 +64,10 @@ fn a_vanished_message_item_gets_one_clearing_upsert_then_is_forgotten() {
     };
     assert_eq!(upsert.message_id, "m1");
     assert_eq!(upsert.content, Some(Some(Vec::new())));
-    assert_eq!(upsert.meta, None);
+    // `Some(None)` wires as an explicit `"_meta": null` — what tells the
+    // client this is a clear and not an empty-content item whose payload is
+    // its meta (a skill-loaded or compaction pill).
+    assert_eq!(upsert.meta, Some(None));
 
     // Forgotten: staying absent is quiet, reappearing is a fresh creation.
     assert!(state.diff(&[]).is_empty());
@@ -88,6 +91,7 @@ fn a_vanished_thought_item_clears_as_a_thought() {
         panic!("expected a clearing AgentThought upsert");
     };
     assert_eq!(upsert.content, Some(Some(Vec::new())));
+    assert_eq!(upsert.meta, Some(None));
 }
 
 #[test]
@@ -110,6 +114,7 @@ fn a_retry_replacing_the_partial_item_clears_the_old_and_creates_the_new() {
     };
     assert_eq!(clear.message_id, "msg_A");
     assert_eq!(clear.content, Some(Some(Vec::new())));
+    assert_eq!(clear.meta, Some(None));
     let SessionUpdate::AgentMessage(create) = &updates[1] else {
         panic!("expected the creation second");
     };

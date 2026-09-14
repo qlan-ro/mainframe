@@ -11,8 +11,12 @@ use mainframe_types::acp::update::{MessageUpsert, SessionUpdate};
 use crate::encoder::{EncodedItem, ItemRole};
 
 /// The clearing upsert for a vanished item: content replaced with the empty
-/// list (patch semantics: `Some` = replace), meta untouched. Should the item
-/// later reappear it is a fresh creation — the clear removed it from state.
+/// list and meta explicitly cleared (patch semantics: `Some(Some(_))`
+/// replaces, `Some(None)` wires as `null`). Both halves are the signal —
+/// empty content alone also describes an item whose entire payload is its
+/// meta (a skill-loaded or compaction pill), which the client must render,
+/// not delete. Should the item later reappear it is a fresh creation; the
+/// clear removed it from state.
 pub(super) fn clear_update(item: &EncodedItem) -> SessionUpdate {
     let (id, role, is_thought) = match item {
         EncodedItem::Message { id, role, .. } => (id, *role, false),
@@ -23,7 +27,7 @@ pub(super) fn clear_update(item: &EncodedItem) -> SessionUpdate {
     upsert_variant(role, is_thought)(MessageUpsert {
         message_id: id.clone(),
         content: create_patch(Some(Vec::new())),
-        meta: None,
+        meta: Some(None),
     })
 }
 
