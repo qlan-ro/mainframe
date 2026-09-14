@@ -31,3 +31,6 @@ tempfile = { workspace = true }
 # test-util enables tokio's paused-clock helpers (advance / start_paused) used by
 # the session kill/stop-task and task-events TTL tests.
 tokio = { workspace = true, features = ["test-util"] }
+# T18: shares mainframe-chat/mainframe-server's LogCapture tracing layer
+# instead of duplicating it for the probe-downgrade test.
+mainframe-runtime = { workspace = true, features = ["test-support"] }

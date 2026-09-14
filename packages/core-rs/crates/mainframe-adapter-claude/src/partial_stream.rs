@@ -18,10 +18,12 @@
 //! Decision 7 phases tool-input deltas after text/reasoning.
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::Value;
+use tokio::sync::OnceCell;
+use tracing::warn;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_types::chat::MessageContent;
@@ -214,29 +216,49 @@ fn accumulate_delta(
 }
 
 /// Does `executable` accept `--include-partial-messages`? One `--version`
-/// spawn per executable per daemon lifetime (measured ~60ms), cached because
-/// every session spawn asks. Unknown/unparseable/failed probes gate to
-/// `false` — the flag is an optimization, a failed spawn is an outage.
+/// spawn per executable per daemon lifetime (measured ~60ms) — concurrent
+/// callers for the same executable share the SAME in-flight probe (T18,
+/// R3.20) rather than each spawning their own, via a `OnceCell` that
+/// `get_or_init` only ever runs once. Unknown/unparseable/failed probes gate
+/// to `false` and log a downgrade warning naming the executable — the flag
+/// is an optimization, a failed spawn is an outage, and the downgrade must
+/// be visible in the daemon log, not silent.
 pub async fn supports_partial_messages(executable: &str, resolved_path: &str) -> bool {
-    static CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<OnceCell<bool>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
-    if let Some(hit) = cache
+    let cell = cache
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .get(executable)
-        .copied()
-    {
-        return hit;
-    }
-    let supported = probe_version(executable, resolved_path)
+        .entry(executable.to_string())
+        .or_insert_with(|| Arc::new(OnceCell::new()))
+        .clone();
+    *cell
+        .get_or_init(|| probe_and_log(executable, resolved_path))
         .await
-        .map(|version| version_at_least(&version, PARTIAL_MESSAGES_MIN_VERSION))
-        .unwrap_or(false);
-    cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(executable.to_string(), supported);
-    supported
+}
+
+/// Runs the probe exactly once (called from inside `OnceCell::get_or_init`)
+/// and logs the downgrade reason when the probe fails or reports a version
+/// below the minimum — the two paths that leave partial streaming off.
+async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
+    match probe_version(executable, resolved_path).await {
+        None => {
+            warn!(
+                reason = executable,
+                "claude: --include-partial-messages probe failed or timed out; downgrading to legacy streaming"
+            );
+            false
+        }
+        Some(version) if !version_at_least(&version, PARTIAL_MESSAGES_MIN_VERSION) => {
+            warn!(
+                reason = executable,
+                version,
+                "claude: CLI version below --include-partial-messages minimum; downgrading to legacy streaming"
+            );
+            false
+        }
+        Some(_) => true,
+    }
 }
 
 async fn probe_version(executable: &str, resolved_path: &str) -> Option<String> {
