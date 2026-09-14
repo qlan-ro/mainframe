@@ -289,4 +289,6 @@ fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
 }
 
 #[cfg(test)]
+mod probe_tests;
+#[cfg(test)]
 mod tests;
