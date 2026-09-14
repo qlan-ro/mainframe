@@ -315,7 +315,8 @@ WS1/WS7 for how a tab of each kind is created._
 ## ACP façade (protocol-level)
 
 _Specs: `facade-protocol.spec.ts`, `facade-protocol-streaming.spec.ts`,
-`facade-protocol-partial.spec.ts`, `facade-reconnect-mid-stream.spec.ts`, `stress-matrix.spec.ts`.
+`facade-protocol-partial.spec.ts`, `facade-reconnect-mid-stream.spec.ts`, `facade-queued-prompt.spec.ts`,
+`plan-clear-context.spec.ts`, `stress-matrix.spec.ts`.
 These assert on `/acp/{profile}` wire frames through the raw WS client in
 `helpers/tauri/raw-ws-client.ts` as well as on the DOM — a façade regression can be invisible in
 the transcript and still corrupt a generic ACP client. Rows below are the six scenarios the PR #688
@@ -327,8 +328,8 @@ four marked "gap" are unreachable under `E2E_MODE=mock` for the reasons and unit
 |---|------|-----|---------------|----------------------|---------------|
 | AF1 | Partial stream aborted by a provider retry | P0 | `retry-partial` recording, `mockMaxDelayMs` widened | `chat-assistant-message`; `agent_message` upsert with `content: []` | the overlay item is created then cleared and never mentioned again; the `attempt` marker rides the retried call's content, never the clearing frame; the client deletes an emptied item rather than keeping a blank bubble |
 | AF2 | Reconnect mid-turn | P0 | long-running turn (`reconnect-mid-stream`), `installWsControl` | `chat-thread-running`; `state_update` with `state: "running"` | the resume replay's state transition must be `running`, not `idle`; the tail keeps growing after the reconnect and every chunk lands exactly once |
-| AF3 | Plan-mode clear context | P0 | plan gate approved with `chat-plan-clear-context` | `_mainframe.dev/transcript_cleared` | **gap** — `mock-cli` resolves no plan-mode handler, so the wipe never happens (COVERAGE-GAPS §5.1) |
-| AF4 | Prompt queued behind a running turn | P0 | a second prompt while the first turn runs | `_mainframe.dev/queue_state` refs | **gap** — `mock-cli` reports `supports_replay_ack() == false`, so nothing is ever enrolled in `queuedRefs` and every snapshot is `refs: []` (COVERAGE-GAPS §5.2) |
+| AF3 | Plan-mode clear context | P0 | plan gate approved with `chat-plan-clear-context` | `chat-plan-clear-context`, `chat-plan-approve`; `_mainframe.dev/transcript_cleared` | the wipe is announced on the wire and the post-wipe replay holds none of the pre-approval turn; a later send must not resurrect it. The restart's auto-sent "Implement the following plan:" prompt has no user bubble under mock — see the `TODO(bug)` in `plan-clear-context.spec.ts` |
+| AF4 | Prompt queued behind a running turn | P0 | a second prompt while the first turn runs (recording parks turn 1 on its `onResult`) | `chat-user-message`; `_mainframe.dev/queue_state` refs | D1: a queued turn leaves the transcript entirely and renders from the snapshot, so the dequeue is a plain create at the tail — never a create above the answer of the turn it waited on; the closing snapshot is `refs: []` |
 | AF5 | Codex "Always allow" | P1 | Codex gate answered allow-always | `chat-permission-option-allow-always` | **gap** — the session-scoped accept lives in the Codex approval handler, which mock mode never runs (COVERAGE-GAPS §5.3) |
 | AF6 | Daemon switch routes the next prompt | P1 | two daemons | `daemon-footer-trigger` | **gap** — `fixtures/daemon.ts` runs one daemon and the bundle bakes its port (COVERAGE-GAPS §5.4) |
 
