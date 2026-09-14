@@ -128,7 +128,9 @@ test.describe('§facade-protocol handshake', () => {
   // ── criterion 11, daemon half: heartbeat arrives at the advertised cadence ──
 
   test('criterion 11 (daemon half): a heartbeat notification arrives after connect', async () => {
-    test.setTimeout(30_000);
+    // Above the 35s budget below — a backstop under an in-test wait kills the test
+    // first and reports "page closed" instead of the real failure.
+    test.setTimeout(45_000);
     const ws = await openSocket(`/acp/${PROFILE}`);
     sendJson(ws, initializeRequest(1));
     const initReply = (await nextJsonMessage(ws)) as {
@@ -140,7 +142,11 @@ test.describe('§facade-protocol handshake', () => {
     // Production cadence (15s) — no test-only knob exists on the spawned daemon binary
     // (`TestServerOptions.facade_heartbeat_interval_ms` is an in-process Rust test seam only).
     // One real wait here is the honest e2e proof; keeping it to a single heartbeat bounds cost.
-    const heartbeat = (await nextJsonMessage(ws, (advertisedMs ?? 15_000) + 5_000)) as {
+    // Budget is TWO intervals plus slack: at one interval + 5s the test had only 5s of room
+    // over a 15s cadence and flaked on a loaded run; two intervals still fails a daemon that
+    // never ticks, which is the behavior under test.
+    const budgetMs = 2 * (advertisedMs ?? 15_000) + 5_000;
+    const heartbeat = (await nextJsonMessage(ws, budgetMs)) as {
       method?: string;
       params?: { sequence?: number };
     };
