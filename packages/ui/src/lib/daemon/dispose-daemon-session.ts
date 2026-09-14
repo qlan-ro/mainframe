@@ -6,6 +6,7 @@ import { useLayoutStore } from '../../store/layout';
 import { tabIdsInRun } from '../../store/run-pane';
 import { resetAdapters } from '../../store/adapters';
 import { invalidateSeedFetches } from '../../store/adapters-seed';
+import { resetAcpFacadeClients } from './acp-clients';
 
 /**
  * Bounded teardown of out-of-React singletons and live OS handles.
@@ -25,6 +26,16 @@ export function disposeDaemonSession(): void {
     chatControllerRegistry.disposeAll();
   } catch (err) {
     console.warn('[disposeDaemonSession] chatControllerRegistry.disposeAll failed', err);
+  }
+
+  try {
+    // The shared per-(daemon, adapter) facade registry is keyed on the
+    // active daemon, but a prompt sent mid-switch must never land on A's
+    // socket — hard-clear it rather than waiting for the next resolve to
+    // key past it.
+    resetAcpFacadeClients();
+  } catch (err) {
+    console.warn('[disposeDaemonSession] resetAcpFacadeClients failed', err);
   }
 
   try {
