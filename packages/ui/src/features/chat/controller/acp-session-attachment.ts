@@ -75,10 +75,19 @@ export class AcpSessionAttachment {
     this.hasAttached = true;
   }
 
-  /** Full re-replay of the current transcript (e.g. after a server-side wipe). */
+  /**
+   * Full re-replay of the current transcript (e.g. after a server-side
+   * wipe). Pre-resets before the round-trip AND bypasses the empty-refresh
+   * guard on the way back: the pre-reset alone would be defeated by a live
+   * update landing between the reset and the resume response, which would
+   * repopulate the accumulator and re-arm the guard just in time to refuse
+   * the wipe it's finishing. `bypassGuard` makes a server-initiated wipe
+   * deterministic regardless of that race (R2.2 / R1.3).
+   */
   async reattach(): Promise<void> {
     this.host.resetSettledCursor();
-    await this.resume({ type: 'start' });
+    this.host.resetAccumulator();
+    await this.resume({ type: 'start' }, { bypassGuard: true });
   }
 
   async resumeFromGap(): Promise<void> {
@@ -140,7 +149,7 @@ export class AcpSessionAttachment {
     this.unsubscribe.length = 0;
   }
 
-  private async resume(cursor: ReplayCursor): Promise<void> {
+  private async resume(cursor: ReplayCursor, opts: { bypassGuard?: boolean } = {}): Promise<void> {
     const client = this.requireClient();
     const response = await client.resume(this.host.getChatId(), '', cursor);
     const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
@@ -151,8 +160,9 @@ export class AcpSessionAttachment {
     // legacy `refusesEmptyRefresh` guard: "empty" from the daemon can mean
     // "no history session for this chat yet", never trust it to blank a
     // populated thread (the first attach is never refused, so a genuinely
-    // empty thread still renders as one).
-    if (itemCount === 0 && this.hasAttached && this.host.hasAccumulatedItems()) {
+    // empty thread still renders as one). `reattach()` bypasses this: see
+    // its doc comment for why a server-initiated wipe must win regardless.
+    if (!opts.bypassGuard && itemCount === 0 && this.hasAttached && this.host.hasAccumulatedItems()) {
       console.warn(`[acp-session] refused an empty full replay for ${this.host.getChatId()}`);
       this.host.dispatch({ type: 'history.refresh.refused' });
       return;

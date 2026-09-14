@@ -203,7 +203,7 @@ describe('AcpSessionPlane — usage_update → context.usage', () => {
 });
 
 describe('AcpSessionPlane — empty full-replay refusal', () => {
-  it('refuses an empty full replay when the transcript already holds items, and leaves them alone', async () => {
+  it('a reattach wipes the transcript even when the daemon reports itemCount 0 — a server-initiated wipe bypasses the guard (R2.2, T24)', async () => {
     const client = makeFakeAcpClient();
     const host = makeHost();
     const plane = new AcpSessionPlane(host);
@@ -218,15 +218,16 @@ describe('AcpSessionPlane — empty full-replay refusal', () => {
     client.nextResumeMeta = { itemCount: 0, fullReplay: true };
     await plane.reattach();
 
-    expect(eventsOf(host)).toContainEqual({ type: 'history.refresh.refused' });
-    // The retained item still coalesces on a further chunk rather than starting fresh.
+    expect(eventsOf(host)).not.toContainEqual({ type: 'history.refresh.refused' });
+    // The old item is gone — a fresh chunk starts a brand-new item rather
+    // than coalescing into the pre-wipe one (plan-mode clear-context stays wiped).
     client.emitUpdate(CHAT_ID, {
       sessionUpdate: 'agent_message_chunk',
       messageId: 'm1',
-      content: { type: 'text', text: ' there' },
+      content: { type: 'text', text: 'fresh start' },
     });
     const lastUpdate = lastOf(eventsOf(host).filter((e) => e.type === 'transcript.updated'));
-    expect(lastUpdate).toMatchObject({ messages: [{ content: [{ type: 'text', text: 'hi there' }] }] });
+    expect(lastUpdate).toMatchObject({ messages: [{ content: [{ type: 'text', text: 'fresh start' }] }] });
   });
 
   it('does not refuse the first attach even when the daemon reports itemCount 0', async () => {
