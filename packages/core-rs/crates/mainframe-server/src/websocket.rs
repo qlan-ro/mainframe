@@ -682,7 +682,7 @@ mod tests {
         );
     }
 
-    /// R2.7: `client_ip`'s first-hop rule trusted a FORGED leftmost
+    /// R2.7: the old WS first-hop rule trusted a FORGED leftmost
     /// `x-forwarded-for` hop, so a client could claim loopback (and skip auth
     /// entirely) by prepending `127.0.0.1` ahead of its real address.
     /// `trust_proxy_client_ip` walks the chain from the right instead, so the

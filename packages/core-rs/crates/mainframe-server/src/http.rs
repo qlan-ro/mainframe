@@ -186,7 +186,8 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
 // (#424) mounts chat_recovery::router() after worktree. Body limit via
 // tower-http RequestBodyLimitLayer(30mb). Auth is a route_layer over the HTTP
 // routes only; the WS `/` route self-authenticates. `trust proxy = loopback` is
-// realized by net::client_ip (peer from ConnectInfo). TODO(port): the global
+// realized by net::trust_proxy_client_ip (peer from ConnectInfo), which the WS
+// upgrade now shares with HTTP. TODO(port): the global
 // thrown-error→500 envelope has no Rust analogue (handlers return Responses;
 // unexpected errors map via async_err::internal_error); 404 is axum's default.
 // Task 5.5 mounted the remaining surfaces: launch/tunnel/lsp route modules behind
