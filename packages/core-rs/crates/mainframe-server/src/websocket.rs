@@ -39,7 +39,7 @@ use tokio::sync::{broadcast, mpsc};
 use crate::ctx::AppCtx;
 use crate::db::Db;
 use crate::middleware::auth::validate_device_token;
-use crate::net::{client_ip, is_localhost};
+use crate::net::{is_localhost, trust_proxy_client_ip};
 use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relative};
 use crate::ws_schemas::parse_client_event;
 
@@ -85,7 +85,7 @@ pub(crate) async fn authenticate_ws_upgrade(
     token: Option<String>,
 ) -> bool {
     let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let ip = client_ip(&peer.ip().to_string(), forwarded);
+    let ip = trust_proxy_client_ip(&peer.ip().to_string(), forwarded);
     let secret = ctx.auth_secret.clone();
 
     if !is_ws_auth_required(&ip, secret.as_deref()) {
@@ -679,6 +679,28 @@ mod tests {
         assert_eq!(
             value["quota"]["session"]["usedPercent"],
             serde_json::json!(55.0)
+        );
+    }
+
+    /// R2.7: `client_ip`'s first-hop rule trusted a FORGED leftmost
+    /// `x-forwarded-for` hop, so a client could claim loopback (and skip auth
+    /// entirely) by prepending `127.0.0.1` ahead of its real address.
+    /// `trust_proxy_client_ip` walks the chain from the right instead, so the
+    /// real appended hop wins and a token is required.
+    #[tokio::test]
+    async fn a_forged_leftmost_forwarded_for_cannot_claim_loopback() {
+        let mut ctx = Arc::try_unwrap(AppCtx::test_ctx()).unwrap_or_else(|_| unreachable!());
+        ctx.auth_secret = Some("secret".to_string());
+        let ctx = Arc::new(ctx);
+
+        let peer: SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "127.0.0.1, 203.0.113.7".parse().unwrap());
+
+        let authed = authenticate_ws_upgrade(&ctx, &peer, &headers, None).await;
+        assert!(
+            !authed,
+            "a forged leftmost 127.0.0.1 must not exempt the real client from auth"
         );
     }
 }
