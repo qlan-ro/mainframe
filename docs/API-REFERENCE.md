@@ -774,6 +774,7 @@ queued-turn metadata).
 | `session/prompt` | client → daemon | Send a turn; the request's `_meta["_mainframe.dev"]` may carry `PromptSendMeta` (`attachmentIds` from the upload REST route, plus the slash-`command` invocation); response is acceptance (immediate or queued via `_meta`), never turn completion — no `queue.*` frame family. |
 | `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
 | `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}` or `{type:"item",itemId}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor falls back to a full replay adding `fullReplay: true`. |
+| `_mainframe.dev/session_detach` | client → daemon (notification) | `{sessionId}` — a connection that follows the active thread (D2) drops the session's stream and any pending gates on itself when the client navigates away; a no-op if the connection was never attached. Switching back re-attaches through the normal `session/prompt`/`session/resume` attach-on-send path. |
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); the request's `_meta["_mainframe.dev"].controlRequest` carries the raw `ControlRequest` (input, suggestions, decision reason) the rich desktop gate cards render. A plain `{outcome:"selected", optionId}` answer is always valid; a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
 | `_mainframe.dev/heartbeat` | daemon → client (notification) | Periodic `{sequence}` at `heartbeatIntervalMs`; a sequence gap larger than one is the client's signal to call `session/resume` instead of heuristically refetching (the sync contract this protocol formalizes). |
@@ -781,6 +782,17 @@ queued-turn metadata).
 | `_mainframe.dev/queue_state` | daemon → client (notification) | `{sessionId, refs: QueuedMessageRef[]}` — the session's FULL queued-prompt snapshot, pushed on every queue change (enqueue, dequeue, cancel, clear) and as the last frame of every `session/resume` replay (even when empty, so a reconnect evicts stale queued turns). A snapshot, never a delta. Queued cancel/edit stay REST (`/queued/{messageId}`). |
 | `_mainframe.dev/compaction` | daemon → client (notification) | `{sessionId, phase: "started" \| "done"}` — live compaction progress; the durable transcript marker is `ItemMeta.isCompacted`. |
 | `_mainframe.dev/transcript_cleared` | daemon → client (notification) | `{sessionId}` — the server wiped the session's transcript (plan-mode clear-context); the client re-resumes to converge. |
+| `_mainframe.dev/resync` | daemon → client (notification) | `{sessionId}` — the chat's `MessageCache` evicted messages past its cap (2000); an attached client's local accumulator has silently diverged, so it re-resumes rather than trusting the next delta (spec Decision 34). Rides the same throttle FIFO content updates ride, so it cannot overtake a still-buffered update it depends on. |
+
+**Reply ordering.** `session/prompt` is the one method dispatched off the
+socket-loop task (a cold-chat adapter spawn can take seconds, and inlining
+it would stall every other frame on the connection); its JSON-RPC reply may
+therefore trail a `session/update` carrying that same turn's
+`state_update: running`, unlike every other method's reply, which the
+socket loop writes inline before continuing. A client must not infer run
+state from reply ordering — `sendPrompt` reads only the reply's
+`_meta["_mainframe.dev"].position` (queued vs. immediate), and run state
+comes from the `state_update` stream itself.
 
 **Message content grammar.** A message/thought item's content is an ordered
 `ContentBlock` list; the vendored variants are `text` and `image` (base64
