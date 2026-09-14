@@ -167,6 +167,9 @@ impl ApprovalHandler {
             input,
             suggestions: Vec::new(),
             decision_reason: None,
+            // Wired in T19: Codex's own accept/acceptForSession/decline and
+            // question choices, in place of Claude's fixed vocabulary.
+            options: None,
         };
 
         self.pending

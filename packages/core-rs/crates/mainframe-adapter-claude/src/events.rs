@@ -281,6 +281,7 @@ fn handle_control_request_event(event: &Value, sink: &dyn SessionSink) {
                 .get("decision_reason")
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            options: None,
         };
         sink.on_permission(perm_request);
     } else {

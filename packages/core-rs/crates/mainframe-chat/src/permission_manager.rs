@@ -216,6 +216,7 @@ impl PermissionManager {
                                     input: input.clone(),
                                     suggestions: Vec::new(),
                                     decision_reason: None,
+                                    options: None,
                                 }]),
                             );
                         }

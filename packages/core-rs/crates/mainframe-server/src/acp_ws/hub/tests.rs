@@ -40,6 +40,7 @@ fn control_request(request_id: &str) -> ControlRequest {
         input: Default::default(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 

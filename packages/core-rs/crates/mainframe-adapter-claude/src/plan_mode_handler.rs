@@ -241,6 +241,7 @@ mod tests {
             message: None,
             execution_mode: Some(ExecutionMode::AcceptEdits),
             clear_context: None,
+            scope: None,
         }
     }
 

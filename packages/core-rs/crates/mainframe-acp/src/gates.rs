@@ -12,6 +12,8 @@
 //! `mainframe-server`'s socket-loop concern, out of this crate's scope per
 //! the module doc in `lib.rs`).
 
+use std::collections::HashMap;
+
 use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RichPermissionAnswer};
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use mainframe_types::acp::permission::{
@@ -19,37 +21,76 @@ use mainframe_types::acp::permission::{
     RequestPermissionResponse, RequestPermissionSubject, ToolCallPermissionSubject,
 };
 use mainframe_types::acp::tool_call::ToolCallUpdate;
-use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
+use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse, PermissionScope};
 
 pub const OPTION_ALLOW_ONCE: &str = "allow-once";
 pub const OPTION_ALLOW_ALWAYS: &str = "allow-always";
 pub const OPTION_REJECT_ONCE: &str = "reject-once";
 
-/// The client must not infer a permission's effect from an option's `kind`/
-/// `name` (spec: "the daemon/adapter owns the effect") — this fixed set is
-/// the only vocabulary `parse_answer` recognizes for a plain answer; anything
-/// else falls through to [`GateAnswerError::UnknownOption`].
-fn offered_options() -> Vec<PermissionOption> {
-    vec![
-        PermissionOption {
-            option_id: OPTION_ALLOW_ONCE.into(),
-            name: "Allow once".into(),
-            kind: PermissionOptionKind::AllowOnce,
-            meta: None,
-        },
-        PermissionOption {
+/// The offered option list for `request`: the adapter's own (Codex) when it
+/// supplies one, Claude's derivation otherwise (plan task 7, D4). The client
+/// must not infer a permission's effect from an option's `kind`/`name`
+/// (spec: "the daemon/adapter owns the effect") — an id outside this list
+/// falls through to [`GateAnswerError::UnknownOption`].
+fn offered_options(request: &ControlRequest) -> Vec<PermissionOption> {
+    request
+        .options
+        .clone()
+        .unwrap_or_else(|| claude_default_options(request))
+}
+
+/// Claude offers allow-once and reject-once always, plus allow-always only
+/// when the CLI sent rule suggestions to save it against (D4; matches
+/// `origin/main`'s `PermissionGate.tsx` — "Always allow" only when
+/// `request.suggestions.length > 0`) — there is nothing to make "always"
+/// durable otherwise.
+fn claude_default_options(request: &ControlRequest) -> Vec<PermissionOption> {
+    let mut options = vec![PermissionOption {
+        option_id: OPTION_ALLOW_ONCE.into(),
+        name: "Allow once".into(),
+        kind: PermissionOptionKind::AllowOnce,
+        meta: None,
+    }];
+    if !request.suggestions.is_empty() {
+        options.push(PermissionOption {
             option_id: OPTION_ALLOW_ALWAYS.into(),
             name: "Always allow".into(),
             kind: PermissionOptionKind::AllowAlways,
             meta: None,
-        },
-        PermissionOption {
-            option_id: OPTION_REJECT_ONCE.into(),
-            name: "Reject".into(),
-            kind: PermissionOptionKind::RejectOnce,
-            meta: None,
-        },
-    ]
+        });
+    }
+    options.push(PermissionOption {
+        option_id: OPTION_REJECT_ONCE.into(),
+        name: "Reject".into(),
+        kind: PermissionOptionKind::RejectOnce,
+        meta: None,
+    });
+    options
+}
+
+/// An `allow`-family kind grants; a `reject`-family kind denies — the only
+/// two effects a plain `{optionId}` answer can carry (spec: gate resolution
+/// is binary at the wire, richer intents ride `_mainframe.dev`).
+fn behavior_for(kind: PermissionOptionKind) -> ControlBehavior {
+    match kind {
+        PermissionOptionKind::AllowOnce | PermissionOptionKind::AllowAlways => {
+            ControlBehavior::Allow
+        }
+        PermissionOptionKind::RejectOnce | PermissionOptionKind::RejectAlways => {
+            ControlBehavior::Deny
+        }
+    }
+}
+
+/// `PermissionOption.meta["_mainframe.dev"].updatedInput` (plan decision 2):
+/// how an adapter-supplied option (a Codex question choice) carries its own
+/// answer payload without the client inferring anything from the option id.
+fn updated_input_from_option(
+    option: &PermissionOption,
+) -> Option<HashMap<String, serde_json::Value>> {
+    let namespace = option.meta.as_ref()?.get(MAINFRAME_META_NAMESPACE)?;
+    let updated = namespace.get("updatedInput")?;
+    serde_json::from_value(updated.clone()).ok()
 }
 
 fn subject_for(request: &ControlRequest) -> RequestPermissionSubject {
@@ -85,7 +126,7 @@ pub fn build_request(session_id: &str, id: RequestId, request: &ControlRequest) 
         title: format!("Allow {} to run?", request.tool_name),
         description: None,
         subject: Some(subject_for(request)),
-        options: offered_options(),
+        options: offered_options(request),
         // The full `ControlRequest` (input, suggestions, decision reason) —
         // what the rich gate cards render and what `rich_answer` below
         // validates a rich reply against. Generic ACP clients ignore it and
@@ -132,22 +173,25 @@ pub fn parse_answer(
         return Ok(rich);
     }
 
-    let behavior = match option_id.as_str() {
-        OPTION_ALLOW_ONCE | OPTION_ALLOW_ALWAYS => ControlBehavior::Allow,
-        OPTION_REJECT_ONCE => ControlBehavior::Deny,
-        other => return Err(GateAnswerError::UnknownOption(other.to_string())),
-    };
+    let options = offered_options(request);
+    let selected = options
+        .iter()
+        .find(|option| &option.option_id == option_id)
+        .ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
+    let scope = matches!(selected.kind, PermissionOptionKind::AllowAlways)
+        .then_some(PermissionScope::Session);
 
     Ok(ControlResponse {
         request_id: request.request_id.clone(),
         tool_use_id: request.tool_use_id.clone(),
         tool_name: Some(request.tool_name.clone()),
-        behavior,
-        updated_input: None,
+        behavior: behavior_for(selected.kind),
+        updated_input: updated_input_from_option(selected),
         updated_permissions: None,
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope,
     })
 }
 

@@ -10,6 +10,7 @@ fn request(request_id: &str) -> ControlRequest {
         input: std::collections::HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 

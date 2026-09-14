@@ -65,6 +65,7 @@ fn request(request_id: &str) -> ControlRequest {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 
@@ -79,6 +80,7 @@ fn allow(request_id: &str) -> ControlResponse {
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope: None,
     }
 }
 

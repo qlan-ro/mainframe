@@ -32,6 +32,7 @@ fn control_request() -> ControlRequest {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 
@@ -148,5 +149,94 @@ fn rich_answer_with_a_mismatched_request_id_falls_back_to_the_plain_mapping() {
     assert_eq!(
         control.request_id, "req_001",
         "the REAL request's id, not the mismatched rich answer's"
+    );
+}
+
+fn control_request_with_suggestions(
+    suggestions: Vec<mainframe_types::adapter::ControlUpdate>,
+) -> ControlRequest {
+    ControlRequest {
+        suggestions,
+        ..control_request()
+    }
+}
+
+#[test]
+fn claude_hides_allow_always_without_suggestions() {
+    let no_suggestions = build_request(
+        "chat_1",
+        RequestId::Str("gate-req_001".into()),
+        &control_request(),
+    );
+    let ids: Vec<String> = no_suggestions.params.unwrap()["options"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["optionId"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec!["allow-once", "reject-once"]);
+
+    let with_suggestion = build_request(
+        "chat_1",
+        RequestId::Str("gate-req_001".into()),
+        &control_request_with_suggestions(vec![mainframe_types::adapter::ControlUpdate::SetMode {
+            mode: mainframe_types::settings::PermissionMode::AcceptEdits,
+            destination: mainframe_types::adapter::ControlDestination::Session,
+        }]),
+    );
+    let ids: Vec<String> = with_suggestion.params.unwrap()["options"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["optionId"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec!["allow-once", "allow-always", "reject-once"]);
+}
+
+#[test]
+fn an_adapter_supplied_option_carries_its_own_updated_input() {
+    let request = ControlRequest {
+        options: Some(vec![PermissionOption {
+            option_id: "q1-yes".into(),
+            name: "Yes".into(),
+            kind: PermissionOptionKind::AllowOnce,
+            meta: Some(json!({
+                mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE: {
+                    "updatedInput": { "answers": ["Yes"] }
+                }
+            })),
+        }]),
+        ..control_request()
+    };
+    let response = RequestPermissionResponse {
+        outcome: RequestPermissionOutcome::Selected {
+            option_id: "q1-yes".to_string(),
+        },
+        meta: None,
+    };
+    let control = parse_answer(&request, response).unwrap();
+    assert_eq!(
+        control.updated_input.unwrap().get("answers").unwrap(),
+        &json!(["Yes"])
+    );
+}
+
+#[test]
+fn allow_always_sets_session_scope() {
+    let request =
+        control_request_with_suggestions(vec![mainframe_types::adapter::ControlUpdate::SetMode {
+            mode: mainframe_types::settings::PermissionMode::AcceptEdits,
+            destination: mainframe_types::adapter::ControlDestination::Session,
+        }]);
+    let response = RequestPermissionResponse {
+        outcome: RequestPermissionOutcome::Selected {
+            option_id: OPTION_ALLOW_ALWAYS.to_string(),
+        },
+        meta: None,
+    };
+    let control = parse_answer(&request, response).unwrap();
+    assert_eq!(
+        control.scope,
+        Some(mainframe_types::adapter::PermissionScope::Session)
     );
 }

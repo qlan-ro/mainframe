@@ -126,6 +126,7 @@ async fn replays_sink_calls_and_ignores_a_late_permission_response() {
             message: None,
             execution_mode: None,
             clear_context: None,
+            scope: None,
         })
         .await
         .unwrap();

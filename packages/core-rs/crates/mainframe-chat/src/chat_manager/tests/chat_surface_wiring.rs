@@ -164,6 +164,7 @@ async fn interrupt_ends_the_turn_cancelled_and_leaves_no_answerable_gate() {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     });
     assert!(
         surface
@@ -217,6 +218,7 @@ fn allow_response(request_id: &str, tool_use_id: &str) -> ControlResponse {
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope: None,
     }
 }
 
@@ -228,6 +230,7 @@ fn control_request(request_id: &str) -> ControlRequest {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 

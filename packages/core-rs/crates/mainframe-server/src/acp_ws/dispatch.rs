@@ -188,6 +188,7 @@ fn deny_response(request: &ControlRequest) -> ControlResponse {
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope: None,
     }
 }
 

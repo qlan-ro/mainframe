@@ -198,6 +198,7 @@ fn on_permission_notifies_gate_raised_then_cancel_notifies_gate_resolved() {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     };
     sink.on_permission(request.clone());
     sink.on_permission_cancelled("req_1");
