@@ -27,33 +27,11 @@ use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, 
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
+use partial_overlay::{PartialOverlay, PartialOverlays};
+
+mod partial_overlay;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
-
-/// The in-flight assistant message's accumulated partial content
-/// (`SessionSink::on_message_partial`), keyed by chat. Merged into the
-/// display computation as a synthetic tail `ChatMessage` — under the API
-/// message id, so the item keeps its id when the completed message replaces
-/// it — and dropped the moment a completed block, retry, result, or exit
-/// supersedes it. Never enters the `MessageCache`.
-pub type PartialOverlays = Arc<Mutex<HashMap<String, PartialOverlay>>>;
-
-#[derive(Debug, Clone)]
-pub struct PartialOverlay {
-    pub message_id: String,
-    pub content: Vec<MessageContent>,
-}
-
-fn overlay_message(chat_id: &str, overlay: &PartialOverlay) -> ChatMessage {
-    ChatMessage {
-        id: overlay.message_id.clone(),
-        chat_id: chat_id.to_string(),
-        r#type: ChatMessageType::Assistant,
-        content: overlay.content.clone(),
-        timestamp: now_iso8601(),
-        metadata: None,
-    }
-}
 
 /// A fire-and-forget push notification (`pushService.sendPush`).
 #[derive(Debug, Clone, PartialEq)]
@@ -226,7 +204,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         Self {
             messages,
             permissions,
-            partial_overlays: Arc::new(Mutex::new(HashMap::new())),
+            partial_overlays: PartialOverlays::new(),
             deps,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
             chat_surface: Arc::new(OnceLock::new()),
@@ -287,13 +265,10 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         );
     }
 
-    /// Remove the chat's partial-overlay entry (call on chat end/archive) —
-    /// nothing else clears this per-chat bookkeeping.
+    /// Remove the chat's partial-overlay entries, every session's (call on
+    /// chat end/archive) — nothing else clears this per-chat bookkeeping.
     pub fn clear_display_state(&self, chat_id: &str) {
-        self.partial_overlays
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+        self.partial_overlays.remove_chat(chat_id);
     }
 }
 
@@ -314,11 +289,7 @@ fn emit_display_for<D: EventHandlerDeps>(
     // groups into the current assistant turn (or opens it, under the API
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
-    let overlay = partial_overlays
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(chat_id)
-        .map(|o| overlay_message(chat_id, o));
+    let overlay = partial_overlays.message_for(chat_id);
     let with_overlay: Vec<ChatMessage>;
     let raw = match overlay {
         Some(synthetic) => {
@@ -381,14 +352,19 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         );
     }
 
-    /// Remove the chat's partial overlay; reports whether one was present so
-    /// abort paths (retry, result, exit) only re-emit when content vanishes.
+    /// This sink's own key into [`PartialOverlays`] — `built_for_session_id`
+    /// when known, matching the session-id guard `on_exit` already applies.
+    fn session_key(&self) -> &str {
+        self.built_for_session_id.as_deref().unwrap_or_default()
+    }
+
+    /// Remove THIS session's overlay entry; reports whether one was present
+    /// so abort paths (retry, result, exit) only re-emit when content
+    /// vanishes. Never touches a different session's overlay for the same
+    /// chat (T13, R3.19).
     fn take_partial_overlay(&self) -> bool {
         self.partial_overlays
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&self.chat_id)
-            .is_some()
+            .take(&self.chat_id, self.session_key())
     }
 
     fn notify_surface(&self, event: ChatSurfaceEvent) {
@@ -1117,6 +1093,15 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_exit(&self, _code: Option<i32>) {
+        // Own-session overlay cleanup runs unconditionally, ahead of the
+        // superseded-session guard below (T13, R3.19): a stale sink's exit
+        // must still drop ITS OWN partial content, but must never reach a
+        // newer session's overlay for the same chat, which the guard exists
+        // to protect from the rest of this method's bookkeeping.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
+
         let cell = self.deps.get_active_chat(&self.chat_id);
         let session_id = cell.as_ref().and_then(|c| {
             c.lock()
@@ -1133,11 +1118,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
         let session_id = session_id.unwrap_or_default();
         debug!(session_id, chat_id = self.chat_id, "session exited");
-
-        // The process died mid-block: its partial content will never complete.
-        if self.take_partial_overlay() {
-            self.emit_display();
-        }
 
         let had_queued = self
             .mutate_messages(|v| {
@@ -1427,16 +1407,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 other => other,
             })
             .collect();
-        self.partial_overlays
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(
-                self.chat_id.clone(),
-                PartialOverlay {
-                    message_id: api_message_id.to_string(),
-                    content: stripped,
-                },
-            );
+        self.partial_overlays.insert(
+            &self.chat_id,
+            self.session_key(),
+            PartialOverlay {
+                message_id: api_message_id.to_string(),
+                content: stripped,
+            },
+        );
         self.emit_display();
     }
 

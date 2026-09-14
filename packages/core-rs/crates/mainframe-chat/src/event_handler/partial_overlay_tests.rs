@@ -208,6 +208,42 @@ fn partial_text_gets_the_same_command_tag_stripping_as_completed_text() {
 }
 
 #[test]
+fn a_superseded_sessions_overlay_is_dropped() {
+    let deps = Arc::new(OverlayDeps::default());
+    let handler = EventHandler::new(
+        Arc::new(Mutex::new(MessageCache::new())),
+        Arc::new(Mutex::new(PermissionManager::new())),
+        deps,
+    );
+    let surface = Arc::new(RevisionSurface::default());
+    handler.set_chat_surface(surface.clone());
+
+    let sink_s1 = handler.build_sink("chat-partial", Some("s1".to_string()));
+    let sink_s2 = handler.build_sink("chat-partial", Some("s2".to_string()));
+
+    sink_s1.on_message_partial("msg_1", vec![text("s1 partial")]);
+    assert_eq!(surface.revisions().len(), 1);
+
+    // s2 never wrote an overlay of its own — its exit must not touch s1's.
+    sink_s2.on_exit(None);
+    let revisions = surface.revisions();
+    assert_eq!(
+        revisions.len(),
+        1,
+        "s2's exit must not re-emit — it owns no overlay for this chat: {revisions:?}"
+    );
+    assert_eq!(first_text(&revisions[0][0]), "s1 partial");
+
+    sink_s1.on_exit(None);
+    let revisions = surface.revisions();
+    assert_eq!(revisions.len(), 2);
+    assert!(
+        revisions[1].is_empty(),
+        "s1's own exit must clear its own overlay: {revisions:?}"
+    );
+}
+
+#[test]
 fn result_and_exit_clear_a_dangling_partial() {
     let (sink, _deps, surface) = setup();
     sink.on_message_partial("msg_1", vec![text("interrupted")]);
