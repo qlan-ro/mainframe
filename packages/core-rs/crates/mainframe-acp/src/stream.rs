@@ -10,6 +10,12 @@
 //!
 //! Lifecycle frames go through the same throttle FIFO as content so an
 //! `Idle` stop can never overtake the final buffered chunks of its own turn.
+//! Out-of-band notifications (gate-raised, queue-changed, transcript-cleared,
+//! compaction) ride the same FIFO as raw `ThrottledFrame::Raw` entries for
+//! the same reason — a gate can never precede the tool-call frame it answers.
+//! The one exception is `GateResolved`: it targets whichever connection is
+//! holding the gate, not every session subscriber, so it is sent directly
+//! rather than queued through this per-session throttle.
 
 use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker};
 use mainframe_types::acp::update::{
