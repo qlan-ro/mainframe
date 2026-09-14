@@ -20,7 +20,8 @@ use tracing::{debug, warn};
 use crate::ctx::AppCtx;
 
 use super::facade_conn::{FacadeConnection, PendingGate};
-use super::ports::ManagerPorts;
+use super::hub::FacadeHub;
+use super::ports::{GatePort, ManagerPorts};
 
 /// Handle one inbound text frame. `Some` is a reply the socket loop writes
 /// directly (safe: the loop writes it before draining the outbound channel
@@ -41,7 +42,7 @@ pub async fn handle_inbound(
     let ports = ManagerPorts::new(ctx.chat_manager.clone());
     match frame {
         InboundFrame::Response(response) => {
-            handle_gate_answer(response, ctx, connection).await;
+            handle_gate_answer(response, &ctx.facade_hub, &ports, connection).await;
             None
         }
         InboundFrame::Request(request) if request.method == "session/resume" => {
@@ -129,7 +130,8 @@ async fn handle_resume(
 /// A client's answer to a daemon-initiated `session/request_permission`.
 async fn handle_gate_answer(
     response: JsonRpcResponse,
-    ctx: &Arc<AppCtx>,
+    hub: &FacadeHub,
+    ports: &dyn GatePort,
     connection: &Arc<FacadeConnection>,
 ) {
     let Some(RequestId::Str(rpc_id)) = response.id.clone() else {
@@ -162,14 +164,15 @@ async fn handle_gate_answer(
             return;
         }
     };
-    apply_gate_answer(&rpc_id, pending, answer, ctx, connection).await;
+    apply_gate_answer(&rpc_id, pending, answer, hub, ports, connection).await;
 }
 
 async fn apply_gate_answer(
     rpc_id: &str,
     pending: PendingGate,
     answer: RequestPermissionResponse,
-    ctx: &Arc<AppCtx>,
+    hub: &FacadeHub,
+    ports: &dyn GatePort,
     connection: &Arc<FacadeConnection>,
 ) {
     let request_id = pending.request.request_id.clone();
@@ -190,23 +193,19 @@ async fn apply_gate_answer(
         }
     };
     connection.remove_gate(rpc_id);
-    match ctx.facade_hub.claim_gate(&pending.chat_id, &request_id) {
+    match hub.claim_gate(&pending.chat_id, &request_id) {
         AnswerOutcome::AlreadyResolved => {
             debug!(rpc_id, "acp facade: late answer to a resolved gate");
         }
         AnswerOutcome::Apply => {
-            let Some(manager) = ctx.chat_manager.clone() else {
-                ctx.facade_hub.release_gate(&pending.chat_id, &request_id);
-                warn!(rpc_id, "acp facade: no chat manager to apply a gate answer");
-                return;
-            };
-            if let Err(err) = manager
-                .respond_to_permission(&pending.chat_id, control)
-                .await
-            {
+            if let Err(err) = ports.respond_to_permission(&pending.chat_id, control).await {
                 // Release the claim so a retried answer is not wedged behind
-                // AlreadyResolved.
-                ctx.facade_hub.release_gate(&pending.chat_id, &request_id);
+                // AlreadyResolved, and restore the connection's own pending
+                // entry so the SAME rpc_id is answerable again — a transport
+                // failure must not strand the CLI waiting on a gate the
+                // client believes it already answered (R2.5).
+                hub.release_gate(&pending.chat_id, &request_id);
+                connection.restore_gate(rpc_id, pending);
                 warn!(rpc_id, %err, "acp facade: respond_to_permission failed");
             }
         }
@@ -218,3 +217,6 @@ pub(super) fn wire(response: &JsonRpcResponse) -> String {
         r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}"#.into()
     })
 }
+
+#[cfg(test)]
+mod tests;

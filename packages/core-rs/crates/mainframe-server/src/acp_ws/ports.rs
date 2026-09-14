@@ -9,8 +9,9 @@ use std::sync::Arc;
 use mainframe_acp::prompt::{BoxFuture, PromptAcceptance, PromptError, PromptPort};
 use mainframe_acp::resume::ResumePort;
 use mainframe_chat::chat_manager::{ChatManager, CommandMeta};
+use mainframe_chat::permission_handler::PermissionError;
 use mainframe_types::acp::extensions::PromptSendMeta;
-use mainframe_types::adapter::ControlRequest;
+use mainframe_types::adapter::{ControlRequest, ControlResponse};
 use mainframe_types::display::DisplayMessage;
 
 pub struct ManagerPorts {
@@ -86,5 +87,33 @@ impl ResumePort for ManagerPorts {
         self.manager
             .as_ref()
             .is_some_and(|manager| manager.is_chat_working(session_id))
+    }
+}
+
+/// The gate-apply seam: kept a plain trait, not a direct `ChatManager` call,
+/// so `apply_gate_answer` can be driven by a failing double in tests without
+/// spinning up a real session (T3).
+pub trait GatePort: Send + Sync {
+    fn respond_to_permission<'a>(
+        &'a self,
+        chat_id: &'a str,
+        response: ControlResponse,
+    ) -> BoxFuture<'a, Result<(), PermissionError>>;
+}
+
+impl GatePort for ManagerPorts {
+    fn respond_to_permission<'a>(
+        &'a self,
+        chat_id: &'a str,
+        response: ControlResponse,
+    ) -> BoxFuture<'a, Result<(), PermissionError>> {
+        Box::pin(async move {
+            match &self.manager {
+                Some(manager) => manager.respond_to_permission(chat_id, response).await,
+                None => Err(PermissionError::Message(
+                    "chat manager unavailable".to_string(),
+                )),
+            }
+        })
     }
 }

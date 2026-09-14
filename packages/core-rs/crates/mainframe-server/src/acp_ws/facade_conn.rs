@@ -64,6 +64,14 @@ impl FacadeConnection {
         self.locked_gates().remove(rpc_id)
     }
 
+    /// Re-register a gate under its original id after a failed apply — the
+    /// answer path already removed it, and a client retry must find the same
+    /// rpc_id answerable again (T3). No frame is sent; the client already
+    /// has the request.
+    pub fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
+        self.locked_gates().insert(rpc_id.to_string(), pending);
+    }
+
     /// Chat teardown (`ChatSurfaceEvent::ChatEnded`): drop the session's
     /// stream state and any gates delivered for it — otherwise both outlive
     /// the chat for the connection's whole lifetime.
