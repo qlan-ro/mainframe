@@ -31,6 +31,12 @@ impl AdapterSession for ReplaySession {
         self.spawned.load(Ordering::SeqCst)
     }
 
+    /// Recordings ack a queued prompt with `on_queued_processed` once the running
+    /// turn ends, so the chat manager may enrol mock sends in `queuedRefs`.
+    fn supports_replay_ack(&self) -> bool {
+        true
+    }
+
     fn spawn(
         &self,
         _options: Option<SessionSpawnOptions>,
@@ -69,9 +75,14 @@ impl AdapterSession for ReplaySession {
         &self,
         _message: String,
         _images: Vec<ImageInput>,
-        _uuid: Option<String>,
+        uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
+            if let Some(uuid) = uuid
+                && self.queue_prompt(uuid)
+            {
+                return Ok(());
+            }
             self.advance("sendMessage").await;
             Ok(())
         })
@@ -114,8 +125,8 @@ impl AdapterSession for ReplaySession {
         Box::pin(async { Ok(()) })
     }
 
-    fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(async { Ok(false) })
+    fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
+        Box::pin(async move { Ok(self.drop_queued_prompt(&uuid)) })
     }
 
     fn get_context_files(&self) -> ContextFiles {

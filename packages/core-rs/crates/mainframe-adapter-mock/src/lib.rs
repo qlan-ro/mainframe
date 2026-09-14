@@ -5,6 +5,7 @@ mod adapter;
 mod dispatch;
 mod fixture;
 mod history;
+mod pump;
 mod session;
 mod session_trait;
 mod task_bridge;

@@ -1,38 +1,28 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
 use mainframe_types::adapter::{AdapterProcess, AdapterProcessStatus, SessionOptions};
 
-use crate::dispatch::emit_event;
-use crate::fixture::{EventDirection, RecordedEvent, ReplayState};
+use crate::fixture::{RecordedEvent, ReplayState};
 use crate::history::recorded_session_id;
+use crate::pump::{self, Pump};
 use crate::task_bridge::TaskBridge;
-
-const MAX_DELAY_MS: u64 = 120;
 
 /// Recordings bake the absolute project root they were captured against; fixtures
 /// write this token instead so replayed paths point at the live project.
 const PROJECT_PATH_PLACEHOLDER: &str = "{{PROJECT_PATH}}";
 
-/// Per-event replay delay ceiling. Defaults to `MAX_DELAY_MS` so the suite stays
-/// fast, but `E2E_MOCK_MAX_DELAY_MS` widens it for the rare test that must observe
-/// a transient state (e.g. the sidebar 'working' dot) whose window would otherwise
-/// collapse into the ~120ms burst and race a debounced client refetch.
-fn max_delay_ms() -> i64 {
-    std::env::var("E2E_MOCK_MAX_DELAY_MS")
-        .ok()
-        .and_then(|v| v.parse::<i64>().ok())
-        .filter(|v| *v >= 0)
-        .unwrap_or(MAX_DELAY_MS as i64)
-}
-
 pub(crate) struct SessionState {
     pub replay: ReplayState,
     pub last_delay: i64,
+    /// A recorded turn is mid-replay: its batch carries an `onResult` the pump
+    /// has not dispatched yet. Prompts that arrive in that window are queued.
+    pub turn_in_flight: bool,
+    /// Uuids of prompts the daemon queued behind the running turn, oldest first.
+    pub queued: VecDeque<String>,
 }
 
 #[derive(Default)]
@@ -97,6 +87,8 @@ impl ReplaySession {
             state: Arc::new(Mutex::new(SessionState {
                 replay: ReplayState::new(events),
                 last_delay: 0,
+                turn_in_flight: false,
+                queued: VecDeque::new(),
             })),
             source: tokio::sync::Mutex::new(ReplaySource::Ready),
         }
@@ -180,81 +172,55 @@ impl ReplaySession {
 
     fn take_interaction(&self, expected: &str) -> (Vec<RecordedEvent>, i64, Option<String>) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        // A permission answer past the end of the recording is a no-op, not a
-        // desync: the real CLI drops a `control_response` whose request it has
-        // already resolved, and recordings routinely stop at the last gate they
-        // opened (the answer to it was never recorded). Failing the whole run on
-        // one instead cost the v2.0.0 release a red e2e gate. Same tolerance the
-        // in-recording duplicate below gets — plan-approval.0.ndjson carries two
-        // identical `respondToPermission` markers because the daemon really does
-        // forward an ExitPlanMode allow twice (permission_handler forwards, then
-        // the plan-mode escalation forwards the same response again).
-        if expected == "respondToPermission" && state.replay.is_exhausted() {
-            tracing::debug!("mock-cli: ignoring a respondToPermission past the end of the fixture");
-            return (Vec::new(), state.last_delay, None);
-        }
-        let mut prefix = if expected == "interrupt" {
-            if !state.replay.peek_input("interrupt") {
-                return (Vec::new(), state.last_delay, None);
-            }
-            Vec::new()
-        } else {
-            state.replay.drain_optional_interrupts()
-        };
-        let marker = state.replay.consume_input();
-        if marker.as_ref().map(|event| event.method.as_str()) != Some(expected) {
-            let message = desync_message(expected, marker, &state.replay);
-            return (Vec::new(), state.last_delay, Some(message));
-        }
-        let Some(marker) = marker else {
-            return (Vec::new(), state.last_delay, None);
-        };
-        state.last_delay = marker.delay_ms;
-        while state.replay.peek_input(expected) {
-            state.replay.consume_input();
-        }
-        prefix.extend(state.replay.drain_outputs());
-        let base = state.last_delay;
-        if let Some(last) = prefix.last() {
-            state.last_delay = last.delay_ms;
-        }
-        (prefix, base, None)
+        pump::take_interaction(&mut state, expected)
     }
 
     pub(crate) async fn emit(&self, batch: Vec<RecordedEvent>, base: i64) {
-        let mut outputs = Vec::new();
-        for event in batch {
-            if event.dir == EventDirection::Fx {
-                if let Err(error) = apply_file_effects(&self.project_path, &event).await {
-                    tracing::warn!(?error, "mock-cli failed to apply recorded file effect");
-                }
-                continue;
-            }
-            outputs.push(event);
-        }
+        let outputs = pump::apply_effects(&self.project_path, batch).await;
         let Some(sink) = self.sink() else {
             return;
         };
-        let delay_ceiling = max_delay_ms();
-        let bridge = self.task_bridge.clone();
-        let chat_id = self.id.clone();
-        tokio::spawn(async move {
-            let started_at = tokio::time::Instant::now();
-            for event in outputs {
-                let target = Duration::from_millis(
-                    event.delay_ms.saturating_sub(base).clamp(0, delay_ceiling) as u64,
-                );
-                if let Some(remaining) = target.checked_sub(started_at.elapsed()) {
-                    tokio::time::sleep(remaining).await;
-                }
-                // Start/end the task BEFORE the message lands, so the Activity
-                // panel and the transcript card appear on the same frame.
-                if let Some(bridge) = bridge.as_ref() {
-                    bridge.observe(&chat_id, &event);
-                }
-                emit_event(sink.clone(), event);
-            }
-        });
+        self.arm_turn(&outputs);
+        Pump {
+            chat_id: self.id.clone(),
+            project_path: self.project_path.clone(),
+            state: self.state.clone(),
+            sink,
+            bridge: self.task_bridge.clone(),
+        }
+        .spawn(outputs, base);
+    }
+
+    /// A batch carrying the turn's `onResult` marks the session busy until the
+    /// pump dispatches it — the window in which a prompt is queued, not replayed.
+    fn arm_turn(&self, batch: &[RecordedEvent]) {
+        if batch.iter().any(pump::is_result) {
+            self.state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .turn_in_flight = true;
+        }
+    }
+
+    /// `true` when the prompt was parked behind the running turn instead of
+    /// replayed. The daemon only hands over a uuid for a send it has already
+    /// marked queued, so a uuid-less send always replays.
+    pub(crate) fn queue_prompt(&self, uuid: String) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if !state.turn_in_flight {
+            return false;
+        }
+        tracing::debug!(chat_id = %self.id, %uuid, "mock-cli queued a prompt sent mid-turn");
+        state.queued.push_back(uuid);
+        true
+    }
+
+    /// Drop a queued prompt; `false` when it already started or never existed.
+    pub(crate) fn drop_queued_prompt(&self, uuid: &str) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let before = state.queued.len();
+        state.queued.retain(|queued| queued != uuid);
+        before != state.queued.len()
     }
 
     fn sink(&self) -> Option<Arc<dyn SessionSink>> {
@@ -262,76 +228,10 @@ impl ReplaySession {
     }
 }
 
-fn desync_message(expected: &str, marker: Option<RecordedEvent>, state: &ReplayState) -> String {
-    let had = if let Some(marker) = marker {
-        format!("'{}'", marker.method)
-    } else if state.is_exhausted() {
-        "nothing (fixture exhausted)".to_string()
-    } else {
-        let method = state
-            .events
-            .get(state.cursor)
-            .map(|event| event.method.as_str())
-            .unwrap_or("unknown");
-        format!("an out-event ('{method}') — fixture is mid-turn")
-    };
-    format!(
-        "mock-cli: expected an '{expected}' marker but the fixture had {had} — the test drives a different interaction order than was recorded. Re-record."
-    )
-}
-
-async fn apply_file_effects(project_path: &str, event: &RecordedEvent) -> std::io::Result<()> {
-    for file in &event.files {
-        let path = Path::new(project_path).join(&file.path);
-        if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-        tokio::fs::write(path, &file.content).await?;
-    }
-    for deleted in &event.deleted {
-        let path = PathBuf::from(project_path).join(deleted);
-        match tokio::fs::remove_file(path).await {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use mainframe_adapter_api::AdapterSession;
-
-    fn exhausted_session() -> ReplaySession {
-        let options = SessionOptions {
-            project_path: "/tmp/project".to_string(),
-            chat_id: None,
-            mainframe_chat_id: "chat-1".to_string(),
-        };
-        ReplaySession::new(options, Vec::new())
-    }
-
-    #[test]
-    fn a_permission_answer_past_the_end_of_the_fixture_is_ignored() {
-        let session = exhausted_session();
-
-        let (batch, _, error) = session.take_interaction("respondToPermission");
-
-        assert!(batch.is_empty());
-        assert_eq!(error, None);
-    }
-
-    #[test]
-    fn a_message_past_the_end_of_the_fixture_still_reports_a_desync() {
-        let session = exhausted_session();
-
-        let (_, _, error) = session.take_interaction("sendMessage");
-
-        let message = error.expect("an exhausted fixture must still fail a sendMessage");
-        assert!(message.contains("fixture exhausted"), "{message}");
-    }
 
     #[tokio::test]
     async fn missing_fixture_fails_spawn_with_path() {
