@@ -1,0 +1,7 @@
+{"dir":"out","method":"onInit","args":["e2e-queued-prompt-sess-1"],"delayMs":0}
+{"dir":"in","method":"sendMessage","args":["Take your time on the first turn"],"delayMs":0}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"TURN-ONE-ANSWER: the running turn finished."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":2400}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":3000}
+{"dir":"in","method":"sendMessage","args":["And now the prompt that waited"],"delayMs":3000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"TURN-TWO-ANSWER: the queued prompt ran second."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":3300}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.008,"usage":{"input_tokens":12,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":3500}

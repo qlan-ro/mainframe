@@ -65,8 +65,12 @@ test.describe('§facade-protocol streaming', () => {
 
     // Criterion 5: no queue.* frame family exists on the facade — every
     // notification method is from the facade vocabulary. The mid-turn prompt
-    // above is what makes `_mainframe.dev/queue_state` appear here: acceptance
-    // while a turn runs snapshots the queued refs (spec decision 24).
+    // above is what makes `_mainframe.dev/queue_state` appear here (spec
+    // decision 24). Whether that snapshot is non-empty depends on whether the
+    // prompt lands inside the `messaging` recording's ~120ms turn-1 window, so
+    // this test only pins the method vocabulary; the queued snapshot's CONTENT
+    // and the dequeue's tail ordering are pinned deterministically in
+    // `facade-queued-prompt.spec.ts`, whose recording parks turn 1 for 3s.
     const allowedMethods = [
       'session/update',
       'session/request_permission',
