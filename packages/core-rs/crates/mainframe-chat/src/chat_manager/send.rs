@@ -205,6 +205,15 @@ impl ChatManager {
         chat_id: &str,
         content: &str,
     ) -> Result<(), SendError> {
+        // A command dispatched while another turn is already running (T17,
+        // R3.12) is not a turn start — a turn is already in progress. Only a
+        // command sent to a free chat opens one.
+        let was_working = post
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .chat
+            .process_state
+            == Some(Some(ProcessState::Working));
         self.store_user_message(
             chat_id,
             vec![MessageContent::Leaf(LeafContent::Text {
@@ -233,12 +242,17 @@ impl ChatManager {
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         // Commands are never queued behind a running turn, so acceptance
-        // (send_entry.rs) and start are the same moment.
-        self.event_handler.notify_chat_surface(
-            crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                chat_id: chat_id.to_string(),
-            },
-        );
+        // (send_entry.rs) and start are the same moment — UNLESS a turn was
+        // already running: the command still bypasses the queue and runs
+        // immediately, but that turn already started, so re-announcing it
+        // would be a spurious running transition.
+        if !was_working {
+            self.event_handler.notify_chat_surface(
+                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                    chat_id: chat_id.to_string(),
+                },
+            );
+        }
         Ok(())
     }
 

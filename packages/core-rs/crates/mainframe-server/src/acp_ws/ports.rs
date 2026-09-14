@@ -40,6 +40,7 @@ impl PromptPort for ManagerPorts {
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>> {
         Box::pin(async move {
             let manager = self.require()?;
+            let is_command = send_meta.command.is_some();
             let command = send_meta.command.map(|c| CommandMeta {
                 name: c.name,
                 source: c.source,
@@ -56,7 +57,16 @@ impl PromptPort for ManagerPorts {
                 .map_err(|err| PromptError {
                     message: err.to_string(),
                 })?;
-            let queued = manager.queued_message_count(session_id);
+            // A command bypasses the queue and always dispatches immediately
+            // (T17, R3.12) — it never adds itself to `queued_message_count`,
+            // so that count (when non-zero) belongs entirely to OTHER,
+            // unrelated queued prompts and must not be reported as this
+            // command's own queue position.
+            let queued = if is_command {
+                0
+            } else {
+                manager.queued_message_count(session_id)
+            };
             Ok(PromptAcceptance {
                 queued_position: (queued > 0).then_some(queued as i64),
             })

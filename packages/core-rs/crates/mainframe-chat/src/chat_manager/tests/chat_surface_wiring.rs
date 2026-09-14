@@ -87,6 +87,43 @@ async fn a_queued_prompt_is_accepted_immediately_but_not_started_until_dequeued(
 }
 
 #[tokio::test]
+async fn a_command_sent_mid_turn_reports_no_queue_position() {
+    let deps = StoreDeps::arc();
+    let surface = RecordingSurface::arc();
+    let mgr = ChatManager::new(deps).with_chat_surface(surface.clone());
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        RecSession::new("c1", true, true),
+    );
+
+    mgr.send_message(
+        "c1",
+        "/compact",
+        None,
+        Some(CommandMeta {
+            name: "compact".to_string(),
+            source: "claude".to_string(),
+            args: None,
+        }),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !has_turn_started(&surface.events()),
+        "a command sent while a turn is already running must not re-announce TurnStarted: {:?}",
+        surface.events()
+    );
+    assert_eq!(
+        mgr.queued_message_count("c1"),
+        0,
+        "commands bypass the queue — a mid-turn command must not appear queued"
+    );
+}
+
+#[tokio::test]
 async fn queue_changes_announce_full_snapshots_on_the_seam() {
     let deps = StoreDeps::arc();
     let surface = RecordingSurface::arc();
