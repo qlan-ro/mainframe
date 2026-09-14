@@ -83,14 +83,18 @@ fn skip_item(name: &str) {
     );
 }
 
-fn dynamic_tool_call_name(d: &DynamicToolCallItem) -> String {
+/// `pub(crate)`: shared with `history_convert.rs`'s reload-path rendering
+/// (T22, R3.17) so the two paths cannot drift on the naming rule.
+pub(crate) fn dynamic_tool_call_name(d: &DynamicToolCallItem) -> String {
     match d.namespace.as_deref().filter(|ns| !ns.is_empty()) {
         Some(ns) => format!("{ns}__{}", d.tool),
         None => d.tool.clone(),
     }
 }
 
-fn dynamic_tool_call_input(arguments: &serde_json::Value) -> HashMap<String, serde_json::Value> {
+pub(crate) fn dynamic_tool_call_input(
+    arguments: &serde_json::Value,
+) -> HashMap<String, serde_json::Value> {
     match arguments.as_object() {
         Some(map) => map.clone().into_iter().collect(),
         None if arguments.is_null() => HashMap::new(),
