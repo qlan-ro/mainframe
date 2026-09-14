@@ -238,3 +238,5 @@ fn chunk_extension(prev: &[ContentBlock], new: &[ContentBlock]) -> Option<Vec<Co
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vanish_tests;

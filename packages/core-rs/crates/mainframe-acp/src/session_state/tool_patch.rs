@@ -65,3 +65,6 @@ fn diff_field<T: Clone + PartialEq>(prev: &T, new: &T) -> Option<Option<T>> {
 fn diff_meta(prev: &Option<Value>, new: &Option<Value>) -> Option<Option<Value>> {
     if prev == new { None } else { Some(new.clone()) }
 }
+
+#[cfg(test)]
+mod tests;
