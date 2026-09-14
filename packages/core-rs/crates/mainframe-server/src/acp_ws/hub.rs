@@ -126,22 +126,20 @@ impl FacadeHub {
         &self,
         connection: &FacadeConnection,
         chat_id: &str,
-        items: &[EncodedItem],
-        reply: &JsonRpcResponse,
-        redelivered_gate: Option<&str>,
+        seed: ResumeSeed<'_>,
         replay: impl FnOnce(&FacadeConnection),
     ) {
         let mut sessions = connection.locked_sessions();
         let Some(previous) = sessions.remove(chat_id) else {
             drop(sessions);
-            connection.send_json(reply);
+            connection.send_json(seed.reply);
             return;
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
-        stream.seed(items);
-        let catch_up = drain_into(&mut stream, previous, redelivered_gate);
+        stream.seed(seed.items);
+        let catch_up = drain_into(&mut stream, previous, connection, seed.redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
-        connection.send_json(reply);
+        connection.send_json(seed.reply);
         replay(connection);
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
@@ -175,16 +173,32 @@ impl FacadeHub {
     }
 }
 
+/// What a completing `session/resume` hands [`FacadeHub::reset_session`].
+pub struct ResumeSeed<'a> {
+    /// The snapshot the connection's stream is re-seeded to.
+    pub items: &'a [EncodedItem],
+    /// The `session/resume` reply, sent ahead of the replay — and sent even
+    /// when the session is gone, so the client's promise always settles.
+    pub reply: &'a JsonRpcResponse,
+    /// The rpc id of the gate the replay redelivers on its own, if any.
+    pub redelivered_gate: Option<&'a str>,
+}
+
 /// Fold everything a `session/resume` buffered while its snapshot was in
 /// flight into the freshly seeded `stream`: the latest revision as a diff
 /// against the seed, then the raw frames in arrival order behind it, so a
-/// gate raise still cannot precede the tool call it belongs to. The one gate
-/// `redelivered_gate` names is skipped — the replay just sent that same
-/// request itself, and two live requests for one decision leave the client
-/// with a gate its answer cannot resolve.
+/// gate raise still cannot precede the tool call it belongs to.
+///
+/// Two buffered gate raises are dropped instead of forwarded. The one
+/// `redelivered_gate` names, because the replay just sent that same request
+/// itself. And any raise the connection no longer holds as pending: only
+/// `handle_gate_resolved` removes a delivered gate, and it pushes
+/// `gate_resolved` immediately (criterion 8) — forwarding the raise behind
+/// that would leave the client a live gate the daemon has already closed.
 fn drain_into(
     stream: &mut SessionStream,
     buffered: SessionSlot,
+    connection: &FacadeConnection,
     redelivered_gate: Option<&str>,
 ) -> Vec<ThrottledFrame> {
     let SessionSlot::AwaitingSeed { latest, raws } = buffered else {
@@ -195,10 +209,12 @@ fn drain_into(
         .map(|latest| stream.on_revision(&latest, now))
         .unwrap_or_default();
     for raw in raws {
+        // Takes the gates lock while the sessions lock is held; no other path
+        // nests the two, so the order cannot cycle.
         if raw
             .gate_rpc_id
             .as_deref()
-            .is_some_and(|id| Some(id) == redelivered_gate)
+            .is_some_and(|id| Some(id) == redelivered_gate || connection.peek_gate(id).is_none())
         {
             continue;
         }

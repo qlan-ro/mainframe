@@ -64,6 +64,16 @@ fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
     )
 }
 
+/// The common `ResumeSeed`: a snapshot and its reply, with no gate the
+/// replay redelivers.
+fn seed<'a>(items: &'a [EncodedItem], reply: &'a JsonRpcResponse) -> ResumeSeed<'a> {
+    ResumeSeed {
+        items,
+        reply,
+        redelivered_gate: None,
+    }
+}
+
 /// One `session/update` sent from inside a replay closure, standing in for
 /// the transcript a real resume replays.
 fn replay_marker(conn: &crate::acp_ws::facade_conn::FacadeConnection) {

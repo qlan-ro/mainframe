@@ -16,6 +16,7 @@ use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use crate::ctx::AppCtx;
 
 use super::facade_conn::{FacadeConnection, rpc_id_string};
+use super::hub::ResumeSeed;
 use super::ports::ManagerPorts;
 
 mod gate_answers;
@@ -207,22 +208,15 @@ async fn handle_resume(
         return;
     };
 
-    let queued = ctx
-        .chat_manager
-        .as_ref()
-        .map(|cm| cm.get_queued_for_chat(&session_id))
-        .unwrap_or_default();
-    let redelivered_gate = replay
-        .pending_gate
-        .as_ref()
-        .map(|gate| rpc_id_string(&gate.request_id));
-    ctx.facade_hub.reset_session(
-        connection,
-        &session_id,
-        &replay.items,
-        &response,
-        redelivered_gate.as_deref(),
-        |conn| {
+    let queued = queued_for(ctx, &session_id);
+    let redelivered_gate = redelivered_gate_id(&replay);
+    let seed = ResumeSeed {
+        items: &replay.items,
+        reply: &response,
+        redelivered_gate: redelivered_gate.as_deref(),
+    };
+    ctx.facade_hub
+        .reset_session(connection, &session_id, seed, |conn| {
             for update in replay.updates {
                 conn.send_update(&session_id, update);
             }
@@ -237,8 +231,25 @@ async fn handle_resume(
                 &session_id,
                 queued,
             ));
-        },
-    );
+        });
+}
+
+/// The queued-prompt snapshot every resume replay closes with — empty when
+/// the harness runs without a `ChatManager`.
+fn queued_for(ctx: &Arc<AppCtx>, session_id: &str) -> Vec<mainframe_types::chat::QueuedMessageRef> {
+    ctx.chat_manager
+        .as_ref()
+        .map(|cm| cm.get_queued_for_chat(session_id))
+        .unwrap_or_default()
+}
+
+/// The rpc id of the gate this replay redelivers itself, which the hub's
+/// buffered-frame drain must not raise a second time.
+fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
+    replay
+        .pending_gate
+        .as_ref()
+        .map(|gate| rpc_id_string(&gate.request_id))
 }
 
 pub(super) fn wire(response: &JsonRpcResponse) -> String {

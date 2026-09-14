@@ -15,7 +15,7 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, |c| {
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::StateUpdate(
@@ -49,14 +49,14 @@ async fn a_revision_after_a_resume_deltas_against_the_replay() {
     // First resume: seeds "Hel".
     let partial = mainframe_acp::encode(&[display_message("m1", "Hel")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &partial, &reply(1), None, |_c| {});
+    hub.reset_session(&conn, "chat-1", seed(&partial, &reply(1)), |_c| {});
     drain(&mut rx);
 
     // A reconnect resumes again, this time at "Hello" — the seeded state
     // must be replaced wholesale, not merged with the stale "Hel" state.
     let full = mainframe_acp::encode(&[display_message("m1", "Hello")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &full, &reply(2), None, |c| {
+    hub.reset_session(&conn, "chat-1", seed(&full, &reply(2)), |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::AgentMessage(
@@ -99,7 +99,7 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
 
     let replayed = AtomicBool::new(false);
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(9), None, |_c| {
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(9)), |_c| {
         replayed.store(true, Ordering::SeqCst);
     });
 

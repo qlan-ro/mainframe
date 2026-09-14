@@ -24,7 +24,7 @@ async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
 
     // The snapshot the await returned reflects the PRE-race content.
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, |_c| {});
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
     assert_eq!(
@@ -57,7 +57,7 @@ async fn a_raw_frame_during_the_snapshot_await_is_drained_after_the_replay() {
     );
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, replay_marker);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
     assert_eq!(frames.len(), 3, "reply, replay, then the buffered raw");
@@ -86,7 +86,7 @@ async fn a_transcript_clear_during_the_snapshot_await_is_delivered_after_the_rep
     );
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, replay_marker);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
     assert_eq!(frames.len(), 3, "reply, replay, then the clear: {frames:?}");
@@ -112,7 +112,7 @@ async fn a_buffered_raw_drains_behind_the_buffered_revision() {
     assert!(drain(&mut rx).is_empty());
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, replay_marker);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
 
     let frames = drain(&mut rx);
     assert_eq!(frames.len(), 4, "reply, replay, catch-up, gate: {frames:?}");
@@ -148,14 +148,15 @@ async fn a_gate_the_replay_redelivers_is_not_also_drained_from_the_buffer() {
         &control,
     );
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(
-        &conn,
-        "chat-1",
-        &items,
-        &reply(1),
-        Some(rpc_id.as_str()),
-        |c| c.deliver_gate("chat-1", &control, &frame),
-    );
+    let reply = reply(1);
+    let seed = ResumeSeed {
+        items: &items,
+        reply: &reply,
+        redelivered_gate: Some(rpc_id.as_str()),
+    };
+    hub.reset_session(&conn, "chat-1", seed, |c| {
+        c.deliver_gate("chat-1", &control, &frame)
+    });
 
     let frames = drain(&mut rx);
     let gates: Vec<_> = frames
@@ -164,4 +165,44 @@ async fn a_gate_the_replay_redelivers_is_not_also_drained_from_the_buffer() {
         .collect();
     assert_eq!(gates.len(), 1, "one gate, one decision: {frames:?}");
     assert_eq!(gates[0]["id"], json!(rpc_id));
+}
+
+/// A gate raised AND resolved inside the await window. `handle_gate_resolved`
+/// pushes `_mainframe.dev/gate_resolved` directly (criterion 8: a gate
+/// answered on another surface clears immediately), so a drain that still
+/// forwards the buffered raise inverts the pair — the client ends the resume
+/// holding a live gate the daemon closed before the replay even ran.
+#[tokio::test]
+async fn a_gate_resolved_during_the_await_is_not_raised_by_the_drain() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+
+    hub.begin_resume(&conn, "chat-1");
+    hub.on_chat_surface_event(ChatSurfaceEvent::GateRaised {
+        chat_id: "chat-1".to_string(),
+        request: control_request("req-3"),
+    });
+    hub.on_chat_surface_event(ChatSurfaceEvent::GateResolved {
+        chat_id: "chat-1".to_string(),
+        request_id: "req-3".to_string(),
+    });
+
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
+
+    let frames = drain(&mut rx);
+    assert_eq!(
+        frames
+            .iter()
+            .filter(|f| f["method"] == json!("_mainframe.dev/gate_resolved"))
+            .count(),
+        1,
+        "the resolution still reaches the client: {frames:?}"
+    );
+    assert!(
+        frames
+            .iter()
+            .all(|f| f["method"] != json!("session/request_permission")),
+        "a resolved gate must not be raised by the drain: {frames:?}"
+    );
 }
