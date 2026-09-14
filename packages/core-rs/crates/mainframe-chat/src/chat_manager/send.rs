@@ -1,5 +1,7 @@
 //! The dispatch half of `send_message`: command vs plain text, and the
-//! first-message titling both share.
+//! first-message titling both share. The queued-turn bookkeeping
+//! (`queued_message_metadata`, `record_queued_ref`) lives in the sibling
+//! `send_queue.rs` (todo #350, plan task 37).
 
 use super::*;
 
@@ -129,70 +131,6 @@ impl ChatManager {
             message_content,
             text,
         }
-    }
-
-    fn queued_message_metadata(
-        &self,
-        post: &Arc<Mutex<ActiveChat>>,
-        session: &Arc<dyn AdapterSession>,
-        attachment_previews: &[serde_json::Value],
-    ) -> (HashMap<String, serde_json::Value>, Option<String>) {
-        let adapter_acks_replay = session.supports_replay_ack();
-        let is_queued = adapter_acks_replay
-            && post
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .process_state
-                == Some(Some(ProcessState::Working));
-        let mut transient_metadata: HashMap<String, serde_json::Value> = HashMap::new();
-        if is_queued {
-            transient_metadata.insert("queued".to_string(), serde_json::json!(true));
-        }
-        if !attachment_previews.is_empty() {
-            transient_metadata.insert(
-                "attachments".to_string(),
-                serde_json::Value::Array(attachment_previews.to_vec()),
-            );
-        }
-        let message_uuid = if is_queued {
-            Some(nanoid::nanoid!())
-        } else {
-            None
-        };
-        if let Some(u) = &message_uuid {
-            transient_metadata.insert("uuid".to_string(), serde_json::json!(u));
-        }
-        (transient_metadata, message_uuid)
-    }
-
-    fn record_queued_ref(
-        &self,
-        chat_id: &str,
-        message: &ChatMessage,
-        uuid: String,
-        content: &str,
-        attachment_ids: Option<&[String]>,
-    ) {
-        let r = QueuedMessageRef {
-            message_id: message.id.clone(),
-            chat_id: chat_id.to_string(),
-            uuid: uuid.clone(),
-            content: content.to_string(),
-            attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
-            timestamp: message.timestamp.clone(),
-        };
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(r);
-        self.notify_queue_changed(chat_id);
-        info!(
-            chat_id,
-            uuid,
-            message_id = message.id,
-            "message sent to CLI while busy (queued)"
-        );
     }
 
     /// Command dispatch: store and emit the user's text, title the chat, hand the

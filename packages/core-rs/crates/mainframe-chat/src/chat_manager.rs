@@ -81,6 +81,7 @@ mod lifecycle_api;
 mod reads;
 mod send;
 mod send_entry;
+mod send_queue;
 mod shared;
 mod update;
 
