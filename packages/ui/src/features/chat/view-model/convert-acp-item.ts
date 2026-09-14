@@ -22,7 +22,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import {
-  ItemMetaSchema,
   MAINFRAME_META_NAMESPACE,
   StructuredDiffSchema,
   TruncationMarkerSchema,
@@ -33,16 +32,12 @@ import type { AccumulatedItem } from './acp-item-accumulator';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
+import { parseItemMeta } from './parse-item-meta';
 import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
 interface ParsedItem {
   readonly item: AccumulatedItem;
   readonly meta: ItemMeta;
-}
-
-function parseMeta(item: AccumulatedItem): ItemMeta {
-  const parsed = ItemMetaSchema.safeParse(item.meta?.[MAINFRAME_META_NAMESPACE]);
-  return parsed.success ? parsed.data : {};
 }
 
 /**
@@ -267,7 +262,7 @@ export function convertAcpItems(
   const containers = new Map<string, ParsedItem[]>();
 
   for (const item of items) {
-    const parsed: ParsedItem = { item, meta: parseMeta(item) };
+    const parsed: ParsedItem = { item, meta: parseItemMeta(item, MAINFRAME_META_NAMESPACE) };
     const parentId = parsed.meta.parentToolCallId;
     if (parentId !== undefined) {
       const list = children.get(parentId) ?? [];
