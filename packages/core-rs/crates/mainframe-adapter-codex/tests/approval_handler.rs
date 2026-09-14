@@ -296,6 +296,30 @@ fn ask_user_question_falls_back_to_empty_string() {
         respond,
     );
     let request = rec.permissions()[0].clone();
+    // T19, R3.5: a bare `behavior: "deny"` with no message/updatedInput is
+    // now a genuine decline (`reject_on_request_user_input_sends_no_answer`
+    // pins that shape) — this test's own case, an allow carrying no real
+    // answer data, still falls back to an empty string.
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "toolName": "AskUserQuestion",
+        }),
+    );
+    assert_eq!(first_answer(&calls, "q5"), "");
+}
+
+#[test]
+fn reject_on_request_user_input_sends_no_answer() {
+    let (handler, calls, request) = setup_ask(
+        "q1",
+        "Proceed?",
+        json!([[{ "label": "Yes" }], [{ "label": "No" }]]),
+        20,
+    );
     resolve(
         &handler,
         json!({
@@ -305,5 +329,77 @@ fn ask_user_question_falls_back_to_empty_string() {
             "toolName": "AskUserQuestion",
         }),
     );
-    assert_eq!(first_answer(&calls, "q5"), "");
+    assert_eq!(calls.lock().unwrap()[0].1, json!({ "answers": {} }));
+}
+
+#[test]
+fn a_plain_option_answer_selects_a_real_question_choice() {
+    let (handler, calls, request) = setup_ask(
+        "q1",
+        "Proceed?",
+        json!([[{ "label": "Yes" }], [{ "label": "No" }]]),
+        21,
+    );
+    let options = request
+        .options
+        .as_ref()
+        .expect("requestUserInput must carry adapter-supplied options");
+    let yes = options
+        .iter()
+        .find(|o| o.name == "Yes")
+        .expect("a Yes option for the offered choice");
+    let updated_input = yes
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("_mainframe.dev"))
+        .and_then(|ns| ns.get("updatedInput"))
+        .cloned()
+        .expect("the Yes option must carry its own updatedInput answer");
+
+    // Mirrors what `gates::parse_answer` (mainframe-acp) does for a plain
+    // `{outcome:"selected", optionId}` answer: map the option's own kind to
+    // a behavior and copy its meta's updatedInput onto the response.
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "toolName": "AskUserQuestion",
+            "updatedInput": updated_input,
+        }),
+    );
+    assert_eq!(
+        calls.lock().unwrap()[0].1,
+        json!({ "answers": { "q1": { "answers": ["Yes"] } } })
+    );
+}
+
+#[test]
+fn accept_for_session_reaches_codex() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "item/commandExecution/requestApproval",
+        &json!({ "itemId": "tc9", "command": "cargo test" }),
+        RequestId::Number(22),
+        respond,
+    );
+    let request = rec.permissions()[0].clone();
+
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "scope": "session",
+        }),
+    );
+
+    assert_eq!(
+        calls.lock().unwrap()[0].1,
+        json!({ "decision": "acceptForSession" })
+    );
 }
