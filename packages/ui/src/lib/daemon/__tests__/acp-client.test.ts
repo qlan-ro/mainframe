@@ -109,6 +109,51 @@ describe('AcpFacadeClient — handshake', () => {
 
     await expect(connectPromise).rejects.toMatchObject({ code: -32001 });
   });
+
+  it('a failed initialize closes its own socket and leaves the client unconnected (R3.4)', async () => {
+    const socket = new FakeSocket();
+    const client = new AcpFacadeClient('mock-cli', { url: () => 'ws://test', createSocket: () => socket });
+    const connectPromise = client.connect();
+    socket.open();
+    await flushMicrotasks();
+    const initReq = socket.sent[0] as { id: number };
+    socket.receive({ jsonrpc: '2.0', id: initReq.id, result: initializeResult({ protocolVersion: 99 }) });
+
+    await expect(connectPromise).rejects.toThrow(/unsupported protocol version/);
+    expect(socket.closed).toBe(true);
+    expect(client.connected).toBe(false);
+    await expect(client.prompt('chat_1', 'hi')).rejects.toThrow(/not connected/);
+  });
+
+  it('a leaked closing socket from a failed connect() attempt cannot tear down a later successful retry', async () => {
+    const deadSocket = new FakeSocket();
+    const liveSocket = new FakeSocket();
+    const sockets = [deadSocket, liveSocket];
+    const client = new AcpFacadeClient('mock-cli', {
+      url: () => 'ws://test',
+      createSocket: () => sockets.shift()!,
+    });
+
+    const failedConnect = client.connect();
+    deadSocket.open();
+    await flushMicrotasks();
+    const deadInitReq = deadSocket.sent[0] as { id: number };
+    deadSocket.receive({ jsonrpc: '2.0', id: deadInitReq.id, result: initializeResult({ protocolVersion: 99 }) });
+    await expect(failedConnect).rejects.toThrow(/unsupported protocol version/);
+
+    const retry = client.connect();
+    liveSocket.open();
+    await flushMicrotasks();
+    const liveInitReq = liveSocket.sent[0] as { id: number };
+    liveSocket.receive({ jsonrpc: '2.0', id: liveInitReq.id, result: initializeResult() });
+    await retry;
+    expect(client.connected).toBe(true);
+
+    // The dead socket's close event arrives late (a race that predates T27) — must be a no-op now.
+    deadSocket.onclose?.();
+
+    expect(client.connected).toBe(true);
+  });
 });
 
 describe('AcpFacadeClient — session/update dispatch', () => {

@@ -125,28 +125,40 @@ export class AcpFacadeClient {
     return attempt;
   }
 
+  /**
+   * Builds the connection locally and only assigns `this.connection` once
+   * the handshake AND version check pass — an un-negotiated connection must
+   * never be handed out via `requireConnection()`. Any failure along the
+   * way closes this attempt's own socket before rethrowing, so a rejected
+   * `connect()` never leaks one (R3.4).
+   */
   async connect(): Promise<InitializeResponse> {
     const url = (this.deps.url ?? (() => defaultUrl(this.profile)))();
     const connection = new RpcConnection(url, this.deps.createSocket ?? defaultSocketFactory);
     connection.onNotification((n) => this.router.handleNotification(n));
     connection.onRequest((r) => this.router.handleRequest(r));
-    connection.onClose(() => this.handleClose());
-    this.connection = connection;
-    await connection.open();
+    connection.onClose(() => this.handleClose(connection));
+    try {
+      await connection.open();
 
-    const request: InitializeRequest = {
-      protocolVersion: PINNED_PROTOCOL_VERSION,
-      info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
-    };
-    const result = await connection.sendRequest('initialize', request);
-    const response = InitializeResponseSchema.parse(result);
-    if (response.protocolVersion !== PINNED_PROTOCOL_VERSION) {
-      throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
+      const request: InitializeRequest = {
+        protocolVersion: PINNED_PROTOCOL_VERSION,
+        info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
+      };
+      const result = await connection.sendRequest('initialize', request);
+      const response = InitializeResponseSchema.parse(result);
+      if (response.protocolVersion !== PINNED_PROTOCOL_VERSION) {
+        throw new Error(`[acp-client] daemon negotiated an unsupported protocol version ${response.protocolVersion}`);
+      }
+      this.connection = connection;
+      this.capabilities = parseCapabilities(response);
+      this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+      this.armWatchdog(this.capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
+      return response;
+    } catch (error) {
+      connection.close();
+      throw error;
     }
-    this.capabilities = parseCapabilities(response);
-    this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
-    this.armWatchdog(this.capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
-    return response;
   }
 
   disconnect(): void {
@@ -240,9 +252,12 @@ export class AcpFacadeClient {
    * Socket death: reconnect with backoff, and only THEN fire the gap
    * listeners — a gap fired while the socket is down would make every
    * session's `resume()` throw. The watchdog's silence gap (socket alive)
-   * still fires immediately via `notifyGap`.
+   * still fires immediately via `notifyGap`. `connection` identifies WHICH
+   * attempt died — a leaked failed-`connect()` socket closing late must not
+   * tear down a connection that has since replaced it (R3.4).
    */
-  private handleClose(): void {
+  private handleClose(connection: RpcConnection): void {
+    if (this.connection !== connection) return;
     this.watchdog?.stop();
     this.watchdog = null;
     this.connection = null;
