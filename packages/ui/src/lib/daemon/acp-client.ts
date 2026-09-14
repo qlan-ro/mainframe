@@ -92,7 +92,10 @@ export class AcpFacadeClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
   private manuallyClosed = false;
-  private readonly router = new AcpNotificationRouter((sequence) => this.watchdog?.observe(sequence));
+  private readonly router = new AcpNotificationRouter(
+    (sequence) => this.watchdog?.observe(sequence),
+    (id, code, message) => this.connection?.respondError(id, code, message),
+  );
   private readonly gapListeners = new Set<GapListener>();
   private readonly closeListeners = new Set<CloseListener>();
 

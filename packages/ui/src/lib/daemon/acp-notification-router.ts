@@ -4,9 +4,9 @@
  * registered listeners. Split out of `acp-client.ts` once that file crossed
  * 300 lines — `AcpFacadeClient` owns the connection/reconnect lifecycle and
  * delegates its `on*` methods here; this module owns wire-frame parsing and
- * listener fan-out only. Heartbeat sequences reach the watchdog via a
- * callback rather than a direct reference, so this module stays ignorant of
- * `HeartbeatWatchdog`.
+ * listener fan-out only. Heartbeat sequences and outbound error replies
+ * both reach their target via injected callbacks rather than a direct
+ * reference, so this module stays ignorant of `HeartbeatWatchdog`/`RpcConnection`.
  */
 import type {
   JsonRpcNotification,
@@ -46,7 +46,10 @@ export class AcpNotificationRouter {
   private readonly transcriptClearedListeners = new Set<TranscriptClearedListener>();
   private readonly queueStateListeners = new Set<QueueStateListener>();
 
-  constructor(private readonly onHeartbeat: (sequence: number) => void) {}
+  constructor(
+    private readonly onHeartbeat: (sequence: number) => void,
+    private readonly onRequestError: (id: JsonRpcRequestId, code: number, message: string) => void,
+  ) {}
 
   onSessionUpdate(listener: SessionUpdateListener): () => void {
     this.sessionUpdateListeners.add(listener);
@@ -104,7 +107,13 @@ export class AcpNotificationRouter {
   handleRequest(request: JsonRpcRequest): void {
     if (request.method !== 'session/request_permission' || request.id == null) return;
     const parsed = this.parseOrWarn(RequestPermissionRequestSchema, request.params, 'session/request_permission');
-    if (!parsed) return;
+    if (!parsed) {
+      // A schema-rejected gate must not hang the turn — an unanswered
+      // request leaves the daemon waiting forever (R3.7). Reply with an
+      // error so the daemon's own arm turns it into a deny.
+      this.onRequestError(request.id as JsonRpcRequestId, -32602, 'invalid params for session/request_permission');
+      return;
+    }
     this.permissionRequestListeners.forEach((fn) => fn(request.id as JsonRpcRequestId, parsed));
   }
 

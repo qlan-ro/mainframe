@@ -126,6 +126,11 @@ export class RpcConnection {
     this.write({ jsonrpc: '2.0', id, result });
   }
 
+  /** Error reply to a daemon-initiated request — e.g. a schema-rejected `session/request_permission` (R3.7). */
+  respondError(id: JsonRpcRequestId | null, code: number, message: string): void {
+    this.write({ jsonrpc: '2.0', id, error: { code, message } });
+  }
+
   private write(frame: unknown): void {
     if (!this.socket) {
       console.warn('[acp-client] dropped outbound frame — connection not open', frame);
