@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{EncodedItem, ThrottledFrame};
+use serde::Serialize;
+use tracing::warn;
 
 use super::super::facade_conn::{FacadeConnection, SessionSlot};
 use super::{FacadeHub, now_ms};
@@ -68,6 +70,26 @@ impl FacadeHub {
         }
     }
 
+    /// Serialize one out-of-band notification and fan it out. Serializing a
+    /// frame the daemon just built does not fail in practice, but dropping it
+    /// silently would leave no trace of why the client never saw it.
+    pub(super) fn push_notification<T: Serialize>(
+        &self,
+        chat_id: &str,
+        note: &T,
+        kind: RawFrameKind,
+    ) {
+        match serde_json::to_string(note) {
+            Ok(payload) => self.push_raw_to_attached(chat_id, payload, kind),
+            Err(err) => warn!(
+                %err,
+                chat_id,
+                kind = kind.label(),
+                "acp facade: failed to serialize an out-of-band notification"
+            ),
+        }
+    }
+
     /// A raw out-of-band notification (a gate raise, queue snapshot,
     /// transcript clear, compaction phase) for every attached connection —
     /// through the SAME per-session throttle FIFO content updates ride
@@ -110,6 +132,17 @@ pub(super) enum RawFrameKind {
 }
 
 impl RawFrameKind {
+    /// The frame family, for logs.
+    fn label(self) -> &'static str {
+        match self {
+            RawFrameKind::Gate => "gate",
+            RawFrameKind::QueueState => "queue_state",
+            RawFrameKind::TranscriptCleared => "transcript_cleared",
+            RawFrameKind::Resync => "resync",
+            RawFrameKind::Compaction => "compaction",
+        }
+    }
+
     /// Whether this frame still says something the resume's replay does not.
     /// A transcript clear does not: the snapshot already reflects the wipe,
     /// so delivering the clear behind the replay would erase the replay.

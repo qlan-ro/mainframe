@@ -112,25 +112,19 @@ impl FacadeHub {
         refs: Vec<mainframe_types::chat::QueuedMessageRef>,
     ) {
         let note = mainframe_acp::queue_state_notification(chat_id, refs);
-        if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload, RawFrameKind::QueueState);
-        }
+        self.push_notification(chat_id, &note, RawFrameKind::QueueState);
     }
 
     pub(super) fn handle_transcript_cleared(&self, chat_id: &str) {
         let note = mainframe_acp::transcript_cleared_notification(chat_id);
-        if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload, RawFrameKind::TranscriptCleared);
-        }
+        self.push_notification(chat_id, &note, RawFrameKind::TranscriptCleared);
     }
 
     /// Same FIFO as content updates (T6, R2.11): a resync must not overtake
     /// the frames whose loss triggered the eviction.
     pub(super) fn handle_resync(&self, chat_id: &str) {
         let note = mainframe_acp::resync_notification(chat_id);
-        if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload, RawFrameKind::Resync);
-        }
+        self.push_notification(chat_id, &note, RawFrameKind::Resync);
     }
 
     pub(super) fn handle_compaction(&self, chat_id: &str, phase: CompactionPhase) {
@@ -139,9 +133,7 @@ impl FacadeHub {
             CompactionPhase::Done => CompactionWirePhase::Done,
         };
         let note = mainframe_acp::compaction_notification(chat_id, wire_phase);
-        if let Ok(payload) = serde_json::to_string(&note) {
-            self.push_raw_to_attached(chat_id, payload, RawFrameKind::Compaction);
-        }
+        self.push_notification(chat_id, &note, RawFrameKind::Compaction);
     }
 
     pub(super) fn handle_usage(&self, chat_id: &str, usage: &ContextUsage) {
