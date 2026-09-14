@@ -215,23 +215,23 @@ async fn handle_resume(
         reply: &response,
         redelivered_gate: redelivered_gate.as_deref(),
     };
-    ctx.facade_hub
-        .reset_session(connection, &session_id, seed, |conn| {
-            for update in replay.updates {
-                conn.send_update(&session_id, update);
-            }
-            if let (Some(frame), Some(control)) =
-                (&replay.pending_permission_request, &replay.pending_gate)
-            {
-                conn.deliver_gate(&session_id, control, frame);
-            }
-            // Queue snapshot LAST, and even when empty: resume is the
-            // reconnecting client's only stale-queued-turn eviction.
-            conn.send_json(&mainframe_acp::queue_state_notification(
-                &session_id,
-                queued,
-            ));
-        });
+    let hub = &ctx.facade_hub;
+    hub.reset_session(connection, &session_id, seed, |conn| {
+        for update in replay.updates {
+            conn.send_update(&session_id, update);
+        }
+        if let (Some(frame), Some(control)) =
+            (&replay.pending_permission_request, &replay.pending_gate)
+        {
+            hub.redeliver_gate(conn, &session_id, control, frame);
+        }
+        // Queue snapshot LAST, and even when empty: resume is the
+        // reconnecting client's only stale-queued-turn eviction.
+        conn.send_json(&mainframe_acp::queue_state_notification(
+            &session_id,
+            queued,
+        ));
+    });
 }
 
 /// The queued-prompt snapshot every resume replay closes with — empty when

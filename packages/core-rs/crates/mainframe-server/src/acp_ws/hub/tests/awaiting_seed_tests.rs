@@ -206,3 +206,53 @@ async fn a_gate_resolved_during_the_await_is_not_raised_by_the_drain() {
         "a resolved gate must not be raised by the drain: {frames:?}"
     );
 }
+
+/// The snapshot reports a gate as open, but it was answered on another
+/// surface while that snapshot was in flight. The buffered raise is already
+/// handled; this is the same inversion through the replay's own redelivery,
+/// which the connection's pending map cannot catch — redelivery is what
+/// registers the gate in the first place. The registry is the only witness.
+#[tokio::test]
+async fn a_gate_resolved_since_the_snapshot_is_not_redelivered_by_the_replay() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+
+    hub.begin_resume(&conn, "chat-1");
+    let control = control_request("req-5");
+    hub.on_chat_surface_event(ChatSurfaceEvent::GateRaised {
+        chat_id: "chat-1".to_string(),
+        request: control.clone(),
+    });
+    hub.on_chat_surface_event(ChatSurfaceEvent::GateResolved {
+        chat_id: "chat-1".to_string(),
+        request_id: control.request_id.clone(),
+    });
+
+    // The snapshot predates the resolution, so the replay still carries the
+    // gate as pending.
+    let frame = mainframe_acp::build_permission_request(
+        "chat-1",
+        mainframe_acp::gate_request_id(&control.request_id),
+        &control,
+    );
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |c| {
+        hub.redeliver_gate(c, "chat-1", &control, &frame);
+    });
+
+    let frames = drain(&mut rx);
+    assert!(
+        frames
+            .iter()
+            .all(|f| f["method"] != json!("session/request_permission")),
+        "a gate resolved since the snapshot must not be redelivered: {frames:?}"
+    );
+    assert_eq!(
+        frames
+            .iter()
+            .filter(|f| f["method"] == json!("_mainframe.dev/gate_resolved"))
+            .count(),
+        1,
+        "the resolution the client already got is the last word: {frames:?}"
+    );
+}

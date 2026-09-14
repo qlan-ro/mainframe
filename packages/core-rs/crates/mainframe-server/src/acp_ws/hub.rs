@@ -15,8 +15,10 @@ use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame};
 use mainframe_chat::chat_surface::ChatSurface;
-use mainframe_types::acp::jsonrpc::JsonRpcResponse;
+use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
+use tracing::debug;
 
 use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
@@ -144,6 +146,36 @@ impl FacadeHub {
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
         }
+    }
+
+    /// Redeliver a gate the resume snapshot still reports as open. The
+    /// snapshot is computed before [`Self::reset_session`] runs, so the gate
+    /// may have been answered on another surface in between — the registry
+    /// has recorded that and `_mainframe.dev/gate_resolved` has already gone
+    /// out, so raising it now would hand the client a live gate the daemon
+    /// has closed. The connection's own pending map cannot answer this:
+    /// redelivery IS the registration.
+    pub fn redeliver_gate(
+        &self,
+        connection: &FacadeConnection,
+        chat_id: &str,
+        request: &ControlRequest,
+        frame: &JsonRpcRequest,
+    ) {
+        // Scoped to a statement: the registry lock is never held across a
+        // connection lock.
+        let resolved = self
+            .locked_registry()
+            .is_resolved(chat_id, &request.request_id);
+        if resolved {
+            debug!(
+                chat_id,
+                request_id = %request.request_id,
+                "acp facade: skipped redelivering a gate resolved since the snapshot"
+            );
+            return;
+        }
+        connection.deliver_gate(chat_id, request, frame);
     }
 
     pub fn claim_gate(&self, chat_id: &str, request_id: &str) -> AnswerOutcome {
