@@ -21,10 +21,23 @@ pub struct PendingGate {
     pub request: ControlRequest,
 }
 
+/// A connection's per-session slot. `AwaitingSeed` covers the window a
+/// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
+/// racing that await has nowhere seeded to diff against yet, so its item
+/// snapshot is buffered — overwritten by any later one, since only the
+/// latest matters — instead of diffed and instead of dropped. `reset_session`
+/// drains it once the stream is seeded.
+pub(super) enum SessionSlot {
+    Live(SessionStream),
+    AwaitingSeed {
+        latest: Option<Vec<mainframe_acp::EncodedItem>>,
+    },
+}
+
 pub struct FacadeConnection {
     pub profile: String,
     tx: mpsc::UnboundedSender<String>,
-    sessions: Mutex<HashMap<String, SessionStream>>,
+    sessions: Mutex<HashMap<String, SessionSlot>>,
     pending_gates: Mutex<HashMap<String, PendingGate>>,
 }
 
@@ -40,7 +53,7 @@ impl FacadeConnection {
 
     pub(super) fn locked_sessions(
         &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<String, SessionStream>> {
+    ) -> std::sync::MutexGuard<'_, HashMap<String, SessionSlot>> {
         self.sessions.lock().unwrap_or_else(|e| e.into_inner())
     }
 

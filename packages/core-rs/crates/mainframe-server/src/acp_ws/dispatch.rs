@@ -94,6 +94,11 @@ async fn handle_resume(
         .and_then(|params| params.get("sessionId"))
         .and_then(|value| value.as_str())
         .map(str::to_string);
+    // Mark this session as awaiting its snapshot BEFORE the await, so a live
+    // revision that races it is buffered rather than lost (T5, R2.9).
+    if let Some(session_id) = &session_id {
+        ctx.facade_hub.begin_resume(connection, session_id);
+    }
     let (response, replay) = dispatch_resume(request, ports).await;
 
     let Some(session_id) = session_id else {

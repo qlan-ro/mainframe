@@ -23,7 +23,7 @@ use mainframe_types::adapter::ContextUsage;
 use tokio::sync::mpsc;
 use tracing::debug;
 
-use super::facade_conn::{FacadeConnection, rpc_id_string};
+use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
 /// Coalescing window for chunk fan-out (spec decision 14) and the cadence of
 /// each connection's flush tick — an implementation choice per the spec; the
@@ -84,18 +84,36 @@ impl FacadeHub {
 
     /// Attach `connection` to `chat_id` with a fresh stream (prompt path —
     /// the resume path seeds through [`Self::reset_session`] instead). A
-    /// no-op when already attached.
+    /// no-op when already attached (`Live` or `AwaitingSeed`).
     pub fn attach(&self, connection: &FacadeConnection, chat_id: &str) {
         connection
             .locked_sessions()
             .entry(chat_id.to_string())
-            .or_insert_with(|| SessionStream::new(self.throttle_interval_ms));
+            .or_insert_with(|| SessionSlot::Live(SessionStream::new(self.throttle_interval_ms)));
+    }
+
+    /// Mark `chat_id` as awaiting a resume snapshot, before that snapshot is
+    /// awaited (T5, R2.9): a live revision racing the await has nothing
+    /// seeded to diff against, so [`Self::on_chat_surface_event`] buffers its
+    /// item snapshot here instead of dropping it. Unconditional — a resume
+    /// always ends by fully reseeding via [`Self::reset_session`], so
+    /// discarding any prior `Live` state (or an overlapping earlier await)
+    /// is safe.
+    pub fn begin_resume(&self, connection: &FacadeConnection, chat_id: &str) {
+        connection.locked_sessions().insert(
+            chat_id.to_string(),
+            SessionSlot::AwaitingSeed { latest: None },
+        );
     }
 
     /// Atomically replace the session's stream state with one seeded to
     /// `items`, running `deliver` (the resume reply + replay send) in the
     /// same critical section — so a concurrent live revision can neither
-    /// interleave with the replay nor diff against pre-replay state.
+    /// interleave with the replay nor diff against pre-replay state. Any
+    /// revision buffered by [`Self::begin_resume`] while the snapshot was in
+    /// flight is diffed against the freshly seeded state and sent as a
+    /// catch-up frame AFTER `deliver`, so it lands as a follow-up
+    /// `session/update`, never folded into the replay itself.
     pub fn reset_session(
         &self,
         connection: &FacadeConnection,
@@ -106,8 +124,18 @@ impl FacadeHub {
         let mut sessions = connection.locked_sessions();
         let mut stream = SessionStream::new(self.throttle_interval_ms);
         stream.seed(items);
-        sessions.insert(chat_id.to_string(), stream);
+        let buffered = match sessions.remove(chat_id) {
+            Some(SessionSlot::AwaitingSeed { latest }) => latest,
+            _ => None,
+        };
+        let catch_up = buffered
+            .map(|latest| stream.on_revision(&latest, now_ms()))
+            .unwrap_or_default();
+        sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         deliver(connection);
+        for update in catch_up {
+            connection.send_update(chat_id, update);
+        }
     }
 
     pub fn claim_gate(&self, chat_id: &str, request_id: &str) -> AnswerOutcome {
@@ -123,9 +151,11 @@ impl FacadeHub {
     pub fn flush_connection(&self, connection: &FacadeConnection) {
         let now = now_ms();
         let mut sessions = connection.locked_sessions();
-        for (chat_id, stream) in sessions.iter_mut() {
-            for update in stream.flush(now) {
-                connection.send_update(chat_id, update);
+        for (chat_id, slot) in sessions.iter_mut() {
+            if let SessionSlot::Live(stream) = slot {
+                for update in stream.flush(now) {
+                    connection.send_update(chat_id, update);
+                }
             }
         }
     }
@@ -142,6 +172,13 @@ impl FacadeHub {
             .collect()
     }
 
+    /// Run `per_stream` against every attached, SEEDED session and send its
+    /// updates — diff and publish inside the same per-connection lock (T5,
+    /// R1.2), so a diff can never be computed under the lock and enqueued
+    /// after it, where a second diff for the same session could interleave
+    /// ahead of it. A session still `AwaitingSeed` (a resume in flight) is
+    /// skipped here, same as an unattached one — only
+    /// [`Self::on_display_revision`] buffers for that state.
     fn for_each_attached_session(
         &self,
         chat_id: &str,
@@ -149,15 +186,35 @@ impl FacadeHub {
     ) {
         let now = now_ms();
         for connection in self.attached_connections(chat_id) {
-            let updates = {
-                let mut sessions = connection.locked_sessions();
-                match sessions.get_mut(chat_id) {
-                    Some(stream) => per_stream(stream, now),
-                    None => Vec::new(),
+            let mut sessions = connection.locked_sessions();
+            if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
+                for update in per_stream(stream, now) {
+                    connection.send_update(chat_id, update);
                 }
-            };
-            for update in updates {
-                connection.send_update(chat_id, update);
+            }
+        }
+    }
+
+    /// [`ChatSurfaceEvent::DisplayRevision`]'s handler: unlike the other
+    /// event kinds, a connection `AwaitingSeed` for this chat must not be
+    /// skipped — its latest item snapshot is buffered so
+    /// [`Self::reset_session`] can diff it against the seed it is about to
+    /// receive (T5, R2.9), instead of the revision vanishing for a
+    /// reconnecting client.
+    fn on_display_revision(&self, chat_id: &str, items: &[EncodedItem]) {
+        let now = now_ms();
+        for connection in self.attached_connections(chat_id) {
+            let mut sessions = connection.locked_sessions();
+            match sessions.get_mut(chat_id) {
+                Some(SessionSlot::Live(stream)) => {
+                    for update in stream.on_revision(items, now) {
+                        connection.send_update(chat_id, update);
+                    }
+                }
+                Some(SessionSlot::AwaitingSeed { latest }) => {
+                    *latest = Some(items.to_vec());
+                }
+                None => {}
             }
         }
     }
@@ -214,9 +271,7 @@ impl ChatSurface for FacadeHub {
                     return;
                 }
                 let items = encoder::encode(&messages);
-                self.for_each_attached_session(&chat_id, |stream, now| {
-                    stream.on_revision(&items, now)
-                });
+                self.on_display_revision(&chat_id, &items);
             }
             ChatSurfaceEvent::GateRaised { chat_id, request } => {
                 let frame = mainframe_acp::build_permission_request(
