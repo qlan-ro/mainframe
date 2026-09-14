@@ -10,14 +10,15 @@
 use std::collections::HashMap;
 
 use mainframe_types::acp::content::{ContentBlock, ContentChunk};
-use mainframe_types::acp::tool_call::ToolCallUpdate;
 use mainframe_types::acp::update::{MessageUpsert, SessionUpdate};
 use serde_json::Value;
 
 use crate::encoder::{EncodedItem, ItemRole};
 
 mod tool_patch;
+mod updates;
 use tool_patch::tool_call_patch;
+use updates::{clear_update, create_patch, create_update, message_variant, upsert_variant};
 
 /// Per-item last-known state, so a diff against a fresh [`SessionState`]
 /// (a just-attached or just-resumed session) always creates every item —
@@ -73,88 +74,6 @@ impl SessionState {
             .filter_map(|id| self.items.remove(&id))
             .map(|item| clear_update(&item))
             .collect()
-    }
-}
-
-/// The clearing upsert for a vanished item: content replaced with the empty
-/// list (patch semantics: `Some` = replace), meta untouched. Should the item
-/// later reappear it is a fresh creation — the clear removed it from state.
-fn clear_update(item: &EncodedItem) -> SessionUpdate {
-    let (id, role, is_thought) = match item {
-        EncodedItem::Message { id, role, .. } => (id, *role, false),
-        EncodedItem::Thought { id, .. } => (id, ItemRole::Agent, true),
-        // Filtered out by the caller.
-        EncodedItem::ToolCall { id, .. } => (id, ItemRole::Agent, false),
-    };
-    upsert_variant(role, is_thought)(MessageUpsert {
-        message_id: id.clone(),
-        content: create_patch(Some(Vec::new())),
-        meta: None,
-    })
-}
-
-fn message_variant(role: ItemRole, is_thought: bool) -> fn(ContentChunk) -> SessionUpdate {
-    match (role, is_thought) {
-        (_, true) => SessionUpdate::AgentThoughtChunk,
-        (ItemRole::User, false) => SessionUpdate::UserMessageChunk,
-        (ItemRole::Agent, false) => SessionUpdate::AgentMessageChunk,
-    }
-}
-
-fn upsert_variant(role: ItemRole, is_thought: bool) -> fn(MessageUpsert) -> SessionUpdate {
-    match (role, is_thought) {
-        (_, true) => SessionUpdate::AgentThought,
-        (ItemRole::User, false) => SessionUpdate::UserMessage,
-        (ItemRole::Agent, false) => SessionUpdate::AgentMessage,
-    }
-}
-
-/// `Option<T> -> Option<Option<T>>`: `Some` creates/replaces, `None` omits
-/// (the patch field stays unchanged). Creation-path helper only — revision
-/// meta uses `Some(new_meta.clone())` directly, because a cleared meta must
-/// wire as the explicit `Some(None)` (`null`) this mapping cannot produce.
-fn create_patch<T>(value: Option<T>) -> Option<Option<T>> {
-    value.map(Some)
-}
-
-fn create_update(item: &EncodedItem) -> SessionUpdate {
-    match item {
-        EncodedItem::Message {
-            id,
-            role,
-            content,
-            meta,
-        } => upsert_variant(*role, false)(MessageUpsert {
-            message_id: id.clone(),
-            content: create_patch(Some(content.clone())),
-            meta: create_patch(meta.clone()),
-        }),
-        EncodedItem::Thought { id, content, meta } => {
-            upsert_variant(ItemRole::Agent, true)(MessageUpsert {
-                message_id: id.clone(),
-                content: create_patch(Some(content.clone())),
-                meta: create_patch(meta.clone()),
-            })
-        }
-        EncodedItem::ToolCall {
-            id,
-            title,
-            kind,
-            status,
-            raw_input,
-            content,
-            meta,
-        } => SessionUpdate::ToolCallUpdate(ToolCallUpdate {
-            tool_call_id: id.clone(),
-            title: create_patch(Some(title.clone())),
-            kind: create_patch(Some(*kind)),
-            status: create_patch(Some(*status)),
-            content: create_patch((!content.is_empty()).then(|| content.clone())),
-            locations: None,
-            raw_input: create_patch(Some(raw_input.clone())),
-            raw_output: None,
-            meta: create_patch(meta.clone()),
-        }),
     }
 }
 
