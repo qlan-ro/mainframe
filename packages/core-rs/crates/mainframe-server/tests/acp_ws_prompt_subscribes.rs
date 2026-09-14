@@ -16,7 +16,7 @@ use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_chat::chat_surface::ChatSurface;
 use serde_json::{Value, json};
 use support::barrier_adapter::BarrierAdapter;
-use support::facade::spawn_facade_server_with;
+use support::facade::{revision_event, spawn_facade_server_with};
 use support::{TestServer, WsClient, spawn_test_server};
 
 async fn server_with_mock_adapter() -> TestServer {
@@ -26,25 +26,6 @@ async fn server_with_mock_adapter() -> TestServer {
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
-}
-
-fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface::ChatSurfaceEvent {
-    mainframe_chat::chat_surface::ChatSurfaceEvent::DisplayRevision {
-        chat_id: chat_id.to_string(),
-        messages: vec![mainframe_types::display::DisplayMessage {
-            id: "m1".to_string(),
-            chat_id: chat_id.to_string(),
-            r#type: mainframe_types::display::DisplayMessageType::Assistant,
-            content: vec![mainframe_types::display::DisplayContent::Leaf(
-                mainframe_types::content::LeafContent::Text {
-                    text: text.to_string(),
-                    parent_tool_use_id: None,
-                },
-            )],
-            timestamp: "2026-09-14T00:00:00.000Z".to_string(),
-            metadata: None,
-        }],
-    }
 }
 
 /// Prompts a chat, then pushes one chat-surface revision for that session

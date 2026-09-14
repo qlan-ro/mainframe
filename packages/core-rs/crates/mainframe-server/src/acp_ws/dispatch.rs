@@ -63,8 +63,12 @@ pub async fn handle_inbound(
         InboundFrame::Request(request) if request.method == "session/prompt" => {
             // Attach-on-send stays inline, ahead of the spawn: T35 pins this
             // ordering (a connection observes the session from the moment it
-            // sends, not from whenever the spawned task gets scheduled).
-            if let Some(session_id) = prompt_session_id(&InboundFrame::Request(request.clone())) {
+            // sends, not from whenever the spawned task gets scheduled) —
+            // but behind the negotiation gate, so a peer whose prompt is
+            // about to be refused never gets a stream (spec decision 32).
+            if connection.is_negotiated()
+                && let Some(session_id) = prompt_session_id(&InboundFrame::Request(request.clone()))
+            {
                 ctx.facade_hub.attach(connection, &session_id);
             }
             spawn_prompt(request, daemon.clone(), ports, Arc::clone(connection));
@@ -86,7 +90,9 @@ async fn dispatch_fallback(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
 ) -> Option<String> {
-    if let Some(session_id) = prompt_session_id(&frame) {
+    if connection.is_negotiated()
+        && let Some(session_id) = prompt_session_id(&frame)
+    {
         ctx.facade_hub.attach(connection, &session_id);
     }
     let is_initialize = matches!(&frame, InboundFrame::Request(r) if r.method == "initialize");
@@ -137,9 +143,9 @@ fn spawn_prompt(
     });
 }
 
-/// Attach-on-prompt: a connection that prompts a session observes it from
-/// then on. Attaching before dispatch (even if the prompt later fails) is
-/// harmless — a session that never runs emits nothing.
+/// Attach-on-prompt: a negotiated connection that prompts a session observes
+/// it from then on. Attaching before dispatch (even if the prompt later
+/// fails) is harmless — a session that never runs emits nothing.
 fn prompt_session_id(frame: &InboundFrame) -> Option<String> {
     let params = match frame {
         InboundFrame::Request(request) if request.method == "session/prompt" => {

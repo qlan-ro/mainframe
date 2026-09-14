@@ -9,6 +9,7 @@ use std::time::Duration;
 use mainframe_adapter_mock::MockCliAdapter;
 use mainframe_chat::chat_surface::ChatSurface;
 use serde_json::json;
+use support::facade::revision_event;
 use support::{TestServer, WsClient, spawn_test_server};
 
 async fn server_with_mock_adapter() -> TestServer {
@@ -20,35 +21,30 @@ async fn server_with_mock_adapter() -> TestServer {
     server
 }
 
-fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface::ChatSurfaceEvent {
-    mainframe_chat::chat_surface::ChatSurfaceEvent::DisplayRevision {
-        chat_id: chat_id.to_string(),
-        messages: vec![mainframe_types::display::DisplayMessage {
-            id: "m1".to_string(),
-            chat_id: chat_id.to_string(),
-            r#type: mainframe_types::display::DisplayMessageType::Assistant,
-            content: vec![mainframe_types::display::DisplayContent::Leaf(
-                mainframe_types::content::LeafContent::Text {
-                    text: text.to_string(),
-                    parent_tool_use_id: None,
-                },
-            )],
-            timestamp: "2026-09-14T00:00:00.000Z".to_string(),
-            metadata: None,
-        }],
-    }
-}
-
 /// Attaches by prompting (attach-on-send runs even though the prompt itself
-/// fails — no `ChatManager` in this harness), detaches, then asserts a
-/// further chat-surface revision for that session produces no frame on this
-/// socket (D2, R2.3).
+/// fails — no `ChatManager` in this harness; it still needs the `initialize`
+/// handshake, which gates the attach), detaches, then asserts a further
+/// chat-surface revision for that session produces no frame on this socket
+/// (D2, R2.3).
 #[tokio::test]
 async fn session_detach_stops_session_updates() {
     let server = server_with_mock_adapter().await;
     let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
         .await
         .unwrap();
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": 2,
+            "info": { "name": "mainframe-ui", "version": "2.2.0" }
+        }
+    }))
+    .await;
+    let init_reply = ws.read_event().await;
+    assert!(init_reply.get("result").is_some());
 
     ws.send_json(&json!({
         "jsonrpc": "2.0",
