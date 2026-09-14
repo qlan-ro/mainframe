@@ -151,7 +151,7 @@ impl ChatManager {
 
     /// A turn is in flight. Reads the live cell, not the DB row — the row lags
     /// behind by one write.
-    pub(super) fn is_chat_working(&self, chat_id: &str) -> bool {
+    pub fn is_chat_working(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .is_some_and(|cell| is_working(&cell.lock().unwrap_or_else(|e| e.into_inner()).chat))
     }

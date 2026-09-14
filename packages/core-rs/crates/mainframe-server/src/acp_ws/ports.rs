@@ -81,4 +81,10 @@ impl ResumePort for ManagerPorts {
             }
         })
     }
+
+    fn is_running(&self, session_id: &str) -> bool {
+        self.manager
+            .as_ref()
+            .is_some_and(|manager| manager.is_chat_working(session_id))
+    }
 }

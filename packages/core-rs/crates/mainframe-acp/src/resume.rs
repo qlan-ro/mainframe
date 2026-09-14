@@ -13,7 +13,9 @@ use std::pin::Pin;
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::session::{ResumeSessionRequest, ResumeSessionResponse};
-use mainframe_types::acp::update::SessionUpdate;
+use mainframe_types::acp::update::{
+    IdleStateUpdate, SessionState as WireSessionState, SessionUpdate,
+};
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::display::DisplayMessage;
 use serde::{Deserialize, Serialize};
@@ -48,6 +50,11 @@ pub trait ResumePort: Send + Sync {
         &'a self,
         session_id: &'a str,
     ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)>;
+
+    /// Whether `session_id` has a turn in flight right now — read after the
+    /// snapshot so a mid-turn reconnect's replay ends with the state the
+    /// client's own UI needs to keep streaming smoothly (R2.4).
+    fn is_running(&self, session_id: &str) -> bool;
 }
 
 /// Everything besides the JSON-RPC response a `session/resume` call
@@ -102,7 +109,17 @@ pub async fn dispatch_resume(
     let (messages, pending) = port.resume_snapshot(&resume.session_id).await;
     let items = encoder::encode(&messages);
     let resolved = resolve_cursor(&items, resume.replay_from.as_ref());
-    let (updates, full_replay) = replay(&items, resolved);
+    let (mut updates, full_replay) = replay(&items, resolved);
+    updates.push(SessionUpdate::StateUpdate(
+        if port.is_running(&resume.session_id) {
+            WireSessionState::Running
+        } else {
+            WireSessionState::Idle(IdleStateUpdate {
+                stop_reason: None,
+                meta: None,
+            })
+        },
+    ));
 
     let pending_permission_request = pending.as_ref().map(|request| {
         gates::build_request(

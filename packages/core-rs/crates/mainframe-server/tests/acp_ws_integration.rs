@@ -175,6 +175,16 @@ async fn session_resume_reaches_the_resume_port() {
         "resume must succeed with an empty replay, got {reply}"
     );
 
+    // The replay always ends with the turn state (idle: no ChatManager to
+    // report running) before the queue snapshot (plan task 2).
+    let state_update = ws.read_event().await;
+    assert_eq!(state_update["method"], json!("session/update"));
+    assert_eq!(
+        state_update["params"]["update"]["sessionUpdate"],
+        json!("state_update")
+    );
+    assert_eq!(state_update["params"]["update"]["state"], json!("idle"));
+
     // The replay always closes with the queue snapshot — even empty, so a
     // reconnecting client evicts stale queued turns.
     let queue_state = ws.read_event().await;

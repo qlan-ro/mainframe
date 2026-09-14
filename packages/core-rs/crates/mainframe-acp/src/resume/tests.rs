@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use mainframe_types::acp::jsonrpc::RequestId;
-use mainframe_types::acp::update::SessionUpdate;
+use mainframe_types::acp::update::{SessionState as WireSessionState, SessionUpdate};
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};
 use serde_json::json;
 
@@ -39,6 +39,7 @@ fn control_request(request_id: &str) -> ControlRequest {
 struct FakePort {
     messages: Vec<DisplayMessage>,
     pending: Option<ControlRequest>,
+    running: bool,
 }
 
 impl ResumePort for FakePort {
@@ -47,6 +48,10 @@ impl ResumePort for FakePort {
         _session_id: &'a str,
     ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
         Box::pin(async move { (self.messages.clone(), self.pending.clone()) })
+    }
+
+    fn is_running(&self, _session_id: &str) -> bool {
+        self.running
     }
 }
 
@@ -71,6 +76,7 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
         pending: None,
+        running: false,
     };
     let (response, replay) =
         dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
@@ -79,10 +85,18 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
         response.outcome,
         mainframe_types::acp::jsonrpc::JsonRpcOutcome::Result { .. }
     ));
-    assert_eq!(replay.updates.len(), 1);
+    assert_eq!(
+        replay.updates.len(),
+        2,
+        "content update plus the trailing turn state"
+    );
     assert!(matches!(
         replay.updates[0],
         SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "dmsg_1"
+    ));
+    assert!(matches!(
+        replay.updates[1],
+        SessionUpdate::StateUpdate(WireSessionState::Idle(ref idle)) if idle.stop_reason.is_none()
     ));
 }
 
@@ -91,9 +105,10 @@ async fn an_absent_cursor_behaves_like_start() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
         pending: None,
+        running: false,
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
-    assert_eq!(replay.updates.len(), 1);
+    assert_eq!(replay.updates.len(), 2);
 }
 
 #[tokio::test]
@@ -104,6 +119,7 @@ async fn a_known_cursor_replays_only_items_after_it() {
             dmsg("dmsg_2", vec![text("second")]),
         ],
         pending: None,
+        running: false,
     };
     let (_response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "item", "itemId": "dmsg_1" }))),
@@ -111,7 +127,7 @@ async fn a_known_cursor_replays_only_items_after_it() {
     )
     .await;
 
-    assert_eq!(replay.updates.len(), 1);
+    assert_eq!(replay.updates.len(), 2);
     assert!(matches!(
         replay.updates[0],
         SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "dmsg_2"
@@ -123,6 +139,7 @@ async fn an_unknown_cursor_gets_a_full_replay_with_the_compaction_marker() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
         pending: None,
+        running: false,
     };
     let (response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "item", "itemId": "never-seen" }))),
@@ -132,8 +149,8 @@ async fn an_unknown_cursor_gets_a_full_replay_with_the_compaction_marker() {
 
     assert_eq!(
         replay.updates.len(),
-        1,
-        "unknown cursor still replays everything"
+        2,
+        "unknown cursor still replays everything, plus the trailing turn state"
     );
     let mainframe_types::acp::jsonrpc::JsonRpcOutcome::Result { result } = response.outcome else {
         panic!("expected a success response");
@@ -146,6 +163,7 @@ async fn a_malformed_cursor_shape_is_treated_as_unknown_not_a_request_error() {
     let port = FakePort {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
         pending: None,
+        running: false,
     };
     let (response, replay) = dispatch_resume(
         resume_request(Some(json!({ "type": "not-a-real-cursor-type" }))),
@@ -157,7 +175,7 @@ async fn a_malformed_cursor_shape_is_treated_as_unknown_not_a_request_error() {
         response.outcome,
         mainframe_types::acp::jsonrpc::JsonRpcOutcome::Result { .. }
     ));
-    assert_eq!(replay.updates.len(), 1, "still replays, just as a full one");
+    assert_eq!(replay.updates.len(), 2, "still replays, just as a full one");
 }
 
 #[tokio::test]
@@ -165,6 +183,7 @@ async fn an_open_gate_is_redelivered_as_a_request_permission_request() {
     let port = FakePort {
         messages: Vec::new(),
         pending: Some(control_request("req_1")),
+        running: false,
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
 
@@ -181,6 +200,7 @@ async fn no_pending_gate_means_no_redelivered_request() {
     let port = FakePort {
         messages: Vec::new(),
         pending: None,
+        running: false,
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port).await;
     assert!(replay.pending_permission_request.is_none());
@@ -197,6 +217,7 @@ async fn missing_params_gets_invalid_params() {
     let port = FakePort {
         messages: Vec::new(),
         pending: None,
+        running: false,
     };
     let (response, replay) = dispatch_resume(request, &port).await;
     assert!(matches!(
@@ -204,4 +225,29 @@ async fn missing_params_gets_invalid_params() {
         mainframe_types::acp::jsonrpc::JsonRpcOutcome::Error { .. }
     ));
     assert!(replay.updates.is_empty());
+}
+
+#[tokio::test]
+async fn resume_replay_ends_with_the_current_turn_state() {
+    let running_port = FakePort {
+        messages: vec![dmsg("dmsg_1", vec![text("hello")])],
+        pending: None,
+        running: true,
+    };
+    let (_response, replay) = dispatch_resume(resume_request(None), &running_port).await;
+    assert!(matches!(
+        replay.updates.last(),
+        Some(SessionUpdate::StateUpdate(WireSessionState::Running))
+    ));
+
+    let idle_port = FakePort {
+        messages: vec![dmsg("dmsg_1", vec![text("hello")])],
+        pending: None,
+        running: false,
+    };
+    let (_response, replay) = dispatch_resume(resume_request(None), &idle_port).await;
+    assert!(matches!(
+        replay.updates.last(),
+        Some(SessionUpdate::StateUpdate(WireSessionState::Idle(idle))) if idle.stop_reason.is_none()
+    ));
 }
