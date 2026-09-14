@@ -48,6 +48,12 @@ pub async fn handle_inbound(
             None
         }
         InboundFrame::Request(request) if request.method == "session/resume" => {
+            if !connection.is_negotiated() {
+                return Some(wire(&rpc::error_response(
+                    request.id,
+                    mainframe_acp::initialize_required(),
+                )));
+            }
             handle_resume(request, ctx, connection, &ports).await;
             None
         }
@@ -59,7 +65,19 @@ pub async fn handle_inbound(
             if let Some(session_id) = prompt_session_id(&frame) {
                 ctx.facade_hub.attach(connection, &session_id);
             }
-            dispatch_with_prompt(frame, daemon, &ports).await
+            let is_initialize =
+                matches!(&frame, InboundFrame::Request(r) if r.method == "initialize");
+            let reply =
+                dispatch_with_prompt(frame, daemon, &ports, connection.is_negotiated()).await;
+            if is_initialize
+                && reply
+                    .as_deref()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
+                    .is_some_and(|v| v.get("result").is_some())
+            {
+                connection.mark_negotiated();
+            }
+            reply
         }
     }
 }

@@ -34,6 +34,19 @@ fn initialize_request(id: i64, protocol_version: i64) -> serde_json::Value {
     })
 }
 
+/// Connect and negotiate, draining the `initialize` reply — every method but
+/// `initialize` itself is refused before this (R3.21).
+async fn connect_initialized(server: &TestServer, path: &str) -> WsClient {
+    let mut ws = WsClient::connect(server.addr, path, None).await.unwrap();
+    ws.send_json(&initialize_request(0, 2)).await;
+    let reply = ws.read_event().await;
+    assert!(
+        reply.get("result").is_some(),
+        "initialize must succeed: {reply}"
+    );
+    ws
+}
+
 // ── profile validation ──────────────────────────────────────────────────────
 
 #[tokio::test]
@@ -111,9 +124,7 @@ async fn unsupported_version_gets_a_structured_error_and_the_connection_stays_op
 #[tokio::test]
 async fn unknown_method_gets_method_not_found() {
     let server = server_with_mock_adapter().await;
-    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
-        .await
-        .unwrap();
+    let mut ws = connect_initialized(&server, "/acp/mock-cli").await;
 
     ws.send_json(&json!({
         "jsonrpc": "2.0",
@@ -126,6 +137,33 @@ async fn unknown_method_gets_method_not_found() {
     assert_eq!(reply["error"]["code"], json!(-32601));
 }
 
+// ── initialize is mandatory ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn a_session_method_before_initialize_is_refused() {
+    let server = server_with_mock_adapter().await;
+    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
+        .await
+        .unwrap();
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "session/prompt",
+        "params": { "sessionId": "chat-1", "prompt": [{ "type": "text", "text": "hi" }] }
+    }))
+    .await;
+    let reply = ws.read_event().await;
+    assert_eq!(reply["id"], json!(1));
+    assert_eq!(reply["error"]["code"], json!(-32002));
+    assert_eq!(reply["error"]["message"], json!("initialize required"));
+
+    // The socket stays open: `initialize` on the same connection still works.
+    ws.send_json(&initialize_request(2, 2)).await;
+    let ok_reply = ws.read_event().await;
+    assert!(ok_reply.get("result").is_some());
+}
+
 /// `session/prompt` is wired to the prompt port, not method-not-found. This
 /// harness runs with no `ChatManager`, so the port answers with the
 /// structured session-unavailable error (-32002) — the same code a prompt to
@@ -133,9 +171,7 @@ async fn unknown_method_gets_method_not_found() {
 #[tokio::test]
 async fn session_prompt_reaches_the_prompt_port() {
     let server = server_with_mock_adapter().await;
-    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
-        .await
-        .unwrap();
+    let mut ws = connect_initialized(&server, "/acp/mock-cli").await;
 
     ws.send_json(&json!({
         "jsonrpc": "2.0",
@@ -157,9 +193,7 @@ async fn session_prompt_reaches_the_prompt_port() {
 #[tokio::test]
 async fn session_resume_reaches_the_resume_port() {
     let server = server_with_mock_adapter().await;
-    let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
-        .await
-        .unwrap();
+    let mut ws = connect_initialized(&server, "/acp/mock-cli").await;
 
     ws.send_json(&json!({
         "jsonrpc": "2.0",

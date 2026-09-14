@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{ThrottledFrame, gate_request_id};
@@ -39,6 +40,11 @@ pub struct FacadeConnection {
     tx: mpsc::UnboundedSender<String>,
     sessions: Mutex<HashMap<String, SessionSlot>>,
     pending_gates: Mutex<HashMap<String, PendingGate>>,
+    /// Set once a successful `initialize` negotiates the pinned protocol
+    /// version (R3.21) — read from the socket-loop task on every inbound
+    /// frame, so an `Atomic` rather than a `Mutex` (no critical section to
+    /// hold, just a flag).
+    negotiated: AtomicBool,
 }
 
 impl FacadeConnection {
@@ -48,7 +54,16 @@ impl FacadeConnection {
             tx,
             sessions: Mutex::new(HashMap::new()),
             pending_gates: Mutex::new(HashMap::new()),
+            negotiated: AtomicBool::new(false),
         }
+    }
+
+    pub fn is_negotiated(&self) -> bool {
+        self.negotiated.load(Ordering::Relaxed)
+    }
+
+    pub fn mark_negotiated(&self) {
+        self.negotiated.store(true, Ordering::Relaxed);
     }
 
     pub(super) fn locked_sessions(

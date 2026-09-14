@@ -36,9 +36,10 @@ pub async fn handle_frame_with_prompt(
     text: &str,
     daemon: &DaemonInfo,
     port: &dyn PromptPort,
+    negotiated: bool,
 ) -> Option<String> {
     match rpc::parse_frame(text) {
-        Ok(frame) => dispatch_with_prompt(frame, daemon, port).await,
+        Ok(frame) => dispatch_with_prompt(frame, daemon, port, negotiated).await,
         Err(error) => Some(to_wire(&rpc::error_response(None, error))),
     }
 }
@@ -48,11 +49,19 @@ pub async fn handle_frame_with_prompt(
 /// (`mainframe-server`'s `acp_ws`) peels off `session/resume` and gate-answer
 /// responses before falling through to this dispatcher, and must not pay (or
 /// diverge on) a second parse.
+///
+/// `negotiated` gates every method but `initialize` (R3.21, spec 32): the
+/// handshake is load-bearing, not advisory — a peer that never negotiated (or
+/// negotiated an unsupported version) cannot prompt, resume, or cancel.
 pub async fn dispatch_with_prompt(
     frame: InboundFrame,
     daemon: &DaemonInfo,
     port: &dyn PromptPort,
+    negotiated: bool,
 ) -> Option<String> {
+    if !negotiated && !is_initialize(&frame) {
+        return refuse_before_initialize(&frame);
+    }
     match frame {
         InboundFrame::Request(request) if request.method == "session/prompt" => {
             Some(to_wire(&prompt::dispatch_prompt(request, port).await))
@@ -64,6 +73,33 @@ pub async fn dispatch_with_prompt(
         InboundFrame::Request(request) => Some(to_wire(&dispatch_request(request, daemon))),
         InboundFrame::Notification(_) => None,
         InboundFrame::Response(_) => None,
+    }
+}
+
+fn is_initialize(frame: &InboundFrame) -> bool {
+    matches!(frame, InboundFrame::Request(request) if request.method == "initialize")
+}
+
+/// A notification gets no reply either way (JSON-RPC 2.0); a request gets
+/// the structured refusal, correlated to its own id.
+fn refuse_before_initialize(frame: &InboundFrame) -> Option<String> {
+    match frame {
+        InboundFrame::Request(request) => Some(to_wire(&rpc::error_response(
+            request.id.clone(),
+            initialize_required(),
+        ))),
+        InboundFrame::Notification(_) | InboundFrame::Response(_) => None,
+    }
+}
+
+/// The structured refusal every method but `initialize` gets before the
+/// handshake completes (R3.21) — `mainframe-server` reuses it for
+/// `session/resume`, which it peels off before this dispatcher ever sees it.
+pub fn initialize_required() -> JsonRpcErrorObject {
+    JsonRpcErrorObject {
+        code: error_codes::RESOURCE_NOT_FOUND,
+        message: "initialize required".into(),
+        data: None,
     }
 }
 
@@ -166,8 +202,8 @@ mod tests {
         }
     }
 
-    async fn handle(text: &str) -> Option<String> {
-        handle_frame_with_prompt(text, &daemon(), &UnusedPort).await
+    async fn handle(text: &str, negotiated: bool) -> Option<String> {
+        handle_frame_with_prompt(text, &daemon(), &UnusedPort, negotiated).await
     }
 
     #[tokio::test]
@@ -175,7 +211,9 @@ mod tests {
         let text = include_str!(
             "../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json"
         );
-        let reply = handle(text).await.expect("initialize must reply");
+        // Not yet negotiated: `initialize` is the one method exempt from the
+        // gate (R3.21) — it is how negotiation happens.
+        let reply = handle(text, false).await.expect("initialize must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
 
         assert_eq!(value["id"], json!(1));
@@ -193,7 +231,7 @@ mod tests {
     #[tokio::test]
     async fn unsupported_version_gets_the_structured_error_and_a_still_open_connection() {
         let text = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":99,"info":{"name":"x","version":"1"}}}"#;
-        let reply = handle(text).await.expect("initialize must reply");
+        let reply = handle(text, false).await.expect("initialize must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
 
         assert_eq!(
@@ -208,7 +246,7 @@ mod tests {
         // The connection stays open: a second, valid frame on the same
         // (simulated) socket still gets a proper reply.
         let ok = r#"{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":2,"info":{"name":"x","version":"1"}}}"#;
-        let second = handle(ok)
+        let second = handle(ok, false)
             .await
             .expect("a later frame must still be handled");
         let second_value: Value = serde_json::from_str(&second).unwrap();
@@ -218,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn unknown_method_request_gets_method_not_found() {
         let text = r#"{"jsonrpc":"2.0","id":1,"method":"definitely/not-a-method","params":{}}"#;
-        let reply = handle(text).await.unwrap();
+        let reply = handle(text, true).await.unwrap();
         let value: Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(value["error"]["code"], json!(error_codes::METHOD_NOT_FOUND));
     }
@@ -226,16 +264,37 @@ mod tests {
     #[tokio::test]
     async fn unadvertised_notification_gets_no_reply() {
         let text = r#"{"jsonrpc":"2.0","method":"session/update","params":{}}"#;
-        assert_eq!(handle(text).await, None);
+        assert_eq!(handle(text, true).await, None);
     }
 
     #[tokio::test]
     async fn malformed_frame_gets_a_null_id_error_and_the_loop_can_continue() {
-        let reply = handle("{not json")
+        let reply = handle("{not json", true)
             .await
             .expect("malformed frame must reply");
         let value: Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(value["id"], Value::Null);
         assert_eq!(value["error"]["code"], json!(error_codes::PARSE_ERROR));
+    }
+
+    #[tokio::test]
+    async fn a_session_method_before_initialize_is_refused() {
+        let text = r#"{"jsonrpc":"2.0","id":1,"method":"session/prompt","params":{"sessionId":"chat_1","prompt":[]}}"#;
+        let reply = handle(text, false)
+            .await
+            .expect("a request before initialize must still get a reply");
+        let value: Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(value["id"], json!(1));
+        assert_eq!(
+            value["error"]["code"],
+            json!(error_codes::RESOURCE_NOT_FOUND)
+        );
+        assert_eq!(value["error"]["message"], json!("initialize required"));
+    }
+
+    #[tokio::test]
+    async fn a_notification_before_initialize_gets_no_reply() {
+        let text = r#"{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"chat_1"}}"#;
+        assert_eq!(handle(text, false).await, None);
     }
 }

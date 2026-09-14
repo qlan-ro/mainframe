@@ -185,7 +185,7 @@ async fn handle_frame_with_prompt_routes_session_prompt_through_the_port() {
     let port = FakePort::default();
     let text = r#"{"jsonrpc":"2.0","id":1,"method":"session/prompt","params":{"sessionId":"chat_1","prompt":[{"type":"text","text":"hi"}]}}"#;
 
-    let reply = handle_frame_with_prompt(text, &daemon(), &port)
+    let reply = handle_frame_with_prompt(text, &daemon(), &port, true)
         .await
         .expect("session/prompt must reply");
     let value: Value = serde_json::from_str(&reply).unwrap();
@@ -205,7 +205,7 @@ async fn handle_frame_with_prompt_routes_session_cancel_through_the_port_with_no
     let port = FakePort::default();
     let text = r#"{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"chat_1"}}"#;
 
-    let reply = handle_frame_with_prompt(text, &daemon(), &port).await;
+    let reply = handle_frame_with_prompt(text, &daemon(), &port, true).await;
     assert_eq!(reply, None, "a notification never gets a reply");
     assert_eq!(*port.cancelled.lock().unwrap(), vec!["chat_1".to_string()]);
 }
@@ -216,7 +216,8 @@ async fn handle_frame_with_prompt_still_serves_initialize_synchronously() {
     let text =
         include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
 
-    let reply = handle_frame_with_prompt(text, &daemon(), &port)
+    // Not yet negotiated: initialize is exempt from the gate (R3.21).
+    let reply = handle_frame_with_prompt(text, &daemon(), &port, false)
         .await
         .expect("initialize must still reply");
     let value: Value = serde_json::from_str(&reply).unwrap();
@@ -234,7 +235,7 @@ async fn handle_frame_with_prompt_ignores_unrelated_notifications() {
     let text = serde_json::to_string(&note).unwrap();
 
     assert_eq!(
-        handle_frame_with_prompt(&text, &daemon(), &port).await,
+        handle_frame_with_prompt(&text, &daemon(), &port, true).await,
         None
     );
 }
