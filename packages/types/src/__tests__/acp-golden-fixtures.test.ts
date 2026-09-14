@@ -23,6 +23,7 @@ import {
   QueuedPromptStateSchema,
   CompactionParamsSchema,
   QueueStateParamsSchema,
+  ResyncParamsSchema,
   SessionDetachParamsSchema,
   TranscriptClearedParamsSchema,
   RetryMarkerSchema,
@@ -66,6 +67,8 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'transcript-cleared.params.json') return TranscriptClearedParamsSchema;
   if (name === 'session-detach.notification.json') return JsonRpcNotificationSchema;
   if (name === 'session-detach.params.json') return SessionDetachParamsSchema;
+  if (name === 'resync.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'resync.params.json') return ResyncParamsSchema;
   if (name === 'compaction.notification.json') return JsonRpcNotificationSchema;
   if (name === 'compaction.params.json') return CompactionParamsSchema;
   if (name === 'heartbeat.notification.json') return JsonRpcNotificationSchema;

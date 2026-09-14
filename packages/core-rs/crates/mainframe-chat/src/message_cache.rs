@@ -43,15 +43,23 @@ impl MessageCache {
         }
     }
 
-    pub fn append(&mut self, chat_id: &str, message: ChatMessage) {
+    /// Appends `message`, returning whether the per-chat cap dropped
+    /// anything from the front (T20, R3.11) — an attached facade client's
+    /// signal that its accumulator has silently diverged and must re-resume
+    /// rather than trust the next delta.
+    pub fn append(&mut self, chat_id: &str, message: ChatMessage) -> bool {
         self.track_key(chat_id);
         let messages = self.cache.entry(chat_id.to_string()).or_default();
         messages.push(message);
-        if messages.len() > MAX_MESSAGES_PER_CHAT {
+        let evicted = if messages.len() > MAX_MESSAGES_PER_CHAT {
             let overflow = messages.len() - MAX_MESSAGES_PER_CHAT;
             messages.drain(0..overflow);
-        }
+            true
+        } else {
+            false
+        };
         self.evict_if_needed();
+        evicted
     }
 
     fn evict_if_needed(&mut self) {
@@ -194,6 +202,21 @@ mod tests {
         cache.append("c1", msg("b"));
         assert!(cache.move_to_end("c1", "b"));
         assert_eq!(ids(&cache, "c1"), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn append_past_the_cap_reports_an_eviction() {
+        let mut cache = MessageCache::new();
+        for n in 0..MAX_MESSAGES_PER_CHAT {
+            assert!(
+                !cache.append("c1", msg(&n.to_string())),
+                "message {n} must not evict yet"
+            );
+        }
+        assert!(
+            cache.append("c1", msg("overflow")),
+            "the 2001st message must report the front-drop eviction"
+        );
     }
 }
 

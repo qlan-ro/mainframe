@@ -73,6 +73,19 @@ export const SessionDetachParamsSchema = z
 export type SessionDetachParams = z.infer<typeof SessionDetachParamsSchema>;
 
 /**
+ * `_mainframe.dev/resync`'s params: the chat's message cache hit its per-chat
+ * cap and dropped messages from the front — the client's accumulator has
+ * silently diverged and must re-resume. Distinct from `transcript_cleared`:
+ * the handler calls `reattach()` with no reducer wipe.
+ */
+export const ResyncParamsSchema = z
+  .object({
+    sessionId: z.string(),
+  })
+  .loose();
+export type ResyncParams = z.infer<typeof ResyncParamsSchema>;
+
+/**
  * Params for the daemon's custom `_mainframe.dev/heartbeat` notification
  * (spec decision 13). `sequence` lets a client detect a gap and resume
  * instead of heuristically refetching.

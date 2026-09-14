@@ -30,6 +30,7 @@ use crate::types::ActiveChat;
 use partial_overlay::{PartialOverlay, PartialOverlays};
 
 mod partial_overlay;
+pub(crate) mod resync;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
 
@@ -372,10 +373,12 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     fn append_and_display(&self, message: ChatMessage) {
-        self.messages
+        let evicted = self
+            .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(&self.chat_id, message);
+        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
         self.emit_display();
     }
 
@@ -1200,10 +1203,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             None,
             vendor_id.map(str::to_string),
         );
-        self.messages
+        let evicted = self
+            .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(&self.chat_id, message);
+        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
         self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
             phase: CompactionPhase::Done,

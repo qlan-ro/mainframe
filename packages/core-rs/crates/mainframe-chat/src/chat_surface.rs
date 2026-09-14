@@ -86,6 +86,13 @@ pub enum ChatSurfaceEvent {
     TranscriptCleared {
         chat_id: String,
     },
+    /// The chat's `MessageCache` entry hit its per-chat cap and dropped
+    /// messages from the front (T20, R3.11). An attached client's local
+    /// accumulator has silently diverged from what the cache still holds —
+    /// it must re-resume, not trust the next delta.
+    Resync {
+        chat_id: String,
+    },
     /// The chat's queued-prompt set changed (enqueue, dequeue, cancel, or
     /// wholesale clear). Always the FULL current snapshot — never a delta —
     /// so observers cannot accumulate ordering bugs.

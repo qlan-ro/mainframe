@@ -358,6 +358,14 @@ impl ChatSurface for FacadeHub {
                     self.push_raw_to_attached(&chat_id, payload);
                 }
             }
+            // Same FIFO as content updates (T6, R2.11): a resync must not
+            // overtake the frames whose loss triggered the eviction.
+            ChatSurfaceEvent::Resync { chat_id } => {
+                let note = mainframe_acp::resync_notification(&chat_id);
+                if let Ok(payload) = serde_json::to_string(&note) {
+                    self.push_raw_to_attached(&chat_id, payload);
+                }
+            }
             ChatSurfaceEvent::Compaction { chat_id, phase } => {
                 let wire_phase = match phase {
                     CompactionPhase::Started => CompactionWirePhase::Started,

@@ -179,10 +179,16 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
 
         if let Some(text) = &response.message {
             let message = self.transient_user_text(chat_id, text);
-            self.messages
+            let evicted = self
+                .messages
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .append(chat_id, message);
+            crate::event_handler::resync::notify_if_evicted(
+                self.chat_surface.get(),
+                chat_id,
+                evicted,
+            );
             self.deps.emit_display(chat_id);
         }
 

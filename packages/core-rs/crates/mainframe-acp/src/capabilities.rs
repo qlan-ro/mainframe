@@ -7,7 +7,7 @@
 
 use mainframe_types::acp::extensions::{
     CompactionParams, CompactionWirePhase, GateResolvedParams, HeartbeatParams,
-    MainframeCapabilities, QueueStateParams, TranscriptClearedParams,
+    MainframeCapabilities, QueueStateParams, ResyncParams, TranscriptClearedParams,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::chat::QueuedMessageRef;
@@ -102,6 +102,20 @@ pub fn queue_state_notification(
         params: Some(serde_json::json!(QueueStateParams {
             session_id: session_id.to_string(),
             refs,
+        })),
+    }
+}
+
+/// The `_mainframe.dev/resync` notification (T20, R3.11): the session's
+/// `MessageCache` evicted from the front, so an attached client's
+/// accumulator has diverged and must re-resume — with no reducer wipe,
+/// unlike `transcript_cleared`.
+pub fn resync_notification(session_id: &str) -> JsonRpcNotification {
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/resync".into(),
+        params: Some(serde_json::json!(ResyncParams {
+            session_id: session_id.to_string(),
         })),
     }
 }

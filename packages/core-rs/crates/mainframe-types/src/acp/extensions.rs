@@ -234,6 +234,18 @@ pub struct SessionDetachParams {
     pub session_id: String,
 }
 
+/// `_mainframe.dev/resync`'s params: the chat's `MessageCache` entry hit its
+/// per-chat cap and dropped messages from the front (T20, R3.11, plan
+/// decision 4/spec 34) — an attached client's accumulator has silently
+/// diverged and must re-resume. Distinct from `transcript_cleared`: reusing
+/// that notification would blank the thread before the replay lands, where
+/// `resync` re-resumes with no reducer wipe.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResyncParams {
+    pub session_id: String,
+}
+
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
