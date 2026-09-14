@@ -122,10 +122,25 @@ fn wrap_meta(meta: ItemMeta) -> Option<Value> {
         .map(|value| json!({ MAINFRAME_META_NAMESPACE: value }))
 }
 
+/// Queued turns render from the `queue_state` snapshot, not the transcript
+/// (D1) — the encoder drops them so a dequeue is a plain create at the tail
+/// instead of a reorder the wire cannot express.
+fn is_queued(message: &DisplayMessage) -> bool {
+    message
+        .metadata
+        .as_ref()
+        .and_then(|meta| meta.get("queued"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
 /// Encode a `DisplayMessage[]` snapshot into the ACP item list.
 pub fn encode(messages: &[DisplayMessage]) -> Vec<EncodedItem> {
     let mut out = Vec::new();
     for message in messages {
+        if is_queued(message) {
+            continue;
+        }
         let container = Container {
             id: &message.id,
             timestamp: &message.timestamp,

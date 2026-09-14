@@ -756,3 +756,18 @@ fn an_ask_user_question_result_carries_its_answers_in_the_text_block_meta() {
         json!("Which db?")
     );
 }
+
+#[test]
+fn queued_messages_are_not_encoded_as_items() {
+    let mut queued = dmsg("q1", DisplayMessageType::User, vec![text("queued turn")]);
+    queued.metadata = Some(HashMap::from([("queued".to_string(), json!(true))]));
+    let messages = vec![
+        dmsg("u1", DisplayMessageType::User, vec![text("hi")]),
+        queued,
+        dmsg("a1", DisplayMessageType::Assistant, vec![text("hello")]),
+    ];
+
+    let items = encode(&messages);
+    let ids: Vec<&str> = items.iter().map(EncodedItem::id).collect();
+    assert_eq!(ids, vec!["u1", "a1"]);
+}
