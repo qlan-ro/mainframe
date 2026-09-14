@@ -187,6 +187,16 @@ export class AcpFacadeClient {
     this.requireConnection().sendNotification('session/cancel', notification);
   }
 
+  /**
+   * Drop this session's live stream on the daemon (`_mainframe.dev/session_detach`,
+   * D2 dormancy). Best-effort: a disconnected client has nothing to notify —
+   * the daemon already lost this connection — so this never throws.
+   */
+  detach(sessionId: string): void {
+    if (!this.connected) return;
+    this.requireConnection().sendNotification('_mainframe.dev/session_detach', { sessionId });
+  }
+
   async resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse> {
     const request: ResumeSessionRequest = { sessionId, cwd, ...(replayFrom !== undefined ? { replayFrom } : {}) };
     const result = await this.requireConnection().sendRequest('session/resume', request);

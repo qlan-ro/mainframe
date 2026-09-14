@@ -88,13 +88,21 @@ export function useChatThreadRuntime(
     void controller.load();
   }, [controller]);
 
-  // Dormancy (D4): open the live WS sub only while this is the active thread.
-  // The effect cleanup is the live teardown, so deactivation drops the sub.
+  // Dormancy (D2/D4, todo #350 T33): the side-band WS sub AND the facade
+  // plane's subscription both gate on the same active boolean, in the same
+  // effect. setActive is called unconditionally so a flip to inactive
+  // detaches even without a cleanup running (StrictMode double-invoke
+  // safety net); the cleanup path (deactivation, or unmount) is what
+  // actually detaches in the common case.
   const active = opts?.active ?? false;
   useEffect(() => {
+    controller.setActive(active);
     if (!active) return;
-    const stop = controller.subscribeLive();
-    return stop;
+    const stopLive = controller.subscribeLive();
+    return () => {
+      stopLive();
+      controller.setActive(false);
+    };
   }, [controller, active]);
 
   const isRunning = isRunningFromState(state);

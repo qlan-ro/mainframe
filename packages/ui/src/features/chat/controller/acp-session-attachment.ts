@@ -39,6 +39,8 @@ export interface AcpSessionClientPort {
   cancel(sessionId: string): void;
   resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse>;
   respondPermission(id: JsonRpcRequestId, response: import('@qlan-ro/mainframe-types').RequestPermissionResponse): void;
+  /** Drop this session's live stream on the daemon (D2 dormancy) — `_mainframe.dev/session_detach`. */
+  detach(sessionId: string): void;
 }
 
 export interface AcpSessionAttachmentHost {
@@ -54,10 +56,25 @@ export interface AcpSessionAttachmentHost {
   onGateResolvedForSession(requestId: string): void;
 }
 
-/** Connect/replay half of `AcpSessionPlane`: attach, reattach, gap resume, and the empty-refresh guard. */
+/**
+ * Connect/replay half of `AcpSessionPlane`: attach, reattach, gap resume,
+ * dormancy detach/reactivate, and the empty-refresh guard.
+ *
+ * Two independent bits of state (D2, todo #350 T33):
+ *  - `client` — bound as soon as a session is loaded, active or not. Prompt/
+ *    cancel/reply need only this, so they work from a dormant chat too
+ *    (`requireClient()` never checks subscription).
+ *  - `subscribed` — whether this session's listeners are wired and it has
+ *    told the daemon it's observing (`session/resume`). Only the active
+ *    thread stays subscribed; `detach()`/`reactivate()` toggle it without
+ *    touching `client`, so a daemon-switch rebind (`bindClient`) survives a
+ *    dormant period untouched.
+ */
 export class AcpSessionAttachment {
   private client: AcpSessionClientPort | null = null;
   private readonly unsubscribe: Array<() => void> = [];
+  private subscribed = false;
+  /** Survives a detach — distinguishes a genuinely first-ever attach (full replay) from a switch-back (cursor resume). */
   private hasAttached = false;
 
   constructor(private readonly host: AcpSessionAttachmentHost) {}
@@ -66,15 +83,52 @@ export class AcpSessionAttachment {
     return this.client;
   }
 
+  get isSubscribed(): boolean {
+    return this.subscribed;
+  }
+
+  /** Bind (or rebind, e.g. on a daemon switch) the shared client — no wiring, no wire traffic. Safe while dormant. */
+  bindClient(client: AcpSessionClientPort): void {
+    if (this.client === client) return;
+    if (this.subscribed) this.detachListeners();
+    this.client = client;
+    if (this.subscribed) this.wireListeners(client);
+  }
+
   /** Bind to the shared per-profile client and full-replay this chat. Idempotent per client. */
   async attach(client: AcpSessionClientPort): Promise<void> {
-    if (this.client !== client) {
-      this.detachListeners();
-      this.client = client;
-      this.wireListeners(client);
-    }
+    this.bindClient(client);
+    this.subscribeIfNeeded();
     await this.resume({ type: 'start' });
     this.hasAttached = true;
+  }
+
+  /**
+   * Re-establish the live stream after a `detach()` (D2 switch-back): a
+   * first-ever activation (never `attach()`ed before) still needs the full
+   * replay `attach()` gives; a genuine switch-back resumes from the last
+   * settled item instead, so the daemon pushes only what changed while
+   * dormant — no full replay.
+   */
+  async reactivate(client: AcpSessionClientPort): Promise<void> {
+    this.bindClient(client);
+    if (this.subscribed) return;
+    if (!this.hasAttached) {
+      await this.attach(client);
+      return;
+    }
+    this.subscribeIfNeeded();
+    const settled = this.host.getLastSettledItemId();
+    const cursor: ReplayCursor = settled ? { type: 'item', itemId: settled } : { type: 'start' };
+    await this.resume(cursor);
+  }
+
+  /** Drop this session's live stream (D2 dormancy) — tells the daemon, stops listening, keeps `client` bound for prompt/cancel/reply. */
+  detach(): void {
+    if (!this.subscribed) return;
+    this.client?.detach(this.host.getChatId());
+    this.detachListeners();
+    this.subscribed = false;
   }
 
   /**
@@ -84,16 +138,20 @@ export class AcpSessionAttachment {
    * update landing between the reset and the resume response, which would
    * repopulate the accumulator and re-arm the guard just in time to refuse
    * the wipe it's finishing. `bypassGuard` makes a server-initiated wipe
-   * deterministic regardless of that race (R2.2 / R1.3).
+   * deterministic regardless of that race (R2.2 / R1.3). No-op while
+   * detached — the server notification that would trigger this can't
+   * arrive without a live subscription anyway.
    */
   async reattach(): Promise<void> {
+    if (!this.subscribed) return;
     this.host.resetSettledCursor();
     this.host.resetAccumulator();
     await this.resume({ type: 'start' }, { bypassGuard: true });
   }
 
+  /** No-op while detached — same reasoning as `reattach()`. */
   async resumeFromGap(): Promise<void> {
-    if (this.host.isDisposed() || !this.hasAttached) return;
+    if (!this.subscribed || this.host.isDisposed() || !this.hasAttached) return;
     const settled = this.host.getLastSettledItemId();
     const cursor: ReplayCursor = settled ? { type: 'item', itemId: settled } : { type: 'start' };
     try {
@@ -103,6 +161,7 @@ export class AcpSessionAttachment {
     }
   }
 
+  /** Prompt/cancel/reply only need a bound client, not a live subscription — a dormant chat can still be prompted (the daemon attaches this connection on send). */
   requireClient(): AcpSessionClientPort {
     if (!this.client) throw new Error('[acp-session] not attached — no facade client yet');
     return this.client;
@@ -110,7 +169,14 @@ export class AcpSessionAttachment {
 
   dispose(): void {
     this.detachListeners();
+    this.subscribed = false;
     this.client = null;
+  }
+
+  private subscribeIfNeeded(): void {
+    if (this.subscribed) return;
+    this.wireListeners(this.requireClient());
+    this.subscribed = true;
   }
 
   private wireListeners(client: AcpSessionClientPort): void {

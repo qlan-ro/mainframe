@@ -71,6 +71,7 @@ function makeController(
   return {
     subscribeState: (_l: () => void) => () => {},
     subscribeLive: () => () => {},
+    setActive: (_active: boolean) => {},
     getState: () => stableState,
     getThreadId: () => 'chat-existing',
     hasRemoteId: () => opts.hasRemoteId ?? true,

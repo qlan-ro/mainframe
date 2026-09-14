@@ -47,6 +47,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   readonly resumeCalls: Array<{ sessionId: string; cursor: ReplayCursor | undefined }>;
   readonly cancelCalls: string[];
   readonly respondCalls: Array<{ id: JsonRpcRequestId; response: RequestPermissionResponse }>;
+  readonly detachCalls: string[];
   /** Controls the next resume() response's `_meta['_mainframe.dev']`. */
   nextResumeMeta: { itemCount?: number; fullReplay?: boolean } | undefined;
   emitUpdate(sessionId: string, update: SessionUpdate): void;
@@ -74,6 +75,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
     resumeCalls: [],
     cancelCalls: [],
     respondCalls: [],
+    detachCalls: [],
     nextResumeMeta: undefined,
 
     ensureConnected: vi.fn().mockResolvedValue(undefined),
@@ -116,6 +118,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     cancel(sessionId) {
       client.cancelCalls.push(sessionId);
+    },
+    detach(sessionId) {
+      client.detachCalls.push(sessionId);
     },
     async resume(sessionId, _cwd, cursor) {
       client.resumeCalls.push({ sessionId, cursor });
@@ -257,9 +262,20 @@ export interface ControllerRig {
   acpClient: FakeAcpClient;
 }
 
-export function makeController(chatId: string = CHAT_ID, options: { connected?: boolean } = {}): ControllerRig {
+/**
+ * `active` defaults to `true` (D2 dormancy, T33): most existing suites
+ * predate the active/inactive facade split and assume the plane is live as
+ * soon as the chat loads — matching the single-thread-focused default a
+ * real session almost always has. Dormancy tests pass `active: false` and
+ * drive `ctrl.setActive(...)` explicitly.
+ */
+export function makeController(
+  chatId: string = CHAT_ID,
+  options: { connected?: boolean; active?: boolean } = {},
+): ControllerRig {
   const ws = makeFakeWs(options);
   const acpClient = makeFakeAcpClient();
   const ctrl = new AcpChatController(chatId, PORT, ws.fakeClient, () => acpClient);
+  if (options.active !== false) ctrl.setActive(true);
   return { ctrl, ws, acpClient };
 }

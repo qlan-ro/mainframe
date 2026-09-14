@@ -114,6 +114,7 @@ function makeFakeController(chatId: string, hasRemoteId = false): FakeData {
       data.subscribeLiveCalls += 1;
       return teardown;
     },
+    setActive: (_active: boolean) => {},
     getState: () => stableState,
     getThreadId: () => chatId,
     hasRemoteId: () => data._hasRemoteId,
@@ -247,6 +248,7 @@ describe('useChatThreadRuntime — onNew on a local controller (no remoteId)', (
     const ctrl = {
       subscribeState: (_l: () => void) => () => {},
       subscribeLive: () => () => {},
+      setActive: (_active: boolean) => {},
       getState: () => stableState,
       getThreadId: () => chatId,
       hasRemoteId: () => false,

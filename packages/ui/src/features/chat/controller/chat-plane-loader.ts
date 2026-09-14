@@ -1,9 +1,19 @@
 /**
  * The controller's load pipeline — REST config seed (which names the adapter
- * profile), shared facade-client connect, and session-plane attach (full
- * replay) — deduped by a single in-flight promise. Split from
- * `acp-chat-controller.ts` along the lifecycle seam: the controller keeps
- * identity and dispatch; this owns "how a chat becomes loaded".
+ * profile), shared facade-client connect, and session-plane bind — deduped
+ * by a single in-flight promise. Split from `acp-chat-controller.ts` along
+ * the lifecycle seam: the controller keeps identity and dispatch; this owns
+ * "how a chat becomes loaded".
+ *
+ * Attach is NOT part of load (D2 dormancy, todo #350 T33): a chat's config
+ * loads regardless of whether it's the active thread, but the plane only
+ * SUBSCRIBES (session/resume, listeners) when active. `load()` binds the
+ * resolved client and, if the host is already active, attaches it too —
+ * both inside the SAME deduped promise, so an `await load()` from any
+ * caller (mount, a switch-back) sees a fully-settled result either way.
+ * `loadState: 'ready'` therefore means "config seeded, client bound" — plus
+ * "facade live" only when active; only the active thread renders, so an
+ * inactive thread reading `ready` without a live stream is harmless.
  */
 import { getChat, getChatWorkflowRuns } from '../../../lib/api/chats';
 import type { AcpClientHandle } from './acp-chat-controller';
@@ -17,16 +27,27 @@ export interface ChatLoaderHost {
   isDisposed(): boolean;
   /** loadState already 'ready' — a non-forced load resolves immediately. */
   isReady(): boolean;
+  /** Whether this chat is the active thread right now (D2) — gates the attach half of load. */
+  isActive(): boolean;
   dispatch(event: ChatStateEvent): void;
   /** Test seam — production resolves the shared per-profile client. */
   resolveClient(profile: string): AcpClientHandle;
-  attachPlane(client: AcpClientHandle): Promise<void>;
+  /** Bind the plane to the client — no subscription, no wire traffic. */
+  bindPlane(client: AcpClientHandle): void;
+  /** Subscribe the plane (session/resume + listeners) — only while active. */
+  reactivatePlane(client: AcpClientHandle): Promise<void>;
 }
 
 export class ChatPlaneLoader {
   private loadPromise: Promise<void> | null = null;
+  private client: AcpClientHandle | null = null;
 
   constructor(private readonly host: ChatLoaderHost) {}
+
+  /** The last client bound during a successful load — null before the first load resolves. */
+  getClient(): AcpClientHandle | null {
+    return this.client;
+  }
 
   /** Deduped by loadPromise; `force` re-runs it (extras.retry after a failed load). */
   load(force = false): Promise<void> {
@@ -36,7 +57,7 @@ export class ChatPlaneLoader {
 
     this.host.dispatch({ type: 'history.loading' });
 
-    const request = this.attachPlanes()
+    const request = this.seedAndBind()
       .then(() => {
         if (this.loadPromise !== request) return;
         this.host.dispatch({ type: 'history.ready' });
@@ -53,7 +74,7 @@ export class ChatPlaneLoader {
     return request;
   }
 
-  private async attachPlanes(): Promise<void> {
+  private async seedAndBind(): Promise<void> {
     const host = this.host;
     const chat = await getChat(host.getPort(), host.getDaemonId());
     if (host.isDisposed()) return;
@@ -73,6 +94,8 @@ export class ChatPlaneLoader {
     const client = host.resolveClient(profile);
     await client.ensureConnected();
     if (host.isDisposed()) return;
-    await host.attachPlane(client);
+    this.client = client;
+    host.bindPlane(client);
+    if (host.isActive()) await host.reactivatePlane(client);
   }
 }

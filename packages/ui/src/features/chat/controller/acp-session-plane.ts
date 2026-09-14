@@ -86,6 +86,21 @@ export class AcpSessionPlane {
     await this.attachment.attach(client);
   }
 
+  /** Bind (or rebind) the client without subscribing — prompt/cancel/reply work from here; no wire traffic (D2, T33). */
+  bindClient(client: AcpSessionClientPort): void {
+    this.attachment.bindClient(client);
+  }
+
+  /** Re-establish the live stream after a detach — cursor resume from the last settled item, not a full replay (D2, T33). */
+  async reactivate(client: AcpSessionClientPort): Promise<void> {
+    await this.attachment.reactivate(client);
+  }
+
+  /** Drop the live stream (D2 dormancy): tells the daemon, stops listening, keeps the client bound. */
+  detach(): void {
+    this.attachment.detach();
+  }
+
   /** Full re-replay of the current transcript (e.g. after a server-side wipe). */
   async reattach(): Promise<void> {
     await this.attachment.reattach();

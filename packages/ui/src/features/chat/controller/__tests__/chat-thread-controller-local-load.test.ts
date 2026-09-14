@@ -61,6 +61,36 @@ describe('AcpChatController.setRemoteId — triggers the initial load', () => {
     const calls = vi.mocked(getChat).mock.calls;
     expect(calls.some((args) => args[1] === REMOTE_ID)).toBe(true);
     expect(calls.some((args) => args[1] === LOCAL_ID)).toBe(false);
+  });
+
+  // D2 dormancy (T33): a controller built directly (not via the test kit's
+  // active-by-default makeController) starts inactive — the config loads
+  // regardless, but the facade only subscribes (session/resume) once the
+  // thread is marked active. This is the behavior the OLD assertion here
+  // ("resumeCalls includes REMOTE_ID right after adopt") tested against;
+  // it now belongs to the two tests below instead.
+  it('does not resume the facade for a newly-adopted id while the thread is inactive', async () => {
+    vi.mocked(getChat).mockResolvedValue(makeChat({ id: REMOTE_ID }));
+    const acpClient = makeFakeAcpClient();
+    const ws = makeFakeWs();
+    const ctrl = new AcpChatController(LOCAL_ID, PORT, ws.fakeClient, () => acpClient);
+
+    ctrl.setRemoteId(REMOTE_ID);
+    await flushMicrotasks();
+
+    expect(acpClient.resumeCalls).toHaveLength(0);
+  });
+
+  it('resumes the facade for the adopted id once the thread is marked active (D2, T33)', async () => {
+    vi.mocked(getChat).mockResolvedValue(makeChat({ id: REMOTE_ID }));
+    const acpClient = makeFakeAcpClient();
+    const ws = makeFakeWs();
+    const ctrl = new AcpChatController(LOCAL_ID, PORT, ws.fakeClient, () => acpClient);
+
+    ctrl.setActive(true);
+    ctrl.setRemoteId(REMOTE_ID);
+    await flushMicrotasks();
+
     expect(acpClient.resumeCalls.some((c) => c.sessionId === REMOTE_ID)).toBe(true);
   });
 

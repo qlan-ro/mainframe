@@ -3,19 +3,22 @@
  * pass; the legacy `chat-thread-controller.ts` is deleted). Two planes over
  * one reducer:
  *  - `AcpSessionPlane` (transcript, run frames, gates) on the shared
- *    per-adapter `/acp/{profile}` facade client — always attached once
- *    loaded, so a dormant chat's accumulator stays current and switching
- *    back needs no re-seed;
+ *    per-adapter `/acp/{profile}` facade client — SUBSCRIBED only while
+ *    active (D2 dormancy, todo #350 T33; gating logic in `chat-activation.ts`,
+ *    load/bind in `chat-plane-loader.ts`). `load()` seeds config and binds
+ *    the client unconditionally (prompt/cancel/reply work dormant too); a
+ *    switch-back reactivates from the last settled item, never a full
+ *    replay.
  *  - `ChatWsSubscription` (side-band: config, background tasks, worktree
  *    offers, workflow runs) gated to the active thread exactly as before.
  *
  * Created once per thread id in the global registry and kept warm across
  * switches. A new (`__LOCALID_*`) thread adopts its daemon id via
- * `setRemoteId` once createChat resolves; the facade attach happens on the
- * post-adopt `load()`, which is also where the adapter profile becomes
- * known (the config seed). Queued cancel/edit and attachment upload stay
- * REST; sends go through `session/prompt` with the `_mainframe.dev` send
- * meta (attachment ids + slash-command invocation).
+ * `setRemoteId` once createChat resolves; that's also where the adapter
+ * profile becomes known. A `__LOCALID_*` thread can be marked active before
+ * it has a remote id (nothing to attach yet) — adoption re-checks
+ * activation. Queued cancel/edit and attachment upload stay REST; sends go
+ * through `session/prompt` with the `_mainframe.dev` send meta.
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
@@ -30,7 +33,6 @@ import {
   type ChatStateEvent,
 } from './chat-thread-state';
 import { AcpSessionPlane } from './acp-session-plane';
-import { ChatWsSubscription } from './chat-ws-subscription';
 import { reconcilePendings } from './chat-reconcile';
 import {
   acceptWorktreeOffer,
@@ -41,7 +43,8 @@ import {
   type ChatActionHost,
 } from './chat-actions';
 import { ChatPlaneLoader } from './chat-plane-loader';
-import { routeDaemonEvent } from './chat-event-router';
+import { ChatActivation } from './chat-activation';
+import { ChatLiveSubscription } from './chat-live-subscription';
 
 /** What the controller needs from a facade client: the plane's port plus the connect handshake. */
 export type AcpClientHandle = AcpSessionClientPort & { ensureConnected(): Promise<unknown> };
@@ -57,12 +60,12 @@ export class AcpChatController {
   // once createChat resolves. Neither plane opens while this is still local.
   private daemonId: string;
   private remoteIdSet = false;
-  private liveRefs = 0;
+  // D2 dormancy: gates the facade plane's subscription; liveSub gates the side-band WS the same way.
+  private readonly activation: ChatActivation;
+  private readonly liveSub: ChatLiveSubscription;
   // The stable aui item.id (constructor chatId) — never changes on adopt, so onNew
   // uses it as the createForLocal localId (same key the picker's draft uses).
   private readonly threadId: string;
-  // Side-band WS attachment; constructed lazily in subscribeLive() so it carries the current daemonId.
-  private wsSub: ChatWsSubscription | null = null;
   // The narrow surface the chat-actions module drives (send/retry/worktree offers).
   private readonly actionHost: ChatActionHost;
 
@@ -95,9 +98,27 @@ export class AcpChatController {
       isLocalOnly: () => this.isLocalOnly(),
       isDisposed: () => this.disposed,
       isReady: () => this.state.loadState.type === 'ready',
+      isActive: () => this.activation.isActive,
       dispatch: (event) => this.dispatch(event),
       resolveClient: (profile) => this.resolveClient(profile),
-      attachPlane: (client) => this.plane.attach(client),
+      bindPlane: (client) => this.plane.bindClient(client),
+      reactivatePlane: (client) => this.plane.reactivate(client),
+    });
+    this.activation = new ChatActivation({
+      isLocalOnly: () => this.isLocalOnly(),
+      isReady: () => this.state.loadState.type === 'ready',
+      getClient: () => this.loader.getClient(),
+      load: () => this.load(),
+      reactivatePlane: (client) => this.plane.reactivate(client),
+      detachPlane: () => this.plane.detach(),
+    });
+    this.liveSub = new ChatLiveSubscription({
+      isLocalOnly: () => this.isLocalOnly(),
+      isDisposed: () => this.disposed,
+      getChatId: () => this.daemonId,
+      getPort: () => this.port,
+      getWs: () => this.ws,
+      dispatch: (event) => this.dispatch(event),
     });
   }
 
@@ -133,36 +154,11 @@ export class AcpChatController {
   /**
    * Side-band (legacy WS) subscription — call ONLY for the active thread.
    * Ref-counted + idempotent (StrictMode-safe). No-op for a local thread.
-   * The facade plane is NOT gated here: it attaches at load() and streams
-   * through dormancy, which is what makes switch-back re-seeds unnecessary.
+   * The facade plane is gated separately, by `setActive` — the runtime
+   * hook's `opts.active` effect calls both.
    */
   public subscribeLive(): () => void {
-    if (this.isLocalOnly()) return () => {};
-    this.liveRefs += 1;
-    if (this.liveRefs === 1) {
-      this.wsSub = new ChatWsSubscription({
-        chatId: this.daemonId,
-        port: this.port,
-        ws: this.ws,
-        onEvent: (event) =>
-          routeDaemonEvent(event, {
-            getChatId: () => this.daemonId,
-            dispatch: (e) => this.dispatch(e),
-          }),
-        isDisposed: () => this.disposed,
-      });
-      this.wsSub.attach();
-    }
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      this.liveRefs -= 1;
-      if (this.liveRefs === 0) {
-        this.wsSub?.detach();
-        this.wsSub = null;
-      }
-    };
+    return this.liveSub.subscribe();
   }
 
   private isLocalOnly(): boolean {
@@ -170,9 +166,21 @@ export class AcpChatController {
   }
 
   /**
+   * Gates the facade plane's subscription (D2 dormancy, T33) — called from
+   * the runtime hook's `opts.active` effect, the same one that gates
+   * `subscribeLive`. Idempotent on a repeat call with the same value.
+   */
+  public setActive(active: boolean): void {
+    this.activation.setActive(active);
+  }
+
+  /**
    * Adopt the daemon chat id for a thread created this session (S2). Set once;
    * thereafter all network ops use it and both planes can open. No id-flip in
-   * aui — item.id stays __LOCALID_*; only this network id changes.
+   * aui — item.id stays __LOCALID_*; only this network id changes. A
+   * `__LOCALID_*` thread can be marked active before it has a remote id
+   * (nothing to attach to yet, D2) — re-check activation here too, or an
+   * already-active new thread would never attach once adopted.
    */
   public setRemoteId(remoteId: string): void {
     if (this.remoteIdSet) {
@@ -186,17 +194,17 @@ export class AcpChatController {
     // must stop targeting the dead __LOCALID_* id from this point on.
     this.dispatch({ type: 'chat.id.adopted', chatId: remoteId });
     void this.load().catch((err: unknown) => console.warn('[acp-chat] post-adopt load failed', err));
+    this.activation.onRemoteIdAdopted();
   }
 
   public dispose(): void {
     this.disposed = true;
-    this.wsSub?.detach();
-    this.wsSub = null;
+    this.liveSub.dispose();
     this.plane.dispose();
     this.listeners.clear();
   }
 
-  /** REST config seed + facade attach, deduped — see `ChatPlaneLoader`. */
+  /** REST config seed + client bind (and attach, if active), deduped — see `ChatPlaneLoader`. */
   public load(force = false): Promise<void> {
     return this.loader.load(force);
   }
