@@ -189,9 +189,10 @@ pub struct ResumeSeed<'a> {
 /// against the seed, then the raw frames in arrival order behind it, so a
 /// gate raise still cannot precede the tool call it belongs to.
 ///
-/// Two buffered gate raises are dropped instead of forwarded. The one
-/// `redelivered_gate` names, because the replay just sent that same request
-/// itself. And any raise the connection no longer holds as pending: only
+/// A buffered gate raise is dropped instead of forwarded in two cases. The
+/// one `redelivered_gate` names, because the replay just sent that same
+/// request itself. And any raise the connection no longer holds as pending:
+/// only
 /// `handle_gate_resolved` removes a delivered gate, and it pushes
 /// `gate_resolved` immediately (criterion 8) — forwarding the raise behind
 /// that would leave the client a live gate the daemon has already closed.
@@ -209,8 +210,9 @@ fn drain_into(
         .map(|latest| stream.on_revision(&latest, now))
         .unwrap_or_default();
     for raw in raws {
-        // Takes the gates lock while the sessions lock is held; no other path
-        // nests the two, so the order cannot cycle.
+        // Takes the gates lock while the sessions lock is held. Every path
+        // that nests the two takes `sessions` first — the replay's
+        // `deliver_gate` does too — so the order cannot cycle.
         if raw
             .gate_rpc_id
             .as_deref()
