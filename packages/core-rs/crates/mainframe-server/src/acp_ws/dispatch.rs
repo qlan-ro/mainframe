@@ -61,17 +61,24 @@ pub async fn handle_inbound(
             None
         }
         InboundFrame::Request(request) if request.method == "session/prompt" => {
+            let session_id = params_session_id(request.params.as_ref());
             // Attach-on-send stays inline, ahead of the spawn: T35 pins this
             // ordering (a connection observes the session from the moment it
             // sends, not from whenever the spawned task gets scheduled) —
             // but behind the negotiation gate, so a peer whose prompt is
             // about to be refused never gets a stream (spec decision 32).
             if connection.is_negotiated()
-                && let Some(session_id) = prompt_session_id(&InboundFrame::Request(request.clone()))
+                && let Some(session_id) = &session_id
             {
-                ctx.facade_hub.attach(connection, &session_id);
+                ctx.facade_hub.attach(connection, session_id);
             }
-            spawn_prompt(request, daemon.clone(), ports, Arc::clone(connection));
+            spawn_prompt(
+                request,
+                session_id,
+                daemon.clone(),
+                ports,
+                Arc::clone(connection),
+            );
             None
         }
         frame => dispatch_fallback(frame, daemon, &ports, ctx, connection).await,
@@ -91,7 +98,7 @@ async fn dispatch_fallback(
     connection: &Arc<FacadeConnection>,
 ) -> Option<String> {
     if connection.is_negotiated()
-        && let Some(session_id) = prompt_session_id(&frame)
+        && let Some(session_id) = cancel_session_id(&frame)
     {
         ctx.facade_hub.attach(connection, &session_id);
     }
@@ -117,16 +124,11 @@ fn reply_is_ok(reply: Option<&str>) -> bool {
 /// position depends on enqueue order.
 fn spawn_prompt(
     request: JsonRpcRequest,
+    session_id: Option<String>,
     daemon: DaemonInfo,
     ports: ManagerPorts,
     connection: Arc<FacadeConnection>,
 ) {
-    let session_id = request
-        .params
-        .as_ref()
-        .and_then(|p| p.get("sessionId"))
-        .and_then(|v| v.as_str())
-        .map(str::to_string);
     let negotiated = connection.is_negotiated();
     tokio::spawn(async move {
         let lock = session_id
@@ -143,20 +145,22 @@ fn spawn_prompt(
     });
 }
 
-/// Attach-on-prompt: a negotiated connection that prompts a session observes
-/// it from then on. Attaching before dispatch (even if the prompt later
-/// fails) is harmless — a session that never runs emits nothing.
-fn prompt_session_id(frame: &InboundFrame) -> Option<String> {
-    let params = match frame {
-        InboundFrame::Request(request) if request.method == "session/prompt" => {
-            request.params.as_ref()?
-        }
+/// Attach-on-cancel: a negotiated connection that cancels a session observes
+/// it from then on (todo #350). Only the cancel notification reaches here —
+/// the `session/prompt` arm reads its own id off the request, since it must
+/// hand the same id to the spawned dispatch.
+fn cancel_session_id(frame: &InboundFrame) -> Option<String> {
+    match frame {
         InboundFrame::Notification(note) if note.method == "session/cancel" => {
-            note.params.as_ref()?
+            params_session_id(note.params.as_ref())
         }
-        _ => return None,
-    };
-    params
+        _ => None,
+    }
+}
+
+/// The `sessionId` every session method carries in its params.
+fn params_session_id(params: Option<&serde_json::Value>) -> Option<String> {
+    params?
         .get("sessionId")
         .and_then(|value| value.as_str())
         .map(str::to_string)
@@ -184,12 +188,7 @@ async fn handle_resume(
     connection: &Arc<FacadeConnection>,
     ports: &ManagerPorts,
 ) {
-    let session_id = request
-        .params
-        .as_ref()
-        .and_then(|params| params.get("sessionId"))
-        .and_then(|value| value.as_str())
-        .map(str::to_string);
+    let session_id = params_session_id(request.params.as_ref());
     // Mark this session as awaiting its snapshot BEFORE the await, so a live
     // revision that races it is buffered rather than lost (T5, R2.9).
     if let Some(session_id) = &session_id {
