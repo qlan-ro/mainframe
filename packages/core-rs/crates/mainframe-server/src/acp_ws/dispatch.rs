@@ -203,8 +203,7 @@ async fn handle_resume(
         .map(|cm| cm.get_queued_for_chat(&session_id))
         .unwrap_or_default();
     ctx.facade_hub
-        .reset_session(connection, &session_id, &replay.items, |conn| {
-            conn.send_json(&response);
+        .reset_session(connection, &session_id, &replay.items, &response, |conn| {
             for update in replay.updates {
                 conn.send_update(&session_id, update);
             }

@@ -2,9 +2,19 @@
 //! race between a live revision and an in-flight snapshot await — split
 //! out of `tests.rs` (todo #350, plan task 37, R2.13).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use serde_json::json;
 
 use super::*;
+
+/// The `session/resume` reply `reset_session` sends ahead of the replay.
+fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
+    mainframe_acp::rpc::success_response(
+        Some(mainframe_types::acp::jsonrpc::RequestId::Number(id)),
+        json!({}),
+    )
+}
 
 #[tokio::test]
 async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas() {
@@ -12,7 +22,8 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, |c| {
+    hub.begin_resume(&conn, "chat-1");
+    hub.reset_session(&conn, "chat-1", &items, &reply(1), |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::StateUpdate(
@@ -21,8 +32,8 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
         );
     });
 
-    // The delivery closure ran inside the reset.
-    assert_eq!(drain(&mut rx).len(), 1);
+    // The reply and the replay closure's frame both left inside the reset.
+    assert_eq!(drain(&mut rx).len(), 2);
 
     // A live revision after the seed emits only the suffix.
     hub.on_chat_surface_event(revision("chat-1", "Hello world"));
@@ -45,14 +56,15 @@ async fn a_revision_after_a_resume_deltas_against_the_replay() {
 
     // First resume: seeds "Hel".
     let partial = mainframe_acp::encode(&[display_message("m1", "Hel")]);
-    hub.reset_session(&conn, "chat-1", &partial, |_c| {});
+    hub.begin_resume(&conn, "chat-1");
+    hub.reset_session(&conn, "chat-1", &partial, &reply(1), |_c| {});
     drain(&mut rx);
 
     // A reconnect resumes again, this time at "Hello" — the seeded state
     // must be replaced wholesale, not merged with the stale "Hel" state.
     let full = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &full, |c| {
-        c.send_json(&json!({"jsonrpc": "2.0", "id": 2, "result": {}}));
+    hub.begin_resume(&conn, "chat-1");
+    hub.reset_session(&conn, "chat-1", &full, &reply(2), |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::AgentMessage(
@@ -97,9 +109,7 @@ async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
 
     // The snapshot the await returned reflects the PRE-race content.
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, |c| {
-        c.send_json(&json!({"jsonrpc": "2.0", "id": 1, "result": {}}));
-    });
+    hub.reset_session(&conn, "chat-1", &items, &reply(1), |_c| {});
 
     let frames = drain(&mut rx);
     assert_eq!(
@@ -112,4 +122,40 @@ async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
         json!("agent_message_chunk")
     );
     assert_eq!(frames[1]["params"]["update"]["content"]["text"], json!("!"));
+}
+
+/// The client dropped the session (a `_mainframe.dev/session_detach`, or the
+/// chat ended) while the resume's snapshot await was still in flight. The
+/// completing resume must not resurrect the attachment — the daemon would
+/// then encode and push that chat's updates to a connection whose listeners
+/// are gone — but the reply must still settle the client's promise.
+#[tokio::test]
+async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+
+    hub.begin_resume(&conn, "chat-1");
+    conn.forget_chat("chat-1");
+
+    let replayed = AtomicBool::new(false);
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.reset_session(&conn, "chat-1", &items, &reply(9), |_c| {
+        replayed.store(true, Ordering::SeqCst);
+    });
+
+    assert!(
+        !conn.is_attached("chat-1"),
+        "a session the client dropped must stay dropped"
+    );
+    assert!(
+        !replayed.load(Ordering::SeqCst),
+        "no replay for a session nobody is listening to"
+    );
+    let frames = drain(&mut rx);
+    assert_eq!(frames.len(), 1, "the reply alone: {frames:?}");
+    assert_eq!(frames[0]["id"], json!(9));
+
+    // And the fan-out stays silent, as it would for any unattached chat.
+    hub.on_chat_surface_event(revision("chat-1", "Hello world"));
+    assert!(drain(&mut rx).is_empty());
 }

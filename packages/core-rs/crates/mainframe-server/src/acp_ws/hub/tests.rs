@@ -8,7 +8,7 @@ mod gate_tests;
 mod notification_tests;
 mod resume_race_tests;
 
-use mainframe_chat::chat_surface::TurnStopReason;
+use mainframe_chat::chat_surface::{ChatSurfaceEvent, TurnStopReason};
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};

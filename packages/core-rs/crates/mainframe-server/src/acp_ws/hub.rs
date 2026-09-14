@@ -12,7 +12,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame};
-use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
+use mainframe_chat::chat_surface::ChatSurface;
+use mainframe_types::acp::jsonrpc::JsonRpcResponse;
 use tokio::sync::mpsc;
 
 use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
@@ -101,32 +102,46 @@ impl FacadeHub {
     }
 
     /// Atomically replace the session's stream state with one seeded to
-    /// `items`, running `deliver` (the resume reply + replay send) in the
-    /// same critical section — so a concurrent live revision can neither
-    /// interleave with the replay nor diff against pre-replay state. Any
-    /// revision buffered by [`Self::begin_resume`] while the snapshot was in
-    /// flight is diffed against the freshly seeded state and sent as a
-    /// catch-up frame AFTER `deliver`, so it lands as a follow-up
-    /// `session/update`, never folded into the replay itself.
+    /// `items`, running `replay` in the same critical section — so a
+    /// concurrent live revision can neither interleave with the replay nor
+    /// diff against pre-replay state. Any revision buffered by
+    /// [`Self::begin_resume`] while the snapshot was in flight is diffed
+    /// against the freshly seeded state and sent as a catch-up frame AFTER
+    /// the replay, so it lands as a follow-up `session/update`, never folded
+    /// into the replay itself.
+    ///
+    /// The slot [`Self::begin_resume`] placed is the resume's claim on this
+    /// session: if a `session_detach` or `ChatEnded` dropped it while the
+    /// snapshot was in flight, the client is no longer listening, so nothing
+    /// is re-created and no replay is delivered. `reply` goes out either way
+    /// — the client's `session/resume` promise must settle even when its own
+    /// detach won the race.
     pub fn reset_session(
         &self,
         connection: &FacadeConnection,
         chat_id: &str,
         items: &[EncodedItem],
-        deliver: impl FnOnce(&FacadeConnection),
+        reply: &JsonRpcResponse,
+        replay: impl FnOnce(&FacadeConnection),
     ) {
         let mut sessions = connection.locked_sessions();
+        let Some(previous) = sessions.remove(chat_id) else {
+            drop(sessions);
+            connection.send_json(reply);
+            return;
+        };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
         stream.seed(items);
-        let buffered = match sessions.remove(chat_id) {
-            Some(SessionSlot::AwaitingSeed { latest }) => latest,
-            _ => None,
+        let buffered = match previous {
+            SessionSlot::AwaitingSeed { latest } => latest,
+            SessionSlot::Live(_) => None,
         };
         let catch_up = buffered
             .map(|latest| stream.on_revision(&latest, now_ms()))
             .unwrap_or_default();
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
-        deliver(connection);
+        connection.send_json(reply);
+        replay(connection);
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
         }
@@ -242,52 +257,6 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
-}
-
-/// Dispatch only — one method per event family lives in `hub/handlers.rs`
-/// (todo #350, plan task 37, R2.13). Every handler still routes through
-/// `for_each_attached_session`/`on_display_revision`/`push_raw_to_attached`
-/// above, so the T5/T6 critical section is unchanged by the split.
-impl ChatSurface for FacadeHub {
-    fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        match event {
-            // Acceptance already rides the `session/prompt` response
-            // (`PromptResponse` + queued `_meta`), not a stream frame.
-            ChatSurfaceEvent::TurnAccepted { .. } => {}
-            ChatSurfaceEvent::TurnStarted { chat_id } => self.handle_turn_started(&chat_id),
-            ChatSurfaceEvent::TurnFinished {
-                chat_id,
-                stop_reason: reason,
-            } => self.handle_turn_finished(&chat_id, reason),
-            ChatSurfaceEvent::DisplayRevision { chat_id, messages } => {
-                self.handle_display_revision(&chat_id, &messages);
-            }
-            ChatSurfaceEvent::GateRaised { chat_id, request } => {
-                self.handle_gate_raised(&chat_id, request);
-            }
-            ChatSurfaceEvent::GateResolved {
-                chat_id,
-                request_id,
-            } => self.handle_gate_resolved(&chat_id, &request_id),
-            ChatSurfaceEvent::Retry {
-                chat_id,
-                attempt,
-                reason,
-            } => self.handle_retry(&chat_id, attempt, reason),
-            ChatSurfaceEvent::QueueChanged { chat_id, refs } => {
-                self.handle_queue_changed(&chat_id, refs);
-            }
-            ChatSurfaceEvent::TranscriptCleared { chat_id } => {
-                self.handle_transcript_cleared(&chat_id);
-            }
-            ChatSurfaceEvent::Resync { chat_id } => self.handle_resync(&chat_id),
-            ChatSurfaceEvent::Compaction { chat_id, phase } => {
-                self.handle_compaction(&chat_id, phase);
-            }
-            ChatSurfaceEvent::Usage { chat_id, usage } => self.handle_usage(&chat_id, &usage),
-            ChatSurfaceEvent::ChatEnded { chat_id } => self.handle_chat_ended(&chat_id),
-        }
-    }
 }
 
 #[cfg(test)]

@@ -1,13 +1,15 @@
-//! One handler method per `ChatSurfaceEvent` family, split out of
-//! `on_chat_surface_event`'s 108-line match (todo #350, plan task 37,
-//! R2.13). Pure extraction: every method still routes through
+//! The `ChatSurface` sink: `on_chat_surface_event`'s dispatch match and one
+//! handler method per event family, split out of `hub.rs` (todo #350, plan
+//! task 37, R2.13). Pure extraction: every method still routes through
 //! `for_each_attached_session`/`on_display_revision`/`push_raw_to_attached`
 //! in the parent module, so the T5/T6 critical section (send inside the
 //! same `locked_sessions()` guard the diff was computed under) is
 //! byte-identical to before the split — nothing here takes a lock itself.
 
 use mainframe_acp::gate_request_id;
-use mainframe_chat::chat_surface::{CompactionPhase, TurnStopReason};
+use mainframe_chat::chat_surface::{
+    ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason,
+};
 use mainframe_types::acp::extensions::{
     CompactionWirePhase, MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta,
 };
@@ -155,6 +157,49 @@ impl FacadeHub {
         self.locked_registry().forget_chat(chat_id);
         for entry in self.connections.iter() {
             entry.value().forget_chat(chat_id);
+        }
+    }
+}
+
+/// Dispatch only: every arm delegates to one of the handlers above.
+impl ChatSurface for FacadeHub {
+    fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+        match event {
+            // Acceptance already rides the `session/prompt` response
+            // (`PromptResponse` + queued `_meta`), not a stream frame.
+            ChatSurfaceEvent::TurnAccepted { .. } => {}
+            ChatSurfaceEvent::TurnStarted { chat_id } => self.handle_turn_started(&chat_id),
+            ChatSurfaceEvent::TurnFinished {
+                chat_id,
+                stop_reason: reason,
+            } => self.handle_turn_finished(&chat_id, reason),
+            ChatSurfaceEvent::DisplayRevision { chat_id, messages } => {
+                self.handle_display_revision(&chat_id, &messages);
+            }
+            ChatSurfaceEvent::GateRaised { chat_id, request } => {
+                self.handle_gate_raised(&chat_id, request);
+            }
+            ChatSurfaceEvent::GateResolved {
+                chat_id,
+                request_id,
+            } => self.handle_gate_resolved(&chat_id, &request_id),
+            ChatSurfaceEvent::Retry {
+                chat_id,
+                attempt,
+                reason,
+            } => self.handle_retry(&chat_id, attempt, reason),
+            ChatSurfaceEvent::QueueChanged { chat_id, refs } => {
+                self.handle_queue_changed(&chat_id, refs);
+            }
+            ChatSurfaceEvent::TranscriptCleared { chat_id } => {
+                self.handle_transcript_cleared(&chat_id);
+            }
+            ChatSurfaceEvent::Resync { chat_id } => self.handle_resync(&chat_id),
+            ChatSurfaceEvent::Compaction { chat_id, phase } => {
+                self.handle_compaction(&chat_id, phase);
+            }
+            ChatSurfaceEvent::Usage { chat_id, usage } => self.handle_usage(&chat_id, &usage),
+            ChatSurfaceEvent::ChatEnded { chat_id } => self.handle_chat_ended(&chat_id),
         }
     }
 }
