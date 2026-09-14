@@ -7,6 +7,7 @@
 
 use mainframe_adapter_api::{
     AdapterError, BoxFuture, PlanActionContext, PlanChatUpdate, PlanModeActionHandler,
+    clear_context_and_restart,
 };
 use mainframe_types::adapter::{ControlBehavior, ControlResponse};
 use mainframe_types::events::DaemonEvent;
@@ -43,14 +44,6 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            let exec = response.execution_mode.unwrap_or(ExecutionMode::Default);
-            let plan = response
-                .updated_input
-                .as_ref()
-                .and_then(|m| m.get("plan"))
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-
             let recovered_plan_path = ctx.recover_latest_plan_file();
             if let Some(path) = recovered_plan_path
                 && ctx.add_plan_file(path)
@@ -67,7 +60,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                     message: Some(
                         "User chose to clear context and start a new session.".to_string(),
                     ),
-                    ..response
+                    ..response.clone()
                 };
                 ctx.session_respond_to_permission(deny).await?;
                 ctx.permissions_shift();
@@ -77,23 +70,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                 ctx.permissions_shift();
             }
 
-            ctx.update_chat(PlanChatUpdate {
-                plan_mode: Some(false),
-                permission_mode: Some(exec),
-                clear_claude_session_id: true,
-            });
-            ctx.emit_chat_updated();
-
-            ctx.clear_messages();
-            ctx.clear_display_state();
-            ctx.notify_transcript_cleared();
-
-            ctx.start_chat().await?;
-            if let Some(plan) = plan {
-                ctx.send_message(format!("Implement the following plan:\n\n{plan}"))
-                    .await?;
-            }
-            Ok(())
+            clear_context_and_restart(&response, ctx).await
         })
     }
 
