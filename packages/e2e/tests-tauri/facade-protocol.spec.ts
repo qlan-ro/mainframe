@@ -98,12 +98,31 @@ test.describe('§facade-protocol handshake', () => {
     expect(okReply.result).toBeDefined();
   });
 
-  test('criterion 2: an unadvertised method gets method-not-found', async () => {
+  // Two refusals, not one: the negotiation gate (spec decision 32) answers every
+  // method but `initialize` before the dispatcher ever sees the frame, so an
+  // unknown method is method-not-found only AFTER a completed handshake. Both
+  // halves are pinned here — asserting the post-handshake code alone would pass
+  // just as well against a daemon that had lost the gate.
+  test('criterion 2: an unknown method is refused as initialize-required before the handshake, and method-not-found after it', async () => {
     const ws = await openSocket(`/acp/${PROFILE}`);
+
+    // Pre-handshake: the structured refusal from `connection.rs::initialize_required`.
     sendJson(ws, { jsonrpc: '2.0', id: 1, method: 'not/a/real/method', params: {} });
-    const reply = (await nextJsonMessage(ws)) as { error?: { code?: number } };
+    const gated = (await nextJsonMessage(ws)) as { error?: { code?: number; message?: string } };
+    expect(gated.error?.code).toBe(-32002);
+    expect(gated.error?.message).toBe('initialize required');
+
+    sendJson(ws, initializeRequest(2));
+    const okReply = (await nextJsonMessage(ws)) as { result?: unknown };
+    expect(okReply.result).toBeDefined();
+
+    // Post-handshake: the same frame reaches the dispatcher, which names the
+    // offending method back.
+    sendJson(ws, { jsonrpc: '2.0', id: 3, method: 'not/a/real/method', params: {} });
+    const reply = (await nextJsonMessage(ws)) as { error?: { code?: number; message?: string } };
     await closeSocket(ws);
     expect(reply.error?.code).toBe(-32601);
+    expect(reply.error?.message).toContain('not/a/real/method');
   });
 
   // ── criterion 11, daemon half: heartbeat arrives at the advertised cadence ──
