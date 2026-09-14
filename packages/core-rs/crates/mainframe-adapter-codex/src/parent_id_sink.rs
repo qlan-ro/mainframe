@@ -60,8 +60,8 @@ impl SessionSink for ParentIdSink {
     fn on_error(&self, error: mainframe_adapter_api::AdapterError) {
         self.inner.on_error(error);
     }
-    fn on_compact(&self) {
-        self.inner.on_compact();
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        self.inner.on_compact(vendor_id);
     }
     fn on_compact_start(&self) {
         self.inner.on_compact_start();

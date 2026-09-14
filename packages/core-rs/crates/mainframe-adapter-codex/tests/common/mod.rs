@@ -133,7 +133,7 @@ impl SessionSink for RecordingSink {
     }
     fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self) {
+    fn on_compact(&self, _vendor_id: Option<&str>) {
         self.0.lock().unwrap().compacts += 1;
     }
     fn on_compact_start(&self) {

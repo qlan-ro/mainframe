@@ -101,8 +101,8 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_error(error);
     }
 
-    fn on_compact(&self) {
-        self.inner.on_compact();
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        self.inner.on_compact(vendor_id);
     }
 
     fn on_compact_start(&self) {

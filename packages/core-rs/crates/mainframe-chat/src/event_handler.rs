@@ -1191,13 +1191,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         });
     }
 
-    fn on_compact(&self) {
-        let message = self.transient(
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        let message = self.transient_with_id(
             ChatMessageType::System,
             vec![MessageContent::Node(MessageContentNode::Compaction {
                 parent_tool_use_id: None,
             })],
             None,
+            vendor_id.map(str::to_string),
         );
         self.messages
             .lock()

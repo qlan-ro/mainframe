@@ -90,7 +90,12 @@ pub trait SessionSink: Send + Sync {
     fn on_result(&self, data: SessionResult);
     fn on_exit(&self, code: Option<i32>);
     fn on_error(&self, error: AdapterError);
-    fn on_compact(&self);
+    /// `vendor_id` is the adapter's stable id for the compaction transcript
+    /// entry (Claude's JSONL `uuid`, Codex's `contextCompaction` item id) —
+    /// `None` only for a path with no id available (Codex's deprecated
+    /// `thread/compacted` notification). Threaded through so the pill's live
+    /// id matches what history reconstruction would assign it (T15, R3.14).
+    fn on_compact(&self, vendor_id: Option<&str>);
     fn on_compact_start(&self);
     fn on_context_usage(&self, usage: ContextUsage);
     fn on_plan_file(&self, file_path: &str);

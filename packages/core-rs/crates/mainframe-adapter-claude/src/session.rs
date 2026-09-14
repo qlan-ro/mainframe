@@ -73,7 +73,7 @@ impl SessionSink for NullSink {
     fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self) {}
+    fn on_compact(&self, _vendor_id: Option<&str>) {}
     fn on_compact_start(&self) {}
     fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
     fn on_plan_file(&self, _file_path: &str) {}

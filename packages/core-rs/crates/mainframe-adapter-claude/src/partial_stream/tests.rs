@@ -33,7 +33,7 @@ impl SessionSink for PartialRec {
     fn on_result(&self, _data: SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self) {}
+    fn on_compact(&self, _vendor_id: Option<&str>) {}
     fn on_compact_start(&self) {}
     fn on_context_usage(&self, _usage: ContextUsage) {}
     fn on_plan_file(&self, _file_path: &str) {}

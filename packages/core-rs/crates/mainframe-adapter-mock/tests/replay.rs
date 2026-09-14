@@ -59,7 +59,7 @@ impl SessionSink for RecordingSink {
         self.push(format!("error:{error}"));
     }
 
-    fn on_compact(&self) {
+    fn on_compact(&self, _vendor_id: Option<&str>) {
         self.push("compact");
     }
 

@@ -239,3 +239,18 @@ fn a_shared_vendor_id_produces_the_same_message_id_on_message_and_on_tool_result
         vec!["entry-uuid-1".to_string(), "entry-uuid-1".to_string()]
     );
 }
+
+/// T15, R3.14: the compaction pill's live id must match what history
+/// reconstruction would assign it — the transcript entry's own vendor id,
+/// not a minted nanoid, so live and reload agree (fact 2's disagreement,
+/// closed for this item kind).
+#[test]
+fn compaction_pill_id_matches_history() {
+    let deps = ShapeDeps::new();
+    let (sink, messages) = sink(deps.clone());
+
+    sink.on_compact(Some("entry-uuid-9"));
+
+    let ids = message_ids(&messages);
+    assert_eq!(ids, vec!["entry-uuid-9".to_string()]);
+}

@@ -42,8 +42,8 @@ pub(crate) fn render_completed_item(
         }
         ThreadItem::McpToolCall(m) => render_mcp_tool_call(&m, sink),
         ThreadItem::TodoList(item) => render_todo_list(&item, sink),
-        ThreadItem::ContextCompaction(_) => {
-            crate::compaction::handle_compaction_completed(sink, state);
+        ThreadItem::ContextCompaction(item) => {
+            crate::compaction::handle_compaction_completed(sink, state, Some(&item.id));
         }
         ThreadItem::DynamicToolCall(d) => render_dynamic_tool_call(&d, sink),
         ThreadItem::EnteredReviewMode(_) => skip_item("enteredReviewMode"),

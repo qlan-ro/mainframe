@@ -215,7 +215,7 @@ fn on_permission_notifies_gate_raised_then_cancel_notifies_gate_resolved() {
 #[test]
 fn on_compact_notifies_compaction() {
     let (sink, surface) = sink_with_surface(ProcessState::Idle);
-    sink.on_compact();
+    sink.on_compact(Some("entry-uuid-1"));
 
     assert!(
         surface

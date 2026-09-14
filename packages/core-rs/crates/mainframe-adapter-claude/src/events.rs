@@ -103,7 +103,9 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             session.set_status(mainframe_types::adapter::AdapterProcessStatus::Ready);
             sink.on_init(&session_id);
         }
-        Some("compact_boundary") => sink.on_compact(),
+        Some("compact_boundary") => {
+            sink.on_compact(event.get("uuid").and_then(Value::as_str));
+        }
         // `system`/`api_error` — CLAUDE-JSONL-SCHEMA.md's `api_error` section
         // (`retryAttempt`/`error`; `retryInMs`/`maxRetries` are not surfaced —
         // the facade models retry as a content-replacing patch, not a
@@ -550,7 +552,7 @@ mod tests {
         fn on_error(&self, _error: AdapterError) {
             self.r().errors += 1;
         }
-        fn on_compact(&self) {
+        fn on_compact(&self, _vendor_id: Option<&str>) {
             self.r().compact += 1;
         }
         fn on_compact_start(&self) {

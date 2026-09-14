@@ -47,7 +47,15 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
         "onExit" => sink.on_exit(arg::<Option<i32>>(event, 0)?),
         "onError" => sink.on_error(AdapterError::Message(recorded_error(event)?)),
-        "onCompact" => sink.on_compact(),
+        // `args[0]` (the vendor id) is optional so pre-existing recorded
+        // fixtures that predate it keep replaying unchanged.
+        "onCompact" => {
+            let vendor_id = match event.args.first() {
+                Some(_) => arg::<Option<String>>(event, 0)?,
+                None => None,
+            };
+            sink.on_compact(vendor_id.as_deref())
+        }
         "onCompactStart" => sink.on_compact_start(),
         "onContextUsage" => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
         "onPlanFile" => sink.on_plan_file(&arg::<String>(event, 0)?),
@@ -117,7 +125,7 @@ mod tests {
         fn on_result(&self, _data: SessionResult) {}
         fn on_exit(&self, _code: Option<i32>) {}
         fn on_error(&self, _error: AdapterError) {}
-        fn on_compact(&self) {}
+        fn on_compact(&self, _vendor_id: Option<&str>) {}
         fn on_compact_start(&self) {}
         fn on_context_usage(&self, _usage: ContextUsage) {}
         fn on_plan_file(&self, _file_path: &str) {}
