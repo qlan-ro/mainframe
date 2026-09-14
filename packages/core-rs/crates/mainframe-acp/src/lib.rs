@@ -25,7 +25,8 @@ pub use capabilities::{
     transcript_cleared_notification,
 };
 pub use connection::{
-    DaemonInfo, dispatch_with_prompt, handle_frame_with_prompt, initialize_required,
+    DaemonInfo, DispatchOutcome, dispatch_with_prompt, handle_frame_with_prompt,
+    initialize_required,
 };
 pub use encoder::{EncodedItem, ItemRole, encode};
 pub use gate_registry::{AnswerOutcome, GateRegistry};

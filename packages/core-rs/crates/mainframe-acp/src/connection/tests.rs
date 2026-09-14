@@ -125,3 +125,30 @@ async fn a_notification_before_initialize_gets_no_reply() {
     let text = r#"{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"chat_1"}}"#;
     assert_eq!(handle(text, false).await, None);
 }
+
+/// The dispatcher is the only place that knows whether an `initialize`
+/// succeeded; the socket shell reads that off the outcome rather than
+/// re-parsing the reply (todo #350, PR #688 review).
+async fn dispatch(text: &str, negotiated: bool) -> DispatchOutcome {
+    let frame = rpc::parse_frame(text).expect("fixture frames parse");
+    dispatch_with_prompt(frame, &daemon(), &UnusedPort, negotiated).await
+}
+
+#[tokio::test]
+async fn a_successful_initialize_reports_the_handshake_as_negotiated() {
+    let text =
+        include_str!("../../../mainframe-types/tests/fixtures/acp/jsonrpc-request.initialize.json");
+    assert!(dispatch(text, false).await.negotiated);
+}
+
+#[tokio::test]
+async fn an_unsupported_version_leaves_the_connection_unnegotiated() {
+    let text = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":99,"info":{"name":"x","version":"1"}}}"#;
+    assert!(!dispatch(text, false).await.negotiated);
+}
+
+#[tokio::test]
+async fn a_non_initialize_reply_never_negotiates() {
+    let text = r#"{"jsonrpc":"2.0","id":1,"method":"definitely/not-a-method","params":{}}"#;
+    assert!(!dispatch(text, true).await.negotiated);
+}

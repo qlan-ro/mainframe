@@ -9,7 +9,7 @@
 
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::jsonrpc::{
-    JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, RequestId, error_codes,
+    JsonRpcErrorObject, JsonRpcOutcome, JsonRpcRequest, JsonRpcResponse, RequestId, error_codes,
 };
 use mainframe_types::acp::session::{
     Implementation, InitializeRequest, InitializeResponse, PINNED_PROTOCOL_VERSION,
@@ -29,11 +29,40 @@ pub struct DaemonInfo {
     pub heartbeat_interval_ms: u64,
 }
 
+/// What one dispatched frame produced: the JSON to write back (if any), and
+/// whether the frame completed the handshake. Only the dispatcher knows an
+/// `initialize` succeeded, so the socket shell reads it from here instead of
+/// re-parsing the reply it is about to send.
+pub struct DispatchOutcome {
+    pub reply: Option<String>,
+    pub negotiated: bool,
+}
+
+impl DispatchOutcome {
+    /// A frame that gets no reply: a notification, or a response to one of
+    /// the daemon's own requests.
+    fn silent() -> Self {
+        Self {
+            reply: None,
+            negotiated: false,
+        }
+    }
+
+    fn answered(wire: String) -> Self {
+        Self {
+            reply: Some(wire),
+            negotiated: false,
+        }
+    }
+}
+
 /// Handle one inbound WS text frame, with `session/prompt`/`session/cancel`
 /// routed through a [`PromptPort`] (plan task 14). `Some` is the JSON to
 /// write back; notifications and daemon-initiated-request responses never get
 /// one, per JSON-RPC 2.0 (even when the notification names an unknown method
 /// — a notification's sender does not expect an answer to be listening for).
+/// Callers that track negotiation across frames want
+/// [`dispatch_with_prompt`]'s full [`DispatchOutcome`] instead.
 pub async fn handle_frame_with_prompt(
     text: &str,
     daemon: &DaemonInfo,
@@ -41,7 +70,11 @@ pub async fn handle_frame_with_prompt(
     negotiated: bool,
 ) -> Option<String> {
     match rpc::parse_frame(text) {
-        Ok(frame) => dispatch_with_prompt(frame, daemon, port, negotiated).await,
+        Ok(frame) => {
+            dispatch_with_prompt(frame, daemon, port, negotiated)
+                .await
+                .reply
+        }
         Err(error) => Some(to_wire(&rpc::error_response(None, error))),
     }
 }
@@ -60,21 +93,31 @@ pub async fn dispatch_with_prompt(
     daemon: &DaemonInfo,
     port: &dyn PromptPort,
     negotiated: bool,
-) -> Option<String> {
+) -> DispatchOutcome {
     if !negotiated && !is_initialize(&frame) {
-        return refuse_before_initialize(&frame);
+        return DispatchOutcome {
+            reply: refuse_before_initialize(&frame),
+            negotiated: false,
+        };
     }
     match frame {
         InboundFrame::Request(request) if request.method == "session/prompt" => {
-            Some(to_wire(&prompt::dispatch_prompt(request, port).await))
+            DispatchOutcome::answered(to_wire(&prompt::dispatch_prompt(request, port).await))
         }
         InboundFrame::Notification(note) if note.method == "session/cancel" => {
             prompt::dispatch_cancel(note.params, port).await;
-            None
+            DispatchOutcome::silent()
         }
-        InboundFrame::Request(request) => Some(to_wire(&dispatch_request(request, daemon))),
-        InboundFrame::Notification(_) => None,
-        InboundFrame::Response(_) => None,
+        InboundFrame::Request(request) => {
+            let completes_handshake = request.method == "initialize";
+            let response = dispatch_request(request, daemon);
+            let succeeded = matches!(response.outcome, JsonRpcOutcome::Result { .. });
+            DispatchOutcome {
+                reply: Some(to_wire(&response)),
+                negotiated: completes_handshake && succeeded,
+            }
+        }
+        InboundFrame::Notification(_) | InboundFrame::Response(_) => DispatchOutcome::silent(),
     }
 }
 

@@ -102,18 +102,11 @@ async fn dispatch_fallback(
     {
         ctx.facade_hub.attach(connection, &session_id);
     }
-    let is_initialize = matches!(&frame, InboundFrame::Request(r) if r.method == "initialize");
-    let reply = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
-    if is_initialize && reply_is_ok(reply.as_deref()) {
+    let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
+    if outcome.negotiated {
         connection.mark_negotiated();
     }
-    reply
-}
-
-fn reply_is_ok(reply: Option<&str>) -> bool {
-    reply
-        .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
-        .is_some_and(|v| v.get("result").is_some())
+    outcome.reply
 }
 
 /// `session/prompt` alone runs off the socket-loop task (R3.6, plan decision
@@ -139,7 +132,8 @@ fn spawn_prompt(
             None => None,
         };
         let frame = InboundFrame::Request(request);
-        if let Some(reply) = dispatch_with_prompt(frame, &daemon, &ports, negotiated).await {
+        let outcome = dispatch_with_prompt(frame, &daemon, &ports, negotiated).await;
+        if let Some(reply) = outcome.reply {
             connection.send_raw(reply);
         }
     });
