@@ -44,7 +44,16 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   if (!input) return;
   const { text, uploadItems } = input;
 
-  const pending = buildPendingMessage(host.getDaemonId(), text);
+  // A draft that is exactly `/<command>` is an invocation, not prose: the
+  // daemon resolves the command by name and — for a Mainframe one —
+  // substitutes its prompt template for `content`. Without this meta the
+  // same text takes the plain-text path and the model receives the
+  // literal "/launch-config" string. Computed before the pending is built
+  // so a later retry can re-carry it (T34) — attachmentIds are NOT part of
+  // it: a retry is text-only.
+  const command = matchCommandInvocation(text);
+  const sendMeta = command ? { command: { ...command } } : {};
+  const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta);
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started' });
 
@@ -55,15 +64,9 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     await host.load();
     attachmentIds =
       uploadItems.length > 0 ? await uploadAttachments(host.getPort(), host.getDaemonId(), uploadItems) : undefined;
-    // A draft that is exactly `/<command>` is an invocation, not prose: the
-    // daemon resolves the command by name and — for a Mainframe one —
-    // substitutes its prompt template for `content`. Without this meta the
-    // same text takes the plain-text path and the model receives the
-    // literal "/launch-config" string.
-    const command = matchCommandInvocation(text);
     await host.sendPrompt(text, {
       ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
-      ...(command ? { command: { ...command } } : {}),
+      ...sendMeta,
     });
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
@@ -87,7 +90,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string): 
 
   try {
     await host.load();
-    await host.sendPrompt(pending.text, {});
+    await host.sendPrompt(pending.text, pending.sendMeta ?? {});
   } catch (error) {
     host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send' });
     throw error;

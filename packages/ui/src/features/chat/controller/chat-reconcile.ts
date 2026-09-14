@@ -8,6 +8,7 @@
  * refresh feeds the SAME matcher with the full confirmed user-message list.
  */
 import type { AppendMessage } from '@assistant-ui/react';
+import type { PromptSendMeta } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
@@ -63,14 +64,15 @@ export function parseSendInput(message: AppendMessage): SendInput | null {
   return { text, uploadItems };
 }
 
-/** Build the optimistic pending user-message for a send. */
-export function buildPendingMessage(chatId: string, text: string): PendingUserMessage {
+/** Build the optimistic pending user-message for a send. `sendMeta` is what a retry must re-carry (e.g. a `/command` invocation). */
+export function buildPendingMessage(chatId: string, text: string, sendMeta: PromptSendMeta = {}): PendingUserMessage {
   return {
     clientId: createLocalId('local'),
     chatId,
     text,
     createdAt: Date.now(),
     status: 'pending',
+    ...(Object.keys(sendMeta).length > 0 ? { sendMeta } : {}),
   };
 }
 

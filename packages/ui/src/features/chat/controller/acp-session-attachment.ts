@@ -13,6 +13,7 @@ import type {
   GateResolvedListener,
   PermissionRequestListener,
   QueueStateListener,
+  ResyncListener,
   SessionUpdateListener,
   TranscriptClearedListener,
 } from '../../../lib/daemon/acp-notification-router';
@@ -32,6 +33,7 @@ export interface AcpSessionClientPort {
   onCompaction(listener: CompactionListener): () => void;
   onTranscriptCleared(listener: TranscriptClearedListener): () => void;
   onQueueState(listener: QueueStateListener): () => void;
+  onResync(listener: ResyncListener): () => void;
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
@@ -132,13 +134,22 @@ export class AcpSessionAttachment {
         // The server wiped the transcript (plan-mode clear-context): drop
         // the local projection and re-replay so tool-call items drop too.
         this.host.dispatch({ type: 'transcript.cleared' });
-        void this.reattach().catch(() => undefined);
+        this.reattach().catch((error: unknown) =>
+          console.warn('[acp-session] reattach after transcript_cleared failed', error),
+        );
       }),
       client.onQueueState((sessionId, refs) => {
         if (sessionId !== chatId()) return;
         // Always a full snapshot (never a delta) — the reducer replaces the
         // queued set wholesale, so stale turns cannot survive a reconnect.
         this.host.dispatch({ type: 'queued.snapshot', refs });
+      }),
+      client.onResync((sessionId) => {
+        if (sessionId !== chatId()) return;
+        // Cache eviction, NOT a wipe (spec: distinct from
+        // transcript_cleared) — re-replay without blanking the reducer's
+        // transcript first, or the thread flashes empty mid-conversation.
+        this.reattach().catch((error: unknown) => console.warn('[acp-session] reattach after resync failed', error));
       }),
       client.onGap(() => void this.resumeFromGap()),
     );

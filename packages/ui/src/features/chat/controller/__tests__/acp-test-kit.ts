@@ -29,6 +29,7 @@ import type {
   PermissionRequestListener,
   CompactionListener,
   QueueStateListener,
+  ResyncListener,
   SessionUpdateListener,
   TranscriptClearedListener,
 } from '../../../../lib/daemon/acp-notification-router';
@@ -54,6 +55,7 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitCompaction(sessionId: string, phase: 'started' | 'done'): void;
   emitTranscriptCleared(sessionId: string): void;
   emitQueueState(sessionId: string, refs: QueuedMessageRef[]): void;
+  emitResync(sessionId: string): void;
   emitGap(): void;
 }
 
@@ -64,6 +66,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const compactionListeners = new Set<CompactionListener>();
   const transcriptClearedListeners = new Set<TranscriptClearedListener>();
   const queueStateListeners = new Set<QueueStateListener>();
+  const resyncListeners = new Set<ResyncListener>();
   const gapListeners = new Set<GapListener>();
 
   const client: FakeAcpClient = {
@@ -98,6 +101,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onQueueState(listener) {
       queueStateListeners.add(listener);
       return () => queueStateListeners.delete(listener);
+    },
+    onResync(listener) {
+      resyncListeners.add(listener);
+      return () => resyncListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -136,6 +143,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     emitQueueState(sessionId, refs) {
       for (const l of queueStateListeners) l(sessionId, refs);
+    },
+    emitResync(sessionId) {
+      for (const l of resyncListeners) l(sessionId);
     },
     emitGap() {
       for (const l of gapListeners) l();

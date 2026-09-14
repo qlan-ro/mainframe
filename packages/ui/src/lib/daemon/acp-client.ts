@@ -42,6 +42,7 @@ import {
   type GateResolvedListener,
   type PermissionRequestListener,
   type QueueStateListener,
+  type ResyncListener,
   type SessionUpdateListener,
   type TranscriptClearedListener,
 } from './acp-notification-router';
@@ -55,7 +56,6 @@ const FALLBACK_HEARTBEAT_INTERVAL_MS = 15_000;
 const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
 
 export type GapListener = () => void;
-export type CloseListener = () => void;
 
 export interface AcpFacadeClientDeps {
   /** Resolved fresh on every `connect()` — defaults to the active daemon target. */
@@ -97,7 +97,6 @@ export class AcpFacadeClient {
     (id, code, message) => this.connection?.respondError(id, code, message),
   );
   private readonly gapListeners = new Set<GapListener>();
-  private readonly closeListeners = new Set<CloseListener>();
 
   constructor(
     private readonly profile: string,
@@ -226,15 +225,15 @@ export class AcpFacadeClient {
     return this.router.onQueueState(listener);
   }
 
+  /** The chat's server-side message cache evicted from the front (`_mainframe.dev/resync`) — re-replay without wiping the transcript first. */
+  onResync(listener: ResyncListener): () => void {
+    return this.router.onResync(listener);
+  }
+
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
     return () => this.gapListeners.delete(listener);
-  }
-
-  onClose(listener: CloseListener): () => void {
-    this.closeListeners.add(listener);
-    return () => this.closeListeners.delete(listener);
   }
 
   private requireConnection(): RpcConnection {
@@ -265,7 +264,6 @@ export class AcpFacadeClient {
     this.watchdog = null;
     this.connection = null;
     this.connectPromise = null;
-    this.closeListeners.forEach((fn) => fn());
     if (this.manuallyClosed) return;
     this.scheduleReconnect();
   }

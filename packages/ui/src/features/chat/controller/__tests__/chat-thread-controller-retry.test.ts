@@ -24,8 +24,12 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
 }));
 
+import type { CustomCommand } from '@qlan-ro/mainframe-types';
 import { uploadAttachments } from '../../../../lib/api/attachments';
+import { publishCommands } from '../../commands/command-registry';
 import { CHAT_ID, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
+
+const COMMANDS: CustomCommand[] = [{ name: 'review', description: 'Review the diff', source: 'mainframe' }];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -85,6 +89,29 @@ describe('AcpChatController.retryMessage', () => {
     await ctrl.retryMessage(clientId);
 
     expect(uploadAttachments).not.toHaveBeenCalled();
+  });
+});
+
+describe('AcpChatController.retryMessage — command re-invocation (T34, R3.22)', () => {
+  it('retrying a failed /command resend carries its command meta, not just the literal text', async () => {
+    publishCommands(COMMANDS);
+    const { ctrl, acpClient } = makeController();
+    const realPrompt = acpClient.prompt.bind(acpClient);
+    let failNext = true;
+    acpClient.prompt = ((...args: Parameters<typeof realPrompt>) => {
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('socket closed'));
+      }
+      return realPrompt(...args);
+    }) as typeof acpClient.prompt;
+    await ctrl.sendMessage(makeMsg('/review')).catch(() => {});
+    const clientId = Object.values(ctrl.getState().pendingUserMessages)[0]!.clientId;
+
+    await ctrl.retryMessage(clientId);
+
+    const last = acpClient.promptCalls[acpClient.promptCalls.length - 1]!;
+    expect(last.extra?._meta?.['_mainframe.dev']).toMatchObject({ command: { name: 'review' } });
   });
 });
 

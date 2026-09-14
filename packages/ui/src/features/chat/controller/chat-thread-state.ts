@@ -22,7 +22,7 @@
  *    `chat-environment-state.ts`
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { ControlRequest, PermissionOption, QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import type { ControlRequest, PermissionOption, PromptSendMeta, QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import {
   createEnvironmentSlice,
   reduceEnvironmentEvent,
@@ -44,6 +44,8 @@ export interface PendingUserMessage {
   error?: unknown;
   stage?: 'upload' | 'send';
   attachmentsRestored?: boolean;
+  /** The send meta (e.g. a `/command` invocation) a retry must re-carry — text-only, attachmentIds are never re-added here. */
+  sendMeta?: PromptSendMeta;
 }
 
 export interface ChatPermissionEntry {

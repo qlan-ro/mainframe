@@ -22,6 +22,7 @@ import {
   HeartbeatParamsSchema,
   QueueStateParamsSchema,
   RequestPermissionRequestSchema,
+  ResyncParamsSchema,
   TranscriptClearedParamsSchema,
   UpdateSessionNotificationSchema,
 } from '@qlan-ro/mainframe-types';
@@ -32,6 +33,8 @@ export type GateResolvedListener = (sessionId: string, requestId: string) => voi
 export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
 export type TranscriptClearedListener = (sessionId: string) => void;
 export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) => void;
+/** `_mainframe.dev/resync` (T20/T34): the chat's message cache evicted from the front — re-replay without wiping the reducer's transcript first. */
+export type ResyncListener = (sessionId: string) => void;
 
 /** Structural rather than `z.ZodType` so this module doesn't need zod as a direct dependency — mirrors `acp-rpc-connection.ts`. */
 interface ParseableSchema<T> {
@@ -45,6 +48,7 @@ export class AcpNotificationRouter {
   private readonly compactionListeners = new Set<CompactionListener>();
   private readonly transcriptClearedListeners = new Set<TranscriptClearedListener>();
   private readonly queueStateListeners = new Set<QueueStateListener>();
+  private readonly resyncListeners = new Set<ResyncListener>();
 
   constructor(
     private readonly onHeartbeat: (sequence: number) => void,
@@ -81,6 +85,11 @@ export class AcpNotificationRouter {
     return () => this.queueStateListeners.delete(listener);
   }
 
+  onResync(listener: ResyncListener): () => void {
+    this.resyncListeners.add(listener);
+    return () => this.resyncListeners.delete(listener);
+  }
+
   handleNotification(notification: JsonRpcNotification): void {
     switch (notification.method) {
       case 'session/update':
@@ -100,6 +109,9 @@ export class AcpNotificationRouter {
         return;
       case '_mainframe.dev/gate_resolved':
         this.handleGateResolved(notification.params);
+        return;
+      case '_mainframe.dev/resync':
+        this.handleResync(notification.params);
         return;
     }
   }
@@ -151,6 +163,12 @@ export class AcpNotificationRouter {
     const parsed = this.parseOrWarn(GateResolvedParamsSchema, params, 'gate_resolved');
     if (!parsed) return;
     this.gateResolvedListeners.forEach((fn) => fn(parsed.sessionId, parsed.requestId));
+  }
+
+  private handleResync(params: unknown): void {
+    const parsed = this.parseOrWarn(ResyncParamsSchema, params, 'resync');
+    if (!parsed) return;
+    this.resyncListeners.forEach((fn) => fn(parsed.sessionId));
   }
 
   private parseOrWarn<T>(schema: ParseableSchema<T>, value: unknown, label: string): T | undefined {

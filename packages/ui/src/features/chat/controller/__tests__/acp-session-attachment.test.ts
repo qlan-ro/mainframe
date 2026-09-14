@@ -70,3 +70,34 @@ describe('AcpSessionAttachment — empty full-replay guard', () => {
     expect(resetSettledCursor).toHaveBeenCalled();
   });
 });
+
+describe('AcpSessionAttachment — resync (T34)', () => {
+  it('a resync re-replays WITHOUT dispatching transcript.cleared — cache eviction, not a wipe', async () => {
+    const client = makeFakeAcpClient();
+    const { host, dispatch } = makeHost();
+    const attachment = new AcpSessionAttachment(host);
+    await attachment.attach(client as unknown as AcpSessionClientPort);
+    const resumesBefore = client.resumeCalls.length;
+    dispatch.mockClear();
+
+    client.emitResync(CHAT_ID);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(dispatch).not.toHaveBeenCalledWith({ type: 'transcript.cleared' });
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+  });
+
+  it('ignores a resync for another session', async () => {
+    const client = makeFakeAcpClient();
+    const { host } = makeHost();
+    const attachment = new AcpSessionAttachment(host);
+    await attachment.attach(client as unknown as AcpSessionClientPort);
+    const resumesBefore = client.resumeCalls.length;
+
+    client.emitResync('other-chat');
+    await Promise.resolve();
+
+    expect(client.resumeCalls.length).toBe(resumesBefore);
+  });
+});
