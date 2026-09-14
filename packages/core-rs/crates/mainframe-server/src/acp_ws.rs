@@ -27,6 +27,7 @@ pub use hub::{FACADE_THROTTLE_INTERVAL_MS, FacadeHub};
 
 use crate::ctx::AppCtx;
 use crate::websocket::authenticate_ws_upgrade;
+use facade_conn::FacadeConnection;
 
 /// `?token=` on the upgrade URL, matching the other self-authenticating WS
 /// routes.
@@ -56,6 +57,57 @@ pub(crate) async fn acp_ws_handler(
     upgrade.on_upgrade(move |socket| handle_acp_socket(socket, ctx, profile))
 }
 
+/// A periodic tick with its first (immediate) firing already consumed, so
+/// the caller's loop sees one tick per configured cadence, not an extra one
+/// at connect time — `connection.ready`'s WS twin already marks connect.
+async fn periodic(interval_ms: u64) -> tokio::time::Interval {
+    let mut ticker = tokio::time::interval(Duration::from_millis(interval_ms.max(1)));
+    ticker.tick().await;
+    ticker
+}
+
+/// One inbound WS message. Returns whether the socket loop should break.
+async fn handle_incoming(
+    incoming: Option<Result<Message, axum::Error>>,
+    daemon: &DaemonInfo,
+    ctx: &Arc<AppCtx>,
+    connection: &Arc<FacadeConnection>,
+    socket: &mut WebSocket,
+) -> bool {
+    match incoming {
+        Some(Ok(Message::Text(text))) => {
+            let reply = dispatch::handle_inbound(text.as_str(), daemon, ctx, connection).await;
+            // Written before the next outbound drain, so a reply can never
+            // trail frames its own request caused.
+            match reply {
+                Some(reply) => socket.send(Message::Text(reply.into())).await.is_err(),
+                None => false,
+            }
+        }
+        Some(Ok(Message::Close(_))) | None => true,
+        Some(Ok(_)) => false, // binary / ping / pong — ignored (axum auto-pongs)
+        Some(Err(_)) => true,
+    }
+}
+
+/// One hub-pushed outbound frame. Returns whether the socket loop should
+/// break.
+async fn handle_outbound(frame: Option<String>, socket: &mut WebSocket) -> bool {
+    match frame {
+        Some(payload) => socket.send(Message::Text(payload.into())).await.is_err(),
+        None => true,
+    }
+}
+
+/// One heartbeat tick. Returns whether the socket loop should break.
+async fn handle_heartbeat_tick(sequence: u64, socket: &mut WebSocket) -> bool {
+    let note = heartbeat_notification(sequence);
+    let Ok(payload) = serde_json::to_string(&note) else {
+        return false;
+    };
+    socket.send(Message::Text(payload.into())).await.is_err()
+}
+
 /// Drive one accepted facade connection: register it on the hub, then
 /// `select!` between inbound frames, hub-pushed outbound frames, the
 /// heartbeat ticker, and the throttle flush tick until either side closes.
@@ -66,61 +118,27 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
         version: ctx.version.clone(),
         heartbeat_interval_ms: ctx.facade_heartbeat_interval_ms,
     };
-    let mut heartbeat = tokio::time::interval(Duration::from_millis(
-        ctx.facade_heartbeat_interval_ms.max(1),
-    ));
-    // `interval` fires its first tick immediately; consume it so the heartbeat
-    // is periodic (one per configured cadence) rather than an extra frame at
-    // connect time — `connection.ready`'s WS twin already marks connect.
-    heartbeat.tick().await;
-    let mut flush = tokio::time::interval(Duration::from_millis(
-        FACADE_THROTTLE_INTERVAL_MS.max(1) as u64,
-    ));
-    flush.tick().await;
+    let mut heartbeat = periodic(ctx.facade_heartbeat_interval_ms).await;
+    let mut flush = periodic(FACADE_THROTTLE_INTERVAL_MS as u64).await;
     let mut sequence: u64 = 0;
 
     loop {
-        tokio::select! {
+        let should_break = tokio::select! {
             incoming = socket.recv() => {
-                match incoming {
-                    Some(Ok(Message::Text(text))) => {
-                        let reply =
-                            dispatch::handle_inbound(text.as_str(), &daemon, &ctx, &connection)
-                                .await;
-                        // Written before the next outbound drain, so a reply
-                        // can never trail frames its own request caused.
-                        if let Some(reply) = reply
-                            && socket.send(Message::Text(reply.into())).await.is_err()
-                        {
-                            break;
-                        }
-                    }
-                    Some(Ok(Message::Close(_))) | None => break,
-                    Some(Ok(_)) => {} // binary / ping / pong — ignored (axum auto-pongs)
-                    Some(Err(_)) => break,
-                }
+                handle_incoming(incoming, &daemon, &ctx, &connection, &mut socket).await
             }
-            frame = outbound.recv() => {
-                match frame {
-                    Some(payload) => {
-                        if socket.send(Message::Text(payload.into())).await.is_err() {
-                            break;
-                        }
-                    }
-                    None => break,
-                }
-            }
+            frame = outbound.recv() => handle_outbound(frame, &mut socket).await,
             _ = heartbeat.tick() => {
                 sequence += 1;
-                let note = heartbeat_notification(sequence);
-                let Ok(payload) = serde_json::to_string(&note) else { continue };
-                if socket.send(Message::Text(payload.into())).await.is_err() {
-                    break;
-                }
+                handle_heartbeat_tick(sequence, &mut socket).await
             }
             _ = flush.tick() => {
                 ctx.facade_hub.flush_connection(&connection);
+                false
             }
+        };
+        if should_break {
+            break;
         }
     }
 

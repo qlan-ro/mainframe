@@ -70,25 +70,37 @@ pub async fn handle_inbound(
             spawn_prompt(request, daemon.clone(), ports, Arc::clone(connection));
             None
         }
-        frame => {
-            if let Some(session_id) = prompt_session_id(&frame) {
-                ctx.facade_hub.attach(connection, &session_id);
-            }
-            let is_initialize =
-                matches!(&frame, InboundFrame::Request(r) if r.method == "initialize");
-            let reply =
-                dispatch_with_prompt(frame, daemon, &ports, connection.is_negotiated()).await;
-            if is_initialize
-                && reply
-                    .as_deref()
-                    .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
-                    .is_some_and(|v| v.get("result").is_some())
-            {
-                connection.mark_negotiated();
-            }
-            reply
-        }
+        frame => dispatch_fallback(frame, daemon, &ports, ctx, connection).await,
     }
+}
+
+/// Everything besides `session/resume`, a gate answer, `session_detach`, and
+/// `session/prompt` — `initialize`, `session/cancel`, and the malformed/
+/// unknown-method errors. Attaches on a `session/cancel` the same as a
+/// prompt (todo #350: a client observes a session it cancels), and marks
+/// the connection negotiated on a successful `initialize` reply.
+async fn dispatch_fallback(
+    frame: InboundFrame,
+    daemon: &DaemonInfo,
+    ports: &ManagerPorts,
+    ctx: &Arc<AppCtx>,
+    connection: &Arc<FacadeConnection>,
+) -> Option<String> {
+    if let Some(session_id) = prompt_session_id(&frame) {
+        ctx.facade_hub.attach(connection, &session_id);
+    }
+    let is_initialize = matches!(&frame, InboundFrame::Request(r) if r.method == "initialize");
+    let reply = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
+    if is_initialize && reply_is_ok(reply.as_deref()) {
+        connection.mark_negotiated();
+    }
+    reply
+}
+
+fn reply_is_ok(reply: Option<&str>) -> bool {
+    reply
+        .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
+        .is_some_and(|v| v.get("result").is_some())
 }
 
 /// `session/prompt` alone runs off the socket-loop task (R3.6, plan decision
