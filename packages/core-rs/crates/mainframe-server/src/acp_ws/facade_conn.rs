@@ -120,12 +120,19 @@ impl FacadeConnection {
     }
 
     /// Chat teardown (`ChatSurfaceEvent::ChatEnded`): drop the session's
-    /// stream state and any gates delivered for it — otherwise both outlive
-    /// the chat for the connection's whole lifetime.
+    /// stream state, any gates delivered for it, and its prompt lock —
+    /// otherwise all three outlive the chat for the connection's whole
+    /// lifetime. A prompt still holding the removed lock keeps its own `Arc`
+    /// alive and finishes under it; a later prompt for a re-created chat
+    /// simply starts a fresh one.
     pub fn forget_chat(&self, chat_id: &str) {
         self.locked_sessions().remove(chat_id);
         self.locked_gates()
             .retain(|_, gate| gate.chat_id != chat_id);
+        self.prompt_locks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(chat_id);
     }
 
     fn send_frame(&self, payload: String) {
@@ -202,3 +209,6 @@ pub fn rpc_id_string(request_id: &str) -> String {
         RequestId::Number(n) => n.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests;
