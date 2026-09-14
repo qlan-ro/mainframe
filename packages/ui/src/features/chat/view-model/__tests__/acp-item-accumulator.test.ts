@@ -231,3 +231,35 @@ describe('AcpItemAccumulator — ordering and session-level state', () => {
     expect(acc.latestUsage).toBeNull();
   });
 });
+
+describe('AcpItemAccumulator — empty-content clear (R2.1)', () => {
+  it('an empty content upsert removes the item entirely, leaving no blank bubble', () => {
+    const acc = new AcpItemAccumulator();
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('partial answer')] });
+
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [] });
+
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a clearing upsert carrying only a retry marker still removes the item', () => {
+    const acc = new AcpItemAccumulator();
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('stale draft')] });
+
+    acc.apply({
+      sessionUpdate: 'agent_message',
+      messageId: 'm1',
+      content: [],
+      _meta: { '_mainframe.dev': { retry: true } },
+    });
+
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('an empty-content chunk does NOT clear — only upsert clears (chunks only ever append)', () => {
+    const acc = new AcpItemAccumulator();
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('still here') });
+
+    expect(acc.itemsInOrder).toHaveLength(1);
+  });
+});

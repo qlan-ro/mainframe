@@ -161,6 +161,18 @@ export class AcpItemAccumulator {
     content: ContentBlock[] | null | undefined,
     meta: Record<string, unknown> | null | undefined,
   ): void {
+    // An empty-array upsert forgets the item entirely — mirrors the
+    // daemon's `clear_update` (session_state.rs). An aborted partial stream
+    // must leave no blank bubble above the real answer, so this checks
+    // BEFORE ensureOrdered: an item that was never ordered stays that way.
+    if (content !== undefined && content !== null && content.length === 0) {
+      if (this.items.has(id)) {
+        this.items.delete(id);
+        const index = this.order.indexOf(id);
+        if (index !== -1) this.order.splice(index, 1);
+      }
+      return;
+    }
     this.ensureOrdered(id);
     const prior = this.items.get(id);
     const priorContent = prior && prior.kind !== 'tool-call' ? prior.content : [];
