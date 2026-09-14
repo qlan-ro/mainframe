@@ -76,6 +76,13 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         // todo #350 group D task 11: extends the fixture vocabulary so a
         // captured `api_error` retry can be replayed through the sink.
         "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
+        // todo #350: a recording can now emit a partial for message A, then
+        // `onApiRetry`, then the completed message B — the sequence the
+        // no-ghost-bubble e2e scenario asserts against.
+        "onMessagePartial" => sink.on_message_partial(
+            arg::<String>(event, 0)?.as_str(),
+            arg::<Vec<MessageContent>>(event, 1)?,
+        ),
         method => tracing::warn!(%method, "mock-cli ignored unknown recorded sink method"),
     }
     Ok(())
@@ -102,6 +109,8 @@ mod tests {
 
     use serde_json::json;
 
+    use mainframe_types::content::LeafContent;
+
     use crate::fixture::EventDirection;
 
     use super::*;
@@ -110,6 +119,7 @@ mod tests {
     struct RecordingSink {
         cancelled: Mutex<Vec<String>>,
         api_retries: Mutex<Vec<(i64, Option<String>)>>,
+        partials: Mutex<Vec<(String, Vec<MessageContent>)>>,
     }
     impl SessionSink for RecordingSink {
         fn on_init(&self, _session_id: &str) {}
@@ -141,6 +151,12 @@ mod tests {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .push((attempt, reason));
+        }
+        fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+            self.partials
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((api_message_id.to_string(), content));
         }
     }
 
@@ -180,6 +196,29 @@ mod tests {
         assert_eq!(
             *sink.api_retries.lock().unwrap_or_else(|e| e.into_inner()),
             vec![(2, Some("overloaded_error".to_string()))]
+        );
+    }
+
+    #[test]
+    fn dispatches_a_recorded_on_message_partial() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded(
+            "onMessagePartial",
+            vec![json!("msg_a"), json!([{ "type": "text", "text": "Hel" }])],
+        );
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        let partials = sink.partials.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(partials.len(), 1);
+        assert_eq!(partials[0].0, "msg_a");
+        assert_eq!(
+            partials[0].1,
+            vec![MessageContent::Leaf(LeafContent::Text {
+                text: "Hel".to_string(),
+                parent_tool_use_id: None,
+            })]
         );
     }
 
