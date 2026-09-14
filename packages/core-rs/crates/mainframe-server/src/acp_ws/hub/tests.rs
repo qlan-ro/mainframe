@@ -1,4 +1,5 @@
-use mainframe_types::adapter::ControlRequest;
+use mainframe_chat::chat_surface::{CompactionPhase, TurnStopReason};
+use mainframe_types::adapter::{ContextUsage, ControlRequest};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};
 use serde_json::{Value, json};

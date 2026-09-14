@@ -11,21 +11,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
-use mainframe_acp::{
-    AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame, encoder, gate_request_id,
-};
-use mainframe_chat::chat_surface::{
-    ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason,
-};
-use mainframe_types::acp::extensions::{
-    CompactionWirePhase, MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta,
-};
-use mainframe_types::acp::update::{StopReason, UsageUpdate};
-use mainframe_types::adapter::ContextUsage;
+use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame};
+use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use tokio::sync::mpsc;
-use tracing::{debug, warn};
 
 use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
+
+mod handlers;
 
 /// Coalescing window for chunk fan-out (spec decision 14) and the cadence of
 /// each connection's flush tick — an implementation choice per the spec; the
@@ -252,144 +244,48 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-fn stop_reason(reason: TurnStopReason) -> StopReason {
-    match reason {
-        TurnStopReason::Completed => StopReason::EndTurn,
-        TurnStopReason::Cancelled => StopReason::Cancelled,
-        TurnStopReason::Error => StopReason::Error,
-    }
-}
-
-fn usage_update(usage: &ContextUsage) -> UsageUpdate {
-    let meta = serde_json::json!({
-        MAINFRAME_META_NAMESPACE: UsageMeta { percentage: usage.percentage }
-    });
-    UsageUpdate {
-        used: usage.total_tokens.max(0) as u64,
-        size: usage.max_tokens.max(0) as u64,
-        cost: None,
-        meta: Some(meta),
-    }
-}
-
+/// Dispatch only — one method per event family lives in `hub/handlers.rs`
+/// (todo #350, plan task 37, R2.13). Every handler still routes through
+/// `for_each_attached_session`/`on_display_revision`/`push_raw_to_attached`
+/// above, so the T5/T6 critical section is unchanged by the split.
 impl ChatSurface for FacadeHub {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
         match event {
             // Acceptance already rides the `session/prompt` response
             // (`PromptResponse` + queued `_meta`), not a stream frame.
             ChatSurfaceEvent::TurnAccepted { .. } => {}
-            ChatSurfaceEvent::TurnStarted { chat_id } => {
-                self.for_each_attached_session(&chat_id, |stream, now| stream.on_turn_started(now));
-            }
+            ChatSurfaceEvent::TurnStarted { chat_id } => self.handle_turn_started(&chat_id),
             ChatSurfaceEvent::TurnFinished {
                 chat_id,
                 stop_reason: reason,
-            } => {
-                self.for_each_attached_session(&chat_id, |stream, now| {
-                    stream.on_turn_finished(stop_reason(reason), now)
-                });
-            }
+            } => self.handle_turn_finished(&chat_id, reason),
             ChatSurfaceEvent::DisplayRevision { chat_id, messages } => {
-                // Encode only when someone is listening: this handler runs on
-                // the sink path for every chat in the daemon.
-                if self.attached_connections(&chat_id).is_empty() {
-                    return;
-                }
-                let items = encoder::encode(&messages);
-                self.on_display_revision(&chat_id, &items);
+                self.handle_display_revision(&chat_id, &messages);
             }
             ChatSurfaceEvent::GateRaised { chat_id, request } => {
-                let frame = mainframe_acp::build_permission_request(
-                    &chat_id,
-                    gate_request_id(&request.request_id),
-                    &request,
-                );
-                let Ok(payload) = serde_json::to_string(&frame) else {
-                    warn!(chat_id, "acp facade: failed to serialize a gate request");
-                    return;
-                };
-                // Registration (pending-gate bookkeeping) is unconditional and
-                // immediate — only the actual send rides the throttle FIFO
-                // (R2.11), so a gate can never precede the tool call it
-                // belongs to on the wire.
-                for connection in self.attached_connections(&chat_id) {
-                    connection.register_gate(&chat_id, &request);
-                }
-                self.push_raw_to_attached(&chat_id, payload);
+                self.handle_gate_raised(&chat_id, request);
             }
             ChatSurfaceEvent::GateResolved {
                 chat_id,
                 request_id,
-            } => {
-                self.locked_registry().mark_resolved(&chat_id, &request_id);
-                let rpc_id = rpc_id_string(&request_id);
-                // A connection still holding the delivered gate did not answer
-                // it (the answer path removes its own entry first) — push the
-                // resolution so it clears now, not on its next resume (spec
-                // criterion 8).
-                let note = mainframe_acp::gate_resolved_notification(&chat_id, &rpc_id);
-                for entry in self.connections.iter() {
-                    if entry.value().remove_gate(&rpc_id).is_some() {
-                        entry.value().send_json(&note);
-                        debug!(chat_id, request_id, "acp facade: pending gate resolved");
-                    }
-                }
-            }
+            } => self.handle_gate_resolved(&chat_id, &request_id),
             ChatSurfaceEvent::Retry {
                 chat_id,
                 attempt,
                 reason,
-            } => {
-                let marker = RetryMarker { attempt, reason };
-                self.for_each_attached_session(&chat_id, |stream, _now| {
-                    stream.on_retry(marker.clone());
-                    Vec::new()
-                });
-            }
+            } => self.handle_retry(&chat_id, attempt, reason),
             ChatSurfaceEvent::QueueChanged { chat_id, refs } => {
-                let note = mainframe_acp::queue_state_notification(&chat_id, refs);
-                if let Ok(payload) = serde_json::to_string(&note) {
-                    self.push_raw_to_attached(&chat_id, payload);
-                }
+                self.handle_queue_changed(&chat_id, refs);
             }
             ChatSurfaceEvent::TranscriptCleared { chat_id } => {
-                let note = mainframe_acp::transcript_cleared_notification(&chat_id);
-                if let Ok(payload) = serde_json::to_string(&note) {
-                    self.push_raw_to_attached(&chat_id, payload);
-                }
+                self.handle_transcript_cleared(&chat_id);
             }
-            // Same FIFO as content updates (T6, R2.11): a resync must not
-            // overtake the frames whose loss triggered the eviction.
-            ChatSurfaceEvent::Resync { chat_id } => {
-                let note = mainframe_acp::resync_notification(&chat_id);
-                if let Ok(payload) = serde_json::to_string(&note) {
-                    self.push_raw_to_attached(&chat_id, payload);
-                }
-            }
+            ChatSurfaceEvent::Resync { chat_id } => self.handle_resync(&chat_id),
             ChatSurfaceEvent::Compaction { chat_id, phase } => {
-                let wire_phase = match phase {
-                    CompactionPhase::Started => CompactionWirePhase::Started,
-                    CompactionPhase::Done => CompactionWirePhase::Done,
-                };
-                let note = mainframe_acp::compaction_notification(&chat_id, wire_phase);
-                if let Ok(payload) = serde_json::to_string(&note) {
-                    self.push_raw_to_attached(&chat_id, payload);
-                }
+                self.handle_compaction(&chat_id, phase);
             }
-            ChatSurfaceEvent::Usage { chat_id, usage } => {
-                let update = usage_update(&usage);
-                self.for_each_attached_session(&chat_id, |stream, now| {
-                    stream.on_usage(update.clone(), now)
-                });
-            }
-            // Chat teardown: nothing else ever clears the gate registry's
-            // per-chat bookkeeping or a connection's per-chat session state.
-            ChatSurfaceEvent::ChatEnded { chat_id } => {
-                self.locked_registry().forget_chat(&chat_id);
-                for entry in self.connections.iter() {
-                    entry.value().forget_chat(&chat_id);
-                }
-            }
+            ChatSurfaceEvent::Usage { chat_id, usage } => self.handle_usage(&chat_id, &usage),
+            ChatSurfaceEvent::ChatEnded { chat_id } => self.handle_chat_ended(&chat_id),
         }
     }
 }
