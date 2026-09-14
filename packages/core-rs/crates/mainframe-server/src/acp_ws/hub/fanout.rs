@@ -23,27 +23,51 @@ impl FacadeHub {
             .collect()
     }
 
-    /// Run `per_stream` against every attached, SEEDED session and send its
-    /// updates — diff and publish inside the same per-connection lock (T5,
-    /// R1.2), so a diff can never be computed under the lock and enqueued
-    /// after it, where a second diff for the same session could interleave
-    /// ahead of it. A session still `AwaitingSeed` (a resume in flight) is
-    /// skipped here, same as an unattached one — only
-    /// [`Self::on_display_revision`] buffers for that state.
+    /// Visit every attached, SEEDED session's stream under that connection's
+    /// own lock. A session still `AwaitingSeed` (a resume in flight) is
+    /// skipped, same as an unattached one — only
+    /// [`Self::on_display_revision`] and [`Self::push_raw_to_attached`]
+    /// buffer for that state.
+    fn with_live_streams(
+        &self,
+        chat_id: &str,
+        mut visit: impl FnMut(&FacadeConnection, &mut SessionStream),
+    ) {
+        for connection in self.attached_connections(chat_id) {
+            let mut sessions = connection.locked_sessions();
+            if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
+                visit(&connection, stream);
+            }
+        }
+    }
+
+    /// Run `per_stream` against every attached, seeded session and send the
+    /// updates it produces — diff and publish inside the same per-connection
+    /// lock (T5, R1.2), so a diff can never be computed under the lock and
+    /// enqueued after it, where a second diff for the same session could
+    /// interleave ahead of it.
     pub(super) fn for_each_attached_session(
         &self,
         chat_id: &str,
         mut per_stream: impl FnMut(&mut SessionStream, i64) -> Vec<ThrottledFrame>,
     ) {
         let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
-                for frame in per_stream(stream, now) {
-                    connection.send_throttled(chat_id, frame);
-                }
+        self.with_live_streams(chat_id, |connection, stream| {
+            for frame in per_stream(stream, now) {
+                connection.send_throttled(chat_id, frame);
             }
-        }
+        });
+    }
+
+    /// Update every attached, seeded session's stream state without emitting
+    /// anything — a retry marker rides out on the next update the stream
+    /// produces, it does not send a frame of its own.
+    pub(super) fn for_each_attached_stream(
+        &self,
+        chat_id: &str,
+        mut per_stream: impl FnMut(&mut SessionStream),
+    ) {
+        self.with_live_streams(chat_id, |_connection, stream| per_stream(stream));
     }
 
     /// [`ChatSurfaceEvent::DisplayRevision`]'s handler: unlike the other

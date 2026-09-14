@@ -100,10 +100,7 @@ impl FacadeHub {
 
     pub(super) fn handle_retry(&self, chat_id: &str, attempt: i64, reason: Option<String>) {
         let marker = RetryMarker { attempt, reason };
-        self.for_each_attached_session(chat_id, |stream, _now| {
-            stream.on_retry(marker.clone());
-            Vec::new()
-        });
+        self.for_each_attached_stream(chat_id, |stream| stream.on_retry(marker.clone()));
     }
 
     pub(super) fn handle_queue_changed(
