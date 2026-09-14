@@ -11,7 +11,7 @@ use mainframe_acp::{EncodedItem, ThrottledFrame};
 use serde::Serialize;
 use tracing::warn;
 
-use super::super::facade_conn::{FacadeConnection, SessionSlot};
+use super::super::facade_conn::{BufferedRaw, FacadeConnection, SessionSlot};
 use super::{FacadeHub, now_ms};
 
 impl FacadeHub {
@@ -104,7 +104,7 @@ impl FacadeHub {
         kind: RawFrameKind,
     ) {
         match serde_json::to_string(note) {
-            Ok(payload) => self.push_raw_to_attached(chat_id, payload),
+            Ok(payload) => self.push_raw_to_attached(chat_id, payload, None),
             Err(err) => warn!(
                 %err,
                 chat_id,
@@ -120,8 +120,14 @@ impl FacadeHub {
     /// (R2.11), so it cannot arrive ahead of a still-buffered update it
     /// depends on. A connection mid-resume has no seeded stream to queue
     /// against, so its frames are buffered in the slot and drained by
-    /// [`Self::reset_session`] behind the replay instead.
-    pub(super) fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
+    /// [`Self::reset_session`] behind the replay instead; `gate_rpc_id`
+    /// identifies a gate raise there, which the replay may redeliver itself.
+    pub(super) fn push_raw_to_attached(
+        &self,
+        chat_id: &str,
+        payload: String,
+        gate_rpc_id: Option<&str>,
+    ) {
         let now = now_ms();
         for connection in self.attached_connections(chat_id) {
             let mut sessions = connection.locked_sessions();
@@ -131,9 +137,10 @@ impl FacadeHub {
                         connection.send_throttled(chat_id, frame);
                     }
                 }
-                Some(SessionSlot::AwaitingSeed { raws, .. }) => {
-                    raws.push(payload.clone());
-                }
+                Some(SessionSlot::AwaitingSeed { raws, .. }) => raws.push(BufferedRaw {
+                    payload: payload.clone(),
+                    gate_rpc_id: gate_rpc_id.map(str::to_string),
+                }),
                 // The connection dropped this chat between the snapshot
                 // `attached_connections` took and this lock; the frame has
                 // nowhere to go. /* expected */

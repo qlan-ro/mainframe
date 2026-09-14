@@ -15,7 +15,7 @@ use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 
 use crate::ctx::AppCtx;
 
-use super::facade_conn::FacadeConnection;
+use super::facade_conn::{FacadeConnection, rpc_id_string};
 use super::ports::ManagerPorts;
 
 mod gate_answers;
@@ -212,8 +212,17 @@ async fn handle_resume(
         .as_ref()
         .map(|cm| cm.get_queued_for_chat(&session_id))
         .unwrap_or_default();
-    ctx.facade_hub
-        .reset_session(connection, &session_id, &replay.items, &response, |conn| {
+    let redelivered_gate = replay
+        .pending_gate
+        .as_ref()
+        .map(|gate| rpc_id_string(&gate.request_id));
+    ctx.facade_hub.reset_session(
+        connection,
+        &session_id,
+        &replay.items,
+        &response,
+        redelivered_gate.as_deref(),
+        |conn| {
             for update in replay.updates {
                 conn.send_update(&session_id, update);
             }
@@ -228,7 +237,8 @@ async fn handle_resume(
                 &session_id,
                 queued,
             ));
-        });
+        },
+    );
 }
 
 pub(super) fn wire(response: &JsonRpcResponse) -> String {

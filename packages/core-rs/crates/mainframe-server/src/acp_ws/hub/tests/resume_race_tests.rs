@@ -1,21 +1,12 @@
-//! Resume/reset-session cases for `FacadeHub`, including the T5/R2.9
-//! race between a live revision and an in-flight snapshot await — split
-//! out of `tests.rs` (todo #350, plan task 37, R2.13).
+//! Seed-and-replay cases for `FacadeHub::reset_session`: what a resume
+//! replaces, what it deltas against afterwards, and what it must not
+//! resurrect. The buffering window itself lives in `awaiting_seed_tests.rs`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::json;
 
 use super::*;
-use crate::acp_ws::facade_conn::FacadeConnection;
-
-/// The `session/resume` reply `reset_session` sends ahead of the replay.
-fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
-    mainframe_acp::rpc::success_response(
-        Some(mainframe_types::acp::jsonrpc::RequestId::Number(id)),
-        json!({}),
-    )
-}
 
 #[tokio::test]
 async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas() {
@@ -24,7 +15,7 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), |c| {
+    hub.reset_session(&conn, "chat-1", &items, &reply(1), None, |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::StateUpdate(
@@ -58,14 +49,14 @@ async fn a_revision_after_a_resume_deltas_against_the_replay() {
     // First resume: seeds "Hel".
     let partial = mainframe_acp::encode(&[display_message("m1", "Hel")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &partial, &reply(1), |_c| {});
+    hub.reset_session(&conn, "chat-1", &partial, &reply(1), None, |_c| {});
     drain(&mut rx);
 
     // A reconnect resumes again, this time at "Hello" — the seeded state
     // must be replaced wholesale, not merged with the stale "Hel" state.
     let full = mainframe_acp::encode(&[display_message("m1", "Hello")]);
     hub.begin_resume(&conn, "chat-1");
-    hub.reset_session(&conn, "chat-1", &full, &reply(2), |c| {
+    hub.reset_session(&conn, "chat-1", &full, &reply(2), None, |c| {
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::AgentMessage(
@@ -93,38 +84,6 @@ async fn a_revision_after_a_resume_deltas_against_the_replay() {
     );
 }
 
-#[tokio::test]
-async fn a_revision_during_the_snapshot_await_is_buffered_not_lost() {
-    let hub = hub();
-    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
-
-    // handle_resume attaches before awaiting the snapshot — the connection
-    // is not yet seeded, so a racing live revision must be buffered, not
-    // dropped and not diffed against nothing.
-    hub.begin_resume(&conn, "chat-1");
-    hub.on_chat_surface_event(revision("chat-1", "Hello!"));
-    assert!(
-        drain(&mut rx).is_empty(),
-        "a revision during the await must not reach the wire yet"
-    );
-
-    // The snapshot the await returned reflects the PRE-race content.
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), |_c| {});
-
-    let frames = drain(&mut rx);
-    assert_eq!(
-        frames.len(),
-        2,
-        "the resume reply, then exactly one catch-up chunk — never a full resend"
-    );
-    assert_eq!(
-        frames[1]["params"]["update"]["sessionUpdate"],
-        json!("agent_message_chunk")
-    );
-    assert_eq!(frames[1]["params"]["update"]["content"]["text"], json!("!"));
-}
-
 /// The client dropped the session (a `_mainframe.dev/session_detach`, or the
 /// chat ended) while the resume's snapshot await was still in flight. The
 /// completing resume must not resurrect the attachment — the daemon would
@@ -140,7 +99,7 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
 
     let replayed = AtomicBool::new(false);
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(9), |_c| {
+    hub.reset_session(&conn, "chat-1", &items, &reply(9), None, |_c| {
         replayed.store(true, Ordering::SeqCst);
     });
 
@@ -159,99 +118,4 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
     // And the fan-out stays silent, as it would for any unattached chat.
     hub.on_chat_surface_event(revision("chat-1", "Hello world"));
     assert!(drain(&mut rx).is_empty());
-}
-
-/// One `session/update` sent from inside the replay closure, standing in for
-/// the transcript a real resume replays.
-fn replay_marker(conn: &FacadeConnection) {
-    conn.send_update(
-        "chat-1",
-        mainframe_types::acp::update::SessionUpdate::StateUpdate(
-            mainframe_types::acp::update::SessionState::Running,
-        ),
-    );
-}
-
-/// A raw out-of-band frame raised during the snapshot await must not reach
-/// the client ahead of the replay it predates — it is buffered like a
-/// revision and drained behind it (T6, R2.11).
-#[tokio::test]
-async fn a_raw_frame_during_the_snapshot_await_is_drained_after_the_replay() {
-    let hub = hub();
-    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
-
-    hub.begin_resume(&conn, "chat-1");
-    hub.on_chat_surface_event(ChatSurfaceEvent::Resync {
-        chat_id: "chat-1".to_string(),
-    });
-    assert!(
-        drain(&mut rx).is_empty(),
-        "a raw frame during the await must not overtake the replay"
-    );
-
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), replay_marker);
-
-    let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 3, "reply, replay, then the buffered raw");
-    assert_eq!(frames[0]["id"], json!(1));
-    assert_eq!(frames[1]["method"], json!("session/update"));
-    assert_eq!(frames[2]["method"], json!("_mainframe.dev/resync"));
-}
-
-/// A transcript clear buffered across the await is forwarded behind the
-/// replay like any other raw frame. The daemon cannot tell whether the wipe
-/// predates the snapshot it just replayed, and the client treats the clear as
-/// a re-resume trigger — so forwarding costs one redundant resume in the
-/// predates case and converges on the wiped state in the other.
-#[tokio::test]
-async fn a_transcript_clear_during_the_snapshot_await_is_delivered_after_the_replay() {
-    let hub = hub();
-    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
-
-    hub.begin_resume(&conn, "chat-1");
-    hub.on_chat_surface_event(ChatSurfaceEvent::TranscriptCleared {
-        chat_id: "chat-1".to_string(),
-    });
-    assert!(
-        drain(&mut rx).is_empty(),
-        "a clear during the await must not wipe the replay it precedes"
-    );
-
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), replay_marker);
-
-    let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 3, "reply, replay, then the clear: {frames:?}");
-    assert_eq!(
-        frames[2]["method"],
-        json!("_mainframe.dev/transcript_cleared")
-    );
-}
-
-/// Buffered content and a buffered raw drain in that order: the raw (here a
-/// gate raise) must not precede the content update it belongs to.
-#[tokio::test]
-async fn a_buffered_raw_drains_behind_the_buffered_revision() {
-    let hub = hub();
-    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
-
-    hub.begin_resume(&conn, "chat-1");
-    hub.on_chat_surface_event(revision("chat-1", "Hello!"));
-    hub.on_chat_surface_event(ChatSurfaceEvent::GateRaised {
-        chat_id: "chat-1".to_string(),
-        request: control_request("req-1"),
-    });
-    assert!(drain(&mut rx).is_empty());
-
-    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
-    hub.reset_session(&conn, "chat-1", &items, &reply(1), replay_marker);
-
-    let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 4, "reply, replay, catch-up, gate: {frames:?}");
-    assert_eq!(
-        frames[2]["params"]["update"]["sessionUpdate"],
-        json!("agent_message_chunk")
-    );
-    assert_eq!(frames[3]["method"], json!("session/request_permission"));
 }

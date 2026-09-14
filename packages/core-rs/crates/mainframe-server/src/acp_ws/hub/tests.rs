@@ -4,6 +4,7 @@
 //! cases to `resume_race_tests.rs` (todo #350, plan task 37, R2.13) — all
 //! three share this file's fixture builders via `use super::*`.
 
+mod awaiting_seed_tests;
 mod gate_tests;
 mod notification_tests;
 mod resume_race_tests;
@@ -53,6 +54,25 @@ fn control_request(request_id: &str) -> ControlRequest {
         decision_reason: None,
         options: None,
     }
+}
+
+/// The `session/resume` reply `reset_session` sends ahead of the replay.
+fn reply(id: i64) -> mainframe_types::acp::jsonrpc::JsonRpcResponse {
+    mainframe_acp::rpc::success_response(
+        Some(mainframe_types::acp::jsonrpc::RequestId::Number(id)),
+        json!({}),
+    )
+}
+
+/// One `session/update` sent from inside a replay closure, standing in for
+/// the transcript a real resume replays.
+fn replay_marker(conn: &crate::acp_ws::facade_conn::FacadeConnection) {
+    conn.send_update(
+        "chat-1",
+        mainframe_types::acp::update::SessionUpdate::StateUpdate(
+            mainframe_types::acp::update::SessionState::Running,
+        ),
+    );
 }
 
 fn drain(rx: &mut mpsc::UnboundedReceiver<String>) -> Vec<Value> {

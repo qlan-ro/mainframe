@@ -128,6 +128,7 @@ impl FacadeHub {
         chat_id: &str,
         items: &[EncodedItem],
         reply: &JsonRpcResponse,
+        redelivered_gate: Option<&str>,
         replay: impl FnOnce(&FacadeConnection),
     ) {
         let mut sessions = connection.locked_sessions();
@@ -138,7 +139,7 @@ impl FacadeHub {
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
         stream.seed(items);
-        let catch_up = drain_into(&mut stream, previous);
+        let catch_up = drain_into(&mut stream, previous, redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         connection.send_json(reply);
         replay(connection);
@@ -177,8 +178,15 @@ impl FacadeHub {
 /// Fold everything a `session/resume` buffered while its snapshot was in
 /// flight into the freshly seeded `stream`: the latest revision as a diff
 /// against the seed, then the raw frames in arrival order behind it, so a
-/// gate raise still cannot precede the tool call it belongs to.
-fn drain_into(stream: &mut SessionStream, buffered: SessionSlot) -> Vec<ThrottledFrame> {
+/// gate raise still cannot precede the tool call it belongs to. The one gate
+/// `redelivered_gate` names is skipped — the replay just sent that same
+/// request itself, and two live requests for one decision leave the client
+/// with a gate its answer cannot resolve.
+fn drain_into(
+    stream: &mut SessionStream,
+    buffered: SessionSlot,
+    redelivered_gate: Option<&str>,
+) -> Vec<ThrottledFrame> {
     let SessionSlot::AwaitingSeed { latest, raws } = buffered else {
         return Vec::new();
     };
@@ -187,7 +195,14 @@ fn drain_into(stream: &mut SessionStream, buffered: SessionSlot) -> Vec<Throttle
         .map(|latest| stream.on_revision(&latest, now))
         .unwrap_or_default();
     for raw in raws {
-        frames.extend(stream.push_raw(raw, now));
+        if raw
+            .gate_rpc_id
+            .as_deref()
+            .is_some_and(|id| Some(id) == redelivered_gate)
+        {
+            continue;
+        }
+        frames.extend(stream.push_raw(raw.payload, now));
     }
     frames
 }

@@ -22,6 +22,15 @@ pub struct PendingGate {
     pub request: ControlRequest,
 }
 
+/// One raw out-of-band frame held for the duration of a resume's snapshot
+/// await. A gate raise carries the rpc id it was delivered under, so the
+/// drain can recognize the gate the replay redelivers on its own and not
+/// hand the client two live requests for one decision.
+pub(super) struct BufferedRaw {
+    pub payload: String,
+    pub gate_rpc_id: Option<String>,
+}
+
 /// A connection's per-session slot. `AwaitingSeed` covers the window a
 /// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
 /// racing that await has nowhere seeded to diff against yet, so its item
@@ -34,7 +43,7 @@ pub(super) enum SessionSlot {
     Live(SessionStream),
     AwaitingSeed {
         latest: Option<Vec<mainframe_acp::EncodedItem>>,
-        raws: Vec<String>,
+        raws: Vec<BufferedRaw>,
     },
 }
 
