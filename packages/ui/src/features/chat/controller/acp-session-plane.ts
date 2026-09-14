@@ -3,7 +3,7 @@
  * ONE chat over the shared per-profile `AcpFacadeClient`. Replaces the four
  * legacy reconnect re-seed paths with `session/resume`:
  *  - `subscribe:ack` re-seed + REST history refresh → `attach()`'s full
- *    replay / `resumeFromGap()`'s cursor replay;
+ *    replay / `resumeFromGap()`'s cursor replay (both in `acp-session-attachment.ts`);
  *  - queue snapshot → acceptance `_meta` (spec decision 11) + the facade's
  *    `_mainframe.dev/queue_state` snapshots (live changes and post-resume);
  *  - pending-permission recovery → resume redelivery: a live mid-turn gate
@@ -25,42 +25,17 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
-import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
-import type {
-  CompactionListener,
-  QueueStateListener,
-  TranscriptClearedListener,
-  GateResolvedListener,
-  PermissionRequestListener,
-  SessionUpdateListener,
-} from '../../../lib/daemon/acp-notification-router';
-import type { JsonRpcRequestId, PromptRequest, PromptResponse, ResumeSessionResponse } from '@qlan-ro/mainframe-types';
+import type { JsonRpcRequestId } from '@qlan-ro/mainframe-types';
 import { AcpItemAccumulator } from '../view-model/acp-item-accumulator';
 import { convertAcpItems } from '../view-model/convert-acp-item';
 import { buildAcpRichAnswer } from '../gates/build-acp-permission-response';
 import type { ChatStateEvent } from './chat-thread-state';
 import { resolveGateControlRequest } from './synthesize-control-request';
+import { AcpSessionAttachment, type AcpSessionClientPort } from './acp-session-attachment';
 
-const ResumeMetaSchema = z
-  .object({ itemCount: z.number().int().optional(), fullReplay: z.boolean().optional() })
-  .loose();
+export type { AcpSessionClientPort } from './acp-session-attachment';
 
 const GateMetaSchema = z.object({ controlRequest: z.record(z.string(), z.unknown()) }).loose();
-
-/** The `AcpFacadeClient` surface this plane needs — narrowed so a test double doesn't reimplement the whole client. */
-export interface AcpSessionClientPort {
-  onSessionUpdate(listener: SessionUpdateListener): () => void;
-  onPermissionRequest(listener: PermissionRequestListener): () => void;
-  onGateResolved(listener: GateResolvedListener): () => void;
-  onCompaction(listener: CompactionListener): () => void;
-  onTranscriptCleared(listener: TranscriptClearedListener): () => void;
-  onQueueState(listener: QueueStateListener): () => void;
-  onGap(listener: GapListener): () => void;
-  prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
-  cancel(sessionId: string): void;
-  resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse>;
-  respondPermission(id: JsonRpcRequestId, response: import('@qlan-ro/mainframe-types').RequestPermissionResponse): void;
-}
 
 export interface AcpSessionPlaneHost {
   /** The daemon chat id at call time (it flips on `setRemoteId`). */
@@ -70,65 +45,46 @@ export interface AcpSessionPlaneHost {
 }
 
 export class AcpSessionPlane {
-  private client: AcpSessionClientPort | null = null;
   private readonly accumulator = new AcpItemAccumulator();
   private readonly firstSeenAt = new Map<string, Date>();
   /** ControlRequest.requestId → the JSON-RPC id its gate traveled under. */
   private readonly gateRpcIds = new Map<string, JsonRpcRequestId>();
-  private readonly unsubscribe: Array<() => void> = [];
-  private hasAttached = false;
   /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
   private lastSettledItemId: string | null = null;
+  private readonly attachment: AcpSessionAttachment;
 
-  constructor(private readonly host: AcpSessionPlaneHost) {}
+  constructor(private readonly host: AcpSessionPlaneHost) {
+    this.attachment = new AcpSessionAttachment({
+      getChatId: () => this.host.getChatId(),
+      dispatch: (event) => this.host.dispatch(event),
+      isDisposed: () => this.host.isDisposed(),
+      getLastSettledItemId: () => this.lastSettledItemId,
+      resetSettledCursor: () => {
+        this.lastSettledItemId = null;
+      },
+      resetAccumulator: () => {
+        this.accumulator.reset();
+        this.firstSeenAt.clear();
+      },
+      hasAccumulatedItems: () => this.accumulator.itemsInOrder.length > 0,
+      onSessionUpdate: (update) => this.handleUpdate(update),
+      onPermissionRequest: (rpcId, request) => this.handleGate(rpcId, request),
+      onGateResolvedForSession: (requestId) => this.handleGateResolved(requestId),
+    });
+  }
 
   /** Bind to the shared per-profile client and full-replay this chat. Idempotent per client. */
   async attach(client: AcpSessionClientPort): Promise<void> {
-    if (this.client !== client) {
-      this.detachListeners();
-      this.client = client;
-      this.unsubscribe.push(
-        client.onSessionUpdate((sessionId, update) => {
-          if (sessionId === this.host.getChatId()) this.handleUpdate(update);
-        }),
-        client.onPermissionRequest((id, request) => {
-          if (request.sessionId === this.host.getChatId()) this.handleGate(id, request);
-        }),
-        client.onGateResolved((sessionId, requestId) => {
-          if (sessionId === this.host.getChatId()) this.handleGateResolved(requestId);
-        }),
-        client.onCompaction((sessionId, phase) => {
-          if (sessionId !== this.host.getChatId()) return;
-          this.host.dispatch({ type: phase === 'started' ? 'compact.started' : 'compact.done' });
-        }),
-        client.onTranscriptCleared((sessionId) => {
-          if (sessionId !== this.host.getChatId()) return;
-          // The server wiped the transcript (plan-mode clear-context): drop
-          // the local projection and re-replay so tool-call items drop too.
-          this.host.dispatch({ type: 'transcript.cleared' });
-          void this.reattach().catch(() => undefined);
-        }),
-        client.onQueueState((sessionId, refs) => {
-          if (sessionId !== this.host.getChatId()) return;
-          // Always a full snapshot (never a delta) — the reducer replaces the
-          // queued set wholesale, so stale turns cannot survive a reconnect.
-          this.host.dispatch({ type: 'queued.snapshot', refs });
-        }),
-        client.onGap(() => void this.resumeFromGap()),
-      );
-    }
-    await this.resume({ type: 'start' });
-    this.hasAttached = true;
+    await this.attachment.attach(client);
   }
 
   /** Full re-replay of the current transcript (e.g. after a server-side wipe). */
   async reattach(): Promise<void> {
-    this.lastSettledItemId = null;
-    await this.resume({ type: 'start' });
+    await this.attachment.reattach();
   }
 
   async sendPrompt(text: string, sendMeta: PromptSendMeta): Promise<{ queued: boolean }> {
-    const client = this.requireClient();
+    const client = this.attachment.requireClient();
     const meta = Object.keys(sendMeta).length > 0 ? { _meta: { [MAINFRAME_META_NAMESPACE]: sendMeta } } : {};
     const response = await client.prompt(this.host.getChatId(), text, meta);
     const queuedState = response._meta?.[MAINFRAME_META_NAMESPACE] as { position?: number } | undefined;
@@ -136,7 +92,7 @@ export class AcpSessionPlane {
   }
 
   cancel(): void {
-    this.requireClient().cancel(this.host.getChatId());
+    this.attachment.requireClient().cancel(this.host.getChatId());
   }
 
   /**
@@ -151,7 +107,7 @@ export class AcpSessionPlane {
     const rpcId = this.gateRpcIds.get(response.requestId) ?? `gate-${response.requestId}`;
     this.gateRpcIds.delete(response.requestId);
     const optionId = selectedOptionId ?? (response.behavior === 'deny' ? 'reject-once' : 'allow-once');
-    this.requireClient().respondPermission(rpcId, buildAcpRichAnswer(optionId, response));
+    this.attachment.requireClient().respondPermission(rpcId, buildAcpRichAnswer(optionId, response));
     this.host.dispatch({ type: 'permission.resolved', requestId: response.requestId });
   }
 
@@ -170,51 +126,7 @@ export class AcpSessionPlane {
   }
 
   dispose(): void {
-    this.detachListeners();
-    this.client = null;
-  }
-
-  private detachListeners(): void {
-    this.unsubscribe.forEach((fn) => fn());
-    this.unsubscribe.length = 0;
-  }
-
-  private requireClient(): AcpSessionClientPort {
-    if (!this.client) throw new Error('[acp-session] not attached — no facade client yet');
-    return this.client;
-  }
-
-  private async resume(cursor: ReplayCursor): Promise<void> {
-    const client = this.requireClient();
-    const response = await client.resume(this.host.getChatId(), '', cursor);
-    const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
-    const itemCount = meta.success ? (meta.data.itemCount ?? null) : null;
-    const isFullReplay = cursor.type === 'start' || (meta.success && meta.data.fullReplay === true);
-    if (!isFullReplay) return;
-    // Refuse an empty full replay of a transcript we already hold — the
-    // legacy `refusesEmptyRefresh` guard: "empty" from the daemon can mean
-    // "no history session for this chat yet", never trust it to blank a
-    // populated thread (the first attach is never refused, so a genuinely
-    // empty thread still renders as one).
-    if (itemCount === 0 && this.hasAttached && this.accumulator.itemsInOrder.length > 0) {
-      console.warn(`[acp-session] refused an empty full replay for ${this.host.getChatId()}`);
-      this.host.dispatch({ type: 'history.refresh.refused' });
-      return;
-    }
-    this.accumulator.reset();
-    this.firstSeenAt.clear();
-  }
-
-  private async resumeFromGap(): Promise<void> {
-    if (this.host.isDisposed() || !this.hasAttached) return;
-    const cursor: ReplayCursor = this.lastSettledItemId
-      ? { type: 'item', itemId: this.lastSettledItemId }
-      : { type: 'start' };
-    try {
-      await this.resume(cursor);
-    } catch (error) {
-      console.warn('[acp-session] resume-on-gap failed — a later gap/close will retry', error);
-    }
+    this.attachment.dispose();
   }
 
   private handleUpdate(update: SessionUpdate): void {
