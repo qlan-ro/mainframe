@@ -61,28 +61,38 @@ pub async fn handle_inbound(
             None
         }
         InboundFrame::Request(request) if request.method == "session/prompt" => {
-            let session_id = params_session_id(request.params.as_ref());
-            // Attach-on-send stays inline, ahead of the spawn: T35 pins this
-            // ordering (a connection observes the session from the moment it
-            // sends, not from whenever the spawned task gets scheduled) —
-            // but behind the negotiation gate, so a peer whose prompt is
-            // about to be refused never gets a stream (spec decision 32).
-            if connection.is_negotiated()
-                && let Some(session_id) = &session_id
-            {
-                ctx.facade_hub.attach(connection, session_id);
-            }
-            spawn_prompt(
-                request,
-                session_id,
-                daemon.clone(),
-                ports,
-                Arc::clone(connection),
-            );
+            handle_prompt(request, daemon, ports, ctx, connection);
             None
         }
         frame => dispatch_fallback(frame, daemon, &ports, ctx, connection).await,
     }
+}
+
+/// `session/prompt`: attach-on-send stays inline, ahead of the spawn — T35
+/// pins this ordering (a connection observes the session from the moment it
+/// sends, not from whenever the spawned task gets scheduled) — but behind the
+/// negotiation gate, so a peer whose prompt is about to be refused never gets
+/// a stream (spec decision 32).
+fn handle_prompt(
+    request: JsonRpcRequest,
+    daemon: &DaemonInfo,
+    ports: ManagerPorts,
+    ctx: &Arc<AppCtx>,
+    connection: &Arc<FacadeConnection>,
+) {
+    let session_id = params_session_id(request.params.as_ref());
+    if connection.is_negotiated()
+        && let Some(session_id) = &session_id
+    {
+        ctx.facade_hub.attach(connection, session_id);
+    }
+    spawn_prompt(
+        request,
+        session_id,
+        daemon.clone(),
+        ports,
+        Arc::clone(connection),
+    );
 }
 
 /// Everything besides `session/resume`, a gate answer, `session_detach`, and
