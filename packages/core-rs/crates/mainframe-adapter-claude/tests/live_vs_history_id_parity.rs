@@ -164,3 +164,50 @@ fn per_api_message_first_entry_ids_match_between_live_and_history() {
     assert_eq!(live_ids, vec!["msg_A", "entry-2", "msg_B"]);
     assert_eq!(live_ids, history_ids);
 }
+
+/// T21, R2.8: hidden-thinking models emit a signature-only thinking entry
+/// (empty prose) before the message's real content. History drops that
+/// entry outright (`content_blocks` stays empty) without claiming the API
+/// message's id, so the SECOND, content-bearing entry is what claims it
+/// there — live must agree, not let the signature-only entry steal the
+/// claim for itself.
+#[test]
+fn a_signature_only_thinking_block_claims_the_same_id_live_and_in_history() {
+    let entries: Vec<Value> = vec![
+        serde_json::json!({
+            "type": "assistant", "uuid": "entry-1",
+            "message": { "id": "msg_T", "model": "claude",
+                "content": [{ "type": "thinking", "thinking": "", "signature": "sig-abc" }] }
+        }),
+        serde_json::json!({
+            "type": "assistant", "uuid": "entry-2",
+            "message": { "id": "msg_T", "model": "claude",
+                "content": [{ "type": "text", "text": "real answer" }] }
+        }),
+    ];
+
+    let mut seen = std::collections::HashSet::new();
+    let history_ids: Vec<Option<String>> = entries
+        .iter()
+        .map(|e| convert_history_entry(e, "c1", &mut seen).map(|m| m.id))
+        .collect();
+    assert_eq!(
+        history_ids,
+        vec![None, Some("msg_T".to_string())],
+        "the signature-only entry must produce no history message at all"
+    );
+
+    let session = session();
+    let sink = IdRecordingSink::default();
+    let mut live_ids = Vec::new();
+    for entry in &entries {
+        let line = format!("{}\n", serde_json::to_string(entry).unwrap());
+        handle_stdout(&session, line.as_bytes(), &sink);
+        live_ids.push(sink.live_message_id.lock().unwrap().clone());
+    }
+
+    assert_eq!(
+        live_ids[1], history_ids[1],
+        "the second, content-bearing entry must claim msg_T on both paths"
+    );
+}

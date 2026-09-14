@@ -37,6 +37,27 @@ pub(crate) fn blocks_to_message_content(blocks: &[Value]) -> Vec<MessageContent>
         .collect()
 }
 
+/// Mirrors `history_converters.rs::convert_assistant_entry`'s per-block keep
+/// rule (text and tool_use always kept; a thinking block only when its text
+/// is non-empty after trim — hidden-thinking models emit signature-only
+/// blocks with empty prose). Used solely to decide whether this entry may
+/// claim the API message's vendor id (T21, R2.8); it does not filter what
+/// `on_message` itself receives.
+fn has_representable_content(content: &[Value]) -> bool {
+    content
+        .iter()
+        .any(|block| match block.get("type").and_then(Value::as_str) {
+            Some("text") | Some("tool_use") => true,
+            Some("thinking") => !block
+                .get("thinking")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .is_empty(),
+            _ => false,
+        })
+}
+
 fn tag_block(block: &Value, parent_tool_use_id: &str) -> Value {
     let mut b = block.clone();
     if let Value::Object(map) = &mut b {
@@ -179,12 +200,28 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
     // item ids stable: it is known at `message_start`, before any block
     // completes, and history reconstruction derives the same id from the same
     // field (history_converters.rs).
+    //
+    // A signature-only thinking entry (hidden-thinking models: empty prose,
+    // just a signature) must NOT consume the claim (T21, R2.8): history's
+    // `convert_assistant_entry` drops that entry outright (`content_blocks`
+    // stays empty) without claiming `seen_api_message_ids`, so the NEXT,
+    // content-bearing entry of the same API message is what claims `mid`
+    // there. Live claimed unconditionally on the first entry regardless of
+    // content, so a live-only signature-only entry stole the claim and the
+    // real second entry fell back to its own transcript uuid — disagreeing
+    // with history on that entry's id. Mirroring history's own emptiness
+    // rule here is what keeps them in lockstep.
     let api_message_id = message
         .and_then(|m| m.get("id"))
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty());
     let vendor_id = match api_message_id {
-        Some(mid) if st.seen_api_message_ids.insert(mid.to_string()) => Some(mid.to_string()),
+        Some(mid)
+            if has_representable_content(content)
+                && st.seen_api_message_ids.insert(mid.to_string()) =>
+        {
+            Some(mid.to_string())
+        }
         _ => event
             .get("uuid")
             .and_then(Value::as_str)
