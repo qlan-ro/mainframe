@@ -199,11 +199,13 @@ async fn a_raw_frame_during_the_snapshot_await_is_drained_after_the_replay() {
     assert_eq!(frames[2]["method"], json!("_mainframe.dev/resync"));
 }
 
-/// A transcript clear buffered across the await is dropped: the snapshot the
-/// resume replays already reflects the wipe, so delivering the clear behind
-/// the replay would erase the replay itself.
+/// A transcript clear buffered across the await is forwarded behind the
+/// replay like any other raw frame. The daemon cannot tell whether the wipe
+/// predates the snapshot it just replayed, and the client treats the clear as
+/// a re-resume trigger — so forwarding costs one redundant resume in the
+/// predates case and converges on the wiped state in the other.
 #[tokio::test]
-async fn a_transcript_clear_during_the_snapshot_await_is_dropped() {
+async fn a_transcript_clear_during_the_snapshot_await_is_delivered_after_the_replay() {
     let hub = hub();
     let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
 
@@ -211,17 +213,19 @@ async fn a_transcript_clear_during_the_snapshot_await_is_dropped() {
     hub.on_chat_surface_event(ChatSurfaceEvent::TranscriptCleared {
         chat_id: "chat-1".to_string(),
     });
+    assert!(
+        drain(&mut rx).is_empty(),
+        "a clear during the await must not wipe the replay it precedes"
+    );
 
     let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
     hub.reset_session(&conn, "chat-1", &items, &reply(1), replay_marker);
 
     let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 2, "reply and replay only: {frames:?}");
-    assert!(
-        frames
-            .iter()
-            .all(|f| f["method"] != json!("_mainframe.dev/transcript_cleared")),
-        "the replay already reflects the wipe"
+    assert_eq!(frames.len(), 3, "reply, replay, then the clear: {frames:?}");
+    assert_eq!(
+        frames[2]["method"],
+        json!("_mainframe.dev/transcript_cleared")
     );
 }
 

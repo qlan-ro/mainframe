@@ -79,7 +79,7 @@ impl FacadeHub {
         for connection in self.attached_connections(chat_id) {
             connection.register_gate(chat_id, &request);
         }
-        self.push_raw_to_attached(chat_id, payload, RawFrameKind::Gate);
+        self.push_raw_to_attached(chat_id, payload);
     }
 
     pub(super) fn handle_gate_resolved(&self, chat_id: &str, request_id: &str) {

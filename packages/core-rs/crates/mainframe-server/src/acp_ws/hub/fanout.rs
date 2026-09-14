@@ -104,7 +104,7 @@ impl FacadeHub {
         kind: RawFrameKind,
     ) {
         match serde_json::to_string(note) {
-            Ok(payload) => self.push_raw_to_attached(chat_id, payload, kind),
+            Ok(payload) => self.push_raw_to_attached(chat_id, payload),
             Err(err) => warn!(
                 %err,
                 chat_id,
@@ -121,7 +121,7 @@ impl FacadeHub {
     /// depends on. A connection mid-resume has no seeded stream to queue
     /// against, so its frames are buffered in the slot and drained by
     /// [`Self::reset_session`] behind the replay instead.
-    pub(super) fn push_raw_to_attached(&self, chat_id: &str, payload: String, kind: RawFrameKind) {
+    pub(super) fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
         let now = now_ms();
         for connection in self.attached_connections(chat_id) {
             let mut sessions = connection.locked_sessions();
@@ -131,24 +131,23 @@ impl FacadeHub {
                         connection.send_throttled(chat_id, frame);
                     }
                 }
-                Some(SessionSlot::AwaitingSeed { raws, .. }) if kind.outlives_a_replay() => {
+                Some(SessionSlot::AwaitingSeed { raws, .. }) => {
                     raws.push(payload.clone());
                 }
-                // Either a clear the imminent replay already reflects, or a
-                // chat this connection dropped between the snapshot
-                // `attached_connections` took and this lock — nothing to
-                // deliver either way. /* expected */
-                _ => {}
+                // The connection dropped this chat between the snapshot
+                // `attached_connections` took and this lock; the frame has
+                // nowhere to go. /* expected */
+                None => {}
             }
         }
     }
 }
 
-/// What kind of raw frame `push_raw_to_attached` is carrying — the one thing
-/// that differs between them once a resume is in flight.
+/// Which out-of-band notification [`FacadeHub::push_notification`] is
+/// carrying, for logs. A gate raise is not here: it serializes its own frame,
+/// because registration has to run between the serialize and the send.
 #[derive(Clone, Copy)]
 pub(super) enum RawFrameKind {
-    Gate,
     QueueState,
     TranscriptCleared,
     Resync,
@@ -159,18 +158,10 @@ impl RawFrameKind {
     /// The frame family, for logs.
     fn label(self) -> &'static str {
         match self {
-            RawFrameKind::Gate => "gate",
             RawFrameKind::QueueState => "queue_state",
             RawFrameKind::TranscriptCleared => "transcript_cleared",
             RawFrameKind::Resync => "resync",
             RawFrameKind::Compaction => "compaction",
         }
-    }
-
-    /// Whether this frame still says something the resume's replay does not.
-    /// A transcript clear does not: the snapshot already reflects the wipe,
-    /// so delivering the clear behind the replay would erase the replay.
-    fn outlives_a_replay(self) -> bool {
-        !matches!(self, RawFrameKind::TranscriptCleared)
     }
 }
