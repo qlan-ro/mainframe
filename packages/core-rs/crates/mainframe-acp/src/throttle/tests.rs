@@ -25,8 +25,15 @@ fn image_chunk(data: &str) -> SessionUpdate {
     })
 }
 
-fn chunk_text(update: &SessionUpdate) -> &str {
-    let SessionUpdate::AgentMessageChunk(c) = update else {
+fn as_update(frame: &ThrottledFrame) -> &SessionUpdate {
+    let ThrottledFrame::Update(update) = frame else {
+        panic!("expected an Update frame, got {frame:?}");
+    };
+    update
+}
+
+fn chunk_text(frame: &ThrottledFrame) -> &str {
+    let SessionUpdate::AgentMessageChunk(c) = as_update(frame) else {
         panic!("expected an AgentMessageChunk");
     };
     let ContentBlock::Text { text, .. } = &c.content else {
@@ -76,7 +83,7 @@ fn non_chunk_updates_pass_through_unmerged() {
     let out = throttle.push(1_060, chunk("c"));
     // The upsert stays distinct from the coalesced chunk run around it.
     assert_eq!(out.len(), 2);
-    assert_eq!(out[0], upsert);
+    assert_eq!(out[0], ThrottledFrame::Update(upsert));
     assert_eq!(chunk_text(&out[1]), "bc");
 }
 
@@ -92,7 +99,7 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
     let mut state = SessionState::new();
     let mut throttle = Throttle::new(50);
     let mut now = 0i64;
-    let mut emitted: Vec<SessionUpdate> = Vec::new();
+    let mut emitted: Vec<ThrottledFrame> = Vec::new();
 
     let revisions = ["Look", "Looking", "Looking into", "Looking into it further"];
     for text in revisions {
@@ -116,8 +123,8 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
 
     let full = revisions.last().unwrap();
     let mut reconstructed = String::new();
-    for (i, update) in emitted.iter().enumerate() {
-        match update {
+    for (i, frame) in emitted.iter().enumerate() {
+        match as_update(frame) {
             SessionUpdate::AgentMessage(upsert) => {
                 let content = upsert.content.clone().flatten().unwrap_or_default();
                 let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &content[0]
@@ -131,7 +138,7 @@ fn coalescing_a_growing_message_never_repeats_the_full_text_and_reconstructs_it(
                 reconstructed.push_str(text);
             }
             SessionUpdate::AgentMessageChunk(_) => {
-                let delta = chunk_text(update);
+                let delta = chunk_text(frame);
                 assert_ne!(
                     delta, *full,
                     "a chunk frame must never repeat the full accumulated text"
@@ -157,7 +164,7 @@ fn an_image_chunk_never_merges_and_blocks_the_text_merge_around_it() {
     // "b" cannot merge across the image; "c"+"d" merge behind it.
     assert_eq!(out.len(), 3);
     assert_eq!(chunk_text(&out[0]), "b");
-    assert_eq!(out[1], image_chunk("aGk="));
+    assert_eq!(out[1], ThrottledFrame::Update(image_chunk("aGk=")));
     assert_eq!(chunk_text(&out[2]), "cd");
 }
 

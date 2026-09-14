@@ -7,12 +7,22 @@
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::update::SessionUpdate;
 
+/// One frame in the throttle's FIFO: a diff-engine update, coalescible, or an
+/// opaque out-of-band notification (a gate raise, a queue snapshot, …) that
+/// rides the same queue so it cannot overtake still-buffered content it
+/// depends on (R2.11) — never coalesced, since its meaning is not a delta.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ThrottledFrame {
+    Update(SessionUpdate),
+    Raw(String),
+}
+
 /// One session's throttle state: when it last flushed, and what is buffered
 /// since then.
 pub struct Throttle {
     interval_ms: i64,
     last_flush_ms: Option<i64>,
-    pending: Vec<SessionUpdate>,
+    pending: Vec<ThrottledFrame>,
 }
 
 impl Throttle {
@@ -28,8 +38,19 @@ impl Throttle {
     /// while the window is still open (the update is buffered, not lost).
     /// The first call always flushes (no prior `last_flush_ms` to compare
     /// against), so a session's opening frame is never delayed.
-    pub fn push(&mut self, now_ms: i64, update: SessionUpdate) -> Vec<SessionUpdate> {
-        self.pending.push(update);
+    pub fn push(&mut self, now_ms: i64, update: SessionUpdate) -> Vec<ThrottledFrame> {
+        self.push_frame(now_ms, ThrottledFrame::Update(update))
+    }
+
+    /// Feed one raw out-of-band frame in, through the same FIFO as content
+    /// updates (R2.11) — never coalesced, but never allowed to jump ahead of
+    /// an update already queued in front of it either.
+    pub fn push_raw(&mut self, now_ms: i64, frame: String) -> Vec<ThrottledFrame> {
+        self.push_frame(now_ms, ThrottledFrame::Raw(frame))
+    }
+
+    fn push_frame(&mut self, now_ms: i64, frame: ThrottledFrame) -> Vec<ThrottledFrame> {
+        self.pending.push(frame);
         let due = self
             .last_flush_ms
             .is_none_or(|last| now_ms - last >= self.interval_ms);
@@ -44,7 +65,7 @@ impl Throttle {
     /// flushes when a *later* update arrives after the window elapses, so a
     /// trailing burst would otherwise sit buffered forever — the socket
     /// loop's periodic flush tick calls this to bound that tail latency.
-    pub fn flush(&mut self, now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn flush(&mut self, now_ms: i64) -> Vec<ThrottledFrame> {
         if self.pending.is_empty() {
             return Vec::new();
         }
@@ -55,17 +76,30 @@ impl Throttle {
 
 /// Merge same-id consecutive chunk frames by concatenating their deltas —
 /// the only case that can multiply frame count without changing meaning.
-/// Non-chunk updates (upserts, tool-call patches) pass through unmerged: each
-/// already carries the full information for its revision.
-fn coalesce(updates: Vec<SessionUpdate>) -> Vec<SessionUpdate> {
-    let mut merged: Vec<SessionUpdate> = Vec::with_capacity(updates.len());
-    for update in updates {
-        if try_merge_chunk(merged.last_mut(), &update) {
+/// Non-chunk updates (upserts, tool-call patches) and raw frames pass
+/// through unmerged: each already carries the full information for its
+/// revision, and a raw frame additionally blocks the merge chain across it,
+/// preserving its position relative to the updates on either side.
+fn coalesce(frames: Vec<ThrottledFrame>) -> Vec<ThrottledFrame> {
+    let mut merged: Vec<ThrottledFrame> = Vec::with_capacity(frames.len());
+    for frame in frames {
+        let ThrottledFrame::Update(update) = &frame else {
+            merged.push(frame);
+            continue;
+        };
+        if try_merge_chunk(last_update_mut(&mut merged), update) {
             continue;
         }
-        merged.push(update);
+        merged.push(frame);
     }
     merged
+}
+
+fn last_update_mut(merged: &mut [ThrottledFrame]) -> Option<&mut SessionUpdate> {
+    match merged.last_mut()? {
+        ThrottledFrame::Update(update) => Some(update),
+        ThrottledFrame::Raw(_) => None,
+    }
 }
 
 /// If `last` and `update` are same-id chunks of the same message kind,

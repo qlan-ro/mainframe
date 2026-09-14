@@ -11,17 +11,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
 use mainframe_acp::stream::SessionStream;
-use mainframe_acp::{AnswerOutcome, EncodedItem, GateRegistry, encoder, gate_request_id};
+use mainframe_acp::{
+    AnswerOutcome, EncodedItem, GateRegistry, ThrottledFrame, encoder, gate_request_id,
+};
 use mainframe_chat::chat_surface::{
     ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason,
 };
 use mainframe_types::acp::extensions::{
     CompactionWirePhase, MAINFRAME_META_NAMESPACE, RetryMarker, UsageMeta,
 };
-use mainframe_types::acp::update::{SessionUpdate, StopReason, UsageUpdate};
+use mainframe_types::acp::update::{StopReason, UsageUpdate};
 use mainframe_types::adapter::ContextUsage;
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
@@ -133,8 +135,8 @@ impl FacadeHub {
             .unwrap_or_default();
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         deliver(connection);
-        for update in catch_up {
-            connection.send_update(chat_id, update);
+        for frame in catch_up {
+            connection.send_throttled(chat_id, frame);
         }
     }
 
@@ -153,8 +155,8 @@ impl FacadeHub {
         let mut sessions = connection.locked_sessions();
         for (chat_id, slot) in sessions.iter_mut() {
             if let SessionSlot::Live(stream) = slot {
-                for update in stream.flush(now) {
-                    connection.send_update(chat_id, update);
+                for frame in stream.flush(now) {
+                    connection.send_throttled(chat_id, frame);
                 }
             }
         }
@@ -182,14 +184,14 @@ impl FacadeHub {
     fn for_each_attached_session(
         &self,
         chat_id: &str,
-        mut per_stream: impl FnMut(&mut SessionStream, i64) -> Vec<SessionUpdate>,
+        mut per_stream: impl FnMut(&mut SessionStream, i64) -> Vec<ThrottledFrame>,
     ) {
         let now = now_ms();
         for connection in self.attached_connections(chat_id) {
             let mut sessions = connection.locked_sessions();
             if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
-                for update in per_stream(stream, now) {
-                    connection.send_update(chat_id, update);
+                for frame in per_stream(stream, now) {
+                    connection.send_throttled(chat_id, frame);
                 }
             }
         }
@@ -207,14 +209,37 @@ impl FacadeHub {
             let mut sessions = connection.locked_sessions();
             match sessions.get_mut(chat_id) {
                 Some(SessionSlot::Live(stream)) => {
-                    for update in stream.on_revision(items, now) {
-                        connection.send_update(chat_id, update);
+                    for frame in stream.on_revision(items, now) {
+                        connection.send_throttled(chat_id, frame);
                     }
                 }
                 Some(SessionSlot::AwaitingSeed { latest }) => {
                     *latest = Some(items.to_vec());
                 }
                 None => {}
+            }
+        }
+    }
+
+    /// A raw out-of-band notification (a gate raise, queue snapshot,
+    /// transcript clear, compaction phase) for every attached connection —
+    /// through the SAME per-session throttle FIFO content updates ride when
+    /// one exists (R2.11), so it cannot arrive ahead of a still-buffered
+    /// update it depends on. A connection with no `Live` stream for this chat
+    /// (unseeded, or genuinely unattached — `attached_connections` also
+    /// counts `AwaitingSeed`) has no queue to order against, so it is sent
+    /// directly, matching the pre-T6 behavior for that narrow window.
+    fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
+        let now = now_ms();
+        for connection in self.attached_connections(chat_id) {
+            let mut sessions = connection.locked_sessions();
+            match sessions.get_mut(chat_id) {
+                Some(SessionSlot::Live(stream)) => {
+                    for frame in stream.push_raw(payload.clone(), now) {
+                        connection.send_throttled(chat_id, frame);
+                    }
+                }
+                _ => connection.send_raw(payload.clone()),
             }
         }
     }
@@ -279,9 +304,18 @@ impl ChatSurface for FacadeHub {
                     gate_request_id(&request.request_id),
                     &request,
                 );
+                let Ok(payload) = serde_json::to_string(&frame) else {
+                    warn!(chat_id, "acp facade: failed to serialize a gate request");
+                    return;
+                };
+                // Registration (pending-gate bookkeeping) is unconditional and
+                // immediate — only the actual send rides the throttle FIFO
+                // (R2.11), so a gate can never precede the tool call it
+                // belongs to on the wire.
                 for connection in self.attached_connections(&chat_id) {
-                    connection.deliver_gate(&chat_id, &request, &frame);
+                    connection.register_gate(&chat_id, &request);
                 }
+                self.push_raw_to_attached(&chat_id, payload);
             }
             ChatSurfaceEvent::GateResolved {
                 chat_id,
@@ -314,14 +348,14 @@ impl ChatSurface for FacadeHub {
             }
             ChatSurfaceEvent::QueueChanged { chat_id, refs } => {
                 let note = mainframe_acp::queue_state_notification(&chat_id, refs);
-                for connection in self.attached_connections(&chat_id) {
-                    connection.send_json(&note);
+                if let Ok(payload) = serde_json::to_string(&note) {
+                    self.push_raw_to_attached(&chat_id, payload);
                 }
             }
             ChatSurfaceEvent::TranscriptCleared { chat_id } => {
                 let note = mainframe_acp::transcript_cleared_notification(&chat_id);
-                for connection in self.attached_connections(&chat_id) {
-                    connection.send_json(&note);
+                if let Ok(payload) = serde_json::to_string(&note) {
+                    self.push_raw_to_attached(&chat_id, payload);
                 }
             }
             ChatSurfaceEvent::Compaction { chat_id, phase } => {
@@ -330,8 +364,8 @@ impl ChatSurface for FacadeHub {
                     CompactionPhase::Done => CompactionWirePhase::Done,
                 };
                 let note = mainframe_acp::compaction_notification(&chat_id, wire_phase);
-                for connection in self.attached_connections(&chat_id) {
-                    connection.send_json(&note);
+                if let Ok(payload) = serde_json::to_string(&note) {
+                    self.push_raw_to_attached(&chat_id, payload);
                 }
             }
             ChatSurfaceEvent::Usage { chat_id, usage } => {

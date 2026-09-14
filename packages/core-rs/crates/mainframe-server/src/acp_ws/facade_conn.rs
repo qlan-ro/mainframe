@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use mainframe_acp::gate_request_id;
 use mainframe_acp::stream::SessionStream;
+use mainframe_acp::{ThrottledFrame, gate_request_id};
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use mainframe_types::acp::update::{SessionUpdate, UpdateSessionNotification};
 use mainframe_types::adapter::ControlRequest;
@@ -121,10 +121,27 @@ impl FacadeConnection {
         }
     }
 
-    /// Deliver a `session/request_permission` for `request` and remember it
-    /// for answer correlation — shared by the live raise path and resume
-    /// redelivery (which passes the request frame it already built).
-    pub fn deliver_gate(&self, chat_id: &str, request: &ControlRequest, frame: &JsonRpcRequest) {
+    /// A pre-serialized frame, sent unthrottled — the fallback
+    /// [`super::hub::FacadeHub::push_raw_to_attached`] uses when this
+    /// connection has no `Live` stream for the chat to queue behind.
+    pub fn send_raw(&self, payload: String) {
+        self.send_frame(payload);
+    }
+
+    /// Dispatch one throttle-drained frame: an update through the normal
+    /// `session/update` envelope, a raw frame as-is (T6).
+    pub fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
+        match frame {
+            ThrottledFrame::Update(update) => self.send_update(chat_id, update),
+            ThrottledFrame::Raw(payload) => self.send_frame(payload),
+        }
+    }
+
+    /// Remember a delivered `session/request_permission` for answer
+    /// correlation, without sending anything — the send is a separate step
+    /// (`send_raw`/`send_throttled`) so the live raise path can throttle it
+    /// while registration itself stays unconditional and immediate.
+    pub fn register_gate(&self, chat_id: &str, request: &ControlRequest) {
         self.locked_gates().insert(
             rpc_id_string(&request.request_id),
             PendingGate {
@@ -132,6 +149,13 @@ impl FacadeConnection {
                 request: request.clone(),
             },
         );
+    }
+
+    /// Register and send a `session/request_permission` immediately —
+    /// resume redelivery, which runs inside `reset_session`'s own atomic
+    /// seed-and-deliver block and has no throttle to ride.
+    pub fn deliver_gate(&self, chat_id: &str, request: &ControlRequest, frame: &JsonRpcRequest) {
+        self.register_gate(chat_id, request);
         self.send_json(frame);
     }
 }

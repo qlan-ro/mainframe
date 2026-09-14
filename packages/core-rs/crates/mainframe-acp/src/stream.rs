@@ -19,7 +19,7 @@ use serde_json::{Map, Value};
 
 use crate::encoder::EncodedItem;
 use crate::session_state::SessionState;
-use crate::throttle::Throttle;
+use crate::throttle::{Throttle, ThrottledFrame};
 
 pub struct SessionStream {
     state: SessionState,
@@ -51,7 +51,7 @@ impl SessionStream {
     /// marker, and run the result through the throttle. Returns the frames
     /// due now; the rest sit buffered until the next revision or
     /// [`Self::flush`].
-    pub fn on_revision(&mut self, items: &[EncodedItem], now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn on_revision(&mut self, items: &[EncodedItem], now_ms: i64) -> Vec<ThrottledFrame> {
         let mut updates = self.state.diff(items);
         if self.pending_retry.is_some() {
             self.attach_retry_marker(&mut updates);
@@ -63,14 +63,18 @@ impl SessionStream {
         self.pending_retry = Some(marker);
     }
 
-    pub fn on_turn_started(&mut self, now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn on_turn_started(&mut self, now_ms: i64) -> Vec<ThrottledFrame> {
         self.throttle.push(
             now_ms,
             SessionUpdate::StateUpdate(WireSessionState::Running),
         )
     }
 
-    pub fn on_turn_finished(&mut self, stop_reason: StopReason, now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn on_turn_finished(
+        &mut self,
+        stop_reason: StopReason,
+        now_ms: i64,
+    ) -> Vec<ThrottledFrame> {
         self.pending_retry = None;
         self.throttle.push(
             now_ms,
@@ -81,17 +85,26 @@ impl SessionStream {
         )
     }
 
-    pub fn on_usage(&mut self, usage: UsageUpdate, now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn on_usage(&mut self, usage: UsageUpdate, now_ms: i64) -> Vec<ThrottledFrame> {
         self.throttle
             .push(now_ms, SessionUpdate::UsageUpdate(usage))
     }
 
+    /// Feed a raw out-of-band notification (a gate raise, a queue snapshot,
+    /// a transcript clear, a compaction phase) into the SAME FIFO content
+    /// updates sit in, so it cannot arrive on the wire ahead of a still-
+    /// buffered update it depends on (R2.11) — e.g. a gate for a tool call
+    /// whose creation frame has not flushed yet.
+    pub fn push_raw(&mut self, frame_json: String, now_ms: i64) -> Vec<ThrottledFrame> {
+        self.throttle.push_raw(now_ms, frame_json)
+    }
+
     /// Drain the throttle's held tail — the hub's periodic flush tick.
-    pub fn flush(&mut self, now_ms: i64) -> Vec<SessionUpdate> {
+    pub fn flush(&mut self, now_ms: i64) -> Vec<ThrottledFrame> {
         self.throttle.flush(now_ms)
     }
 
-    fn push_all(&mut self, updates: Vec<SessionUpdate>, now_ms: i64) -> Vec<SessionUpdate> {
+    fn push_all(&mut self, updates: Vec<SessionUpdate>, now_ms: i64) -> Vec<ThrottledFrame> {
         let mut due = Vec::new();
         for update in updates {
             due.extend(self.throttle.push(now_ms, update));

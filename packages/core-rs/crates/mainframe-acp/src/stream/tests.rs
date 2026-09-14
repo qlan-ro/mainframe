@@ -40,17 +40,27 @@ fn stream() -> SessionStream {
     SessionStream::new(0)
 }
 
+fn as_update(frame: &ThrottledFrame) -> &SessionUpdate {
+    let ThrottledFrame::Update(update) = frame else {
+        panic!("expected an Update frame, got {frame:?}");
+    };
+    update
+}
+
 #[test]
 fn a_growing_message_creates_once_then_chunks_the_delta() {
     let mut stream = stream();
 
     let first = stream.on_revision(&[message("m1", "Hel")], 0);
     assert_eq!(first.len(), 1);
-    assert!(matches!(first[0], SessionUpdate::AgentMessage(_)));
+    assert!(matches!(
+        as_update(&first[0]),
+        SessionUpdate::AgentMessage(_)
+    ));
 
     let second = stream.on_revision(&[message("m1", "Hello")], 10);
     assert_eq!(second.len(), 1);
-    let SessionUpdate::AgentMessageChunk(chunk) = &second[0] else {
+    let SessionUpdate::AgentMessageChunk(chunk) = as_update(&second[0]) else {
         panic!("expected a chunk, got {:?}", second[0]);
     };
     let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content else {
@@ -68,7 +78,7 @@ fn seeding_replayed_items_makes_the_next_revision_a_pure_delta() {
     // suffix may go on the wire.
     let updates = stream.on_revision(&[message("m1", "Hello world")], 0);
     assert_eq!(updates.len(), 1);
-    let SessionUpdate::AgentMessageChunk(chunk) = &updates[0] else {
+    let SessionUpdate::AgentMessageChunk(chunk) = as_update(&updates[0]) else {
         panic!("expected a chunk, got {:?}", updates[0]);
     };
     let mainframe_types::acp::content::ContentBlock::Text { text, .. } = &chunk.content else {
@@ -84,7 +94,7 @@ fn a_retry_marker_rides_the_next_upsert_meta_and_is_consumed_once() {
 
     let updates = stream.on_revision(&[message("m1", "Retried and completed.")], 0);
     assert_eq!(updates.len(), 1);
-    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+    let SessionUpdate::AgentMessage(upsert) = as_update(&updates[0]) else {
         panic!("expected an upsert, got {:?}", updates[0]);
     };
     let meta = upsert.meta.clone().flatten().expect("marker meta expected");
@@ -95,7 +105,7 @@ fn a_retry_marker_rides_the_next_upsert_meta_and_is_consumed_once() {
 
     // Consumed: the next revision carries no marker.
     let next = stream.on_revision(&[message("m1", "Retried and completed. More")], 10);
-    let SessionUpdate::AgentMessageChunk(chunk) = &next[0] else {
+    let SessionUpdate::AgentMessageChunk(chunk) = as_update(&next[0]) else {
         panic!("expected a chunk, got {:?}", next[0]);
     };
     assert_eq!(chunk.meta, None);
@@ -114,7 +124,7 @@ fn a_retry_marker_extends_the_namespace_without_clobbering_the_parent_relation()
         )],
         0,
     );
-    let SessionUpdate::AgentMessage(upsert) = &updates[0] else {
+    let SessionUpdate::AgentMessage(upsert) = as_update(&updates[0]) else {
         panic!("expected an upsert, got {:?}", updates[0]);
     };
     let meta = upsert.meta.clone().flatten().expect("meta expected");
@@ -133,13 +143,16 @@ fn a_marker_with_no_carrier_waits_and_turn_end_clears_it() {
     // A pure append is a chunk — no carrier, marker stays pending.
     stream.on_retry(marker());
     let chunk_only = stream.on_revision(&[message("m1", "Hello")], 10);
-    assert!(matches!(chunk_only[0], SessionUpdate::AgentMessageChunk(_)));
+    assert!(matches!(
+        as_update(&chunk_only[0]),
+        SessionUpdate::AgentMessageChunk(_)
+    ));
 
     // The turn ends before any upsert appears: the marker must not survive
     // into the next turn's unrelated revision.
     let _ = stream.on_turn_finished(StopReason::EndTurn, 20);
     let next_turn = stream.on_revision(&[message("m2", "fresh")], 30);
-    let SessionUpdate::AgentMessage(upsert) = &next_turn[0] else {
+    let SessionUpdate::AgentMessage(upsert) = as_update(&next_turn[0]) else {
         panic!("expected an upsert, got {:?}", next_turn[0]);
     };
     assert_eq!(upsert.meta, None);
@@ -157,8 +170,11 @@ fn lifecycle_frames_share_the_throttle_fifo_so_idle_never_overtakes_content() {
     assert!(stream.on_turn_finished(StopReason::EndTurn, 20).is_empty());
     let drained = stream.flush(30);
     assert_eq!(drained.len(), 2);
-    assert!(matches!(drained[0], SessionUpdate::AgentMessageChunk(_)));
-    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = &drained[1] else {
+    assert!(matches!(
+        as_update(&drained[0]),
+        SessionUpdate::AgentMessageChunk(_)
+    ));
+    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = as_update(&drained[1]) else {
         panic!("expected the Idle frame last, got {:?}", drained[1]);
     };
     assert_eq!(idle.stop_reason, Some(StopReason::EndTurn));
@@ -171,7 +187,7 @@ fn turn_started_and_usage_emit_their_wire_frames() {
     let started = stream.on_turn_started(0);
     assert_eq!(started.len(), 1);
     assert!(matches!(
-        started[0],
+        as_update(&started[0]),
         SessionUpdate::StateUpdate(WireSessionState::Running)
     ));
 
@@ -185,7 +201,7 @@ fn turn_started_and_usage_emit_their_wire_frames() {
         10,
     );
     assert_eq!(usage.len(), 1);
-    let SessionUpdate::UsageUpdate(update) = &usage[0] else {
+    let SessionUpdate::UsageUpdate(update) = as_update(&usage[0]) else {
         panic!("expected a usage update, got {:?}", usage[0]);
     };
     assert_eq!(update.used, 1_000);
@@ -196,16 +212,54 @@ fn turn_started_and_usage_emit_their_wire_frames() {
 fn cancelled_and_error_stops_map_to_their_wire_reasons() {
     let mut stream = stream();
     let cancelled = stream.on_turn_finished(StopReason::Cancelled, 0);
-    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = &cancelled[0] else {
+    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = as_update(&cancelled[0]) else {
         panic!("expected Idle, got {:?}", cancelled[0]);
     };
     assert_eq!(idle.stop_reason, Some(StopReason::Cancelled));
 
     let errored = stream.on_turn_finished(StopReason::Error, 10);
-    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = &errored[0] else {
+    let SessionUpdate::StateUpdate(WireSessionState::Idle(idle)) = as_update(&errored[0]) else {
         panic!("expected Idle, got {:?}", errored[0]);
     };
     assert_eq!(idle.stop_reason, Some(StopReason::Error));
-    let wire = serde_json::to_value(&errored[0]).unwrap();
+    let wire = serde_json::to_value(as_update(&errored[0])).unwrap();
     assert_eq!(wire["stopReason"], json!("_mainframe.dev/error"));
+}
+
+#[test]
+fn a_gate_cannot_precede_the_tool_call_it_belongs_to() {
+    // A wide window: both the tool-call create and the raw gate frame land
+    // inside it, buffered behind the opening frame that already flushed.
+    let mut stream = SessionStream::new(1_000);
+    assert_eq!(stream.on_revision(&[message("m1", "Hel")], 0).len(), 1);
+
+    let tool_call = EncodedItem::ToolCall {
+        id: "tool-1".to_string(),
+        title: "Bash".to_string(),
+        kind: mainframe_types::acp::tool_call::ToolKind::Execute,
+        status: mainframe_types::acp::tool_call::ToolCallStatus::InProgress,
+        raw_input: json!({}),
+        content: Vec::new(),
+        meta: None,
+    };
+    assert!(
+        stream
+            .on_revision(&[message("m1", "Hel"), tool_call], 10)
+            .is_empty(),
+        "still within the throttle window"
+    );
+    assert!(
+        stream
+            .push_raw(r#"{"method":"session/request_permission"}"#.to_string(), 10)
+            .is_empty(),
+        "still within the throttle window"
+    );
+
+    let drained = stream.flush(1_020);
+    assert_eq!(drained.len(), 2);
+    assert!(matches!(
+        as_update(&drained[0]),
+        SessionUpdate::ToolCallUpdate(_)
+    ));
+    assert!(matches!(drained[1], ThrottledFrame::Raw(_)));
 }

@@ -35,4 +35,4 @@ pub use prompt::{PromptAcceptance, PromptError, PromptPort};
 pub use resume::{ReplayCursor, ResumePort, ResumeReplay, dispatch_resume};
 pub use session_state::SessionState;
 pub use stream::SessionStream;
-pub use throttle::Throttle;
+pub use throttle::{Throttle, ThrottledFrame};
