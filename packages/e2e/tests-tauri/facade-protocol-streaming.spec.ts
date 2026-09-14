@@ -15,7 +15,13 @@ import {
   cleanupHeadlessProject,
   type HeadlessProject,
 } from '../helpers/tauri/headless-chat.js';
-import { sendJson, nextJsonMessage, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
+import {
+  sendJson,
+  nextJsonMessage,
+  collectFrames,
+  collectUntilQuiet,
+  closeSocket,
+} from '../helpers/tauri/raw-ws-client.js';
 import {
   promptRequest,
   resumeRequest,
@@ -47,15 +53,25 @@ test.describe('§facade-protocol streaming', () => {
   test('criteria 3 + 5: chunk/patch-only streaming, prompt-during-turn, no queue.* frames', async () => {
     const ws = await connectAndInitialize();
 
+    // Both readers attach BEFORE the first prompt. `nextJsonMessage` is a one-shot
+    // listener that resolves on whatever frame arrives first, and since T10 spawns
+    // the `session/prompt` reply it can trail frames its own request caused — so
+    // awaiting the reply that way swallowed the first turn's `user_message` create.
+    // The item then appeared only in the resume replay, failing criterion 4's id
+    // comparison below. Two listeners on one socket both see every frame, so the
+    // reply can be matched by id without costing the stream a frame.
+    const collected = collectUntilQuiet(ws, 1_500, 25_000);
+    const replies = collectFrames(ws);
+
     sendJson(ws, promptRequest(2, chatId, 'What is 2 + 2? Reply with just the number.'));
-    const first = (await nextJsonMessage(ws)) as { id?: number; result?: unknown; error?: unknown };
+    const first = (await replies.next((f) => f['id'] === 2)) as { result?: unknown; error?: unknown };
     expect(first.error).toBeUndefined();
 
     // Criterion 5: a prompt sent while the first turn is replaying is accepted
     // immediately (a result, not an error) — acceptance is distinct from
     // turn completion.
     sendJson(ws, promptRequest(3, chatId, 'List the files in this project using bash ls.'));
-    const frames = (await collectUntilQuiet(ws, 1_500, 25_000)) as SessionUpdateFrame[];
+    const frames = (await collected) as SessionUpdateFrame[];
     await closeSocket(ws);
 
     const promptReply = frames.find((f) => (f as { id?: number }).id === 3) as
