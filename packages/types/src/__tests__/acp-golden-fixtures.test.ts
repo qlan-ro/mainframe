@@ -10,7 +10,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
@@ -104,6 +104,77 @@ function schemaFor(name: string): z.ZodType {
 
 const fixtureNames = readdirSync(fixturesDir()).filter((n) => n.endsWith('.json'));
 
+/**
+ * A key-set comparison on parse output cannot catch a Rust-required field
+ * left unmodelled in TS: every schema here is `.loose()`, so an unknown key
+ * survives `parse` unchanged and the round-trip equality above holds by
+ * construction (todo #350, R2.10). The oracle instead is the schema's own
+ * declared shape, read through `z.toJSONSchema` rather than re-parsing the
+ * fixture — a `properties` object with no matching key for something the
+ * fixture actually sent is the drift this test exists to catch.
+ */
+interface JsonSchemaNode {
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode;
+  oneOf?: JsonSchemaNode[];
+  anyOf?: JsonSchemaNode[];
+  const?: unknown;
+}
+
+/**
+ * How well `branch` fits `value`: literal (`const`) agreement counts far
+ * more than plain key overlap, so a tag match wins over a bigger shape, but
+ * key overlap still breaks ties among branches that share one discriminator
+ * and differ on a second tag — `update.ts`'s flattened `state_update`
+ * family (`sessionUpdate` shared, `state` distinguishes) and `jsonrpc.ts`'s
+ * result/error split (`jsonrpc` shared, `result`/`error` distinguishes).
+ */
+function branchFit(branch: JsonSchemaNode, value: Record<string, unknown>): number {
+  const properties = branch.properties ?? {};
+  let constMatches = 0;
+  let keyOverlap = 0;
+  for (const [key, node] of Object.entries(properties)) {
+    if (!(key in value)) continue;
+    keyOverlap += 1;
+    if ('const' in node && value[key] === node.const) constMatches += 1;
+  }
+  return constMatches * 1000 + keyOverlap;
+}
+
+/** The best-matching object-shaped branch, or `undefined` if every branch is open (`z.unknown()`, a bare `null` arm) and the key set is unconstrained by construction. */
+function branchFor(branches: JsonSchemaNode[], value: Record<string, unknown>): JsonSchemaNode | undefined {
+  const candidates = branches.filter((branch) => branch.properties);
+  if (candidates.length === 0) return undefined;
+  const [best] = candidates.map((branch) => [branch, branchFit(branch, value)] as const).sort(([, a], [, b]) => b - a);
+  return best?.[0];
+}
+
+function collectUndeclaredKeys(node: JsonSchemaNode, value: unknown, path: string, out: string[]): void {
+  if (Array.isArray(value)) {
+    if (node.items) value.forEach((item, i) => collectUndeclaredKeys(node.items!, item, `${path}[${i}]`, out));
+    return;
+  }
+  if (value === null || typeof value !== 'object') return;
+  const object = value as Record<string, unknown>;
+
+  const branches = node.oneOf ?? node.anyOf;
+  if (branches) {
+    const matched = branchFor(branches, object);
+    if (matched) collectUndeclaredKeys(matched, value, path, out);
+    return;
+  }
+
+  // No `properties` at this node means an open map (`z.record`) or an
+  // opaque field (`z.unknown()`/`z.custom()`) — every key is allowed.
+  if (!node.properties) return;
+
+  for (const [key, child] of Object.entries(object)) {
+    const childSchema = node.properties[key];
+    if (!childSchema) out.push(`${path}.${key}`);
+    else collectUndeclaredKeys(childSchema, child, `${path}.${key}`, out);
+  }
+}
+
 describe('acp/*.json fixtures validate and round-trip through their Zod schema', () => {
   it('covers every fixture in the directory', () => {
     expect(fixtureNames.length).toBeGreaterThan(0);
@@ -129,5 +200,16 @@ describe('acp/*.json fixtures validate and round-trip through their Zod schema',
     });
     expect(result.success).toBe(true);
     expect(result.data?.options[0]?.kind).toBe('maybe_once');
+  });
+});
+
+describe('every fixture key is declared in its schema (R2.10)', () => {
+  it.each(fixtureNames)('%s', (name) => {
+    const body = readFixture(name);
+    const schema = schemaFor(name);
+    const jsonSchema = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchemaNode;
+    const undeclared: string[] = [];
+    collectUndeclaredKeys(jsonSchema, body, name, undeclared);
+    expect(undeclared).toEqual([]);
   });
 });
