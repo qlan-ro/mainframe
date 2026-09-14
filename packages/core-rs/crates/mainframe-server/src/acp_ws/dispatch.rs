@@ -13,6 +13,7 @@ use mainframe_acp::{
     AnswerOutcome, DaemonInfo, GateAnswerError, dispatch_resume, dispatch_with_prompt,
     parse_permission_answer,
 };
+use mainframe_types::acp::extensions::SessionDetachParams;
 use mainframe_types::acp::jsonrpc::{JsonRpcOutcome, JsonRpcRequest, JsonRpcResponse, RequestId};
 use mainframe_types::acp::permission::RequestPermissionResponse;
 use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
@@ -50,6 +51,10 @@ pub async fn handle_inbound(
             handle_resume(request, ctx, connection, &ports).await;
             None
         }
+        InboundFrame::Notification(note) if note.method == "_mainframe.dev/session_detach" => {
+            handle_session_detach(note.params, connection);
+            None
+        }
         frame => {
             if let Some(session_id) = prompt_session_id(&frame) {
                 ctx.facade_hub.attach(connection, &session_id);
@@ -76,6 +81,18 @@ fn prompt_session_id(frame: &InboundFrame) -> Option<String> {
         .get("sessionId")
         .and_then(|value| value.as_str())
         .map(str::to_string)
+}
+
+/// `_mainframe.dev/session_detach` (D2): drop this connection's stream state
+/// and pending gates for the session, the same teardown `ChatEnded` already
+/// does — a malformed or missing `sessionId` is silently ignored, matching
+/// every other extension notification's tolerance for a stale client.
+fn handle_session_detach(params: Option<serde_json::Value>, connection: &Arc<FacadeConnection>) {
+    let Some(params) = params.and_then(|p| serde_json::from_value::<SessionDetachParams>(p).ok())
+    else {
+        return;
+    };
+    connection.forget_chat(&params.session_id);
 }
 
 /// `session/resume`: compute the snapshot, then — atomically with respect to

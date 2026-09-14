@@ -223,6 +223,17 @@ pub struct TranscriptClearedParams {
     pub session_id: String,
 }
 
+/// `_mainframe.dev/session_detach`'s params: the client is dropping this
+/// session's live stream (D2 — façade attachment follows the active
+/// thread). The daemon forgets the session's stream state and any pending
+/// gates for it on this connection, the same teardown `ChatEnded` already
+/// does; switching back re-attaches through `session/resume`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDetachParams {
+    pub session_id: String,
+}
+
 /// [`CompactionParams::phase`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

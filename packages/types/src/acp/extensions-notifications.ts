@@ -59,6 +59,20 @@ export const CompactionParamsSchema = z
 export type CompactionParams = z.infer<typeof CompactionParamsSchema>;
 
 /**
+ * `_mainframe.dev/session_detach`'s params: the client is dropping this
+ * session's live stream (D2 — façade attachment follows the active
+ * thread). The daemon forgets the session's stream state and any pending
+ * gates for it on this connection; switching back re-attaches through
+ * `session/resume`.
+ */
+export const SessionDetachParamsSchema = z
+  .object({
+    sessionId: z.string(),
+  })
+  .loose();
+export type SessionDetachParams = z.infer<typeof SessionDetachParamsSchema>;
+
+/**
  * Params for the daemon's custom `_mainframe.dev/heartbeat` notification
  * (spec decision 13). `sequence` lets a client detect a gap and resume
  * instead of heuristically refetching.

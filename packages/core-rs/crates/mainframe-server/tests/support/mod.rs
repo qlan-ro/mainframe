@@ -4,6 +4,7 @@
 //! allowlist).
 #![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
 
+pub mod facade;
 pub mod raw_http;
 
 use std::net::SocketAddr;
