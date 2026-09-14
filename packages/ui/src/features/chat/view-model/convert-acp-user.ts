@@ -29,7 +29,6 @@ export function coerceUserMeta(metadata: unknown): MainframeMessageMeta {
   if (typeof metadata !== 'object' || metadata === null) return {};
   const m = metadata as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  if (typeof m.queued === 'boolean') out.queued = m.queued;
   if (typeof m.cleanText === 'string') out.cleanText = m.cleanText;
   if (typeof m.pending === 'boolean') out.pending = m.pending;
   if (typeof m.clientId === 'string') out.clientId = m.clientId;

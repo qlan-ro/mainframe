@@ -64,10 +64,14 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     await host.load();
     attachmentIds =
       uploadItems.length > 0 ? await uploadAttachments(host.getPort(), host.getDaemonId(), uploadItems) : undefined;
-    await host.sendPrompt(text, {
+    const { queued } = await host.sendPrompt(text, {
       ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       ...sendMeta,
     });
+    // A queued acceptance renders as a queued turn from the queue snapshot
+    // (D1, project-messages.ts) — reconcile the optimistic pending right
+    // away, or the same send would render twice, side by side.
+    if (queued) host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
     host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage });

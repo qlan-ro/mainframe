@@ -8,6 +8,7 @@
  */
 import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ThreadMessage, ThreadMessageLike, ThreadUserMessage } from '@assistant-ui/react';
+import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { describeSendError } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
@@ -50,6 +51,34 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
 }
 
 // ---------------------------------------------------------------------------
+// Queued-turn projection (D1): the encoder drops messages carrying `queued`
+// metadata, so queued turns render from `state.interactions.queued` alone.
+// ---------------------------------------------------------------------------
+
+function projectQueuedMessage(ref: QueuedMessageRef): ThreadUserMessage {
+  return makeUserMessage({
+    id: ref.messageId,
+    content: [{ type: 'text', text: ref.content }],
+    attachments: [],
+    createdAt: new Date(ref.timestamp),
+    metadata: { custom: { mainframe: { queued: true } } },
+  });
+}
+
+/**
+ * Queued refs in FIFO order, skipping any whose `messageId` already appears
+ * in the confirmed transcript — the window between the dequeue's create
+ * frame and the next `queue_state` snapshot, which would otherwise render
+ * the same turn twice.
+ */
+function projectQueuedMessages(state: ChatThreadState, serverMessageIds: ReadonlySet<string>): ThreadUserMessage[] {
+  return Object.values(state.interactions.queued)
+    .filter((ref) => !serverMessageIds.has(ref.messageId))
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    .map(projectQueuedMessage);
+}
+
+// ---------------------------------------------------------------------------
 // Projection entry
 // ---------------------------------------------------------------------------
 
@@ -77,6 +106,12 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
     }
   }
 
+  // Queued turns (D1) — the encoder never sends these as part of the
+  // transcript, so they render from the queue snapshot alone, between the
+  // confirmed transcript and any still-in-flight optimistic send.
+  const serverMessageIds = new Set(serverMessages.map((m) => m.id));
+  const queuedMessages = projectQueuedMessages(state, serverMessageIds);
+
   // Pending (optimistic) messages sorted by createdAt
   const pendingMessages: ThreadUserMessage[] = Object.values(state.pendingUserMessages)
     .filter((p): p is PendingUserMessage => p != null)
@@ -85,7 +120,7 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
 
   // Merge: pending at end (they are always "newest" — sent just now).
   // If the fingerprint dedup has reconciled them they won't appear here.
-  return [...serverMessages, ...pendingMessages];
+  return [...serverMessages, ...queuedMessages, ...pendingMessages];
 }
 
 export function projectChatThreadRepository(state: ChatThreadState) {

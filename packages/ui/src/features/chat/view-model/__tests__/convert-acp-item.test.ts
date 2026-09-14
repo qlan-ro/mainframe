@@ -98,8 +98,20 @@ describe('convertAcpItems — reaggregation', () => {
 
   it('items with different containerIds produce separate messages in first-seen order', () => {
     const items: AccumulatedItem[] = [
-      { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('first')], meta: itemMeta({ containerId: 'c1' }) },
-      { kind: 'message', id: 'm2', role: 'agent', content: [textBlock('second')], meta: itemMeta({ containerId: 'c2' }) },
+      {
+        kind: 'message',
+        id: 'm1',
+        role: 'agent',
+        content: [textBlock('first')],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+      {
+        kind: 'message',
+        id: 'm2',
+        role: 'agent',
+        content: [textBlock('second')],
+        meta: itemMeta({ containerId: 'c2' }),
+      },
       {
         kind: 'tool-call',
         id: 't1',
@@ -452,7 +464,7 @@ describe('convertAcpItems — user container: file attachments', () => {
 });
 
 describe('convertAcpItems — user container: coerceUserMeta', () => {
-  it('coerces command/queued/cleanText into mainframe meta and drops malformed fields', () => {
+  it('coerces command/cleanText into mainframe meta and drops malformed fields — queued no longer rides the wire (D1, T32: it comes from the queue snapshot projection instead)', () => {
     const items: AccumulatedItem[] = [
       {
         kind: 'message',
@@ -473,7 +485,6 @@ describe('convertAcpItems — user container: coerceUserMeta', () => {
 
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(mainframeMeta(container)).toEqual({
-      queued: true,
       cleanText: 'go',
       command: { name: 'plan', userText: 'go' },
     });
