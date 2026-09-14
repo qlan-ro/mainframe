@@ -221,6 +221,44 @@ fn an_adapter_supplied_option_carries_its_own_updated_input() {
     );
 }
 
+/// R3.2/T19 regression: the desktop never sets `scope` on a rich answer, so
+/// a rich answer selecting an `allow_always` option must still come out
+/// session-scoped, or Codex's "Accept for session" re-prompts next turn.
+#[test]
+fn rich_answer_selecting_an_allow_always_option_gets_session_scope_overlaid() {
+    let request = ControlRequest {
+        options: Some(vec![PermissionOption {
+            option_id: "acceptForSession".into(),
+            name: "Accept for session".into(),
+            kind: PermissionOptionKind::AllowAlways,
+            meta: None,
+        }]),
+        ..control_request()
+    };
+    let response = RequestPermissionResponse {
+        outcome: RequestPermissionOutcome::Selected {
+            option_id: "acceptForSession".to_string(),
+        },
+        meta: Some(json!({
+            "_mainframe.dev": {
+                "controlResponse": {
+                    "requestId": "req_001",
+                    "toolUseId": "toolu_01A",
+                    "behavior": "allow"
+                }
+            }
+        })),
+    };
+
+    let control = parse_answer(&request, response).unwrap();
+
+    assert_eq!(control.behavior, ControlBehavior::Allow);
+    assert_eq!(
+        control.scope,
+        Some(mainframe_types::adapter::PermissionScope::Session)
+    );
+}
+
 #[test]
 fn allow_always_sets_session_scope() {
     let request =

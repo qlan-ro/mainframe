@@ -157,10 +157,12 @@ pub enum GateAnswerError {
 }
 
 /// Parse a `session/request_permission` answer for `request` into today's
-/// `ControlResponse`. A rich `_mainframe.dev` answer (full `ControlResponse`
-/// semantics: input mutation, execution mode, clear-context) is validated
-/// against the request it answers before being trusted; a plain
-/// `{outcome:"selected", optionId}` answer maps through [`offered_options`].
+/// `ControlResponse`. The `optionId` always resolves against
+/// [`offered_options`] first, then overlays the selected option's
+/// `scope`/`updatedInput` onto a rich `_mainframe.dev` answer — the client
+/// never sets `scope` itself, so without the overlay a session-scoped
+/// allow (e.g. Codex's `acceptForSession`) would re-prompt next turn
+/// (R3.2/T19).
 pub fn parse_answer(
     request: &ControlRequest,
     response: RequestPermissionResponse,
@@ -169,15 +171,22 @@ pub fn parse_answer(
         return Err(GateAnswerError::Cancelled);
     };
 
-    if let Some(rich) = rich_answer(request, &response) {
+    let options = offered_options(request);
+    let selected = options.iter().find(|option| &option.option_id == option_id);
+
+    if let Some(mut rich) = rich_answer(request, &response) {
+        if let Some(selected) = selected {
+            if matches!(selected.kind, PermissionOptionKind::AllowAlways) {
+                rich.scope = rich.scope.or(Some(PermissionScope::Session));
+            }
+            rich.updated_input = rich
+                .updated_input
+                .or_else(|| updated_input_from_option(selected));
+        }
         return Ok(rich);
     }
 
-    let options = offered_options(request);
-    let selected = options
-        .iter()
-        .find(|option| &option.option_id == option_id)
-        .ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
+    let selected = selected.ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
     let scope = matches!(selected.kind, PermissionOptionKind::AllowAlways)
         .then_some(PermissionScope::Session);
 
