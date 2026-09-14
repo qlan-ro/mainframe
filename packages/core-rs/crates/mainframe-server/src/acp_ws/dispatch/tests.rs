@@ -5,8 +5,9 @@ use std::sync::Mutex;
 
 use mainframe_acp::gates::OPTION_ALLOW_ONCE;
 use mainframe_chat::permission_handler::PermissionError;
+use mainframe_types::acp::jsonrpc::JsonRpcErrorObject;
 use mainframe_types::acp::permission::{RequestPermissionOutcome, RequestPermissionResponse};
-use mainframe_types::adapter::{ControlRequest, ControlResponse};
+use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
 
 use super::super::facade_conn::rpc_id_string;
 use super::super::hub::FacadeHub;
@@ -122,5 +123,43 @@ async fn a_failed_apply_leaves_the_gate_answerable() {
     assert!(
         connection.peek_gate(&rpc_id).is_none(),
         "a successful apply must clear the gate"
+    );
+}
+
+#[tokio::test]
+async fn an_error_reply_to_a_gate_denies_it() {
+    let hub = FacadeHub::new(100);
+    let (_client_id, connection, _rx) = hub.register("mock-cli".to_string());
+    let request = control_request("req-1");
+    let rpc_id = rpc_id_string(&request.request_id);
+    let frame = mainframe_acp::build_permission_request(
+        "chat-1",
+        mainframe_acp::gate_request_id(&request.request_id),
+        &request,
+    );
+    connection.deliver_gate("chat-1", &request, &frame);
+
+    let ports = FlakyPort::new(0);
+    let response = JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: Some(RequestId::Str(rpc_id.clone())),
+        outcome: JsonRpcOutcome::Error {
+            error: JsonRpcErrorObject {
+                code: -32602,
+                message: "bad params".to_string(),
+                data: None,
+            },
+        },
+    };
+
+    handle_gate_answer(response, &hub, &ports, &connection).await;
+
+    let calls = ports.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].request_id, "req-1");
+    assert_eq!(calls[0].behavior, ControlBehavior::Deny);
+    assert!(
+        connection.peek_gate(&rpc_id).is_none(),
+        "a denied gate must not stay pending"
     );
 }

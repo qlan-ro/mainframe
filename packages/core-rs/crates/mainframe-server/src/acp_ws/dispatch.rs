@@ -15,6 +15,7 @@ use mainframe_acp::{
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcOutcome, JsonRpcRequest, JsonRpcResponse, RequestId};
 use mainframe_types::acp::permission::RequestPermissionResponse;
+use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
 use tracing::{debug, warn};
 
 use crate::ctx::AppCtx;
@@ -155,16 +156,34 @@ async fn handle_gate_answer(
             }
         }
         JsonRpcOutcome::Error { error } => {
+            // A client that cannot parse the gate says so; treat it as a
+            // deny instead of leaving the turn hanging until the CLI dies
+            // (R3.7).
             warn!(
                 rpc_id,
                 code = error.code,
-                "acp facade: client answered a gate with an error"
+                "acp facade: client answered a gate with an error, denying it"
             );
-            connection.remove_gate(&rpc_id);
+            let control = deny_response(&pending.request);
+            apply_control_response(&rpc_id, pending, control, hub, ports, connection).await;
             return;
         }
     };
     apply_gate_answer(&rpc_id, pending, answer, hub, ports, connection).await;
+}
+
+fn deny_response(request: &ControlRequest) -> ControlResponse {
+    ControlResponse {
+        request_id: request.request_id.clone(),
+        tool_use_id: request.tool_use_id.clone(),
+        tool_name: Some(request.tool_name.clone()),
+        behavior: ControlBehavior::Deny,
+        updated_input: None,
+        updated_permissions: None,
+        message: None,
+        execution_mode: None,
+        clear_context: None,
+    }
 }
 
 async fn apply_gate_answer(
@@ -175,7 +194,6 @@ async fn apply_gate_answer(
     ports: &dyn GatePort,
     connection: &Arc<FacadeConnection>,
 ) {
-    let request_id = pending.request.request_id.clone();
     let control = match parse_permission_answer(&pending.request, answer) {
         Ok(control) => control,
         Err(GateAnswerError::Cancelled) => {
@@ -192,6 +210,22 @@ async fn apply_gate_answer(
             return;
         }
     };
+    apply_control_response(rpc_id, pending, control, hub, ports, connection).await;
+}
+
+/// The claim-apply tail shared by a parsed client answer and a synthesized
+/// deny (T4): remove the connection's own pending entry, claim the gate on
+/// the hub, and forward to the port — restoring both on a transport failure
+/// (T3).
+async fn apply_control_response(
+    rpc_id: &str,
+    pending: PendingGate,
+    control: ControlResponse,
+    hub: &FacadeHub,
+    ports: &dyn GatePort,
+    connection: &Arc<FacadeConnection>,
+) {
+    let request_id = pending.request.request_id.clone();
     connection.remove_gate(rpc_id);
     match hub.claim_gate(&pending.chat_id, &request_id) {
         AnswerOutcome::AlreadyResolved => {
