@@ -14,6 +14,7 @@ use mainframe_types::acp::extensions::PromptSendMeta;
 use mainframe_types::adapter::{ControlRequest, ControlResponse};
 use mainframe_types::display::DisplayMessage;
 
+#[derive(Clone)]
 pub struct ManagerPorts {
     manager: Option<Arc<ChatManager>>,
 }

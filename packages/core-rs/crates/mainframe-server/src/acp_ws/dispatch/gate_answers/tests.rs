@@ -9,9 +9,7 @@ use mainframe_types::acp::jsonrpc::JsonRpcErrorObject;
 use mainframe_types::acp::permission::{RequestPermissionOutcome, RequestPermissionResponse};
 use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse};
 
-use super::super::facade_conn::rpc_id_string;
-use super::super::hub::FacadeHub;
-use super::super::ports::GatePort;
+use super::super::super::facade_conn::rpc_id_string;
 use super::*;
 
 fn control_request(request_id: &str) -> ControlRequest {

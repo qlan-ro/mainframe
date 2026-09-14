@@ -3,8 +3,8 @@
 //! yet answered (todo #350, live-wiring pass).
 
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{ThrottledFrame, gate_request_id};
@@ -45,6 +45,12 @@ pub struct FacadeConnection {
     /// frame, so an `Atomic` rather than a `Mutex` (no critical section to
     /// hold, just a flag).
     negotiated: AtomicBool,
+    /// One `tokio::sync::Mutex` per session, held for the duration of a
+    /// spawned `session/prompt` (T10). Serializes concurrent prompts for the
+    /// SAME session — queue position and D1's tail ordering both depend on
+    /// which of two concurrent prompts enqueues first — while leaving
+    /// different sessions free to run their prompts in parallel.
+    prompt_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl FacadeConnection {
@@ -55,7 +61,20 @@ impl FacadeConnection {
             sessions: Mutex::new(HashMap::new()),
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
+            prompt_locks: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Acquire this session's prompt-serialization lock, creating it on
+    /// first use. Held by the caller for the lifetime of one spawned prompt
+    /// dispatch.
+    pub fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.prompt_locks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(session_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
     }
 
     pub fn is_negotiated(&self) -> bool {

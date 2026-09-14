@@ -4,6 +4,7 @@
 //! allowlist).
 #![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
 
+pub mod barrier_adapter;
 pub mod facade;
 pub mod raw_http;
 

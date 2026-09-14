@@ -47,11 +47,38 @@ pub struct FacadeServer {
     pub server: TestServer,
     pub chat_id: String,
     pub profile: String,
+    pub project_id: String,
+}
+
+impl FacadeServer {
+    /// A second chat under the same project/adapter — T10's cold-start-vs-
+    /// cancel ordering test needs two independent sessions.
+    pub async fn create_chat(&self) -> String {
+        let project_id = self.project_id.clone();
+        let profile = self.profile.clone();
+        self.server
+            .ctx
+            .db
+            .call(move |d| d.chats.create(&project_id, &profile, None, None, None))
+            .await
+            .unwrap()
+            .id
+    }
 }
 
 /// `adapter` is injected (not hardcoded to the mock) so T10's barrier
 /// adapter can reuse this fixture without a second harness.
 pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
+    spawn_facade_server_with(adapter, mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS).await
+}
+
+/// `heartbeat_interval_ms` shrinks the cadence so a test can observe several
+/// ticks inside a bounded timeout (T10: proof the socket loop is not stuck
+/// on a blocked prompt).
+pub async fn spawn_facade_server_with(
+    adapter: Arc<dyn Adapter>,
+    heartbeat_interval_ms: u64,
+) -> FacadeServer {
     let profile = adapter.id().to_string();
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
@@ -93,6 +120,7 @@ pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
     let project = db
         .call_blocking(move |d| d.projects.create(&path, None))
         .unwrap();
+    let project_id = project.id.clone();
     let profile_for_chat = profile.clone();
     let chat = db
         .call_blocking(move |d| {
@@ -129,7 +157,7 @@ pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
         tunnel_url: Arc::new(std::sync::RwLock::new(None)),
         ws_clients: Arc::new(DashMap::new()),
         facade_hub,
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
+        facade_heartbeat_interval_ms: heartbeat_interval_ms,
     });
     spawn_broadcast_pump(Arc::clone(&ctx));
 
@@ -155,5 +183,6 @@ pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
         },
         chat_id: chat.id,
         profile,
+        project_id,
     }
 }
