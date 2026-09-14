@@ -118,8 +118,8 @@ test.describe('§permission gate details', () => {
     await expect(pre).toContainText('/tmp/mf-e2e-test.txt');
     await expect(pre).toContainText('hello');
 
-    // The daemon offers the same three options on every gate (spec decision 12) —
-    // always-allow is no longer gated on the request carrying suggestions.
+    // Renders because this recording's onPermission carries suggestions (T7/D4:
+    // Claude's default options gate always-allow on request.suggestions).
     await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
 
     // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
@@ -137,7 +137,7 @@ test.describe('§permission gate details', () => {
   });
 });
 
-// ─── Permission gate — the offered option set is suggestion-independent ──────
+// ─── Permission gate — always-allow is gated on suggestions ──────────────────
 
 test.describe('§permission gate no suggestions', () => {
   let app: TauriAppFixture;
@@ -154,19 +154,16 @@ test.describe('§permission gate no suggestions', () => {
     await closeTauriApp(app);
   });
 
-  // The pre-facade gate hid Always Allow when the request carried no suggestions
-  // (client-side `hasSuggestions` gating). On the facade the daemon supplies the
-  // option list and the client renders it verbatim (spec decision 12) — the
-  // recording's empty `suggestions:[]` must NOT change the offered set.
-  test('all three offered options render even when the request carries no suggestions', async () => {
+  // No suggestions means Claude's default options omit allow-always (T7/D4).
+  test('only allow-once and reject-once render when the request carries no suggestions', async () => {
     const { page } = app;
     await sendMessage(page, 'Run `whoami` to check the current user');
     const gate = page.locator('[data-testid="chat-permission-gate"]');
     await gate.waitFor({ timeout: 45_000 });
 
     await expect(page.locator('[data-testid="chat-permission-option-allow-once"]')).toBeVisible();
-    await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
     await expect(page.locator('[data-testid="chat-permission-option-reject-once"]')).toBeVisible();
+    await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).not.toBeVisible();
 
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
