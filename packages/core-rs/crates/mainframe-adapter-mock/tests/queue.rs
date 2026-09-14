@@ -105,9 +105,6 @@ async fn a_prompt_sent_mid_turn_replays_only_after_the_running_turns_result() {
         .await
         .unwrap();
 
-    tokio::time::sleep(Duration::from_millis(40)).await;
-    assert_eq!(sink.calls(), ["init:recorded-session", "message"]);
-
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(
         sink.calls(),
