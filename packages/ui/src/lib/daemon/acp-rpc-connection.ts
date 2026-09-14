@@ -29,7 +29,12 @@ export interface RpcError {
 interface PendingEntry {
   resolve: (result: unknown) => void;
   reject: (error: RpcError) => void;
+  deadline: ReturnType<typeof setTimeout>;
 }
+
+/** A reply that never arrives must not hang `prompt()`/`resume()` forever — the caller always leaves its waiting state. */
+const REQUEST_DEADLINE_MS = 30_000;
+const CLOSED_ERROR: RpcError = { code: -32000, message: 'connection closed' };
 
 interface ParseableSchema<T> {
   safeParse: (value: unknown) => { success: boolean; data?: T };
@@ -88,15 +93,26 @@ export class RpcConnection {
     this.closeHandler = handler;
   }
 
+  /**
+   * A real `WebSocket.close()` fires `onclose` asynchronously — this
+   * rejects synchronously instead, so a caller awaiting `sendRequest()`
+   * never hangs on the event-loop turnaround (R3.8).
+   */
   close(): void {
     this.socket?.close();
     this.socket = null;
+    this.rejectAllPending(CLOSED_ERROR);
   }
 
   sendRequest(method: string, params?: unknown): Promise<unknown> {
     const id = this.nextId++;
+    const key = String(id);
     return new Promise((resolve, reject) => {
-      this.pending.set(String(id), { resolve, reject });
+      const deadline = setTimeout(() => {
+        this.pending.delete(key);
+        reject({ code: -32000, message: 'request timed out' });
+      }, REQUEST_DEADLINE_MS);
+      this.pending.set(key, { resolve, reject, deadline });
       this.write({ jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) });
     });
   }
@@ -113,9 +129,22 @@ export class RpcConnection {
   private write(frame: unknown): void {
     if (!this.socket) {
       console.warn('[acp-client] dropped outbound frame — connection not open', frame);
+      this.rejectIfRequest(frame);
       return;
     }
     this.socket.send(JSON.stringify(frame));
+  }
+
+  /** A request written after the connection died must reject its own promise, not hang until the next close/timeout. */
+  private rejectIfRequest(frame: unknown): void {
+    const id = (frame as { id?: unknown }).id;
+    if (id === undefined) return;
+    const key = String(id);
+    const entry = this.pending.get(key);
+    if (!entry) return;
+    this.pending.delete(key);
+    clearTimeout(entry.deadline);
+    entry.reject(CLOSED_ERROR);
   }
 
   private handleMessage(raw: string): void {
@@ -158,6 +187,7 @@ export class RpcConnection {
     const entry = this.pending.get(key);
     if (!entry) return;
     this.pending.delete(key);
+    clearTimeout(entry.deadline);
     // Both `JsonRpcResponseSchema` union members are `.loose()` (permits
     // unknown extra keys), so their inferred types carry an index signature
     // that defeats plain `'error' in response` narrowing to a single member —
@@ -168,7 +198,10 @@ export class RpcConnection {
   }
 
   private rejectAllPending(error: RpcError): void {
-    for (const entry of this.pending.values()) entry.reject(error);
+    for (const entry of this.pending.values()) {
+      clearTimeout(entry.deadline);
+      entry.reject(error);
+    }
     this.pending.clear();
   }
 }
