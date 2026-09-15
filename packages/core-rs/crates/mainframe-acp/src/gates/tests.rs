@@ -114,6 +114,24 @@ fn unknown_option_id_is_never_treated_as_approval() {
     );
 }
 
+/// The rich `_mainframe.dev` payload is an overlay on the plain answer, not
+/// a bypass: the `optionId` still has to name an offered option, or a
+/// version-skewed (or forged) client could resolve a gate with an option the
+/// daemon never offered.
+#[test]
+fn a_rich_answer_for_an_unoffered_option_is_still_unknown() {
+    let mut fixture = fixture("permission.response-rich");
+    fixture["outcome"]["optionId"] = json!("some-future-option");
+    let response: RequestPermissionResponse = serde_json::from_value(fixture).unwrap();
+
+    let err = parse_answer(&control_request(), response).unwrap_err();
+
+    assert_eq!(
+        err,
+        GateAnswerError::UnknownOption("some-future-option".to_string())
+    );
+}
+
 #[test]
 fn cancelled_outcome_is_rejected_as_a_session_answer() {
     let response: RequestPermissionResponse =

@@ -172,21 +172,24 @@ pub fn parse_answer(
     };
 
     let options = offered_options(request);
-    let selected = options.iter().find(|option| &option.option_id == option_id);
+    // The option is resolved before the rich branch: the `_mainframe.dev`
+    // payload overlays a plain answer, it does not replace the check that the
+    // daemon offered this option at all.
+    let selected = options
+        .iter()
+        .find(|option| &option.option_id == option_id)
+        .ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
 
     if let Some(mut rich) = rich_answer(request, &response) {
-        if let Some(selected) = selected {
-            if matches!(selected.kind, PermissionOptionKind::AllowAlways) {
-                rich.scope = rich.scope.or(Some(PermissionScope::Session));
-            }
-            rich.updated_input = rich
-                .updated_input
-                .or_else(|| updated_input_from_option(selected));
+        if matches!(selected.kind, PermissionOptionKind::AllowAlways) {
+            rich.scope = rich.scope.or(Some(PermissionScope::Session));
         }
+        rich.updated_input = rich
+            .updated_input
+            .or_else(|| updated_input_from_option(selected));
         return Ok(rich);
     }
 
-    let selected = selected.ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
     let scope = matches!(selected.kind, PermissionOptionKind::AllowAlways)
         .then_some(PermissionScope::Session);
 
