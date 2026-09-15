@@ -70,23 +70,30 @@ pub(super) fn start_resume(
             .await;
         });
         if let Err(err) = delivery.await {
-            error!(
-                %err,
-                session_id = claimed.as_deref().unwrap_or("<none>"),
-                "acp facade: resume delivery failed"
-            );
-            fail_resume(
-                &connection,
+            fail_resume(ResumeFailure {
+                connection: &connection,
                 request_id,
-                claimed.as_deref(),
-                replied.load(Ordering::Relaxed),
-            );
+                session_id: claimed.as_deref(),
+                replied: replied.load(Ordering::Relaxed),
+                cause: err.to_string(),
+            });
         }
     });
 }
 
-/// A resume whose delivery never returned. The resync sends the client back
-/// for a fresh one, which nothing else would: heartbeats are
+/// One `session/resume` delivery that never returned, as its failure path
+/// needs it.
+struct ResumeFailure<'a> {
+    connection: &'a FacadeConnection,
+    request_id: Option<RequestId>,
+    session_id: Option<&'a str>,
+    /// Whether the success reply already went out — `reset_session` returned.
+    replied: bool,
+    cause: String,
+}
+
+/// Answer for a resume whose delivery never returned. The resync sends the
+/// client back for a fresh one, which nothing else would: heartbeats are
 /// connection-level, so its watchdog sees no gap, and a first attach has not
 /// attached yet, so its own gap resume returns early.
 ///
@@ -94,25 +101,42 @@ pub(super) fn start_resume(
 /// is still pending, and it has no other end. Once `reset_session` has
 /// returned, the reply is on the wire (it goes out in both of that method's
 /// arms), so a second response for that id could only be dropped.
-fn fail_resume(
-    connection: &FacadeConnection,
-    id: Option<RequestId>,
-    session_id: Option<&str>,
-    replied: bool,
-) {
+fn fail_resume(failure: ResumeFailure<'_>) {
+    let ResumeFailure {
+        connection,
+        request_id,
+        session_id,
+        replied,
+        cause,
+    } = failure;
     if !replied {
         connection.send_json(&rpc::error_response(
-            id,
+            request_id,
             rpc::internal_error("resume failed"),
         ));
     }
     let Some(session_id) = session_id else {
+        error!(%cause, "acp facade: resume delivery failed with no session to recover");
         return;
     };
+    let failures = connection.record_resume_failure(session_id);
+    error!(
+        %cause,
+        session_id,
+        failures,
+        resync_suppressed = failures > 1,
+        "acp facade: resume delivery failed"
+    );
+    // The client answers a resync with another resume, so a failure that
+    // repeats on the same transcript would loop at round-trip speed. After
+    // the first, recovery is left to its gap/reconnect path.
+    //
     // Sent directly rather than through the hub's per-session throttle: an
     // unseeded slot has no stream to queue against, and the buffer it does
     // hold is about to be dropped.
-    connection.send_json(&mainframe_acp::resync_notification(session_id));
+    if failures == 1 {
+        connection.send_json(&mainframe_acp::resync_notification(session_id));
+    }
     if !replied {
         connection.forget_chat(session_id);
     }
@@ -165,6 +189,7 @@ async fn deliver_resume(
         ));
     });
     replied.store(true, Ordering::Relaxed);
+    connection.clear_resume_failures(&session_id);
 }
 
 /// The queued-prompt snapshot every resume replay closes with — empty when

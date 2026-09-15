@@ -7,7 +7,6 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{ThrottledFrame, gate_request_id};
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use mainframe_types::acp::update::{SessionUpdate, UpdateSessionNotification};
@@ -15,65 +14,9 @@ use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
 use tracing::warn;
 
-/// A claim on a session's lock, taken on the socket loop and awaited from
-/// the spawned task that does the work.
-pub enum SessionLockWait {
-    /// Uncontended: the guard was available on the spot.
-    Held(tokio::sync::OwnedMutexGuard<()>),
-    /// Contended: already queued behind the holder, in arrival order.
-    Queued(std::pin::Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>>),
-}
-
-impl SessionLockWait {
-    pub async fn guard(self) -> tokio::sync::OwnedMutexGuard<()> {
-        match self {
-            SessionLockWait::Held(guard) => guard,
-            SessionLockWait::Queued(acquire) => acquire.await,
-        }
-    }
-}
-
-/// A gate delivered to a connection and not yet answered, keyed by the
-/// JSON-RPC id its `session/request_permission` traveled under.
-#[derive(Clone)]
-pub struct PendingGate {
-    pub chat_id: String,
-    pub request: ControlRequest,
-}
-
-/// One thing that happens to a session's stream. Applied immediately on a
-/// seeded stream; buffered in arrival order while a resume's snapshot is in
-/// flight, then replayed through the freshly seeded stream (T5/T6, R2.9).
-/// A gate raise carries the rpc id it was delivered under, so the drain can
-/// recognize the gate the replay redelivers on its own and not hand the
-/// client two live requests for one decision.
-#[derive(Clone)]
-pub(super) enum StreamOp {
-    Revision(Vec<mainframe_acp::EncodedItem>),
-    Raw {
-        payload: String,
-        gate_rpc_id: Option<String>,
-    },
-    TurnStarted,
-    TurnFinished(mainframe_types::acp::update::StopReason),
-    Usage(mainframe_types::acp::update::UsageUpdate),
-    Retry(mainframe_types::acp::extensions::RetryMarker),
-}
-
-/// A connection's per-session slot. `AwaitingSeed` covers the window a
-/// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
-/// racing that await has nowhere seeded to diff against yet, so its item
-/// snapshot is buffered — a later revision replaces the earlier one in
-/// place, since only the latest matters — instead of diffed and instead of
-/// dropped. Everything else raised in the window (raw frames, turn
-/// lifecycle, usage, retry markers) buffers alongside it in arrival order,
-/// or it would either reach the client ahead of the replay it predates or
-/// vanish with the window. `reset_session` drains the lot once the stream is
-/// seeded.
-pub(super) enum SessionSlot {
-    Live(SessionStream),
-    AwaitingSeed { pending: Vec<StreamOp> },
-}
+mod slots;
+pub use slots::{PendingGate, SessionLockWait};
+pub(super) use slots::{SessionSlot, StreamOp};
 
 pub struct FacadeConnection {
     pub profile: String,
@@ -91,6 +34,11 @@ pub struct FacadeConnection {
     /// which of two concurrent prompts enqueues first — while leaving
     /// different sessions free to run their prompts in parallel.
     prompt_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// Consecutive failed `session/resume` deliveries per session. NOT
+    /// reclaimed by `forget_chat`: the failure path detaches the session
+    /// itself, and reclaiming there would reset the very count that stops a
+    /// resync/retry loop.
+    resume_failures: Mutex<HashMap<String, u32>>,
 }
 
 impl FacadeConnection {
@@ -102,6 +50,7 @@ impl FacadeConnection {
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
             prompt_locks: Mutex::new(HashMap::new()),
+            resume_failures: Mutex::new(HashMap::new()),
         }
     }
 
@@ -135,6 +84,26 @@ impl FacadeConnection {
             .entry(session_id.to_string())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
             .clone()
+    }
+
+    /// Count one failed resume for `chat_id` and report how many in a row
+    /// that makes — the failure path pushes its recovery notification on the
+    /// first only.
+    pub fn record_resume_failure(&self, chat_id: &str) -> u32 {
+        let mut failures = self.locked_resume_failures();
+        let count = failures.entry(chat_id.to_string()).or_insert(0);
+        *count += 1;
+        *count
+    }
+
+    pub fn clear_resume_failures(&self, chat_id: &str) {
+        self.locked_resume_failures().remove(chat_id);
+    }
+
+    fn locked_resume_failures(&self) -> std::sync::MutexGuard<'_, HashMap<String, u32>> {
+        self.resume_failures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn is_negotiated(&self) -> bool {

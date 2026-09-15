@@ -29,6 +29,23 @@ impl ResumePort for PanickingPort {
     }
 }
 
+/// A resume that completes: an empty transcript still seeds the stream and
+/// sends its reply.
+struct EmptyPort;
+
+impl ResumePort for EmptyPort {
+    fn resume_snapshot<'a>(
+        &'a self,
+        _session_id: &'a str,
+    ) -> BoxFuture<'a, (Vec<DisplayMessage>, Option<ControlRequest>)> {
+        Box::pin(async { (Vec::new(), None) })
+    }
+
+    fn is_running(&self, _session_id: &str) -> bool {
+        false
+    }
+}
+
 fn resume_request(id: i64, session_id: &str) -> JsonRpcRequest {
     JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -36,6 +53,32 @@ fn resume_request(id: i64, session_id: &str) -> JsonRpcRequest {
         method: "session/resume".into(),
         params: Some(json!({ "sessionId": session_id, "cwd": "/tmp" })),
     }
+}
+
+/// Every frame the connection has to send, up to a quiet window — a resume
+/// failure's frames all leave in one burst once the panic unwinds.
+async fn drain(rx: &mut mpsc::UnboundedReceiver<String>) -> Vec<Value> {
+    let mut frames = Vec::new();
+    while let Ok(Some(text)) =
+        tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await
+    {
+        frames.push(serde_json::from_str(&text).expect("a JSON frame"));
+    }
+    frames
+}
+
+fn resyncs(frames: &[Value]) -> usize {
+    frames
+        .iter()
+        .filter(|frame| frame["method"] == json!("_mainframe.dev/resync"))
+        .count()
+}
+
+fn internal_errors(frames: &[Value]) -> usize {
+    frames
+        .iter()
+        .filter(|frame| frame["error"]["code"] == json!(-32603))
+        .count()
 }
 
 async fn next_frame(rx: &mut mpsc::UnboundedReceiver<String>) -> Value {
@@ -85,12 +128,13 @@ async fn a_replied_resume_failure_sends_only_a_resync() {
     let ctx = AppCtx::test_ctx();
     let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
 
-    fail_resume(
-        &connection,
-        Some(RequestId::Number(7)),
-        Some("chat-1"),
-        true,
-    );
+    fail_resume(ResumeFailure {
+        connection: &connection,
+        request_id: Some(RequestId::Number(7)),
+        session_id: Some("chat-1"),
+        replied: true,
+        cause: "the delivery task panicked".to_string(),
+    });
 
     let resync = next_frame(&mut rx).await;
     assert_eq!(resync["method"], json!("_mainframe.dev/resync"));
@@ -98,5 +142,62 @@ async fn a_replied_resume_failure_sends_only_a_resync() {
     assert!(
         rx.try_recv().is_err(),
         "the reply already went out; a second response for that id could only be dropped"
+    );
+}
+
+/// The client answers every resync with a full reattach, so a resume that
+/// panics repeatably on the same stored transcript would loop at round-trip
+/// speed, reloading the transcript every iteration.
+#[tokio::test]
+async fn a_repeatedly_failing_resume_asks_for_one_resync_only() {
+    let ctx = AppCtx::test_ctx();
+    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    for id in [1, 2] {
+        start_resume(
+            resume_request(id, "chat-1"),
+            &ctx,
+            &connection,
+            Arc::new(PanickingPort),
+        );
+    }
+    let frames = drain(&mut rx).await;
+
+    assert_eq!(resyncs(&frames), 1, "only the first failure asks again");
+    assert_eq!(internal_errors(&frames), 2, "both promises still settle");
+}
+
+#[tokio::test]
+async fn a_resume_that_succeeds_clears_the_failure_count() {
+    let ctx = AppCtx::test_ctx();
+    let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+
+    start_resume(
+        resume_request(1, "chat-1"),
+        &ctx,
+        &connection,
+        Arc::new(PanickingPort),
+    );
+    assert_eq!(resyncs(&drain(&mut rx).await), 1);
+
+    start_resume(
+        resume_request(2, "chat-1"),
+        &ctx,
+        &connection,
+        Arc::new(EmptyPort),
+    );
+    drain(&mut rx).await;
+
+    start_resume(
+        resume_request(3, "chat-1"),
+        &ctx,
+        &connection,
+        Arc::new(PanickingPort),
+    );
+
+    assert_eq!(
+        resyncs(&drain(&mut rx).await),
+        1,
+        "a resume that worked since means this failure is not the loop"
     );
 }
