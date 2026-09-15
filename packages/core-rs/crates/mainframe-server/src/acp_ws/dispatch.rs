@@ -57,7 +57,7 @@ pub async fn handle_inbound(
                     mainframe_acp::initialize_required(),
                 )));
             }
-            start_resume(request, ctx, connection, ports);
+            start_resume(request, ctx, connection, Arc::new(ports));
             None
         }
         InboundFrame::Notification(note) if note.method == "_mainframe.dev/session_detach" => {

@@ -7,15 +7,15 @@
 
 use std::sync::Arc;
 
-use mainframe_acp::dispatch_resume;
-use mainframe_types::acp::jsonrpc::JsonRpcRequest;
+use mainframe_acp::resume::ResumePort;
+use mainframe_acp::{dispatch_resume, rpc};
+use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use tracing::error;
 
 use crate::ctx::AppCtx;
 
-use super::super::facade_conn::{FacadeConnection, rpc_id_string};
+use super::super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 use super::super::hub::ResumeSeed;
-use super::super::ports::ManagerPorts;
 use super::params_session_id;
 
 /// Claim the session's slot inline, then run the snapshot behind the same
@@ -26,7 +26,7 @@ pub(super) fn start_resume(
     request: JsonRpcRequest,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
-    ports: ManagerPorts,
+    ports: Arc<dyn ResumePort>,
 ) {
     let session_id = params_session_id(request.params.as_ref());
     // Mark this session as awaiting its snapshot BEFORE anything awaits, so
@@ -38,6 +38,7 @@ pub(super) fn start_resume(
     let wait = session_id
         .as_deref()
         .map(|id| connection.enqueue_prompt_lock(id));
+    let request_id = request.id.clone();
     let ctx = Arc::clone(ctx);
     let connection = Arc::clone(connection);
     tokio::spawn(async move {
@@ -50,22 +51,51 @@ pub(super) fn start_resume(
         // `reset_session` is the only exit from `AwaitingSeed`, so a panic on
         // the way to it would leave this session buffering every event for
         // the connection's remaining life, silently. Run it as its own task
-        // and treat a panic as a dropped claim: the client's next gap resume
-        // then re-seeds from scratch.
+        // so `fail_resume` can answer for it.
         let delivery = tokio::spawn(async move {
-            deliver_resume(request, session_id, &task_ctx, &task_conn, &ports).await;
+            deliver_resume(request, session_id, &task_ctx, &task_conn, ports.as_ref()).await;
         });
         if let Err(err) = delivery.await {
             error!(
                 %err,
                 session_id = claimed.as_deref().unwrap_or("<none>"),
-                "acp facade: resume delivery failed; dropping the session claim"
+                "acp facade: resume delivery failed"
             );
-            if let Some(session_id) = claimed {
-                connection.forget_chat(&session_id);
-            }
+            fail_resume(&connection, request_id, claimed.as_deref());
         }
     });
+}
+
+/// A resume whose delivery never returned. The reply settles the client's
+/// promise, which nothing else would: heartbeats are connection-level, so
+/// its watchdog sees no gap, and a first attach has not attached yet, so its
+/// own gap resume returns early. The resync is what sends it back for a
+/// fresh one.
+fn fail_resume(connection: &FacadeConnection, id: Option<RequestId>, session_id: Option<&str>) {
+    connection.send_json(&rpc::error_response(
+        id,
+        rpc::internal_error("resume failed"),
+    ));
+    let Some(session_id) = session_id else {
+        return;
+    };
+    // Sent directly rather than through the hub's per-session throttle: the
+    // slot this resume claimed holds no seeded stream to queue against, and
+    // the buffer it does hold is about to be dropped.
+    connection.send_json(&mainframe_acp::resync_notification(session_id));
+    if !session_is_seeded(connection, session_id) {
+        connection.forget_chat(session_id);
+    }
+}
+
+/// Whether `reset_session` seeded this session before the failure. A seeded
+/// stream is correct state the client is already streaming against — only a
+/// claim that never got there is dropped.
+fn session_is_seeded(connection: &FacadeConnection, session_id: &str) -> bool {
+    matches!(
+        connection.locked_sessions().get(session_id),
+        Some(SessionSlot::Live(_))
+    )
 }
 
 /// Compute the snapshot, then — atomically with respect to live fan-out for
@@ -77,7 +107,7 @@ async fn deliver_resume(
     session_id: Option<String>,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
-    ports: &ManagerPorts,
+    ports: &dyn ResumePort,
 ) {
     let (response, replay) = dispatch_resume(request, ports).await;
 
@@ -131,3 +161,6 @@ fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
         .as_ref()
         .map(|gate| rpc_id_string(&gate.request_id))
 }
+
+#[cfg(test)]
+mod tests;

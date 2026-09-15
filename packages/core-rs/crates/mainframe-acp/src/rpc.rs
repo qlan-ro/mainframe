@@ -88,6 +88,16 @@ pub fn invalid_params(reason: &str) -> JsonRpcErrorObject {
     }
 }
 
+/// The reply a call that failed on the daemon's own side gets. `reason` is a
+/// generic phrase, never a panic payload — the detail belongs in the log.
+pub fn internal_error(reason: &str) -> JsonRpcErrorObject {
+    JsonRpcErrorObject {
+        code: error_codes::INTERNAL_ERROR,
+        message: format!("internal error: {reason}"),
+        data: None,
+    }
+}
+
 pub fn success_response(id: Option<RequestId>, result: Value) -> JsonRpcResponse {
     JsonRpcResponse {
         jsonrpc: "2.0".into(),
