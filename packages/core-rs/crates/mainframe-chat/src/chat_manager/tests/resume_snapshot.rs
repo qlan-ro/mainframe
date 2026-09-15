@@ -13,7 +13,11 @@ async fn a_resume_snapshot_loads_the_transcript_once() {
     let mut chat = test_chat("c1");
     chat.claude_session_id = Some("sess-1".to_string());
     let deps = StoreDeps::with_chats(vec![chat]);
-    *deps.history.lock().unwrap() = Some(vec![history_message()]);
+    // An EMPTY history on purpose: a non-empty one populates the message
+    // cache, and the second lookup would then never reach the disk — the case
+    // that leaks is the cold chat with nothing cached, which reloads per
+    // caller.
+    *deps.history.lock().unwrap() = Some(Vec::new());
     // Transcript present: reconcile leaves the chat's session id in place, so
     // the pending-permission lookup can still reach a history session.
     *deps.transcript_present.lock().unwrap() = Some(true);
