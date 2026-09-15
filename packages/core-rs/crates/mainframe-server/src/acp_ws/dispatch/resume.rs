@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use mainframe_acp::dispatch_resume;
 use mainframe_types::acp::jsonrpc::JsonRpcRequest;
+use tracing::error;
 
 use crate::ctx::AppCtx;
 
@@ -44,7 +45,26 @@ pub(super) fn start_resume(
             Some(wait) => Some(wait.guard().await),
             None => None,
         };
-        deliver_resume(request, session_id, &ctx, &connection, &ports).await;
+        let claimed = session_id.clone();
+        let (task_ctx, task_conn) = (Arc::clone(&ctx), Arc::clone(&connection));
+        // `reset_session` is the only exit from `AwaitingSeed`, so a panic on
+        // the way to it would leave this session buffering every event for
+        // the connection's remaining life, silently. Run it as its own task
+        // and treat a panic as a dropped claim: the client's next gap resume
+        // then re-seeds from scratch.
+        let delivery = tokio::spawn(async move {
+            deliver_resume(request, session_id, &task_ctx, &task_conn, &ports).await;
+        });
+        if let Err(err) = delivery.await {
+            error!(
+                %err,
+                session_id = claimed.as_deref().unwrap_or("<none>"),
+                "acp facade: resume delivery failed; dropping the session claim"
+            );
+            if let Some(session_id) = claimed {
+                connection.forget_chat(&session_id);
+            }
+        }
     });
 }
 
