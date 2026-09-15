@@ -6,8 +6,8 @@
  *
  * The mechanism moved from a `display.message.added`/`display.messages.set`
  * DaemonEvent handler to `AcpChatController.dispatchFromPlane`: every ACP
- * `transcript.updated` re-runs `reconcilePendings` against
- * `plane.userMessageContents()` (raw text, sentinels intact). Server echoes
+ * `transcript.updated` re-runs `reconcilePendings` against the user messages
+ * the plane has not fed it before (raw text, sentinels intact). Server echoes
  * are simulated here as `user_message` SessionUpdates on the fake ACP client.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,7 +31,7 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { createChatThreadState, reduceChatThreadState } from '../chat-thread-state';
-import { CHAT_ID, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
+import { CHAT_ID, flushMicrotasks, makeCompleteAttachment, makeController, makeMsg } from './acp-test-kit';
 
 function pendingTexts(ctrl: ReturnType<typeof makeController>['ctrl']): string[] {
   return Object.values(ctrl.getState().pendingUserMessages).map((p) => p.text);
@@ -206,6 +206,36 @@ describe('reconcile — suffix-only feed, not the whole history (T25, R3.3, bloc
 
     // The real echo finally arrives.
     acpClient.emitUpdate(CHAT_ID, userEcho('live-1', 'continue'));
+    expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
+  });
+});
+
+describe('reconcile — a replay of the same history feeds the matcher nothing (R3.3)', () => {
+  it('a resync replay leaves the new pending outstanding; only the live echo clears it', async () => {
+    const { ctrl, acpClient } = makeController();
+    await ctrl.load();
+    // Two prior user messages already sit in the loaded transcript, before
+    // any pending exists — the duplicate is the SECOND, so re-baselining on
+    // the first replayed frame alone would still feed it to the matcher.
+    acpClient.emitUpdate(CHAT_ID, userEcho('hist-1', 'hello'));
+    acpClient.emitUpdate(CHAT_ID, userEcho('hist-2', 'continue'));
+
+    await ctrl.sendMessage(makeMsg('continue'));
+    const [pendingId] = Object.keys(ctrl.getState().pendingUserMessages);
+    expect(pendingId).toBeDefined();
+
+    // `_mainframe.dev/resync` → reattach(): the accumulator is reset and the
+    // daemon re-replays the SAME history, one frame per item, under the same
+    // stable item ids.
+    acpClient.emitResync(CHAT_ID);
+    await flushMicrotasks();
+    acpClient.emitUpdate(CHAT_ID, userEcho('hist-1', 'hello'));
+    acpClient.emitUpdate(CHAT_ID, userEcho('hist-2', 'continue'));
+
+    expect(ctrl.getState().pendingUserMessages[pendingId!]?.status).toBe('pending');
+
+    // The pending's own echo finally arrives, under an id never seen before.
+    acpClient.emitUpdate(CHAT_ID, userEcho('live-2', 'continue'));
     expect(Object.keys(ctrl.getState().pendingUserMessages)).toHaveLength(0);
   });
 });

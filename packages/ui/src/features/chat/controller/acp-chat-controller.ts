@@ -271,15 +271,15 @@ export class AcpChatController {
 
   /**
    * Plane dispatches route through here so the count-aware optimistic
-   * reconcile (judo-A) runs against every transcript refresh — but ONLY the
-   * suffix of user messages that appeared since the last dispatch, not the
-   * whole history (R3.3, T25): feeding the full list let an already-loaded
+   * reconcile (judo-A) runs against every transcript refresh — but ONLY
+   * against user messages the plane has never fed it before, not the whole
+   * history (R3.3, T25): feeding the full list let an already-loaded
    * historical duplicate satisfy a brand-new pending before its own live
    * echo ever arrived.
    */
   private dispatchFromPlane(event: ChatStateEvent): void {
     if (event.type === 'transcript.updated') {
-      const raw = this.plane.newUserMessagesSinceLastDispatch();
+      const raw = this.plane.takeUnreconciledUserMessages();
       for (const clientId of reconcilePendings(this.state.pendingUserMessages, raw)) {
         this.dispatch({ type: 'local.message.reconciled', clientId });
       }

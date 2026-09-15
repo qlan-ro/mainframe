@@ -37,6 +37,13 @@ export type { AcpSessionClientPort } from './acp-session-attachment';
 
 const GateMetaSchema = z.object({ controlRequest: z.record(z.string(), z.unknown()) }).loose();
 
+/** The reconcile matcher's input shape (`chat-reconcile.ts`). */
+type ReconcilableUserMessage = { content: Array<{ type: 'text'; text: string }> };
+
+function asReconcilable(text: string): ReconcilableUserMessage {
+  return { content: [{ type: 'text', text }] };
+}
+
 export interface AcpSessionPlaneHost {
   /** The daemon chat id at call time (it flips on `setRemoteId`). */
   getChatId: () => string;
@@ -51,8 +58,8 @@ export class AcpSessionPlane {
   private readonly gateRpcIds = new Map<string, JsonRpcRequestId>();
   /** Resume cursor: only advanced when the turn goes idle — a cursor into a still-streaming item would drop its tail (resume.rs replays up to and including the cursor at its CURRENT content). */
   private lastSettledItemId: string | null = null;
-  /** High-water mark for `newUserMessagesSinceLastDispatch()` — see its doc comment. */
-  private lastReconciledUserCount = 0;
+  /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
+  private readonly reconciledUserItemIds = new Set<string>();
   private readonly attachment: AcpSessionAttachment;
 
   constructor(private readonly host: AcpSessionPlaneHost) {
@@ -67,12 +74,9 @@ export class AcpSessionPlane {
       resetAccumulator: () => {
         this.accumulator.reset();
         this.firstSeenAt.clear();
-        // A resume/reattach re-baselines the count to the (now empty)
-        // accumulator rather than leaving it pointing past the end — the
-        // stable-id upsert is idempotent, so a replay that re-establishes
-        // the SAME history never grows the count past this new baseline,
-        // and no reconcile batch fires for it (R3.3).
-        this.lastReconciledUserCount = 0;
+        // `reconciledUserItemIds` deliberately survives: the replay that
+        // refills the accumulator carries the same stable ids, and those
+        // messages were reconciled once already (R3.3).
       },
       hasAccumulatedItems: () => this.accumulator.itemsInOrder.length > 0,
       onSessionUpdate: (update) => this.handleUpdate(update),
@@ -140,28 +144,35 @@ export class AcpSessionPlane {
    * (captures, review comments) that the optimistic pending's sent text
    * still carries, and the multiset match must compare like with like.
    */
-  userMessageContents(): Array<{ content: Array<{ type: 'text'; text: string }> }> {
-    return this.accumulator.itemsInOrder.flatMap((item) => {
-      if (item.kind !== 'message' || item.role !== 'user') return [];
-      const text = item.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
-      return [{ content: [{ type: 'text' as const, text }] }];
-    });
+  userMessageContents(): ReconcilableUserMessage[] {
+    return this.userItems().map(({ text }) => asReconcilable(text));
   }
 
   /**
-   * Only the user messages that appeared since the LAST call to this method
-   * — the reconcile matcher's actual input (R3.3, T25). Feeding it the full
-   * history on every `transcript.updated` let an already-loaded historical
-   * duplicate satisfy a brand-new pending before that pending's own echo
-   * ever arrived (stable ids make replay idempotent, so a resume/reattach
-   * that just re-establishes the same history never grows the count and
-   * emits nothing — `resetAccumulator()` re-baselines to 0 on top of that).
+   * The user messages never yet fed to the reconcile matcher, marking them
+   * fed (R3.3, T25). Feeding it the whole history on every
+   * `transcript.updated` let an already-loaded historical duplicate satisfy
+   * a brand-new pending before that pending's own echo arrived. Keyed by the
+   * item's stable id rather than a count, because a replay refills an
+   * emptied accumulator one frame at a time: every count baseline a reset
+   * could take is either stale or lands mid-replay.
    */
-  newUserMessagesSinceLastDispatch(): Array<{ content: Array<{ type: 'text'; text: string }> }> {
-    const all = this.userMessageContents();
-    const suffix = all.slice(this.lastReconciledUserCount);
-    this.lastReconciledUserCount = all.length;
-    return suffix;
+  takeUnreconciledUserMessages(): ReconcilableUserMessage[] {
+    const fresh: ReconcilableUserMessage[] = [];
+    for (const { id, text } of this.userItems()) {
+      if (this.reconciledUserItemIds.has(id)) continue;
+      this.reconciledUserItemIds.add(id);
+      fresh.push(asReconcilable(text));
+    }
+    return fresh;
+  }
+
+  private userItems(): Array<{ id: string; text: string }> {
+    return this.accumulator.itemsInOrder.flatMap((item) => {
+      if (item.kind !== 'message' || item.role !== 'user') return [];
+      const text = item.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
+      return [{ id: item.id, text }];
+    });
   }
 
   dispose(): void {
