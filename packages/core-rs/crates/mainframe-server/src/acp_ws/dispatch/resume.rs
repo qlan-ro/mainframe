@@ -15,7 +15,7 @@ use tracing::error;
 
 use crate::ctx::AppCtx;
 
-use super::super::facade_conn::{FacadeConnection, rpc_id_string};
+use super::super::facade_conn::{FacadeConnection, SessionLockWait, rpc_id_string};
 use super::super::hub::ResumeSeed;
 use super::params_session_id;
 
@@ -39,14 +39,43 @@ pub(super) fn start_resume(
     let wait = session_id
         .as_deref()
         .map(|id| connection.enqueue_prompt_lock(id));
-    let request_id = request.id.clone();
-    let ctx = Arc::clone(ctx);
-    let connection = Arc::clone(connection);
-    tokio::spawn(async move {
+    let task = ResumeTask {
+        request_id: request.id.clone(),
+        request,
+        session_id,
+        ctx: Arc::clone(ctx),
+        connection: Arc::clone(connection),
+        ports,
+    };
+    tokio::spawn(task.run(wait));
+}
+
+/// One `session/resume` past the socket loop: everything the spawned task
+/// needs to deliver the snapshot, and to answer for it if the delivery never
+/// returns.
+struct ResumeTask {
+    request: JsonRpcRequest,
+    request_id: Option<RequestId>,
+    session_id: Option<String>,
+    ctx: Arc<AppCtx>,
+    connection: Arc<FacadeConnection>,
+    ports: Arc<dyn ResumePort>,
+}
+
+impl ResumeTask {
+    async fn run(self, wait: Option<SessionLockWait>) {
         let _guard = match wait {
             Some(wait) => Some(wait.guard().await),
             None => None,
         };
+        let ResumeTask {
+            request,
+            request_id,
+            session_id,
+            ctx,
+            connection,
+            ports,
+        } = self;
         let claimed = session_id.clone();
         let (task_ctx, task_conn) = (Arc::clone(&ctx), Arc::clone(&connection));
         // Set the moment the reply goes out, so the failure path below knows
@@ -78,7 +107,7 @@ pub(super) fn start_resume(
                 cause: err.to_string(),
             });
         }
-    });
+    }
 }
 
 /// One `session/resume` delivery that never returned, as its failure path
