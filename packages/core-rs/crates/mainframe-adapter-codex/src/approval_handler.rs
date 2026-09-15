@@ -132,7 +132,7 @@ impl ApprovalHandler {
                     .unwrap_or_default();
                 input.insert("plan".to_string(), json!(plan_text));
                 input.insert("allowedPrompts".to_string(), json!([]));
-                options = Some(exit_plan_mode_options(&flat_labels));
+                options = Some(exit_plan_mode_options(&mainframe_request_id, &flat_labels));
             } else {
                 tool_name = "AskUserQuestion".to_string();
                 let question_text = questions
@@ -161,7 +161,11 @@ impl ApprovalHandler {
                     "options".to_string(),
                     raw_options.map(Value::Array).unwrap_or(Value::Null),
                 );
-                options = Some(ask_user_question_options(&question_text, &flat_labels));
+                options = Some(ask_user_question_options(
+                    &mainframe_request_id,
+                    &question_text,
+                    &flat_labels,
+                ));
             }
         } else {
             tracing::warn!(
