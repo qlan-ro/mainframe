@@ -3,6 +3,7 @@
 //! yet answered (todo #350, live-wiring pass).
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +14,24 @@ use mainframe_types::acp::update::{SessionUpdate, UpdateSessionNotification};
 use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
 use tracing::warn;
+
+/// A claim on a session's lock, taken on the socket loop and awaited from
+/// the spawned task that does the work.
+pub enum SessionLockWait {
+    /// Uncontended: the guard was available on the spot.
+    Held(tokio::sync::OwnedMutexGuard<()>),
+    /// Contended: already queued behind the holder, in arrival order.
+    Queued(std::pin::Pin<Box<dyn Future<Output = tokio::sync::OwnedMutexGuard<()>> + Send>>),
+}
+
+impl SessionLockWait {
+    pub async fn guard(self) -> tokio::sync::OwnedMutexGuard<()> {
+        match self {
+            SessionLockWait::Held(guard) => guard,
+            SessionLockWait::Queued(acquire) => acquire.await,
+        }
+    }
+}
 
 /// A gate delivered to a connection and not yet answered, keyed by the
 /// JSON-RPC id its `session/request_permission` traveled under.
@@ -83,6 +102,21 @@ impl FacadeConnection {
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
             prompt_locks: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Take a place in this session's lock queue NOW, for a caller that will
+    /// await the guard from a spawned task. Tokio's mutex is fair in first-poll
+    /// order, and a spawned task is first polled whenever the runtime gets to
+    /// it — so two frames spawned back to back could acquire in either order.
+    /// Polling once here, on the socket loop, makes arrival order the
+    /// acquisition order.
+    pub fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
+        let mut acquire = Box::pin(self.session_prompt_lock(session_id).lock_owned());
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        match acquire.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(guard) => SessionLockWait::Held(guard),
+            std::task::Poll::Pending => SessionLockWait::Queued(acquire),
         }
     }
 

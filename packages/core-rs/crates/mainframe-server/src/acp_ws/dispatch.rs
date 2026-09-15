@@ -155,9 +155,13 @@ fn spawn_session_method(
     connection: Arc<FacadeConnection>,
 ) {
     let negotiated = connection.is_negotiated();
+    // Queued here, on the socket loop, so arrival order is acquisition order.
+    let wait = session_id
+        .as_deref()
+        .map(|id| connection.enqueue_prompt_lock(id));
     tokio::spawn(async move {
-        let _guard = match session_id.as_deref() {
-            Some(id) => Some(connection.session_prompt_lock(id).lock_owned().await),
+        let _guard = match wait {
+            Some(wait) => Some(wait.guard().await),
             None => None,
         };
         let outcome = dispatch_with_prompt(frame, &daemon, &ports, negotiated).await;

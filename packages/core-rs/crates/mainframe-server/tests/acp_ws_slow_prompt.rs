@@ -52,7 +52,9 @@ async fn connect(facade: &support::facade::FacadeServer) -> WsClient {
 }
 
 /// A `session/cancel` for the SAME session as an in-flight `session/prompt`
-/// must not overtake it. The prompt is spawned off the socket loop, so a
+/// must not overtake it. Both frames are spawned, so this also pins that two
+/// spawned frames for one session acquire its lock in arrival order — the
+/// runtime's scheduling must not decide it. The prompt is spawned off the socket loop, so a
 /// cancel handled inline would reach `interrupt_chat` while the cold start
 /// was still inside `spawn()` — interrupting a turn that has not begun,
 /// which is a no-op, and then the turn runs on uncancelled. Both now take

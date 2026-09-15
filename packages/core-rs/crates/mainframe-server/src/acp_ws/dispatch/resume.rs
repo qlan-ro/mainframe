@@ -33,11 +33,15 @@ pub(super) fn start_resume(
     if let Some(session_id) = &session_id {
         ctx.facade_hub.begin_resume(connection, session_id);
     }
+    // Queued here, on the socket loop, so arrival order is acquisition order.
+    let wait = session_id
+        .as_deref()
+        .map(|id| connection.enqueue_prompt_lock(id));
     let ctx = Arc::clone(ctx);
     let connection = Arc::clone(connection);
     tokio::spawn(async move {
-        let _guard = match session_id.as_deref() {
-            Some(id) => Some(connection.session_prompt_lock(id).lock_owned().await),
+        let _guard = match wait {
+            Some(wait) => Some(wait.guard().await),
             None => None,
         };
         deliver_resume(request, session_id, &ctx, &connection, &ports).await;
