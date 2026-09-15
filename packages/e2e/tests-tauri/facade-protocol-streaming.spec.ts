@@ -15,13 +15,7 @@ import {
   cleanupHeadlessProject,
   type HeadlessProject,
 } from '../helpers/tauri/headless-chat.js';
-import {
-  sendJson,
-  nextJsonMessage,
-  collectFrames,
-  collectUntilQuiet,
-  closeSocket,
-} from '../helpers/tauri/raw-ws-client.js';
+import { sendJson, collectFrames, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
 import {
   promptRequest,
   resumeRequest,
@@ -130,11 +124,18 @@ test.describe('§facade-protocol streaming', () => {
 
   test('criterion 4: item ids are stable between the live stream and session/resume', async () => {
     const ws = await connectAndInitialize();
+    // Both readers attach BEFORE the request, for the reason the criteria-3
+    // test above documents: `nextJsonMessage` is one-shot, so every frame
+    // between it firing and a later collector attaching is lost. The daemon
+    // queues the resume reply and its whole replay in one burst, so that gap
+    // swallowed the entire replay.
+    const collected = collectUntilQuiet(ws, 1_500, 15_000);
+    const replies = collectFrames(ws);
     sendJson(ws, resumeRequest(2, chatId));
-    const reply = (await nextJsonMessage(ws)) as { result?: unknown; error?: unknown };
+    const reply = (await replies.next((f) => f['id'] === 2)) as { result?: unknown; error?: unknown };
     expect(reply.error).toBeUndefined();
 
-    const replayFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    const replayFrames = updates(await collected);
     await closeSocket(ws);
 
     const liveIds = itemIds(liveFrames);
@@ -151,24 +152,27 @@ test.describe('§facade-protocol streaming', () => {
     const cursorId = orderedIds[0];
 
     const ws = await connectAndInitialize();
+    const replies = collectFrames(ws);
+    const partial = collectUntilQuiet(ws, 1_500, 15_000);
     sendJson(ws, resumeRequest(2, chatId, { type: 'item', itemId: cursorId }));
-    const reply = (await nextJsonMessage(ws)) as {
+    const reply = (await replies.next((f) => f['id'] === 2)) as {
       result?: { _meta?: Record<string, { fullReplay?: boolean }> };
     };
     expect(reply.result?._meta?.['_mainframe.dev']?.fullReplay).toBeUndefined();
 
-    const partialFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    const partialFrames = updates(await partial);
     const partialIds = itemIds(partialFrames);
     expect(partialIds.has(cursorId!)).toBe(false);
     for (const id of partialIds) expect(itemIds(liveFrames)).toContain(id);
 
     // Unknown cursor: full replay, flagged, no error (criterion 9's fallback).
+    const full = collectUntilQuiet(ws, 1_500, 15_000);
     sendJson(ws, resumeRequest(3, chatId, { type: 'item', itemId: 'no-such-item' }));
-    const fullReply = (await nextJsonMessage(ws)) as {
+    const fullReply = (await replies.next((f) => f['id'] === 3)) as {
       result?: { _meta?: Record<string, { fullReplay?: boolean }> };
     };
     expect(fullReply.result?._meta?.['_mainframe.dev']?.fullReplay).toBe(true);
-    const fullFrames = updates(await collectUntilQuiet(ws, 1_500, 15_000));
+    const fullFrames = updates(await full);
     await closeSocket(ws);
     expect(itemIds(fullFrames)).toEqual(itemIds(liveFrames));
   });

@@ -10,6 +10,7 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
+use mainframe_adapter_mock::MockCliAdapter;
 use serde_json::{Value, json};
 use support::WsClient;
 use support::barrier_adapter::BarrierAdapter;
@@ -228,4 +229,44 @@ async fn a_resume_waits_for_its_sessions_prompt_while_the_loop_keeps_answering()
         resumed.get("result").is_some(),
         "the resume must complete once the prompt releases the session, got {resumed}"
     );
+}
+
+/// The `session/resume` reply precedes every frame of its own replay. The
+/// client resets its accumulator when the reply resolves, so a replay frame
+/// that arrived first would be wiped — and since T-review the whole burst is
+/// queued from a spawned task, which is exactly where that order could slip.
+#[tokio::test]
+async fn a_resume_reply_precedes_every_frame_of_its_own_replay() {
+    let facade = spawn_facade_server_with(Arc::new(MockCliAdapter::default()), 5_000).await;
+    let chat = facade.chat_id.clone();
+    let mut ws = connect(&facade).await;
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0", "id": 7, "method": "session/resume",
+        "params": { "sessionId": chat, "cwd": "/tmp" }
+    }))
+    .await;
+
+    // Everything the resume produces, in wire order.
+    let mut seen: Vec<Value> = Vec::new();
+    let reply_at = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let frame = ws.read_event().await;
+            let is_reply = frame["id"] == json!(7);
+            seen.push(frame);
+            if is_reply {
+                return seen.len() - 1;
+            }
+        }
+    })
+    .await
+    .expect("the resume must reply");
+
+    assert_eq!(
+        reply_at, 0,
+        "no frame may precede the reply on this socket: {seen:?}"
+    );
+    // And the replay does follow it, so the ordering above is not vacuous.
+    let trailing = read_until(&mut ws, |v| v["method"] == json!("session/update")).await;
+    assert_eq!(trailing["params"]["sessionId"], json!(chat));
 }
