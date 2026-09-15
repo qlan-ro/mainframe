@@ -95,17 +95,12 @@ test.describe('§plan gate clear-context', () => {
     expect(replayed).not.toContain(PROMPT);
     expect(replayed).toContain(POST_CLEAR_ANSWER);
 
-    // UI half: the pre-approval turn is gone and the restart's auto-sent turn is
-    // what the thread now holds. That turn is asserted through its ANSWER, not a
-    // user bubble. TODO(bug): the auto-sent "Implement the following plan:" prompt
-    // gets enrolled in `queuedRefs` — the chat is still `Working`, because the
-    // pre-approval turn is killed mid-flight and never produces an `onResult` —
-    // and `mock-cli` replays a uuid-carrying prompt without ever calling
-    // `on_queued_processed`, so the ref is never retired, the encoder keeps
-    // dropping the message (D1), and every later send stacks behind it as
-    // "Queued · Nth in line". The real CLI's replay ack retires the ref, so this
-    // is a mock-fidelity gap in `mainframe-adapter-mock/src/session_trait.rs`,
-    // not a façade defect — but it is why no user bubble is asserted here.
+    // UI half: the pre-approval turn is gone and the restart's auto-sent turn is a
+    // plan bubble (UserMessage strips the "Implement the following plan:" prefix and
+    // renders PlanBubble in its place) plus its answer — never a queued badge. The
+    // mock's kill() reports on_exit like the real CLI, so the daemon is idle first.
+    await expect(page.getByTestId('chat-plan-bubble').filter({ hasText: 'Add a greet function' })).toHaveCount(1);
+    await expect(page.getByTestId('chat-queued-message')).toHaveCount(0);
     await expect(thread.assistantMessages().filter({ hasText: PRE_CLEAR_ANSWER })).toHaveCount(0);
     await expect(thread.userMessages().filter({ hasText: PROMPT })).toHaveCount(0);
     await expect(thread.assistantMessages().filter({ hasText: POST_CLEAR_ANSWER })).toHaveCount(1);
