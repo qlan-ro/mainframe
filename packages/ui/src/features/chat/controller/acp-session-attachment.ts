@@ -20,6 +20,7 @@ import type {
 import type { GapListener, ReplayCursor } from '../../../lib/daemon/acp-client';
 import type { PromptRequest, PromptResponse, ResumeSessionResponse } from '@qlan-ro/mainframe-types';
 import type { ChatStateEvent } from './chat-thread-state';
+import { ResyncRetry } from './acp-resync-retry';
 
 const ResumeMetaSchema = z
   .object({ itemCount: z.number().int().optional(), fullReplay: z.boolean().optional() })
@@ -60,7 +61,8 @@ export interface AcpSessionAttachmentHost {
  * Connect/replay half of `AcpSessionPlane`: attach, reattach, gap resume,
  * dormancy detach/reactivate, and the empty-refresh guard.
  *
- * Two independent bits of state (D2, todo #350 T33):
+ * Two independent bits of state (D2, todo #350 T33), plus `resyncRetry`,
+ * which bounds the re-replay a `_mainframe.dev/resync` asks for (T40):
  *  - `client` — bound as soon as a session is loaded, active or not. Prompt/
  *    cancel/reply need only this, so they work from a dormant chat too
  *    (`requireClient()` never checks subscription).
@@ -76,6 +78,11 @@ export class AcpSessionAttachment {
   private subscribed = false;
   /** Survives a detach — distinguishes a genuinely first-ever attach (full replay) from a switch-back (cursor resume). */
   private hasAttached = false;
+  /** The daemon pushes a resync after a failed resume, so the re-replay it asks for has to be bounded (T40). */
+  private readonly resyncRetry = new ResyncRetry(
+    () => this.reattach(),
+    () => this.host.getChatId(),
+  );
 
   constructor(private readonly host: AcpSessionAttachmentHost) {}
 
@@ -126,6 +133,7 @@ export class AcpSessionAttachment {
   /** Drop this session's live stream (D2 dormancy) — tells the daemon, stops listening, keeps `client` bound for prompt/cancel/reply. */
   detach(): void {
     if (!this.subscribed) return;
+    this.resyncRetry.cancel();
     this.client?.detach(this.host.getChatId());
     this.detachListeners();
     this.subscribed = false;
@@ -168,6 +176,7 @@ export class AcpSessionAttachment {
   }
 
   dispose(): void {
+    this.resyncRetry.cancel();
     this.detachListeners();
     this.subscribed = false;
     this.client = null;
@@ -215,7 +224,7 @@ export class AcpSessionAttachment {
         // Cache eviction, NOT a wipe (spec: distinct from
         // transcript_cleared) — re-replay without blanking the reducer's
         // transcript first, or the thread flashes empty mid-conversation.
-        this.reattach().catch((error: unknown) => console.warn('[acp-session] reattach after resync failed', error));
+        this.resyncRetry.request();
       }),
       client.onGap(() => void this.resumeFromGap()),
     );
@@ -229,6 +238,8 @@ export class AcpSessionAttachment {
   private async resume(cursor: ReplayCursor, opts: { bypassGuard?: boolean } = {}): Promise<void> {
     const client = this.requireClient();
     const response = await client.resume(this.host.getChatId(), '', cursor);
+    // Any successful round-trip — gap, reactivation, attach — ends a resync failure streak.
+    this.resyncRetry.reset();
     const meta = ResumeMetaSchema.safeParse(response._meta?.[MAINFRAME_META_NAMESPACE]);
     const itemCount = meta.success ? (meta.data.itemCount ?? null) : null;
     const isFullReplay = cursor.type === 'start' || (meta.success && meta.data.fullReplay === true);
