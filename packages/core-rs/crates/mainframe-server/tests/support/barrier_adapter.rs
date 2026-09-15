@@ -5,6 +5,7 @@
 //! Every other method is a trivial success stub: the test that uses this
 //! adapter only cares about the spawn barrier.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
@@ -19,8 +20,15 @@ use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
+/// One `interrupt()` call, recorded with whether the blocked `spawn()` had
+/// already returned when it arrived — the ordering a cancel racing its own
+/// prompt turns on.
+pub type InterruptLog = Arc<Mutex<Vec<bool>>>;
+
 pub struct BarrierAdapter {
     gate: Arc<Mutex<Option<tokio::sync::oneshot::Receiver<()>>>>,
+    spawned: Arc<AtomicBool>,
+    interrupts: InterruptLog,
 }
 
 impl BarrierAdapter {
@@ -30,9 +38,16 @@ impl BarrierAdapter {
         (
             Self {
                 gate: Arc::new(Mutex::new(Some(rx))),
+                spawned: Arc::new(AtomicBool::new(false)),
+                interrupts: Arc::new(Mutex::new(Vec::new())),
             },
             tx,
         )
+    }
+
+    /// Share the interrupt log before the adapter is handed to the registry.
+    pub fn interrupt_log(&self) -> InterruptLog {
+        Arc::clone(&self.interrupts)
     }
 }
 
@@ -63,6 +78,8 @@ impl Adapter for BarrierAdapter {
             id: options.mainframe_chat_id,
             project_path: options.project_path,
             gate: Arc::clone(&self.gate),
+            spawned: Arc::clone(&self.spawned),
+            interrupts: Arc::clone(&self.interrupts),
         })
     }
     fn kill_all(&self) {}
@@ -72,6 +89,8 @@ struct BarrierSession {
     id: String,
     project_path: String,
     gate: Arc<Mutex<Option<tokio::sync::oneshot::Receiver<()>>>>,
+    spawned: Arc<AtomicBool>,
+    interrupts: InterruptLog,
 }
 
 impl AdapterSession for BarrierSession {
@@ -100,6 +119,7 @@ impl AdapterSession for BarrierSession {
             if let Some(rx) = rx {
                 let _ = rx.await;
             }
+            self.spawned.store(true, Ordering::SeqCst);
             Ok(AdapterProcess {
                 id: self.id.clone(),
                 adapter_id: "barrier-cli".to_string(),
@@ -133,7 +153,13 @@ impl AdapterSession for BarrierSession {
         Box::pin(async { Ok(()) })
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(async { Ok(()) })
+        Box::pin(async {
+            self.interrupts
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(self.spawned.load(Ordering::SeqCst));
+            Ok(())
+        })
     }
     fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async { Ok(()) })

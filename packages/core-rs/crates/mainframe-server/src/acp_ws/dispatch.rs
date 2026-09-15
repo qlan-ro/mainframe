@@ -25,10 +25,12 @@ use gate_answers::handle_gate_answer;
 /// Handle one inbound text frame. `Some` is a reply the socket loop writes
 /// directly, covering every arm except `session/resume` (pushes its own
 /// reply through the connection channel so the replay updates cannot
-/// overtake it) and `session/prompt` (T10: spawned, so its reply goes
-/// through the connection channel too and may trail frames its own request
-/// caused — `sendPrompt` on the client only reads `_meta.position` from it,
-/// and run state comes from the reducer, not reply ordering).
+/// overtake it) and the two session methods that run off the loop —
+/// `session/prompt` and `session/cancel` (T10, and the ordering below: a
+/// prompt's reply goes through the connection channel and may trail frames
+/// its own request caused; `sendPrompt` on the client only reads
+/// `_meta.position` from it, and run state comes from the reducer, not reply
+/// ordering).
 pub async fn handle_inbound(
     text: &str,
     daemon: &DaemonInfo,
@@ -62,33 +64,53 @@ pub async fn handle_inbound(
             None
         }
         InboundFrame::Request(request) if request.method == "session/prompt" => {
-            handle_prompt(request, daemon, ports, ctx, connection);
+            let session_id = params_session_id(request.params.as_ref());
+            handle_session_method(
+                InboundFrame::Request(request),
+                session_id,
+                daemon,
+                ports,
+                ctx,
+                connection,
+            );
             None
         }
-        frame => dispatch_fallback(frame, daemon, &ports, ctx, connection).await,
+        InboundFrame::Notification(note) if note.method == "session/cancel" => {
+            let session_id = params_session_id(note.params.as_ref());
+            handle_session_method(
+                InboundFrame::Notification(note),
+                session_id,
+                daemon,
+                ports,
+                ctx,
+                connection,
+            );
+            None
+        }
+        frame => dispatch_fallback(frame, daemon, &ports, connection).await,
     }
 }
 
-/// `session/prompt`: attach-on-send stays inline, ahead of the spawn — T35
-/// pins this ordering (a connection observes the session from the moment it
-/// sends, not from whenever the spawned task gets scheduled) — but behind the
-/// negotiation gate, so a peer whose prompt is about to be refused never gets
-/// a stream (spec decision 32).
-fn handle_prompt(
-    request: JsonRpcRequest,
+/// `session/prompt` and `session/cancel`: attach-on-send stays inline, ahead
+/// of the spawn — T35 pins this ordering (a connection observes the session
+/// from the moment it sends, not from whenever the spawned task gets
+/// scheduled) — but behind the negotiation gate, so a peer whose call is
+/// about to be refused never gets a stream (spec decision 32).
+fn handle_session_method(
+    frame: InboundFrame,
+    session_id: Option<String>,
     daemon: &DaemonInfo,
     ports: ManagerPorts,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
 ) {
-    let session_id = params_session_id(request.params.as_ref());
     if connection.is_negotiated()
         && let Some(session_id) = &session_id
     {
         ctx.facade_hub.attach(connection, session_id);
     }
-    spawn_prompt(
-        request,
+    spawn_session_method(
+        frame,
         session_id,
         daemon.clone(),
         ports,
@@ -96,23 +118,17 @@ fn handle_prompt(
     );
 }
 
-/// Everything besides `session/resume`, a gate answer, `session_detach`, and
-/// `session/prompt` — `initialize`, `session/cancel`, and the malformed/
-/// unknown-method errors. Attaches on a `session/cancel` the same as a
-/// prompt (todo #350: a client observes a session it cancels), and marks
-/// the connection negotiated on a successful `initialize` reply.
+/// What is left once `session/resume`, a gate answer, `session_detach`, and
+/// the two spawned session methods are peeled off: `initialize` and the
+/// malformed/unknown-method errors. None of them touch a session, so all of
+/// them stay inline; a successful `initialize` marks the connection
+/// negotiated.
 async fn dispatch_fallback(
     frame: InboundFrame,
     daemon: &DaemonInfo,
     ports: &ManagerPorts,
-    ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
 ) -> Option<String> {
-    if connection.is_negotiated()
-        && let Some(session_id) = cancel_session_id(&frame)
-    {
-        ctx.facade_hub.attach(connection, &session_id);
-    }
     let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
     if outcome.negotiated {
         connection.mark_negotiated();
@@ -120,14 +136,18 @@ async fn dispatch_fallback(
     outcome.reply
 }
 
-/// `session/prompt` alone runs off the socket-loop task (R3.6, plan decision
-/// 5): a cold-chat start's adapter spawn can take seconds, and inlining it
-/// would stall every other frame on this connection — heartbeats, a cancel
-/// for a different chat, another chat's `session/update`. Concurrent prompts
-/// for the SAME session still serialize (`session_prompt_lock`), since queue
-/// position depends on enqueue order.
-fn spawn_prompt(
-    request: JsonRpcRequest,
+/// The session methods run off the socket-loop task (R3.6, plan decision 5):
+/// a cold-chat start's adapter spawn can take seconds, and inlining it would
+/// stall every other frame on this connection — heartbeats, a call for a
+/// different chat, another chat's `session/update`.
+///
+/// Both take the SAME per-session lock, so calls for one session run in
+/// arrival order: concurrent prompts serialize because queue position
+/// depends on enqueue order, and a cancel cannot overtake the prompt it
+/// means to stop — inline, it reached `interrupt_chat` while the cold start
+/// was still inside `spawn()`, interrupting a turn that had not begun.
+fn spawn_session_method(
+    frame: InboundFrame,
     session_id: Option<String>,
     daemon: DaemonInfo,
     ports: ManagerPorts,
@@ -135,32 +155,15 @@ fn spawn_prompt(
 ) {
     let negotiated = connection.is_negotiated();
     tokio::spawn(async move {
-        let lock = session_id
-            .as_deref()
-            .map(|id| connection.session_prompt_lock(id));
-        let _guard = match &lock {
-            Some(lock) => Some(lock.lock().await),
+        let _guard = match session_id.as_deref() {
+            Some(id) => Some(connection.session_prompt_lock(id).lock_owned().await),
             None => None,
         };
-        let frame = InboundFrame::Request(request);
         let outcome = dispatch_with_prompt(frame, &daemon, &ports, negotiated).await;
         if let Some(reply) = outcome.reply {
             connection.send_raw(reply);
         }
     });
-}
-
-/// Attach-on-cancel: a negotiated connection that cancels a session observes
-/// it from then on (todo #350). Only the cancel notification reaches here —
-/// the `session/prompt` arm reads its own id off the request, since it must
-/// hand the same id to the spawned dispatch.
-fn cancel_session_id(frame: &InboundFrame) -> Option<String> {
-    match frame {
-        InboundFrame::Notification(note) if note.method == "session/cancel" => {
-            params_session_id(note.params.as_ref())
-        }
-        _ => None,
-    }
 }
 
 /// The `sessionId` every session method carries in its params.
