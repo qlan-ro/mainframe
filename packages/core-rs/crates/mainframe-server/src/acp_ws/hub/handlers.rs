@@ -14,6 +14,7 @@ use mainframe_types::acp::update::{StopReason, UsageUpdate};
 use mainframe_types::adapter::{ContextUsage, ControlRequest};
 use tracing::{debug, warn};
 
+use super::super::facade_conn::StreamOp;
 use super::FacadeHub;
 use super::fanout::RawFrameKind;
 
@@ -39,13 +40,11 @@ fn usage_update(usage: &ContextUsage) -> UsageUpdate {
 
 impl FacadeHub {
     pub(super) fn handle_turn_started(&self, chat_id: &str) {
-        self.for_each_attached_session(chat_id, |stream, now| stream.on_turn_started(now));
+        self.apply_stream_op(chat_id, StreamOp::TurnStarted);
     }
 
     pub(super) fn handle_turn_finished(&self, chat_id: &str, reason: TurnStopReason) {
-        self.for_each_attached_session(chat_id, |stream, now| {
-            stream.on_turn_finished(stop_reason(reason), now)
-        });
+        self.apply_stream_op(chat_id, StreamOp::TurnFinished(stop_reason(reason)));
     }
 
     /// Encode only when someone is listening: this handler runs on the sink
@@ -100,8 +99,7 @@ impl FacadeHub {
     }
 
     pub(super) fn handle_retry(&self, chat_id: &str, attempt: i64, reason: Option<String>) {
-        let marker = RetryMarker { attempt, reason };
-        self.for_each_attached_stream(chat_id, |stream| stream.on_retry(marker.clone()));
+        self.apply_stream_op(chat_id, StreamOp::Retry(RetryMarker { attempt, reason }));
     }
 
     pub(super) fn handle_queue_changed(
@@ -135,8 +133,7 @@ impl FacadeHub {
     }
 
     pub(super) fn handle_usage(&self, chat_id: &str, usage: &ContextUsage) {
-        let update = usage_update(usage);
-        self.for_each_attached_session(chat_id, |stream, now| stream.on_usage(update.clone(), now));
+        self.apply_stream_op(chat_id, StreamOp::Usage(usage_update(usage)));
     }
 
     /// Chat teardown: nothing else ever clears the gate registry's per-chat

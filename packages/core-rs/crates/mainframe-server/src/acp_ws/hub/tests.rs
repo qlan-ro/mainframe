@@ -4,6 +4,7 @@
 //! cases to `resume_race_tests.rs` (todo #350, plan task 37, R2.13) — all
 //! three share this file's fixture builders via `use super::*`.
 
+mod awaiting_seed_lifecycle_tests;
 mod awaiting_seed_tests;
 mod gate_tests;
 mod notification_tests;

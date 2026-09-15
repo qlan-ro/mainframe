@@ -20,7 +20,7 @@ use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
 use tracing::debug;
 
-use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
+use super::facade_conn::{FacadeConnection, SessionSlot, StreamOp, rpc_id_string};
 
 mod fanout;
 mod handlers;
@@ -103,8 +103,7 @@ impl FacadeHub {
         connection.locked_sessions().insert(
             chat_id.to_string(),
             SessionSlot::AwaitingSeed {
-                latest: None,
-                raws: Vec::new(),
+                pending: Vec::new(),
             },
         );
     }
@@ -216,15 +215,13 @@ pub struct ResumeSeed<'a> {
     pub redelivered_gate: Option<&'a str>,
 }
 
-/// Fold everything a `session/resume` buffered while its snapshot was in
-/// flight into the freshly seeded `stream`: the latest revision as a diff
-/// against the seed, then the raw frames in arrival order behind it, so a
-/// gate raise still cannot precede the tool call it belongs to.
+/// Replay everything buffered while the snapshot was in flight through the
+/// freshly seeded `stream`, in arrival order, so each op emits the frames it
+/// would have emitted live — behind the replay, never folded into it.
 ///
-/// A buffered gate raise is dropped instead of forwarded in two cases. The
-/// one `redelivered_gate` names, because the replay just sent that same
-/// request itself. And any raise the connection no longer holds as pending:
-/// only
+/// Two buffered gate raises are dropped instead. The one `redelivered_gate`
+/// names, because the replay just sent that same request itself. And any
+/// raise the connection no longer holds as pending: only
 /// `handle_gate_resolved` removes a delivered gate, and it pushes
 /// `gate_resolved` immediately (criterion 8) — forwarding the raise behind
 /// that would leave the client a live gate the daemon has already closed.
@@ -234,25 +231,24 @@ fn drain_into(
     connection: &FacadeConnection,
     redelivered_gate: Option<&str>,
 ) -> Vec<ThrottledFrame> {
-    let SessionSlot::AwaitingSeed { latest, raws } = buffered else {
+    let SessionSlot::AwaitingSeed { pending } = buffered else {
         return Vec::new();
     };
     let now = now_ms();
-    let mut frames = latest
-        .map(|latest| stream.on_revision(&latest, now))
-        .unwrap_or_default();
-    for raw in raws {
-        // Takes the gates lock while the sessions lock is held. Every path
-        // that nests the two takes `sessions` first — the replay's
-        // `deliver_gate` does too — so the order cannot cycle.
-        if raw
-            .gate_rpc_id
-            .as_deref()
-            .is_some_and(|id| Some(id) == redelivered_gate || connection.peek_gate(id).is_none())
+    let mut frames = Vec::new();
+    for op in pending {
+        if let StreamOp::Raw {
+            gate_rpc_id: Some(id),
+            ..
+        } = &op
+            // Takes the gates lock while the sessions lock is held. Every path
+            // that nests the two takes `sessions` first — the replay's
+            // `deliver_gate` does too — so the order cannot cycle.
+            && (Some(id.as_str()) == redelivered_gate || connection.peek_gate(id).is_none())
         {
             continue;
         }
-        frames.extend(stream.push_raw(raw.payload, now));
+        frames.extend(fanout::run_op(stream, op, now));
     }
     frames
 }

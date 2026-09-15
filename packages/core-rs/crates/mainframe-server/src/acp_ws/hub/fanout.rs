@@ -1,9 +1,11 @@
 //! Per-event fan-out: who receives a chat-surface event, and the critical
-//! section it is delivered in (todo #350, T5/T6). Every helper here computes
-//! its frames and sends them inside the SAME `locked_sessions()` guard
-//! (R1.2), so a diff can never be computed under the lock and enqueued after
-//! it, where a second diff for the same session could interleave ahead of it.
+//! section it is delivered in (todo #350, T5/T6). Every event becomes one
+//! [`StreamOp`], applied inside the SAME `locked_sessions()` guard it was
+//! computed under (R1.2) — so a diff can never be computed under the lock
+//! and enqueued after it, where a second diff for the same session could
+//! interleave ahead of it — or buffered there for a resume in flight.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use mainframe_acp::stream::SessionStream;
@@ -11,7 +13,7 @@ use mainframe_acp::{EncodedItem, ThrottledFrame};
 use serde::Serialize;
 use tracing::warn;
 
-use super::super::facade_conn::{BufferedRaw, FacadeConnection, SessionSlot};
+use super::super::facade_conn::{FacadeConnection, SessionSlot, StreamOp};
 use super::{FacadeHub, now_ms};
 
 impl FacadeHub {
@@ -23,75 +25,23 @@ impl FacadeHub {
             .collect()
     }
 
-    /// Visit every attached, SEEDED session's stream under that connection's
-    /// own lock. A session still `AwaitingSeed` (a resume in flight) is
-    /// skipped, same as an unattached one — only
-    /// [`Self::on_display_revision`] and [`Self::push_raw_to_attached`]
-    /// buffer for that state.
-    fn with_live_streams(
-        &self,
-        chat_id: &str,
-        mut visit: impl FnMut(&FacadeConnection, &mut SessionStream),
-    ) {
+    /// Apply one op to every attached session: through the seeded stream when
+    /// there is one, or into the resume buffer when the snapshot is still in
+    /// flight, for [`FacadeHub::reset_session`] to drain behind the replay.
+    pub(super) fn apply_stream_op(&self, chat_id: &str, op: StreamOp) {
+        let now = now_ms();
         for connection in self.attached_connections(chat_id) {
             let mut sessions = connection.locked_sessions();
-            if let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) {
-                visit(&connection, stream);
-            }
+            deliver_op(&connection, chat_id, &mut sessions, op.clone(), now);
         }
     }
 
-    /// Run `per_stream` against every attached, seeded session and send the
-    /// updates it produces — diff and publish inside the same per-connection
-    /// lock (T5, R1.2), so a diff can never be computed under the lock and
-    /// enqueued after it, where a second diff for the same session could
-    /// interleave ahead of it.
-    pub(super) fn for_each_attached_session(
-        &self,
-        chat_id: &str,
-        mut per_stream: impl FnMut(&mut SessionStream, i64) -> Vec<ThrottledFrame>,
-    ) {
-        let now = now_ms();
-        self.with_live_streams(chat_id, |connection, stream| {
-            for frame in per_stream(stream, now) {
-                connection.send_throttled(chat_id, frame);
-            }
-        });
-    }
-
-    /// Update every attached, seeded session's stream state without emitting
-    /// anything — a retry marker rides out on the next update the stream
-    /// produces, it does not send a frame of its own.
-    pub(super) fn for_each_attached_stream(
-        &self,
-        chat_id: &str,
-        mut per_stream: impl FnMut(&mut SessionStream),
-    ) {
-        self.with_live_streams(chat_id, |_connection, stream| per_stream(stream));
-    }
-
-    /// [`ChatSurfaceEvent::DisplayRevision`]'s handler: unlike the other
-    /// event kinds, a connection `AwaitingSeed` for this chat must not be
-    /// skipped — its latest item snapshot is buffered so
-    /// [`Self::reset_session`] can diff it against the seed it is about to
-    /// receive (T5, R2.9), instead of the revision vanishing for a
-    /// reconnecting client.
+    /// [`ChatSurfaceEvent::DisplayRevision`]'s handler. A revision buffered
+    /// during a resume replaces the one already waiting: only the latest
+    /// snapshot matters, and diffing it against the seed is what
+    /// [`FacadeHub::reset_session`] does with it (T5, R2.9).
     pub(super) fn on_display_revision(&self, chat_id: &str, items: &[EncodedItem]) {
-        let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            match sessions.get_mut(chat_id) {
-                Some(SessionSlot::Live(stream)) => {
-                    for frame in stream.on_revision(items, now) {
-                        connection.send_throttled(chat_id, frame);
-                    }
-                }
-                Some(SessionSlot::AwaitingSeed { latest, .. }) => {
-                    *latest = Some(items.to_vec());
-                }
-                None => {}
-            }
-        }
+        self.apply_stream_op(chat_id, StreamOp::Revision(items.to_vec()));
     }
 
     /// Serialize one out-of-band notification and fan it out. Serializing a
@@ -115,37 +65,78 @@ impl FacadeHub {
     }
 
     /// A raw out-of-band notification (a gate raise, queue snapshot,
-    /// transcript clear, compaction phase) for every attached connection —
-    /// through the SAME per-session throttle FIFO content updates ride
-    /// (R2.11), so it cannot arrive ahead of a still-buffered update it
-    /// depends on. A connection mid-resume has no seeded stream to queue
-    /// against, so its frames are buffered in the slot and drained by
-    /// [`Self::reset_session`] behind the replay instead; `gate_rpc_id`
-    /// identifies a gate raise there, which the replay may redeliver itself.
+    /// transcript clear, compaction phase) — through the SAME per-session
+    /// throttle FIFO content updates ride (R2.11), so it cannot arrive ahead
+    /// of a still-buffered update it depends on. `gate_rpc_id` identifies a
+    /// gate raise, which a resume's replay may redeliver itself.
     pub(super) fn push_raw_to_attached(
         &self,
         chat_id: &str,
         payload: String,
         gate_rpc_id: Option<&str>,
     ) {
-        let now = now_ms();
-        for connection in self.attached_connections(chat_id) {
-            let mut sessions = connection.locked_sessions();
-            match sessions.get_mut(chat_id) {
-                Some(SessionSlot::Live(stream)) => {
-                    for frame in stream.push_raw(payload.clone(), now) {
-                        connection.send_throttled(chat_id, frame);
-                    }
-                }
-                Some(SessionSlot::AwaitingSeed { raws, .. }) => raws.push(BufferedRaw {
-                    payload: payload.clone(),
-                    gate_rpc_id: gate_rpc_id.map(str::to_string),
-                }),
-                // The connection dropped this chat between the snapshot
-                // `attached_connections` took and this lock; the frame has
-                // nowhere to go. /* expected */
-                None => {}
+        self.apply_stream_op(
+            chat_id,
+            StreamOp::Raw {
+                payload,
+                gate_rpc_id: gate_rpc_id.map(str::to_string),
+            },
+        );
+    }
+}
+
+/// One op against one connection's slot: applied to a seeded stream, or
+/// buffered for the resume in flight. Takes the already-locked session map,
+/// so a caller that must do something else under the same lock (the gate
+/// raise registers before it delivers) can.
+pub(super) fn deliver_op(
+    connection: &FacadeConnection,
+    chat_id: &str,
+    sessions: &mut HashMap<String, SessionSlot>,
+    op: StreamOp,
+    now: i64,
+) {
+    match sessions.get_mut(chat_id) {
+        Some(SessionSlot::Live(stream)) => {
+            for frame in run_op(stream, op, now) {
+                connection.send_throttled(chat_id, frame);
             }
+        }
+        Some(SessionSlot::AwaitingSeed { pending }) => buffer_op(pending, op),
+        // The connection dropped this chat between the snapshot
+        // `attached_connections` took and this lock; the op has nowhere to
+        // go. /* expected */
+        None => {}
+    }
+}
+
+/// Buffer `op` in arrival order — except a revision, which replaces any
+/// revision already waiting rather than queueing behind it.
+fn buffer_op(pending: &mut Vec<StreamOp>, op: StreamOp) {
+    if matches!(op, StreamOp::Revision(_))
+        && let Some(slot) = pending
+            .iter_mut()
+            .find(|held| matches!(held, StreamOp::Revision(_)))
+    {
+        *slot = op;
+        return;
+    }
+    pending.push(op);
+}
+
+/// The one interpreter for a [`StreamOp`], used live and on the resume drain.
+/// A retry marker emits nothing of its own — it rides the next upsert the
+/// stream produces (T16).
+pub(super) fn run_op(stream: &mut SessionStream, op: StreamOp, now: i64) -> Vec<ThrottledFrame> {
+    match op {
+        StreamOp::Revision(items) => stream.on_revision(&items, now),
+        StreamOp::Raw { payload, .. } => stream.push_raw(payload, now),
+        StreamOp::TurnStarted => stream.on_turn_started(now),
+        StreamOp::TurnFinished(reason) => stream.on_turn_finished(reason, now),
+        StreamOp::Usage(usage) => stream.on_usage(usage, now),
+        StreamOp::Retry(marker) => {
+            stream.on_retry(marker);
+            Vec::new()
         }
     }
 }

@@ -22,29 +22,38 @@ pub struct PendingGate {
     pub request: ControlRequest,
 }
 
-/// One raw out-of-band frame held for the duration of a resume's snapshot
-/// await. A gate raise carries the rpc id it was delivered under, so the
-/// drain can recognize the gate the replay redelivers on its own and not
-/// hand the client two live requests for one decision.
-pub(super) struct BufferedRaw {
-    pub payload: String,
-    pub gate_rpc_id: Option<String>,
+/// One thing that happens to a session's stream. Applied immediately on a
+/// seeded stream; buffered in arrival order while a resume's snapshot is in
+/// flight, then replayed through the freshly seeded stream (T5/T6, R2.9).
+/// A gate raise carries the rpc id it was delivered under, so the drain can
+/// recognize the gate the replay redelivers on its own and not hand the
+/// client two live requests for one decision.
+#[derive(Clone)]
+pub(super) enum StreamOp {
+    Revision(Vec<mainframe_acp::EncodedItem>),
+    Raw {
+        payload: String,
+        gate_rpc_id: Option<String>,
+    },
+    TurnStarted,
+    TurnFinished(mainframe_types::acp::update::StopReason),
+    Usage(mainframe_types::acp::update::UsageUpdate),
+    Retry(mainframe_types::acp::extensions::RetryMarker),
 }
 
 /// A connection's per-session slot. `AwaitingSeed` covers the window a
 /// `session/resume` spends awaiting its snapshot (T5, R2.9): a live revision
 /// racing that await has nowhere seeded to diff against yet, so its item
-/// snapshot is buffered — overwritten by any later one, since only the
-/// latest matters — instead of diffed and instead of dropped. Raw
-/// out-of-band frames raised in the same window are buffered too, in arrival
-/// order, or they would reach the client ahead of the replay they predate.
-/// `reset_session` drains both once the stream is seeded.
+/// snapshot is buffered — a later revision replaces the earlier one in
+/// place, since only the latest matters — instead of diffed and instead of
+/// dropped. Everything else raised in the window (raw frames, turn
+/// lifecycle, usage, retry markers) buffers alongside it in arrival order,
+/// or it would either reach the client ahead of the replay it predates or
+/// vanish with the window. `reset_session` drains the lot once the stream is
+/// seeded.
 pub(super) enum SessionSlot {
     Live(SessionStream),
-    AwaitingSeed {
-        latest: Option<Vec<mainframe_acp::EncodedItem>>,
-        raws: Vec<BufferedRaw>,
-    },
+    AwaitingSeed { pending: Vec<StreamOp> },
 }
 
 pub struct FacadeConnection {
