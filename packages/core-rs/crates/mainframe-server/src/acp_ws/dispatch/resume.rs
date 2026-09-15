@@ -66,24 +66,31 @@ pub(super) fn start_resume(
     });
 }
 
-/// A resume whose delivery never returned. The reply settles the client's
-/// promise, which nothing else would: heartbeats are connection-level, so
-/// its watchdog sees no gap, and a first attach has not attached yet, so its
-/// own gap resume returns early. The resync is what sends it back for a
-/// fresh one.
+/// A resume whose delivery never returned. The resync sends the client back
+/// for a fresh one, which nothing else would: heartbeats are
+/// connection-level, so its watchdog sees no gap, and a first attach has not
+/// attached yet, so its own gap resume returns early.
+///
+/// An unseeded claim also owes the client a reply — its promise is still
+/// pending, and it has no other end. A seeded one does not: `reset_session`
+/// sends the success reply as it seeds, so the promise has settled and a
+/// second response for that id could only be dropped.
 fn fail_resume(connection: &FacadeConnection, id: Option<RequestId>, session_id: Option<&str>) {
-    connection.send_json(&rpc::error_response(
-        id,
-        rpc::internal_error("resume failed"),
-    ));
+    let seeded = session_id.is_some_and(|session_id| session_is_seeded(connection, session_id));
+    if !seeded {
+        connection.send_json(&rpc::error_response(
+            id,
+            rpc::internal_error("resume failed"),
+        ));
+    }
     let Some(session_id) = session_id else {
         return;
     };
-    // Sent directly rather than through the hub's per-session throttle: the
-    // slot this resume claimed holds no seeded stream to queue against, and
-    // the buffer it does hold is about to be dropped.
+    // Sent directly rather than through the hub's per-session throttle: an
+    // unseeded slot has no stream to queue against, and the buffer it does
+    // hold is about to be dropped.
     connection.send_json(&mainframe_acp::resync_notification(session_id));
-    if !session_is_seeded(connection, session_id) {
+    if !seeded {
         connection.forget_chat(session_id);
     }
 }

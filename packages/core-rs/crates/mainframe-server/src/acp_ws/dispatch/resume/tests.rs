@@ -86,10 +86,12 @@ async fn a_failure_after_the_seed_keeps_the_session_attached() {
 
     fail_resume(&connection, Some(RequestId::Number(7)), Some("chat-1"));
 
-    assert_eq!(next_frame(&mut rx).await["error"]["code"], json!(-32603));
-    assert_eq!(
-        next_frame(&mut rx).await["method"],
-        json!("_mainframe.dev/resync")
+    let resync = next_frame(&mut rx).await;
+    assert_eq!(resync["method"], json!("_mainframe.dev/resync"));
+    assert!(resync.get("id").is_none(), "a notification answers nobody");
+    assert!(
+        rx.try_recv().is_err(),
+        "the seed already replied; a second response for that id could only be dropped"
     );
     assert!(connection.is_attached("chat-1"));
 }
