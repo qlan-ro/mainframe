@@ -112,7 +112,12 @@ impl FacadeConnection {
     /// Polling once here, on the socket loop, makes arrival order the
     /// acquisition order.
     pub fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
-        let mut acquire = Box::pin(self.session_prompt_lock(session_id).lock_owned());
+        // `unconstrained`: tokio's `Acquire::poll` checks the coop budget
+        // before the semaphore, so a spent budget would report Pending with
+        // no waiter registered — queued in name, last in line in fact.
+        let mut acquire = Box::pin(tokio::task::coop::unconstrained(
+            self.session_prompt_lock(session_id).lock_owned(),
+        ));
         let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
         match acquire.as_mut().poll(&mut cx) {
             std::task::Poll::Ready(guard) => SessionLockWait::Held(guard),

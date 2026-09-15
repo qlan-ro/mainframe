@@ -58,3 +58,64 @@ fn forget_chat_keeps_a_prompt_lock_an_in_flight_prompt_still_holds() {
     connection.forget_chat("chat-1");
     assert!(!holds(&connection, "chat-1"));
 }
+
+/// Spend this task's cooperative-scheduling budget without yielding: every
+/// ready `consume_budget` poll burns one unit, and the first `Pending` means
+/// the budget is gone.
+fn exhaust_coop_budget() {
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    for _ in 0..1024 {
+        let mut consume = Box::pin(tokio::task::coop::consume_budget());
+        if consume.as_mut().poll(&mut cx).is_pending() {
+            return;
+        }
+    }
+    panic!("coop budget never ran out");
+}
+
+/// `Acquire::poll` runs the coop check BEFORE it touches the semaphore, so on
+/// a task with no budget left an unconstrained-less `lock_owned()` reports
+/// `Pending` without registering a waiter — "queued" with no place taken,
+/// which is exactly the race `enqueue_prompt_lock` exists to remove. A
+/// replay burst drains `outbound.recv()` without yielding, so budget 0 is
+/// reachable on the socket loop.
+#[tokio::test]
+async fn a_lock_queued_with_no_coop_budget_still_takes_its_place() {
+    let (connection, _rx) = connection();
+    let connection = Arc::new(connection);
+    let held = connection.session_prompt_lock("chat-1").lock_owned().await;
+
+    exhaust_coop_budget();
+    assert!(
+        !tokio::task::coop::has_budget_remaining(),
+        "the case under test needs a task whose coop budget is spent"
+    );
+    let wait = connection.enqueue_prompt_lock("chat-1");
+    assert!(
+        matches!(wait, SessionLockWait::Queued(_)),
+        "a held lock cannot be acquired on the spot"
+    );
+
+    let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (first, second) = (Arc::clone(&order), Arc::clone(&order));
+
+    // The later arrival polls first: only a waiter registered by the enqueue
+    // above can keep it behind.
+    let later = connection.session_prompt_lock("chat-1");
+    let latecomer = tokio::spawn(async move {
+        let _guard = later.lock_owned().await;
+        second.lock().unwrap().push("later");
+    });
+    tokio::task::yield_now().await;
+    let queued = tokio::spawn(async move {
+        let _guard = wait.guard().await;
+        first.lock().unwrap().push("queued");
+    });
+    tokio::task::yield_now().await;
+
+    drop(held);
+    queued.await.unwrap();
+    latecomer.await.unwrap();
+
+    assert_eq!(*order.lock().unwrap(), vec!["queued", "later"]);
+}
