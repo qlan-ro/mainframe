@@ -5,9 +5,13 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::ControlBehavior;
+use mainframe_types::chat::ChatMessage;
+use mainframe_types::events::DaemonEvent;
 
 use super::*;
+use crate::event_handler::EventChatUpdate;
 use crate::test_support::{FakeSession, test_chat};
 
 #[derive(Default)]
