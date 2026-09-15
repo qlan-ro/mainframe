@@ -25,6 +25,7 @@ async fn tunnel_server(stub: TunnelStub) -> TestServer {
         auth_secret: None,
         tunnel: Some(stub),
         port: DAEMON_PORT,
+        ..TestServerOptions::default()
     })
     .await
 }

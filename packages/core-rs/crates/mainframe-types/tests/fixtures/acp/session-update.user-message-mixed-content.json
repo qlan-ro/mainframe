@@ -1,0 +1,20 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "user_message",
+    "messageId": "msg_user_01",
+    "content": [
+      {
+        "type": "text",
+        "text": "What does this screenshot show?"
+      },
+      {
+        "type": "image",
+        "data": "iVBORw0KGgoAAAANSUhEUg==",
+        "mimeType": "image/png",
+        "uri": "file:///tmp/screenshot.png"
+      }
+    ]
+  }
+}

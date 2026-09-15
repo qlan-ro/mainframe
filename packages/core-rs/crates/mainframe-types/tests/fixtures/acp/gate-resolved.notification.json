@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/gate_resolved",
+  "params": {
+    "sessionId": "chat_1",
+    "requestId": "gate-req_1"
+  }
+}

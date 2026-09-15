@@ -99,6 +99,7 @@ fn exit_plan_response(
         message: None,
         execution_mode,
         clear_context,
+        scope: None,
     }
 }
 

@@ -13,7 +13,9 @@ use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod chat_surface_wiring;
 mod plan_mode;
+mod resume_snapshot;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
@@ -29,6 +31,8 @@ pub(crate) struct StoreDeps {
     transcript_present: Mutex<Option<bool>>,
     /// When `Some`, `create_session` yields a session whose `load_history` returns it.
     history: Mutex<Option<Vec<ChatMessage>>>,
+    /// Counts `load_history` across every session this fake hands out.
+    history_loads: Arc<AtomicUsize>,
     /// Records every path `trust_workspace` persisted, for assertion.
     trusted_paths: Mutex<Vec<String>>,
     /// When `Some`, `write_workspace_trust` fails with this message instead of
@@ -203,6 +207,7 @@ impl ChatManagerDeps for StoreDeps {
         self.history.lock().unwrap().clone().map(|history| {
             Arc::new(crate::test_support::FakeSession {
                 history,
+                history_loads: Some(Arc::clone(&self.history_loads)),
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
@@ -595,11 +600,6 @@ async fn writes_to_cli_immediately_with_uuid_and_records_queued_ref() {
     assert!(calls[0].1.is_some(), "sendMessage carried a uuid");
     drop(calls);
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
-    assert!(
-        deps.events()
-            .iter()
-            .any(|e| matches!(e, DaemonEvent::MessageQueued { .. }))
-    );
 }
 
 #[tokio::test]
@@ -640,11 +640,6 @@ async fn cancel_success_removes_the_bubble_and_emits_cancelled() {
         std::slice::from_ref(&r.uuid)
     );
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 0);
-    assert!(
-        deps.events().iter().any(
-            |e| matches!(e, DaemonEvent::MessageQueuedCancelled { uuid, .. } if *uuid == r.uuid)
-        )
-    );
 }
 
 #[tokio::test]
@@ -968,19 +963,9 @@ async fn provider_command_first_message_sets_the_fallback_title() {
     .unwrap();
 
     let events = deps.events();
-    let added: Vec<&ChatMessage> = events
-        .iter()
-        .filter_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. } => Some(message),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        added.len(),
-        1,
-        "the user's message is still stored and emitted"
-    );
-    let msg = added[0];
+    let added = mgr.get_messages("chat-1").await;
+    assert_eq!(added.len(), 1, "the user's message is still stored");
+    let msg = &added[0];
     assert_eq!(msg.r#type, ChatMessageType::User);
     assert!(
         msg.metadata.is_none(),
@@ -1292,14 +1277,7 @@ async fn plain_text_with_attachments_keeps_prefix_images_and_transient_metadata(
     };
     assert_eq!(session.images_calls.lock().unwrap()[0], 1);
 
-    let added: Vec<ChatMessage> = deps
-        .events()
-        .into_iter()
-        .filter_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. } => Some(message),
-            _ => None,
-        })
-        .collect();
+    let added = mgr.get_messages("c1").await;
     assert_eq!(added.len(), 1);
     let msg = &added[0];
     let texts: Vec<&str> = msg

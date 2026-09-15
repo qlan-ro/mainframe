@@ -64,7 +64,7 @@ pub fn handle_notification(
                 handle_token_usage(p, state);
             }
         }
-        "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state),
+        "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state, None),
         "item/started" => {
             if let Ok(p) = serde_json::from_value::<ItemStartedParams>(params.clone()) {
                 handle_item_started(p, sink, state);

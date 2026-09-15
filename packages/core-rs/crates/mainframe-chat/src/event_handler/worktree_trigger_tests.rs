@@ -143,7 +143,7 @@ fn a_bash_worktree_add_command_triggers_one_rescan_after_a_successful_result() {
         )],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", false)]);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
     assert_eq!(
@@ -161,7 +161,7 @@ fn a_mixed_case_worktree_command_matches_case_insensitively() {
         vec![tool_use("tu-1", "Bash", Some("GIT WORKTREE LIST"))],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", false)]);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
 }
@@ -175,7 +175,7 @@ fn the_bash_tool_alias_is_recognised_too() {
         vec![tool_use("tu-1", "BashTool", Some("git worktree list"))],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", false)]);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
 }
@@ -186,7 +186,7 @@ fn an_unrelated_bash_command_never_triggers_a_rescan() {
     let sink = sink(deps.clone());
 
     sink.on_message(vec![tool_use("tu-1", "Bash", Some("ls -la"))], None);
-    sink.on_tool_result(vec![tool_result("tu-1", false)]);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 0);
 }
@@ -200,7 +200,7 @@ fn a_failed_worktree_command_result_does_not_trigger_a_rescan() {
         vec![tool_use("tu-1", "Bash", Some("git worktree add ../wt"))],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", true)]);
+    sink.on_tool_result(vec![tool_result("tu-1", true)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 0);
 }
@@ -211,7 +211,7 @@ fn an_enter_worktree_tool_use_triggers_one_rescan_after_a_successful_result() {
     let sink = sink(deps.clone());
 
     sink.on_message(vec![tool_use("tu-1", "EnterWorktree", None)], None);
-    sink.on_tool_result(vec![tool_result("tu-1", false)]);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
 }
@@ -228,7 +228,10 @@ fn two_worktree_tool_uses_resolved_in_one_batch_trigger_only_one_rescan() {
         ],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", false), tool_result("tu-2", false)]);
+    sink.on_tool_result(
+        vec![tool_result("tu-1", false), tool_result("tu-2", false)],
+        None,
+    );
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
 }

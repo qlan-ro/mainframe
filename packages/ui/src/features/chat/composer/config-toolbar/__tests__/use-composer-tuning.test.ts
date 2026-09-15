@@ -15,7 +15,7 @@
  * ----------------
  * 1. `@assistant-ui/react` → stub `useAuiState` to return a fixed isRunning
  *    value (false by default).
- * 2. `../runtime/use-chat-thread-runtime` → stub `useChatExtras` to return a
+ * 2. `../runtime/chat-extras` → stub `useChatExtras` to return a
  *    fake extras whose `state.chatConfig` carries the chat fixture.
  * 3. `@/lib/api/chats` → vi.fn() stubs for `setChatTuning` and `setChatConfig`.
  * 4. `@/lib/api/adapters` → stub `getAdapters` (silenced; not under test here).
@@ -39,7 +39,7 @@ vi.mock('@/lib/api/settings', () => ({
   getProviderSettings: vi.fn().mockResolvedValue({ claude: { defaultEffort: 'high', defaultUltracode: 'true' } }),
 }));
 
-vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: vi.fn(),
 }));
 
@@ -71,7 +71,7 @@ vi.mock('@/features/sessions/new-thread/initialize-draft', () => ({
 // ---------------------------------------------------------------------------
 
 import { useComposerTuning, useProviderDefaults } from '../use-composer-tuning';
-import { useChatExtras } from '../../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../../runtime/chat-extras';
 import { useAuiState } from '@assistant-ui/react';
 import { setChatTuning, setChatConfig } from '@/lib/api/chats';
 import type { Chat, AdapterInfo } from '@qlan-ro/mainframe-types';

@@ -57,20 +57,6 @@ export interface MainframeMessageMeta {
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };
 }
 
-/** One item in the _TaskProgress synthetic tool args — the app-tauri-local contract. */
-export interface TaskProgressItem {
-  readonly toolCallId: string;
-  readonly toolName: string;
-  readonly args: Record<string, unknown>;
-  readonly result: unknown;
-  readonly isError?: boolean;
-}
-
-/** Typed args for the synthetic tool-call parts (built in the projection, read by the cards). */
-export interface TaskProgressArgs {
-  readonly items: ReadonlyArray<TaskProgressItem>;
-}
-
 const EMPTY_META: MainframeMessageMeta = Object.freeze({});
 
 /** The message's mainframe metadata as one typed, stable object. */

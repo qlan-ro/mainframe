@@ -11,14 +11,14 @@
  *   only a reload makes a live-detected PR visible. The event is subscriber-
  *   gated — it arrives only for the chat the user has open — so background
  *   sessions keep relying on the daemon's rescan when their chat is loaded.
- * chat.notification / permission.requested / waiting-or-terminal chat.updated
- * → markUnread. A chat.notification carrying kind 'attention_request' (Claude's
- *   PushNotification tool) additionally raises an OS notification via onOsNotify;
- *   the other kinds keep their unread-only behavior.
- * permission.resolved is a no-op: the subsequent chat.updated → reload re-carries
- *   displayStatus and clears the "waiting" badge (Spike 0.3 / S4). If 0.3 shows
- *   the daemon does NOT re-emit chat.updated, add `case 'permission.resolved':
- *   this.deps.onReload(); return;`.
+ * chat.notification / waiting-or-terminal chat.updated → markUnread. A gate
+ *   raised on any chat arrives as chat.updated with displayStatus 'waiting'
+ *   (the daemon re-broadcasts the enriched chat on every gate raise), so the
+ *   badge needs no dedicated permission frame; gate resolution likewise
+ *   re-carries displayStatus via chat.updated → reload. A chat.notification
+ *   carrying kind 'attention_request' (Claude's PushNotification tool)
+ *   additionally raises an OS notification via onOsNotify; the other kinds
+ *   keep their unread-only behavior.
  * background_task.started / .updated / .ended → reload. A background-only
  *   window (only a subagent running, no foreground turn) never emits
  *   chat.updated, so without this the sidebar badge freezes at idle even
@@ -90,10 +90,6 @@ export class SessionListRouter {
 
       case 'chat.notification':
         if (event.kind === 'attention_request') this.deps.onOsNotify?.(event.title, event.body);
-        this.deps.onMarkUnread(event.chatId);
-        return;
-
-      case 'permission.requested':
         this.deps.onMarkUnread(event.chatId);
         return;
 

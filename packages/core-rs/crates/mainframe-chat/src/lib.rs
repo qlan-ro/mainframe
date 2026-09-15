@@ -18,10 +18,10 @@
 pub mod attachment_processor;
 pub mod attention_request;
 pub mod chat_manager;
+pub mod chat_surface;
 pub mod config_manager;
 pub mod context_tracker;
 pub mod degraded_recovery;
-pub mod display_emitter;
 pub mod event_handler;
 pub mod external_session_service;
 pub mod idle_scanner;

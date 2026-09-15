@@ -296,6 +296,30 @@ fn ask_user_question_falls_back_to_empty_string() {
         respond,
     );
     let request = rec.permissions()[0].clone();
+    // T19, R3.5: a bare `behavior: "deny"` with no message/updatedInput is
+    // now a genuine decline (`reject_on_request_user_input_sends_no_answer`
+    // pins that shape) — this test's own case, an allow carrying no real
+    // answer data, still falls back to an empty string.
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "toolName": "AskUserQuestion",
+        }),
+    );
+    assert_eq!(first_answer(&calls, "q5"), "");
+}
+
+#[test]
+fn reject_on_request_user_input_sends_no_answer() {
+    let (handler, calls, request) = setup_ask(
+        "q1",
+        "Proceed?",
+        json!([[{ "label": "Yes" }], [{ "label": "No" }]]),
+        20,
+    );
     resolve(
         &handler,
         json!({
@@ -305,5 +329,120 @@ fn ask_user_question_falls_back_to_empty_string() {
             "toolName": "AskUserQuestion",
         }),
     );
-    assert_eq!(first_answer(&calls, "q5"), "");
+    assert_eq!(calls.lock().unwrap()[0].1, json!({ "answers": {} }));
+}
+
+#[test]
+fn a_plain_option_answer_selects_a_real_question_choice() {
+    let (handler, calls, request) = setup_ask(
+        "q1",
+        "Proceed?",
+        json!([[{ "label": "Yes" }], [{ "label": "No" }]]),
+        21,
+    );
+    let options = request
+        .options
+        .as_ref()
+        .expect("requestUserInput must carry adapter-supplied options");
+    let yes = options
+        .iter()
+        .find(|o| o.name == "Yes")
+        .expect("a Yes option for the offered choice");
+    let updated_input = yes
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("_mainframe.dev"))
+        .and_then(|ns| ns.get("updatedInput"))
+        .cloned()
+        .expect("the Yes option must carry its own updatedInput answer");
+
+    // Mirrors what `gates::parse_answer` (mainframe-acp) does for a plain
+    // `{outcome:"selected", optionId}` answer: map the option's own kind to
+    // a behavior and copy its meta's updatedInput onto the response.
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "toolName": "AskUserQuestion",
+            "updatedInput": updated_input,
+        }),
+    );
+    assert_eq!(
+        calls.lock().unwrap()[0].1,
+        json!({ "answers": { "q1": { "answers": ["Yes"] } } })
+    );
+}
+
+#[test]
+fn accept_for_session_reaches_codex() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "item/commandExecution/requestApproval",
+        &json!({ "itemId": "tc9", "command": "cargo test" }),
+        RequestId::Number(22),
+        respond,
+    );
+    let request = rec.permissions()[0].clone();
+
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "allow",
+            "scope": "session",
+        }),
+    );
+
+    assert_eq!(
+        calls.lock().unwrap()[0].1,
+        json!({ "decision": "acceptForSession" })
+    );
+}
+
+/// Codex can send a plan-exit prompt whose options carry no labels. The
+/// ExitPlanMode exemption from the clean decline exists because that branch
+/// reads `behavior` to pick between the real "yes"/"no" labels — with no
+/// labels to pick, it fell through to an empty answer string, which Codex
+/// takes for a genuine choice.
+#[test]
+fn plan_exit_without_labels_declines_cleanly() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    handler.set_plan_context(PlanContext {
+        plan_mode: true,
+        current_turn_plan: Some(CurrentTurnPlan {
+            id: "p1".to_string(),
+            text: "PLAN".to_string(),
+        }),
+    });
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "item/tool/requestUserInput",
+        &json!({
+            "toolCallId": "tc1",
+            "questions": [{ "id": "q1", "question": "Exit plan mode?" }],
+            "options": [[{}], [{}]],
+        }),
+        RequestId::Number(7),
+        respond,
+    );
+    let request = rec.permissions()[0].clone();
+    assert_eq!(request.tool_name, "ExitPlanMode");
+
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "deny",
+            "toolName": "ExitPlanMode",
+        }),
+    );
+
+    assert_eq!(calls.lock().unwrap()[0].1, json!({ "answers": {} }));
 }

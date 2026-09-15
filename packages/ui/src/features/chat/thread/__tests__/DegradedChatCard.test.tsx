@@ -17,7 +17,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 
 let __chatConfig: Partial<Chat> | null = null;
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => (__chatConfig === null ? undefined : { state: { chatConfig: __chatConfig } }),
 }));
 

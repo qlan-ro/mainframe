@@ -1,0 +1,5 @@
+{"dir":"out","method":"onInit","args":["e2e-plan-clear-sess-1"],"delayMs":0}
+{"dir":"in","method":"sendMessage","args":["PRE-CLEAR-PROMPT: sketch a greeting helper"],"delayMs":0}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"PRE-CLEAR-ANSWER: read utils.ts before planning."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":60}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_planclear_exit","name":"ExitPlanMode","input":{"plan":"# Add a greet function to utils.ts\n\n## Plan\nAppend `export function greet(name: string) { return \"Hello \" + name; }` to utils.ts.\n"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":100}
+{"dir":"out","method":"onPermission","args":[{"requestId":"e2e-plan-clear-req-1","toolName":"ExitPlanMode","toolUseId":"toolu_planclear_exit","input":{"plan":"# Add a greet function to utils.ts\n\n## Plan\nAppend `export function greet(name: string) { return \"Hello \" + name; }` to utils.ts.\n"},"suggestions":[]}],"delayMs":140}

@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ retryMessage: vi.fn() }),
   useChatQueuedMessages: () => [],
 }));

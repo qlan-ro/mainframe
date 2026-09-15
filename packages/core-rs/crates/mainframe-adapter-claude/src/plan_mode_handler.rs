@@ -7,6 +7,7 @@
 
 use mainframe_adapter_api::{
     AdapterError, BoxFuture, PlanActionContext, PlanChatUpdate, PlanModeActionHandler,
+    clear_context_and_restart,
 };
 use mainframe_types::adapter::{ControlBehavior, ControlResponse};
 use mainframe_types::events::DaemonEvent;
@@ -43,14 +44,6 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            let exec = response.execution_mode.unwrap_or(ExecutionMode::Default);
-            let plan = response
-                .updated_input
-                .as_ref()
-                .and_then(|m| m.get("plan"))
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-
             let recovered_plan_path = ctx.recover_latest_plan_file();
             if let Some(path) = recovered_plan_path
                 && ctx.add_plan_file(path)
@@ -67,7 +60,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                     message: Some(
                         "User chose to clear context and start a new session.".to_string(),
                     ),
-                    ..response
+                    ..response.clone()
                 };
                 ctx.session_respond_to_permission(deny).await?;
                 ctx.permissions_shift();
@@ -77,25 +70,7 @@ impl PlanModeActionHandler for ClaudePlanModeHandler {
                 ctx.permissions_shift();
             }
 
-            ctx.update_chat(PlanChatUpdate {
-                plan_mode: Some(false),
-                permission_mode: Some(exec),
-                clear_claude_session_id: true,
-            });
-            ctx.emit_chat_updated();
-
-            ctx.clear_messages();
-            ctx.clear_display_cache();
-            ctx.emit_event(DaemonEvent::MessagesCleared {
-                chat_id: ctx.chat_id(),
-            });
-
-            ctx.start_chat().await?;
-            if let Some(plan) = plan {
-                ctx.send_message(format!("Implement the following plan:\n\n{plan}"))
-                    .await?;
-            }
-            Ok(())
+            clear_context_and_restart(&response, ctx).await
         })
     }
 
@@ -145,6 +120,7 @@ mod tests {
         shifts: usize,
         cleared_messages: usize,
         cleared_display: usize,
+        transcript_cleared: usize,
         started: usize,
         sent: Vec<String>,
     }
@@ -215,8 +191,11 @@ mod tests {
         fn clear_messages(&self) {
             self.rec().cleared_messages += 1;
         }
-        fn clear_display_cache(&self) {
+        fn clear_display_state(&self) {
             self.rec().cleared_display += 1;
+        }
+        fn notify_transcript_cleared(&self) {
+            self.rec().transcript_cleared += 1;
         }
         fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
             self.rec().started += 1;
@@ -239,6 +218,7 @@ mod tests {
             message: None,
             execution_mode: Some(ExecutionMode::AcceptEdits),
             clear_context: None,
+            scope: None,
         }
     }
 
@@ -308,11 +288,7 @@ mod tests {
                 && u.plan_mode == Some(false)
                 && u.permission_mode == Some(ExecutionMode::AcceptEdits)
         }));
-        assert!(
-            rec.events
-                .iter()
-                .any(|e| matches!(e, DaemonEvent::MessagesCleared { chat_id } if chat_id == "c1"))
-        );
+        assert_eq!(rec.transcript_cleared, 1);
         assert_eq!(rec.started, 1);
         assert_eq!(rec.cleared_messages, 1);
         assert_eq!(rec.cleared_display, 1);

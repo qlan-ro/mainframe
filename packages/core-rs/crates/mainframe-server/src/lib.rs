@@ -10,6 +10,7 @@
 // the threshold rather than when the code changes.
 #![allow(clippy::result_large_err)]
 
+pub mod acp_ws;
 pub mod async_err;
 pub mod automations_deps;
 pub mod chat_deps;
@@ -32,6 +33,7 @@ pub mod websocket;
 pub mod ws_file_watch;
 pub mod ws_schemas;
 
+pub use acp_ws::FacadeHub;
 pub use automations_deps::build_automations_engine;
 pub use chat_deps::build_chat_manager;
 pub use chat_seams::{

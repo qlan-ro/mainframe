@@ -389,7 +389,7 @@ test.describe('§sessions-rows Working + waiting status dot during a gate-held r
     await expect(dot).toHaveAttribute('aria-label', 'waiting', { timeout: 5_000 });
 
     // Clean up: deny so the mock session ends cleanly before teardown.
-    await page.locator('[data-testid="chat-permission-deny"]').click();
+    await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
     await expect(dot).toHaveAttribute('aria-label', 'idle', { timeout: 10_000 });
   });
@@ -425,10 +425,9 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
   // Previously: a backgrounded chat's `chat.notification` WS event never reached
   // the client — `broadcastEvent` scoped delivery to `client.subscriptions.has(chatId)`,
   // and per-chat subscriptions are torn down on deactivation, so the unread dot
-  // never lit up. Fixed by the product-bug-fix campaign: `chat.notification` (and
-  // `permission.requested`) are now connection-global (websocket.ts
-  // `CONNECTION_GLOBAL_EVENT_TYPES`), reaching every client regardless of which
-  // chat it's currently subscribed to.
+  // never lit up. Fixed by the product-bug-fix campaign: `chat.notification` is
+  // now connection-global (websocket.rs `CONNECTION_GLOBAL_EVENT_TYPES`),
+  // reaching every client regardless of which chat it's currently subscribed to.
   test('marks the row unread once a response lands while a different chat is active, and clears it on reselect', async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);

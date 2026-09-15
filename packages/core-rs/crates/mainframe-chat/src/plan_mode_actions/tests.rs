@@ -24,7 +24,8 @@ impl PlanHost for FakeHost {
     fn emit_event(&self, event: DaemonEvent) {
         self.events.lock().unwrap().push(event);
     }
-    fn clear_display_cache(&self, _chat_id: &str) {}
+    fn clear_display_state(&self, _chat_id: &str) {}
+    fn notify_transcript_cleared(&self, _chat_id: &str) {}
     fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -71,6 +72,7 @@ fn request(request_id: &str) -> ControlRequest {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 

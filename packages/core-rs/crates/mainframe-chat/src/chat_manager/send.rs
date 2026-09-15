@@ -1,5 +1,7 @@
 //! The dispatch half of `send_message`: command vs plain text, and the
-//! first-message titling both share.
+//! first-message titling both share. The queued-turn bookkeeping
+//! (`queued_message_metadata`, `record_queued_ref`) lives in the sibling
+//! `send_queue.rs` (todo #350, plan task 37).
 
 use super::*;
 
@@ -83,10 +85,6 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(chat_id, message.clone());
-        self.emit(DaemonEvent::MessageAdded {
-            chat_id: chat_id.to_string(),
-            message: message.clone(),
-        });
         self.event_handler.emit_display(chat_id);
         if attachment_ids.map(|a| !a.is_empty()).unwrap_or(false) {
             self.emit(DaemonEvent::ContextUpdated {
@@ -135,73 +133,6 @@ impl ChatManager {
         }
     }
 
-    fn queued_message_metadata(
-        &self,
-        post: &Arc<Mutex<ActiveChat>>,
-        session: &Arc<dyn AdapterSession>,
-        attachment_previews: &[serde_json::Value],
-    ) -> (HashMap<String, serde_json::Value>, Option<String>) {
-        let adapter_acks_replay = session.supports_replay_ack();
-        let is_queued = adapter_acks_replay
-            && post
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .process_state
-                == Some(Some(ProcessState::Working));
-        let mut transient_metadata: HashMap<String, serde_json::Value> = HashMap::new();
-        if is_queued {
-            transient_metadata.insert("queued".to_string(), serde_json::json!(true));
-        }
-        if !attachment_previews.is_empty() {
-            transient_metadata.insert(
-                "attachments".to_string(),
-                serde_json::Value::Array(attachment_previews.to_vec()),
-            );
-        }
-        let message_uuid = if is_queued {
-            Some(nanoid::nanoid!())
-        } else {
-            None
-        };
-        if let Some(u) = &message_uuid {
-            transient_metadata.insert("uuid".to_string(), serde_json::json!(u));
-        }
-        (transient_metadata, message_uuid)
-    }
-
-    fn record_queued_ref(
-        &self,
-        chat_id: &str,
-        message: &ChatMessage,
-        uuid: String,
-        content: &str,
-        attachment_ids: Option<&[String]>,
-    ) {
-        let r = QueuedMessageRef {
-            message_id: message.id.clone(),
-            chat_id: chat_id.to_string(),
-            uuid: uuid.clone(),
-            content: content.to_string(),
-            attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
-            timestamp: message.timestamp.clone(),
-        };
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(uuid.clone(), r.clone());
-        self.emit(DaemonEvent::MessageQueued {
-            chat_id: chat_id.to_string(),
-            r#ref: r,
-        });
-        info!(
-            chat_id,
-            uuid,
-            message_id = message.id,
-            "message sent to CLI while busy (queued)"
-        );
-    }
-
     /// Command dispatch: store and emit the user's text, title the chat, hand the
     /// command to the adapter (wrapped for mainframe-source commands), mark working.
     pub(super) async fn dispatch_command(
@@ -212,6 +143,15 @@ impl ChatManager {
         chat_id: &str,
         content: &str,
     ) -> Result<(), SendError> {
+        // A command dispatched while another turn is already running (T17,
+        // R3.12) is not a turn start — a turn is already in progress. Only a
+        // command sent to a free chat opens one.
+        let was_working = post
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .chat
+            .process_state
+            == Some(Some(ProcessState::Working));
         self.store_user_message(
             chat_id,
             vec![MessageContent::Leaf(LeafContent::Text {
@@ -239,6 +179,18 @@ impl ChatManager {
         self.set_working(post, chat_id, &now);
         let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        // Commands are never queued behind a running turn, so acceptance
+        // (send_entry.rs) and start are the same moment — UNLESS a turn was
+        // already running: the command still bypasses the queue and runs
+        // immediately, but that turn already started, so re-announcing it
+        // would be a spurious running transition.
+        if !was_working {
+            self.event_handler.notify_chat_surface(
+                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                    chat_id: chat_id.to_string(),
+                },
+            );
+        }
         Ok(())
     }
 
@@ -286,6 +238,14 @@ impl ChatManager {
 
         if let Some(uuid) = message_uuid {
             self.record_queued_ref(chat_id, &message, uuid, content, attachment_ids);
+            // Queued: `TurnStarted` waits for the CLI to dequeue it
+            // (event_handler.rs's `on_queued_processed`).
+        } else {
+            self.event_handler.notify_chat_surface(
+                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+                    chat_id: chat_id.to_string(),
+                },
+            );
         }
         Ok(())
     }

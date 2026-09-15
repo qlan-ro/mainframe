@@ -1,0 +1,13 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": 2,
+    "info": {
+      "name": "mainframe-ui",
+      "version": "2.2.0"
+    }
+  }
+}

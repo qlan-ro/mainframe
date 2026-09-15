@@ -119,6 +119,8 @@ pub async fn load_history(session_id: &str, project_path: &str) -> Vec<ChatMessa
     let mut agent_tools: HashMap<String, Vec<MessageContent>> = HashMap::new();
     let mut subagent_tool_results: HashMap<String, MessageContent> = HashMap::new();
     let mut seen_uuids: HashSet<String> = HashSet::new();
+    // First-entry-per-API-message id claims (convert_history_entry doc).
+    let mut seen_api_message_ids: HashSet<String> = HashSet::new();
     // CLI 2.1.118+ subagent JSONLs omit parentToolUseID; the link lives on the
     // parent's tool_result via toolUseResult.agentId. Build that map while
     // walking the parent file so subagent processing can resolve the parent id.
@@ -210,7 +212,7 @@ pub async fn load_history(session_id: &str, project_path: &str) -> Vec<ChatMessa
                 continue;
             }
 
-            let msg = match convert_history_entry(&entry, session_id) {
+            let msg = match convert_history_entry(&entry, session_id, &mut seen_api_message_ids) {
                 Some(m) => m,
                 None => continue,
             };

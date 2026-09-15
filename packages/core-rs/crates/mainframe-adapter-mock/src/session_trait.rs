@@ -31,6 +31,12 @@ impl AdapterSession for ReplaySession {
         self.spawned.load(Ordering::SeqCst)
     }
 
+    /// Recordings ack a queued prompt with `on_queued_processed` once the running
+    /// turn ends, so the chat manager may enrol mock sends in `queuedRefs`.
+    fn supports_replay_ack(&self) -> bool {
+        true
+    }
+
     fn spawn(
         &self,
         _options: Option<SessionSpawnOptions>,
@@ -57,6 +63,15 @@ impl AdapterSession for ReplaySession {
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
             self.spawned.store(false, Ordering::SeqCst);
+            self.forget_queue();
+            // A killed CLI reports its exit, and that report is what runs the
+            // daemon's sweep: queued refs dropped, process state back to idle.
+            // Claude gets it from the dying child's waiter; a replay session has
+            // no process, so it says so itself — otherwise a chat restarted by
+            // the clear-context path still looks busy and strands every ref.
+            if let Some(sink) = self.sink() {
+                sink.on_exit(None);
+            }
             Ok(())
         })
     }
@@ -69,9 +84,19 @@ impl AdapterSession for ReplaySession {
         &self,
         _message: String,
         _images: Vec<ImageInput>,
-        _uuid: Option<String>,
+        uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
+            if let Some(uuid) = uuid {
+                if self.queue_prompt(uuid.clone()) {
+                    return Ok(());
+                }
+                // The daemon filed a queuedRef for this prompt before it knew the
+                // replay would start at once; nothing later would retire it.
+                if let Some(sink) = self.sink() {
+                    sink.on_queued_processed(&uuid);
+                }
+            }
             self.advance("sendMessage").await;
             Ok(())
         })
@@ -114,8 +139,8 @@ impl AdapterSession for ReplaySession {
         Box::pin(async { Ok(()) })
     }
 
-    fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        Box::pin(async { Ok(false) })
+    fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
+        Box::pin(async move { Ok(self.drop_queued_prompt(&uuid)) })
     }
 
     fn get_context_files(&self) -> ContextFiles {

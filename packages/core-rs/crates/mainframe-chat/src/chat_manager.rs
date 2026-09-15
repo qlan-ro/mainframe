@@ -81,6 +81,7 @@ mod lifecycle_api;
 mod reads;
 mod send;
 mod send_entry;
+mod send_queue;
 mod shared;
 mod update;
 
@@ -102,7 +103,10 @@ use shared::{
 };
 
 type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
-type QueuedRefs = Arc<Mutex<HashMap<String, QueuedMessageRef>>>;
+/// Insertion-ordered (FIFO): `queue_state` snapshots render in the order we
+/// iterate, so enqueue order IS the wire contract. Queues are tiny (a few
+/// prompts), so linear scans by uuid beat carrying an ordered-map dependency.
+type QueuedRefs = Arc<Mutex<Vec<QueuedMessageRef>>>;
 
 // ── ChatManager facade ───────────────────────────────────────────────────────
 

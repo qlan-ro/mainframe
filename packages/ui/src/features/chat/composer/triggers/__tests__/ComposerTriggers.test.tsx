@@ -22,7 +22,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
     port: 31415,
     state: { chatId: 'chat-1', chatConfig: { projectId: 'proj-1', adapterId: 'claude' } },

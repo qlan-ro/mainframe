@@ -294,10 +294,6 @@ async fn websocket_upgrade_completes_when_the_client_advertises_an_encoding() {
     ws.send_json(&serde_json::json!({ "type": "subscribe", "chatId": "c1" }))
         .await;
 
-    let queued_snapshot = ws.read_event().await;
-    assert_eq!(queued_snapshot["type"], "message.queued.snapshot");
-    assert_eq!(queued_snapshot["chatId"], "c1");
-
     let offer_snapshot = ws.read_event().await;
     assert_eq!(offer_snapshot["type"], "worktree.offer.snapshot");
     assert_eq!(offer_snapshot["chatId"], "c1");

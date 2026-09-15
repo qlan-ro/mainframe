@@ -7,12 +7,17 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{ControlRequest, ControlResponse, SessionSink};
-use mainframe_types::adapter::ControlBehavior;
+use mainframe_types::adapter::{ControlBehavior, PermissionScope};
 use nanoid::nanoid;
 use serde_json::{Value, json};
 
 use crate::event_mapper::CurrentTurnPlan;
 use crate::types::RequestId;
+
+mod approval_options;
+use approval_options::{
+    approval_triad, ask_user_question_options, exit_plan_mode_options, no_answerable_label,
+};
 
 /// `respond(id, result)` — the JSON-RPC reply callback captured per request.
 pub type RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync>;
@@ -70,16 +75,19 @@ impl ApprovalHandler {
         let mut input: HashMap<String, Value> = HashMap::new();
         let mut option_labels: Option<Vec<Vec<String>>> = None;
         let mut questions: Option<Vec<Value>> = None;
+        let options;
 
         if method == "item/commandExecution/requestApproval" {
             tool_name = "command_execution".to_string();
             tool_use_id = str_field(params, "itemId").unwrap_or_default();
             insert_if_present(&mut input, "command", params.get("command"));
             insert_if_present(&mut input, "cwd", params.get("cwd"));
+            options = Some(approval_triad());
         } else if method == "item/fileChange/requestApproval" {
             tool_name = "file_change".to_string();
             tool_use_id = str_field(params, "itemId").unwrap_or_default();
             insert_if_present(&mut input, "reason", params.get("reason"));
+            options = Some(approval_triad());
         } else if method == "item/tool/requestUserInput" {
             tool_use_id = str_field(params, "toolCallId")
                 .or_else(|| str_field(params, "itemId"))
@@ -107,6 +115,11 @@ impl ApprovalHandler {
                     .collect()
             });
 
+            let flat_labels: Vec<String> = option_labels
+                .as_ref()
+                .map(|groups| groups.iter().flatten().cloned().collect())
+                .unwrap_or_default();
+
             let plan_ctx = self.plan_context.lock().unwrap_or_else(|e| e.into_inner());
             let is_plan_exit = plan_ctx.plan_mode
                 && plan_ctx.current_turn_plan.is_some()
@@ -121,6 +134,7 @@ impl ApprovalHandler {
                     .unwrap_or_default();
                 input.insert("plan".to_string(), json!(plan_text));
                 input.insert("allowedPrompts".to_string(), json!([]));
+                options = Some(exit_plan_mode_options(&mainframe_request_id, &flat_labels));
             } else {
                 tool_name = "AskUserQuestion".to_string();
                 let question_text = questions
@@ -149,6 +163,11 @@ impl ApprovalHandler {
                     "options".to_string(),
                     raw_options.map(Value::Array).unwrap_or(Value::Null),
                 );
+                options = Some(ask_user_question_options(
+                    &mainframe_request_id,
+                    &question_text,
+                    &flat_labels,
+                ));
             }
         } else {
             tracing::warn!(
@@ -167,6 +186,7 @@ impl ApprovalHandler {
             input,
             suggestions: Vec::new(),
             decision_reason: None,
+            options,
         };
 
         self.pending
@@ -212,6 +232,23 @@ impl ApprovalHandler {
 
         // requestUserInput expects { answers: { [questionId]: { answers: string[] } } }
         if entry.method == "item/tool/requestUserInput" {
+            // A plain deny (T19, R3.5) — ExitPlanMode is exempt: its own
+            // branch below reads `behavior` to pick between the "yes"/"no"
+            // labels, which IS its real answer, not an absence of one. That
+            // needs labels to pick from; with none, the branch can only
+            // produce a blank answer Codex would take for a choice.
+            let picks_its_own_label =
+                entry.tool_name == "ExitPlanMode" && !no_answerable_label(&flat_labels(&entry));
+            if !picks_its_own_label && response.behavior == ControlBehavior::Deny {
+                tracing::info!(
+                    module = "codex:approvals",
+                    request_id = %response.request_id,
+                    tool_name = %entry.tool_name,
+                    "codex user input declined"
+                );
+                (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
+                return;
+            }
             let answer_string = choose_request_user_input_answer(&entry, response);
             let mut answers = serde_json::Map::new();
             for qid in collect_question_ids(&entry, response) {
@@ -232,10 +269,12 @@ impl ApprovalHandler {
             return;
         }
 
-        let decision = if response.behavior == ControlBehavior::Allow {
-            "accept"
-        } else {
-            "decline"
+        // T19, R3.2: session-scoped allow reaches Codex's own "stop asking
+        // this session" decision, distinct from a one-off accept.
+        let decision = match (response.behavior, response.scope) {
+            (ControlBehavior::Allow, Some(PermissionScope::Session)) => "acceptForSession",
+            (ControlBehavior::Allow, _) => "accept",
+            (ControlBehavior::Deny, _) => "decline",
         };
         tracing::info!(module = "codex:approvals", request_id = %response.request_id, decision, "codex approval resolved");
         (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }));
@@ -294,6 +333,16 @@ fn collect_question_ids(entry: &PendingApproval, response: &ControlResponse) -> 
         .collect()
 }
 
+/// Codex emits one option per group for `requestUserInput`; the gate and the
+/// answer both work off the flattened list.
+fn flat_labels(entry: &PendingApproval) -> Vec<String> {
+    entry
+        .option_labels
+        .as_ref()
+        .map(|groups| groups.iter().flatten().cloned().collect())
+        .unwrap_or_default()
+}
+
 /// Decide the single answer string to deliver for a requestUserInput.
 fn choose_request_user_input_answer(entry: &PendingApproval, response: &ControlResponse) -> String {
     if entry.tool_name != "ExitPlanMode" {
@@ -307,12 +356,7 @@ fn choose_request_user_input_answer(entry: &PendingApproval, response: &ControlR
         return extract_answer_from_updated_input(response);
     }
 
-    // Flatten option groups — Codex emits one option per group for ExitPlanMode.
-    let flat_labels: Vec<String> = entry
-        .option_labels
-        .as_ref()
-        .map(|groups| groups.iter().flatten().cloned().collect())
-        .unwrap_or_default();
+    let flat_labels = flat_labels(entry);
 
     let find_by_prefix = |prefix: &str, fallback_index: usize| -> String {
         if let Some(m) = flat_labels

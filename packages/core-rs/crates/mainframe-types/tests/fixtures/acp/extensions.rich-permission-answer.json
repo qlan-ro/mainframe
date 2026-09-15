@@ -1,0 +1,11 @@
+{
+  "_provenance": "synthetic",
+  "controlResponse": {
+    "requestId": "req_001",
+    "toolUseId": "toolu_01A",
+    "behavior": "allow",
+    "updatedInput": {
+      "command": "rm -rf /tmp/scratch --dry-run"
+    }
+  }
+}

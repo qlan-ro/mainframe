@@ -59,7 +59,7 @@ vi.mock('@/lib/api/chats', () => ({
   continueChatInProjectRoot: vi.fn().mockResolvedValue(undefined),
   archiveChat: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: testState.extrasState, retry: () => Promise.resolve() }),
 }));
 

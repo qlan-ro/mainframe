@@ -349,10 +349,11 @@ test.describe('§sessions-filters Project + tag filter bar', () => {
   });
 
   // Attention badges are driven by useUnreadStore.markUnread, which is only
-  // called by the session-list-router on a `chat.notification` /
-  // `permission.requested{notify:true}` WS event. Previously that event never
-  // reached the client for a BACKGROUND chat (see the sessions-rows.spec.ts
-  // unread-dot test for the root cause); now that chat.notification is
+  // called by the session-list-router on a `chat.notification` WS event or a
+  // waiting/terminal `chat.updated` (the `permission.requested` frame died with
+  // the legacy chat dialect — spec decision 24). Previously chat.notification
+  // never reached the client for a BACKGROUND chat (see the
+  // sessions-rows.spec.ts unread-dot test for the root cause); now that it is
   // connection-global, project A's badge lights up while B stays active.
   //
   // A was backgrounded by sending from it and switching away before the reply

@@ -18,7 +18,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { useControllerState } from '../use-chat-thread-runtime';
-import type { ChatThreadController } from '../../controller/chat-thread-controller';
+import type { AcpChatController } from '../../controller/acp-chat-controller';
 
 // ---------------------------------------------------------------------------
 // Minimal fake controller — only subscribeState and getState are used by the hook.
@@ -51,7 +51,7 @@ describe('useControllerState', () => {
     const fake = fakeController();
 
     const { rerender } = renderHook(
-      ({ c }: { c: typeof fake }) => useControllerState(c as unknown as ChatThreadController),
+      ({ c }: { c: typeof fake }) => useControllerState(c as unknown as AcpChatController),
       { initialProps: { c: fake } },
     );
 
@@ -70,7 +70,7 @@ describe('useControllerState', () => {
   it('returns the stable state object from controller.getState', () => {
     const fake = fakeController();
 
-    const { result } = renderHook(() => useControllerState(fake as unknown as ChatThreadController));
+    const { result } = renderHook(() => useControllerState(fake as unknown as AcpChatController));
 
     // The return value must be the exact object getState() vends — { foo: 'bar' }.
     expect(result.current).toEqual({ foo: 'bar' });
@@ -82,7 +82,7 @@ describe('useControllerState', () => {
     const fake2 = fakeController();
 
     const { rerender } = renderHook(
-      ({ c }: { c: typeof fake1 }) => useControllerState(c as unknown as ChatThreadController),
+      ({ c }: { c: typeof fake1 }) => useControllerState(c as unknown as AcpChatController),
       { initialProps: { c: fake1 } },
     );
 
@@ -102,7 +102,7 @@ describe('useControllerState', () => {
   it('unsubscribes from the controller on unmount', () => {
     const fake = fakeController();
 
-    const { unmount } = renderHook(() => useControllerState(fake as unknown as ChatThreadController));
+    const { unmount } = renderHook(() => useControllerState(fake as unknown as AcpChatController));
 
     unmount();
 

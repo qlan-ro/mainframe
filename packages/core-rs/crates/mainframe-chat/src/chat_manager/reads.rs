@@ -71,10 +71,22 @@ impl ChatManager {
             .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone())
     }
 
-    /// Return all queued refs for a chat, oldest-first is not guaranteed by the
-    /// HashMap; the TS returns Map-insertion order but callers filter by chat only.
+    /// Return all queued refs for a chat, oldest-first (enqueue order) —
+    /// `queue_state` snapshots render in this order, so it is part of the wire
+    /// contract, not a courtesy.
     pub fn get_queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
         queued_for_chat(&self.queued_refs, chat_id)
+    }
+
+    /// Announce the chat's current queued snapshot on the chat-surface seam
+    /// (`_mainframe.dev/queue_state` on the facade). Always the full set.
+    pub(super) fn notify_queue_changed(&self, chat_id: &str) {
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::QueueChanged {
+                chat_id: chat_id.to_string(),
+                refs: self.get_queued_for_chat(chat_id),
+            },
+        );
     }
 
     pub fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {

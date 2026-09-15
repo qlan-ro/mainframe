@@ -325,7 +325,12 @@ fn convert_user_entry(entry: &Value, message: &Value, chat_id: &str) -> Option<C
     })
 }
 
-fn convert_assistant_entry(entry: &Value, message: &Value, chat_id: &str) -> Option<ChatMessage> {
+fn convert_assistant_entry(
+    entry: &Value,
+    message: &Value,
+    chat_id: &str,
+    seen_api_message_ids: &mut std::collections::HashSet<String>,
+) -> Option<ChatMessage> {
     let mut content_blocks: Vec<MessageContent> = Vec::new();
 
     if let Some(Value::Array(arr)) = message.get("content") {
@@ -377,6 +382,20 @@ fn convert_assistant_entry(entry: &Value, message: &Value, chat_id: &str) -> Opt
         return None;
     }
 
+    // Mirror of assistant_event.rs's vendor-id rule. Claimed only by entries
+    // that produce a message (after the empty check): a signature-only
+    // thinking entry is skipped here but grouped into the same turn live, so
+    // claiming on the surviving first entry is what keeps the grouped display
+    // message's base id identical across live and reconstruction.
+    let id = match message
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        Some(mid) if seen_api_message_ids.insert(mid.to_string()) => mid.to_string(),
+        _ => id_or_nanoid(entry),
+    };
+
     let mut meta = history_meta();
     if js_truthy(message.get("model"))
         && let Some(model) = message.get("model")
@@ -390,7 +409,7 @@ fn convert_assistant_entry(entry: &Value, message: &Value, chat_id: &str) -> Opt
     }
 
     Some(ChatMessage {
-        id: id_or_nanoid(entry),
+        id,
         chat_id: chat_id.to_string(),
         r#type: ChatMessageType::Assistant,
         content: content_blocks,
@@ -455,7 +474,15 @@ fn convert_queued_command_entry(entry: &Value, chat_id: &str) -> Option<ChatMess
     })
 }
 
-pub fn convert_history_entry(entry: &Value, chat_id: &str) -> Option<ChatMessage> {
+/// `seen_api_message_ids` spans the caller's whole entry walk: the first
+/// assistant entry of each API message adopts `message.id` as its id, so
+/// reconstruction derives the same ids the live adapter minted
+/// (assistant_event.rs's vendor-id rule — the stable-ID contract).
+pub fn convert_history_entry(
+    entry: &Value,
+    chat_id: &str,
+    seen_api_message_ids: &mut std::collections::HashSet<String>,
+) -> Option<ChatMessage> {
     let entry_type = entry.get("type").and_then(Value::as_str);
 
     if entry_type == Some("attachment") {
@@ -509,7 +536,7 @@ pub fn convert_history_entry(entry: &Value, chat_id: &str) -> Option<ChatMessage
         return convert_user_entry(entry, message, chat_id);
     }
     if entry_type == Some("assistant") {
-        return convert_assistant_entry(entry, message, chat_id);
+        return convert_assistant_entry(entry, message, chat_id, seen_api_message_ids);
     }
     None
 }
@@ -548,7 +575,12 @@ mod tests {
 
     #[test]
     fn converts_prompt_mode_queued_command_with_original_text() {
-        let msg = convert_history_entry(&attachment_entry(json!({}), json!({})), "c1").unwrap();
+        let msg = convert_history_entry(
+            &attachment_entry(json!({}), json!({})),
+            "c1",
+            &mut std::collections::HashSet::new(),
+        )
+        .unwrap();
         assert_eq!(msg.r#type, ChatMessageType::User);
         assert_eq!(
             msg.content,
@@ -571,7 +603,8 @@ mod tests {
                 { "type": "text", "text": "hi" },
             ]}
         });
-        let msg = convert_history_entry(&entry, "c1").unwrap();
+        let msg =
+            convert_history_entry(&entry, "c1", &mut std::collections::HashSet::new()).unwrap();
         let thinkings: Vec<&str> = msg
             .content
             .iter()
@@ -590,6 +623,7 @@ mod tests {
         let msg = convert_history_entry(
             &attachment_entry(json!({}), json!({ "prompt": "string prompt" })),
             "c1",
+            &mut std::collections::HashSet::new(),
         )
         .unwrap();
         assert_eq!(msg.content, vec![text_block("string prompt".to_string())]);
@@ -600,7 +634,8 @@ mod tests {
         assert!(
             convert_history_entry(
                 &attachment_entry(json!({}), json!({ "commandMode": "task-notification" })),
-                "c1"
+                "c1",
+                &mut std::collections::HashSet::new()
             )
             .is_none()
         );
@@ -611,7 +646,8 @@ mod tests {
         assert!(
             convert_history_entry(
                 &attachment_entry(json!({}), json!({ "type": "edited_text_file" })),
-                "c1"
+                "c1",
+                &mut std::collections::HashSet::new()
             )
             .is_none()
         );
@@ -632,7 +668,8 @@ mod tests {
                         == Some("queued_command")
             })
             .expect("fixture must contain a queued_command attachment entry");
-        let msg = convert_history_entry(&entry, "c1").unwrap();
+        let msg =
+            convert_history_entry(&entry, "c1", &mut std::collections::HashSet::new()).unwrap();
         assert_eq!(msg.r#type, ChatMessageType::User);
         let text: String = msg
             .content

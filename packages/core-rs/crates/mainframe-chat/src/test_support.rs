@@ -34,6 +34,9 @@ pub struct FakeSession {
     pub set_plan_mode_ok: bool,
     /// Configurable history returned by `load_history` (empty by default).
     pub history: Vec<ChatMessage>,
+    /// When set, every `load_history` call bumps it — how a test proves a
+    /// path loads the transcript once rather than twice.
+    pub history_loads: Option<Arc<AtomicUsize>>,
     /// Fires synchronously inside `respond_to_permission`, before it resolves —
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
@@ -165,6 +168,9 @@ impl AdapterSession for FakeSession {
         }
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        if let Some(loads) = &self.history_loads {
+            loads.fetch_add(1, Ordering::SeqCst);
+        }
         let history = self.history.clone();
         Box::pin(async move { Ok(history) })
     }

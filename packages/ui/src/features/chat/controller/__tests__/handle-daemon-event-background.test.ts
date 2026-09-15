@@ -8,8 +8,6 @@ import { handleDaemonEvent } from '../handle-daemon-event';
 
 const CHAT_ID = 'chat-abc';
 const OTHER_CHAT = 'chat-other';
-const EMPTY_MSGS = {} as Readonly<Record<string, unknown>>;
-
 function makeTask(overrides: Partial<BackgroundTask> = {}): BackgroundTask {
   return {
     id: 'a-1',
@@ -31,11 +29,7 @@ function makeTask(overrides: Partial<BackgroundTask> = {}): BackgroundTask {
 
 describe('handleDaemonEvent — background_task.*', () => {
   it('started → background.upsert with the projected activity task', () => {
-    const result = handleDaemonEvent(
-      { type: 'background_task.started', chatId: CHAT_ID, task: makeTask() },
-      CHAT_ID,
-      EMPTY_MSGS,
-    );
+    const result = handleDaemonEvent({ type: 'background_task.started', chatId: CHAT_ID, task: makeTask() }, CHAT_ID);
     expect(result).toEqual({
       kind: 'event',
       event: {
@@ -49,7 +43,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const result = handleDaemonEvent(
       { type: 'background_task.started', chatId: OTHER_CHAT, task: makeTask() },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({ kind: 'noop' });
   });
@@ -58,7 +51,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const result = handleDaemonEvent(
       { type: 'background_task.updated', chatId: CHAT_ID, task: makeTask({ description: 'now longer' }) },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({
       kind: 'event',
@@ -73,7 +65,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const result = handleDaemonEvent(
       { type: 'background_task.updated', chatId: CHAT_ID, task: makeTask({ status: 'completed', endedAt: 5000 }) },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({ kind: 'event', event: { type: 'background.ended', taskId: 'a-1' } });
   });
@@ -82,7 +73,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const result = handleDaemonEvent(
       { type: 'background_task.ended', chatId: CHAT_ID, task: makeTask({ status: 'stopped', endedAt: 5000 }) },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({ kind: 'event', event: { type: 'background.ended', taskId: 'a-1' } });
   });
@@ -91,7 +81,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const result = handleDaemonEvent(
       { type: 'background_task.started', chatId: CHAT_ID, task: makeTask({ status: 'failed', endedAt: 5000 }) },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({ kind: 'event', event: { type: 'background.ended', taskId: 'a-1' } });
   });
@@ -104,7 +93,6 @@ describe('handleDaemonEvent — background_task.*', () => {
         task: makeTask({ id: 'b-1', kind: 'bash', description: '', command: 'pnpm dev' }),
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(result).toEqual({
       kind: 'event',
@@ -119,7 +107,6 @@ describe('handleDaemonEvent — background_task.*', () => {
     const started = handleDaemonEvent(
       { type: 'background_task.started', chatId: CHAT_ID, task: makeTask({ id: 'w-1', kind: 'workflow' }) },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(started).toEqual({
       kind: 'event',
@@ -136,7 +123,6 @@ describe('handleDaemonEvent — background_task.*', () => {
         task: makeTask({ id: 'w-1', kind: 'workflow', workflowName: 'deploy', runId: 'run_1' }),
       },
       CHAT_ID,
-      EMPTY_MSGS,
     );
     expect(updated).toEqual({
       kind: 'event',

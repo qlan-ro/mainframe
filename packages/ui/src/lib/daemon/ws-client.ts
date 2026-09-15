@@ -141,9 +141,9 @@ export class DaemonWsClient {
       this.ws.send(JSON.stringify(event));
       return;
     }
-    // Never silently drop: a lost message.send / permission.respond looks like
-    // success while the daemon never received it. Buffer and let the
-    // (re)connection flush it (`flushPending` runs on `onopen`).
+    // Never silently drop: a lost subscribe/unsubscribe frame silently
+    // detaches the side-band stream. Buffer and let the (re)connection
+    // flush it (`flushPending` runs on `onopen`).
     this.pendingMessages.push(event);
     this.kickReconnect();
   }

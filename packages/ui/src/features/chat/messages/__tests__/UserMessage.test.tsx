@@ -43,7 +43,7 @@ const { retryMessageSpy, extrasState } = vi.hoisted(() => ({
 }));
 // Mutable queued-refs fixture for the FIFO position/total dispatch tests (7.2).
 let __queuedFixture: import('@qlan-ro/mainframe-types').QueuedMessageRef[] = [];
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ retryMessage: retryMessageSpy, state: extrasState }),
   useChatQueuedMessages: () => __queuedFixture,
 }));

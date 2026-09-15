@@ -47,7 +47,7 @@ vi.mock('../../tools/register-cards', () => ({}));
 
 // Mutable extras state so a rerender can flip `compacting`.
 const extrasState = { compacting: true, loadState: { type: 'ready' } };
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: extrasState, retry: () => Promise.resolve() }),
 }));
 

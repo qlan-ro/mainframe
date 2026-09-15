@@ -27,12 +27,12 @@ struct NullSink;
 impl SessionSink for NullSink {
     fn on_init(&self, _session_id: &str) {}
     fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-    fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
     fn on_permission(&self, _request: ControlRequest) {}
     fn on_result(&self, _data: SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self) {}
+    fn on_compact(&self, _vendor_id: Option<&str>) {}
     fn on_compact_start(&self) {}
     fn on_context_usage(&self, _usage: ContextUsage) {}
     fn on_plan_file(&self, _file_path: &str) {}

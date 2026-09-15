@@ -412,7 +412,15 @@ pub fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &dyn Sess
         .or_else(|| event.get("toolUseResult"));
     let tool_result_content = build_tool_result_blocks(message, tur);
     if !tool_result_content.is_empty() {
-        sink.on_tool_result(tool_result_content);
+        // Same source as history's `id_or_nanoid(entry)` for a ToolResult
+        // ChatMessage (history_converters.rs convert_user_entry) — the entry's
+        // own uuid, no suffix (todo #350 group B, stable-ids task 5).
+        let vendor_id = event
+            .get("uuid")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        sink.on_tool_result(tool_result_content, vendor_id);
     }
 
     let Some(blocks) = content.and_then(Value::as_array) else {

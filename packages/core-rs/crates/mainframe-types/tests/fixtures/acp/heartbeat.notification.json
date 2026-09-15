@@ -1,0 +1,8 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/heartbeat",
+  "params": {
+    "sequence": 42
+  }
+}

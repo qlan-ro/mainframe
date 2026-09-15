@@ -1,11 +1,15 @@
 /**
  * chat-thread-state — transcriptMissing plumbing.
  *
- * `history.loaded` carries the typed daemon payload's transcriptMissing flag;
- * the reducer mirrors it into chatConfig (when seeded) so the degraded card
- * reacts to a load-time detection without waiting for a chat.updated. A
- * chat.updated differing ONLY in transcriptMissing must also refresh
- * chatConfig (sameComposerConfig must not swallow it).
+ * `transcriptMissing` is a `Chat` field, so `sameComposerConfig` treats it as
+ * composer-relevant: a `chat.updated` differing ONLY in `transcriptMissing`
+ * still refreshes `chatConfig` (the degraded-transcript card must react to
+ * it). The dedicated `history.loaded`-carries-transcriptMissing mirror this
+ * file used to test is retired with the event: the facade plane has no
+ * history-payload frame, so on load `AcpChatController.attachPlanes()`
+ * dispatches the single `chat.config.updated` from its `getChat()` REST
+ * read — which already carries `transcriptMissing` — instead of a second,
+ * dedicated event.
  */
 import { describe, it, expect } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
@@ -24,36 +28,6 @@ const chatFixture = {
   lastContextTokensInput: 0,
   transcriptMissing: false,
 } as Chat;
-
-describe('history.loaded — transcriptMissing mirror', () => {
-  it('sets chatConfig.transcriptMissing when chatConfig is seeded', () => {
-    let state = createChatThreadState('c1');
-    state = reduceChatThreadState(state, { type: 'chat.config.updated', chat: chatFixture });
-
-    state = reduceChatThreadState(state, { type: 'history.loaded', messages: [], transcriptMissing: true });
-
-    expect(state.loadState).toEqual({ type: 'ready' });
-    expect(state.chatConfig?.transcriptMissing).toBe(true);
-  });
-
-  it('leaves a null chatConfig alone (REST seed carries the flag later)', () => {
-    let state = createChatThreadState('c1');
-    state = reduceChatThreadState(state, { type: 'history.loaded', messages: [], transcriptMissing: true });
-    expect(state.chatConfig).toBeNull();
-  });
-
-  it('clears a previously-set flag when the payload reports the transcript back', () => {
-    let state = createChatThreadState('c1');
-    state = reduceChatThreadState(state, {
-      type: 'chat.config.updated',
-      chat: { ...chatFixture, transcriptMissing: true },
-    });
-
-    state = reduceChatThreadState(state, { type: 'history.loaded', messages: [], transcriptMissing: false });
-
-    expect(state.chatConfig?.transcriptMissing).toBe(false);
-  });
-});
 
 describe('chat.config.updated — transcriptMissing is composer-relevant', () => {
   it('adopts a chat.updated that differs only in transcriptMissing', () => {

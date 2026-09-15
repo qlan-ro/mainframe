@@ -43,15 +43,23 @@ impl MessageCache {
         }
     }
 
-    pub fn append(&mut self, chat_id: &str, message: ChatMessage) {
+    /// Appends `message`, returning whether the per-chat cap dropped
+    /// anything from the front (T20, R3.11) — an attached facade client's
+    /// signal that its accumulator has silently diverged and must re-resume
+    /// rather than trust the next delta.
+    pub fn append(&mut self, chat_id: &str, message: ChatMessage) -> bool {
         self.track_key(chat_id);
         let messages = self.cache.entry(chat_id.to_string()).or_default();
         messages.push(message);
-        if messages.len() > MAX_MESSAGES_PER_CHAT {
+        let evicted = if messages.len() > MAX_MESSAGES_PER_CHAT {
             let overflow = messages.len() - MAX_MESSAGES_PER_CHAT;
             messages.drain(0..overflow);
-        }
+            true
+        } else {
+            false
+        };
         self.evict_if_needed();
+        evicted
     }
 
     fn evict_if_needed(&mut self) {
@@ -96,8 +104,24 @@ impl MessageCache {
         content: Vec<MessageContent>,
         metadata: Option<HashMap<String, serde_json::Value>>,
     ) -> ChatMessage {
+        self.create_transient_message_with_vendor_id(chat_id, r#type, content, metadata, None)
+    }
+
+    /// `create_transient_message`, with an adapter-supplied id (the transcript
+    /// uuid / thread-item id) in place of a minted nanoid — todo #350 group B,
+    /// stable-ids task 5. `None` falls back to the nanoid path unchanged, so
+    /// this is additive: every existing caller of `create_transient_message`
+    /// keeps its current behavior verbatim.
+    pub fn create_transient_message_with_vendor_id(
+        &self,
+        chat_id: &str,
+        r#type: ChatMessageType,
+        content: Vec<MessageContent>,
+        metadata: Option<HashMap<String, serde_json::Value>>,
+        vendor_id: Option<String>,
+    ) -> ChatMessage {
         ChatMessage {
-            id: nanoid::nanoid!(),
+            id: vendor_id.unwrap_or_else(|| nanoid::nanoid!()),
             chat_id: chat_id.to_string(),
             r#type,
             content,
@@ -178,6 +202,21 @@ mod tests {
         cache.append("c1", msg("b"));
         assert!(cache.move_to_end("c1", "b"));
         assert_eq!(ids(&cache, "c1"), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn append_past_the_cap_reports_an_eviction() {
+        let mut cache = MessageCache::new();
+        for n in 0..MAX_MESSAGES_PER_CHAT {
+            assert!(
+                !cache.append("c1", msg(&n.to_string())),
+                "message {n} must not evict yet"
+            );
+        }
+        assert!(
+            cache.append("c1", msg("overflow")),
+            "the 2001st message must report the front-drop eviction"
+        );
     }
 }
 

@@ -1,0 +1,13 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "usage_update",
+    "used": 4200,
+    "size": 200000,
+    "cost": {
+      "amount": 0.42,
+      "currency": "USD"
+    }
+  }
+}

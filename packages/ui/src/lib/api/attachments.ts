@@ -1,7 +1,7 @@
 /**
  * Composer attachment upload. Files are uploaded to the daemon's attachment
- * store (POST /api/chats/:id/attachments) which returns stable ids; the message
- * then references those ids (`message.send.attachmentIds`), not the bytes.
+ * store (POST /api/chats/:id/attachments) which returns stable ids; the prompt
+ * then references those ids (`PromptSendMeta.attachmentIds`), not the bytes.
  */
 import { apiBase, request } from './http';
 

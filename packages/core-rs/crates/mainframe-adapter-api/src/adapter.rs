@@ -77,7 +77,10 @@ pub struct LoadedSkill {
 pub trait SessionSink: Send + Sync {
     fn on_init(&self, session_id: &str);
     fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>);
-    fn on_tool_result(&self, content: Vec<MessageContent>);
+    /// `vendor_id` mirrors `on_message`'s `MessageMetadata::vendor_id` — the
+    /// adapter's own stable id for this tool-result entry, used as the
+    /// `ChatMessage.id` in place of a minted nanoid (todo #350 group B).
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>);
     fn on_permission(&self, request: ControlRequest);
     /// The CLI withdrew a control request it already sent
     /// (`control_cancel_request`). Implementations remove the named pending
@@ -87,7 +90,12 @@ pub trait SessionSink: Send + Sync {
     fn on_result(&self, data: SessionResult);
     fn on_exit(&self, code: Option<i32>);
     fn on_error(&self, error: AdapterError);
-    fn on_compact(&self);
+    /// `vendor_id` is the adapter's stable id for the compaction transcript
+    /// entry (Claude's JSONL `uuid`, Codex's `contextCompaction` item id) —
+    /// `None` only for a path with no id available (Codex's deprecated
+    /// `thread/compacted` notification). Threaded through so the pill's live
+    /// id matches what history reconstruction would assign it (T15, R3.14).
+    fn on_compact(&self, vendor_id: Option<&str>);
     fn on_compact_start(&self);
     fn on_context_usage(&self, usage: ContextUsage);
     fn on_plan_file(&self, file_path: &str);
@@ -112,6 +120,23 @@ pub trait SessionSink: Send + Sync {
     /// trimming, truncation and dedupe (todo #293). Default no-op: adapters
     /// with no such tool need not implement it.
     fn on_attention_request(&self, _message: &str) {}
+    /// The CLI retried an API call after a transient error (Claude's
+    /// `system`/`api_error` transcript entry — see
+    /// `docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md`'s `api_error`
+    /// section; todo #350 group D task 11). `reason` is the adapter's raw
+    /// error text, not a categorized taxonomy. Default no-op: adapters with
+    /// no retry-reporting event need not implement it, and today's daemon
+    /// drops it exactly as before (fact 1) until a sink overrides this.
+    fn on_api_retry(&self, _attempt: i64, _reason: Option<String>) {}
+    /// The in-flight assistant message's partial content, re-sent accumulated
+    /// on every call (Claude's `--include-partial-messages` stream deltas,
+    /// todo #350: AGENT-SDK-PARITY B4). `api_message_id` is the provider
+    /// message id (`message_start`'s `message.id`) — the one vendor identifier
+    /// known before the block completes, and the id `on_message` will carry as
+    /// `vendor_id` for that message's first completed block, so a sink can
+    /// anchor partial content to the item the completed message becomes.
+    /// Default no-op: adapters without partial streaming need not implement it.
+    fn on_message_partial(&self, _api_message_id: &str, _content: Vec<MessageContent>) {}
 }
 
 /// A live adapter session (mirrors the TS `AdapterSession`). Trait object stored

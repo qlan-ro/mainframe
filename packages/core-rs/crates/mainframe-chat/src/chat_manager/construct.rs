@@ -69,7 +69,7 @@ impl ChatManager {
         let active_chats: Registry = Arc::new(DashMap::new());
         let messages = Arc::new(Mutex::new(MessageCache::new()));
         let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-        let queued_refs: QueuedRefs = Arc::new(Mutex::new(HashMap::new()));
+        let queued_refs: QueuedRefs = Arc::new(Mutex::new(Vec::new()));
 
         // Unset until `attach_self()` runs (called from `build_chat_manager` once
         // the manager is behind an `Arc`); until then plan-mode's clear-context
@@ -114,6 +114,18 @@ impl ChatManager {
         self
     }
 
+    /// Attach the chat-surface observer (todo #350 plan task 10) both the
+    /// legacy WS surface and the ACP facade can be driven from. A manager
+    /// built with none attached (most tests) behaves exactly as before —
+    /// `EventHandler::notify_chat_surface` is a no-op until this runs.
+    /// `permission_handler` gets the same surface (plan task 17): it owns
+    /// the normal permission-answer path, which `EventHandler` never sees.
+    pub fn with_chat_surface(self, surface: Arc<dyn crate::chat_surface::ChatSurface>) -> Self {
+        self.event_handler.set_chat_surface(surface.clone());
+        self.permission_handler.set_chat_surface(surface);
+        self
+    }
+
     /// Lets `PlanHostImpl::send_message` reach back into this manager for the
     /// clear-context follow-up send. Must run once, after the manager is behind
     /// an `Arc` (can't use `Arc::new_cyclic` without touching every `ChatManager::new`
@@ -139,7 +151,7 @@ impl ChatManager {
 
     /// A turn is in flight. Reads the live cell, not the DB row — the row lags
     /// behind by one write.
-    pub(super) fn is_chat_working(&self, chat_id: &str) -> bool {
+    pub fn is_chat_working(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .is_some_and(|cell| is_working(&cell.lock().unwrap_or_else(|e| e.into_inner()).chat))
     }

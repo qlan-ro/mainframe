@@ -39,7 +39,7 @@ import type {
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 import { useProviderDefaults } from './use-provider-defaults';
 import { useTuningWarning, type TuningWarningHook } from './use-tuning-warning';

@@ -1,0 +1,7 @@
+{"dir":"out","method":"onInit","args":["e2e-plan-clear-sess-2"],"delayMs":0}
+{"dir":"in","method":"sendMessage","args":["Implement the following plan:"],"delayMs":0}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"POST-CLEAR-ANSWER: implemented the approved plan."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":60}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":120}
+{"dir":"in","method":"sendMessage","args":["Anything else worth doing?"],"delayMs":120}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"AFTER-CLEAR-ANSWER: nothing older came back."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":9}}],"delayMs":180}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.008,"usage":{"input_tokens":12,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":240}

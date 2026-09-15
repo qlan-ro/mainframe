@@ -39,7 +39,7 @@ impl SessionSink for RecordingSink {
         self.push("message");
     }
 
-    fn on_tool_result(&self, _content: Vec<MessageContent>) {
+    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {
         self.push("tool-result");
     }
 
@@ -59,7 +59,7 @@ impl SessionSink for RecordingSink {
         self.push(format!("error:{error}"));
     }
 
-    fn on_compact(&self) {
+    fn on_compact(&self, _vendor_id: Option<&str>) {
         self.push("compact");
     }
 
@@ -126,6 +126,7 @@ async fn replays_sink_calls_and_ignores_a_late_permission_response() {
             message: None,
             execution_mode: None,
             clear_context: None,
+            scope: None,
         })
         .await
         .unwrap();

@@ -21,13 +21,16 @@ pub(crate) fn handle_compaction_started(sink: &Arc<dyn SessionSink>) {
 
 /// End-of-compaction, from either `item/completed(contextCompaction)` or the
 /// legacy `thread/compacted` notification — whichever arrives first wins.
+/// `vendor_id` is the item's own id (`ContextCompactionItem.id`) when the
+/// v2 item path fired first; the legacy notification carries none.
 pub(crate) fn handle_compaction_completed(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
+    vendor_id: Option<&str>,
 ) {
     if state.compaction_emitted {
         return;
     }
     state.compaction_emitted = true;
-    sink.on_compact();
+    sink.on_compact(vendor_id);
 }

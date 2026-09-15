@@ -37,7 +37,7 @@ import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Badge } from '@/components/ui/badge';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
-import { useChatExtras, useChatQueuedMessages } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatQueuedMessages } from '../runtime/chat-extras';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
 import { queuePosition } from './queue-position';

@@ -30,8 +30,16 @@ boundary" meet.
 
 ## CRITICAL
 
-### C1 — WebSocket auth bypass via `X-Forwarded-For` spoofing → unauthenticated remote RCE
+### C1 — WebSocket auth bypass via `X-Forwarded-For` spoofing → unauthenticated remote RCE — **RESOLVED**
 **`packages/core/src/server/websocket.ts:59-82`** (IP derivation at `62-70`, gate at `29-32`)
+
+**Status (todo #350, plan task 11):** closed in the Rust port. `authenticate_ws_upgrade`
+(`packages/core-rs/crates/mainframe-server/src/websocket.rs`), shared by `/`,
+`/lsp/:projectId/:language`, and `/acp/:profile`, now calls
+`net::trust_proxy_client_ip` — the same leftmost-untrusted-hop walk the HTTP path
+already used — instead of the leftmost-hop `net::client_ip`. A forged leftmost
+`127.0.0.1` can no longer claim loopback and skip the token check; regression-pinned
+by `websocket::tests::a_forged_leftmost_forwarded_for_cannot_claim_loopback`.
 
 The WS upgrade handler derives the client IP by taking the **leftmost**
 `X-Forwarded-For` entry:

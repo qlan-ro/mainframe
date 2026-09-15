@@ -1,7 +1,8 @@
 /**
  * Client-side unread tracking. No server concept exists for unread.
- * markUnread is called by session-list-router on chat.notification /
- * permission.requested with notify; clearUnread is called on thread activate.
+ * markUnread is called by session-list-router on chat.notification and on a
+ * waiting chat.updated (a raised gate); clearUnread is called on thread
+ * activate.
  */
 import { create } from 'zustand';
 

@@ -86,15 +86,23 @@ impl ChatManager {
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
         self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_cache(chat_id);
+        self.event_handler.clear_display_state(chat_id);
         self.worktree_offers.forget(chat_id);
+        self.event_handler
+            .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
+                chat_id: chat_id.to_string(),
+            });
     }
 
     pub async fn end_chat(&self, chat_id: &str) {
         self.lifecycle.end_chat(chat_id).await;
         self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_cache(chat_id);
+        self.event_handler.clear_display_state(chat_id);
         self.worktree_offers.forget(chat_id);
+        self.event_handler
+            .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
+                chat_id: chat_id.to_string(),
+            });
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {

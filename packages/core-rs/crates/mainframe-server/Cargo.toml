@@ -21,6 +21,7 @@ dashmap = { workspace = true }
 nanoid = { workspace = true }
 dirs = { workspace = true }
 mainframe-automations = { workspace = true }
+mainframe-acp = { workspace = true }
 mainframe-types = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
