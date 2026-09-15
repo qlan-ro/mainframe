@@ -143,17 +143,24 @@ impl FacadeConnection {
     /// Chat teardown (`ChatSurfaceEvent::ChatEnded`): drop the session's
     /// stream state, any gates delivered for it, and its prompt lock —
     /// otherwise all three outlive the chat for the connection's whole
-    /// lifetime. A prompt still holding the removed lock keeps its own `Arc`
-    /// alive and finishes under it; a later prompt for a re-created chat
-    /// simply starts a fresh one.
+    /// lifetime.
+    ///
+    /// The prompt lock goes only when nothing else holds it. A call still in
+    /// flight owns a clone, and replacing the entry would hand the next call
+    /// for that session a different mutex — two calls then enqueue
+    /// concurrently, which is the ordering the lock exists to prevent. The
+    /// entry a running call keeps alive is reclaimed by the next teardown.
     pub fn forget_chat(&self, chat_id: &str) {
         self.locked_sessions().remove(chat_id);
         self.locked_gates()
             .retain(|_, gate| gate.chat_id != chat_id);
-        self.prompt_locks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+        let mut locks = self.prompt_locks.lock().unwrap_or_else(|e| e.into_inner());
+        if locks
+            .get(chat_id)
+            .is_some_and(|lock| Arc::strong_count(lock) == 1)
+        {
+            locks.remove(chat_id);
+        }
     }
 
     fn send_frame(&self, payload: String) {
