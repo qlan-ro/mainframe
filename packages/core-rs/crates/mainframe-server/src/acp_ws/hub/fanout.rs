@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use mainframe_acp::stream::SessionStream;
 use mainframe_acp::{EncodedItem, ThrottledFrame};
+use mainframe_types::adapter::ControlRequest;
 use serde::Serialize;
 use tracing::warn;
 
@@ -54,7 +55,7 @@ impl FacadeHub {
         kind: RawFrameKind,
     ) {
         match serde_json::to_string(note) {
-            Ok(payload) => self.push_raw_to_attached(chat_id, payload, None),
+            Ok(payload) => self.push_raw_to_attached(chat_id, payload),
             Err(err) => warn!(
                 %err,
                 chat_id,
@@ -64,22 +65,42 @@ impl FacadeHub {
         }
     }
 
+    /// Register and deliver a gate raise in one pass over one snapshot of
+    /// the attached connections. Two passes let a connection that attached in
+    /// between receive the request with no pending entry to correlate its
+    /// answer against — the answer would then be discarded. Registration
+    /// stays ahead of the send (it is unconditional and immediate; only the
+    /// send rides the throttle FIFO, R2.11), just per connection now.
+    pub(super) fn raise_gate(&self, chat_id: &str, request: &ControlRequest, payload: String) {
+        let now = now_ms();
+        let rpc_id = super::rpc_id_string(&request.request_id);
+        for connection in self.attached_connections(chat_id) {
+            connection.register_gate(chat_id, request);
+            let mut sessions = connection.locked_sessions();
+            deliver_op(
+                &connection,
+                chat_id,
+                &mut sessions,
+                StreamOp::Raw {
+                    payload: payload.clone(),
+                    gate_rpc_id: Some(rpc_id.clone()),
+                },
+                now,
+            );
+        }
+    }
+
     /// A raw out-of-band notification (a gate raise, queue snapshot,
     /// transcript clear, compaction phase) — through the SAME per-session
     /// throttle FIFO content updates ride (R2.11), so it cannot arrive ahead
-    /// of a still-buffered update it depends on. `gate_rpc_id` identifies a
-    /// gate raise, which a resume's replay may redeliver itself.
-    pub(super) fn push_raw_to_attached(
-        &self,
-        chat_id: &str,
-        payload: String,
-        gate_rpc_id: Option<&str>,
-    ) {
+    /// of a still-buffered update it depends on. A gate raise goes through
+    /// [`Self::raise_gate`] instead, which registers in the same pass.
+    pub(super) fn push_raw_to_attached(&self, chat_id: &str, payload: String) {
         self.apply_stream_op(
             chat_id,
             StreamOp::Raw {
                 payload,
-                gate_rpc_id: gate_rpc_id.map(str::to_string),
+                gate_rpc_id: None,
             },
         );
     }

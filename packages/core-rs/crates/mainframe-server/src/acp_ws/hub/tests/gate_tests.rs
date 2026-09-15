@@ -139,3 +139,38 @@ async fn chat_ended_drops_gate_bookkeeping_and_per_connection_session_state() {
         "resolved-id memory dropped with the chat"
     );
 }
+
+/// Registration and delivery run against one snapshot of the attached
+/// connections, so every connection that receives the request also holds it
+/// pending — a request with no pending entry would have its answer silently
+/// discarded. The window itself (a connection attaching between two passes)
+/// is not reachable from a single-threaded test; what is pinned here is the
+/// invariant that closes it, on both sides of the raise.
+#[tokio::test]
+async fn every_connection_that_receives_a_gate_also_holds_it_pending() {
+    let hub = hub();
+    let (_id_a, conn_a, mut rx_a) = hub.register("mock-cli".to_string());
+    let (_id_b, conn_b, mut rx_b) = hub.register("mock-cli".to_string());
+    hub.attach(&conn_a, "chat-1");
+    hub.attach(&conn_b, "chat-1");
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::GateRaised {
+        chat_id: "chat-1".to_string(),
+        request: control_request("req-4"),
+    });
+
+    for (frames, conn) in [(drain(&mut rx_a), &conn_a), (drain(&mut rx_b), &conn_b)] {
+        assert_eq!(frames.len(), 1, "both attached connections got it");
+        assert_eq!(frames[0]["method"], json!("session/request_permission"));
+        assert!(
+            conn.peek_gate("gate-req-4").is_some(),
+            "a delivered gate is always answerable"
+        );
+    }
+
+    // A connection attaching after the raise gets neither half.
+    let (_id_c, conn_c, mut rx_c) = hub.register("mock-cli".to_string());
+    hub.attach(&conn_c, "chat-1");
+    assert!(drain(&mut rx_c).is_empty());
+    assert!(conn_c.peek_gate("gate-req-4").is_none());
+}

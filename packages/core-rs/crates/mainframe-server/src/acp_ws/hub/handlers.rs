@@ -71,15 +71,7 @@ impl FacadeHub {
             warn!(chat_id, "acp facade: failed to serialize a gate request");
             return;
         };
-        // Registration (pending-gate bookkeeping) is unconditional and
-        // immediate — only the actual send rides the throttle FIFO (R2.11),
-        // so a gate can never precede the tool call it belongs to on the
-        // wire.
-        for connection in self.attached_connections(chat_id) {
-            connection.register_gate(chat_id, &request);
-        }
-        let rpc_id = super::rpc_id_string(&request.request_id);
-        self.push_raw_to_attached(chat_id, payload, Some(&rpc_id));
+        self.raise_gate(chat_id, &request, payload);
     }
 
     pub(super) fn handle_gate_resolved(&self, chat_id: &str, request_id: &str) {
