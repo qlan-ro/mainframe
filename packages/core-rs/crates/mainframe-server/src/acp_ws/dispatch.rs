@@ -8,10 +8,12 @@
 
 use std::sync::Arc;
 
+use mainframe_acp::prompt::PromptPort;
 use mainframe_acp::rpc::{self, InboundFrame};
 use mainframe_acp::{DaemonInfo, dispatch_with_prompt};
 use mainframe_types::acp::extensions::SessionDetachParams;
 use mainframe_types::acp::jsonrpc::JsonRpcResponse;
+use tracing::error;
 
 use crate::ctx::AppCtx;
 
@@ -70,7 +72,7 @@ pub async fn handle_inbound(
                 InboundFrame::Request(request),
                 session_id,
                 daemon,
-                ports,
+                Arc::new(ports),
                 ctx,
                 connection,
             );
@@ -82,7 +84,7 @@ pub async fn handle_inbound(
                 InboundFrame::Notification(note),
                 session_id,
                 daemon,
-                ports,
+                Arc::new(ports),
                 ctx,
                 connection,
             );
@@ -101,7 +103,7 @@ fn handle_session_method(
     frame: InboundFrame,
     session_id: Option<String>,
     daemon: &DaemonInfo,
-    ports: ManagerPorts,
+    ports: Arc<dyn PromptPort>,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
 ) {
@@ -151,7 +153,7 @@ fn spawn_session_method(
     frame: InboundFrame,
     session_id: Option<String>,
     daemon: DaemonInfo,
-    ports: ManagerPorts,
+    ports: Arc<dyn PromptPort>,
     connection: Arc<FacadeConnection>,
 ) {
     let negotiated = connection.is_negotiated();
@@ -159,14 +161,40 @@ fn spawn_session_method(
     let wait = session_id
         .as_deref()
         .map(|id| connection.enqueue_prompt_lock(id));
+    let request_id = match &frame {
+        InboundFrame::Request(request) => request.id.clone(),
+        _ => None,
+    };
     tokio::spawn(async move {
         let _guard = match wait {
             Some(wait) => Some(wait.guard().await),
             None => None,
         };
-        let outcome = dispatch_with_prompt(frame, &daemon, &ports, negotiated).await;
-        if let Some(reply) = outcome.reply {
-            connection.send_raw(reply);
+        let task_conn = Arc::clone(&connection);
+        // Its own task, so a panic in the dispatch cannot leave a
+        // `session/prompt` unanswered: its promise has no other end, and a
+        // connection-level heartbeat never reveals one missing reply.
+        let work = tokio::spawn(async move {
+            let outcome = dispatch_with_prompt(frame, &daemon, ports.as_ref(), negotiated).await;
+            if let Some(reply) = outcome.reply {
+                task_conn.send_raw(reply);
+            }
+        });
+        if let Err(err) = work.await {
+            error!(
+                %err,
+                session_id = session_id.as_deref().unwrap_or("<none>"),
+                answered = request_id.is_some(),
+                "acp facade: session method failed"
+            );
+            // A notification (`session/cancel`) has no id to answer under;
+            // the log is all it gets.
+            if let Some(id) = request_id {
+                connection.send_json(&rpc::error_response(
+                    Some(id),
+                    rpc::internal_error("session method failed"),
+                ));
+            }
         }
     });
 }
@@ -196,3 +224,6 @@ pub(super) fn wire(response: &JsonRpcResponse) -> String {
         r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"internal error"}}"#.into()
     })
 }
+
+#[cfg(test)]
+mod tests;
