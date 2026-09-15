@@ -170,3 +170,62 @@ async fn a_slow_prompt_does_not_block_other_frames() {
         "A's prompt must still complete once released, got {prompt_reply}"
     );
 }
+
+/// Read for `ms`, failing if any frame satisfies `unwanted`.
+async fn assert_absent(ws: &mut WsClient, ms: u64, unwanted: impl Fn(&Value) -> bool) {
+    let found = tokio::time::timeout(Duration::from_millis(ms), async {
+        loop {
+            let event = ws.read_event().await;
+            if unwanted(&event) {
+                return event;
+            }
+        }
+    })
+    .await;
+    assert!(found.is_err(), "unexpected frame: {found:?}");
+}
+
+/// `session/resume`'s snapshot is unbounded — a cold chat's `get_messages`
+/// loads the whole transcript off disk — so it runs off the socket loop too,
+/// behind the same per-session lock as the prompt. Two things follow, and
+/// this pins both: the loop keeps answering while the snapshot is in flight,
+/// and the resume for a session with a prompt still in flight waits for it
+/// rather than replaying a snapshot taken mid-send.
+#[tokio::test]
+async fn a_resume_waits_for_its_sessions_prompt_while_the_loop_keeps_answering() {
+    let (adapter, release) = BarrierAdapter::new();
+    let facade = spawn_facade_server_with(Arc::new(adapter), 50).await;
+    let chat_a = facade.chat_id.clone();
+    let chat_b = facade.create_chat().await;
+    let mut ws = connect(&facade).await;
+
+    ws.send_json(&json!({
+        "jsonrpc": "2.0", "id": 1, "method": "session/prompt",
+        "params": { "sessionId": chat_a, "prompt": [{ "type": "text", "text": "hi" }] }
+    }))
+    .await;
+    ws.send_json(&json!({
+        "jsonrpc": "2.0", "id": 3, "method": "session/resume",
+        "params": { "sessionId": chat_a, "cwd": "/tmp" }
+    }))
+    .await;
+
+    // An unrelated chat's resume still answers, so the loop has already
+    // dispatched chat A's resume frame — it is waiting on the lock, not
+    // queued behind an unread socket.
+    ws.send_json(&json!({
+        "jsonrpc": "2.0", "id": 2, "method": "session/resume",
+        "params": { "sessionId": chat_b, "cwd": "/tmp" }
+    }))
+    .await;
+    let unrelated = read_until(&mut ws, |v| v["id"] == json!(2)).await;
+    assert!(unrelated.get("result").is_some());
+    assert_absent(&mut ws, 300, |v| v["id"] == json!(3)).await;
+
+    let _ = release.send(());
+    let resumed = read_until(&mut ws, |v| v["id"] == json!(3)).await;
+    assert!(
+        resumed.get("result").is_some(),
+        "the resume must complete once the prompt releases the session, got {resumed}"
+    );
+}

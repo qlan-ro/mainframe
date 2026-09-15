@@ -209,6 +209,14 @@ impl<D: PermissionHandlerDeps> ChatPermissionHandler<D> {
         if !self.has_pending(chat_id) {
             let _ = self.deps.get_messages(chat_id).await;
         }
+        self.pending_permission_as_known(chat_id)
+    }
+
+    /// The pending gate as already known, with no transcript load. For
+    /// callers that just loaded the history themselves — `get_messages`
+    /// restores a pending permission from it, so a second load would only
+    /// repeat that work (a cold chat's whole JSONL, twice per resume).
+    pub fn pending_permission_as_known(&self, chat_id: &str) -> Option<ControlRequest> {
         self.permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())

@@ -9,18 +9,19 @@
 use std::sync::Arc;
 
 use mainframe_acp::rpc::{self, InboundFrame};
-use mainframe_acp::{DaemonInfo, dispatch_resume, dispatch_with_prompt};
+use mainframe_acp::{DaemonInfo, dispatch_with_prompt};
 use mainframe_types::acp::extensions::SessionDetachParams;
-use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
+use mainframe_types::acp::jsonrpc::JsonRpcResponse;
 
 use crate::ctx::AppCtx;
 
-use super::facade_conn::{FacadeConnection, rpc_id_string};
-use super::hub::ResumeSeed;
+use super::facade_conn::FacadeConnection;
 use super::ports::ManagerPorts;
 
 mod gate_answers;
+mod resume;
 use gate_answers::handle_gate_answer;
+use resume::start_resume;
 
 /// Handle one inbound text frame. `Some` is a reply the socket loop writes
 /// directly, covering every arm except `session/resume` (pushes its own
@@ -56,7 +57,7 @@ pub async fn handle_inbound(
                     mainframe_acp::initialize_required(),
                 )));
             }
-            handle_resume(request, ctx, connection, &ports).await;
+            start_resume(request, ctx, connection, ports);
             None
         }
         InboundFrame::Notification(note) if note.method == "_mainframe.dev/session_detach" => {
@@ -167,7 +168,7 @@ fn spawn_session_method(
 }
 
 /// The `sessionId` every session method carries in its params.
-fn params_session_id(params: Option<&serde_json::Value>) -> Option<String> {
+pub(super) fn params_session_id(params: Option<&serde_json::Value>) -> Option<String> {
     params?
         .get("sessionId")
         .and_then(|value| value.as_str())
@@ -184,75 +185,6 @@ fn handle_session_detach(params: Option<serde_json::Value>, connection: &Arc<Fac
         return;
     };
     connection.forget_chat(&params.session_id);
-}
-
-/// `session/resume`: compute the snapshot, then — atomically with respect to
-/// live fan-out for this session — seed the stream state and push the reply,
-/// the replay updates, and any redelivered open gate through the connection
-/// channel in that order.
-async fn handle_resume(
-    request: JsonRpcRequest,
-    ctx: &Arc<AppCtx>,
-    connection: &Arc<FacadeConnection>,
-    ports: &ManagerPorts,
-) {
-    let session_id = params_session_id(request.params.as_ref());
-    // Mark this session as awaiting its snapshot BEFORE the await, so a live
-    // revision that races it is buffered rather than lost (T5, R2.9).
-    if let Some(session_id) = &session_id {
-        ctx.facade_hub.begin_resume(connection, session_id);
-    }
-    let (response, replay) = dispatch_resume(request, ports).await;
-
-    let Some(session_id) = session_id else {
-        // Malformed params: dispatch_resume already produced the structured
-        // error; there is no session to seed.
-        connection.send_json(&response);
-        return;
-    };
-
-    let queued = queued_for(ctx, &session_id);
-    let redelivered_gate = redelivered_gate_id(&replay);
-    let seed = ResumeSeed {
-        items: &replay.items,
-        reply: &response,
-        redelivered_gate: redelivered_gate.as_deref(),
-    };
-    let hub = &ctx.facade_hub;
-    hub.reset_session(connection, &session_id, seed, |conn| {
-        for update in replay.updates {
-            conn.send_update(&session_id, update);
-        }
-        if let (Some(frame), Some(control)) =
-            (&replay.pending_permission_request, &replay.pending_gate)
-        {
-            hub.redeliver_gate(conn, &session_id, control, frame);
-        }
-        // Queue snapshot LAST, and even when empty: resume is the
-        // reconnecting client's only stale-queued-turn eviction.
-        conn.send_json(&mainframe_acp::queue_state_notification(
-            &session_id,
-            queued,
-        ));
-    });
-}
-
-/// The queued-prompt snapshot every resume replay closes with — empty when
-/// the harness runs without a `ChatManager`.
-fn queued_for(ctx: &Arc<AppCtx>, session_id: &str) -> Vec<mainframe_types::chat::QueuedMessageRef> {
-    ctx.chat_manager
-        .as_ref()
-        .map(|cm| cm.get_queued_for_chat(session_id))
-        .unwrap_or_default()
-}
-
-/// The rpc id of the gate this replay redelivers itself, which the hub's
-/// buffered-frame drain must not raise a second time.
-fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
-    replay
-        .pending_gate
-        .as_ref()
-        .map(|gate| rpc_id_string(&gate.request_id))
 }
 
 pub(super) fn wire(response: &JsonRpcResponse) -> String {

@@ -124,7 +124,10 @@ impl ChatManager {
         Option<mainframe_types::adapter::ControlRequest>,
     ) {
         let payload = self.get_display_messages(chat_id).await;
-        let pending = self.get_pending_permission(chat_id).await;
+        // `get_display_messages` already loaded the transcript and restored
+        // any pending permission from it, so read the restored state rather
+        // than letting `get_pending_permission` load it a second time.
+        let pending = self.permission_handler.pending_permission_as_known(chat_id);
         (payload.messages, pending)
     }
 

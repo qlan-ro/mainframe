@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
 mod plan_mode;
+mod resume_snapshot;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ pub(crate) struct StoreDeps {
     transcript_present: Mutex<Option<bool>>,
     /// When `Some`, `create_session` yields a session whose `load_history` returns it.
     history: Mutex<Option<Vec<ChatMessage>>>,
+    /// Counts `load_history` across every session this fake hands out.
+    history_loads: Arc<AtomicUsize>,
     /// Records every path `trust_workspace` persisted, for assertion.
     trusted_paths: Mutex<Vec<String>>,
     /// When `Some`, `write_workspace_trust` fails with this message instead of
@@ -204,6 +207,7 @@ impl ChatManagerDeps for StoreDeps {
         self.history.lock().unwrap().clone().map(|history| {
             Arc::new(crate::test_support::FakeSession {
                 history,
+                history_loads: Some(Arc::clone(&self.history_loads)),
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
