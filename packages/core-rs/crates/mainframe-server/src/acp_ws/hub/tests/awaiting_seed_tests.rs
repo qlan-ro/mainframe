@@ -256,3 +256,29 @@ async fn a_gate_resolved_since_the_snapshot_is_not_redelivered_by_the_replay() {
         "the resolution the client already got is the last word: {frames:?}"
     );
 }
+
+/// Two resumes for one session can be in flight at once — the client's gap
+/// watchdog racing a reattach. The second claim must not discard what the
+/// first one's window already buffered.
+#[tokio::test]
+async fn a_second_begin_resume_keeps_what_the_first_buffered() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+
+    hub.begin_resume(&conn, "chat-1");
+    hub.on_chat_surface_event(ChatSurfaceEvent::Resync {
+        chat_id: "chat-1".to_string(),
+    });
+    hub.begin_resume(&conn, "chat-1");
+
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), replay_marker);
+
+    let frames = drain(&mut rx);
+    assert!(
+        frames
+            .iter()
+            .any(|f| f["method"] == json!("_mainframe.dev/resync")),
+        "the second claim must not drop the first's buffer: {frames:?}"
+    );
+}

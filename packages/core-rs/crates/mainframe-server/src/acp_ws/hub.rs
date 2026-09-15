@@ -93,14 +93,23 @@ impl FacadeHub {
     }
 
     /// Mark `chat_id` as awaiting a resume snapshot, before that snapshot is
-    /// awaited (T5, R2.9): a live revision racing the await has nothing
-    /// seeded to diff against, so [`Self::on_chat_surface_event`] buffers its
-    /// item snapshot here instead of dropping it. Unconditional — a resume
-    /// always ends by fully reseeding via [`Self::reset_session`], so
-    /// discarding any prior `Live` state (or an overlapping earlier await)
-    /// is safe.
+    /// awaited (T5, R2.9): a live event racing the await has nothing seeded
+    /// to diff against, so [`Self::on_chat_surface_event`] buffers it here
+    /// instead of dropping it. Discarding a prior `Live` state is safe — a
+    /// resume always ends by fully reseeding via [`Self::reset_session`] —
+    /// but an overlapping earlier await is NOT: two resumes for one session
+    /// can be in flight at once (a gap watchdog racing a reattach), and the
+    /// second claim would throw away everything the first one's window had
+    /// already buffered.
     pub fn begin_resume(&self, connection: &FacadeConnection, chat_id: &str) {
-        connection.locked_sessions().insert(
+        let mut sessions = connection.locked_sessions();
+        if matches!(
+            sessions.get(chat_id),
+            Some(SessionSlot::AwaitingSeed { .. })
+        ) {
+            return;
+        }
+        sessions.insert(
             chat_id.to_string(),
             SessionSlot::AwaitingSeed {
                 pending: Vec::new(),
