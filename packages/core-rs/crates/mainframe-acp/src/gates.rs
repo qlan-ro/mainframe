@@ -30,15 +30,30 @@ pub const OPTION_REJECT_ONCE: &str = "reject-once";
 /// The offered option list for `request`: the adapter's own (Codex) when it
 /// supplies one, Claude's derivation otherwise (plan task 7, D4). The client
 /// must not infer a permission's effect from an option's `kind`/`name`
-/// (spec: "the daemon/adapter owns the effect") — an id outside this list
-/// falls through to [`GateAnswerError::UnknownOption`].
-/// An adapter list of its own wins; an EMPTY one does not — an adapter that
-/// offered no labels (Codex's `exit_plan_mode_options` before it knows them)
-/// would otherwise leave a gate with no answerable option at all.
+/// (spec: "the daemon/adapter owns the effect"). This list bounds the plain
+/// `{optionId}` path alone — an id outside it is
+/// [`GateAnswerError::UnknownOption`], while a rich `_mainframe.dev` answer
+/// stands on its request-id/tool-use-id match instead.
+///
+/// An EMPTY adapter list is offered the reject option and nothing else. The
+/// adapter had labels to give and had none (Codex's `requestUserInput` before
+/// it knows them), so no selectable answer exists; Claude's triad here would
+/// make the gate approvable by an id the adapter never named, which Codex
+/// resolves as an empty answer string it accepts as a real choice.
 fn offered_options(request: &ControlRequest) -> Vec<PermissionOption> {
     match &request.options {
         Some(options) if !options.is_empty() => options.clone(),
-        _ => claude_default_options(request),
+        Some(_) => vec![reject_option()],
+        None => claude_default_options(request),
+    }
+}
+
+fn reject_option() -> PermissionOption {
+    PermissionOption {
+        option_id: OPTION_REJECT_ONCE.into(),
+        name: "Reject".into(),
+        kind: PermissionOptionKind::RejectOnce,
+        meta: None,
     }
 }
 
@@ -62,12 +77,7 @@ fn claude_default_options(request: &ControlRequest) -> Vec<PermissionOption> {
             meta: None,
         });
     }
-    options.push(PermissionOption {
-        option_id: OPTION_REJECT_ONCE.into(),
-        name: "Reject".into(),
-        kind: PermissionOptionKind::RejectOnce,
-        meta: None,
-    });
+    options.push(reject_option());
     options
 }
 
@@ -153,19 +163,21 @@ pub enum GateAnswerError {
     /// request; the caller's job (not this function's) is to route it as a
     /// cancellation rather than a session-level answer.
     Cancelled,
-    /// An `optionId` outside [`offered_options`] — never treated as
-    /// approval (spec: "unknown extension values never treated as
-    /// approval").
+    /// A plain answer whose `optionId` is outside [`offered_options`]. Only
+    /// the plain path can fail this way: a rich `_mainframe.dev` answer is
+    /// trusted on its request-id/tool-use-id match and never has to name an
+    /// offered id.
     UnknownOption(String),
 }
 
 /// Parse a `session/request_permission` answer for `request` into today's
-/// `ControlResponse`. The `optionId` always resolves against
-/// [`offered_options`] first, then overlays the selected option's
-/// `scope`/`updatedInput` onto a rich `_mainframe.dev` answer — the client
-/// never sets `scope` itself, so without the overlay a session-scoped
-/// allow (e.g. Codex's `acceptForSession`) would re-prompt next turn
-/// (R3.2/T19).
+/// `ControlResponse`. A rich `_mainframe.dev` answer resolves on its own
+/// behavior, and the `optionId` it names — when it names an offered one at
+/// all — only overlays that option's `scope`/`updatedInput`, never vetoes
+/// it: the client never sets `scope` itself, so without the overlay a
+/// session-scoped allow (e.g. Codex's `acceptForSession`) would re-prompt
+/// next turn (R3.2/T19). A plain answer has nothing but its `optionId`, so
+/// that id must resolve against [`offered_options`].
 pub fn parse_answer(
     request: &ControlRequest,
     response: RequestPermissionResponse,

@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 
 use super::*;
 
+mod offered_options_tests;
+
 fn fixture(name: &str) -> Value {
     let text = match name {
         "permission.request" => {
@@ -34,26 +36,6 @@ fn control_request() -> ControlRequest {
         decision_reason: None,
         options: None,
     }
-}
-
-#[test]
-fn build_request_matches_the_pinned_option_vocabulary() {
-    let request = build_request(
-        "chat_9f2a3b1c",
-        RequestId::Str("gate-req_001".into()),
-        &control_request(),
-    );
-    let params = request
-        .params
-        .expect("session/request_permission needs params");
-    let expected = fixture("permission.request");
-
-    assert_eq!(params["sessionId"], expected["sessionId"]);
-    assert_eq!(params["options"], expected["options"]);
-    assert_eq!(
-        params["subject"]["toolCall"]["toolCallId"],
-        expected["subject"]["toolCall"]["toolCallId"]
-    );
 }
 
 /// Desktop-cutover pass: the rich gate cards render the raw `ControlRequest`
@@ -137,22 +119,25 @@ fn a_rich_answer_stands_without_an_offered_option_id() {
     assert_eq!(control.request_id, "req_001");
 }
 
-/// An adapter that sends an empty list has offered nothing, not "no options":
-/// taking it literally leaves a gate nobody can answer.
+/// A named option's kind only adds scope or `updatedInput` to a rich answer;
+/// it never vetoes the behavior the answer itself carries, which stands on
+/// its request-id/tool-use-id match.
 #[test]
-fn an_empty_adapter_option_list_falls_back_to_the_default_set() {
+fn a_rich_answer_outranks_the_kind_of_the_option_it_names() {
     let mut request = control_request();
-    request.options = Some(Vec::new());
-    let response = RequestPermissionResponse {
-        outcome: RequestPermissionOutcome::Selected {
-            option_id: "allow-once".to_string(),
-        },
+    request.options = Some(vec![PermissionOption {
+        option_id: OPTION_ALLOW_ONCE.to_string(),
+        name: "Decline".to_string(),
+        kind: PermissionOptionKind::RejectOnce,
         meta: None,
-    };
+    }]);
+    let response: RequestPermissionResponse =
+        serde_json::from_value(fixture("permission.response-rich")).unwrap();
 
     let control = parse_answer(&request, response).unwrap();
 
     assert_eq!(control.behavior, ControlBehavior::Allow);
+    assert_eq!(control.scope, None, "only allow-always overlays a scope");
 }
 
 #[test]
@@ -200,38 +185,6 @@ fn control_request_with_suggestions(
         suggestions,
         ..control_request()
     }
-}
-
-#[test]
-fn claude_hides_allow_always_without_suggestions() {
-    let no_suggestions = build_request(
-        "chat_1",
-        RequestId::Str("gate-req_001".into()),
-        &control_request(),
-    );
-    let ids: Vec<String> = no_suggestions.params.unwrap()["options"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|o| o["optionId"].as_str().unwrap().to_string())
-        .collect();
-    assert_eq!(ids, vec!["allow-once", "reject-once"]);
-
-    let with_suggestion = build_request(
-        "chat_1",
-        RequestId::Str("gate-req_001".into()),
-        &control_request_with_suggestions(vec![mainframe_types::adapter::ControlUpdate::SetMode {
-            mode: mainframe_types::settings::PermissionMode::AcceptEdits,
-            destination: mainframe_types::adapter::ControlDestination::Session,
-        }]),
-    );
-    let ids: Vec<String> = with_suggestion.params.unwrap()["options"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|o| o["optionId"].as_str().unwrap().to_string())
-        .collect();
-    assert_eq!(ids, vec!["allow-once", "allow-always", "reject-once"]);
 }
 
 #[test]
