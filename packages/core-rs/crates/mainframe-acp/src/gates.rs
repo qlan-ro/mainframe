@@ -32,11 +32,14 @@ pub const OPTION_REJECT_ONCE: &str = "reject-once";
 /// must not infer a permission's effect from an option's `kind`/`name`
 /// (spec: "the daemon/adapter owns the effect") — an id outside this list
 /// falls through to [`GateAnswerError::UnknownOption`].
+/// An adapter list of its own wins; an EMPTY one does not — an adapter that
+/// offered no labels (Codex's `exit_plan_mode_options` before it knows them)
+/// would otherwise leave a gate with no answerable option at all.
 fn offered_options(request: &ControlRequest) -> Vec<PermissionOption> {
-    request
-        .options
-        .clone()
-        .unwrap_or_else(|| claude_default_options(request))
+    match &request.options {
+        Some(options) if !options.is_empty() => options.clone(),
+        _ => claude_default_options(request),
+    }
 }
 
 /// Claude offers allow-once and reject-once always, plus allow-always only
@@ -172,23 +175,30 @@ pub fn parse_answer(
     };
 
     let options = offered_options(request);
-    // The option is resolved before the rich branch: the `_mainframe.dev`
-    // payload overlays a plain answer, it does not replace the check that the
-    // daemon offered this option at all.
-    let selected = options
-        .iter()
-        .find(|option| &option.option_id == option_id)
-        .ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
+    let selected = options.iter().find(|option| &option.option_id == option_id);
 
+    // A rich answer carries its own `ControlResponse`, already validated
+    // against this request's id and tool-use id — that match is what makes it
+    // trustworthy, not the option id. The rich gates (plan approval, user
+    // questions) have no clicked option to report, so the client sends a
+    // stand-in id the adapter's own list never contains; requiring it here
+    // turned every Codex plan answer into `UnknownOption` and hung the turn.
+    // The option's kind is still honoured when it does name one.
     if let Some(mut rich) = rich_answer(request, &response) {
-        if matches!(selected.kind, PermissionOptionKind::AllowAlways) {
-            rich.scope = rich.scope.or(Some(PermissionScope::Session));
+        if let Some(selected) = selected {
+            if matches!(selected.kind, PermissionOptionKind::AllowAlways) {
+                rich.scope = rich.scope.or(Some(PermissionScope::Session));
+            }
+            rich.updated_input = rich
+                .updated_input
+                .or_else(|| updated_input_from_option(selected));
         }
-        rich.updated_input = rich
-            .updated_input
-            .or_else(|| updated_input_from_option(selected));
         return Ok(rich);
     }
+
+    // A plain answer is nothing BUT its option id, so that id must be one the
+    // daemon offered.
+    let selected = selected.ok_or_else(|| GateAnswerError::UnknownOption(option_id.clone()))?;
 
     let scope = matches!(selected.kind, PermissionOptionKind::AllowAlways)
         .then_some(PermissionScope::Session);

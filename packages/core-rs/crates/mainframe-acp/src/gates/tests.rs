@@ -114,22 +114,45 @@ fn unknown_option_id_is_never_treated_as_approval() {
     );
 }
 
-/// The rich `_mainframe.dev` payload is an overlay on the plain answer, not
-/// a bypass: the `optionId` still has to name an offered option, or a
-/// version-skewed (or forged) client could resolve a gate with an option the
-/// daemon never offered.
+/// The rich gates (plan approval, user questions) have no clicked option to
+/// report, so the client falls back to a stand-in id an adapter list never
+/// contains. The rich answer stands on its request-id match instead — before
+/// this, every Codex plan answer came back `UnknownOption` and the turn hung.
 #[test]
-fn a_rich_answer_for_an_unoffered_option_is_still_unknown() {
+fn a_rich_answer_stands_without_an_offered_option_id() {
+    let mut request = control_request();
+    request.options = Some(vec![PermissionOption {
+        option_id: "choice-0".to_string(),
+        name: "Approve".to_string(),
+        kind: PermissionOptionKind::AllowOnce,
+        meta: None,
+    }]);
     let mut fixture = fixture("permission.response-rich");
-    fixture["outcome"]["optionId"] = json!("some-future-option");
+    fixture["outcome"]["optionId"] = json!("allow-once");
     let response: RequestPermissionResponse = serde_json::from_value(fixture).unwrap();
 
-    let err = parse_answer(&control_request(), response).unwrap_err();
+    let control = parse_answer(&request, response).unwrap();
 
-    assert_eq!(
-        err,
-        GateAnswerError::UnknownOption("some-future-option".to_string())
-    );
+    assert_eq!(control.behavior, ControlBehavior::Allow);
+    assert_eq!(control.request_id, "req_001");
+}
+
+/// An adapter that sends an empty list has offered nothing, not "no options":
+/// taking it literally leaves a gate nobody can answer.
+#[test]
+fn an_empty_adapter_option_list_falls_back_to_the_default_set() {
+    let mut request = control_request();
+    request.options = Some(Vec::new());
+    let response = RequestPermissionResponse {
+        outcome: RequestPermissionOutcome::Selected {
+            option_id: "allow-once".to_string(),
+        },
+        meta: None,
+    };
+
+    let control = parse_answer(&request, response).unwrap();
+
+    assert_eq!(control.behavior, ControlBehavior::Allow);
 }
 
 #[test]
