@@ -6,6 +6,7 @@
 //! task gets scheduled.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use mainframe_acp::resume::ResumePort;
 use mainframe_acp::{dispatch_resume, rpc};
@@ -14,7 +15,7 @@ use tracing::error;
 
 use crate::ctx::AppCtx;
 
-use super::super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
+use super::super::facade_conn::{FacadeConnection, rpc_id_string};
 use super::super::hub::ResumeSeed;
 use super::params_session_id;
 
@@ -48,12 +49,25 @@ pub(super) fn start_resume(
         };
         let claimed = session_id.clone();
         let (task_ctx, task_conn) = (Arc::clone(&ctx), Arc::clone(&connection));
+        // Set the moment the reply goes out, so the failure path below knows
+        // whether the client's promise has settled without asking the session
+        // map — which a concurrent detach or `ChatEnded` can empty.
+        let replied = Arc::new(AtomicBool::new(false));
+        let task_replied = Arc::clone(&replied);
         // `reset_session` is the only exit from `AwaitingSeed`, so a panic on
         // the way to it would leave this session buffering every event for
         // the connection's remaining life, silently. Run it as its own task
         // so `fail_resume` can answer for it.
         let delivery = tokio::spawn(async move {
-            deliver_resume(request, session_id, &task_ctx, &task_conn, ports.as_ref()).await;
+            deliver_resume(
+                request,
+                session_id,
+                &task_ctx,
+                &task_conn,
+                ports.as_ref(),
+                &task_replied,
+            )
+            .await;
         });
         if let Err(err) = delivery.await {
             error!(
@@ -61,7 +75,12 @@ pub(super) fn start_resume(
                 session_id = claimed.as_deref().unwrap_or("<none>"),
                 "acp facade: resume delivery failed"
             );
-            fail_resume(&connection, request_id, claimed.as_deref());
+            fail_resume(
+                &connection,
+                request_id,
+                claimed.as_deref(),
+                replied.load(Ordering::Relaxed),
+            );
         }
     });
 }
@@ -71,13 +90,17 @@ pub(super) fn start_resume(
 /// connection-level, so its watchdog sees no gap, and a first attach has not
 /// attached yet, so its own gap resume returns early.
 ///
-/// An unseeded claim also owes the client a reply — its promise is still
-/// pending, and it has no other end. A seeded one does not: `reset_session`
-/// sends the success reply as it seeds, so the promise has settled and a
-/// second response for that id could only be dropped.
-fn fail_resume(connection: &FacadeConnection, id: Option<RequestId>, session_id: Option<&str>) {
-    let seeded = session_id.is_some_and(|session_id| session_is_seeded(connection, session_id));
-    if !seeded {
+/// A claim whose reply never went out also owes the client one — its promise
+/// is still pending, and it has no other end. Once `reset_session` has
+/// returned, the reply is on the wire (it goes out in both of that method's
+/// arms), so a second response for that id could only be dropped.
+fn fail_resume(
+    connection: &FacadeConnection,
+    id: Option<RequestId>,
+    session_id: Option<&str>,
+    replied: bool,
+) {
+    if !replied {
         connection.send_json(&rpc::error_response(
             id,
             rpc::internal_error("resume failed"),
@@ -90,19 +113,9 @@ fn fail_resume(connection: &FacadeConnection, id: Option<RequestId>, session_id:
     // unseeded slot has no stream to queue against, and the buffer it does
     // hold is about to be dropped.
     connection.send_json(&mainframe_acp::resync_notification(session_id));
-    if !seeded {
+    if !replied {
         connection.forget_chat(session_id);
     }
-}
-
-/// Whether `reset_session` seeded this session before the failure. A seeded
-/// stream is correct state the client is already streaming against — only a
-/// claim that never got there is dropped.
-fn session_is_seeded(connection: &FacadeConnection, session_id: &str) -> bool {
-    matches!(
-        connection.locked_sessions().get(session_id),
-        Some(SessionSlot::Live(_))
-    )
 }
 
 /// Compute the snapshot, then — atomically with respect to live fan-out for
@@ -115,6 +128,7 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
+    replied: &AtomicBool,
 ) {
     let (response, replay) = dispatch_resume(request, ports).await;
 
@@ -122,6 +136,7 @@ async fn deliver_resume(
         // Malformed params: dispatch_resume already produced the structured
         // error; there is no session to seed.
         connection.send_json(&response);
+        replied.store(true, Ordering::Relaxed);
         return;
     };
 
@@ -149,6 +164,7 @@ async fn deliver_resume(
             queued,
         ));
     });
+    replied.store(true, Ordering::Relaxed);
 }
 
 /// The queued-prompt snapshot every resume replay closes with — empty when
