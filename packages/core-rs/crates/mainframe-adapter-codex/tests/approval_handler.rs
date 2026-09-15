@@ -403,3 +403,46 @@ fn accept_for_session_reaches_codex() {
         json!({ "decision": "acceptForSession" })
     );
 }
+
+/// Codex can send a plan-exit prompt whose options carry no labels. The
+/// ExitPlanMode exemption from the clean decline exists because that branch
+/// reads `behavior` to pick between the real "yes"/"no" labels — with no
+/// labels to pick, it fell through to an empty answer string, which Codex
+/// takes for a genuine choice.
+#[test]
+fn plan_exit_without_labels_declines_cleanly() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    handler.set_plan_context(PlanContext {
+        plan_mode: true,
+        current_turn_plan: Some(CurrentTurnPlan {
+            id: "p1".to_string(),
+            text: "PLAN".to_string(),
+        }),
+    });
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "item/tool/requestUserInput",
+        &json!({
+            "toolCallId": "tc1",
+            "questions": [{ "id": "q1", "question": "Exit plan mode?" }],
+            "options": [[{}], [{}]],
+        }),
+        RequestId::Number(7),
+        respond,
+    );
+    let request = rec.permissions()[0].clone();
+    assert_eq!(request.tool_name, "ExitPlanMode");
+
+    resolve(
+        &handler,
+        json!({
+            "requestId": request.request_id,
+            "toolUseId": request.tool_use_id,
+            "behavior": "deny",
+            "toolName": "ExitPlanMode",
+        }),
+    );
+
+    assert_eq!(calls.lock().unwrap()[0].1, json!({ "answers": {} }));
+}

@@ -44,7 +44,9 @@ pub(crate) fn ask_user_question_options(
     question_text: &str,
     flat_labels: &[String],
 ) -> Vec<PermissionOption> {
-    warn_if_unanswerable("AskUserQuestion", request_id, flat_labels);
+    if unanswerable("AskUserQuestion", request_id, flat_labels) {
+        return Vec::new();
+    }
     flat_labels
         .iter()
         .enumerate()
@@ -70,7 +72,9 @@ pub(crate) fn exit_plan_mode_options(
     request_id: &str,
     flat_labels: &[String],
 ) -> Vec<PermissionOption> {
-    warn_if_unanswerable("ExitPlanMode", request_id, flat_labels);
+    if unanswerable("ExitPlanMode", request_id, flat_labels) {
+        return Vec::new();
+    }
     flat_labels
         .iter()
         .enumerate()
@@ -87,31 +91,61 @@ pub(crate) fn exit_plan_mode_options(
         .collect()
 }
 
-/// Codex sent a `requestUserInput` with no labels, so there is no choice to
-/// offer: the facade's gate then offers reject alone (`mainframe_acp::gates`).
-/// Without this line that gate reads as a daemon bug rather than as the empty
-/// list it came from.
-fn warn_if_unanswerable(tool_name: &str, request_id: &str, flat_labels: &[String]) {
-    if flat_labels.is_empty() {
-        tracing::warn!(
-            module = "codex:approvals",
-            tool_name,
-            request_id,
-            "codex sent no option labels; the gate can only be rejected"
-        );
+/// Whether there is nothing here a client could pick: Codex sent no options,
+/// or every label arrived blank — the labels are read with `unwrap_or("")`,
+/// so an option object carrying no string label reaches us as an empty one.
+pub(crate) fn no_answerable_label(flat_labels: &[String]) -> bool {
+    flat_labels.iter().all(|label| label.trim().is_empty())
+}
+
+/// [`no_answerable_label`], said out loud. The facade turns an empty option
+/// list into a gate offering reject alone (`mainframe_acp::gates`); without
+/// this line that gate reads as a daemon bug rather than as the labels Codex
+/// never sent.
+fn unanswerable(tool_name: &str, request_id: &str, flat_labels: &[String]) -> bool {
+    if !no_answerable_label(flat_labels) {
+        return false;
     }
+    tracing::warn!(
+        module = "codex:approvals",
+        tool_name,
+        request_id,
+        "codex sent no usable option labels; the gate can only be rejected"
+    );
+    true
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The warn above is the only change to the empty-label path: an empty
-    /// list still offers nothing, which is what the facade turns into a
+    /// An empty list offers nothing, which is what the facade turns into a
     /// reject-only gate.
     #[test]
     fn empty_labels_still_offer_no_options() {
         assert!(exit_plan_mode_options("req_1", &[]).is_empty());
         assert!(ask_user_question_options("req_1", "Which file?", &[]).is_empty());
+    }
+
+    /// Labels are read with `unwrap_or("")`, so an option object carrying no
+    /// string label reaches these builders as a blank one. Offering it would
+    /// hand the client a nameless button whose answer is the empty string
+    /// Codex takes for a real choice.
+    #[test]
+    fn all_blank_labels_offer_no_options() {
+        let blanks = [String::new(), "   ".to_string()];
+        assert!(exit_plan_mode_options("req_1", &blanks).is_empty());
+        assert!(ask_user_question_options("req_1", "Which file?", &blanks).is_empty());
+    }
+
+    /// One real label among blanks is still an answerable gate, and the
+    /// blanks keep their positions: `choice-{i}` ids and `find_by_prefix`'s
+    /// fallback index both align with Codex's own option groups.
+    #[test]
+    fn one_real_label_keeps_every_position() {
+        let labels = [String::new(), "No, keep planning".to_string()];
+        let offered = exit_plan_mode_options("req_1", &labels);
+        assert_eq!(offered.len(), 2);
+        assert_eq!(offered[1].option_id, "choice-1");
     }
 }

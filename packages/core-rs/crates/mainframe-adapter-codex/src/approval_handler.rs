@@ -15,7 +15,9 @@ use crate::event_mapper::CurrentTurnPlan;
 use crate::types::RequestId;
 
 mod approval_options;
-use approval_options::{approval_triad, ask_user_question_options, exit_plan_mode_options};
+use approval_options::{
+    approval_triad, ask_user_question_options, exit_plan_mode_options, no_answerable_label,
+};
 
 /// `respond(id, result)` — the JSON-RPC reply callback captured per request.
 pub type RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync>;
@@ -232,8 +234,12 @@ impl ApprovalHandler {
         if entry.method == "item/tool/requestUserInput" {
             // A plain deny (T19, R3.5) — ExitPlanMode is exempt: its own
             // branch below reads `behavior` to pick between the "yes"/"no"
-            // labels, which IS its real answer, not an absence of one.
-            if entry.tool_name != "ExitPlanMode" && response.behavior == ControlBehavior::Deny {
+            // labels, which IS its real answer, not an absence of one. That
+            // needs labels to pick from; with none, the branch can only
+            // produce a blank answer Codex would take for a choice.
+            let picks_its_own_label =
+                entry.tool_name == "ExitPlanMode" && !no_answerable_label(&flat_labels(&entry));
+            if !picks_its_own_label && response.behavior == ControlBehavior::Deny {
                 tracing::info!(
                     module = "codex:approvals",
                     request_id = %response.request_id,
@@ -327,6 +333,16 @@ fn collect_question_ids(entry: &PendingApproval, response: &ControlResponse) -> 
         .collect()
 }
 
+/// Codex emits one option per group for `requestUserInput`; the gate and the
+/// answer both work off the flattened list.
+fn flat_labels(entry: &PendingApproval) -> Vec<String> {
+    entry
+        .option_labels
+        .as_ref()
+        .map(|groups| groups.iter().flatten().cloned().collect())
+        .unwrap_or_default()
+}
+
 /// Decide the single answer string to deliver for a requestUserInput.
 fn choose_request_user_input_answer(entry: &PendingApproval, response: &ControlResponse) -> String {
     if entry.tool_name != "ExitPlanMode" {
@@ -340,12 +356,7 @@ fn choose_request_user_input_answer(entry: &PendingApproval, response: &ControlR
         return extract_answer_from_updated_input(response);
     }
 
-    // Flatten option groups — Codex emits one option per group for ExitPlanMode.
-    let flat_labels: Vec<String> = entry
-        .option_labels
-        .as_ref()
-        .map(|groups| groups.iter().flatten().cloned().collect())
-        .unwrap_or_default();
+    let flat_labels = flat_labels(entry);
 
     let find_by_prefix = |prefix: &str, fallback_index: usize| -> String {
         if let Some(m) = flat_labels
