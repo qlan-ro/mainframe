@@ -162,6 +162,9 @@ test.describe('§facade-protocol streaming', () => {
 
     const partialFrames = updates(await partial);
     const partialIds = itemIds(partialFrames);
+    // A cursor at item 0 replays every later item; an empty set would make the
+    // two checks below vacuously true, so pin the count first.
+    expect(partialIds.size).toBe(orderedIds.length - 1);
     expect(partialIds.has(cursorId!)).toBe(false);
     for (const id of partialIds) expect(itemIds(liveFrames)).toContain(id);
 
