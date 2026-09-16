@@ -157,7 +157,7 @@ fn exit_plan_mode_answer(entry: &PendingApproval, response: &ControlResponse) ->
             module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
-            "codex: plan-exit revise free-text not supported by requestUserInput; falling back to deny option"
+            "codex: plan-exit revise free-text not supported by requestUserInput; answering with the no label, or the message when that label is blank"
         );
     }
 
