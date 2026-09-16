@@ -207,9 +207,15 @@ export class AcpSessionAttachment {
       }),
       client.onTranscriptCleared((sessionId) => {
         if (sessionId !== chatId()) return;
-        // The server wiped the transcript (plan-mode clear-context): drop
-        // the local projection and re-replay so tool-call items drop too.
+        // The server wiped the transcript (plan-mode clear-context): drop the
+        // local projection and re-replay so tool-call items drop too. The
+        // cursor and accumulator go NOW, not in the deferred reattach — a
+        // detach before that runs would swallow it, and a live update in the
+        // meantime would re-render items the server has already dropped.
+        // Only the round-trip is deferred.
         this.host.dispatch({ type: 'transcript.cleared' });
+        this.host.resetSettledCursor();
+        this.host.resetAccumulator();
         this.fullReplay.requestWipe();
       }),
       client.onQueueState((sessionId, refs) => {

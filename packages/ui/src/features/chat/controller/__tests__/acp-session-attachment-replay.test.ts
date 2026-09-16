@@ -6,10 +6,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { CHAT_ID } from './acp-test-kit';
-import { attachedWithStubbedResume, deferred, type ResumeResult } from './acp-attachment-support';
-
-/** Real-timer macrotask hop — flushes every microtask the reattach chain queues. */
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+import type { AcpSessionClientPort } from '../acp-session-attachment';
+import { attachedWithStubbedResume, deferred, tick, type ResumeResult } from './acp-attachment-support';
 
 describe('AcpSessionAttachment — resync retry is bounded (T40)', () => {
   it('ignores a resync while a reattach is already in flight — one resume, not two', async () => {
@@ -155,6 +153,34 @@ describe('AcpSessionAttachment — one full replay at a time (T40)', () => {
     // nothing to add.
     expect(resume).toHaveBeenCalledTimes(1);
     wipe.resolve({} as ResumeResult);
+  });
+
+  it('a wipe during an in-flight replay clears the cursor at once, so a detach before the deferred reattach cannot resurrect the items', async () => {
+    const { attachment, client, resume, state } = await attachedWithStubbedResume();
+    const gate = deferred<ResumeResult>();
+    resume.mockReturnValue(gate.promise);
+
+    client.emitResync(CHAT_ID);
+    await tick();
+    // A live update repopulates the transcript while the resync's replay is
+    // still in flight — the state the deferred wipe would otherwise inherit.
+    state.settledItemId = 'item-9';
+    state.hasItems = true;
+
+    client.emitTranscriptCleared(CHAT_ID);
+    const accumulatedAtWipe = state.hasItems;
+
+    // The user switches away before the coalesced wipe gets to run: its
+    // reattach() no-ops on `!subscribed`, so the resets must already have run.
+    attachment.detach();
+    resume.mockResolvedValue({} as ResumeResult);
+    gate.resolve({} as ResumeResult);
+    await tick();
+    await attachment.reactivate(client as unknown as AcpSessionClientPort);
+
+    const lastCursor = resume.mock.calls[resume.mock.calls.length - 1]?.[2];
+    expect(lastCursor).toEqual({ type: 'start' });
+    expect(accumulatedAtWipe).toBe(false);
   });
 
   it('a transcript_cleared arriving during a resync reattach runs after it settles — a wipe is never dropped', async () => {
