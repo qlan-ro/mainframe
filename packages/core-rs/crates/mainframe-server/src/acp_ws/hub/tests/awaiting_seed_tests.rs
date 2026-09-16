@@ -152,6 +152,7 @@ async fn a_gate_the_replay_redelivers_is_not_also_drained_from_the_buffer() {
     let seed = ResumeSeed {
         items: &items,
         reply: &reply,
+        replied: Arc::new(AtomicBool::new(false)),
         redelivered_gate: Some(rpc_id.as_str()),
     };
     hub.reset_session(&conn, "chat-1", seed, |c| {

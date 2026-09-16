@@ -8,6 +8,7 @@
 //! and the resume seed/teardown lifecycle; `fanout.rs` owns per-event
 //! delivery and `handlers.rs` the `ChatSurface` sink itself.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -143,6 +144,7 @@ impl FacadeHub {
         let Some(previous) = sessions.remove(chat_id) else {
             drop(sessions);
             connection.send_json(seed.reply);
+            seed.replied.store(true, Ordering::Relaxed);
             return;
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
@@ -150,6 +152,7 @@ impl FacadeHub {
         let catch_up = drain_into(&mut stream, previous, connection, seed.redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         connection.send_json(seed.reply);
+        seed.replied.store(true, Ordering::Relaxed);
         replay(connection);
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
@@ -220,6 +223,10 @@ pub struct ResumeSeed<'a> {
     /// The `session/resume` reply, sent ahead of the replay — and sent even
     /// when the session is gone, so the client's promise always settles.
     pub reply: &'a JsonRpcResponse,
+    /// Set as `reply` goes out, in whichever arm sends it. The replay and the
+    /// catch-up run behind that send, so a delivery that dies in there has
+    /// already settled the client's promise and owes it no second answer.
+    pub replied: Arc<AtomicBool>,
     /// The rpc id of the gate the replay redelivers on its own, if any.
     pub redelivered_gate: Option<&'a str>,
 }

@@ -119,3 +119,48 @@ async fn a_detach_during_the_snapshot_await_is_not_undone_by_the_resume() {
     hub.on_chat_surface_event(revision("chat-1", "Hello world"));
     assert!(drain(&mut rx).is_empty());
 }
+
+/// The replay and the catch-up run behind the reply, so the flag the resume
+/// failure path reads must already be set when the replay runs: a panic in
+/// there would otherwise answer -32603 for an id that has its result, and
+/// drop a Live slot the client is streaming against.
+#[tokio::test]
+async fn the_reply_is_marked_sent_before_the_replay_runs() {
+    let hub = hub();
+    let (_id, conn, _rx) = hub.register("mock-cli".to_string());
+
+    let replied = Arc::new(AtomicBool::new(false));
+    let seen_by_the_replay = AtomicBool::new(false);
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.begin_resume(&conn, "chat-1");
+    hub.reset_session(
+        &conn,
+        "chat-1",
+        seed_with_flag(&items, &reply(1), Arc::clone(&replied)),
+        |_c| seen_by_the_replay.store(replied.load(Ordering::SeqCst), Ordering::SeqCst),
+    );
+
+    assert!(
+        seen_by_the_replay.load(Ordering::SeqCst),
+        "the reply left before the replay, so the flag owes it the same order"
+    );
+}
+
+/// The slot-gone arm replies too — the client's promise settles even when its
+/// own detach won the race — so it owes the same flag.
+#[tokio::test]
+async fn a_reply_to_a_dropped_session_is_marked_sent_too() {
+    let hub = hub();
+    let (_id, conn, _rx) = hub.register("mock-cli".to_string());
+
+    let replied = Arc::new(AtomicBool::new(false));
+    let items = mainframe_acp::encode(&[display_message("m1", "Hello")]);
+    hub.reset_session(
+        &conn,
+        "chat-1",
+        seed_with_flag(&items, &reply(9), Arc::clone(&replied)),
+        |_c| {},
+    );
+
+    assert!(replied.load(Ordering::SeqCst), "the reply went out");
+}

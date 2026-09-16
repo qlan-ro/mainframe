@@ -119,14 +119,17 @@ async fn a_panicked_resume_settles_the_promise_and_asks_for_a_resync() {
     );
 }
 /// `reset_session` sends the success reply as it seeds, so a failure after
-/// that point owes the client nothing but a way back. The slot is no
-/// evidence of it: `session_detach` and `ChatEnded` drop it without the
-/// per-session lock, so a teardown racing the panic would make a map read
-/// answer -32603 for an id that already got a result.
+/// that point — a panic in the replay closure — owes the client nothing but a
+/// way back: the seeded stream is correct and the client is reading it. The
+/// slot is no evidence the reply went out, though: `session_detach` and
+/// `ChatEnded` drop it without the per-session lock, so a teardown racing the
+/// panic would make a map read answer -32603 for an id that already got a
+/// result.
 #[tokio::test]
-async fn a_replied_resume_failure_sends_only_a_resync() {
+async fn a_replied_resume_failure_keeps_the_session_and_sends_only_a_resync() {
     let ctx = AppCtx::test_ctx();
     let (_client_id, connection, mut rx) = ctx.facade_hub.register("mock-cli".to_string());
+    ctx.facade_hub.attach(&connection, "chat-1");
 
     fail_resume(ResumeFailure {
         connection: &connection,
@@ -142,6 +145,10 @@ async fn a_replied_resume_failure_sends_only_a_resync() {
     assert!(
         rx.try_recv().is_err(),
         "the reply already went out; a second response for that id could only be dropped"
+    );
+    assert!(
+        connection.is_attached("chat-1"),
+        "the seeded stream is the one the client is reading"
     );
 }
 

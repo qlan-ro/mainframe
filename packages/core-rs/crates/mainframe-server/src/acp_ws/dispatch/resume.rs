@@ -94,7 +94,7 @@ impl ResumeTask {
                 &task_ctx,
                 &task_conn,
                 ports.as_ref(),
-                &task_replied,
+                task_replied,
             )
             .await;
         });
@@ -116,7 +116,8 @@ struct ResumeFailure<'a> {
     connection: &'a FacadeConnection,
     request_id: Option<RequestId>,
     session_id: Option<&'a str>,
-    /// Whether the success reply already went out — `reset_session` returned.
+    /// Whether the success reply already went out — `reset_session` sets it
+    /// as it sends, in whichever arm sends it.
     replied: bool,
     cause: String,
 }
@@ -127,9 +128,9 @@ struct ResumeFailure<'a> {
 /// attached yet, so its own gap resume returns early.
 ///
 /// A claim whose reply never went out also owes the client one — its promise
-/// is still pending, and it has no other end. Once `reset_session` has
-/// returned, the reply is on the wire (it goes out in both of that method's
-/// arms), so a second response for that id could only be dropped.
+/// is still pending, and it has no other end. Once that reply is on the wire,
+/// a second response for that id could only be dropped, and the seeded stream
+/// it left behind is the one the client is reading.
 fn fail_resume(failure: ResumeFailure<'_>) {
     let ResumeFailure {
         connection,
@@ -181,7 +182,7 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
-    replied: &AtomicBool,
+    replied: Arc<AtomicBool>,
 ) {
     let (response, replay) = dispatch_resume(request, ports).await;
 
@@ -198,6 +199,7 @@ async fn deliver_resume(
     let seed = ResumeSeed {
         items: &replay.items,
         reply: &response,
+        replied,
         redelivered_gate: redelivered_gate.as_deref(),
     };
     let hub = &ctx.facade_hub;
@@ -217,7 +219,6 @@ async fn deliver_resume(
             queued,
         ));
     });
-    replied.store(true, Ordering::Relaxed);
     connection.clear_resume_failures(&session_id);
 }
 
