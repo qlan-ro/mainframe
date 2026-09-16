@@ -115,7 +115,7 @@ The daemon coalesces updates per connection every 100 ms, so several chunks for 
 
 ### Items and ids
 
-Every message, thought, and tool call has a stable id. The same id identifies the item in the live stream, in a `session/resume` replay, and in `GET /api/chats/{id}/messages`. Message ids are the provider's message id (`msg_*`), tool-call ids are the tool-use id (`toolu_*`). Because ids are stable, you can apply a replay on top of what you already hold without duplicating anything.
+Every message, thought, and tool call has a stable id. The same id identifies the item in the live stream, in a `session/resume` replay, and in `GET /api/chats/{id}/messages`. Treat ids as opaque strings; their shape depends on the adapter. Because ids are stable, you can apply a replay on top of what you already hold without duplicating anything.
 
 ### Chunks, upserts, and the clear frame
 
@@ -166,7 +166,9 @@ When the agent needs approval, the daemon sends you a request:
       { "optionId": "allow-always", "name": "Always allow", "kind": "allow_always" },
       { "optionId": "reject-once", "name": "Reject", "kind": "reject_once" } ],
     "_meta": { "_mainframe.dev": { "controlRequest": { "requestId": "req_001", "toolUseId": "toolu_01A",
-      "toolName": "Bash", "input": { "command": "rm -rf /tmp/scratch" }, "suggestions": [] } } } } }
+      "toolName": "Bash", "input": { "command": "rm -rf /tmp/scratch" },
+      "suggestions": [ { "type": "addRules", "behavior": "allow", "destination": "localSettings",
+        "rules": [ { "toolName": "Bash", "ruleContent": "rm -rf /tmp/scratch" } ] } ] } } } } }
 ```
 
 Updates keep streaming while the gate is open. Answer with a JSON-RPC response under the same id. Note the nesting: the result has an `outcome` object, which has its own `outcome` tag.
@@ -178,7 +180,7 @@ Updates keep streaming while the gate is open. Answer with a JSON-RPC response u
 
 Rules that matter:
 
-- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save.
+- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save, which for Claude means a non-empty `suggestions` list as in the example above.
 - A plain answer with an `optionId` the daemon did not offer is logged and ignored. The gate stays open and you receive nothing back, so validate against the offered list before sending.
 - An error response (`"error": {...}`) under the gate id denies the request.
 - `{ "outcome": { "outcome": "cancelled" } }` only withdraws the gate from your connection. It does not resolve it for the agent; send `session/cancel` for that.
@@ -216,7 +218,7 @@ The daemon sends a heartbeat every `heartbeatIntervalMs`:
 { "jsonrpc": "2.0", "method": "_mainframe.dev/heartbeat", "params": { "sequence": 42 } }
 ```
 
-`sequence` starts at 1 and increments by one. A jump larger than one, or silence for twice the interval, means you missed frames. Do not guess what you missed; call `session/resume`.
+`sequence` starts at 1 and increments by one. A jump larger than one means you missed frames. Do not guess what you missed; call `session/resume`. The protocol signal is the gap; the desktop client additionally treats two intervals of silence as a stalled connection and resumes then too, which is a sensible default for your own watchdog.
 
 ```json
 { "jsonrpc": "2.0", "id": 3, "method": "session/resume",
