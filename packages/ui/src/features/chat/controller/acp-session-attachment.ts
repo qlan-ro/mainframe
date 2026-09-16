@@ -77,7 +77,13 @@ export class AcpSessionAttachment {
   private client: AcpSessionClientPort | null = null;
   private readonly unsubscribe: Array<() => void> = [];
   private subscribed = false;
-  /** Survives a detach — distinguishes a genuinely first-ever attach (full replay) from a switch-back (cursor resume). */
+  /**
+   * Survives a detach — distinguishes a genuinely first-ever attach (full
+   * replay) from a switch-back (cursor resume). Set by `resume()`, not by
+   * `attach()`: a first attach whose resume rejects is not attached, but the
+   * reattach a resync then drives is, and everything gated on this flag (gap
+   * resume, reactivation, the empty-refresh guard) must come back with it.
+   */
   private hasAttached = false;
   /** One full replay at a time, for both the resync and the wipe trigger (T40). */
   private readonly fullReplay = new FullReplayRetry(
@@ -108,7 +114,6 @@ export class AcpSessionAttachment {
     this.bindClient(client);
     this.subscribeIfNeeded();
     await this.resume({ type: 'start' });
-    this.hasAttached = true;
   }
 
   /**
@@ -260,6 +265,9 @@ export class AcpSessionAttachment {
       this.host.dispatch({ type: 'history.refresh.refused' });
       return;
     }
+    // After the guard, never before: the first full replay must stay
+    // un-refusable, and the guard reads this flag.
+    this.hasAttached = true;
     this.host.resetAccumulator();
   }
 }
