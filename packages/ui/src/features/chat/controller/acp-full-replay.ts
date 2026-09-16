@@ -37,9 +37,13 @@ export class FullReplayRetry {
     void this.run();
   }
 
-  /** Never dropped: a wipe supersedes an armed retry, and waits out an in-flight replay. */
+  /**
+   * Never dropped: a wipe supersedes an armed retry, and waits out an
+   * in-flight replay. It also starts a fresh backoff — inheriting a capped
+   * delay would leave a user-initiated wipe with no retries at all.
+   */
   requestWipe(): void {
-    this.gaveUp = false;
+    this.reset();
     if (this.inFlight) {
       this.wipePending = true;
       return;

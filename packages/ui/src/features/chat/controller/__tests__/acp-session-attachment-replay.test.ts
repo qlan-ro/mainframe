@@ -110,6 +110,30 @@ describe('AcpSessionAttachment — resync retry is bounded (T40)', () => {
       vi.useRealTimers();
     }
   });
+  it('a wipe after the give-up starts a fresh backoff — its failed replay retries in 1s instead of giving up again', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const { client, resume } = await attachedWithStubbedResume();
+      resume.mockRejectedValue(new Error('resume failed'));
+
+      client.emitResync(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(resume).toHaveBeenCalledTimes(7);
+
+      // A user-initiated wipe is never dropped, so it must arrive with the
+      // retries the streak spent — not with the capped delay it inherited.
+      client.emitTranscriptCleared(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resume).toHaveBeenCalledTimes(8);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(resume).toHaveBeenCalledTimes(9);
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
   it('a gap resume clears the streak but does not swallow the armed retry', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
