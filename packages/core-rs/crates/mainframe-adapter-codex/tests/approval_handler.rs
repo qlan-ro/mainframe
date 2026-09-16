@@ -36,6 +36,14 @@ fn recording_respond() -> (RespondFn, Calls) {
     (respond, calls)
 }
 
+/// Address `decision` to the gate `request` raised.
+fn decision_for(request: &ControlRequest, decision: Value) -> Value {
+    let mut decision = decision;
+    decision["requestId"] = json!(request.request_id);
+    decision["toolUseId"] = json!(request.tool_use_id);
+    decision
+}
+
 fn resolve(handler: &ApprovalHandler, v: Value) {
     let response: ControlResponse = serde_json::from_value(v).unwrap();
     handler.resolve(&response);

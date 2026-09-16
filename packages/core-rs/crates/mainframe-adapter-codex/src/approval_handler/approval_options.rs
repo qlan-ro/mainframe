@@ -97,16 +97,11 @@ pub(crate) fn exit_plan_mode_options(
 /// Whether there is nothing here a client could pick: Codex sent no options,
 /// or every label arrived blank — the labels are read with `unwrap_or("")`,
 /// so an option object carrying no string label reaches us as an empty one.
-pub(crate) fn no_answerable_label(flat_labels: &[String]) -> bool {
-    flat_labels.iter().all(|label| label.trim().is_empty())
-}
-
-/// [`no_answerable_label`], said out loud. The facade turns an empty option
-/// list into a gate offering reject alone (`mainframe_acp::gates`); without
-/// this line that gate reads as a daemon bug rather than as the labels Codex
-/// never sent.
+/// Said out loud, because the facade turns an empty option list into a gate
+/// offering reject alone (`mainframe_acp::gates`); without this line that gate
+/// reads as a daemon bug rather than as the labels Codex never sent.
 fn unanswerable(tool_name: &str, request_id: &str, flat_labels: &[String]) -> bool {
-    if !no_answerable_label(flat_labels) {
+    if flat_labels.iter().any(|label| !label.trim().is_empty()) {
         return false;
     }
     tracing::warn!(
