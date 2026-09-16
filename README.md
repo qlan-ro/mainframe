@@ -129,6 +129,7 @@ Pairing over the internet requires a tunnel on the daemon's machine — and remo
 | [Running the Daemon](docs/guides/running-the-daemon.md) | Standalone install, prerequisites, systemd service |
 | [Cloudflare Tunnel Setup](docs/guides/cloudflare-tunnel.md) | Remote access: quick vs named tunnels, troubleshooting |
 | [API Reference](docs/API-REFERENCE.md) | HTTP and WebSocket API for the daemon |
+| [Driving Mainframe over ACP](docs/guides/acp-facade.md) | Integrator guide for the chat protocol: connect, prompt, stream, gates, reconnect |
 | [Developer Guide](docs/DEVELOPER-GUIDE.md) | Setup, workflow, monorepo conventions, configuration |
 | [Contributing](CONTRIBUTING.md) | How to contribute, code standards, PR process |
 

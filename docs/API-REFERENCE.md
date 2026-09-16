@@ -750,7 +750,9 @@ connections stream `session/update` with server-side coalescing
 (`FACADE_THROTTLE_INTERVAL_MS`). A connection observes a session once it has
 prompted or resumed it; one connection multiplexes any number of sessions.
 The desktop UI's chat controller speaks this protocol (`acp-client.ts` +
-`acp-session-plane.ts`).
+`acp-session-plane.ts`). Integrators writing their own client should start
+with the [ACP guide](guides/acp-facade.md), which walks the contract with
+wire examples; this section is the reference.
 
 **Connecting.** `GET /acp/{profile}` (upgrade), where `profile` names a
 registered adapter (`claude`, `codex`, `mock-cli`, …) — unregistered profiles
@@ -818,8 +820,10 @@ cadence. Message/thought item ids are the provider message id (`msg_*`,
 claimed by the message's first block; later blocks keep transcript-entry
 uuids), identical across live streaming, resume replay, and history
 reconstruction. A partial block aborted mid-stream (provider retry,
-interrupt, adapter death) emits one content-clearing upsert (`content: []`)
-so no client keeps text the transcript never got; tool-input streaming
+interrupt, adapter death) emits one content-clearing upsert (`content: []`
+with `_meta: null`; a client deletes the item on exactly that pair, since an
+empty `content` alone is a legitimate empty item) so no client keeps text
+the transcript never got; tool-input streaming
 (`input_json_delta`) is not consumed yet.
 
 **Item display fidelity (`ItemMeta`).** Every encoded item's
