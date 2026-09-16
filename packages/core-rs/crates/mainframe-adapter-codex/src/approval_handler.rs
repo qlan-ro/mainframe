@@ -362,12 +362,12 @@ fn choose_request_user_input_answer(entry: &PendingApproval, response: &ControlR
         if let Some(m) = flat_labels
             .iter()
             .find(|l| l.to_lowercase().starts_with(prefix))
-            && !m.is_empty()
+            && !m.trim().is_empty()
         {
             return m.clone();
         }
         match flat_labels.get(fallback_index) {
-            Some(f) if !f.is_empty() => f.clone(),
+            Some(f) if !f.trim().is_empty() => f.clone(),
             _ => response.message.clone().unwrap_or_default(),
         }
     };
