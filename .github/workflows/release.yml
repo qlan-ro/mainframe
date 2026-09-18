@@ -297,8 +297,16 @@ jobs:
   # pre-release, not "latest". If e2e failed/was cancelled this job is skipped and the draft waits
   # for a manual publish.
   publish-release:
-    needs: [release, e2e]
-    if: ${{ always() && needs.release.result == 'success' && needs.e2e.result == 'success' }}
+    needs: [release, e2e, build-app-tauri]
+    # build-app-tauri is a gate here even though `release` deliberately ignores it:
+    # that job uploads the installers AND the updater's latest.json straight to this
+    # tag, so publishing without it yields a release whose only assets are the daemon
+    # tarballs — and `releases/latest/download/latest.json`, which every installed app
+    # polls, 404s. A failed app build now leaves the draft for a manual publish, the
+    # same way a failed e2e run already does.
+    if: >-
+      ${{ always() && needs.release.result == 'success' && needs.e2e.result == 'success'
+      && needs.build-app-tauri.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -312,11 +320,38 @@ jobs:
           set -euo pipefail
           # GET /releases/tags/{tag} 404s on drafts; list and match by tag instead (same as the
           # "Normalize Tauri dmg asset name" step above).
-          release_id=$(gh api "repos/$REPO/releases?per_page=100" \
-            --jq "[.[] | select(.tag_name == \"$TAG\")][0].id // empty")
-          if [ -z "$release_id" ]; then
+          matches=$(gh api "repos/$REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\")]")
+          count=$(jq 'length' <<<"$matches")
+
+          if [ "$count" -eq 0 ]; then
             echo "No release found for $TAG — nothing to publish." >&2
             exit 1
           fi
+
+          # tauri-action and the `release` job each create a release for this tag, and
+          # a draft is invisible to GET /releases/tags/{tag}, so they can fail to find
+          # each other and split the assets across two objects. Taking [0] then published
+          # whichever the listing happened to return first — for v2.3.0 that was the
+          # daemon-only one, leaving the installers and latest.json stranded on a draft.
+          # Refuse to guess: a split needs a human to consolidate.
+          if [ "$count" -gt 1 ]; then
+            echo "::error::$count releases carry the tag $TAG. The assets are split across them;" \
+                 "consolidate onto one release and delete the rest, then publish manually." >&2
+            jq -r '.[] | "  id=\(.id) draft=\(.draft) assets=\([.assets[].name] | join(", "))"' <<<"$matches" >&2
+            exit 1
+          fi
+
+          release_id=$(jq -r '.[0].id' <<<"$matches")
+
+          # The updater manifest is the one asset whose absence is invisible until an
+          # installed app polls `releases/latest/download/latest.json` and gets a 404.
+          if ! jq -e '.[0].assets | map(.name) | index("latest.json")' <<<"$matches" >/dev/null; then
+            echo "::error::Release $TAG has no latest.json — publishing it would break the" \
+                 "in-app updater for every installed client. Leaving it as a draft." >&2
+            jq -r '.[0].assets[].name' <<<"$matches" >&2
+            exit 1
+          fi
+
           gh api -X PATCH "repos/$REPO/releases/$release_id" -F draft=false >/dev/null
           echo "Published release $TAG (draft -> published)."
