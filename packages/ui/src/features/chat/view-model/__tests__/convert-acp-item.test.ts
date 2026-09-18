@@ -130,6 +130,63 @@ describe('convertAcpItems — reaggregation', () => {
       { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
     ]);
   });
+
+  it('folds multiple message segments sharing a containerId into one assistant message, parts in item order', () => {
+    const items: AccumulatedItem[] = [
+      {
+        kind: 'message',
+        id: 'c1',
+        role: 'agent',
+        content: [textBlock('first')],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+      {
+        kind: 'tool-call',
+        id: 't1',
+        title: 'Bash',
+        status: 'completed',
+        content: [],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+      {
+        kind: 'message',
+        id: 'c1-1',
+        role: 'agent',
+        content: [textBlock('second')],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+      {
+        kind: 'tool-call',
+        id: 't2',
+        title: 'Bash',
+        status: 'completed',
+        content: [],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+      {
+        kind: 'message',
+        id: 'c1-2',
+        role: 'agent',
+        content: [textBlock('third')],
+        meta: itemMeta({ containerId: 'c1' }),
+      },
+    ];
+
+    expect(convertAcpItems(items, stampFor)).toEqual([
+      {
+        role: 'assistant',
+        id: 'c1',
+        createdAt,
+        content: [
+          { type: 'text', text: 'first' },
+          { type: 'tool-call', toolCallId: 't1', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+          { type: 'text', text: 'second' },
+          { type: 'tool-call', toolCallId: 't2', toolName: 'Bash', args: {}, result: undefined, isError: undefined },
+          { type: 'text', text: 'third' },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('convertAcpItems — tool-group echo', () => {

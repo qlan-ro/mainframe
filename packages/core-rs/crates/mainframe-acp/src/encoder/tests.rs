@@ -1,12 +1,16 @@
 //! Basic leaf/content ordering, purity/parity, and queued-turn cases
 //! for the canonical encoder. Tool-call/task-group cases moved to
 //! `tool_call_tests.rs`, diff/truncation cases to
-//! `result_content_tests.rs`, and container/meta cases to
-//! `meta_tests.rs` (todo #350, plan task 37, R2.13) — all four share
+//! `result_content_tests.rs`, container/meta cases to `meta_tests.rs`,
+//! text/thought segmentation cases to `segment_tests.rs`, and
+//! no-split marker cases (compaction, skill-loaded, error) to
+//! `marker_tests.rs` (todo #350, plan task 37, R2.13) — all five share
 //! this file's fixture builders via `use super::*`.
 
+mod marker_tests;
 mod meta_tests;
 mod result_content_tests;
+mod segment_tests;
 mod tool_call_tests;
 
 use std::collections::HashMap;
