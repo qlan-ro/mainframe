@@ -3,9 +3,9 @@
 //!
 //! Upgrade auth (token query param unless loopback), `connection.ready` first
 //! frame, per-connection chat subscriptions (`subscribe`/`unsubscribe` +
-//! `subscribe:ack`), per-connection file subscriptions wired to the
-//! `FileWatcherService`, and the broadcast fan-out with chatId-scoped vs
-//! connection-global gating.
+//! `subscribe:ack` — the reply carries `worktree.offer.snapshot` then the
+//! ack), per-connection file subscriptions wired to the `FileWatcherService`,
+//! and the broadcast fan-out with chatId-scoped vs connection-global gating.
 //!
 //! **Forced deviation from CONCURRENCY.tsv:** the tsv models each client as a
 //! separate *write task* fed by an mpsc, which requires splitting the axum
@@ -19,14 +19,13 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, Once, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use dashmap::DashMap;
-use mainframe_chat::chat_manager::CommandMeta;
 use mainframe_lsp::lsp_connection::attach_client_with_capture;
 use mainframe_lsp::{
     ChatStore, ClientRef, LspConnectionHandler, LspServerHandle, ProjectStore, ReattachAction,
@@ -40,19 +39,15 @@ use tokio::sync::{broadcast, mpsc};
 use crate::ctx::AppCtx;
 use crate::db::Db;
 use crate::middleware::auth::validate_device_token;
-use crate::net::{client_ip, is_localhost};
+use crate::net::{is_localhost, trust_proxy_client_ip};
 use crate::ws_file_watch::{WsFileWatch, resolve_subscribe_base, validate_relative};
 use crate::ws_schemas::parse_client_event;
 
 /// Event types delivered to every connected client regardless of per-chat
-/// subscription (unread-dot / attention-badge for backgrounded chats). Verbatim
-/// from `CONNECTION_GLOBAL_EVENT_TYPES` + `automation.notification` (T9.1 —
-/// chatId-less, fans out to all clients).
-const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
-    "chat.notification",
-    "permission.requested",
-    "automation.notification",
-];
+/// subscription (unread-dot / attention-badge for backgrounded chats). A gate
+/// on a backgrounded chat reaches the sessions list through `chat.updated`
+/// (chatId-less on the wire, so global) carrying `displayStatus: waiting`.
+const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 2] = ["chat.notification", "automation.notification"];
 
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).
@@ -79,6 +74,35 @@ pub fn is_ws_auth_required(ip: &str, secret: Option<&str>) -> bool {
     }
 }
 
+/// Shared upgrade-auth check for every self-authenticating WS route (`/`,
+/// `/lsp/:projectId/:language`, `/acp/:profile`): a token query param unless
+/// the peer is loopback. Extracted once a third route needed the identical
+/// block (repo rule: extract shared helpers at 3+ duplications).
+pub(crate) async fn authenticate_ws_upgrade(
+    ctx: &AppCtx,
+    peer: &SocketAddr,
+    headers: &HeaderMap,
+    token: Option<String>,
+) -> bool {
+    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
+    let ip = trust_proxy_client_ip(&peer.ip().to_string(), forwarded);
+    let secret = ctx.auth_secret.clone();
+
+    if !is_ws_auth_required(&ip, secret.as_deref()) {
+        return true;
+    }
+    let authed = match (token, secret) {
+        (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
+            .await
+            .is_some(),
+        _ => false,
+    };
+    if !authed {
+        tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
+    }
+    authed
+}
+
 /// The `/` WS route handler: authenticates the upgrade (token query param unless
 /// loopback), then upgrades. Mirrors `setupUpgradeAuth` + the `connection` setup.
 pub(crate) async fn ws_handler(
@@ -88,21 +112,8 @@ pub(crate) async fn ws_handler(
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let ip = client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
-
-    if is_ws_auth_required(&ip, secret.as_deref()) {
-        let authed = match (query.token, secret) {
-            (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
-                .await
-                .is_some(),
-            _ => false,
-        };
-        if !authed {
-            tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
-            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        }
+    if !authenticate_ws_upgrade(&ctx, &peer, &headers, query.token).await {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
     // LSP upgrades (`/lsp/:projectId/:language`) are a separate axum route
@@ -161,21 +172,8 @@ pub(crate) async fn lsp_ws_handler(
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    let ip = client_ip(&peer.ip().to_string(), forwarded);
-    let secret = ctx.auth_secret.clone();
-
-    if is_ws_auth_required(&ip, secret.as_deref()) {
-        let authed = match (query.token, secret) {
-            (Some(token), Some(secret)) => validate_device_token(&ctx.db, secret, token)
-                .await
-                .is_some(),
-            _ => false,
-        };
-        if !authed {
-            tracing::warn!(ip, "ws upgrade rejected: invalid or missing token");
-            return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
-        }
+    if !authenticate_ws_upgrade(&ctx, &peer, &headers, query.token).await {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
     let Some(manager) = ctx.lsp_manager.clone() else {
@@ -429,22 +427,6 @@ async fn handle_client_event(
     match event {
         ClientEvent::Subscribe { chat_id } => {
             lock(subscriptions).insert(chat_id.clone());
-            // Node emits message.queued.snapshot (refs from getQueuedForChat) BEFORE
-            // subscribe:ack (`sendQueuedSnapshot`). With the ChatManager unwired the
-            // queue is empty, so this degrades to the empty snapshot the daemon sent
-            // before; once `ctx.chat_manager` is Some the real refs flow through.
-            let refs = ctx
-                .chat_manager
-                .as_ref()
-                .map(|cm| cm.get_queued_for_chat(&chat_id))
-                .unwrap_or_default();
-            send(
-                out_tx,
-                &DaemonEvent::MessageQueuedSnapshot {
-                    chat_id: chat_id.clone(),
-                    refs,
-                },
-            );
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
             let offers = ctx
@@ -483,97 +465,7 @@ async fn handle_client_event(
                 chat_id.as_deref(),
             );
         }
-        ClientEvent::MessageSend {
-            chat_id,
-            content,
-            attachment_ids,
-            metadata,
-        } => {
-            handle_message_send(
-                ctx,
-                out_tx,
-                subscriptions,
-                chat_id,
-                content,
-                attachment_ids,
-                metadata,
-            )
-            .await;
-        }
-        ClientEvent::PermissionRespond { chat_id, response } => {
-            handle_permission_respond(ctx, out_tx, chat_id, response).await;
-        }
     }
-}
-
-/// `message.send` → `ChatManager.sendMessage(chatId, content, attachmentIds,
-/// metadata)`. Registers the sending connection as a subscriber of `chat_id`
-/// first, so events emitted before the client's own `subscribe` frame arrives
-/// still reach it. A rejection logs `ws message handler error` and emits a
-/// chat-scoped error with the underlying reason. Until `ctx.chat_manager` is wired
-/// the seam warns once and drops the send.
-async fn handle_message_send(
-    ctx: &Arc<AppCtx>,
-    out_tx: &mpsc::UnboundedSender<String>,
-    subscriptions: &Arc<Mutex<HashSet<String>>>,
-    chat_id: String,
-    content: String,
-    attachment_ids: Option<Vec<String>>,
-    metadata: Option<mainframe_types::events::MessageSendMetadata>,
-) {
-    // The sender is the one connection guaranteed to care about this chat, and
-    // send_message emits the user message before this task ever reads the client's
-    // `subscribe` frame — without membership here the fan-out drops those events.
-    lock(subscriptions).insert(chat_id.clone());
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        warn_message_send_seam();
-        return;
-    };
-    let command = metadata.and_then(|m| m.command).map(|c| CommandMeta {
-        name: c.name,
-        source: c.source,
-        args: c.args,
-    });
-    if let Err(err) = cm
-        .send_message(&chat_id, &content, attachment_ids.as_deref(), command)
-        .await
-    {
-        tracing::error!(%err, "ws message handler error");
-        send(out_tx, &send_failure_event(&chat_id, &err));
-    }
-}
-
-/// `permission.respond` → `ChatManager.respondToPermission(chatId, response)`,
-/// bracketed by the same received/delivered info logs the TS handler emits. A
-/// rejection logs and emits a chat-scoped error with the underlying reason.
-async fn handle_permission_respond(
-    ctx: &Arc<AppCtx>,
-    out_tx: &mpsc::UnboundedSender<String>,
-    chat_id: String,
-    response: mainframe_types::adapter::ControlResponse,
-) {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        warn_permission_respond_seam();
-        return;
-    };
-    let request_id = response.request_id.clone();
-    tracing::info!(
-        chat_id,
-        request_id = %request_id,
-        tool_name = ?response.tool_name,
-        behavior = ?response.behavior,
-        "permission.respond received from client"
-    );
-    if let Err(err) = cm.respond_to_permission(&chat_id, response).await {
-        tracing::error!(%err, "ws message handler error");
-        send(out_tx, &send_failure_event(&chat_id, &err));
-        return;
-    }
-    tracing::info!(
-        chat_id,
-        request_id = %request_id,
-        "permission.respond delivered to adapter"
-    );
 }
 
 async fn handle_subscribe_file(
@@ -717,13 +609,6 @@ fn build_connect_replay_events(
         .collect()
 }
 
-fn send_failure_event(chat_id: &str, err: &dyn std::fmt::Display) -> DaemonEvent {
-    DaemonEvent::Error {
-        chat_id: Some(chat_id.to_string()),
-        error: err.to_string(),
-    }
-}
-
 fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
     match serde_json::to_string(event) {
         Ok(payload) => {
@@ -735,20 +620,6 @@ fn send(out_tx: &mpsc::UnboundedSender<String>, event: &DaemonEvent) {
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-fn warn_message_send_seam() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        tracing::warn!("ws message.send received but chat handling is Phase 4 — ignoring");
-    });
-}
-
-fn warn_permission_respond_seam() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        tracing::warn!("ws permission.respond received but chat handling is Phase 4 — ignoring");
-    });
 }
 
 #[cfg(test)]
@@ -790,18 +661,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn send_failure_event_carries_the_chat_id_and_the_real_message() {
-        let err = "Chat c1 not running".to_string();
-        let event = send_failure_event("c1", &err);
-        let value = serde_json::to_value(event).unwrap();
-
-        assert_eq!(value["chatId"], serde_json::json!("c1"));
-        assert_eq!(value["error"], serde_json::json!("Chat c1 not running"));
-        let old_message = format!("{} {}", "Internal", "error");
-        assert!(!value.to_string().contains(&old_message));
-    }
-
     // Seam-3 transport: a harvested quota carries no chatId, so the fan-out must
     // reach every client account-wide — even one subscribed to no chat.
     #[test]
@@ -822,6 +681,28 @@ mod tests {
             serde_json::json!(55.0)
         );
     }
+
+    /// R2.7: the old WS first-hop rule trusted a FORGED leftmost
+    /// `x-forwarded-for` hop, so a client could claim loopback (and skip auth
+    /// entirely) by prepending `127.0.0.1` ahead of its real address.
+    /// `trust_proxy_client_ip` walks the chain from the right instead, so the
+    /// real appended hop wins and a token is required.
+    #[tokio::test]
+    async fn a_forged_leftmost_forwarded_for_cannot_claim_loopback() {
+        let mut ctx = Arc::try_unwrap(AppCtx::test_ctx()).unwrap_or_else(|_| unreachable!());
+        ctx.auth_secret = Some("secret".to_string());
+        let ctx = Arc::new(ctx);
+
+        let peer: SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "127.0.0.1, 203.0.113.7".parse().unwrap());
+
+        let authed = authenticate_ws_upgrade(&ctx, &peer, &headers, None).await;
+        assert!(
+            !authed,
+            "a forged leftmost 127.0.0.1 must not exempt the real client from auth"
+        );
+    }
 }
 
 // PORT STATUS: src/server/websocket.ts (+ ws-file-watch wiring, ws-schemas seam)
@@ -832,13 +713,12 @@ mod tests {
 // Chat subscriptions = shared Mutex<HashSet> (read by fan-out, tsv PER_ENTITY);
 // file-watch state = task-local (single owner). Broadcast fan-out = one pump task
 // over broadcast::Receiver → per-client mpsc, with the exact chatId-scoped vs
-// connection-global gating. message.send → ChatManager.sendMessage (attachments +
-// command meta), permission.respond → respondToPermission, and subscribe's
-// message.queued.snapshot (real getQueuedForChat refs) are all WIRED — they
-// self-gate on ctx.chat_manager: while it is None (ChatManager construction is a
-// documented daemon-boot blocker) they degrade to empty snapshot / warn-once +
-// ignore, exactly the pre-4.6b behavior the ws_integration tests pin. Once boot
-// sets Some(..) the wired paths run. Adapter-replay (buildConnectReplayEvents over
+// connection-global gating. The legacy chat dialect's client frames
+// (message.send, permission.respond) and subscribe's message.queued.snapshot
+// died with spec decision 24 — chat sends and gates ride the /acp/{profile}
+// facade now; this socket keeps only the non-chat domains and rejects the
+// retired frames at the schema seam (ws_schemas.rs). Adapter-replay
+// (buildConnectReplayEvents over
 // the live registry snapshots) streams right after connection.ready so a
 // reconnecting client's catalog is authoritative. Task 5.5 added lsp_ws_handler:
 // the `/lsp/:projectId/:language` route self-authenticates, validates+spawns via
@@ -847,6 +727,3 @@ mod tests {
 // replays the cached initialize + re-bridges). KNOWN GAP: the mainframe-lsp seam
 // consumes the child's stdout/stderr on first attach, so a reconnect after the
 // first bridge tore down cannot re-proxy (start_reattach_bridge warns) — flagged.
-// message.send also registers the sending connection as a subscriber of its
-// target chat before the seam check, so events emitted in the send-before-
-// subscribe window are no longer dropped (#275).

@@ -1,0 +1,54 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_02E",
+    "title": "Edit",
+    "kind": "edit",
+    "status": "completed",
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "Applied 1 edit to /Users/dev/code/mainframe/src/config.json"
+        }
+      },
+      {
+        "type": "diff",
+        "changes": [
+          {
+            "operation": "modify",
+            "path": "/Users/dev/code/mainframe/src/config.json",
+            "fileType": "text"
+          }
+        ],
+        "patch": {
+          "format": "git_patch",
+          "text": "diff --git /Users/dev/code/mainframe/src/config.json /Users/dev/code/mainframe/src/config.json\n--- /Users/dev/code/mainframe/src/config.json\n+++ /Users/dev/code/mainframe/src/config.json\n@@ -1,3 +1,3 @@\n {\n-  \"debug\": false\n+  \"debug\": true\n }\n"
+        },
+        "_meta": {
+          "_mainframe.dev": {
+            "structuredPatch": [
+              {
+                "oldStart": 1,
+                "oldLines": 3,
+                "newStart": 1,
+                "newLines": 3,
+                "lines": [" {", "-  \"debug\": false", "+  \"debug\": true", " }"]
+              }
+            ],
+            "originalFile": "{\n  \"debug\": false\n}\n",
+            "modifiedFile": "{\n  \"debug\": true\n}\n"
+          }
+        }
+      }
+    ],
+    "rawInput": {
+      "file_path": "/Users/dev/code/mainframe/src/config.json",
+      "old_string": "\"debug\": false",
+      "new_string": "\"debug\": true"
+    }
+  }
+}

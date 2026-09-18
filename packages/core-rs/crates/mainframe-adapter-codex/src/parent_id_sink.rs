@@ -36,12 +36,13 @@ impl SessionSink for ParentIdSink {
             metadata,
         );
     }
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         self.inner.on_tool_result(
             content
                 .into_iter()
                 .map(|b| with_parent(b, &self.parent))
                 .collect(),
+            vendor_id,
         );
     }
     fn on_permission(&self, request: mainframe_adapter_api::ControlRequest) {
@@ -59,8 +60,8 @@ impl SessionSink for ParentIdSink {
     fn on_error(&self, error: mainframe_adapter_api::AdapterError) {
         self.inner.on_error(error);
     }
-    fn on_compact(&self) {
-        self.inner.on_compact();
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        self.inner.on_compact(vendor_id);
     }
     fn on_compact_start(&self) {
         self.inner.on_compact_start();

@@ -1,0 +1,10 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_01A",
+    "title": null,
+    "content": null
+  }
+}

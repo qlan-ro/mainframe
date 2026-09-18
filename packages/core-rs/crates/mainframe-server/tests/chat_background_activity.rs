@@ -89,6 +89,7 @@ fn harness() -> Harness {
         quota,
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
+        None,
     );
 
     Harness {

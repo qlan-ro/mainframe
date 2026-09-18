@@ -938,6 +938,9 @@ pub fn build_chat_manager(
     // the adapter's title spawn, so the ChatManager no longer needs it. The param
     // is retained for the boot call site (mainframe-daemon) until it drops the arg.
     _resolved_path: ResolvedPath,
+    // The chat-surface observer (todo #350): the ACP facade hub in the daemon
+    // boot; `None` in harnesses that exercise the legacy surface only.
+    chat_surface: Option<Arc<dyn mainframe_chat::chat_surface::ChatSurface>>,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
         db,
@@ -955,8 +958,11 @@ pub fn build_chat_manager(
         claude_workflows,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
-    let manager =
-        Arc::new(ChatManager::new(deps.clone()).with_external_sessions(external_sessions));
+    let mut manager = ChatManager::new(deps.clone()).with_external_sessions(external_sessions);
+    if let Some(surface) = chat_surface {
+        manager = manager.with_chat_surface(surface);
+    }
+    let manager = Arc::new(manager);
     manager.attach_self();
     let _ = deps.chat_manager.set(Arc::downgrade(&manager));
     manager

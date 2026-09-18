@@ -23,7 +23,7 @@ import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 import { getCommands } from '@/lib/api/commands';
 import { publishCommands } from '../chat/commands/command-registry';
-import { useChatExtras } from '../chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../chat/runtime/chat-extras';
 import { useDraftConfig } from '../sessions/runtime/draft-config';
 import { resolveDraftChatContext } from '../chat/composer/triggers/resolve-draft-chat-context';
 import { useSkillsNonce } from './use-skills-revalidation';

@@ -1,0 +1,25 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "title": "Allow Bash to run this command?",
+  "description": "rm -rf /tmp/scratch",
+  "subject": {
+    "type": "tool_call",
+    "toolCall": {
+      "toolCallId": "toolu_01A",
+      "title": "Bash"
+    }
+  },
+  "options": [
+    {
+      "optionId": "allow-once",
+      "name": "Allow once",
+      "kind": "allow_once"
+    },
+    {
+      "optionId": "reject-once",
+      "name": "Reject",
+      "kind": "reject_once"
+    }
+  ]
+}

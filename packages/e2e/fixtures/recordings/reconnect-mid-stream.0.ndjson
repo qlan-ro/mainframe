@@ -1,0 +1,16 @@
+{"dir":"in","method":"sendMessage","args":["Stream a long twelve-part answer"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-reconnect-mid-stream-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 1 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":1000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 2 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":2000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 3 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":3000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 4 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":4000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 5 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":5000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 6 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":6000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 7 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":7000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 8 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":8000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 9 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":9000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 10 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":10000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 11 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":11000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Stream chunk 12 of 12"}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":12000}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"STREAM-COMPLETE: all twelve chunks delivered."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}}],"delayMs":13000}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.03,"usage":{"input_tokens":30,"output_tokens":24},"subtype":"success","is_error":false}],"delayMs":13200}

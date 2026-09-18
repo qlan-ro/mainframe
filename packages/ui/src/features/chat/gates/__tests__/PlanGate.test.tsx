@@ -45,6 +45,9 @@ function makeEntry(): ChatPermissionEntry {
       input: { plan: '1. First step\n2. Second step' },
       suggestions: [],
     },
+    // PlanGate has its own bespoke approve/revise/reject UI and never reads
+    // `options` — this fixture only satisfies `ChatPermissionEntry`'s shape.
+    options: [],
   };
 }
 

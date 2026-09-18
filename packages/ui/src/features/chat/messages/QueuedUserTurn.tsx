@@ -20,7 +20,7 @@ import { PencilIcon, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Button } from '@/components/ui/button';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { useComposerEdit } from '../composer/edit/composer-edit-context';
 
 // ── Ordinal helper ────────────────────────────────────────────────────────────

@@ -72,7 +72,7 @@ let mockPercent: number | null = 42;
 vi.mock('../use-context-percent', () => ({ useContextPercent: () => mockPercent }));
 
 let mockUsage: ContextUsage | undefined = { percentage: 42, totalTokens: 84_000, maxTokens: 200_000 };
-vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { contextUsage: mockUsage } }),
 }));
 

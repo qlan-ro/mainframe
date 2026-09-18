@@ -22,7 +22,7 @@ let __accept: Mock<(worktreePath: string) => Promise<void>>;
 let __dismiss: Mock<(worktreePath: string) => Promise<void>>;
 let __clear: Mock<() => void>;
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { chatId: __chatId } }),
   useWorktreeOffer: () => ({
     offers: __offers,

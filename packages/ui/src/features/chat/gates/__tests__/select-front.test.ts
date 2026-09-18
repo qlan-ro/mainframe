@@ -30,7 +30,7 @@ function entry(requestId: string, askedAt: number, over: Partial<ControlRequest>
     suggestions: [],
     ...over,
   };
-  return { requestId, request, askedAt };
+  return { requestId, request, askedAt, options: [] };
 }
 
 // ---------------------------------------------------------------------------

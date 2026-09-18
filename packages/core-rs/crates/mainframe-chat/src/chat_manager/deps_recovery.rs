@@ -123,7 +123,7 @@ impl DegradedRecoveryDeps for RecoveryWrapper {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .delete(chat_id);
-        self.event_handler.clear_display_cache(chat_id);
+        self.event_handler.clear_display_state(chat_id);
     }
 }
 

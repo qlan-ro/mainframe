@@ -8,7 +8,7 @@
  * Summary row both report this number, so the resolution lives here once rather
  * than at each call site.
  */
-import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useAdapters } from '@/store/adapters';
 import { deriveContextPct } from '@/features/chat/thread/session-bar-status';
 

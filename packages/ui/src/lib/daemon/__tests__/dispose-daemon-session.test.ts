@@ -23,6 +23,8 @@ import { killAndDisposeCachedTerminals } from '../../../store/terminal-cleanup';
 import { disposeDaemonSession } from '../dispose-daemon-session';
 import { useAdaptersStore, resetAdapters, seedAdapters } from '../../../store/adapters';
 import { seedAdaptersFor } from '../../../store/adapters-seed';
+import { getAcpFacadeClient } from '../acp-clients';
+import { setActiveDaemon } from '../active-daemon';
 
 const adapterInfo = (id: string): AdapterInfo => ({
   id,
@@ -122,5 +124,16 @@ describe('disposeDaemonSession', () => {
     await Promise.resolve();
 
     expect(useAdaptersStore.getState().byId).toEqual({});
+  });
+
+  it('a daemon switch drops the cached facade clients — even a switch that lands back on the same daemon id (R1.1)', () => {
+    setActiveDaemon({ id: 'daemon-a', kind: 'local', label: 'A', baseUrl: 'http://a', token: null });
+    const before = getAcpFacadeClient('claude');
+
+    disposeDaemonSession();
+
+    // Same daemon id afterward — without the hard-clear, keying alone
+    // would still resolve `before`. Only the explicit reset proves out.
+    expect(getAcpFacadeClient('claude')).not.toBe(before);
   });
 });

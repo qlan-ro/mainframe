@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
 
-use crate::history::{tool_result_block, tool_use_block};
+use crate::history::{tool_result_block, tool_use_block, vendor_metadata};
 use crate::item_types::WebSearchItem;
 
 /// Codex's `webSearch` item carries only the query — no result payload ever
@@ -15,6 +15,12 @@ use crate::item_types::WebSearchItem;
 pub(crate) fn render_web_search(w: &WebSearchItem, sink: &Arc<dyn SessionSink>) {
     let mut input = HashMap::new();
     input.insert("query".to_string(), serde_json::json!(w.query));
-    sink.on_message(vec![tool_use_block(&w.id, "WebSearch", input)], None);
-    sink.on_tool_result(vec![tool_result_block(&w.id, "", false, None)]);
+    sink.on_message(
+        vec![tool_use_block(&w.id, "WebSearch", input)],
+        vendor_metadata(&w.id),
+    );
+    sink.on_tool_result(
+        vec![tool_result_block(&w.id, "", false, None)],
+        Some(format!("{}:result", w.id)),
+    );
 }

@@ -1,0 +1,14 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_1",
+  "refs": [
+    {
+      "messageId": "dmsg_0003",
+      "chatId": "chat_1",
+      "uuid": "a1b2c3d4",
+      "content": "Continue with the fix",
+      "attachmentIds": ["att_1"],
+      "timestamp": "2026-07-08T10:15:30.000Z"
+    }
+  ]
+}

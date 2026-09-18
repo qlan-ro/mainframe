@@ -22,7 +22,7 @@ import { Bot, ChevronLeft, ChevronRight, CircleDashed, Logs, SquareTerminal, Wor
 import type { LucideIcon } from 'lucide-react';
 import type { BackgroundActivityTask, BackgroundWorkKind, ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
-import { useChatExtras } from '@/features/chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { formatElapsed, useNow } from './background-activity-view';
 import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
 import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';

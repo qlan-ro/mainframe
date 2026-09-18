@@ -33,13 +33,29 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
             arg::<Vec<MessageContent>>(event, 0)?,
             arg::<Option<MessageMetadata>>(event, 1)?,
         ),
-        "onToolResult" => sink.on_tool_result(arg(event, 0)?),
+        // `args[1]` (the vendor id) is optional so pre-existing recorded
+        // fixtures that predate it keep replaying unchanged.
+        "onToolResult" => sink.on_tool_result(
+            arg(event, 0)?,
+            match event.args.get(1) {
+                Some(_) => arg::<Option<String>>(event, 1)?,
+                None => None,
+            },
+        ),
         "onPermission" => sink.on_permission(arg::<ControlRequest>(event, 0)?),
         "onPermissionCancelled" => sink.on_permission_cancelled(&arg::<String>(event, 0)?),
         "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
         "onExit" => sink.on_exit(arg::<Option<i32>>(event, 0)?),
         "onError" => sink.on_error(AdapterError::Message(recorded_error(event)?)),
-        "onCompact" => sink.on_compact(),
+        // `args[0]` (the vendor id) is optional so pre-existing recorded
+        // fixtures that predate it keep replaying unchanged.
+        "onCompact" => {
+            let vendor_id = match event.args.first() {
+                Some(_) => arg::<Option<String>>(event, 0)?,
+                None => None,
+            };
+            sink.on_compact(vendor_id.as_deref())
+        }
         "onCompactStart" => sink.on_compact_start(),
         "onContextUsage" => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
         "onPlanFile" => sink.on_plan_file(&arg::<String>(event, 0)?),
@@ -57,6 +73,16 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
         "onProviderQuota" => {
             sink.on_provider_quota(&arg::<String>(event, 0)?, arg::<ProviderQuota>(event, 1)?)
         }
+        // todo #350 group D task 11: extends the fixture vocabulary so a
+        // captured `api_error` retry can be replayed through the sink.
+        "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
+        // todo #350: a recording can now emit a partial for message A, then
+        // `onApiRetry`, then the completed message B — the sequence the
+        // no-ghost-bubble e2e scenario asserts against.
+        "onMessagePartial" => sink.on_message_partial(
+            arg::<String>(event, 0)?.as_str(),
+            arg::<Vec<MessageContent>>(event, 1)?,
+        ),
         method => tracing::warn!(%method, "mock-cli ignored unknown recorded sink method"),
     }
     Ok(())
@@ -83,6 +109,8 @@ mod tests {
 
     use serde_json::json;
 
+    use mainframe_types::content::LeafContent;
+
     use crate::fixture::EventDirection;
 
     use super::*;
@@ -90,11 +118,13 @@ mod tests {
     #[derive(Default)]
     struct RecordingSink {
         cancelled: Mutex<Vec<String>>,
+        api_retries: Mutex<Vec<(i64, Option<String>)>>,
+        partials: Mutex<Vec<(String, Vec<MessageContent>)>>,
     }
     impl SessionSink for RecordingSink {
         fn on_init(&self, _session_id: &str) {}
         fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-        fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+        fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
         fn on_permission(&self, _request: ControlRequest) {}
         fn on_permission_cancelled(&self, request_id: &str) {
             self.cancelled
@@ -105,7 +135,7 @@ mod tests {
         fn on_result(&self, _data: SessionResult) {}
         fn on_exit(&self, _code: Option<i32>) {}
         fn on_error(&self, _error: AdapterError) {}
-        fn on_compact(&self) {}
+        fn on_compact(&self, _vendor_id: Option<&str>) {}
         fn on_compact_start(&self) {}
         fn on_context_usage(&self, _usage: ContextUsage) {}
         fn on_plan_file(&self, _file_path: &str) {}
@@ -116,6 +146,18 @@ mod tests {
         fn on_cli_message(&self, _text: &str) {}
         fn on_skill_loaded(&self, _entry: LoadedSkill) {}
         fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
+        fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+            self.api_retries
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((attempt, reason));
+        }
+        fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+            self.partials
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((api_message_id.to_string(), content));
+        }
     }
 
     fn recorded(method: &str, args: Vec<Value>) -> RecordedEvent {
@@ -140,6 +182,43 @@ mod tests {
         assert_eq!(
             *sink.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
             vec!["req_1".to_string()]
+        );
+    }
+
+    #[test]
+    fn dispatches_a_recorded_on_api_retry() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded("onApiRetry", vec![json!(2), json!("overloaded_error")]);
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        assert_eq!(
+            *sink.api_retries.lock().unwrap_or_else(|e| e.into_inner()),
+            vec![(2, Some("overloaded_error".to_string()))]
+        );
+    }
+
+    #[test]
+    fn dispatches_a_recorded_on_message_partial() {
+        let sink = Arc::new(RecordingSink::default());
+        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
+        let event = recorded(
+            "onMessagePartial",
+            vec![json!("msg_a"), json!([{ "type": "text", "text": "Hel" }])],
+        );
+
+        dispatch(&dyn_sink, &event).unwrap();
+
+        let partials = sink.partials.lock().unwrap_or_else(|e| e.into_inner());
+        assert_eq!(partials.len(), 1);
+        assert_eq!(partials[0].0, "msg_a");
+        assert_eq!(
+            partials[0].1,
+            vec![MessageContent::Leaf(LeafContent::Text {
+                text: "Hel".to_string(),
+                parent_tool_use_id: None,
+            })]
         );
     }
 

@@ -22,7 +22,7 @@ function makeRef(uuid: string): QueuedMessageRef {
 // Seed state with a stale item C already in interactions.queued.
 function stateWithC() {
   const base = createChatThreadState(CHAT_ID);
-  return reduceChatThreadState(base, { type: 'queued.added', ref: makeRef('C') });
+  return reduceChatThreadState(base, { type: 'queued.snapshot', refs: [makeRef('C')] });
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ describe('reduceChatThreadState — queued.snapshot', () => {
     expect(after.chatId).toBe(CHAT_ID);
     expect(after.runState).toBe(before.runState);
     expect(after.loadState).toBe(before.loadState);
-    expect(after.messagesById).toBe(before.messagesById);
+    expect(after.messages).toBe(before.messages);
     expect(after.pendingUserMessages).toBe(before.pendingUserMessages);
   });
 });

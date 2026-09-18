@@ -20,6 +20,7 @@ fn response(updated_permissions: Vec<ControlUpdate>) -> ControlResponse {
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope: None,
     }
 }
 

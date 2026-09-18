@@ -5,9 +5,13 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::ControlBehavior;
+use mainframe_types::chat::ChatMessage;
+use mainframe_types::events::DaemonEvent;
 
 use super::*;
+use crate::event_handler::EventChatUpdate;
 use crate::test_support::{FakeSession, test_chat};
 
 #[derive(Default)]
@@ -65,6 +69,7 @@ fn request(request_id: &str) -> ControlRequest {
         input: HashMap::new(),
         suggestions: Vec::new(),
         decision_reason: None,
+        options: None,
     }
 }
 
@@ -79,6 +84,7 @@ fn allow(request_id: &str) -> ControlResponse {
         message: None,
         execution_mode: None,
         clear_context: None,
+        scope: None,
     }
 }
 
@@ -216,6 +222,8 @@ async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
         Arc::new(Mutex::new(MessageCache::new())),
         deps,
     );
+    let surface = Arc::new(GateCapture::default());
+    handler.set_chat_surface(surface.clone());
 
     let result = handler.respond_to_permission("chat-1", allow("r1")).await;
 
@@ -224,16 +232,37 @@ async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r2"))
     );
-    let promoted: Vec<_> = events
-        .lock()
-        .unwrap()
-        .iter()
-        .filter_map(|e| match e {
-            DaemonEvent::PermissionRequested { request, .. } => Some(request.request_id.clone()),
-            _ => None,
-        })
-        .collect();
+    drop(events);
+    let promoted = surface.raised();
     assert!(promoted.is_empty(), "unexpected promotion: {promoted:?}");
+}
+
+/// Captures `GateRaised` request ids off the chat-surface seam — the only
+/// place a promotion is announced now that the legacy `permission.requested`
+/// frame is retired.
+#[derive(Default)]
+struct GateCapture {
+    raised: Mutex<Vec<String>>,
+}
+
+impl GateCapture {
+    fn raised(&self) -> Vec<String> {
+        self.raised
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+}
+
+impl crate::chat_surface::ChatSurface for GateCapture {
+    fn on_chat_surface_event(&self, event: crate::chat_surface::ChatSurfaceEvent) {
+        if let crate::chat_surface::ChatSurfaceEvent::GateRaised { request, .. } = event {
+            self.raised
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(request.request_id);
+        }
+    }
 }
 
 #[tokio::test]

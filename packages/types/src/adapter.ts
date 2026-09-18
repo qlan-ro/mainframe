@@ -1,3 +1,4 @@
+import type { PermissionOption } from './acp/permission.js';
 import type { ExecutionMode, PermissionMode } from './settings.js';
 
 export interface MessageMetadata {
@@ -92,7 +93,20 @@ export interface ControlRequest {
   input: Record<string, unknown>;
   suggestions: ControlUpdate[];
   decisionReason?: string;
+  /**
+   * The adapter's own ordered option list (todo #350 plan task 7). Absent
+   * keeps Claude's derived allow-once/allow-always/reject-once triad; Codex
+   * sets it with its real accept/acceptForSession/decline or question
+   * choices.
+   */
+  options?: PermissionOption[];
 }
+
+/**
+ * Whether a granted permission covers just this call or the rest of the
+ * session (todo #350 plan task 7).
+ */
+export type PermissionScope = 'once' | 'session';
 
 export interface ControlResponse {
   requestId: string;
@@ -104,6 +118,7 @@ export interface ControlResponse {
   message?: string;
   executionMode?: ExecutionMode;
   clearContext?: boolean;
+  scope?: PermissionScope;
 }
 
 export interface ContextUsage {

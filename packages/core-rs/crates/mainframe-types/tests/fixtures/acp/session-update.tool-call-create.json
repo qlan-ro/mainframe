@@ -1,0 +1,21 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "toolu_01A",
+    "title": "Read package.json",
+    "kind": "read",
+    "status": "pending",
+    "content": [],
+    "locations": [
+      {
+        "path": "/Users/dev/code/mainframe/package.json",
+        "line": 1
+      }
+    ],
+    "rawInput": {
+      "file_path": "/Users/dev/code/mainframe/package.json"
+    }
+  }
+}

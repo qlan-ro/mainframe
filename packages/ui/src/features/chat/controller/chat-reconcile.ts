@@ -4,12 +4,12 @@
  * Reconcile = count-aware + server-authoritative (judo-A): each confirmed
  * server user-message clears at most one optimistic pending, oldest-first, by a
  * normalized-text multiset. No time window, no empty-text wildcard, no
- * over-clearing of legitimate duplicate sends. The single live `message.added`
- * and the full history re-seed feed the SAME matcher (one message vs many).
+ * over-clearing of legitimate duplicate sends. Every facade transcript
+ * refresh feeds the SAME matcher with the full confirmed user-message list.
  */
 import type { AppendMessage } from '@assistant-ui/react';
-import type { DisplayContent } from '@qlan-ro/mainframe-types';
-import type { PendingUserMessage } from './chat-thread-state';
+import type { PromptSendMeta } from '@qlan-ro/mainframe-types';
+import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
 
@@ -33,8 +33,14 @@ export function reconcileKey(text: string): string {
   return fp.length > 0 ? fp : ATTACHMENT_KEY;
 }
 
-export function contentKey(content: DisplayContent[]): string {
-  const textBlock = content.find((c): c is DisplayContent & { type: 'text' } => c.type === 'text');
+/** Any part list with `{type:'text', text}` members — DisplayContent and aui parts both qualify. */
+export interface ReconcilableContent {
+  readonly type: string;
+  readonly text?: string;
+}
+
+export function contentKey(content: readonly ReconcilableContent[]): string {
+  const textBlock = content.find((c) => c.type === 'text' && typeof c.text === 'string');
   return reconcileKey(textBlock?.text ?? '');
 }
 
@@ -58,20 +64,21 @@ export function parseSendInput(message: AppendMessage): SendInput | null {
   return { text, uploadItems };
 }
 
-/** Build the optimistic pending user-message for a send. */
-export function buildPendingMessage(chatId: string, text: string): PendingUserMessage {
+/** Build the optimistic pending user-message for a send. `sendMeta` is what a retry must re-carry (e.g. a `/command` invocation). */
+export function buildPendingMessage(chatId: string, text: string, sendMeta: PromptSendMeta = {}): PendingUserMessage {
   return {
     clientId: createLocalId('local'),
     chatId,
     text,
     createdAt: Date.now(),
     status: 'pending',
+    ...(Object.keys(sendMeta).length > 0 ? { sendMeta } : {}),
   };
 }
 
 export function reconcilePendings(
   pendings: Readonly<Record<string, PendingUserMessage>>,
-  serverMessages: readonly { content: DisplayContent[] }[],
+  serverMessages: readonly { content: readonly ReconcilableContent[] }[],
 ): string[] {
   const remaining = new Map<string, number>();
   for (const m of serverMessages) {
@@ -91,4 +98,83 @@ export function reconcilePendings(
     }
   }
   return matched;
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic-pending reducer slice (delegated to by reduceChatThreadState)
+// ---------------------------------------------------------------------------
+
+export type LocalMessageEvent =
+  | { type: 'local.message.queued'; pending: PendingUserMessage }
+  | { type: 'local.message.reconciled'; clientId: string }
+  | {
+      type: 'local.message.failed';
+      clientId: string;
+      error: unknown;
+      stage?: 'upload' | 'send';
+      /** Fallback source when the pending was already removed from state (e.g. a race with a correct reconcile) — the failure indicator must still render (R3.3). */
+      pending?: PendingUserMessage;
+    }
+  | { type: 'local.message.attachments_restored'; clientId: string }
+  | { type: 'local.message.retrying'; clientId: string };
+
+function removePending(state: ChatThreadState, clientId: string): ChatThreadState {
+  if (!(clientId in state.pendingUserMessages)) return state;
+  const pendingUserMessages = { ...state.pendingUserMessages };
+  delete pendingUserMessages[clientId];
+  return { ...state, pendingUserMessages };
+}
+
+export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMessageEvent): ChatThreadState {
+  switch (event.type) {
+    case 'local.message.queued':
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.pending.clientId]: event.pending,
+        },
+      };
+
+    case 'local.message.reconciled':
+      return removePending(state, event.clientId);
+
+    case 'local.message.failed': {
+      const current = state.pendingUserMessages[event.clientId] ?? event.pending;
+      if (!current) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
+        },
+        runState: { type: 'error', error: event.error },
+      };
+    }
+
+    case 'local.message.attachments_restored': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current || current.attachmentsRestored) return state;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...current, attachmentsRestored: true },
+        },
+      };
+    }
+
+    case 'local.message.retrying': {
+      const current = state.pendingUserMessages[event.clientId];
+      if (!current) return state;
+      const { error: _dropped, stage: _dropped2, attachmentsRestored: _dropped3, ...rest } = current;
+      return {
+        ...state,
+        pendingUserMessages: {
+          ...state.pendingUserMessages,
+          [event.clientId]: { ...rest, status: 'pending' },
+        },
+      };
+    }
+  }
 }

@@ -34,7 +34,9 @@ pub use adapter::{
     Adapter, AdapterSession, ContextFiles, ImageInput, LoadedSkill, SessionSink,
     StopBackgroundTaskResult,
 };
-pub use plan_mode_actions::{PlanActionContext, PlanChatUpdate, PlanModeActionHandler};
+pub use plan_mode_actions::{
+    PlanActionContext, PlanChatUpdate, PlanModeActionHandler, clear_context_and_restart,
+};
 pub use title::finalize_title;
 // The control envelopes are DATA (they live in mainframe-types); re-exported here
 // so adapter consumers get them from the contract crate (crate-map §2.6).

@@ -21,7 +21,6 @@
  *   ask-question.0                   → AskUserQuestion
  *   chat-status.0                    → Skill (SlashCommandCard) + onSkillLoaded (SkillLoadedCard)
  *   task-subagent.0                  → Task (nested onSubagentChild transcript)
- *   task-progress.0                  → TaskCreate/TaskUpdate (_TaskProgress reduction)
  *   web-fetch.0                      → WebFetch
  *   mcp-tool.0                       → mcp__linear__get_issue (done + error)
  *   unregistered-tool.0              → CustomAnalyticsReport (ToolFallback)
@@ -55,7 +54,6 @@
  *   chat-slash-command-row (Skill tool call)
  *   chat-skill-loaded-pill ; chat-system-message ; marker-body (onSkillLoaded system message)
  *   chat-task-card / -toggle / -agent / -description (Task subagent card)
- *   chat-task-progress-card / -toggle / -item-{status} (TaskProgress card)
  *   web-fetch-card-root / -trigger / -url / -summary
  *   chat-mcp-pill ; marker-body (MCP tool pill)
  *   chat-tool-fallback-card / -trigger / -args / -result (ToolFallback)
@@ -142,12 +140,12 @@ test.describe('§tool-cards — Write (permissions-interactive)', () => {
     // mirrors chat.spec.ts's §permissions-interactive two-turn sequence.
     await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 60_000);
 
     await sendMessage(page, 'Create /tmp/mf-e2e-test.txt again');
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-allow-once').click();
+    await page.getByTestId('chat-permission-option-allow-once').click();
     await waitForIdle(page, 60_000);
 
     const card = page.getByTestId('chat-write-card').first();
@@ -389,7 +387,7 @@ test.describe('§tool-cards — Plan (plan-approval)', () => {
     // Clean up: the approval triggers an Edit permission gate next (plan-approval.0.ndjson) —
     // deny so the mock session ends cleanly.
     await page.getByTestId('chat-permission-gate').waitFor({ timeout: 45_000 });
-    await page.getByTestId('chat-permission-deny').click();
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 90_000);
   });
 });
@@ -569,46 +567,6 @@ test.describe('§tool-cards — Task subagent (task-subagent)', () => {
     const nestedBash = card.getByTestId('chat-bash-card').first();
     await expect(nestedBash).toBeVisible({ timeout: 5_000 });
     await expect(nestedBash.getByTestId('chat-bash-command')).toContainText('export const greeting');
-  });
-});
-
-// ─── TaskProgress card (TaskCreate/TaskUpdate reduction) — task-progress ──────
-
-test.describe('§tool-cards — TaskProgress (task-progress)', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'task-progress' });
-    project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'acceptEdits');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('default-open card shows rows reduced to their latest status', async () => {
-    const { page } = app;
-    await sendMessage(
-      page,
-      'Track three tasks: add a login form, write its tests, update the docs. Use TaskCreate/TaskUpdate to track progress.',
-    );
-
-    const card = page.getByTestId('chat-task-progress-card').first();
-    await card.waitFor({ timeout: 60_000 });
-    // Default open — rows are mounted without a trigger click.
-    await expect(card).toHaveAttribute('data-state', 'open');
-    await expect(card.getByTestId('chat-task-progress-toggle')).toContainText('(3)');
-
-    // Recording: task 1 → in_progress → completed; task 2 → in_progress; task 3 never updated.
-    const completed = card.getByTestId('chat-task-progress-item-completed');
-    await expect(completed).toContainText('Add login form');
-    const inProgress = card.getByTestId('chat-task-progress-item-in_progress');
-    await expect(inProgress).toContainText('Write login form tests');
-    const pending = card.getByTestId('chat-task-progress-item-pending');
-    await expect(pending).toContainText('Update login form docs');
   });
 });
 

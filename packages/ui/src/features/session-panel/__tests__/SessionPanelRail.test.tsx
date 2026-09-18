@@ -20,7 +20,7 @@
  *  - ./use-context-percent — the resolved context fill
  *  - @/features/run/use-launch-actions — configs and statuses
  *  - @/features/sessions/use-active-identity — projectId / chatId
- *  - @/features/chat/runtime/use-chat-thread-runtime — background tasks
+ *  - @/features/chat/runtime/chat-extras — background tasks
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
@@ -56,7 +56,7 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 }));
 
 let mockTasks: Record<string, BackgroundActivityTask> = {};
-vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { backgroundTasks: mockTasks } }),
 }));
 

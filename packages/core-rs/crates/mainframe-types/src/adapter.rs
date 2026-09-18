@@ -30,6 +30,12 @@ pub struct MessageMetadata {
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<MessageUsage>,
+    /// The adapter's own stable id for this message (Claude: transcript
+    /// `uuid`; Codex: thread-item id) — never serialized to the wire, only
+    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`
+    /// (todo #350 group B, stable-ids). `None` falls back to a minted nanoid.
+    #[serde(skip)]
+    pub vendor_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -198,6 +204,24 @@ pub struct ControlRequest {
     pub suggestions: Vec<ControlUpdate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision_reason: Option<String>,
+    /// The adapter's own ordered option list (plan task 7, D4). `None` keeps
+    /// today's Claude derivation (`gates::offered_options`); Codex sets
+    /// `Some` with its real accept/acceptForSession/decline or question
+    /// choices, so `gates::parse_answer` no longer has to guess a fixed
+    /// three-string vocabulary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<crate::acp::permission::PermissionOption>>,
+}
+
+/// Whether a granted permission covers just this call or the rest of the
+/// session (plan task 7, D4). Distinct from `ControlUpdate::SetMode`, which
+/// Claude still uses for its own persisted rule scopes — this rides the
+/// answer itself for adapters (Codex) that have no equivalent rule store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionScope {
+    Once,
+    Session,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -218,6 +242,8 @@ pub struct ControlResponse {
     pub execution_mode: Option<ExecutionMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clear_context: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<PermissionScope>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

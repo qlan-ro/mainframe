@@ -14,6 +14,7 @@ use crate::history_collab_resolve::{
     CardMap, CollabCtx, handle_collab_tool_call, handle_sub_agent_activity, resolve_open_cards,
 };
 use crate::item_types::{PatchChangeKind, ThreadItem};
+use crate::thread_item_render::{dynamic_tool_call_input, dynamic_tool_call_name};
 use crate::thread_registry::AgentMetadata;
 use crate::unified_diff::parse_unified_diff;
 
@@ -154,6 +155,19 @@ pub fn convert_thread_items(
             }
             ThreadItem::WebSearch(w) => {
                 messages.extend(crate::web_search_history::web_search_messages(w, chat_id));
+            }
+            // T22, R3.17: reload silently dropped this item entirely — the
+            // live path (thread_item_render::render_dynamic_tool_call)
+            // renders exactly this one tool_use block, no result.
+            ThreadItem::DynamicToolCall(d) => {
+                let name = dynamic_tool_call_name(d);
+                let input = dynamic_tool_call_input(&d.arguments);
+                messages.push(make_message(
+                    &d.id,
+                    chat_id,
+                    ChatMessageType::Assistant,
+                    vec![tool_use_block(&d.id, &name, input)],
+                ));
             }
             // todoList — skip for now
             _ => {}

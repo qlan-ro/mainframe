@@ -111,8 +111,8 @@ the thread's sticky footer above the composer (`chat-thread-gate-slot`)._
 
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
-| G1 | Permission — allow once / deny | P0 | CLI `can_use_tool` for a non-question/non-plan tool | chat-permission-gate, chat-permission-allow-once, chat-permission-deny | allow-once sends no `updatedPermissions`, so the same tool re-prompts next time; an answered gate simply unmounts — the daemon shifts the pending permission so the delivery re-read finds nothing to restore |
-| G2 | Permission — always allow | P1 | `request.suggestions.length > 0` | chat-permission-always-allow | **button is absent when suggestions are empty** — test both states |
+| G1 | Permission — allow once / deny | P0 | CLI `can_use_tool` for a non-question/non-plan tool | chat-permission-gate, chat-permission-option-allow-once, chat-permission-option-reject-once | allow-once sends no `updatedPermissions`, so the same tool re-prompts next time; an answered gate simply unmounts — an answer lost to a dead socket resurfaces as a redelivered gate on the post-reconnect `session/resume` |
+| G2 | Permission — always allow | P1 | permission gate showing | chat-permission-option-allow-always | the daemon offers allow-once / allow-always / reject-once on **every** gate and the client renders exactly that set (spec decision 12) — suggestions no longer gate the button |
 | G3 | Permission details | P1 | permission gate showing | chat-permission-details-toggle, chat-permission-details-pre | toggles a raw-input JSON dump; the card width matches the composer at both narrow and wide surface widths |
 | G4 | Plan — approve | P0 | chat in plan mode; CLI calls `ExitPlanMode` | chat-plan-gate, chat-plan-approve, chat-plan-execmode-${…}, chat-plan-clear-context | exec-mode `yolo` → bypassPermissions; `clearContext` wipes history and restarts the CLI; the approved plan renders as a durable PlanBubble in the transcript, not this card |
 | G5 | Plan — reject vs. keep-planning | P0 | plan gate showing | chat-plan-reject, chat-plan-keep-planning | reject is a bare deny with no message; "Keep planning" (not "revise" — renamed from the pre-v2 label) opens the feedback row inline on the same card |
@@ -311,6 +311,27 @@ WS1/WS7 for how a tab of each kind is created._
 | RT3 | URL tab body states | P1 | url tab active | url-tab-body-loaded, url-tab-body-failed, url-tab-body-invalid, url-tab-body-pending, url-tab-body-rejected, url-tab-body-stopped | a corrupt persisted tab with no URL resolves to the `invalid` state, never a placeholder; retry is available from the failed state |
 | RT4 | URL tab toolbar | P2 | url tab active | url-tab-toolbar | controls that need a process (reload/clear-cache) are hidden rather than disabled — a URL tab has no process behind it |
 | RT5 | URL tab inspect | P2 | url tab active, preview-style inspect available | url-tab-inspect-active-indicator | same local-state toggle pattern as the preview surface's Inspect (see Viewers & preview P3) |
+
+## ACP façade (protocol-level)
+
+_Specs: `facade-protocol.spec.ts`, `facade-protocol-streaming.spec.ts`,
+`facade-protocol-partial.spec.ts`, `facade-reconnect-mid-stream.spec.ts`, `facade-queued-prompt.spec.ts`,
+`plan-clear-context.spec.ts`, `stress-matrix.spec.ts`.
+These assert on `/acp/{profile}` wire frames through the raw WS client in
+`helpers/tauri/raw-ws-client.ts` as well as on the DOM — a façade regression can be invisible in
+the transcript and still corrupt a generic ACP client. Rows below are the six scenarios the PR #688
+fix plan (`docs/plans/2026-09-14-pr-688-review-fixes-plan.md`, Verification step 7) requires; the
+four marked "gap" are unreachable under `E2E_MODE=mock` for the reasons and unit-test pins in
+[`COVERAGE-GAPS.md`](./COVERAGE-GAPS.md) §5._
+
+| # | Flow | Pri | Preconditions | Key test-ids / frames | Notable edges |
+|---|------|-----|---------------|----------------------|---------------|
+| AF1 | Partial stream aborted by a provider retry | P0 | `retry-partial` recording, `mockMaxDelayMs` widened | `chat-assistant-message`; `agent_message` upsert with `content: []` | the overlay item is created then cleared and never mentioned again; the `attempt` marker rides the retried call's content, never the clearing frame; the client deletes an emptied item rather than keeping a blank bubble |
+| AF2 | Reconnect mid-turn | P0 | long-running turn (`reconnect-mid-stream`), `installWsControl` | `chat-thread-running`; `state_update` with `state: "running"` | the resume replay's state transition must be `running`, not `idle`; the tail keeps growing after the reconnect and every chunk lands exactly once |
+| AF3 | Plan-mode clear context | P0 | plan gate approved with `chat-plan-clear-context` | `chat-plan-clear-context`, `chat-plan-approve`; `_mainframe.dev/transcript_cleared` | the wipe is announced on the wire and the post-wipe replay holds none of the pre-approval turn; a later send must not resurrect it. The restart's auto-sent "Implement the following plan:" prompt has no user bubble under mock — see the `TODO(bug)` in `plan-clear-context.spec.ts` |
+| AF4 | Prompt queued behind a running turn | P0 | a second prompt while the first turn runs (recording parks turn 1 on its `onResult`) | `chat-user-message`; `_mainframe.dev/queue_state` refs | D1: a queued turn leaves the transcript entirely and renders from the snapshot, so the dequeue is a plain create at the tail — never a create above the answer of the turn it waited on; the closing snapshot is `refs: []` |
+| AF5 | Codex "Always allow" | P1 | Codex gate answered allow-always | `chat-permission-option-allow-always` | **gap** — the session-scoped accept lives in the Codex approval handler, which mock mode never runs (COVERAGE-GAPS §5.3) |
+| AF6 | Daemon switch routes the next prompt | P1 | two daemons | `daemon-footer-trigger` | **gap** — `fixtures/daemon.ts` runs one daemon and the bundle bakes its port (COVERAGE-GAPS §5.4) |
 
 ## Recommended authoring order
 

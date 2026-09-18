@@ -1,7 +1,7 @@
 //! Ported from `packages/core/src/chat/event-handler.ts`.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
@@ -23,15 +23,16 @@ use mainframe_types::events::{
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
-use crate::display_emitter::emit_display_delta;
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason};
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
+use partial_overlay::{PartialOverlay, PartialOverlays};
+
+mod partial_overlay;
+pub(crate) mod resync;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
-
-/// Shared display-delta base cache, keyed by chat (never shared cross-chat).
-pub type DisplayCache = Arc<Mutex<HashMap<String, Vec<DisplayMessage>>>>;
 
 /// A fire-and-forget push notification (`pushService.sendPush`).
 #[derive(Debug, Clone, PartialEq)]
@@ -182,11 +183,17 @@ fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
 pub struct EventHandler<D: EventHandlerDeps + 'static> {
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
-    display_cache: DisplayCache,
+    partial_overlays: PartialOverlays,
     deps: Arc<D>,
     /// Survives a session resume (plan decision P3) — kept on the handler,
     /// not the per-session sink `build_sink` recreates.
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
+    /// The chat-surface observer (todo #350 plan task 10), attached after
+    /// construction via [`EventHandler::set_chat_surface`] — mirrors
+    /// `ChatManager::attach_self`'s `OnceLock` pattern so a handler built with
+    /// no surface attached (most tests) is a silent no-op, not a construction
+    /// error.
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: EventHandlerDeps + 'static> EventHandler<D> {
@@ -198,10 +205,25 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         Self {
             messages,
             permissions,
-            display_cache: Arc::new(Mutex::new(HashMap::new())),
+            partial_overlays: PartialOverlays::new(),
             deps,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
+            chat_surface: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Attach the chat-surface observer. Idempotent-once: a second call is a
+    /// no-op (the `OnceLock` already holds the first surface), matching
+    /// `attach_self`'s convention elsewhere in this crate.
+    pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
+        let _ = self.chat_surface.set(surface);
+    }
+
+    /// Notify the attached surface (a no-op when none is attached). Public so
+    /// `ChatManager`'s send path (turn accepted/started, outside the sink)
+    /// can drive the same observer the sink drives.
+    pub fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
+        chat_surface::notify(self.chat_surface.get(), event);
     }
 
     /// `buildSink(chatId, sessionId, respondToPermission)`. The TS sink never calls
@@ -217,12 +239,13 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             built_for_session_id,
             messages: self.messages.clone(),
             permissions: self.permissions.clone(),
-            display_cache: self.display_cache.clone(),
+            partial_overlays: self.partial_overlays.clone(),
             deps: self.deps.clone(),
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
             attention_dedupe: self.attention_dedupe.clone(),
+            chat_surface: self.chat_surface.clone(),
         });
         // PR detection is adapter-neutral (todo #339): wrapping here, the one
         // construction point every session's sink comes from, is what makes
@@ -230,44 +253,64 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         Arc::new(PrDetectionSink::new(inner))
     }
 
-    /// Emit display delta for a chat (code paths outside the session sink).
+    /// Emit a display revision for a chat (code paths outside the session sink).
     pub fn emit_display(&self, chat_id: &str) {
         let categories = self.deps.get_tool_categories(chat_id);
         emit_display_for(
             chat_id,
             &self.messages,
-            &self.display_cache,
+            &self.partial_overlays,
             categories.as_ref(),
             self.deps.as_ref(),
+            self.chat_surface.get(),
         );
     }
 
-    /// Remove display cache entry for a chat (call on chat end/archive).
-    pub fn clear_display_cache(&self, chat_id: &str) {
-        self.display_cache
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+    /// Remove the chat's partial-overlay entries, every session's (call on
+    /// chat end/archive) — nothing else clears this per-chat bookkeeping.
+    pub fn clear_display_state(&self, chat_id: &str) {
+        self.partial_overlays.remove_chat(chat_id);
     }
 }
 
-/// Shared `emitDisplay` used by both `EventHandler::emit_display` and the sink.
-/// The injected `emit_event` is a non-reentrant channel send in the daemon (it
-/// fans out to WS clients, never back into these locks), so holding the message +
-/// display-cache locks across it cannot deadlock (CONCURRENCY.tsv rule 3 note).
+/// Shared `emitDisplay` used by both `EventHandler::emit_display` and the
+/// sink: recompute the chat's display snapshot and hand it to the chat-surface
+/// seam (the ACP facade's per-connection `SessionStream` owns all diffing).
 fn emit_display_for<D: EventHandlerDeps>(
     chat_id: &str,
     messages: &Arc<Mutex<MessageCache>>,
-    display_cache: &DisplayCache,
+    partial_overlays: &PartialOverlays,
     categories: Option<&ToolCategories>,
     deps: &D,
+    surface: Option<&Arc<dyn ChatSurface>>,
 ) {
     let msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
-    let mut cache = display_cache.lock().unwrap_or_else(|e| e.into_inner());
-    let prepare =
-        |raw: &[ChatMessage], c: Option<&ToolCategories>| deps.prepare_messages_for_client(raw, c);
-    let mut emit = |e: DaemonEvent| deps.emit_event(e);
-    emit_display_delta(chat_id, &msgs, &mut cache, categories, &prepare, &mut emit);
+    let raw: &[ChatMessage] = msgs.get(chat_id).map(Vec::as_slice).unwrap_or(&[]);
+    // Append the in-flight partial content as a synthetic tail message: it
+    // groups into the current assistant turn (or opens it, under the API
+    // message id the completed message will keep), so the surface streams
+    // the growing block instead of waiting for its completion.
+    let overlay = partial_overlays.message_for(chat_id);
+    let with_overlay: Vec<ChatMessage>;
+    let raw = match overlay {
+        Some(synthetic) => {
+            with_overlay = raw
+                .iter()
+                .cloned()
+                .chain(std::iter::once(synthetic))
+                .collect();
+            &with_overlay[..]
+        }
+        None => raw,
+    };
+    let new_display = deps.prepare_messages_for_client(raw, categories);
+    chat_surface::notify(
+        surface,
+        ChatSurfaceEvent::DisplayRevision {
+            chat_id: chat_id.to_string(),
+            messages: new_display,
+        },
+    );
 }
 
 /// A `git worktree` shell call, or Claude's own worktree tool. Neither result is
@@ -288,12 +331,13 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     built_for_session_id: Option<String>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
-    display_cache: DisplayCache,
+    partial_overlays: PartialOverlays,
     deps: Arc<D>,
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
@@ -302,21 +346,39 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         emit_display_for(
             &self.chat_id,
             &self.messages,
-            &self.display_cache,
+            &self.partial_overlays,
             categories.as_ref(),
             self.deps.as_ref(),
+            self.chat_surface.get(),
         );
     }
 
-    fn append_and_emit(&self, message: ChatMessage) {
-        self.messages
+    /// This sink's own key into [`PartialOverlays`] — `built_for_session_id`
+    /// when known, matching the session-id guard `on_exit` already applies.
+    fn session_key(&self) -> &str {
+        self.built_for_session_id.as_deref().unwrap_or_default()
+    }
+
+    /// Remove THIS session's overlay entry; reports whether one was present
+    /// so abort paths (retry, result, exit) only re-emit when content
+    /// vanishes. Never touches a different session's overlay for the same
+    /// chat (T13, R3.19).
+    fn take_partial_overlay(&self) -> bool {
+        self.partial_overlays
+            .take(&self.chat_id, self.session_key())
+    }
+
+    fn notify_surface(&self, event: ChatSurfaceEvent) {
+        chat_surface::notify(self.chat_surface.get(), event);
+    }
+
+    fn append_and_display(&self, message: ChatMessage) {
+        let evicted = self
+            .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .append(&self.chat_id, message.clone());
-        self.deps.emit_event(DaemonEvent::MessageAdded {
-            chat_id: self.chat_id.clone(),
-            message,
-        });
+            .append(&self.chat_id, message);
+        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
         self.emit_display();
     }
 
@@ -326,10 +388,28 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         content: Vec<MessageContent>,
         metadata: Option<HashMap<String, serde_json::Value>>,
     ) -> ChatMessage {
+        self.transient_with_id(r#type, content, metadata, None)
+    }
+
+    /// `transient`, with an adapter-supplied id in place of a minted nanoid
+    /// (todo #350 group B, stable-ids task 5).
+    fn transient_with_id(
+        &self,
+        r#type: ChatMessageType,
+        content: Vec<MessageContent>,
+        metadata: Option<HashMap<String, serde_json::Value>>,
+        vendor_id: Option<String>,
+    ) -> ChatMessage {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .create_transient_message(&self.chat_id, r#type, content, metadata)
+            .create_transient_message_with_vendor_id(
+                &self.chat_id,
+                r#type,
+                content,
+                metadata,
+                vendor_id,
+            )
     }
 
     /// `MessageCache` exposes only immutable `get`; in-place message mutation
@@ -349,10 +429,9 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     fn promote_next(&self, next: Option<ControlRequest>) {
         if let Some(next) = next {
             let notify = self.deps.should_notify_permission(Some(&next.tool_name));
-            self.deps.emit_event(DaemonEvent::PermissionRequested {
+            self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: next.clone(),
-                notify,
             });
             if notify {
                 let tool = &next.tool_name;
@@ -444,6 +523,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             block_count = content.len(),
             "assistant message received"
         );
+
+        // A completed block supersedes the partial overlay: it lands in the
+        // cache under the same item id (the API message id for a message's
+        // first block), so the emit below converges the display in place —
+        // no id change, no reset frame.
+        self.take_partial_overlay();
 
         // Drain-turn re-entry: a background task's completion re-invokes the turn
         // (task_notification → fresh init → assistant message → second result)
@@ -561,7 +646,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         if let Some(a) = adapter_id {
             meta.insert("adapterId".to_string(), serde_json::Value::String(a));
         }
+        let mut vendor_id = None;
         if let Some(m) = metadata {
+            vendor_id = m.vendor_id;
             if let Some(model) = m.model {
                 meta.insert("model".to_string(), serde_json::Value::String(model));
             }
@@ -571,11 +658,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 meta.insert("usage".to_string(), v);
             }
         }
-        let message = self.transient(ChatMessageType::Assistant, cleaned, Some(meta));
-        self.append_and_emit(message);
+        let message =
+            self.transient_with_id(ChatMessageType::Assistant, cleaned, Some(meta), vendor_id);
+        self.append_and_display(message);
     }
 
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         let mut edited_paths: Vec<String> = Vec::new();
         let mut subagent_completed = false;
         let mut worktree_trigger = false;
@@ -620,8 +708,8 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             self.deps.on_worktree_trigger(&self.chat_id);
         }
 
-        let message = self.transient(ChatMessageType::ToolResult, content, None);
-        self.append_and_emit(message);
+        let message = self.transient_with_id(ChatMessageType::ToolResult, content, None, vendor_id);
+        self.append_and_display(message);
 
         if !edited_paths.is_empty() {
             self.deps.emit_event(DaemonEvent::ContextUpdated {
@@ -644,10 +732,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             .enqueue(&self.chat_id, request.clone());
         if is_first {
             let notify = self.deps.should_notify_permission(Some(&request.tool_name));
-            self.deps.emit_event(DaemonEvent::PermissionRequested {
+            self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: request.clone(),
-                notify,
             });
             if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
                 let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
@@ -687,7 +774,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             CancelOutcome::Front { next } => next,
         };
 
-        self.deps.emit_event(DaemonEvent::PermissionResolved {
+        self.notify_surface(ChatSurfaceEvent::GateResolved {
             chat_id: self.chat_id.clone(),
             request_id: request_id.to_string(),
         });
@@ -697,6 +784,12 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
     }
 
     fn on_result(&self, data: SessionResult) {
+        // A turn that ends with an unfinished block (interrupt, error) leaves
+        // its partial content dangling — drop it and re-emit so no surface
+        // keeps text the transcript never got.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
         let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
             return;
         };
@@ -765,10 +858,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         uuid = u,
                         "onResult: orphan metadata.queued (no matching ref) — clearing"
                     );
-                    self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-                        chat_id: self.chat_id.clone(),
-                        uuid: u.clone(),
-                    });
                     self.deps.on_queued_processed(&self.chat_id, &u);
                 }
             }
@@ -781,10 +870,6 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     uuid = r.uuid,
                     "onResult: orphan queuedRef (no matching cached message) — pruning"
                 );
-                self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-                    chat_id: self.chat_id.clone(),
-                    uuid: r.uuid.clone(),
-                });
                 self.deps.on_queued_processed(&self.chat_id, &r.uuid);
             }
         }
@@ -794,7 +879,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
 
         let refs_after = self.deps.get_queued_refs(&self.chat_id);
-        self.deps.emit_event(DaemonEvent::MessageQueuedSnapshot {
+        self.notify_surface(ChatSurfaceEvent::QueueChanged {
             chat_id: self.chat_id.clone(),
             refs: refs_after.clone(),
         });
@@ -870,6 +955,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             chat,
             reason: Some(reason),
         });
+        self.notify_surface(ChatSurfaceEvent::TurnFinished {
+            chat_id: self.chat_id.clone(),
+            stop_reason: match reason {
+                ChatUpdatedReason::Interrupted => TurnStopReason::Cancelled,
+                ChatUpdatedReason::Error => TurnStopReason::Error,
+                ChatUpdatedReason::Completed => TurnStopReason::Completed,
+            },
+        });
 
         // Turn duration for the MessageTiming pill.
         let turn_started_at = cell
@@ -885,7 +978,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 serde_json::json!(turn_duration_ms),
             );
             let timing = self.transient(ChatMessageType::System, Vec::new(), Some(md));
-            self.append_and_emit(timing);
+            self.append_and_display(timing);
         }
 
         if is_error {
@@ -913,7 +1006,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     })],
                     None,
                 );
-                self.append_and_emit(message);
+                self.append_and_display(message);
 
                 if self.deps.notify_session_error() {
                     self.deps.emit_event(DaemonEvent::ChatNotification {
@@ -983,20 +1076,35 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         }
         if found_id.is_some() {
             self.emit_display();
+            // A queued prompt's `TurnAccepted` (send_entry.rs) is not
+            // `TurnStarted` until the CLI actually dequeues it — this is that
+            // signal (plan task 10's queued-turn start point).
+            self.notify_surface(ChatSurfaceEvent::TurnStarted {
+                chat_id: self.chat_id.clone(),
+            });
         } else {
             warn!(
                 chat_id = self.chat_id,
                 uuid, "onQueuedProcessed: message not found in cache or already processed"
             );
         }
-        self.deps.emit_event(DaemonEvent::MessageQueuedProcessed {
-            chat_id: self.chat_id.clone(),
-            uuid: uuid.to_string(),
-        });
         self.deps.on_queued_processed(&self.chat_id, uuid);
+        self.notify_surface(ChatSurfaceEvent::QueueChanged {
+            chat_id: self.chat_id.clone(),
+            refs: self.deps.get_queued_refs(&self.chat_id),
+        });
     }
 
     fn on_exit(&self, _code: Option<i32>) {
+        // Own-session overlay cleanup runs unconditionally, ahead of the
+        // superseded-session guard below (T13, R3.19): a stale sink's exit
+        // must still drop ITS OWN partial content, but must never reach a
+        // newer session's overlay for the same chat, which the guard exists
+        // to protect from the rest of this method's bookkeeping.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
+
         let cell = self.deps.get_active_chat(&self.chat_id);
         let session_id = cell.as_ref().and_then(|c| {
             c.lock()
@@ -1031,11 +1139,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             .unwrap_or(false);
         if had_queued {
             self.emit_display();
-            self.deps.emit_event(DaemonEvent::MessageQueuedCleared {
-                chat_id: self.chat_id.clone(),
-            });
         }
         self.deps.on_queued_cleared(&self.chat_id);
+        if had_queued {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.deps.get_queued_refs(&self.chat_id),
+            });
+        }
 
         // The CLI process owns every live background task (agents, workflows,
         // bg bash) — none can report completion after it dies. Stop them so
@@ -1046,10 +1157,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         self.deps.workflow_runs_stop_all(&self.chat_id);
 
         if let Some(cell) = &cell {
-            let chat = {
+            let (chat, was_working) = {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let was_working = guard.chat.process_state == Some(Some(ProcessState::Working));
                 guard.chat.process_state = Some(None);
-                guard.chat.clone()
+                (guard.chat.clone(), was_working)
             };
             self.deps.chats_update(
                 &self.chat_id,
@@ -1060,6 +1172,15 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             );
             self.deps
                 .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+            // Adapter process death mid-turn (plan task 10 edge case): no
+            // `on_result` will ever arrive for this turn, so this is its only
+            // stop signal.
+            if was_working {
+                self.notify_surface(ChatSurfaceEvent::TurnFinished {
+                    chat_id: self.chat_id.clone(),
+                    stop_reason: TurnStopReason::Error,
+                });
+            }
         }
         self.deps.emit_event(DaemonEvent::ProcessStopped {
             process_id: session_id,
@@ -1073,31 +1194,32 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         });
     }
 
-    fn on_compact(&self) {
-        let message = self.transient(
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        let message = self.transient_with_id(
             ChatMessageType::System,
             vec![MessageContent::Node(MessageContentNode::Compaction {
                 parent_tool_use_id: None,
             })],
             None,
+            vendor_id.map(str::to_string),
         );
-        self.messages
+        let evicted = self
+            .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .append(&self.chat_id, message.clone());
-        self.deps.emit_event(DaemonEvent::MessageAdded {
+            .append(&self.chat_id, message);
+        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
+        self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
-            message,
-        });
-        self.deps.emit_event(DaemonEvent::ChatCompactDone {
-            chat_id: self.chat_id.clone(),
+            phase: CompactionPhase::Done,
         });
         self.emit_display();
     }
 
     fn on_compact_start(&self) {
-        self.deps.emit_event(DaemonEvent::ChatCompacting {
+        self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
+            phase: CompactionPhase::Started,
         });
     }
 
@@ -1126,11 +1248,9 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                     .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
             }
         }
-        self.deps.emit_event(DaemonEvent::ChatContextUsage {
+        self.notify_surface(ChatSurfaceEvent::Usage {
             chat_id: self.chat_id.clone(),
-            percentage: usage.percentage,
-            total_tokens: usage.total_tokens,
-            max_tokens: usage.max_tokens,
+            usage,
         });
     }
 
@@ -1185,7 +1305,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             })],
             None,
         );
-        self.append_and_emit(message);
+        self.append_and_display(message);
     }
 
     fn on_skill_loaded(&self, entry: mainframe_adapter_api::LoadedSkill) {
@@ -1199,7 +1319,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             })],
             None,
         );
-        self.append_and_emit(message);
+        self.append_and_display(message);
     }
 
     fn on_subagent_child(&self, parent_tool_use_id: &str, blocks: Vec<MessageContent>) {
@@ -1238,11 +1358,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             None
         });
         match updated {
-            Some(Some(message)) => {
-                self.deps.emit_event(DaemonEvent::MessageUpdated {
-                    chat_id: self.chat_id.clone(),
-                    message,
-                });
+            Some(Some(_message)) => {
                 self.emit_display();
             }
             _ => {
@@ -1265,6 +1381,52 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
 
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.deps.on_provider_quota(adapter_id, quota);
+    }
+
+    fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        // The marker must be recorded before the clearing revision it
+        // precedes (T16, R1.4): the hub attaches a pending marker to the
+        // first eligible upsert on the NEXT revision, and the display
+        // revision below is that revision's trigger — recording the marker
+        // after emitting it would let the clearing frame go out unmarked.
+        self.notify_surface(ChatSurfaceEvent::Retry {
+            chat_id: self.chat_id.clone(),
+            attempt,
+            reason,
+        });
+        // The retried API call re-streams from scratch under a fresh message
+        // id — the aborted call's partial content must disappear now, not
+        // linger until the retry's first block lands.
+        if self.take_partial_overlay() {
+            self.emit_display();
+        }
+    }
+
+    fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+        // Same tag stripping the completed path applies (`on_message`), so
+        // the completed block extends the partial text instead of revising it.
+        let stripped: Vec<MessageContent> = content
+            .into_iter()
+            .map(|block| match block {
+                MessageContent::Leaf(LeafContent::Text {
+                    text,
+                    parent_tool_use_id,
+                }) => MessageContent::Leaf(LeafContent::Text {
+                    text: self.deps.strip_command_tags(&text),
+                    parent_tool_use_id,
+                }),
+                other => other,
+            })
+            .collect();
+        self.partial_overlays.insert(
+            &self.chat_id,
+            self.session_key(),
+            PartialOverlay {
+                message_id: api_message_id.to_string(),
+                content: stripped,
+            },
+        );
+        self.emit_display();
     }
 
     fn on_attention_request(&self, message: &str) {
@@ -1307,6 +1469,12 @@ fn now_ms() -> i64 {
 mod attention_tests;
 
 #[cfg(test)]
+mod chat_surface_tests;
+
+#[cfg(test)]
+mod partial_overlay_tests;
+
+#[cfg(test)]
 mod worktree_trigger_tests;
 
 #[cfg(test)]
@@ -1314,6 +1482,9 @@ mod permission_cancel_tests;
 
 #[cfg(test)]
 mod pr_detection_wiring_tests;
+
+#[cfg(test)]
+mod stable_id_characterization_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1351,9 +1522,6 @@ mod tests {
                 updates: Mutex::new(Vec::new()),
                 quota: Some(quota),
             })
-        }
-        fn events(&self) -> Vec<DaemonEvent> {
-            self.events.lock().unwrap().clone()
         }
     }
 
@@ -1504,6 +1672,27 @@ mod tests {
         assert!(p.ends_with(".jsonl"));
     }
 
+    /// Captures `QueueChanged` snapshots off the chat-surface seam — the
+    /// facade's only queued-prompt signal now that `message.queued.*` is gone.
+    #[derive(Default)]
+    struct QueueSurface {
+        snapshots: Mutex<Vec<Vec<QueuedMessageRef>>>,
+    }
+
+    impl QueueSurface {
+        fn snapshots(&self) -> Vec<Vec<QueuedMessageRef>> {
+            self.snapshots.lock().unwrap().clone()
+        }
+    }
+
+    impl ChatSurface for QueueSurface {
+        fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+            if let ChatSurfaceEvent::QueueChanged { refs, .. } = event {
+                self.snapshots.lock().unwrap().push(refs);
+            }
+        }
+    }
+
     // ── event-handler-move-on-process.test.ts (ack path) ─────────────────────
     #[test]
     fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
@@ -1530,6 +1719,8 @@ mod tests {
             Arc::new(Mutex::new(PermissionManager::new())),
             deps.clone(),
         );
+        let surface = Arc::new(QueueSurface::default());
+        handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("c1", None);
 
         sink.on_queued_processed("u1");
@@ -1552,9 +1743,8 @@ mod tests {
         );
         assert!(m.metadata.as_ref().and_then(|md| md.get("uuid")).is_none());
         assert_eq!(deps.refs.lock().unwrap().len(), 0);
-        assert!(deps.events().iter().any(
-            |e| matches!(e, DaemonEvent::MessageQueuedProcessed { uuid, .. } if uuid == "u1")
-        ));
+        // The seam announces the post-dequeue snapshot (now empty).
+        assert_eq!(surface.snapshots(), vec![Vec::new()]);
     }
 
     // ── session-pushed provider quota (Codex account/rateLimits/updated) ──────
@@ -1746,6 +1936,8 @@ mod tests {
             Arc::new(Mutex::new(PermissionManager::new())),
             deps.clone(),
         );
+        let surface = Arc::new(QueueSurface::default());
+        handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("c1", None);
 
         sink.on_result(SessionResult {
@@ -1773,16 +1965,8 @@ mod tests {
                 .and_then(|md| md.get("queued"))
                 .is_none()
         );
-        let processed: Vec<String> = deps
-            .events()
-            .iter()
-            .filter_map(|e| match e {
-                DaemonEvent::MessageQueuedProcessed { uuid, .. } => Some(uuid.clone()),
-                _ => None,
-            })
-            .collect();
-        assert!(processed.contains(&"u1".to_string()));
-        assert!(processed.contains(&"u2".to_string()));
+        // The turn's final seam snapshot announces the emptied queue.
+        assert_eq!(surface.snapshots().last(), Some(&Vec::new()));
     }
 
     // ── event-handler-turn-timing.test.ts ────────────────────────────────────
@@ -1812,23 +1996,21 @@ mod tests {
             is_error: None,
         });
 
-        let timing = deps.events().into_iter().find_map(|e| match e {
-            DaemonEvent::MessageAdded { message, .. }
-                if message.r#type == ChatMessageType::System
-                    && message
-                        .metadata
-                        .as_ref()
-                        .and_then(|md| md.get("turnDurationMs"))
-                        .is_some() =>
-            {
+        let cache = messages.lock().unwrap();
+        let timing = cache
+            .get("chat-timing")
+            .into_iter()
+            .flatten()
+            .find_map(|message| {
+                if message.r#type != ChatMessageType::System {
+                    return None;
+                }
                 message
                     .metadata
                     .as_ref()
                     .and_then(|md| md.get("turnDurationMs"))
                     .and_then(|v| v.as_i64())
-            }
-            _ => None,
-        });
+            });
         // measured from turnStartedAt (now - 1500) → ~1500ms; allow slack for wall time.
         let ms = timing.expect("turn timing message");
         assert!((1500..1700).contains(&ms), "turnDurationMs was {ms}");
@@ -1839,7 +2021,7 @@ mod tests {
         let messages = Arc::new(Mutex::new(MessageCache::new()));
         let deps = FakeDeps::new(cell(ProcessState::Working, None), Vec::new());
         let handler = EventHandler::new(
-            messages,
+            messages.clone(),
             Arc::new(Mutex::new(PermissionManager::new())),
             deps.clone(),
         );
@@ -1859,11 +2041,19 @@ mod tests {
             is_error: None,
         });
 
-        let has_timing = deps.events().iter().any(|e| {
-            matches!(e, DaemonEvent::MessageAdded { message, .. }
-                if message.r#type == ChatMessageType::System
-                && message.metadata.as_ref().and_then(|md| md.get("turnDurationMs")).is_some())
-        });
+        let cache = messages.lock().unwrap();
+        let has_timing = cache
+            .get("chat-timing")
+            .into_iter()
+            .flatten()
+            .any(|message| {
+                message.r#type == ChatMessageType::System
+                    && message
+                        .metadata
+                        .as_ref()
+                        .and_then(|md| md.get("turnDurationMs"))
+                        .is_some()
+            });
         assert!(!has_timing);
     }
 

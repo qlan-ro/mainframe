@@ -3,14 +3,7 @@
  * All routes are unauthenticated when called from localhost (daemon auth middleware
  * isLocalhost() bypass confirmed in packages/core/src/server/middleware/auth.ts).
  */
-import type {
-  Chat,
-  ChatHistoryPayload,
-  SessionTuning,
-  ExecutionMode,
-  PermissionMode,
-  ControlRequest,
-} from '@qlan-ro/mainframe-types';
+import type { Chat, ClaudeWorkflowRun, SessionTuning, ExecutionMode, PermissionMode } from '@qlan-ro/mainframe-types';
 import { apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
@@ -29,9 +22,9 @@ export interface ChatConfigPatch {
 export const setChatConfig = (port: number, chatId: string, body: ChatConfigPatch): Promise<Chat> =>
   request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/config`, body);
 
-/** History + transcript presence — `transcriptMissing` tells an empty thread from a deleted transcript. */
-export const getChatMessages = (port: number, chatId: string): Promise<ChatHistoryPayload> =>
-  request<ChatHistoryPayload>('GET', `${apiBase(port)}/api/chats/${chatId}/messages`);
+/** Workflow-run seed for the facade path — the transcript itself arrives over `/acp/{profile}`. */
+export const getChatWorkflowRuns = (port: number, chatId: string): Promise<ClaudeWorkflowRun[]> =>
+  request<ClaudeWorkflowRun[]>('GET', `${apiBase(port)}/api/chats/${chatId}/workflow-runs`);
 
 // ── Degraded-chat recovery (missing transcript / missing worktree) ──────────
 
@@ -50,15 +43,6 @@ export const continueChatInProjectRoot = (port: number, chatId: string): Promise
 /** The chat record (model, effort, planMode, permissionMode, adapterId, isRunning, …). */
 export const getChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('GET', `${apiBase(port)}/api/chats/${chatId}`);
-
-/**
- * The chat's currently-pending permission (control_request), or null. Used to
- * restore the permission gate on load/reconnect — the daemon does NOT re-emit
- * `permission.requested` on subscribe/resume, so a live event missed during a
- * disconnect must be recovered via this REST read.
- */
-export const getPendingPermission = (port: number, chatId: string): Promise<ControlRequest | null> =>
-  request<ControlRequest | null>('GET', `${apiBase(port)}/api/chats/${chatId}/pending-permission`);
 
 /**
  * Persist a tuning patch (effort + fast/ultracode/adaptiveThinking — the only

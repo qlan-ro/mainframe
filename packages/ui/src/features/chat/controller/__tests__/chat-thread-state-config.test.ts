@@ -62,7 +62,7 @@ describe('reduceChatThreadState — chat.config.updated', () => {
     const after = reduceChatThreadState(before, { type: 'chat.config.updated', chat });
 
     expect(after.runState).toEqual({ type: 'idle' });
-    expect(after.messageOrder).toEqual([]);
+    expect(after.messages).toEqual([]);
     expect(after.interactions).toBe(before.interactions);
   });
 

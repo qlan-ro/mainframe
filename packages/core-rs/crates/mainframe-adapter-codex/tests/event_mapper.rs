@@ -515,6 +515,29 @@ fn dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source() {
     assert!(rec.tool_results().is_empty());
 }
 
+/// R3.17/T35: the original name claimed history-reload parity that this
+/// test never checked — it drives only the live path. That comparison now
+/// has its own test,
+/// `live_vs_history_id_parity.rs::dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`
+/// (T22, fixed); this one is renamed to say what it actually asserts.
+#[test]
+fn dynamic_tool_call_completion_uses_the_item_id_as_its_vendor_id() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "dyn_1",
+            "type": "dynamicToolCall",
+            "tool": "search",
+            "arguments": {},
+            "status": "completed",
+        }),
+    );
+    assert_eq!(rec.message_vendor_ids(), vec![Some("dyn_1".to_string())]);
+}
+
 #[test]
 fn dynamic_tool_call_without_a_namespace_uses_the_bare_tool_name() {
     let rec = Recorder::new();
@@ -569,6 +592,14 @@ fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
             "content": "",
             "isError": false,
         }])
+    );
+    // Matches `web_search_history.rs`'s `make_message(&w.id, ..)` /
+    // `make_message(&format!("{}:result", w.id), ..)` id scheme (todo #350
+    // group B, stable-ids task 5).
+    assert_eq!(rec.message_vendor_ids(), vec![Some("ws_1".to_string())]);
+    assert_eq!(
+        rec.tool_result_vendor_ids(),
+        vec![Some("ws_1:result".to_string())]
     );
 }
 

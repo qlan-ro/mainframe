@@ -16,7 +16,7 @@ import { useSettingsStore } from '@/store/settings';
 import { initializeDraft } from '@/features/sessions/new-thread/initialize-draft';
 import { resetNewThreadDraft } from '@/features/sessions/new-thread/reset-new-thread-draft';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 
 export interface InstructionActions {
   /** Appends the instruction to the current composer and focuses it. */

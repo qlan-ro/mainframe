@@ -1,0 +1,21 @@
+{
+  "_provenance": "synthetic",
+  "sessionId": "chat_9f2a3b1c",
+  "update": {
+    "sessionUpdate": "tool_call_content_chunk",
+    "toolCallId": "toolu_01T",
+    "content": {
+      "type": "content",
+      "content": {
+        "type": "text",
+        "text": "row 0\nrow 1\n…[truncated 4800 lines · 142 KB — expand]…\nrow 4999",
+        "_meta": {
+          "_mainframe.dev": {
+            "truncated": true,
+            "fullBytes": 145728
+          }
+        }
+      }
+    }
+  }
+}

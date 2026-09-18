@@ -357,6 +357,13 @@ fn capture_mainframe_response(text: &str) -> Option<String> {
     Some(text[content_start..content_start + close_rel].to_string())
 }
 
+/// Streaming-safe (T14, R3.9): an open `<mainframe-command...>` with no
+/// close tag yet — whether the open tag itself is still incomplete or the
+/// body just hasn't closed — is a wrapper mid-stream, not absent text. Both
+/// cases drop from `tag_start` to the end of input rather than passing the
+/// raw wrapper through, so a chunk boundary can never leak it to the UI. Only
+/// the true "no tag at all" case (`text.find(TAG)` fails) leaves the text
+/// unchanged.
 fn remove_mainframe_wrapper(text: &str) -> String {
     const TAG: &str = "<mainframe-command";
     const CLOSE: &str = "</mainframe-command>";
@@ -365,11 +372,11 @@ fn remove_mainframe_wrapper(text: &str) -> String {
     };
     let after_tag = tag_start + TAG.len();
     let Some(gt) = text[after_tag..].find('>') else {
-        return text.to_string();
+        return text[..tag_start].to_string();
     };
     let content_start = after_tag + gt + 1;
     let Some(close_rel) = text[content_start..].find(CLOSE) else {
-        return text.to_string();
+        return text[..tag_start].to_string();
     };
     let close_end = content_start + close_rel + CLOSE.len();
     let mut out = String::with_capacity(text.len());
@@ -399,6 +406,19 @@ mod tests {
         let input =
             "<mainframe-command name=\"init\" id=\"cmd_abc\">Do init work</mainframe-command>";
         assert_eq!(strip_mainframe_command_tags(input), "");
+    }
+
+    #[test]
+    fn an_unclosed_command_wrapper_strips_to_end_of_input() {
+        // The open tag is complete but the body never closed — a wrapper
+        // still streaming.
+        assert_eq!(
+            strip_mainframe_command_tags("<mainframe-command name=\"review\">do it"),
+            ""
+        );
+        // The open tag itself is incomplete — the first chunk of a real
+        // stream, before `remove_mainframe_wrapper` can even find its `>`.
+        assert_eq!(strip_mainframe_command_tags("<mainframe-command na"), "");
     }
 
     #[test]

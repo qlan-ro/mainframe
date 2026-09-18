@@ -2,9 +2,8 @@
 //!
 //! The wire shape of `ClientEvent` lives in `mainframe_types::events`; serde
 //! deserialization enforces the discriminated-union shape and required fields.
-//! The Zod *refinements* (min-length strings, message.send's content-or-
-//! attachments rule, the command-name identifier charset) have no serde analogue,
-//! so they live here as an explicit `validate()` — the §3.1 idiom.
+//! The Zod *refinements* (min-length strings) have no serde analogue, so they
+//! live here as an explicit `validate()` — the §3.1 idiom.
 
 use mainframe_types::events::ClientEvent;
 
@@ -59,26 +58,6 @@ fn validate(event: &ClientEvent) -> Result<(), String> {
             opt_non_empty(project_id.as_deref(), "projectId")?;
             opt_non_empty(chat_id.as_deref(), "chatId")
         }
-        ClientEvent::MessageSend {
-            chat_id,
-            content,
-            attachment_ids,
-            metadata,
-        } => {
-            non_empty(chat_id, "chatId")?;
-            let has_attachments = attachment_ids.as_ref().is_some_and(|a| !a.is_empty());
-            if content.is_empty() && !has_attachments {
-                return Err("Either content or attachmentIds must be non-empty".to_string());
-            }
-            if let Some(cmd) = metadata.as_ref().and_then(|m| m.command.as_ref()) {
-                if !is_command_name(&cmd.name) {
-                    return Err("command.name must match ^[a-zA-Z0-9_-]+$".to_string());
-                }
-                non_empty(&cmd.source, "command.source")?;
-            }
-            Ok(())
-        }
-        ClientEvent::PermissionRespond { chat_id, .. } => non_empty(chat_id, "chatId"),
     }
 }
 
@@ -95,15 +74,6 @@ fn opt_non_empty(value: Option<&str>, field: &str) -> Result<(), String> {
         Some(v) => non_empty(v, field),
         None => Ok(()),
     }
-}
-
-/// The `^[a-zA-Z0-9_-]+$` identifier rule kept verbatim (§3.1) — closes the
-/// command-injection seam noted in ws-schemas.ts.
-fn is_command_name(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 #[cfg(test)]
@@ -157,18 +127,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_message_send_with_no_content_and_no_attachments() {
+    fn rejects_the_retired_message_send_frame() {
+        // The legacy chat dialect is gone: `message.send` now fails the union
+        // parse like any unknown type (prompts ride `/acp/{profile}`).
         assert!(matches!(
-            parse_client_event(r#"{"type":"message.send","chatId":"c1","content":""}"#),
-            Err(ClientEventError::Invalid(_))
-        ));
-    }
-
-    #[test]
-    fn rejects_message_send_command_name_with_bad_charset() {
-        let raw = r#"{"type":"message.send","chatId":"c1","content":"hi","metadata":{"command":{"name":"bad name!","source":"x"}}}"#;
-        assert!(matches!(
-            parse_client_event(raw),
+            parse_client_event(r#"{"type":"message.send","chatId":"c1","content":"hi"}"#),
             Err(ClientEventError::Invalid(_))
         ));
     }
@@ -178,6 +141,9 @@ mod tests {
 // confidence: high
 // todos: 0
 // notes: shape enforced by `serde_json::from_value::<ClientEvent>` (the type in
-// mainframe_types::events); the Zod `.min(1)` / `.refine` / regex refinements are
-// the explicit `validate()` fn (§3.1). Error strings are best-effort (the wire
-// contract freezes only `{type:'error', error:<reason>}`, not the reason text).
+// mainframe_types::events); the Zod `.min(1)` refinements are the explicit
+// `validate()` fn (§3.1). Error strings are best-effort (the wire contract
+// freezes only `{type:'error', error:<reason>}`, not the reason text). The
+// message.send/permission.respond arms died with the legacy chat dialect
+// (todo #350) — the command-name identifier rule now lives on the facade's
+// prompt path.

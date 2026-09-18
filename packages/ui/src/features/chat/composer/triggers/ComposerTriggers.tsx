@@ -22,7 +22,7 @@
 
 import { useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { ComposerPrimitive, INTERNAL, useAui, useAuiState } from '@assistant-ui/react';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { useChatSkills, useChatAgents } from '@/features/skills/use-chat-skills';
 import { useDraftConfig } from '@/features/sessions/runtime/draft-config';

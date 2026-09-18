@@ -11,7 +11,7 @@
  *   1. `@/lib/api/projects`  → vi.fn() stub for getProjects
  *   2. `@/lib/api/skills`    → vi.fn() stub for getSkills
  *   3. `@/lib/api/agents`    → vi.fn() stub for getAgents
- *   4. `../chat/runtime/use-chat-thread-runtime` → stub useChatExtras
+ *   4. `../chat/runtime/chat-extras` → stub useChatExtras
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -33,7 +33,7 @@ vi.mock('@/lib/api/agents', () => ({
   getAgents: vi.fn(),
 }));
 
-vi.mock('../../chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../chat/runtime/chat-extras', () => ({
   useChatExtras: vi.fn(),
 }));
 
@@ -45,7 +45,7 @@ import { SkillsProvider, useChatSkills, useChatAgents } from '../use-chat-skills
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
-import { useChatExtras } from '../../chat/runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../chat/runtime/chat-extras';
 import { setDraftConfig, useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import type { Skill, Project, AgentConfig } from '@qlan-ro/mainframe-types';
 

@@ -1,6 +1,7 @@
 /**
- * build-control-response — behavior tests for three pure builder functions:
- * buildPermissionResponse, buildAskUserQuestionResponse, and buildPlanResponse.
+ * build-control-response — behavior tests for four pure builder functions:
+ * buildPermissionResponse, buildOptionResponse, buildAskUserQuestionResponse,
+ * and buildPlanResponse.
  *
  * Strategy:
  *  - All expected values are hardcoded; no logic is duplicated from the
@@ -10,15 +11,23 @@
  *  - buildPermissionResponse: deny, once (no updatedPermissions, even when the
  *    request carries suggestions — #283), always (with updatedPermissions from
  *    entry.request.suggestions).
+ *  - buildOptionResponse: allow_once/allow_always/reject_once map through to
+ *    the matching buildPermissionResponse kind regardless of optionId/name;
+ *    an unrecognized kind resolves to deny (never guessed as approval).
  *  - buildAskUserQuestionResponse: with answers (spreads original input,
  *    appends answers key), without answers (behavior:'deny', no updatedInput).
  *  - buildPlanResponse: approve+yolo+clearContext, approve+default (no
  *    clearContext key), reject, revise (trims feedback into message).
  */
 import { describe, it, expect } from 'vitest';
-import type { ControlRequest, ControlUpdate } from '@qlan-ro/mainframe-types';
+import type { ControlRequest, ControlUpdate, PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-import { buildPermissionResponse, buildAskUserQuestionResponse, buildPlanResponse } from '../build-control-response';
+import {
+  buildPermissionResponse,
+  buildAskUserQuestionResponse,
+  buildPlanResponse,
+  buildOptionResponse,
+} from '../build-control-response';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -40,7 +49,7 @@ function entry(over: Partial<ControlRequest> = {}, askedAt = 1): ChatPermissionE
     suggestions: [],
     ...over,
   };
-  return { requestId: request.requestId, request, askedAt };
+  return { requestId: request.requestId, request, askedAt, options: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +101,43 @@ describe('buildPermissionResponse', () => {
       updatedInput: { cmd: 'ls' },
       updatedPermissions: [SUG],
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildOptionResponse
+// ---------------------------------------------------------------------------
+
+function option(kind: PermissionOptionKind, over: Partial<PermissionOption> = {}): PermissionOption {
+  return { optionId: 'opt-x', name: 'Some Option', kind, ...over };
+}
+
+describe('buildOptionResponse', () => {
+  it("kind='allow_once' returns the same response as buildPermissionResponse(e, 'once'), regardless of optionId/name", () => {
+    const e = entry();
+    const res = buildOptionResponse(e, option('allow_once', { optionId: 'anything', name: 'Whatever' }));
+    expect(res).toEqual(buildPermissionResponse(e, 'once'));
+  });
+
+  it("kind='allow_always' returns the same response as buildPermissionResponse(e, 'always'), including suggestions", () => {
+    const e = entry({ suggestions: [SUG] });
+    const res = buildOptionResponse(e, option('allow_always'));
+    expect(res).toEqual(buildPermissionResponse(e, 'always'));
+  });
+
+  it("kind='reject_once' returns the same response as buildPermissionResponse(e, 'deny')", () => {
+    const e = entry();
+    const res = buildOptionResponse(e, option('reject_once'));
+    expect(res).toEqual(buildPermissionResponse(e, 'deny'));
+  });
+
+  it('an unrecognized kind resolves to deny rather than being guessed as an approval', () => {
+    const e = entry();
+    // A future/adapter-extension kind our vocabulary doesn't cover yet — cast
+    // past the current 4-literal union to exercise the defensive fallback.
+    const unknown = option('nonstandard_kind' as PermissionOptionKind);
+    const res = buildOptionResponse(e, unknown);
+    expect(res).toEqual(buildPermissionResponse(e, 'deny'));
   });
 });
 

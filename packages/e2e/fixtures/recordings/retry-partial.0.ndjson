@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["Start answering, then hit a provider retry"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-retry-partial-sess-1"],"delayMs":20}
+{"dir":"out","method":"onQueuedProcessed","args":["e2e-retry-partial-uuid-1"],"delayMs":60}
+{"dir":"out","method":"onMessagePartial","args":["msg_A",[{"type":"text","text":"Starting to ans"}]],"delayMs":300}
+{"dir":"out","method":"onApiRetry","args":[1,"overloaded_error"],"delayMs":1500}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"RETRY-PARTIAL-DONE: the retried call answered in full."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":8,"output_tokens":12}}],"delayMs":2500}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":12},"subtype":"success","is_error":false}],"delayMs":2600}

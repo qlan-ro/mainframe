@@ -73,9 +73,9 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_message(content, metadata);
     }
 
-    fn on_tool_result(&self, content: Vec<MessageContent>) {
+    fn on_tool_result(&self, content: Vec<MessageContent>, vendor_id: Option<String>) {
         let hits = self.observe_tool_results(&content);
-        self.inner.on_tool_result(content);
+        self.inner.on_tool_result(content, vendor_id);
         for pr in hits {
             self.inner.on_pr_detected(pr);
         }
@@ -101,8 +101,8 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_error(error);
     }
 
-    fn on_compact(&self) {
-        self.inner.on_compact();
+    fn on_compact(&self, vendor_id: Option<&str>) {
+        self.inner.on_compact(vendor_id);
     }
 
     fn on_compact_start(&self) {
@@ -155,5 +155,15 @@ impl SessionSink for PrDetectionSink {
 
     fn on_attention_request(&self, message: &str) {
         self.inner.on_attention_request(message);
+    }
+
+    fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        self.inner.on_api_retry(attempt, reason);
+    }
+
+    fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
+        // Pass through unscanned: partial text is a prefix of the completed
+        // block `on_message` will scan — detecting on both would double-count.
+        self.inner.on_message_partial(api_message_id, content);
     }
 }

@@ -22,7 +22,7 @@ impl SessionSink for RecordingSink {
         _metadata: Option<mainframe_types::adapter::MessageMetadata>,
     ) {
     }
-    fn on_tool_result(&self, _content: Vec<MessageContent>) {}
+    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
     fn on_permission(&self, _request: mainframe_adapter_api::ControlRequest) {}
     fn on_permission_cancelled(&self, request_id: &str) {
         self.cancelled
@@ -33,7 +33,7 @@ impl SessionSink for RecordingSink {
     fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
     fn on_exit(&self, _code: Option<i32>) {}
     fn on_error(&self, _error: mainframe_adapter_api::AdapterError) {}
-    fn on_compact(&self) {}
+    fn on_compact(&self, _vendor_id: Option<&str>) {}
     fn on_compact_start(&self) {}
     fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
     fn on_plan_file(&self, _file_path: &str) {}

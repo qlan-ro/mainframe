@@ -14,7 +14,7 @@
 import { QuoteIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { useOpenNewThreadDraft } from '@/features/sessions/new-thread/use-open-new-thread-draft';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { useAppendQuoteSegment } from '../composer/segments/use-append-quote-segment';
 
 export function ChatSelectionToolbar() {

@@ -35,6 +35,14 @@ impl ChatManager {
         post.lock()
             .unwrap_or_else(|e| e.into_inner())
             .turn_started_at = Some(now_ms());
+        // The manager has taken ownership of this prompt — accepted whether it
+        // dispatches immediately or lands behind a running turn (plan task 10;
+        // `send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
+                chat_id: chat_id.to_string(),
+            },
+        );
 
         if let Some(cmd) = command {
             return self
@@ -62,11 +70,7 @@ impl ChatManager {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .append(chat_id, error_msg.clone());
-        self.emit(DaemonEvent::MessageAdded {
-            chat_id: chat_id.to_string(),
-            message: error_msg,
-        });
+            .append(chat_id, error_msg);
         self.event_handler.emit_display(chat_id);
     }
 
@@ -155,11 +159,8 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&r.uuid);
-        self.emit(DaemonEvent::MessageQueuedCancelled {
-            chat_id: chat_id.to_string(),
-            uuid: r.uuid.clone(),
-        });
+            .retain(|q| q.uuid != r.uuid);
+        self.notify_queue_changed(chat_id);
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -196,25 +197,34 @@ impl ChatManager {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&r.uuid);
+            .retain(|q| q.uuid != r.uuid);
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove_by_id(chat_id, &r.message_id);
-        self.emit(DaemonEvent::MessageQueuedCancelled {
-            chat_id: chat_id.to_string(),
-            uuid: r.uuid.clone(),
-        });
+        self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
         info!(chat_id, uuid = r.uuid, "queued message cancelled in CLI");
         Ok(())
+    }
+
+    /// How many accepted prompts are queued behind this chat's running turn.
+    /// The ACP facade's prompt port reads this right after `send_message` to
+    /// fill the queued-state extension metadata (spec decision 11).
+    pub fn queued_message_count(&self, chat_id: &str) -> usize {
+        self.queued_refs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .filter(|r| r.chat_id == chat_id)
+            .count()
     }
 
     fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
         self.queued_refs
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .values()
+            .iter()
             .find(|r| r.chat_id == chat_id && r.message_id == message_id)
             .cloned()
     }

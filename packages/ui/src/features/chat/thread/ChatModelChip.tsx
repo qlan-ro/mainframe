@@ -11,7 +11,7 @@
  */
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
-import { useChatExtras } from '../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../runtime/chat-extras';
 import { useAdapters } from '../composer/config-toolbar/use-composer-tuning';
 import { providerDot } from '../composer/config-toolbar/ProviderModelSelect';
 

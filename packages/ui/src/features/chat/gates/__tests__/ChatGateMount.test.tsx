@@ -37,16 +37,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import type { AdapterInfo, PermissionOption } from '@qlan-ro/mainframe-types';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-import type { ChatRuntimeExtras } from '../../runtime/use-chat-thread-runtime';
+import type { ChatRuntimeExtras } from '../../runtime/chat-extras';
 
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatPermissionFront: vi.fn(),
   useChatExtras: vi.fn(),
 }));
-import { useChatExtras, useChatPermissionFront } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras, useChatPermissionFront } from '../../runtime/chat-extras';
 import { ChatGateMount } from '../ChatGateMount';
 
 const mockFront = vi.mocked(useChatPermissionFront);
@@ -58,11 +58,18 @@ const mockExtras = vi.mocked(useChatExtras);
 
 const reply = vi.fn();
 
+const OPTIONS: PermissionOption[] = [
+  { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+  { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
+  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+];
+
 function entry(toolName: string, input: Record<string, unknown>): ChatPermissionEntry {
   return {
     requestId: 'r1',
     askedAt: 1,
     request: { requestId: 'r1', toolName, toolUseId: 'tu1', input, suggestions: [] },
+    options: OPTIONS,
   };
 }
 
@@ -77,6 +84,7 @@ function extrasWithAdapter(adapterId: string): ChatRuntimeExtras {
 const permissionEntry = entry('Bash', { command: 'ls' });
 const askEntry = entry('AskUserQuestion', { questions: [{ question: 'Pick', options: [{ label: 'A' }] }] });
 const planEntry = entry('ExitPlanMode', { plan: '1. step' });
+const synthesizedAskEntry: ChatPermissionEntry = { ...askEntry, synthesizedRequest: true };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,22 +147,36 @@ describe('ChatGateMount', () => {
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
   });
 
-  // --- Behavior 5: reply forwarded to PermissionGate deny action ---
+  // --- A synthesized request (no daemon _meta) always renders the generic
+  // options card, even for a toolName the router would otherwise dispatch to
+  // a rich Plan/AskUserQuestion card (spec decision 27) ---
 
-  it('forwards the hook reply fn to PermissionGate — deny click calls reply with the deny ControlResponse', () => {
+  it('routes a synthesized AskUserQuestion entry to chat-permission-gate, not chat-question-gate', () => {
+    mockFront.mockReturnValue({ front: synthesizedAskEntry, reply });
+    wrap(<ChatGateMount />);
+    expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-question-gate')).toBeNull();
+  });
+
+  // --- Behavior 5: reply forwarded to PermissionGate's chosen-option action ---
+
+  it('forwards the hook reply fn to PermissionGate — the Reject option calls reply with the deny ControlResponse', () => {
     const localReply = vi.fn();
     mockFront.mockReturnValue({ front: permissionEntry, reply: localReply });
     wrap(<ChatGateMount />);
 
-    fireEvent.click(screen.getByTestId('chat-permission-deny'));
+    fireEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
 
     expect(localReply).toHaveBeenCalledTimes(1);
-    expect(localReply).toHaveBeenCalledWith({
-      requestId: 'r1',
-      toolUseId: 'tu1',
-      toolName: 'Bash',
-      behavior: 'deny',
-    });
+    expect(localReply).toHaveBeenCalledWith(
+      {
+        requestId: 'r1',
+        toolUseId: 'tu1',
+        toolName: 'Bash',
+        behavior: 'deny',
+      },
+      'reject-once',
+    );
   });
 
   // --- Behavior 6: an answered gate unmounts with the queue front ---
@@ -178,6 +200,23 @@ describe('ChatGateMount', () => {
     );
 
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('unmounts the permission gate once an option answer clears the queue front', () => {
+    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    const { container, rerender } = wrap(<ChatGateMount />);
+
+    fireEvent.click(screen.getByTestId('chat-permission-option-allow-once'));
+
+    mockFront.mockReturnValue({ front: undefined, reply });
+    rerender(
+      <TooltipProvider>
+        <ChatGateMount />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByTestId('chat-permission-gate')).toBeNull();
     expect(container).toBeEmptyDOMElement();
   });
 

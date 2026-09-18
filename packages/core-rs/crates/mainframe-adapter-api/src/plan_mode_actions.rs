@@ -67,9 +67,49 @@ pub trait PlanActionContext: Send + Sync {
     fn add_plan_file(&self, path: String) -> bool;
     /// `ctx.messages.set(ctx.chatId, [])`.
     fn clear_messages(&self);
-    fn clear_display_cache(&self);
+    fn clear_display_state(&self);
+    /// Announce the wipe on the chat-surface seam — the facade pushes
+    /// `_mainframe.dev/transcript_cleared` so attached clients re-resume.
+    fn notify_transcript_cleared(&self);
     fn start_chat(&self) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn send_message(&self, content: String) -> BoxFuture<'_, Result<(), AdapterError>>;
+}
+
+/// The adapter-generic half of "approve the plan, then clear context": leave plan
+/// mode, drop the vendor session id so the next spawn is a fresh one, wipe the
+/// transcript on every seam, and restart the chat with the approved plan as its
+/// first prompt. Each adapter owns only what precedes it — answering the pending
+/// gate and tearing down its CLI.
+pub async fn clear_context_and_restart(
+    response: &ControlResponse,
+    ctx: &dyn PlanActionContext,
+) -> Result<(), AdapterError> {
+    ctx.update_chat(PlanChatUpdate {
+        plan_mode: Some(false),
+        permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
+        clear_claude_session_id: true,
+    });
+    ctx.emit_chat_updated();
+
+    ctx.clear_messages();
+    ctx.clear_display_state();
+    ctx.notify_transcript_cleared();
+
+    ctx.start_chat().await?;
+    if let Some(plan) = approved_plan(response) {
+        ctx.send_message(format!("Implement the following plan:\n\n{plan}"))
+            .await?;
+    }
+    Ok(())
+}
+
+fn approved_plan(response: &ControlResponse) -> Option<String> {
+    response
+        .updated_input
+        .as_ref()?
+        .get("plan")?
+        .as_str()
+        .map(str::to_string)
 }
 
 /// Per-adapter plan-mode action strategy (relocated `PlanModeActionHandler`).

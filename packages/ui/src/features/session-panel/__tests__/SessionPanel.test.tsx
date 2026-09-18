@@ -20,7 +20,7 @@
  * Mocked dependencies (the rail's data sources — the real rail renders here):
  *  - ./use-context-percent, @/features/run/use-launch-actions,
  *    @/features/sessions/use-active-identity,
- *    @/features/chat/runtime/use-chat-thread-runtime
+ *    @/features/chat/runtime/chat-extras
  *
  * The section/card bodies are stubbed: each owns its own suite, and this one is
  * about the shell. The session card's PanelCard chrome is REAL, so its close X
@@ -52,7 +52,7 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectName: 'repo', projectId: 'proj-1', chatId: 'chat-9', isWorktree: false }),
 }));
 
-vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { backgroundTasks: {} } }),
 }));
 

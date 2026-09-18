@@ -2,7 +2,7 @@
  * Render tests for ChatModelChip.
  *
  * Strategy:
- *  - Mock `useChatExtras` (from ../runtime/use-chat-thread-runtime) to inject
+ *  - Mock `useChatExtras` (from ../runtime/chat-extras) to inject
  *    fixture extras with the desired ChatThreadState.
  *  - Mock `useAdapters` (from ../composer/config-toolbar/use-composer-tuning)
  *    to inject a fixed adapter registry.
@@ -27,7 +27,7 @@ const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvi
 // (thread/ChatModelChip.tsx) imports `../runtime/...` and `../composer/...`,
 // which resolve to `chat/runtime/...` and `chat/composer/...`. From this test
 // file (thread/__tests__/) the same modules are two levels up.
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: vi.fn(),
 }));
 
@@ -45,7 +45,7 @@ vi.mock('../../composer/config-toolbar/ProviderModelSelect', () => ({
 // ---------------------------------------------------------------------------
 
 import { ChatModelChip } from '../ChatModelChip';
-import { useChatExtras } from '../../runtime/use-chat-thread-runtime';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { useAdapters } from '../../composer/config-toolbar/use-composer-tuning';
 import { createChatThreadState, reduceChatThreadState } from '../../controller/chat-thread-state';
 import type { ChatThreadState } from '../../controller/chat-thread-state';

@@ -103,7 +103,33 @@ fn handle_system_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
             session.set_status(mainframe_types::adapter::AdapterProcessStatus::Ready);
             sink.on_init(&session_id);
         }
-        Some("compact_boundary") => sink.on_compact(),
+        Some("compact_boundary") => {
+            sink.on_compact(event.get("uuid").and_then(Value::as_str));
+        }
+        // `system`/`api_error` — CLAUDE-JSONL-SCHEMA.md's `api_error` section
+        // (`retryAttempt`/`error`; `retryInMs`/`maxRetries` are not surfaced —
+        // the facade models retry as a content-replacing patch, not a
+        // countdown, per spec decision 10). Previously dropped entirely
+        // (fact 1); this is todo #350 group D task 11's wiring.
+        Some("api_error") => {
+            let attempt = event
+                .get("retryAttempt")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            let reason = event
+                .get("error")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            // The aborted API call's partial accumulation is stale — the
+            // retry is a fresh call with a fresh message id.
+            session
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .partial
+                .clear();
+            sink.on_api_retry(attempt, reason);
+        }
         Some("task_started") => {
             let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
             let task_id = event
@@ -257,6 +283,7 @@ fn handle_control_request_event(event: &Value, sink: &dyn SessionSink) {
                 .get("decision_reason")
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            options: None,
         };
         sink.on_permission(perm_request);
     } else {
@@ -341,12 +368,10 @@ fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn Sessio
     }
 
     let last_usage = {
-        session
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .last_assistant_usage
-            .take()
+        let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+        // Turn over: whatever partial accumulation is left never completes.
+        st.partial.clear();
+        st.last_assistant_usage.take()
     };
     // Context size comes ONLY from the last parent assistant usage. The result
     // event's own `usage` is the QueryEngine total accumulated across every API
@@ -421,6 +446,9 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         Some("control_cancel_request") => handle_control_cancel_request_event(event, sink),
         Some("control_response") => handle_control_response_event(session, event, sink),
         Some("rate_limit_event") => handle_rate_limit_event(session, event, sink),
+        Some("stream_event") => {
+            crate::partial_stream::handle_stream_event(session, event, sink);
+        }
         Some("result") => {
             // Subagent result events (parent_tool_use_id present) are inner
             // sub-turns — dropping them keeps the parent processState 'working'.
@@ -464,7 +492,9 @@ mod tests {
     struct Rec {
         init: Vec<String>,
         messages: usize,
+        last_message_metadata: Option<MessageMetadata>,
         tool_results: usize,
+        last_tool_result_vendor_id: Option<String>,
         skill_files: Vec<SkillFileEntry>,
         skill_loaded: Vec<mainframe_adapter_api::LoadedSkill>,
         cli_messages: Vec<String>,
@@ -483,6 +513,7 @@ mod tests {
         cancelled: Vec<String>,
         provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
         attention_requests: Vec<String>,
+        api_retries: Vec<(i64, Option<String>)>,
     }
 
     #[derive(Default)]
@@ -498,11 +529,15 @@ mod tests {
         fn on_init(&self, session_id: &str) {
             self.r().init.push(session_id.to_string());
         }
-        fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {
-            self.r().messages += 1;
+        fn on_message(&self, _content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
+            let mut r = self.r();
+            r.messages += 1;
+            r.last_message_metadata = metadata;
         }
-        fn on_tool_result(&self, _content: Vec<MessageContent>) {
-            self.r().tool_results += 1;
+        fn on_tool_result(&self, _content: Vec<MessageContent>, vendor_id: Option<String>) {
+            let mut r = self.r();
+            r.tool_results += 1;
+            r.last_tool_result_vendor_id = vendor_id;
         }
         fn on_permission(&self, request: ControlRequest) {
             self.r().permissions.push(request);
@@ -517,7 +552,7 @@ mod tests {
         fn on_error(&self, _error: AdapterError) {
             self.r().errors += 1;
         }
-        fn on_compact(&self) {
+        fn on_compact(&self, _vendor_id: Option<&str>) {
             self.r().compact += 1;
         }
         fn on_compact_start(&self) {
@@ -567,6 +602,9 @@ mod tests {
         fn on_attention_request(&self, message: &str) {
             self.r().attention_requests.push(message.to_string());
         }
+        fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+            self.r().api_retries.push((attempt, reason));
+        }
     }
 
     fn session_at(path: &str, tracker: Arc<BackgroundTaskTracker>) -> Arc<ClaudeSession> {
@@ -608,6 +646,32 @@ mod tests {
         assert_eq!(sink.r().init, vec!["s1".to_string()]);
     }
 
+    // Captured shape: docs/research/adapters/claude/CLAUDE-JSONL-SCHEMA.md's
+    // `api_error` section (a real transcript line, not the informal
+    // "api_retry" naming the todo brief used).
+    #[test]
+    fn parses_a_captured_api_error_line_into_on_api_retry() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "system",
+                "subtype": "api_error",
+                "level": "error",
+                "error": "{status: 529, headers: {...}}",
+                "retryInMs": 538.28,
+                "retryAttempt": 1,
+                "maxRetries": 10
+            }),
+        );
+        assert_eq!(
+            sink.r().api_retries,
+            vec![(1, Some("{status: 529, headers: {...}}".to_string()))]
+        );
+    }
+
     #[test]
     fn handles_partial_chunks_by_buffering() {
         let s = session();
@@ -631,6 +695,69 @@ mod tests {
         handle_stdout(&s, b"\n\n\n", &sink);
         assert!(sink.r().init.is_empty());
         assert_eq!(sink.r().messages, 0);
+    }
+
+    // ---- stable ids (todo #350 group B, task 5) ----
+    #[test]
+    fn assistant_event_entry_uuid_becomes_the_message_metadata_vendor_id() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "uuid": "entry-uuid-1",
+                "message": { "model": "claude", "content": [
+                    { "type": "text", "text": "hi" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_message_metadata.as_ref().unwrap().vendor_id,
+            Some("entry-uuid-1".to_string())
+        );
+    }
+
+    #[test]
+    fn assistant_event_without_a_uuid_leaves_vendor_id_absent() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "assistant",
+                "message": { "model": "claude", "content": [
+                    { "type": "text", "text": "hi" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_message_metadata.as_ref().unwrap().vendor_id,
+            None
+        );
+    }
+
+    #[test]
+    fn user_event_entry_uuid_becomes_the_tool_result_vendor_id() {
+        let s = session();
+        let sink = RecordingSink::default();
+        feed(
+            &s,
+            &sink,
+            serde_json::json!({
+                "type": "user",
+                "uuid": "entry-uuid-2",
+                "message": { "role": "user", "content": [
+                    { "type": "tool_result", "tool_use_id": "tu_1", "content": "done" }
+                ] }
+            }),
+        );
+        assert_eq!(
+            sink.r().last_tool_result_vendor_id,
+            Some("entry-uuid-2".to_string())
+        );
     }
 
     // ---- skill detection ----

@@ -1,13 +1,16 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
+use mainframe_adapter_api::{
+    Adapter, AdapterError, AdapterSession, BoxFuture, PlanModeActionHandler,
+};
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
 use mainframe_types::display::ToolCategories;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 
+use crate::plan_mode_handler::MockPlanModeHandler;
 use crate::session::{ReplayCache, ReplaySession};
 use crate::task_bridge::TaskBridge;
 
@@ -172,6 +175,10 @@ impl Adapter for MockCliAdapter {
 
     fn kill_all(&self) {}
 
+    fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
+        Some(Arc::new(MockPlanModeHandler))
+    }
+
     fn get_tool_categories(&self) -> Option<ToolCategories> {
         Some(ToolCategories {
             explore: HashSet::from_iter(["Read", "Glob", "Grep", "LS"].map(str::to_string)),
@@ -179,5 +186,15 @@ impl Adapter for MockCliAdapter {
             progress: HashSet::from_iter(["TaskCreate", "TaskUpdate"].map(str::to_string)),
             subagent: HashSet::from_iter(["Task", "Agent"].map(str::to_string)),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adapter_trait_resolves_a_plan_mode_handler() {
+        assert!(Adapter::create_plan_mode_handler(&MockCliAdapter::default()).is_some());
     }
 }
