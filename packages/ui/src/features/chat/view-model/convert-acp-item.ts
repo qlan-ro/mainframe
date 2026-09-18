@@ -218,10 +218,15 @@ function systemContainer(items: readonly ParsedItem[], base: { id: string; creat
 }
 
 function errorContainer(items: readonly ParsedItem[], base: { id: string; createdAt: Date }): ThreadMessageLike {
-  const message = items.find((p) => p.item.kind === 'message');
-  const blocks = message && message.item.kind !== 'tool-call' ? message.item.content : [];
+  // A container can hold several message segments, so the marker is looked up
+  // across all of them rather than on the first — an error container carries
+  // no tool calls today and therefore never segments, but nothing here should
+  // depend on that staying true.
+  const messages = items.filter((p) => p.item.kind === 'message');
+  const blocks = messages.flatMap((p) => (p.item.kind === 'message' ? p.item.content : []));
   const fallback = textOf(blocks).trim();
-  const errorText = message?.meta.errorText ?? (fallback.length > 0 ? fallback : 'An error occurred');
+  const errorText =
+    messages.find((p) => p.meta.errorText)?.meta.errorText ?? (fallback.length > 0 ? fallback : 'An error occurred');
   // Keep the text part (≥1-content-part invariant + a11y/fallback); the
   // `errorText` meta drives AssistantMessage's styled error block.
   return {

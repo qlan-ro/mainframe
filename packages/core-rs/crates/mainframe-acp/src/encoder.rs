@@ -6,14 +6,16 @@
 //!
 //! Subagent/task content (`DisplayNode::TaskGroup`) flattens to tool-call
 //! items carrying a `_meta` parent relation instead of nesting — the facade
-//! has no `task_group` (criterion 10). Every text/thinking/image leaf under
-//! one container id accumulates into a single item's ordered block list
-//! (spec Decision 22), and that item sits at the position of its FIRST
-//! contribution, so cross-kind order within a container survives for the
-//! common one-transition case (text before tools). Invariant: a block list
-//! never holds two adjacent text blocks — text coalesces into the trailing
-//! text block — so the diff engine's chunk appends are lossless under the
-//! client's trailing-text coalescing rule.
+//! has no `task_group` (criterion 10). Text/thinking/image leaves under one
+//! container id accumulate into an item's ordered block list (spec Decision
+//! 22), and that item sits at the position of its FIRST contribution. A run
+//! of leaves interrupted by a tool call, a subagent task, or the other leaf
+//! kind closes there and resumes as a new *segment* item after it
+//! (`accum.rs`), so a turn that alternates prose and tools keeps
+//! source order rather than hoisting every paragraph above every tool.
+//! Invariant: a block list never holds two adjacent text blocks — text
+//! coalesces into the trailing text block — so the diff engine's chunk
+//! appends are lossless under the client's trailing-text coalescing rule.
 //!
 //! Every item carries an `ItemMeta` under `_meta["_mainframe.dev"]`
 //! (desktop-cutover pass): timestamp, container id, the raw
@@ -37,6 +39,7 @@ use mainframe_types::acp::extensions::{
 use mainframe_types::acp::tool_call::{ToolCallContent, ToolCallStatus, ToolKind};
 use serde_json::{Value, json};
 
+mod accum;
 mod content;
 mod result_content;
 use content::encode_content;

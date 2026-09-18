@@ -837,8 +837,13 @@ map: attachment previews, command invocation, `cost_usd`,
 `tool_group` membership: members share the first visible member's id), and
 `subagent: true` on a task-group tool call, whose `title` is the task
 description rather than a tool name. A message item sits at the position of
-its first content contribution, so text-before-tools order survives
-flattening. Hidden-category tool calls are not encoded at all. Generic ACP
+its first content contribution; when a tool call, a subagent task, or a
+thought interrupts a run of text, the text resumes as a new item after it
+(`{containerId}-1`, `-2`, … — the unsuffixed id is always the first
+segment), so a turn alternating prose and tools keeps source order instead
+of hoisting its whole narration above its tools. Several message items can
+therefore share one `containerId`; a client renders them in item order
+within the container. Hidden-category tool calls are not encoded at all. Generic ACP
 clients ignore all of it. The retry marker shares this namespace object —
 its `attempt`/`reason` keys merge into it, never replace it.
 
