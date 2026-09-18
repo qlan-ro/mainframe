@@ -297,8 +297,16 @@ jobs:
   # pre-release, not "latest". If e2e failed/was cancelled this job is skipped and the draft waits
   # for a manual publish.
   publish-release:
-    needs: [release, e2e]
-    if: ${{ always() && needs.release.result == 'success' && needs.e2e.result == 'success' }}
+    needs: [release, e2e, build-app-tauri]
+    # build-app-tauri is a gate here even though `release` deliberately ignores it:
+    # that job uploads the installers AND the updater's latest.json straight to this
+    # tag, so publishing without it yields a release whose only assets are the daemon
+    # tarballs — and `releases/latest/download/latest.json`, which every installed app
+    # polls, 404s. A failed app build now leaves the draft for a manual publish, the
+    # same way a failed e2e run already does.
+    if: >-
+      ${{ always() && needs.release.result == 'success' && needs.e2e.result == 'success'
+      && needs.build-app-tauri.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
