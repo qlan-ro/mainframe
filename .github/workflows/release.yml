@@ -6,6 +6,55 @@ on:
       - 'v*'
 
 jobs:
+  # Exactly one job creates the release object. Previously tauri-action and the
+  # `release` job each created their own, and because a draft is invisible to
+  # GET /releases/tags/{tag} they could not find each other — v2.3.0 ended up with
+  # the installers and latest.json on one release and the daemon tarballs on
+  # another, and the daemon-only one got published. Everything downstream now
+  # targets this id.
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - name: Find or create the draft release for this tag
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ contains(github.ref_name, '-') }}
+        run: |
+          set -euo pipefail
+          # Drafts 404 on GET /releases/tags/{tag}; list and match instead.
+          existing=$(gh api "repos/$REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$TAG\")]")
+          count=$(jq 'length' <<<"$existing")
+
+          if [ "$count" -gt 1 ]; then
+            echo "::error::$count releases already carry $TAG. Consolidate them onto one" \
+                 "and delete the rest before re-running." >&2
+            jq -r '.[] | "  id=\(.id) draft=\(.draft) assets=\([.assets[].name] | join(", "))"' <<<"$existing" >&2
+            exit 1
+          fi
+
+          # Re-runs reuse the release rather than adding a second one.
+          if [ "$count" -eq 1 ]; then
+            id=$(jq -r '.[0].id' <<<"$existing")
+            echo "Reusing release $id for $TAG."
+          else
+            id=$(gh api --method POST "repos/$REPO/releases" \
+              -f tag_name="$TAG" -f name="$TAG" \
+              -F draft=true -F prerelease="$PRERELEASE" -F generate_release_notes=true \
+              -f body='---
+          **Full Changelog**: [`CHANGELOG.md`](https://github.com/qlan-ro/mainframe/blob/'"$TAG"'/CHANGELOG.md)' \
+              --jq '.id')
+            echo "Created draft release $id for $TAG."
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   build-daemon:
     strategy:
       fail-fast: false
@@ -81,6 +130,7 @@ jobs:
   # uploads the installers + a merged multi-platform latest.json to this tag's draft
   # release (find-or-create — coexists with the `release` job's softprops upload).
   build-app-tauri:
+    needs: [create-release]
     permissions:
       contents: write
     strategy:
@@ -202,13 +252,11 @@ jobs:
           APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         with:
           projectPath: packages/app-tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
-          releaseDraft: true
-          # Any tag with a pre-release suffix (v2.0.0-rc.1, -nightly.N, …) is a
-          # pre-release, so it never becomes the "latest" release the in-app updater
-          # tracks. Clean vX.Y.Z tags publish as stable.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # `releaseId` (not `tagName`) — the action creates a release only when
+          # `tagName && !releaseId`, so passing the id makes it upload into the
+          # release `create-release` already made. The draft/prerelease flags live
+          # there too, since only the creating job can set them.
+          releaseId: ${{ needs.create-release.outputs.id }}
 
       # tauri-action uploads the installer as `Mainframe_<ver>_<arch>.dmg` (arch =
       # aarch64|x64) — a name that says neither "tauri" nor a consistent arch. Rename
@@ -229,16 +277,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.id }}
         run: |
           set -euo pipefail
-          # tauri-action creates the release as a DRAFT, and GET /releases/tags/{tag}
-          # returns published releases only (404s on drafts). Find it by listing.
-          release_id=$(gh api "repos/$REPO/releases?per_page=100" \
-            --jq "[.[] | select(.tag_name == \"$TAG\")][0].id // empty")
-          if [ -z "$release_id" ]; then
-            echo "No release found for $TAG yet — skipping dmg rename."
-            exit 0
-          fi
+          release_id="$RELEASE_ID"
           version="${TAG#v}"
           gh api "repos/$REPO/releases/$release_id/assets" \
             -q '.[] | select(.name | test("^Mainframe_.*\\.dmg$")) | "\(.id) \(.name)"' \
@@ -259,7 +301,7 @@ jobs:
     uses: ./.github/workflows/e2e-mock.yml
 
   release:
-    needs: [build-daemon, build-app-tauri]
+    needs: [create-release, build-daemon, build-app-tauri]
     # Assemble the release as a DRAFT as long as the daemon built — the daemon tarballs back
     # `mainframe update` and must never be blocked by a Tauri build failure. `always()` overrides
     # the default "skip if any need failed". build-app-tauri uploads its own dmg/updater assets
@@ -276,19 +318,36 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - uses: softprops/action-gh-release@v3
-        with:
-          # The daemon job is the only upload-artifact producer left feeding
-          # this download — build-app-tauri publishes straight to the release.
-          files: |
-            artifacts/*.tar.gz
-          draft: true
-          # Mirror the tauri-action job: pre-release suffix → GitHub pre-release.
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
-          body: |
-            ---
-            **Full Changelog**: [`CHANGELOG.md`](https://github.com/qlan-ro/mainframe/blob/${{ github.ref_name }}/CHANGELOG.md)
+      # Upload by release id rather than letting an action create-or-find by tag:
+      # that lookup 404s on drafts, which is exactly how the assets used to end up
+      # split across two releases. The daemon job is the only upload-artifact
+      # producer feeding this download — build-app-tauri uploads its own bundles.
+      - name: Attach the daemon tarballs to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create-release.outputs.id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(artifacts/*.tar.gz)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No daemon tarballs were downloaded — nothing to attach." >&2
+            exit 1
+          fi
+          for path in "${files[@]}"; do
+            name=$(basename "$path")
+            # Re-runs replace rather than 422 on a duplicate name.
+            old=$(gh api "repos/$REPO/releases/$RELEASE_ID/assets" \
+              --jq "[.[] | select(.name == \"$name\")][0].id // empty")
+            if [ -n "$old" ]; then
+              gh api --method DELETE "repos/$REPO/releases/assets/$old" >/dev/null
+            fi
+            gh api --method POST \
+              "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$name" \
+              -H "Content-Type: application/octet-stream" --input "$path" >/dev/null
+            echo "attached $name"
+          done
 
   # Auto-publish gate: promote the draft to a published release once the e2e suite is green.
   # Runs only when BOTH the draft was assembled (`release`) and the mock e2e suite passed (`e2e`).
@@ -297,7 +356,7 @@ jobs:
   # pre-release, not "latest". If e2e failed/was cancelled this job is skipped and the draft waits
   # for a manual publish.
   publish-release:
-    needs: [release, e2e, build-app-tauri]
+    needs: [create-release, release, e2e, build-app-tauri]
     # build-app-tauri is a gate here even though `release` deliberately ignores it:
     # that job uploads the installers AND the updater's latest.json straight to this
     # tag, so publishing without it yields a release whose only assets are the daemon
@@ -316,42 +375,22 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ needs.create-release.outputs.id }}
         run: |
           set -euo pipefail
-          # GET /releases/tags/{tag} 404s on drafts; list and match by tag instead (same as the
-          # "Normalize Tauri dmg asset name" step above).
-          matches=$(gh api "repos/$REPO/releases?per_page=100" \
-            --jq "[.[] | select(.tag_name == \"$TAG\")]")
-          count=$(jq 'length' <<<"$matches")
+          # The release id comes from `create-release`, so there is nothing to look up
+          # and nothing to guess between.
+          assets=$(gh api "repos/$REPO/releases/$RELEASE_ID/assets" --jq '[.[].name]')
 
-          if [ "$count" -eq 0 ]; then
-            echo "No release found for $TAG — nothing to publish." >&2
-            exit 1
-          fi
-
-          # tauri-action and the `release` job each create a release for this tag, and
-          # a draft is invisible to GET /releases/tags/{tag}, so they can fail to find
-          # each other and split the assets across two objects. Taking [0] then published
-          # whichever the listing happened to return first — for v2.3.0 that was the
-          # daemon-only one, leaving the installers and latest.json stranded on a draft.
-          # Refuse to guess: a split needs a human to consolidate.
-          if [ "$count" -gt 1 ]; then
-            echo "::error::$count releases carry the tag $TAG. The assets are split across them;" \
-                 "consolidate onto one release and delete the rest, then publish manually." >&2
-            jq -r '.[] | "  id=\(.id) draft=\(.draft) assets=\([.assets[].name] | join(", "))"' <<<"$matches" >&2
-            exit 1
-          fi
-
-          release_id=$(jq -r '.[0].id' <<<"$matches")
-
-          # The updater manifest is the one asset whose absence is invisible until an
-          # installed app polls `releases/latest/download/latest.json` and gets a 404.
-          if ! jq -e '.[0].assets | map(.name) | index("latest.json")' <<<"$matches" >/dev/null; then
+          # A missing updater manifest is invisible until an installed app polls
+          # `releases/latest/download/latest.json` and gets a 404 — which is how
+          # v2.3.0 shipped. Refuse to publish without it.
+          if ! jq -e 'index("latest.json")' <<<"$assets" >/dev/null; then
             echo "::error::Release $TAG has no latest.json — publishing it would break the" \
                  "in-app updater for every installed client. Leaving it as a draft." >&2
-            jq -r '.[0].assets[].name' <<<"$matches" >&2
+            jq -r '.[]' <<<"$assets" >&2
             exit 1
           fi
 
-          gh api -X PATCH "repos/$REPO/releases/$release_id" -F draft=false >/dev/null
+          gh api -X PATCH "repos/$REPO/releases/$RELEASE_ID" -F draft=false >/dev/null
           echo "Published release $TAG (draft -> published)."
