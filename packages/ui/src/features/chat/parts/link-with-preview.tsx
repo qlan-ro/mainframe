@@ -6,7 +6,7 @@
  * (#279) can delegate to it for every link it does not chip, without importing
  * the whole component map.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
@@ -19,31 +19,12 @@ import {
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
-import { writeToClipboard } from '@/lib/editor/copy-reference';
+import { LINK_MENU_ROWS, httpLinkHref, openInMainframe, useCopyHref, type LinkMenuRowKey } from './link-menu-actions';
 
-/**
- * Writes `href` to clipboard and briefly shows "Copied" feedback.
- * Resolves with whether the write actually landed, so menu callers can say
- * "Copy failed" instead of confirming a copy that never happened.
- */
-function useCopyHref(href: string | undefined) {
-  const [copied, setCopied] = useState(false);
-  const copy = useCallback(
-    async (e?: React.MouseEvent): Promise<boolean> => {
-      e?.preventDefault();
-      e?.stopPropagation();
-      if (!href) return false;
-      const ok = await writeToClipboard(href);
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-      return ok;
-    },
-    [href],
-  );
-  return { copied, copy };
-}
+const ROW_TEST_IDS: Record<LinkMenuRowKey, string> = {
+  'open-in-app': 'chat-link-open-in-app',
+  'open-browser': 'chat-link-open',
+};
 
 export function LinkWithPreview({
   className,
@@ -54,6 +35,7 @@ export function LinkWithPreview({
   const { copied, copy } = useCopyHref(href);
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
   const menuStatus = statusFor('copy-link');
+  const inAppHref = httpLinkHref(href);
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
@@ -67,6 +49,11 @@ export function LinkWithPreview({
   );
 
   const handleMenuCopy = onCopySelect('copy-link', copy);
+
+  const rowHandlers: Record<LinkMenuRowKey, () => void> = {
+    'open-in-app': () => inAppHref && openInMainframe(inAppHref),
+    'open-browser': () => handleOpen(),
+  };
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
   const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
@@ -94,10 +81,13 @@ export function LinkWithPreview({
         </TooltipTrigger>
         <ContextMenuContent>
           <ContextMenuGroup>
+            {LINK_MENU_ROWS.filter((row) => row.key !== 'open-in-app' || inAppHref).map((row) => (
+              <ContextMenuItem key={row.key} data-testid={ROW_TEST_IDS[row.key]} onSelect={rowHandlers[row.key]}>
+                <row.icon />
+                {row.label}
+              </ContextMenuItem>
+            ))}
             <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
-            <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
-              Open link
-            </ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
