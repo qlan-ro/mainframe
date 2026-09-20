@@ -6,9 +6,9 @@ Typing a slash or `@` token that matches nothing (e.g. `/compact`, `/zzz`) leave
 
 ## Changes
 
-1. `packages/ui/src/components/trigger-engine/use-trigger-field.ts` — in `handleKeyDown`, make `ArrowDown`, `ArrowUp`, `Enter` and `Tab` return `false` **without** calling `preventDefault()` when `current.entries.length === 0`. `Escape` stays consumed while a token is detected (it must still disarm), and `Backspace` keeps its own guard — a drilled-into category may legitimately list nothing. Keep the function under 50 lines.
+1. `packages/ui/src/components/trigger-engine/use-trigger-field.ts` — in `handleKeyDown`, make `ArrowDown`, `ArrowUp`, `Enter` and `Tab` return `false` **without** calling `preventDefault()` when `current.entries.length === 0`. `Escape` stays consumed while a token is detected (it must still disarm), and `Backspace` keeps its own guard — a drilled-into category may legitimately list nothing. Tab falling through means it moves focus out of the textarea after an unmatched token, where today it is a silent no-op: intended, per "behave as if no trigger were in play". Keep the function under 50 lines.
 2. `packages/ui/src/features/chat/composer/triggers/trigger-field-aria-context.tsx` — carry an "armed" boolean beside the ARIA props: a sibling context (default `false`) exported through the existing provider (extra prop) plus a new hook. Do **not** put it on `TriggerFieldAriaProps`: that object is spread onto the textarea and a non-ARIA key becomes a bogus DOM attribute.
-3. `packages/ui/src/features/chat/composer/triggers/ComposerTriggers.tsx` — feed the provider `field.trigger !== null` as the armed value (that field already is the signal; no change to the hook's public shape). Memoize whatever object the provider receives so the context value does not churn identity on unrelated renders.
+3. `packages/ui/src/features/chat/composer/triggers/ComposerTriggers.tsx` — feed the provider `field.trigger !== null` as the armed value (that field already is the signal; no change to the hook's public shape). A bare boolean on its own context needs no memoization; if it is instead bundled into an object, memoize it so the context value does not churn identity.
 4. `packages/ui/src/features/chat/composer/Composer.tsx` — in `ComposerInputField`, the Escape focus-park branch tests `!armed` instead of `triggerAria['aria-expanded'] !== true`. Armed is a superset of expanded, so the existing open-menu behavior is unchanged and the unmatched-token case stops moving focus.
 5. `packages/ui/src/components/trigger-engine/__tests__/use-trigger-field.test.tsx` — extend the existing "renders no popover when the query matches nothing" setup: `Enter` and `ArrowDown` report **not handled** and do not prevent default while a token is detected with an empty entry list; `Escape` still reports handled and still disarms.
 6. `packages/ui/src/features/chat/composer/triggers/__tests__/ComposerTriggers.test.tsx` — the load-bearing pin for AC 1: this suite mounts the real `Unstable_TriggerPopoverRoot` and plugin registry, which is the only place aui's early-return is exercised. Type `/zzz`, press Enter, observe the composer form submits. Keep a companion assertion that with matching results Enter still inserts the highlighted entry and does not submit.
@@ -27,7 +27,7 @@ Typing a slash or `@` token that matches nothing (e.g. `/compact`, `/zzz`) leave
 - A non-matching token produces no send metadata: `matchCommandInvocation(text)` returns null → `sendMeta = {}` → `buildPendingMessage(..., sendMeta)` — `packages/ui/src/features/chat/controller/chat-actions.ts:54-56`. Both the optimistic pending and the reconciled turn therefore carry no `command` meta. Unchanged by this work.
 - Transcript chip rendering is text-driven: `mainframeUserFormatter = createUserFormatter({ recognizeCommand: true })` recognizes a leading `/token` by shape with no registry lookup — `packages/ui/src/features/chat/messages/user-directives.ts:75, 100-125`. So `/zzz` already chips today; task 8 pins it.
 - `VariablePickerButton.tsx` is a third file that mentions the hook but only uses `selectEntry` (see its header comment, lines 11-12) — it never calls `handleKeyDown`, so it is unaffected.
-- `docs/plans/` is gitignored in this repo, so this plan file is committed with `git add -f`.
+- `docs/plans/` is gitignored in this repo (a plain `git add` was refused with "The following paths are ignored"), so this plan file is committed with `git add -f`.
 
 ## Risks
 
@@ -37,7 +37,7 @@ Typing a slash or `@` token that matches nothing (e.g. `/compact`, `/zzz`) leave
 
 ## Exit gates
 
-- Every acceptance criterion in the todo brief is covered by a test in tasks 5-9, and the new tests fail before the source change and pass after (write each failing test and its fix in the same turn).
+- Acceptance criteria 1-6, 8 and 9 each get a new test in tasks 5-9, and each new test fails before the source change and passes after (write the failing test and its fix in the same turn). AC 7 (mid-run Enter still queues) is unchanged by construction — `Composer.tsx:150-162` prevents default before the plugin loop can run — so it needs no new test; confirm the existing mid-run queue coverage still passes.
 - `packages/ui` unit tests, typecheck and lint pass. Typecheck includes test files, so run it, not just the build.
 - A patch changeset for `@qlan-ro/mainframe-ui` describing the Enter-after-unmatched-token fix accompanies the branch.
 - No leftovers: the stale `TriggerTextField.tsx:85-88` comment is now accurate — if its wording no longer matches the code, correct it in the same pass.
