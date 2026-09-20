@@ -679,4 +679,16 @@ describe('UserMessage — SR: session reference lines and chips', () => {
     expect(container.querySelector('[data-directive-type="command"]')).toBeNull();
     expect(screen.getByTestId('chat-user-message')).toHaveTextContent('/not-a-command here');
   });
+
+  it('renders a leading unmatched slash token as a command chip with no command metadata (todo #353)', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: '/zzz do the thing' }],
+      mainframe: undefined,
+    });
+    const { container } = renderUserMessage();
+    const chip = container.querySelector('[data-directive-type="command"]');
+    expect(chip).not.toBeNull();
+    expect(chip).toHaveTextContent('/zzz');
+    expect(screen.getByTestId('chat-user-message')).toHaveTextContent('do the thing');
+  });
 });
