@@ -7,7 +7,7 @@
  * On a local daemon the chip is a plain opener and the word "tunnel" appears
  * nowhere — same port, different machine, different meaning.
  */
-import { AppWindow, ExternalLink, Globe, Unplug } from 'lucide-react';
+import { ExternalLink, Globe, Unplug } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Hint } from '@/components/ui/hint';
-import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
+import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
+import {
+  LINK_MENU_ROWS,
+  openInMainframe,
+  useCopyHref,
+  type LinkMenuRowKey,
+} from '@/features/chat/parts/link-menu-actions';
 import { useUrlTunnel } from './use-url-tunnel';
 import type { PortTunnelEntry } from '@/store/port-tunnels';
+
+const ROW_TEST_IDS: Record<LinkMenuRowKey, string> = {
+  'open-in-app': 'smart-action-url-open-in-app',
+  'open-browser': 'smart-action-url-open-browser',
+};
 
 const CHIP_CLASS =
   'inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 pl-1.5 pr-1 py-0.5 align-baseline';
@@ -50,6 +62,10 @@ interface UrlChipProps {
 
 export function UrlChip({ href, port }: UrlChipProps) {
   const { isLocal, entry, busy, open, stop } = useUrlTunnel(href, port);
+  const { copy } = useCopyHref(href);
+  const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
+  const menuStatus = statusFor('copy-link');
+  const handleMenuCopy = onCopySelect('copy-link', copy);
 
   const badge = isLocal ? null : badgeFor(entry, busy);
   const openLabel = isLocal ? 'Open' : entry?.state === 'ready' ? 'Reopen tunnel URL' : 'Tunnel and open';
@@ -58,11 +74,16 @@ export function UrlChip({ href, port }: UrlChipProps) {
   // left to stop, and the spec has the control disappear once the tunnel is down.
   const canStop = !isLocal && (entry?.state === 'starting' || entry?.state === 'ready');
 
+  const rowHandlers: Record<LinkMenuRowKey, () => void> = {
+    'open-in-app': () => openInMainframe(href),
+    'open-browser': open,
+  };
+
   return (
     <span className={CHIP_CLASS} data-smart-action-port={port}>
       <span className="font-mono text-xs text-primary">{href}</span>
       {badge && <span className={`${BADGE_CLASS} ${badge.className}`}>{badge.label}</span>}
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={handleOpenChange}>
         {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would
             swallow the menu's own ref and onClick. */}
         <Hint label={openLabel}>
@@ -80,17 +101,19 @@ export function UrlChip({ href, port }: UrlChipProps) {
         </Hint>
         <DropdownMenuContent align="start">
           {/* The tab owns tunnelling — this path must not start one. */}
-          <DropdownMenuItem
-            data-testid="smart-action-url-open-in-app"
-            onSelect={() => emitSurfaceIntent({ type: 'open-url-tab', url: href })}
-          >
-            <AppWindow />
-            Open in Mainframe
-          </DropdownMenuItem>
-          <DropdownMenuItem data-testid="smart-action-url-open-browser" onSelect={open}>
-            <ExternalLink />
-            Open in browser
-          </DropdownMenuItem>
+          {LINK_MENU_ROWS.map((row) => (
+            <DropdownMenuItem key={row.key} data-testid={ROW_TEST_IDS[row.key]} onSelect={rowHandlers[row.key]}>
+              <row.icon />
+              {row.label}
+            </DropdownMenuItem>
+          ))}
+          <CopyMenuItem
+            as={DropdownMenuItem}
+            testId="smart-action-url-copy"
+            label="Copy link"
+            status={menuStatus}
+            onSelect={handleMenuCopy}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
       {canStop && (
