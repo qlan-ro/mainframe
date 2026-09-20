@@ -20,6 +20,7 @@ pub(crate) mod collab_identity;
 pub(crate) mod collab_protocol;
 pub(crate) mod collab_resolve;
 pub(crate) mod compaction;
+pub(crate) mod context_window;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
