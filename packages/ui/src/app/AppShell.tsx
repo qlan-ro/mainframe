@@ -124,7 +124,7 @@ function RuntimeBody({ port }: { port: number }) {
       <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
       {/* PROTOTYPE — remove with packages/ui/src/prototype/ */}
-      {import.meta.env.DEV && <PrototypeOverlay />}
+      {import.meta.env.MODE !== 'production' && <PrototypeOverlay />}
     </SidebarProvider>
   );
 }

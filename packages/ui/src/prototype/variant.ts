@@ -28,7 +28,8 @@ function params(): URLSearchParams {
 }
 
 export function prototypeGroup(): PrototypeGroup | null {
-  if (!import.meta.env.DEV) return null;
+  // MODE, not DEV: this dev server runs with NODE_ENV=production leaked in, so DEV is false.
+  if (import.meta.env.MODE === 'production') return null;
   const g = params().get('prototype');
   return g && g in VARIANTS ? (g as PrototypeGroup) : null;
 }
