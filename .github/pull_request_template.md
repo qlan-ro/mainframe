@@ -10,7 +10,7 @@
 
 ## Changes
 
-<!-- Optional: 2–4 changes or tradeoffs needed for review. Omit when Summary already covers them. Do not paste stage decisions, reviewer transcripts, local paths, or staging/retry history. -->
+<!-- Optional: 2–4 changes or tradeoffs needed for review. Omit when Summary already covers them. Put useful extended rationale in one collapsible Implementation notes comment and link it here; update it on reruns. Do not paste stage decisions, reviewer transcripts, local paths, or staging/retry history. -->
 
 ## Validation
 
