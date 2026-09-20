@@ -1,18 +1,32 @@
-## What changed
+<!-- Write for a reviewer who has not seen the agent conversation. Aim for 150–300 words for an ordinary PR; use less for small changes and more only when risk needs it. Remove guidance and irrelevant sections. Summarize the final change, not the sequence of agent work. -->
 
-Brief description of the change.
+## Summary
 
-## Why
+<!-- Explain the problem and resulting behavior. Include a concrete before/after example when useful. -->
 
-Why this change is needed.
+## Related work
 
-## Testing done
+<!-- Link the GitHub issue, todo, and relevant design. Write "None" if there is no related work item. -->
 
-How you verified the change works.
+## Changes
 
-## Checklist
+<!-- Optional: 2–4 changes or tradeoffs needed for review. Omit when Summary already covers them. Do not paste stage decisions, reviewer transcripts, local paths, or staging/retry history. -->
 
-- [ ] `pnpm test` passes
-- [ ] `pnpm build` passes (TypeScript compiles)
-- [ ] No secrets in staged files
-- [ ] File size limits respected (max 300 lines/file, 50 lines/function)
+## Validation
+
+<!-- State the commands or scenarios actually run and their results. Include relevant regression checks. If checks were not run, explain why and what remains unverified. -->
+
+## Risks and rollout
+
+<!-- Optional: material compatibility, deployment/rollback concerns, and unresolved review or testing gaps. Summarize and deduplicate findings; keep full agent logs outside the PR body. -->
+
+## Visual evidence
+
+<!-- For visible changes: embed 2–3 screenshots or link a short video from live QA, with captions and the tested commit. Include relevant light/dark themes or viewports. Local paths are not uploaded evidence. For nonvisual changes, state why evidence is not needed. If capture/upload is blocked, state the gap. -->
+
+## Review checklist
+
+- [ ] I reviewed the diff and kept unrelated changes out.
+- [ ] Validation above accurately records completed checks and remaining gaps.
+- [ ] Applicable documentation, API consumers, migrations, and a changeset are addressed.
+- [ ] Visual evidence is attached for visible changes, or the reason it is not needed is stated.
