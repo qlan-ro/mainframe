@@ -86,6 +86,7 @@ export function TasksModalHost({ port }: Props): React.ReactElement {
       >
         <DialogContent
           showCloseButton={boardProjectId === null}
+          resizeKey={boardProjectId !== null ? 'tasks' : undefined}
           className={cn(
             boardProjectId === null
               ? 'sm:max-w-sm'

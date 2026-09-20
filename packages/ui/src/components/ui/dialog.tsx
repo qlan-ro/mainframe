@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useDialogResize } from '@/components/ui/dialog-resize';
 import { XIcon } from 'lucide-react';
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -32,24 +33,31 @@ function DialogContent({
   children,
   showCloseButton = true,
   closeButtonClassName,
+  resizeKey,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   /** Repositions the built-in close — compact band headers (px-4 py-3) center it with `top-1.5`. */
   closeButtonClassName?: string;
+  /** Opt-in corner-resize: a stable per-dialog key, persisted in the UI-chrome store. Omit for no behavior change. */
+  resizeKey?: string;
 }) {
+  const { style, dragging, grabber } = useDialogResize(resizeKey);
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        style={style}
         className={cn(
           'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
+          dragging && 'transition-none',
         )}
         {...props}
       >
         {children}
+        {grabber}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             {/* Stable testid: the e2e suite and several unit tests address the
