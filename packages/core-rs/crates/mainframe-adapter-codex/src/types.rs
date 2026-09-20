@@ -234,8 +234,9 @@ pub struct TokenUsageEnvelope {
     pub total: Option<CamelUsage>,
     #[serde(default)]
     pub last: Option<CamelUsage>,
-    /// Absent on older builds (plan fact 4); `#[serde(default)]` keeps the
-    /// 0.144.3 capture deserializing without it.
+    /// Absent on codex-cli 0.144.3 (see
+    /// `tests/fixtures/collab-delegation-0.144.3.jsonl`), present from 0.153.4;
+    /// `#[serde(default)]` keeps the older capture deserializing without it.
     #[serde(default)]
     pub model_context_window: Option<i64>,
 }

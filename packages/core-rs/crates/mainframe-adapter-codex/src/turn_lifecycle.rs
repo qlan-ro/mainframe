@@ -156,7 +156,8 @@ pub(crate) fn handle_token_usage(
 /// The wire's own `tokenUsage.modelContextWindow` (authoritative, reflects any
 /// remote catalog override) when present, else the packaged table's window
 /// for the turn's resolved model — no default here, an unresolvable id must
-/// emit nothing rather than guess (AC 4).
+/// emit nothing rather than guess a percentage against a window that may not
+/// match the real model.
 fn resolve_context_window(
     params: &TokenUsageUpdatedParams,
     state: &CodexSessionState,

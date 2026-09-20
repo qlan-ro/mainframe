@@ -1,7 +1,7 @@
-//! Codex model context windows (todo #352). `model/list` carries no window
-//! (plan fact 3), so this is a snapshot of codex-cli 0.153.4's packaged
-//! `modelCatalogJson` (plan fact 5), consulted only when the wire's own
-//! `tokenUsage.modelContextWindow` (plan fact 1) is absent.
+//! Codex model context windows (todo #352). `model/list` carries no window,
+//! so this is a snapshot of codex-cli 0.153.4's packaged `modelCatalogJson`,
+//! consulted only when the wire's own `tokenUsage.modelContextWindow` is
+//! absent.
 
 /// Falls back for a model id the table doesn't recognize — codex-cli's own
 /// packaged default for its common models.

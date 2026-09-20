@@ -180,3 +180,27 @@ fn no_wire_window_and_an_unresolvable_model_emits_nothing() {
 
     assert_eq!(rec.context_usages().len(), 0);
 }
+
+#[test]
+fn no_wire_window_and_a_model_absent_from_the_table_emits_nothing() {
+    let rec = Recorder::new();
+    let mut state = CodexSessionState {
+        thread_id: Some("t1".to_string()),
+        resolved_turn_model: Some("some-future-model".to_string()),
+        ..Default::default()
+    };
+
+    handle_notification(
+        "thread/tokenUsage/updated",
+        &json!({
+            "threadId": "t1",
+            "tokenUsage": {
+                "last": { "inputTokens": 1_000, "outputTokens": 50 },
+            },
+        }),
+        &rec.sink(),
+        &mut state,
+    );
+
+    assert_eq!(rec.context_usages().len(), 0);
+}
