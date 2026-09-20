@@ -22,7 +22,7 @@ import { useComposerEdit } from './edit/composer-edit-context';
 import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from './attachments/ComposerAttachmentStrip';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
-import { useTriggerFieldAria, useTriggerFieldArmed } from './triggers/trigger-field-aria-context';
+import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
 import { focusOwningTranscript } from './focus-composer';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
 import { ComposerSegments } from './segments/ComposerSegments';
@@ -87,15 +87,22 @@ function ComposerInputField({
   placeholder: string;
 }) {
   const triggerAria = useTriggerFieldAria();
-  const triggerArmed = useTriggerFieldArmed();
   // Escape leaves the composer and parks focus on the transcript (⌘L brings it
   // back). The `/` and `@` trigger menu owns Escape while a token is armed —
   // even with no matching entries, the trigger hook still consumes Escape to
-  // disarm itself, and that must not also throw the caret out of the field.
-  // No preventDefault here: the session panel and files panel dismiss
-  // themselves on a document-level Escape listener gated on
-  // `!event.defaultPrevented`, and React's synthetic handler (attached below
-  // `document`) would otherwise stand them down before that listener runs.
+  // disarm itself and calls preventDefault() on the SAME native event before
+  // this handler runs (assistant-ui's plugin registry is consulted from a
+  // document-level CAPTURE listener, which always fires before this bubble-
+  // phase handler). Gating on `e.defaultPrevented` reads that fact off the
+  // event itself; a React-context "armed" flag was tried first and dropped —
+  // the trigger's own preventDefault() can land a state update (closing the
+  // token) whose re-render commits, via a microtask checkpoint, in the gap
+  // between the two listeners, so the context value this handler closes over
+  // is already stale by the time it runs. No preventDefault of our own here:
+  // the session panel and files panel dismiss themselves on a document-level
+  // Escape listener gated on `!event.defaultPrevented`, and React's synthetic
+  // handler (attached below `document`) would otherwise stand them down
+  // before that listener runs.
   //
   // `cancelOnEscape={false}` below turns off aui's OWN document-level Escape
   // handler (`useEscapeKeydown` in ComposerPrimitive.Input), which calls the
@@ -110,12 +117,12 @@ function ComposerInputField({
   // Stop button is the one real way to cancel a run.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Escape' && !triggerArmed && focusOwningTranscript(e.currentTarget)) {
+      if (e.key === 'Escape' && !e.defaultPrevented && focusOwningTranscript(e.currentTarget)) {
         return;
       }
       onKeyDown(e);
     },
-    [onKeyDown, triggerArmed],
+    [onKeyDown],
   );
   return (
     <ComposerPrimitive.Input

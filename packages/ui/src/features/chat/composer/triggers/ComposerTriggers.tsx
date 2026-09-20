@@ -174,7 +174,7 @@ export function ComposerTriggers({
       {/* Outside TriggerFieldPopover's PopoverAnchor slot on purpose — that slot
           clones props onto its single child for Radix's anchor measurement, and
           a context provider isn't a forwardable DOM element. */}
-      <TriggerFieldAriaProvider value={field.ariaProps} armed={field.trigger !== null}>
+      <TriggerFieldAriaProvider value={field.ariaProps}>
         <TriggerFieldPopover field={field} testId="composer-trigger-popover">
           {children}
         </TriggerFieldPopover>
