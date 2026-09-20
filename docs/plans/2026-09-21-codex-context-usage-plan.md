@@ -49,8 +49,11 @@ Every line below was verified while planning; the receipt is how to re-derive it
    `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-daybreak-blue-latest`,
    `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.2`, `codex-auto-review` → `context_window:
    272000`; `gpt-daybreak-red-latest` → `372000`. Receipt:
-   `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex | grep -B 12 -A 6 '"context_window":'`
-   (pair each `"context_window"` with the nearest preceding `"slug"`). Use `context_window`,
+   dump the binary's strings once
+   (`strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex > /tmp/codex_strings.txt`), then
+   `grep -nE '"(slug|context_window|max_context_window|display_name)":' /tmp/codex_strings.txt`
+   — those four fields appear in that order per model, so each `context_window` belongs to
+   the `slug` listed above it. Use `context_window`,
    **not** `max_context_window` — they diverge (`gpt-5.4`: 272000 vs 1000000). This catalog
    is a packaged default that remote config can override at runtime, which is the second
    reason the wire value must win over the table.
@@ -65,6 +68,14 @@ Every line below was verified while planning; the receipt is how to re-derive it
 8. **No changeset-tracked package covers `packages/core-rs`.** `.changeset/config.json`
    locksteps only `@qlan-ro/mainframe-types` and `@qlan-ro/mainframe-ui`, and `packages/`
    holds no `core` JS package. See Decisions.
+9. **The reload seed is already adapter-agnostic.** `persistedContextUsage`
+   (`packages/ui/src/features/chat/controller/chat-environment-state.ts:80-85`) rebuilds the
+   `contextUsage` slice from the chat row's `lastContextTotalTokens`/`lastContextMaxTokens`
+   for any adapter, gated only on `max > 0`, and the columns round-trip through
+   `packages/core-rs/crates/mainframe-db/src/chats.rs:23` (select) and `:339` (update). AC 3
+   therefore needs no new read-side code — only the write side (fact 6), which this change
+   supplies. Its doc comment reads "Null when the chat has never reported (legacy rows,
+   codex)" and goes stale the moment this lands.
 
 ## Files
 
@@ -77,7 +88,7 @@ Core (all under `packages/core-rs/crates/mainframe-adapter-codex/`):
 | `src/types.rs` | `TokenUsageEnvelope` gains `#[serde(default)] pub model_context_window: Option<i64>` (the struct already renames to camelCase and has no `deny_unknown_fields`). |
 | `src/adapter.rs` | `map_codex_model` sets `context_window: Some(catalog_context_window(&m.id))` instead of `None`. |
 | `src/session_state.rs` | `CodexSessionState` gains `pub resolved_turn_model: Option<String>` (doc-commented as "the id whose window the context percentage divides by"). |
-| `src/session.rs` | In `send_message`, after `resolve_turn_model(..)` succeeds (~:588), store the resolved id on the session state. Reuse the existing state lock block at ~:581 or take one immediately after — do not add a second lock inside the hot path. This file is already 978 lines; keep the addition to the two or three lines this needs and add nothing else. |
+| `src/session.rs` | In `send_message`, after `resolve_turn_model(..)` succeeds (~:588), store the resolved id on the session state. `model` and `default_model` are already in scope from the config lock above, so the cleanest shape is to move the `resolve_turn_model(..)` call inside the existing `self.state` lock block at ~:581 and write the field there — one lock, not two. This file is already 978 lines; keep the addition to the few lines this needs and add nothing else. |
 | `src/turn_lifecycle.rs` | `handle_token_usage` gains a `sink: &Arc<dyn SessionSink>` parameter and, after the existing `state.last_usage` write, resolves a window and emits `sink.on_context_usage(..)`. The `Owner::Parent` guard and the `state.last_usage` write are unchanged. |
 | `src/event_mapper.rs:64` | Pass `sink` at the single call site. |
 
@@ -87,6 +98,12 @@ Test:
 | --- | --- |
 | `tests/common/mod.rs` | `Recorded` gains `pub context_usages: Vec<ContextUsage>`; `RecordingSink::on_context_usage` pushes instead of no-opping; add a `Recorder::context_usages()` accessor. `ContextUsage` is `Copy`. |
 | `tests/context_usage.rs` **(new)** | The acceptance tests below. Uses `mod common;` like `tests/quota_notification.rs`. |
+
+Cleanup (no-leftovers, same pass):
+
+| File | Change |
+| --- | --- |
+| `packages/ui/src/features/chat/controller/chat-environment-state.ts` | Drop "codex" from `persistedContextUsage`'s doc comment (fact 9); it is the only line in the UI this change falsifies. No code change. |
 
 Release:
 
@@ -186,4 +203,8 @@ with a `Recorder` sink, mirroring `tests/quota_notification.rs`:
 - The collab-delegation replay tests still pass unchanged.
 - `cargo fmt` and `cargo clippy` are clean for the crate; no new `warn!` on the skip path.
 - `src/context_window.rs` is under 300 lines and `src/turn_lifecycle.rs` stays under it too.
+- AC 3 holds without new read-side code: after a Codex turn the chat row carries both
+  context columns, and reopening the chat shows a non-null percentage via the existing
+  `persistedContextUsage` seed (fact 9). Observe it by checking the persisted columns after a
+  turn rather than by re-deriving the UI path.
 - The changeset exists and names a real package.
