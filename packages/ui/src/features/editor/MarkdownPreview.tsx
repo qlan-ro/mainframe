@@ -15,6 +15,10 @@ import remarkGfm from 'remark-gfm';
 import { useHost } from '@/lib/host';
 import { urlTransform } from '@/features/chat/parts/markdown-url-transform';
 import { ShikiCode } from '@/lib/shiki-tokens';
+// PROTOTYPE (#357) — remove with packages/ui/src/prototype/
+import { useMemo } from 'react';
+import { NotableBlock, NotesSourceContext, NotesSubmitBar } from '@/prototype/NotableBlock';
+import { usePrototype } from '@/prototype/variant';
 
 type ElProps<T extends keyof JSX.IntrinsicElements> = ComponentPropsWithoutRef<T>;
 
@@ -106,16 +110,55 @@ const components = {
   hr: (p: ElProps<'hr'>) => <hr {...p} className="my-4 border-border" />,
 };
 
+// PROTOTYPE (#357): wrap block-level elements with the add-note affordance.
+type AnyProps = { node?: never; children?: React.ReactNode } & Record<string, unknown>;
+function notable(variant: string): typeof components {
+  const wrapOutside = (key: 'p' | 'h1' | 'h2' | 'h3' | 'blockquote' | 'table') => {
+    const Inner = components[key] as (p: AnyProps) => JSX.Element;
+    return ({ node, ...p }: AnyProps) => (
+      <NotableBlock variant={variant} node={node as never}>
+        <Inner {...p} />
+      </NotableBlock>
+    );
+  };
+  return {
+    ...components,
+    p: wrapOutside('p'),
+    h1: wrapOutside('h1'),
+    h2: wrapOutside('h2'),
+    h3: wrapOutside('h3'),
+    blockquote: wrapOutside('blockquote'),
+    table: wrapOutside('table'),
+    li: ({ node, children, ...p }: AnyProps) => (
+      <li {...(p as ElProps<'li'>)} className="my-0.5">
+        <NotableBlock variant={variant} node={node as never}>
+          {children}
+        </NotableBlock>
+      </li>
+    ),
+    pre: ({ node, children }: AnyProps) => (
+      <NotableBlock variant={variant} node={node as never}>
+        {children}
+      </NotableBlock>
+    ),
+  } as typeof components;
+}
+
 // ── MarkdownPreview ───────────────────────────────────────────────────────────
 
 export function MarkdownPreview({ value }: { value: string }) {
+  const variant = usePrototype('notes');
+  const comps = useMemo(() => (variant ? notable(variant) : components), [variant]);
   return (
-    <div data-testid="markdown-preview" className="mf-editor-selectable h-full overflow-auto">
-      <div className="mx-auto max-w-[720px] px-10 pb-16 pt-[36px]">
-        <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={urlTransform} components={components}>
-          {value}
-        </Markdown>
+    <NotesSourceContext.Provider value={value}>
+      <div data-testid="markdown-preview" className="mf-editor-selectable flex h-full flex-col overflow-auto">
+        <div className="mx-auto w-full max-w-[720px] flex-1 px-10 pb-16 pt-[36px]">
+          <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={urlTransform} components={comps}>
+            {value}
+          </Markdown>
+        </div>
+        {variant && <NotesSubmitBar />}
       </div>
-    </div>
+    </NotesSourceContext.Provider>
   );
 }

@@ -27,6 +27,9 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
     />
   );
 }
+// PROTOTYPE (#340) — remove with packages/ui/src/prototype/
+import { useDialogResizePrototype } from '@/prototype/dialog-resize';
+
 function DialogContent({
   className,
   children,
@@ -38,18 +41,23 @@ function DialogContent({
   /** Repositions the built-in close — compact band headers (px-4 py-3) center it with `top-1.5`. */
   closeButtonClassName?: string;
 }) {
+  const resize = useDialogResizePrototype();
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        ref={resize.ref}
+        style={resize.style}
         className={cn(
+          resize.className,
           'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
       >
         {children}
+        {resize.extra}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             {/* Stable testid: the e2e suite and several unit tests address the

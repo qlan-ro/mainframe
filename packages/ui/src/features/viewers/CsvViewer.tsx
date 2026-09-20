@@ -22,6 +22,9 @@ import { Search, ChevronsUpDown } from 'lucide-react';
 import { parseCsv, isNumericColumn, type CsvRow } from './csv-parser';
 import { ViewerShell } from './ViewerShell';
 import { splitCsvStatus } from './viewer-status';
+// PROTOTYPE (#357) — remove with packages/ui/src/prototype/
+import { usePrototype } from '@/prototype/variant';
+import { CsvModeToggle, CsvNoteRow, CsvRowGutter, CsvRowTrailingAction, CsvSelectToolbar, CsvSourceListing, type CsvMode } from '@/prototype/csv-notes';
 
 interface CsvViewerProps {
   content: string | null;
@@ -44,6 +47,9 @@ function nextSortDir(current: SortDir): SortDir {
 export function CsvViewer({ content, path }: CsvViewerProps) {
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState<SortState>({ colIndex: -1, dir: null });
+  const proto = usePrototype('notes');
+  const [mode, setMode] = useState<CsvMode>('preview');
+  const [selectedLine, setSelectedLine] = useState<number | null>(null);
 
   const parsed = useMemo(() => (content !== null ? parseCsv(content) : null), [content]);
 
@@ -112,10 +118,17 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
   );
 
   return (
-    <ViewerShell path={path} status={statusLeft} statusRight={statusRight} actions={filterChip}>
+    <ViewerShell
+      path={path}
+      status={statusLeft}
+      statusRight={statusRight}
+      actions={proto ? <div className="flex items-center gap-2">{filterChip}<CsvModeToggle mode={mode} onChange={setMode} /></div> : filterChip}
+    >
       <div data-testid="viewer-csv" className="flex h-full flex-col">
         {/* Table */}
-        {content === null ? (
+        {proto && mode === 'source' ? (
+          <CsvSourceListing content={content ?? ''} variant={proto} />
+        ) : content === null ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : !parsed || parsed.headers.length === 0 ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
@@ -125,6 +138,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
               <thead className="sticky top-0 bg-card">
                 <tr>
                   {/* Row-number gutter */}
+                  {/* PROTOTYPE: variant B adds a trailing action column */}
                   <th className="w-10 border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 select-none">
                     #
                   </th>
@@ -154,13 +168,36 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                       </th>
                     );
                   })}
+                  {proto === 'B' && <th className="w-8 border-b border-border" />}
                 </tr>
               </thead>
               <tbody>
-                {displayRows.map((row, rowIdx) => (
-                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-muted/40'}>
+                {displayRows.map((row, rowIdx) => {
+                  // PROTOTYPE: source line ≈ ordinal + 2 (header on line 1).
+                  const line = row._index + 2;
+                  const raw = row.cells.join(',');
+                  return (
+                  <>
+                  <tr
+                    key={row._index}
+                    onClick={proto === 'C' ? () => setSelectedLine((s) => (s === line ? null : line)) : undefined}
+                    className={[
+                      'group/row relative',
+                      rowIdx % 2 === 0 ? 'bg-background' : 'bg-muted/40',
+                      proto === 'C' && selectedLine === line ? 'bg-primary/5' : '',
+                    ].join(' ')}
+                  >
                     <td className="border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 tabular-nums">
-                      {rowIdx + 1}
+                      {proto ? (
+                        <CsvRowGutter variant={proto} line={line} content={raw}>
+                          {line}
+                        </CsvRowGutter>
+                      ) : (
+                        rowIdx + 1
+                      )}
+                      {proto === 'C' && selectedLine === line && (
+                        <CsvSelectToolbar line={line} content={raw} onDone={() => setSelectedLine(null)} />
+                      )}
                     </td>
                     {parsed.headers.map((_header, colIdx) => (
                       <td
@@ -174,8 +211,16 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
                         {row.cells[colIdx] ?? ''}
                       </td>
                     ))}
+                    {proto === 'B' && (
+                      <td className="w-8 border-b border-border px-2 py-1.5">
+                        <CsvRowTrailingAction line={line} content={raw} />
+                      </td>
+                    )}
                   </tr>
-                ))}
+                  {proto && <CsvNoteRow line={line} colSpan={parsed.headers.length + 2} />}
+                  </>
+                  );
+                })}
                 {displayRows.length === 0 && filter.trim() && (
                   <tr data-testid="viewer-csv-empty">
                     <td

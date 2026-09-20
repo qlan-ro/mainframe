@@ -20,6 +20,9 @@ import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
+// PROTOTYPE (#341/#355) — remove with packages/ui/src/prototype/
+import { FileRefLink, isFileHref, openInMainframeStub } from '@/prototype/FileRefLink';
+import { usePrototype } from '@/prototype/variant';
 
 /**
  * Writes `href` to clipboard and briefly shows "Copied" feedback.
@@ -51,6 +54,7 @@ export function LinkWithPreview({
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.ReactElement {
   const host = useHost();
+  const proto = usePrototype('links');
   const { copied, copy } = useCopyHref(href);
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
   const menuStatus = statusFor('copy-link');
@@ -67,6 +71,10 @@ export function LinkWithPreview({
   );
 
   const handleMenuCopy = onCopySelect('copy-link', copy);
+
+  if (proto && href && isFileHref(href)) {
+    return <FileRefLink href={href} variant={proto} className={className} {...props} />;
+  }
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
   const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
@@ -94,10 +102,15 @@ export function LinkWithPreview({
         </TooltipTrigger>
         <ContextMenuContent>
           <ContextMenuGroup>
-            <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
+            {proto && (
+              <ContextMenuItem data-testid="chat-link-open-in-app" onClick={() => openInMainframeStub(href)}>
+                Open in Mainframe
+              </ContextMenuItem>
+            )}
             <ContextMenuItem data-testid="chat-link-open" onClick={handleOpen}>
-              Open link
+              {proto ? 'Open in browser' : 'Open link'}
             </ContextMenuItem>
+            <CopyMenuItem testId="chat-link-copy" label="Copy link" status={menuStatus} onSelect={handleMenuCopy} />
           </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>

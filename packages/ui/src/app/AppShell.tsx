@@ -41,6 +41,7 @@ import { useIndexHintReveal } from '../features/shortcuts/index-hints';
 import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
 import { useAppShortcutActions } from './use-app-shortcut-actions';
 import { useSandboxWsRouter } from '../features/run/use-sandbox-ws-router';
+import { PrototypeOverlay } from '@/prototype/PrototypeSwitcher';
 
 /** While the sidebar is collapsed, the surface area's top-left sits under the
  *  native traffic lights, so the MainToolbar's left group insets to clear them. */
@@ -122,6 +123,8 @@ function RuntimeBody({ port }: { port: number }) {
       <SettingsDialog port={port} />
       <ShortcutsCheatSheet />
       {showTour && <TutorialOverlay />}
+      {/* PROTOTYPE — remove with packages/ui/src/prototype/ */}
+      {import.meta.env.DEV && <PrototypeOverlay />}
     </SidebarProvider>
   );
 }
