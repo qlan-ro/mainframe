@@ -3,6 +3,8 @@
 //! module breaks up was itself the single biggest function in the crate
 //! (`cargo clippy -- -W clippy::too_many_lines`).
 
+use mainframe_types::display::has_attachment_evidence;
+
 use super::accum::{Accum, AccumKind};
 use super::*;
 
@@ -34,6 +36,14 @@ pub(super) fn encode_content(
 
     for block in content {
         handle_block(block, container, role, &mut message, &mut thought, out);
+    }
+
+    // A user container with attachment evidence but zero content leaves
+    // never claims the accumulator, so `finish` would emit no item and take
+    // the container's metadata (the attachment previews) with it — open an
+    // empty slot so the item still surfaces with its ItemMeta intact.
+    if role == ItemRole::User && has_attachment_evidence(container.message_meta) {
+        message.claim_marker(out, container);
     }
 
     message.finish(container, out);
