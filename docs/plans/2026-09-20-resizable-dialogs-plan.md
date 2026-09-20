@@ -16,7 +16,7 @@ as today — same DOM, no grip, no behavior change.
 | --- | --- |
 | `packages/ui/src/components/ui/dialog-resize.tsx` | **new** — `clampDialogSize`, `DialogResizeGrabber`, `useDialogResize` |
 | `packages/ui/src/components/ui/dialog.tsx` | `DialogContent` gains one optional prop (`resizeKey?: string`); applies inline size + renders the grabber when set |
-| `packages/ui/src/store/ui-prefs.ts` | `dialogSizes: Record<string, DialogSize>`, `setDialogSize(key, size)`, `dialogSizeFor(sizes, key, fallback)` |
+| `packages/ui/src/store/ui-prefs.ts` | `dialogSizes: Record<string, DialogSize>`, `setDialogSize(key, size)`, `dialogSizeFor(sizes, key, fallback)`, **and `dialogSizes: s.dialogSizes` added to `partializeUiPrefs`** (`:79-87`) — without that line the key never reaches `mf:ui-prefs` |
 | `packages/ui/src/components/ui/__tests__/dialog-resize.test.ts` | **new** — clamp helper cases |
 | `packages/ui/src/store/__tests__/ui-prefs.test.ts` | selector fallback + setter cases appended |
 | `packages/ui/src/features/settings/SettingsDialog.tsx` | `resizeKey="settings"` |
@@ -55,8 +55,18 @@ as today — same DOM, no grip, no behavior change.
 - **Commit.** `pointerup` calls `setDialogSize(key, size)`. The store writes what it is given; the hook clamps
   before committing, because the store cannot know a dialog's measured minimum (unlike `setSidebarWidth`,
   which clamps against module constants).
-- **While dragging.** The inline style lifts `max-w`/`max-h` (`maxWidth: 'none'`, `maxHeight: 'none'`) and the
-  wrapper adds `transition-none`. That class must be merged **after** the caller's `className` —
+- **Lifting the max constraints.** `maxWidth: 'none'`/`maxHeight: 'none'` go in the inline style **whenever an
+  inline size is applied (`size !== null`)** — not only while `dragging`. Every opt-in call site carries a CSS
+  cap *tighter* than the clamp ceiling (`SettingsDialog.tsx:63` `max-w-[760px] sm:max-w-[760px]`,
+  `ReviewPanel.tsx:136` `max-h-[880px] sm:max-w-[1180px]`, `AutomationsHost.tsx:73` `max-h-[880px]
+  sm:max-w-[1040px]`, `TasksModalHost.tsx:92-93` `max-h-[85vh]` + `sm:max-w-[880px]`/`sm:max-w-[1200px]`), and a
+  CSS `max-*` beats an inline `width`/`height`. Drag-gating the lift means a Review dialog dragged to 1300×950
+  tracks the pointer, then snaps back to 1180×880 on `pointerup` and renders at 1180×880 on every later open —
+  breaking both the viewport-bound criterion and the persistence criterion. The primitive's own
+  `max-w-[calc(100%-2rem)]` (`dialog.tsx:47`) is *not* the problem: it equals the clamp ceiling. The call-site
+  caps are.
+- **While dragging** the wrapper adds `transition-none` (drag-gated — an applied size alone must not kill the
+  dialog's transitions). That class must be merged **after** the caller's `className` —
   `cn(base, className, dragging && 'transition-none')` — or twMerge lets the Tasks board's
   `transition-[width] duration-[180ms]` win (same trap as the Separator self-stretch case).
 - **Grip.** Three short diagonal strokes, `text-muted-foreground/70`, ~12px, `cursor-nwse-resize`, positioned
@@ -68,8 +78,9 @@ as today — same DOM, no grip, no behavior change.
 
 - Radix unmounts dialog content on close: `DialogPrimitive.Content` is wrapped in `<Presence present={forceMount || context.open}>` — `node_modules/@radix-ui/react-dialog/dist/index.mjs:134`. No call site passes `forceMount`.
 - `zoom-in-95` animates `transform: … scale3d(var(--tw-enter-scale) …)` in the `enter` keyframe — `node_modules/tw-animate-css/dist/tw-animate.css:1`. `getBoundingClientRect` returns the transformed box; `offsetWidth`/`offsetHeight` are untransformed layout metrics, hence the measurement choice.
-- zustand `persist` merges shallowly by default (`merge: (persisted, current) => ({...current, ...persisted})` — `node_modules/zustand/middleware.js:337`, zustand 5.0.14), so an additive `dialogSizes` key hydrates to its initial `{}` from any older payload. **No `version` bump or migration entry is needed** (store is at v6).
+- zustand `persist` merges shallowly by default (`merge: (persisted, current) => ({...current, ...persisted})` — `node_modules/zustand/middleware.js:337`, zustand 5.0.14), so an additive `dialogSizes` key hydrates to its initial `{}` from any older payload. **No `version` bump or migration entry is needed** (store is at v6) — but the key is only persisted if it is added to the allowlist, below.
 - `ui-prefs` tests assert per key, never on a whole persisted payload (`ui-prefs-migration.test.ts` uses `toEqual` only on `sessionPanelOpen`/`sessionPanelSections`), so the additive key does not break them — but `ui-prefs.test.ts`'s `beforeEach` reset and its "documented defaults" test enumerate every key and must gain `dialogSizes: {}`.
+- `ui-prefs` persists an **explicit allowlist**, not the whole state: `partializeUiPrefs` returns a literal object (`packages/ui/src/store/ui-prefs.ts:79-87`) wired as `partialize` at `:119`. Omitting `dialogSizes` there leaves it in memory only and typecheck stays green, because `PersistedUiPrefs` is derived from that function's return type (`:89`) — the allowlist is internally consistent either way. The store unit test must assert through the persisted payload, not just `setState`/`getState`.
 - Existing clamp precedent: `clampSidebarWidth` in `packages/ui/src/components/ui/sidebar/context.tsx:12-14`, exported from `sidebar/index.ts`.
 - Existing pointer-drag precedent: `SidebarRail.onPointerDown` measures the target from the DOM and binds `pointermove`/`pointerup` on `window` — `packages/ui/src/components/ui/sidebar/sidebar.tsx:105-131`.
 - The 2N centering compensation is proven in the approved prototype (branch `prototype/design-walk-2026-09-20`, `packages/ui/src/prototype/dialog-resize.tsx`, variant A — the user's pick).
@@ -88,7 +99,7 @@ as today — same DOM, no grip, no behavior change.
 ## Exit gates
 
 - Clamp-helper unit tests pass: below-min, above-viewport-max, in-range, and the degenerate min-greater-than-max case returning `min`.
-- Store unit tests pass: `dialogSizeFor` returns the fallback for an absent key and the stored value for a present one; `setDialogSize` writes under the key and survives a persist reload.
+- Store unit tests pass: `dialogSizeFor` returns the fallback for an absent key and the stored value for a present one; `setDialogSize` writes under the key, and the value shows up in the persisted `mf:ui-prefs` payload — assert through the persist layer (storage contents / `rehydrate()`), not `getState()`, which passes even when `partializeUiPrefs` drops the key.
 - `pnpm --filter @qlan-ro/mainframe-ui typecheck` passes, and the UI package's existing test suite still passes.
 - A grep for `resizeKey` finds exactly the four intended call sites, and no non-opt-in dialog renders a grabber (the prop is absent → the component's returned tree is unchanged).
 - Live check in the running app: each of the four dialogs drags from the corner with the grip staying under the pointer, stops at its default size and at the viewport bound, and reopens at the size it was left at after an app restart.
