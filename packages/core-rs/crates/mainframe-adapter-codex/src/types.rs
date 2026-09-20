@@ -234,6 +234,10 @@ pub struct TokenUsageEnvelope {
     pub total: Option<CamelUsage>,
     #[serde(default)]
     pub last: Option<CamelUsage>,
+    /// Absent on older builds (plan fact 4); `#[serde(default)]` keeps the
+    /// 0.144.3 capture deserializing without it.
+    #[serde(default)]
+    pub model_context_window: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -309,7 +313,7 @@ pub struct ReasoningEffortOption {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,
