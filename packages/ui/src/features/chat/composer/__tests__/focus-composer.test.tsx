@@ -92,8 +92,10 @@ describe('⌘L — focus the visible composer', () => {
 // ---------------------------------------------------------------------------
 
 let triggerExpanded = false;
+let triggerArmed = false;
 vi.mock('../triggers/trigger-field-aria-context', () => ({
   useTriggerFieldAria: () => ({ 'aria-expanded': triggerExpanded }),
+  useTriggerFieldArmed: () => triggerArmed,
 }));
 
 vi.mock('@assistant-ui/react', () => ({
@@ -157,6 +159,7 @@ function renderComposerInTranscript() {
 describe('Escape in the composer (AC 13)', () => {
   beforeEach(() => {
     triggerExpanded = false;
+    triggerArmed = false;
   });
 
   it('moves focus off the input and onto [data-mf-chat-thread] with no trigger menu open', () => {
@@ -191,6 +194,7 @@ describe('Escape in the composer (AC 13)', () => {
 
   it('leaves focus in the composer while the trigger menu is open', () => {
     triggerExpanded = true;
+    triggerArmed = true;
     renderComposerInTranscript();
     const input = screen.getByTestId('chat-composer-input');
     input.focus();
@@ -198,5 +202,23 @@ describe('Escape in the composer (AC 13)', () => {
     fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
 
     expect(document.activeElement).toBe(input);
+  });
+
+  it('leaves focus in the composer for an armed-but-unmatched token, so a following Enter is not swallowed', () => {
+    triggerExpanded = false;
+    triggerArmed = true;
+    renderComposerInTranscript();
+    const input = screen.getByTestId('chat-composer-input');
+    input.focus();
+
+    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+    expect(document.activeElement).toBe(input);
+
+    // The mocked ComposerPrimitive.Input never submits on its own, but this
+    // proves Escape's focus-park branch did not fire (it would have moved
+    // focus off `input` above) and that the composer's own handler leaves a
+    // following Enter alone.
+    const enterEvent = fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', cancelable: true, bubbles: true });
+    expect(enterEvent).toBe(true);
   });
 });

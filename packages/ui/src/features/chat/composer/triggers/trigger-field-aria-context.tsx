@@ -17,11 +17,31 @@ const CLOSED_COMBOBOX: TriggerFieldAriaProps = {
 };
 
 const TriggerFieldAriaContext = createContext<TriggerFieldAriaProps>(CLOSED_COMBOBOX);
+// Separate context, not a field on TriggerFieldAriaProps: that object is
+// spread onto the textarea, and a non-ARIA key would become a bogus DOM attribute.
+const TriggerFieldArmedContext = createContext<boolean>(false);
 
-export function TriggerFieldAriaProvider({ value, children }: { value: TriggerFieldAriaProps; children: ReactNode }) {
-  return <TriggerFieldAriaContext.Provider value={value}>{children}</TriggerFieldAriaContext.Provider>;
+export function TriggerFieldAriaProvider({
+  value,
+  armed = false,
+  children,
+}: {
+  value: TriggerFieldAriaProps;
+  armed?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <TriggerFieldAriaContext.Provider value={value}>
+      <TriggerFieldArmedContext.Provider value={armed}>{children}</TriggerFieldArmedContext.Provider>
+    </TriggerFieldAriaContext.Provider>
+  );
 }
 
 export function useTriggerFieldAria(): TriggerFieldAriaProps {
   return useContext(TriggerFieldAriaContext);
+}
+
+/** True whenever a trigger token is detected, even with an empty entry list. */
+export function useTriggerFieldArmed(): boolean {
+  return useContext(TriggerFieldArmedContext);
 }
