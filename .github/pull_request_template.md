@@ -1,4 +1,4 @@
-<!-- Write for a reviewer who has not seen the agent conversation. Aim for 150–300 words for an ordinary PR; use less for small changes and more only when risk needs it. Remove guidance and irrelevant sections. Summarize the final change, not the sequence of agent work. -->
+<!-- Write for a reviewer who has not seen the agent conversation. Aim for 150–300 words for an ordinary PR; use less for small changes and more only when risk needs it. Use this same template for manual and automated PRs. Preserve its headings, order, and checklist; remove guidance and only optional/inapplicable sections. Put additional pipeline context in comments, not custom description sections. Summarize the final change, not the sequence of agent work. -->
 
 ## Summary
 
