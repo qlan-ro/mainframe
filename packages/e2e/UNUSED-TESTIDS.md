@@ -1,7 +1,7 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (959) minus e2e references
-(547). Unused: 412._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (961) minus e2e references
+(547). Unused: 414._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
@@ -90,7 +90,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (959) minus e2e refe
 - `automations-when-add-${…}`
 - `automations-when-add-menu`
 
-## chat (53)
+## chat (54)
 
 - `chat-ask-answer-notes`
 - `chat-ask-answer-preview`
@@ -115,6 +115,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (959) minus e2e refe
 - `chat-link-copy`
 - `chat-link-copy-url`
 - `chat-link-open`
+- `chat-link-open-in-app`
 - `chat-message-session-chip-${…}`
 - `chat-plan-exec-mode`
 - `chat-plan-revise-cancel`
@@ -393,10 +394,11 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (959) minus e2e refe
 - `image-lightbox-next`
 - `image-lightbox-prev`
 
-## smart (6)
+## smart (7)
 
 - `smart-action-instruction-append`
 - `smart-action-instruction-new-session`
+- `smart-action-url-copy`
 - `smart-action-url-open`
 - `smart-action-url-open-browser`
 - `smart-action-url-open-in-app`
