@@ -141,7 +141,9 @@ Files: `packages/ui/src/store/layout.ts`, `packages/ui/src/store/layout-persist.
 is the active one, re-seeds a chat-only arrangement in place; `dropSession` disposes the entry's
 terminals and URL tunnels; `adoptSession(from, to)` moves the entry (layout + run) under the new key
 *without* disposing anything, deletes the source, and repoints `activeSessionId` when it was the
-source; `pruneSessions` keeps the active `__LOCALID_*` entry while still dropping stale local ids and
+source; a **second** `adoptSession(from, to)` with the source already gone is a no-op that leaves the
+already-adopted `to` entry intact (the re-entrant handoff case — see 1.2), and `adoptSession` from an
+unknown id onto an existing `to` entry neither overwrites nor clears it; `pruneSessions` keeps the active `__LOCALID_*` entry while still dropping stale local ids and
 unknown chat ids. *Verification intent:* these fail for the missing actions before 1.2 lands.
 
 **1.2 Layout-store actions.** In `store/layout.ts` add `dropSession(sessionId)` and
@@ -154,8 +156,16 @@ a draft can own terminals and URL tabs once it has a launch scope, so mirror `cl
 (`layout.ts:262-270`) and call `killAndDisposeCachedTerminals` + `releaseUrlTunnels` for the dropped
 entry's tabs — both helpers are already imported, though the ids must be collected across ALL panes
 of the entry (`tabIdsInPane` is per-pane). `adoptSession` moves the same tabs to a live
-session and must NOT dispose; if the destination id somehow already has an entry, the draft's entry
-(what is on screen) wins. *Verification intent:* 1.1 passes; the existing prune and persistence tests in
+session and must NOT dispose; if the destination id somehow already has an entry **and the source
+exists**, the draft's entry (what is on screen) wins. When `fromId` has **no** entry, `adoptSession` is
+a strict no-op: it must not write `toId`, must not clobber an existing `toId` entry, and must not touch
+`activeSessionId`. Implementing it as an unguarded move-then-delete is the bug: the router's handoff
+block is re-entrant (`use-session-list-router.ts:188-194` re-runs on every `[mainThreadId, items,
+threadItems, threads]` change while `mainThreadId` is still the draft, which is why the existing
+`switchToThread` call is idempotent), so on the second run `sessions.set(toId, sessions.get(fromId))`
+would write `remoteId -> undefined` and the follow-up `setActiveSession(remoteId)` would then see
+`existing == null` and re-seed chat-only (`layout.ts:144-150`) — dropping the Workspace that acceptance
+criterion 3 requires to survive the first send. *Verification intent:* 1.1 passes; the existing prune and persistence tests in
 `store/__tests__/layout-persist.test.ts` still pass unchanged.
 
 **1.3 (red) Router tests.** In `packages/ui/src/features/sessions/ws/__tests__/use-session-list-router.test.tsx`,
@@ -246,11 +256,17 @@ including the close-last-tab fallback in `SessionTabs`. Delete
 `useOpenDraft`; the session-tabs and sessions suites pass.
 
 **2.6 Picker ordering.** In `WelcomeState.tsx`'s `ProjectPicker`, order the dropdown with
-`sortProjectsByRecentActivity(projects, threadItemsToSessionItems(threadItems))` — `threadItems` from
-`useAuiState((s) => s.threads.threadItems)`, memoized. Per-item `data-testid="welcome-project-${id}"`
-stays. Add a case to `__tests__/WelcomeState.test.tsx` asserting the rendered order puts the
-most-recently-active project first and a session-less project last. *Verification intent:* the
-WelcomeState suite passes.
+`sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems))` — `threadItems` from
+`useAuiState((s) => s.threads.threadItems)`, memoized. It must be the **regular** projection, not
+`threadItemsToSessionItems`: the sidebar ranks off `regularThreadItemsToSessionItems`
+(`packages/ui/src/features/sessions/SessionSidebar.tsx:85,102`), and the archived-including sibling is
+the archived-leak bug its own docstring names
+(`packages/ui/src/features/sessions/view-model/chat-to-thread-custom.ts:189-195`). Using the wrong one
+makes the two orderings diverge — a project whose sessions are all archived would rank ahead of a
+project with a live session. Per-item `data-testid="welcome-project-${id}"` stays. Add cases to
+`__tests__/WelcomeState.test.tsx`: the rendered order puts the most-recently-active project first and a
+session-less project last, and a project whose only sessions are archived ranks behind a project with an
+older live session. *Verification intent:* the WelcomeState suite passes.
 
 **Group exit (also the lane's exit):** `pnpm --filter @qlan-ro/mainframe-ui typecheck` and lint are
 clean, the touched UI test files pass, and a changeset for `@qlan-ro/mainframe-ui` accompanies the PR
