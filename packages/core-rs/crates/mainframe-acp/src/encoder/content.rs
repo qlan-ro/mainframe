@@ -38,10 +38,7 @@ pub(super) fn encode_content(
         handle_block(block, container, role, &mut message, &mut thought, out);
     }
 
-    // A user container with attachment evidence but zero content leaves
-    // never claims the accumulator, so `finish` would emit no item and take
-    // the container's metadata (the attachment previews) with it — open an
-    // empty slot so the item still surfaces with its ItemMeta intact.
+    // Attachment evidence with no leaves never claims — open the slot so finish emits the item.
     if role == ItemRole::User && has_attachment_evidence(container.message_meta) {
         message.claim_marker(out, container);
     }

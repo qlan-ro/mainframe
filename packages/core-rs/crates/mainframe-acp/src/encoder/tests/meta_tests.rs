@@ -120,6 +120,27 @@ fn an_attachment_only_user_container_still_encodes_a_message_item() {
 }
 
 #[test]
+fn a_replay_user_container_with_attached_files_still_encodes_a_message_item() {
+    let mut message = dmsg("dmsg_replay", DisplayMessageType::User, vec![]);
+    message.metadata = Some(HashMap::from([(
+        "attachedFiles".to_string(),
+        json!([{ "name": "notes.txt" }]),
+    )]));
+
+    let items = encode(&[message]);
+    assert_eq!(items.len(), 1);
+    let EncodedItem::Message { content, meta, .. } = &items[0] else {
+        panic!("expected a message item");
+    };
+    assert!(content.is_empty());
+    let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];
+    assert_eq!(
+        ns["messageMeta"]["attachedFiles"][0]["name"],
+        json!("notes.txt")
+    );
+}
+
+#[test]
 fn an_empty_user_container_with_no_attachment_evidence_encodes_no_item() {
     let message = dmsg("dmsg_empty", DisplayMessageType::User, vec![]);
 
