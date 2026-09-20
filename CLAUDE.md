@@ -78,6 +78,7 @@ Domain skills (typescript-expert, nodejs-best-practices, vercel-react-best-pract
 
 ## Git
 
+- **PR descriptions:** Use [.github/pull_request_template.md](.github/pull_request_template.md) for manual and automated PRs. CLI-created PRs must fill it explicitly; keep its headings, order, and checklist. Put additional pipeline context in comments.
 - **Never commit to `main`.** Always work on a feature or fix branch. Run `git branch --show-current` before any commit or reset to confirm you are not on `main`.
 - **Check branch before destructive git ops.** Before `reset`, `rebase`, or `push --force`, verify the current branch with `git status` or `git branch`.
 - **Never discard unstaged changes you didn't create.** They may be in-progress work from another session. When committing, stage only your own files by name. Do not `git checkout --`, `git restore`, or `git stash` other people's changes.
