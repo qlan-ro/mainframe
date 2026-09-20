@@ -158,6 +158,18 @@ pub struct ChatHistoryPayload {
     pub workflow_runs: Vec<ClaudeWorkflowRun>,
 }
 
+/// True when metadata carries a non-empty `attachments` (live preview) or
+/// `attachedFiles` (replay-parsed) array — the signal the display and encoder
+/// gates use to keep an attachment-only user turn alive despite empty content.
+pub fn has_attachment_evidence(metadata: Option<&HashMap<String, serde_json::Value>>) -> bool {
+    ["attachments", "attachedFiles"].iter().any(|key| {
+        metadata
+            .and_then(|m| m.get(*key))
+            .and_then(|v| v.as_array())
+            .is_some_and(|a| !a.is_empty())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
