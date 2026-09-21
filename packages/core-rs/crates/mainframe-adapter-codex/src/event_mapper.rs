@@ -61,7 +61,7 @@ pub fn handle_notification(
         }
         "thread/tokenUsage/updated" => {
             if let Ok(p) = serde_json::from_value::<TokenUsageUpdatedParams>(params.clone()) {
-                handle_token_usage(p, state);
+                handle_token_usage(p, sink, state);
             }
         }
         "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state, None),

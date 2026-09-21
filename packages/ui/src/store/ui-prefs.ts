@@ -1,8 +1,9 @@
 /**
  * ui-prefs — the single persisted store for global UI chrome.
  *
- * Owns sidebar visibility, the committed sidebar width, and the session
- * panel's per-section open state. Persisted to localStorage under
+ * Owns sidebar visibility, the committed sidebar width, the session
+ * panel's per-section open state, and committed sizes for opt-in resizable
+ * dialogs. Persisted to localStorage under
  * `mf:ui-prefs` via zustand's persist middleware (mirrors store/tutorial.ts).
  * Per-session surface layout is NOT here — it stays in-memory in
  * store/layout.ts (live PTY/preview refs make it unsafe to persist). The
@@ -54,6 +55,20 @@ export function isSessionPanelSectionOpen(sections: SessionPanelSections, id: Se
   return sections[id] ?? SESSION_PANEL_SECTION_DEFAULTS[id];
 }
 
+/** A committed dialog size, in CSS pixels. */
+export interface DialogSize {
+  width: number;
+  height: number;
+}
+
+/** Keyed by the opt-in dialog's stable `resizeKey` (e.g. `'settings'`). */
+export type DialogSizes = Record<string, DialogSize>;
+
+/** Selector helper: a dialog with no recorded size falls back to its declared default. */
+export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogSize): DialogSize {
+  return sizes[key] ?? fallback;
+}
+
 interface UiPrefsState {
   sidebarVisible: boolean;
   sidebarWidth: number;
@@ -65,6 +80,9 @@ interface UiPrefsState {
   /** Per-section open state inside the session card. Absent keys read as the
    *  section's default; see isSessionPanelSectionOpen. */
   sessionPanelSections: SessionPanelSections;
+  /** Committed sizes for opt-in resizable dialogs. Absent keys read as that
+   *  dialog's declared default; see dialogSizeFor. */
+  dialogSizes: DialogSizes;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
@@ -73,6 +91,9 @@ interface UiPrefsState {
   /** Idempotent open — for controls that navigate to a panel's content. */
   openSessionPanel: (id: SessionPanelId) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
+  /** Overwrites the committed size for one dialog key. Callers clamp before
+   *  committing — the store doesn't know a dialog's measured minimum. */
+  setDialogSize: (key: string, size: DialogSize) => void;
 }
 
 /** The persisted subset. */
@@ -83,6 +104,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
+    dialogSizes: s.dialogSizes,
   };
 }
 
@@ -96,6 +118,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       dontWarnOnTuningChange: false,
       sessionPanelOpen: {},
       sessionPanelSections: {},
+      dialogSizes: {},
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -112,6 +135,7 @@ export const useUiPrefs = create<UiPrefsState>()(
             [id]: !isSessionPanelSectionOpen(s.sessionPanelSections, id),
           },
         })),
+      setDialogSize: (key, size) => set((s) => ({ dialogSizes: { ...s.dialogSizes, [key]: size } })),
     }),
     {
       name: 'mf:ui-prefs',

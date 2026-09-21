@@ -12,6 +12,7 @@ use mainframe_types::adapter::{
 use mainframe_types::display::ToolCategories;
 use mainframe_types::transcript::TranscriptLocation;
 
+use crate::context_window::catalog_context_window;
 use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
@@ -25,7 +26,7 @@ pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
         label: m.display_name.clone().unwrap_or_else(|| m.id.clone()),
         description: None,
         resolved_model: None,
-        context_window: None,
+        context_window: Some(catalog_context_window(&m.id)),
         is_default: None,
         is_older: None,
         group: None,
@@ -401,6 +402,24 @@ mod tests {
         assert_eq!(model.default_effort, Some(EffortLevel::Medium));
         assert_eq!(model.supports_fast, Some(true));
         assert_eq!(model.supports_personality, Some(true));
+    }
+
+    #[test]
+    fn maps_a_known_and_an_unknown_model_id_to_a_non_null_context_window() {
+        let known = ModelInfo {
+            id: "gpt-5.5".to_string(),
+            ..ModelInfo::default()
+        };
+        assert_eq!(map_codex_model(&known).context_window, Some(272_000));
+
+        let unknown = ModelInfo {
+            id: "some-future-model".to_string(),
+            ..ModelInfo::default()
+        };
+        assert_eq!(
+            map_codex_model(&unknown).context_window,
+            Some(crate::context_window::DEFAULT_CODEX_CONTEXT_WINDOW)
+        );
     }
 
     #[test]

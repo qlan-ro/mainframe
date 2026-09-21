@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 const SIDEBAR_DEFAULT_WIDTH = 256; // mirrors ui-prefs (v2 sidebar 16rem default)
-import { useUiPrefs, isSessionPanelOpen, isSessionPanelSectionOpen } from '../ui-prefs';
+import { useUiPrefs, isSessionPanelOpen, isSessionPanelSectionOpen, dialogSizeFor } from '../ui-prefs';
 
 const STORAGE_KEY = 'mf:ui-prefs';
 
@@ -16,6 +16,7 @@ beforeEach(() => {
     dontWarnOnTuningChange: false,
     sessionPanelOpen: {},
     sessionPanelSections: {},
+    dialogSizes: {},
   });
 });
 
@@ -27,6 +28,20 @@ describe('useUiPrefs defaults', () => {
     expect(s.dontWarnOnTuningChange).toBe(false);
     expect(s.sessionPanelOpen).toEqual({});
     expect(s.sessionPanelSections).toEqual({});
+    expect(s.dialogSizes).toEqual({});
+  });
+});
+
+describe('dialogSizeFor', () => {
+  const fallback = { width: 760, height: 600 };
+
+  it('falls back to the declared default when the key is absent', () => {
+    expect(dialogSizeFor({}, 'settings', fallback)).toBe(fallback);
+  });
+
+  it('returns the stored size when the key is present', () => {
+    const stored = { width: 900, height: 700 };
+    expect(dialogSizeFor({ settings: stored }, 'settings', fallback)).toBe(stored);
   });
 });
 
@@ -142,6 +157,22 @@ describe('useUiPrefs actions', () => {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(parsed.state.dontWarnOnTuningChange).toBe(true);
   });
+
+  it('setDialogSize writes under the dialog key and leaves siblings alone', () => {
+    useUiPrefs.getState().setDialogSize('settings', { width: 900, height: 700 });
+    expect(useUiPrefs.getState().dialogSizes).toEqual({ settings: { width: 900, height: 700 } });
+    useUiPrefs.getState().setDialogSize('review', { width: 1200, height: 880 });
+    expect(useUiPrefs.getState().dialogSizes).toEqual({
+      settings: { width: 900, height: 700 },
+      review: { width: 1200, height: 880 },
+    });
+  });
+
+  it('setDialogSize persists the size to localStorage, not just in-memory state', () => {
+    useUiPrefs.getState().setDialogSize('settings', { width: 900, height: 700 });
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(parsed.state.dialogSizes).toEqual({ settings: { width: 900, height: 700 } });
+  });
 });
 
 describe('useUiPrefs persistence', () => {
@@ -153,7 +184,14 @@ describe('useUiPrefs persistence', () => {
     // zustand persist wraps as { state, version }.
     expect(parsed.state.sidebarWidth).toBe(300);
     expect(Object.keys(parsed.state).sort()).toEqual(
-      ['dontWarnOnTuningChange', 'sessionPanelOpen', 'sessionPanelSections', 'sidebarVisible', 'sidebarWidth'].sort(),
+      [
+        'dialogSizes',
+        'dontWarnOnTuningChange',
+        'sessionPanelOpen',
+        'sessionPanelSections',
+        'sidebarVisible',
+        'sidebarWidth',
+      ].sort(),
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();

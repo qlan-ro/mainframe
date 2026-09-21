@@ -133,6 +133,7 @@ export function ReviewPanel() {
       <DialogContent
         data-testid="review-modal"
         showCloseButton={false}
+        resizeKey="review"
         className="flex h-[86vh] max-h-[880px] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[1180px]"
       >
         <ReviewPanelHeader

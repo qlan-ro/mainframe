@@ -35,6 +35,7 @@ pub struct Recorded {
     /// todo #350 group B, stable-ids task 5.
     pub message_vendor_ids: Vec<Option<String>>,
     pub tool_result_vendor_ids: Vec<Option<String>>,
+    pub context_usages: Vec<ContextUsage>,
 }
 
 #[derive(Clone, Default)]
@@ -79,6 +80,9 @@ impl Recorder {
     }
     pub fn tool_result_vendor_ids(&self) -> Vec<Option<String>> {
         self.0.lock().unwrap().tool_result_vendor_ids.clone()
+    }
+    pub fn context_usages(&self) -> Vec<ContextUsage> {
+        self.0.lock().unwrap().context_usages.clone()
     }
     /// Every recorded message/tool-result block whose `parentToolUseId` equals
     /// `card_id`, in emission order.
@@ -139,7 +143,9 @@ impl SessionSink for RecordingSink {
     fn on_compact_start(&self) {
         self.0.lock().unwrap().compact_starts += 1;
     }
-    fn on_context_usage(&self, _usage: ContextUsage) {}
+    fn on_context_usage(&self, usage: ContextUsage) {
+        self.0.lock().unwrap().context_usages.push(usage);
+    }
     fn on_plan_file(&self, _file_path: &str) {}
     fn on_skill_file(&self, _entry: SkillFileEntry) {}
     fn on_queued_processed(&self, _uuid: &str) {}

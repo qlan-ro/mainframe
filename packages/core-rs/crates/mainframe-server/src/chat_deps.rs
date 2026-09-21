@@ -92,6 +92,8 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         total_tokens_input: patch.total_tokens_input,
         total_tokens_output: patch.total_tokens_output,
         last_context_tokens_input: patch.last_context_tokens_input,
+        last_context_total_tokens: patch.last_context_total_tokens,
+        last_context_max_tokens: patch.last_context_max_tokens,
         title: patch.title.clone(),
         permission_mode: patch.permission_mode,
         worktree_path: patch.worktree_path.clone(),
@@ -101,6 +103,25 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         plan_mode: patch.plan_mode,
         transcript_missing: patch.transcript_missing,
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod to_db_update_tests {
+    use super::*;
+
+    #[test]
+    fn carries_the_persisted_context_usage_fields_through() {
+        let patch = ChatUpdate {
+            last_context_total_tokens: Some(12_345),
+            last_context_max_tokens: Some(200_000),
+            ..Default::default()
+        };
+
+        let db_patch = to_db_update(&patch);
+
+        assert_eq!(db_patch.last_context_total_tokens, Some(12_345));
+        assert_eq!(db_patch.last_context_max_tokens, Some(200_000));
     }
 }
 

@@ -578,26 +578,24 @@ impl AdapterSession for CodexSession {
             self.ensure_thread(&client, model.as_deref(), permission_mode)
                 .await?;
 
-            let (thread_id, reported_model) = {
-                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                (
-                    state.thread_id.clone().unwrap_or_default(),
-                    state.reported_model.clone(),
+            let (thread_id, resolved_model) = {
+                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                let resolved_model = resolve_turn_model(
+                    model.as_deref(),
+                    state.reported_model.as_deref(),
+                    default_model.as_deref(),
                 )
+                .inspect_err(|err| {
+                    tracing::error!(
+                        module = "codex:session",
+                        session_id = %self.id,
+                        err = %err,
+                        "codex: cannot start turn without a model"
+                    );
+                })?;
+                state.resolved_turn_model = Some(resolved_model.clone());
+                (state.thread_id.clone().unwrap_or_default(), resolved_model)
             };
-            let resolved_model = resolve_turn_model(
-                model.as_deref(),
-                reported_model.as_deref(),
-                default_model.as_deref(),
-            )
-            .inspect_err(|err| {
-                tracing::error!(
-                    module = "codex:session",
-                    session_id = %self.id,
-                    err = %err,
-                    "codex: cannot start turn without a model"
-                );
-            })?;
 
             let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
             let default_resolved = ResolvedTuning {

@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_types::adapter::{MessageUsage, SessionResult};
+use mainframe_types::adapter::{ContextUsage, MessageUsage, SessionResult};
 
 use crate::collab_activity::end_all_activity;
 use crate::collab_card;
+use crate::context_window::known_context_window;
 use crate::event_mapper::{Owner, resolve_owner};
 use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
 use crate::types::{
@@ -113,7 +114,11 @@ fn emit_parent_turn_result(
     state.last_usage = None;
 }
 
-pub(crate) fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut CodexSessionState) {
+pub(crate) fn handle_token_usage(
+    params: TokenUsageUpdatedParams,
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
     if !matches!(
         resolve_owner(params.thread_id.as_deref(), state),
         Owner::Parent
@@ -127,9 +132,40 @@ pub(crate) fn handle_token_usage(params: TokenUsageUpdatedParams, state: &mut Co
         );
         return;
     };
+    let window = resolve_context_window(&params, state);
     state.last_usage = Some(LastUsage {
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
         cache_read_input_tokens: usage.cached_input_tokens,
     });
+
+    let Some(max_tokens) = window else {
+        tracing::debug!(
+            module = "codex:events",
+            "codex: tokenUsage/updated has no resolvable context window — skipped"
+        );
+        return;
+    };
+    sink.on_context_usage(ContextUsage {
+        percentage: usage.input_tokens as f64 / max_tokens as f64 * 100.0,
+        total_tokens: usage.input_tokens,
+        max_tokens,
+    });
+}
+
+/// The wire's own `tokenUsage.modelContextWindow` (authoritative, reflects any
+/// remote catalog override) when present, else the packaged table's window
+/// for the turn's resolved model — no default here, an unresolvable id must
+/// emit nothing rather than guess a percentage against a window that may not
+/// match the real model.
+fn resolve_context_window(
+    params: &TokenUsageUpdatedParams,
+    state: &CodexSessionState,
+) -> Option<i64> {
+    let wire_window = params
+        .token_usage
+        .as_ref()
+        .and_then(|envelope| envelope.model_context_window)
+        .filter(|w| *w > 0);
+    wire_window.or_else(|| known_context_window(state.resolved_turn_model.as_deref()))
 }
