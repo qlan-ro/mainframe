@@ -13,6 +13,7 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, Messag
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{
     DisplayContent, DisplayMessage, DisplayMessageType, DisplayNode, ToolCategories,
+    has_attachment_evidence,
 };
 
 use super::display_helpers::{
@@ -99,8 +100,13 @@ fn convert_grouped_to_display(
         ChatMessageType::User => {
             let (display_content, extra_meta) = convert_user_content(&msg.base.content);
             // Suppress user messages whose entire content was stripped to nothing
-            // (bare <command-name> CLI echoes with no visible text/images/results).
-            if display_content.is_empty() && extra_meta.is_empty() {
+            // (bare <command-name> CLI echoes with no visible text/images/results),
+            // unless attachment evidence in metadata proves this was a real,
+            // attachment-only send rather than internal CLI plumbing.
+            if display_content.is_empty()
+                && extra_meta.is_empty()
+                && !has_attachment_evidence(msg.base.metadata.as_ref())
+            {
                 return None;
             }
             let mut metadata = msg.base.metadata.clone().unwrap_or_default();
@@ -767,6 +773,38 @@ mod tests {
             "user",
             vec![txt("<command-name>/some-internal-skill</command-name>")],
             json!({}),
+        )];
+        let result = prepare_messages_for_client(&messages, None);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn renders_an_attachment_only_user_turn_with_empty_content() {
+        let mut c = 0;
+        let messages = vec![raw_msg(
+            &mut c,
+            "user",
+            vec![],
+            json!({ "metadata": { "attachments": [{ "name": "notes.txt", "kind": "file" }] } }),
+        )];
+        let result = prepare_messages_for_client(&messages, None);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].r#type, DisplayMessageType::User);
+        assert!(result[0].content.is_empty());
+        assert_eq!(
+            result[0].metadata.as_ref().unwrap()["attachments"],
+            json!([{ "name": "notes.txt", "kind": "file" }])
+        );
+    }
+
+    #[test]
+    fn suppresses_empty_content_with_unrelated_metadata_and_no_attachment_evidence() {
+        let mut c = 0;
+        let messages = vec![raw_msg(
+            &mut c,
+            "user",
+            vec![txt("<command-name>do-thing</command-name>")],
+            json!({ "metadata": { "foo": 1 } }),
         )];
         let result = prepare_messages_for_client(&messages, None);
         assert_eq!(result.len(), 0);

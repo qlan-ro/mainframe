@@ -105,6 +105,26 @@ describe('convertUserContainer — file attachment merge/dedup', () => {
   });
 });
 
+describe('convertUserContainer — attachment-only send (todo #342)', () => {
+  it('renders one file attachment and backfills content to a single empty text part', () => {
+    const rawMeta = { attachments: [{ name: 'notes.txt', kind: 'file', sizeBytes: 10 }] };
+
+    const container = convertUserContainer([], rawMeta, BASE);
+
+    expect(container.attachments).toEqual([
+      {
+        id: 'notes.txt',
+        type: 'file',
+        name: 'notes.txt',
+        contentType: 'application/octet-stream',
+        content: [],
+        status: { type: 'complete' },
+      },
+    ]);
+    expect(container.content).toEqual([{ type: 'text', text: '' }]);
+  });
+});
+
 describe('coerceUserMeta — malformed metadata', () => {
   it('returns {} for null or non-object metadata', () => {
     expect(coerceUserMeta(null)).toEqual({});

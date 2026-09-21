@@ -91,6 +91,64 @@ fn display_metadata_rides_every_item_of_the_container() {
 }
 
 #[test]
+fn an_attachment_only_user_container_still_encodes_a_message_item() {
+    let mut message = dmsg("dmsg_att", DisplayMessageType::User, vec![]);
+    message.metadata = Some(HashMap::from([(
+        "attachments".to_string(),
+        json!([{ "name": "notes.txt", "kind": "file" }]),
+    )]));
+
+    let items = encode(&[message]);
+    assert_eq!(items.len(), 1);
+    let EncodedItem::Message {
+        id,
+        role,
+        content,
+        meta,
+    } = &items[0]
+    else {
+        panic!("expected a message item");
+    };
+    assert_eq!(id, "dmsg_att");
+    assert_eq!(*role, ItemRole::User);
+    assert!(content.is_empty());
+    let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];
+    assert_eq!(
+        ns["messageMeta"]["attachments"][0]["name"],
+        json!("notes.txt")
+    );
+}
+
+#[test]
+fn a_replay_user_container_with_attached_files_still_encodes_a_message_item() {
+    let mut message = dmsg("dmsg_replay", DisplayMessageType::User, vec![]);
+    message.metadata = Some(HashMap::from([(
+        "attachedFiles".to_string(),
+        json!([{ "name": "notes.txt" }]),
+    )]));
+
+    let items = encode(&[message]);
+    assert_eq!(items.len(), 1);
+    let EncodedItem::Message { content, meta, .. } = &items[0] else {
+        panic!("expected a message item");
+    };
+    assert!(content.is_empty());
+    let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];
+    assert_eq!(
+        ns["messageMeta"]["attachedFiles"][0]["name"],
+        json!("notes.txt")
+    );
+}
+
+#[test]
+fn an_empty_user_container_with_no_attachment_evidence_encodes_no_item() {
+    let message = dmsg("dmsg_empty", DisplayMessageType::User, vec![]);
+
+    let items = encode(&[message]);
+    assert!(items.is_empty());
+}
+
+#[test]
 fn an_ask_user_question_result_carries_its_answers_in_the_text_block_meta() {
     let messages = vec![dmsg(
         "dmsg_ask",
