@@ -312,9 +312,10 @@ the tab discards them, exactly as for code files today.
 - **Notes stay ephemeral.** Matches the code and diff tabs; changing that is a
   decision for all surfaces at once. `reversible`
 - **A note's recorded line range follows edits to the buffer under it; markdown
-  Source writes the mapped range back into the owned set.** The brief says line
-  numbers "stay as recorded", but the code disagrees in a way that only bites
-  once the model is lifted: `comment-gutter-state` already maps its anchors
+  Source writes the mapped range back into the owned set.** An earlier draft of
+  this spec claimed line numbers stay as recorded; the code disagrees, in a way
+  that only bites once the model is lifted: `comment-gutter-state` already maps
+  its anchors
   through `tr.changes.mapPos`, while `CommentEntry.startLine` never moves, so the
   code editor's marker already follows edits and its submitted payload already
   does not. Preview and the view-less submit path read the owned set, so leaving
