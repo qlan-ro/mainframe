@@ -275,7 +275,7 @@ describe('WebFetchCard — verb derives from args, not toolName', () => {
   });
 });
 
-describe('WebFetchCard — Codex search (dynamic tool-call args shape)', () => {
+describe('WebFetchCard — Codex search (normalized webSearch item)', () => {
   it('renders "Search" and the quoted query from a query-only args object', () => {
     render(
       <Wrap>
