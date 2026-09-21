@@ -8,9 +8,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, File, Folder } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import type { TabMode } from '@/store/run-pane';
+import { isMacPlatform } from '@/features/shortcuts/platform';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
+import { openModeForMouseEvent } from './open-mode-from-mouse';
 import { isAncestorOf, sortEntries, toFullPath } from './file-tree-utils';
+
+/** Emits `open-file`, adding `mode` only when it isn't the default preview — keeps existing exact-shape assertions green. */
+function emitOpenFile(path: string, mode: TabMode): void {
+  emitSurfaceIntent(mode === 'permanent' ? { type: 'open-file', path, mode } : { type: 'open-file', path });
+}
 
 interface NodeProps {
   entry: FileTreeEntry;
@@ -93,7 +101,11 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
           data-kind="file"
           data-highlighted={isRevealTarget ? 'true' : undefined}
           type="button"
-          onClick={() => emitSurfaceIntent({ type: 'open-file', path: entry.path })}
+          onClick={(e) => emitOpenFile(entry.path, openModeForMouseEvent(e, isMacPlatform()))}
+          onDoubleClick={() => emitOpenFile(entry.path, 'permanent')}
+          onMouseUp={(e) => {
+            if (e.button === 1) emitOpenFile(entry.path, 'permanent');
+          }}
           style={{ paddingLeft: indent }}
           className={[
             'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground',
