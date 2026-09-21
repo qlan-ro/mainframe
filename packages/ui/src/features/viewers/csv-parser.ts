@@ -12,8 +12,10 @@
  *
  * @pure — no side effects.
  */
+import { MAX_INLINE_LINES } from '@/features/editor/inline-comments/resolve-comment-range';
 
 /** Same line-break rule CodeMirror's `Text.of` splits on — keeps CSV row numbers in Source lined up 1:1 with the raw text. */
+const LINE_BREAK = /\r\n?|\n/;
 const LINE_BREAK_GLOBAL = /\r\n?|\n/g;
 
 export interface LineRange {
@@ -148,6 +150,13 @@ export function parseCsv(text: string): ParsedCsv {
   const headerRange: LineRange | null = header ? { startLine: header.startLine, endLine: header.endLine } : null;
   const rows: CsvRow[] = rawRows.map((row, index) => ({ ...row, _index: index }));
   return { headers, headerRange, rows };
+}
+
+/** Raw source lines for a row's range, capped like `resolveCommentRange` so quotes never blow past `MAX_INLINE_LINES`. */
+export function sliceCsvRowSource(text: string, range: LineRange): string {
+  if (range.endLine - range.startLine + 1 > MAX_INLINE_LINES) return '';
+  const lines = text.split(LINE_BREAK);
+  return lines.slice(range.startLine - 1, range.endLine).join('\n');
 }
 
 /** Return true if every non-empty value in the column parses as a finite number. */

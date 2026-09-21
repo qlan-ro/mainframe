@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseCsv } from '../csv-parser';
+import { parseCsv, sliceCsvRowSource } from '../csv-parser';
+import { MAX_INLINE_LINES } from '@/features/editor/inline-comments/resolve-comment-range';
 
 /** Extract the cells arrays from CsvRow[] for backward-compatible assertions. */
 function rowCells(rows: ReturnType<typeof parseCsv>['rows']): string[][] {
@@ -114,5 +115,29 @@ describe('parseCsv — source line ranges', () => {
 
   it('reports a null header range for empty input', () => {
     expect(parseCsv('').headerRange).toBeNull();
+  });
+});
+
+describe('sliceCsvRowSource', () => {
+  it('slices the file source lines for a single-line row', () => {
+    const text = 'a,b\n1,2\n3,4';
+    const { rows } = parseCsv(text);
+    expect(sliceCsvRowSource(text, rows[1]!)).toBe('3,4');
+  });
+
+  it('slices the file source lines for a multi-line quoted row', () => {
+    const text = 'a,b\n1,2\n"x\ny",z\n5,6';
+    const { rows } = parseCsv(text);
+    expect(rows[1]).toMatchObject({ startLine: 3, endLine: 4 });
+    expect(sliceCsvRowSource(text, rows[1]!)).toBe('"x\ny",z');
+  });
+
+  it('returns an empty string once the range exceeds MAX_INLINE_LINES', () => {
+    const overCap = MAX_INLINE_LINES + 10;
+    const bigQuoted = `"${Array.from({ length: overCap }, (_, i) => `line${i}`).join('\n')}",z`;
+    const text = `a,b\n${bigQuoted}`;
+    const { rows } = parseCsv(text);
+    expect(rows[0]!.endLine - rows[0]!.startLine + 1).toBeGreaterThan(MAX_INLINE_LINES);
+    expect(sliceCsvRowSource(text, rows[0]!)).toBe('');
   });
 });
