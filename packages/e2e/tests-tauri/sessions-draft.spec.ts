@@ -1,14 +1,17 @@
 /**
  * §sessions-draft — the new-session Welcome flow (app-tauri browser mode).
  *
- * THE WELCOME SCREEN OWNS THE PROJECT CHOICE. The anchored "NEW SESSION IN…"
- * popover is gone: the sidebar "+", the tab-strip "+" and ⌘N are all ONE CLICK
- * and open a PROJECTLESS draft. Its welcome screen shows the choose-project
- * state — a `welcome-project` trigger over a dropdown of `welcome-project-<id>`
- * rows — and until a project is picked there is no draft row, no suggestions and
- * NO COMPOSER (the first send needs a project to create the chat in). With a
- * project filter active the draft seeds that project directly and the welcome
- * shows it already picked, so the dropdown step is skipped.
+ * THE WELCOME SCREEN OWNS THE PROJECT CHOICE, but "+" / ⌘N resolve a target
+ * project silently before it ever renders (`resolveNewSessionProject`): an
+ * active filter pill wins, else the project of the session that was active at
+ * click time, else the draft opens projectless. Only the last case shows the
+ * welcome screen's choose-project state — a `welcome-project` trigger over a
+ * dropdown of `welcome-project-<id>` rows — with no draft row, no suggestions
+ * and no composer until one is picked (the first send needs a project to
+ * create the chat in). Whenever a project resolves up front (pill OR active
+ * session), the welcome screen opens with `welcome-project` already showing
+ * that project's chip and the dropdown step is skipped — the chip stays a
+ * picker, so a different project is still one click away.
  *
  * The rest of the surface is unchanged: DraftSessionRow (sidebar synthetic row)
  * → WelcomeState (repo suggestions) / FirstRunState (zero projects), the chat
@@ -106,11 +109,31 @@ async function pickProjectFromWelcome(page: Page, projectId: string): Promise<vo
   await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0, { timeout: 10_000 });
 }
 
-/** The one-click "+": a projectless draft whose welcome screen asks for a project. */
+/**
+ * The one-click "+" when NEITHER signal exists: no project filter pill, and
+ * the session active at click time is itself a projectless draft (or there is
+ * none). Only then does the welcome screen fall back to its choose-project
+ * state. Callers seeded through `createTauriChat` leave a project-backed
+ * session active — use `openDraftInheritingProject` there instead.
+ */
 async function openProjectlessDraft(page: Page): Promise<void> {
   await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
   await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
+}
+
+/**
+ * The one-click "+" with a project-backed session already active and no
+ * filter pill: `resolveNewSessionProject` inherits that session's project, so
+ * the welcome screen opens with it already picked — draft row and composer
+ * live immediately, no dropdown step.
+ */
+async function openDraftInheritingProject(page: Page, project: TauriProject): Promise<void> {
+  await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
+  await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
+    timeout: 10_000,
+  });
 }
 
 /**
@@ -139,11 +162,12 @@ async function closeConfigMenu(page: Page, options: Locator): Promise<void> {
  * that opened the draft never runs — turning any first failure in this describe
  * into two.
  */
-async function ensureDraftRow(page: Page, projectId: string): Promise<void> {
+async function ensureDraftRow(page: Page, project: TauriProject): Promise<void> {
   const draftRow = page.getByTestId('sessions-draft-row');
   if ((await draftRow.count()) === 0) {
-    await openProjectlessDraft(page);
-    await pickProjectFromWelcome(page, projectId);
+    // The describe's seeded chat is the active session at this point, so "+"
+    // inherits its project directly — no dropdown step to redo.
+    await openDraftInheritingProject(page, project);
   }
   await expect(draftRow).toBeVisible({ timeout: 10_000 });
 }
@@ -233,7 +257,12 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
   let existingChatId: string;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp();
+    // This describe sends real messages (first-send + first-message-visibility
+    // tests below) — without a recordingKey the mock adapter looks for the
+    // default `session.0.ndjson`, which doesn't exist, and every send fails
+    // with "fixture not found". Previously masked: the describe's own
+    // precondition helper failed before any test reached a real send.
+    app = await launchTauriApp({ recordingKey: 'messaging' });
     project = await createTauriProject(app.page);
     // Seed one real chat so a discard has a session to return to, and so the
     // draft row is provably distinct from a `sessions-row`.
@@ -245,6 +274,10 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     await closeTauriApp(app);
   });
 
+  // With no filter pill, the seeded chat is the active session at click time,
+  // so `resolveNewSessionProject` inherits its project (acceptance criterion
+  // 6) — the draft row and composer are live immediately, no dropdown step.
+  //
   // Previously: `sessions-draft-row` never rendered after picking a project
   // in "All" view — `use-draft-row.ts`'s discard-on-navigate-away
   // effect fired on the render where the draft config had just been armed but
@@ -253,18 +286,11 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
   // product-bug-fix campaign: a `wasSelectedRef` gate now requires the draft
   // to have genuinely been selected (`mainThreadId === newThreadId` on some
   // earlier render) before treating a mismatch as a real navigate-away.
-  test('New (All view) opens the welcome picker; picking a project there resolves the draft without creating a chat', async () => {
+  test("New (All view) inherits the active session's project without creating a chat", async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
 
-    await openProjectlessDraft(page);
-    // The projectless draft creates no session and carries no draft row — and
-    // with nowhere to send yet, no composer either.
-    await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
-    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
-    await expect(composer(page).input()).toHaveCount(0);
-
-    await pickProjectFromWelcome(page, project.projectId);
+    await openDraftInheritingProject(page, project);
 
     const draftRow = page.getByTestId('sessions-draft-row');
     await expect(draftRow).toBeVisible({ timeout: 10_000 });
@@ -275,8 +301,9 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     // name (v2 DraftSessionRow → ProjectAvatar); the name is on the chat header.
     await expect(draftRow.getByTestId('project-avatar')).toBeVisible();
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
-    // The welcome screen now names the picked project, and the composer — which
-    // the choose-project state withheld — is live for the first send.
+    // The welcome screen names the inherited project up front, and the
+    // composer — which only the choose-project state would withhold — is
+    // live for the first send.
     await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath));
     await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
   });
@@ -285,7 +312,7 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
   // the test above; `ensureDraftRow` re-opens one when this runs as a lone retry.
   test('composer config selectors are usable on the unsent draft', async () => {
     const { page } = app;
-    await ensureDraftRow(page, project.projectId);
+    await ensureDraftRow(page, project);
     await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
 
     const modelOptions = page.locator('[data-testid^="composer-model-select-option-"]');
@@ -309,7 +336,7 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
   // in this describe block.
   test('discarding the draft (✕) clears the row and returns to the previously active session', async () => {
     const { page } = app;
-    await ensureDraftRow(page, project.projectId);
+    await ensureDraftRow(page, project);
     const draftRow = page.getByTestId('sessions-draft-row');
 
     await draftRow.hover();
@@ -322,15 +349,16 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     await expect(previousRow).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
   });
 
-  // This test independently re-triggers the welcome flow — see the fix note
-  // documented on the first test in this describe block.
+  // This test independently re-triggers "+" — the discard above left the
+  // seeded `existingChatId` active, still project-backed, so it inherits
+  // directly — see the fix note documented on the first test in this describe
+  // block.
   test('first send creates exactly one chat in the picked project (no chat exists before send)', async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
     const chatsBefore = await fetchProjectChatIds(project.projectId);
 
-    await openProjectlessDraft(page);
-    await pickProjectFromWelcome(page, project.projectId);
+    await openDraftInheritingProject(page, project);
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     // Still no new sessions-row while the draft is unsent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
@@ -379,8 +407,23 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     // already tore down throws, and that throw REPLACED the only report of which
     // step actually hung. This is the last test in the describe and `afterAll`
     // closes the app, so the route cannot leak into anything.
-    await openProjectlessDraft(page);
-    await pickProjectFromWelcome(page, project.projectId);
+    //
+    // A project filter pill resolves the target deterministically (it wins
+    // over any active-session signal), sidestepping the previous test's
+    // freshly-handed-off chat — whether ITS custom.projectId has propagated to
+    // `useActiveIdentity()` yet is exactly the kind of client-side timing this
+    // test isn't about.
+    await openProjectScope(page);
+    await projectRow(page, project.projectId).click();
+    await expect(projectRow(page, project.projectId)).toHaveAttribute('data-state', 'checked', {
+      timeout: 5_000,
+    });
+    await closeMenus(page);
+    await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
+      timeout: 10_000,
+    });
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
 
     // A failed agent run earlier in this describe parks a persistent error toast
@@ -412,7 +455,9 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
   let projectB: TauriProject;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp();
+    // The no-leak test sends a real message — see the recordingKey note on the
+    // describe above.
+    app = await launchTauriApp({ recordingKey: 'messaging' });
     projectA = await createTauriProject(app.page);
     projectB = await createTauriProject(app.page);
   });
@@ -485,12 +530,18 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     await expect(headerProject).toContainText(baseName(projectA.projectPath));
 
     // WITHOUT sending, click New again — the reused draft slot must not stack.
-    // Re-opening resets the slot's config, so the draft row retires with it and
-    // the welcome screen is back to asking for a project.
-    await openProjectlessDraft(page);
-    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    // Re-opening resets the slot's config, but the active thread at click time
+    // is now the CONFIGURED draft A itself, and `useActiveIdentity().projectId`
+    // is draft-aware — that inherited signal re-seeds the slot with A again
+    // rather than resetting to the choose-project state (acceptance criterion
+    // 6 applies here too: a resolved target is a resolved target, whatever
+    // resolved it).
+    await openDraftInheritingProject(page, projectA);
+    await expect(draftRow).toBeVisible({ timeout: 10_000 });
+    await expect(headerProject).toContainText(baseName(projectA.projectPath));
 
-    // This time pick project B — the stale A config must be fully replaced, not merged.
+    // Retarget through the welcome chip's own picker — the stale A config
+    // must be fully replaced, not merged.
     await pickProjectFromWelcome(page, projectB.projectId);
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(1);
     await expect(headerProject).toContainText(baseName(projectB.projectPath), { timeout: 10_000 });
@@ -507,20 +558,23 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
 
 // ─── §sessions-draft — ⌘N takes the same one-click path as the "+" ─────────
 //
-// ⌘N and the "+" share `useNewChatHotkeyHandler`: reset the stale draft, switch
-// to the new thread, and let the surface resolve the project — the welcome
-// screen's picker in "All" view, the selected project directly when one is
-// active. The historical dead-end this block guards (a projectless draft whose
-// first send failed and rolled back via the coordinator's "no draft config"
-// guard) is now unreachable because the composer itself is withheld until a
-// project resolves.
+// ⌘N and the "+" share `useStartNewSession`: resolve the target project (an
+// active filter pill wins, else the project of the session active at keypress
+// time, else none), reset the stale draft, and switch — the welcome screen's
+// own picker only takes over when neither signal resolves a project. The
+// historical dead-end this block guards (a projectless draft whose first send
+// failed and rolled back via the coordinator's "no draft config" guard) is
+// now unreachable because the composer itself is withheld until a project
+// resolves.
 
-test.describe('§sessions-draft — ⌘N opens the welcome project picker (no projectless send)', () => {
+test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp();
+    // The ⌘N-picked draft gets sent below — see the recordingKey note on the
+    // first describe in this file.
+    app = await launchTauriApp({ recordingKey: 'messaging' });
     project = await createTauriProject(app.page);
     await createTauriChat(app.page, project.projectId, 'default');
   });
@@ -530,7 +584,7 @@ test.describe('§sessions-draft — ⌘N opens the welcome project picker (no pr
     await closeTauriApp(app);
   });
 
-  test('⌘N opens the same welcome picker as the "+" button; nothing is sendable until a project is picked', async () => {
+  test("⌘N inherits the active session's project — no choose-project state, no new session yet", async () => {
     const { page } = app;
     const rowsBefore = await page.getByTestId('sessions-row').count();
     // Guarantee "All" view (no project selected) — the trigger reads "All
@@ -540,18 +594,17 @@ test.describe('§sessions-draft — ⌘N opens the welcome project picker (no pr
     await page.keyboard.press('ControlOrMeta+n');
 
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
-    // The welcome screen gates project choice BEFORE any draft config, chat or
-    // composer exists — no projectless dead-end and no new session.
-    await expect(composer(page).input()).toHaveCount(0);
-    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    // The seeded chat is the active session at keypress time, so the resolver
+    // inherits its project directly (acceptance criterion 6) — no
+    // choose-project state to gate the draft or the composer behind.
+    await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
+      timeout: 10_000,
+    });
+    await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
+    // Still no new chat created — the draft is unsent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
-
-    await pickProjectFromWelcome(page, project.projectId);
-
-    const draftRow = page.getByTestId('sessions-draft-row');
-    await expect(draftRow).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('chat-header-project')).toBeVisible();
+    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath));
   });
 
   test('sending from the ⌘N-picked draft creates exactly one chat tied to the picked project', async () => {
