@@ -107,13 +107,6 @@ pub struct McpToolCallItem {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WebSearchItem {
-    pub id: String,
-    pub query: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ImageGenerationItem {
     pub id: String,
     /// Base64-encoded image bytes (PNG). Always present in completed events.
