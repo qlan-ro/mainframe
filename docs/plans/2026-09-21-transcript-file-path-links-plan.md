@@ -46,9 +46,16 @@ smart-actions provider.
    - any scheme other than `file:` — a scheme being `^[A-Za-z][A-Za-z0-9+.-]*:` appearing before the first `/`
      (so `http:`, `mailto:`, `slack:`, `vscode:` reject, while `/a/b.ts:42` and `src/a.ts:42` do not match the
      scheme shape at all);
-   - a relative target whose first segment contains a dot *and* which has further segments
-     (`example.com/page` is a hostname, not a path).
-   Accepts: `file://…`, `/abs/path`, `./x`, `../x`, and relative `a/b.ts` / `README.md`. The trailing
+   - a relative target whose first segment contains a dot, **does not start with `.`**, and has further
+     segments (`example.com/page` is a hostname, not a path). The leading-dot exemption is load-bearing:
+     without it the rule would reject `./x`, `../x` and every dotfile directory in this repo
+     (`.github/pull_request_template.md`, `.agents/live-qa.md`, `.changeset/x.md`, `.claude/settings.json`),
+     which carry no colon, so `defaultUrlTransform` passes them through untouched, `parseFileHref` would
+     return `null`, and `SmartLink` would fall through to `LinkWithPreview` — whose click handler hands the
+     bare filesystem path to `host.shell.openExternal` (`link-with-preview.tsx:56-64`), i.e. exactly the bug
+     this todo fixes.
+   Accepts: `file://…`, `/abs/path`, `./x`, `../x`, `.github/pull_request_template.md`, and relative
+   `a/b.ts` / `README.md`. The trailing
    `:line` / `:line:col` suffix is split off the path and converted to the 0-based `RevealTarget` contract
    (`:42` → `{ line: 41, character: 0 }`; `:42:7` → `{ line: 41, character: 6 }`), clamped at 0 so `:0` does
    not produce `-1`. `character` is always present when `line` is, because the subscriber only stashes a
@@ -60,11 +67,18 @@ smart-actions provider.
 3. **`file:` relaxation is scoped to `key === 'href'`.** react-markdown applies `urlTransform` to every URL
    property, `img src` included; an unscoped relaxation would newly allow live `file://` image sources in the
    webview, which is outside this change.
-4. **No new toast.** The acceptance criterion "a target that cannot be opened surfaces a toast" cannot be met
-   at the link: `emitSurfaceIntent` returns `void` and the brief pins the subscriber as reuse-as-is. The
-   existing failure surface is the viewer's in-tab error state, "File not found or unreadable"
-   (`viewer-router.tsx:129`) — a missing or external file opens a tab that says so. That satisfies "not
-   silent"; **do not** add a toast to the subscriber or the viewer, and do not pre-validate existence.
+4. **AC-7's toast clause is deliberately satisfied by the in-tab error state — flagged for human
+   ratification.** The brief's AC reads "a target that cannot be opened surfaces a toast rather than failing
+   silently". The link cannot observe the failure: `emitSurfaceIntent` returns `void`. The only place the
+   failure is observable is `raw == null` in `viewer-router.tsx:129` (and `EditorTab.tsx:130`), which already
+   renders "File not found or unreadable" in the tab — a visible, non-silent signal. Firing `mfToast.error`
+   from `@/lib/toast` there would also fire for every other consumer of the shared viewer — the file tree,
+   spotlight, the review panel and find-in-path — and scoping it to transcript links would need a flag
+   threaded through the `open-file` intent, which the brief rules out ("no new intent variant"). **Decision:**
+   ship the in-tab error as the failure signal, add no toast, and do not pre-validate existence. This is a
+   deliberate deviation from AC-7 as literally worded; it needs a human yes/no before the PR closes. If the
+   answer is no, the fallback is `mfToast.error('Could not open file', { description: path })` at
+   `viewer-router.tsx:129` + `EditorTab.tsx:130`, accepting that all four other viewer consumers toast too.
 5. **`data-testid`s:** the anchor is `chat-fileref-<relative>`, the menu items are
    `chat-fileref-open-<relative>`, `chat-fileref-copy-absolute-<relative>` and
    `chat-fileref-copy-relative-<relative>`, where `<relative>` is `toFileRef(path, bases).relative` (per the
@@ -128,23 +142,28 @@ smart-actions provider.
 TDD inline: write each test first and watch it fail, then make it pass. Order within the group:
 
 1. **`parseFileHref` tests → implementation.** Table-driven over the rules in resolution 2, including the
-   line/character conversions (including the `:0` clamp), a percent-encoded path (`%20` → a real space), and
+   line/character conversions (including the `:0` clamp), a percent-encoded path (`%20` → a real space), the
+   leading-dot accept rows (`./x`, `../x`, `.github/pull_request_template.md`, `.changeset/x.md`), and
    every rejection case (`http(s)`, `mailto:`, `slack:`, `#anchor`, `?q`, `example.com/page`, empty).
 2. **`urlTransform` tests → implementation.** `file:///a/b.ts` with `key === 'href'` survives; the same URL with
    `key === 'src'` is still stripped; `https://…`, `slack://…` and the existing app-protocol allowances are
    unchanged.
-3. **`FileRefLink` + `SmartLink` branch tests → implementation.** Cover, with no providers mounted (render
+3. **`useOpenFile` widening.** `openFile(path, position?: { line: number; character: number })`; leave
+   `openDiff`/`revealFile` alone. The existing single-argument calls at `tools/shared/chrome.tsx:84,92` must
+   keep compiling. This step comes **before** the link component because step 4's `path:42:7` case asserts the
+   widened signature; the reverse order cannot go green and would not typecheck. There is no test file for
+   `chat-tool-context.ts` (`tools/__tests__/` holds only `group-parts` and `tool-dispatch`), so this step's
+   verification is the package typecheck plus step 4's position case — do not author a new suite for the hook.
+4. **`FileRefLink` + `SmartLink` branch tests → implementation.** Cover, with no providers mounted (render
    `SmartLink` directly, mocking `@/store/surface-intents` and `@/lib/host` the way
    `smart-actions/__tests__/url-chip-menu.test.tsx:11-27` does):
    - an absolute in-project href emits `{ type: 'open-file', path }` and never calls `host.shell.openExternal`;
    - a project-relative href and a `file://` href do the same;
-   - `path:42:7` emits `line: 41, character: 6`;
+   - `path:42:7` emits `line: 41, character: 6` (via the step-3 signature);
    - the rendered link text is the authored markdown text, not a helper-derived label;
    - the context menu shows Open file + the two copy-path items and shows neither "Copy link" nor "Open link",
      and no hover Copy-URL button is rendered;
    - an `https://` href still routes to `LinkWithPreview` (external open, `chat-link-copy` present).
-4. **`useOpenFile` widening.** `openFile(path, position?)`; leave `openDiff`/`revealFile` alone. The existing
-   `chrome.tsx` single-argument calls must keep compiling.
 5. **`MessagePathContextMenu` Open-file item.** Add the item + separator; extend the existing suite with a case
    asserting the emitted intent for a `[data-file-path]` element, and that the fall-through behaviour for
    prose/selection is unchanged.
