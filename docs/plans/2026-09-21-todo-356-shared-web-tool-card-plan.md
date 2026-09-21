@@ -35,13 +35,50 @@ here, not merely unobserved — the clause is satisfied vacuously and needs no c
 `item/completed` frame — Gate 0 below closes that gap before any code is written, and the
 alternative branch is spelled out so a surprise there is a redirect, not a replan.
 
+## Acceptance criterion 1 — amended (the PR must carry this deviation)
+
+The brief's AC1 reads: "A Codex web-fetch tool call renders the shared Web card with the 'Fetch'
+verb, a clickable URL, **and the result summary in the body**." This plan delivers the first two
+clauses and **not** the third. A Codex fetch card's body is the URL row alone; `SummaryBody` never
+renders, because the tool_result content stays `""` and the card gates the summary on a non-empty
+result text (`WebFetchCard.tsx:86-94`).
+
+Why — on receipts, not on the brief's premise:
+
+- The app-server `WebSearchItem` *does* carry a fourth field, `results`. The Established-facts
+  receipt is real and the brief's stated premise ("Codex's search item carries no result payload")
+  is wrong as written. This plan does not lean on it.
+- But `results`' element type is **unnamed**: `WebSearchResult` appears **0 times** in
+  `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex`, and in both serde field tables —
+  `WebSearchItem id action results queries url findInPage pattern other` (strings line 446584) and
+  `WebSearchItem query action results` (line 453672) — `results` is followed immediately by the
+  `WebSearchAction` fields, with no element-struct field names anywhere in the binary. It is a
+  `Vec<String>` or opaque JSON, and its **content is unverified**: we know the field exists, not
+  what text it holds nor whether it is ever populated for `openPage`.
+- Every captured `open_page` item in the local corpus is action-only, with no result payload of any
+  kind: `{"type":"web_search_call","status":"completed","action":{"type":"open_page","url":"https://v2.tauri.app/develop/calling-rust/"}}`
+  (`~/.codex/sessions/2026/06/13/rollout-2026-06-13T07-54-52-019ebf55-33d4-74f1-aa87-e87f352f2f08.jsonl`,
+  ordinals 32 and 35).
+- The brief's Out of scope is explicit: "Adding structured parsing of web-search *results* … the
+  summary stays free text." Piping an unnamed field of unverified content into `SummaryBody` is that
+  parsing. It would also change today's Codex **Search** card, since `results` sits on the item for
+  `search` too — a rendering change no acceptance criterion asks for and Gate 2 forbids.
+
+Resolution: `results` is **not** added to our `WebSearchItem` (unknown fields are ignored crate-wide,
+so an unread field would be dead code); the tool_result content stays `""` on both paths; AC1 is met
+in its first two clauses only. Gates 1, 3 and 5 assert the empty body explicitly, so "no summary" is
+pinned as intentional rather than left to drift. **The PR body must carry the deviation** — "AC1's
+result-summary clause is not delivered: Codex's `webSearch.results` is an unnamed field of unverified
+content and the brief excludes result parsing" — and the acceptance checklist must record AC1 as
+*partially met* with that note, never as met.
+
 ## Files touched
 
 | File | Change |
 | --- | --- |
 | `packages/core-rs/crates/mainframe-adapter-codex/src/thread_item_variants.rs` | `WebSearchItem` gains `action: Option<WebSearchAction>`; `query` becomes `#[serde(default)]` so an action-only item can never be dropped. New `WebSearchAction` enum mirroring codex's tags (`search`, `openPage`, `findInPage`, `other`) with an unknown-variant tolerance consistent with this crate's lenient style. Watch the 300-line ceiling — the file is near it; a new `web_search_action.rs` is fine if it crosses. |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_render.rs` | live path: `openPage` → tool_use named `WebFetch` with input `{url}`; everything else (including a missing/`other` action) keeps today's `WebSearch` + `{query}`. The already-complete empty tool_result pair stays. |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_history.rs` | reload path: identical mapping, identical ids (`{id}` / `{id}:result`). |
+| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_render.rs` | live path: `openPage` → tool_use named `WebFetch` with input `{url}`; everything else (including a missing/`other` action) keeps today's `WebSearch` + `{query}`. The already-complete empty tool_result pair stays — `tool_result_block(&w.id, "", false, None)`, see **Acceptance criterion 1 — amended**. Also reword the module `//!` and fn `///` comments: they claim the item "carries only the query — no result payload ever follows it", which the `results` receipt disproves. One line, stating instead that `results` is deliberately not consumed. |
+| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_history.rs` | reload path: identical mapping, identical ids (`{id}` / `{id}:result`), identical empty tool_result. Its `///` comment repeats the same disproved "carries only the query" claim — reword it the same way. |
 | `packages/core-rs/crates/mainframe-adapter-codex/tests/{item_types,event_mapper,history,live_vs_history_id_parity}.rs` | new cases (see gates). |
 | `packages/ui/src/features/chat/tools/cards/WebFetchCard.tsx` | verb/target from args, not `toolName`; degraded header-only state. |
 | `packages/ui/src/features/chat/tools/cards/__tests__/WebFetchCard.test.tsx` | new cases appended; **no existing case edited** (acceptance criterion). |
@@ -56,7 +93,8 @@ wire), and `dynamic_tool_call_name` (see Out of scope).
 ```
 url   = args.url   (string)
 query = args.query (string)
-url present   -> verb "Fetch",  URL row + summary body   (unchanged for Claude WebFetch)
+url present   -> verb "Fetch",  URL row + summary body iff result text non-empty
+                 (unchanged for Claude WebFetch; Codex fetch has none — see amended AC1)
 else query    -> verb "Search", quoted query, no URL row (unchanged for Claude WebSearch)
 else          -> degraded: globe + verb + muted "no target" (text-muted-foreground),
                  status dot, trigger disabled, no body, never raw JSON
@@ -76,8 +114,13 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
   `WebSearchAction` before the app-server layer — its typed `SearchCommands` parser and the plural
   `search {query, queries}` tag are that conversion. Writing a normalizer for this path would be
   dead code. If Gate 0 nonetheless shows `dynamicToolCall`, see the branch note there.
-- **Parsing `webSearch.results`.** The brief excludes structured result parsing; the tool_result
-  content stays the empty string it is today, and the fetch card's body is the URL row.
+- **Parsing `webSearch.results`.** Not because the item lacks a result field — it has one — but
+  because that field's element type is unnamed and its content unverified (`WebSearchResult`: 0 hits
+  in the binary; every captured `open_page` item is action-only), and the brief excludes structured
+  result parsing outright ("the summary stays free text"). Reading it would also alter today's Codex
+  **Search** card, which Gate 2 forbids. The field is not added to our struct and the tool_result
+  content stays `""` on both paths. Its consequence for AC1 is stated, not hidden: see
+  **Acceptance criterion 1 — amended**.
 - **`findInPage` / `other` actions**, external-session rollout scanning (`rollout_reconstruct.rs`
   reconstructs only `exec_command` and `mcp__*`, so a `web`/`run` call produces no item there at
   all), MCP cards, mobile.
@@ -93,6 +136,13 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
   strings `struct WebSearchItem with 4 elements`, `struct variant WebSearchAction::OpenPage with 1
   element`, `::Search with 2 elements`, `::FindInPage with 2 elements`, and the snake_case mirror
   `WebSearchAction queries open_page url find_in_page` (450341).
+- **`results` is a field we can see but not read.** No `WebSearchResult` type exists in the binary
+  (`strings -a … | grep -c 'WebSearchResult'` → `0`), and the deserializer struct-name table at
+  strings line 450535 lists only `struct WebSearchItem`, `struct variant WebSearchAction::OpenPage /
+  ::FindInPage / ::Search` — no element struct. In both serde field tables `results` is followed
+  straight by the action fields. So the element type is a bare `String` or opaque JSON, and nothing
+  in the binary or the capture corpus says what it contains or when it is populated. This is the
+  receipt behind **Acceptance criterion 1 — amended**.
 - The raw Responses-API form of the same tool, captured (not synthetic):
   `~/.codex/sessions/2026/07/22/rollout-2026-07-22T14-20-25-019f898e-33a8-7b00-90ee-a67a362fd1e5.jsonl`
   lines 588 and 895 — `{"type":"function_call","name":"run","namespace":"web","arguments":"{\"search_query\":[{\"q\":…}],\"response_length\":\"long\"}"}`.
@@ -144,8 +194,11 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
   recorded in CONSUMED-SURFACE.
 - **`openPage` may also carry a non-empty top-level `query`** (the item has both). The action wins;
   state that in the code's one comment if it is not obvious from the match.
-- **A fetch's body is only the URL row**, since `results` stays unparsed — that is the brief's call,
-  and it matches Claude's `WebSearch`, whose result string is opaque too.
+- **A fetch's body is only the URL row**, since `results` is an unnamed field of unverified content
+  and stays unread. This is a stated deviation from the brief's AC1, not an oversight
+  (**Acceptance criterion 1 — amended**), and the PR body must carry it. If the Gate 0 capture shows
+  `results` populated with readable text for `openPage`, that is a follow-up todo — not a silent
+  in-scope addition, because the same field would also start feeding the Search card.
 
 ## Group 1 — shared Web card for Codex (the only implementation group)
 
@@ -172,20 +225,25 @@ Exit gates — each must be true and observable:
    (`thread_item_variants.rs:228-241`) because the dynamic path emits none today. Gates 5-8 are
    identical either way.
 1. A `webSearch` item whose action is `openPage` produces a tool_use block named `WebFetch` with the
-   url as input, on the live path.
+   url as input, on the live path, **and its paired tool_result content is asserted to be exactly
+   `""`** — the assertion that pins amended AC1's empty body as intentional. A payload that also
+   carries a `results` field produces that same empty tool_result (the field is ignored, not read).
 2. A `webSearch` item with a `search` action, with no action at all, or with an action tag this
    crate does not know, still produces exactly today's `WebSearch` + `{query}` pair — the existing
    `web_search_renders_a_tool_use_and_tool_result_pair_named_web_search` case and the `history.rs`
    WebSearch case pass unmodified.
-3. Live and history-reload emit the identical tool_use id **and** name for an `openPage` item — a new
+3. Live and history-reload emit the identical tool_use id **and** name for an `openPage` item, with
+   the identical empty tool_result content on both paths — a new
    case in `tests/live_vs_history_id_parity.rs` following
    `dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`'s structure. This is the
    acceptance criterion's Rust parity test.
 4. A `webSearch` payload missing `query` deserializes instead of being dropped (`tests/item_types.rs`,
    matching the crate's existing tolerance cases).
-5. `WebFetchCard` renders "Fetch" + a clickable URL for `{url}` args, "Search" + the quoted query for
-   `{query}` args, and the header-only degraded card (trigger disabled, no body, no JSON) when
-   neither is present — regardless of `toolName`.
+5. `WebFetchCard` renders "Fetch" + a clickable URL for `{url}` args — with **no
+   `web-fetch-card-summary` element when the result text is empty** (the Codex fetch shape, amended
+   AC1) and with one when the result text is non-empty (the Claude shape, unchanged) — "Search" +
+   the quoted query for `{query}` args, and the header-only degraded card (trigger disabled, no body,
+   no JSON) when neither is present, regardless of `toolName`.
 6. Clicking a URL row still calls `useHost().shell.openExternal` with that URL, via the spy the
    existing tests already install.
 7. **Every pre-existing case in `WebFetchCard.test.tsx` passes with zero edits to it** — the
