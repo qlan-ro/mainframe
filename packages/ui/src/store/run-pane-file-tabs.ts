@@ -49,16 +49,6 @@ export function activeFileTab(run: RunState | null): RunTab | null {
   return null;
 }
 
-/**
- * True when `path` is open anywhere as a permanent file tab. Ignores
- * `scopeKey`, matching the tree's existing selected-row path comparison
- * (`activeFileTab(run)?.path`) rather than introducing a second identity rule.
- */
-export function hasPermanentFileTab(run: RunState | null, path: string): boolean {
-  if (!run) return false;
-  return run.panes.some((p) => p.tabs.some((t) => isFileTab(t) && t.path === path && t.mode === 'permanent'));
-}
-
 /** What the caller wants opened — the descriptor an `open-file`/`open-diff` intent carries. */
 export interface OpenFileTarget {
   kind: FileTabKind;
@@ -91,8 +81,25 @@ function buildFileTab(target: OpenFileTarget, mode: TabMode): RunTab {
 }
 
 /** Identity of an open file tab: kind + path within one launch scope. */
-function sameFile(target: OpenFileTarget): (t: RunTab) => boolean {
+export type FileTabIdentity = Pick<OpenFileTarget, 'kind' | 'path' | 'scopeKey'>;
+
+function sameFile(target: FileTabIdentity): (t: RunTab) => boolean {
   return (t) => t.kind === target.kind && t.path === target.path && (t.scopeKey ?? null) === (target.scopeKey ?? null);
+}
+
+/**
+ * The open tab matching `target`'s identity (kind + path + scope), or null.
+ * The one place this lookup happens — `openFileTab`'s existing-tab check and
+ * the file tree's "already open" check both call this so they can't diverge.
+ */
+export function findOpenFileTab(run: RunState | null, target: FileTabIdentity): RunTab | null {
+  if (!run) return null;
+  const matches = sameFile(target);
+  for (const pane of run.panes) {
+    const found = pane.tabs.find(matches);
+    if (found) return found;
+  }
+  return null;
 }
 
 /**
@@ -125,10 +132,12 @@ export function openFileTab(
   paneId?: string,
 ): OpenFileTabResult {
   const base = run ?? emptyRun();
-  const matches = sameFile(target);
 
-  const holder = base.panes.find((p) => p.tabs.some(matches));
-  if (holder) return focusExisting(base, holder.id, holder.tabs.find(matches)!, target, mode);
+  const existing = findOpenFileTab(base, target);
+  if (existing) {
+    const holder = base.panes.find((p) => p.tabs.some((t) => t.id === existing.id))!;
+    return focusExisting(base, holder.id, existing, target, mode);
+  }
 
   const idx = paneId ? base.panes.findIndex((p) => p.id === paneId) : 0;
   const pane = base.panes[idx] ?? base.panes[0]!;

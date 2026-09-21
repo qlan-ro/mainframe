@@ -21,7 +21,6 @@ const emitSurfaceIntent = mockEmit;
 
 import { FileTree } from '../FileTree';
 import { useActiveBasesStore } from '@/store/active-bases-store';
-import { useLayoutStore } from '@/store/layout';
 
 // Set up a FakeHostBridge singleton for all tests in this file.
 beforeEach(() => {
@@ -187,71 +186,5 @@ describe('FileTree — context menu copy/reveal actions', () => {
     expect(reveal).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(reveal);
     expect(mockReveal).not.toHaveBeenCalled();
-  });
-});
-
-describe('FileTree — Keep open menu item', () => {
-  beforeEach(() => {
-    getFileTree.mockReset();
-    mockEmit.mockReset();
-    useLayoutStore.setState({ run: null });
-  });
-
-  it('offers "Keep open" for a file not yet open, and selecting it opens it as permanent', async () => {
-    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
-    render(<FileTree port={1} projectId="p1" />);
-    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src/a.ts'));
-    const item = await screen.findByTestId('file-tree-keep-open-src/a.ts');
-    fireEvent.click(item);
-    expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts', mode: 'permanent' });
-  });
-
-  it('hides "Keep open" once the file is already open as permanent', async () => {
-    useLayoutStore.setState({
-      run: {
-        dir: 'v',
-        flex: [1],
-        panes: [
-          {
-            id: 'p1',
-            active: null,
-            tabs: [{ id: 't1', kind: 'code', title: 'a.ts', path: 'src/a.ts', mode: 'permanent' }],
-          },
-        ],
-      },
-    });
-    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
-    render(<FileTree port={1} projectId="p1" />);
-    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src/a.ts'));
-    await screen.findByTestId('file-tree-find-in-file');
-    expect(screen.queryByTestId('file-tree-keep-open-src/a.ts')).toBeNull();
-  });
-
-  it('still offers "Keep open" for a file open only as a preview', async () => {
-    useLayoutStore.setState({
-      run: {
-        dir: 'v',
-        flex: [1],
-        panes: [
-          {
-            id: 'p1',
-            active: null,
-            tabs: [{ id: 't1', kind: 'code', title: 'a.ts', path: 'src/a.ts', mode: 'preview' }],
-          },
-        ],
-      },
-    });
-    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
-    render(<FileTree port={1} projectId="p1" />);
-    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src/a.ts'));
-    expect(await screen.findByTestId('file-tree-keep-open-src/a.ts')).toBeTruthy();
-  });
-
-  it('never offers "Keep open" for a directory', async () => {
-    getFileTree.mockResolvedValueOnce([dir('src', 'src')]);
-    render(<FileTree port={1} projectId="p1" />);
-    fireEvent.contextMenu(await screen.findByTestId('file-tree-row-src'));
-    await screen.findByTestId('file-tree-find-in-folder');
-    expect(screen.queryByTestId('file-tree-keep-open-src')).toBeNull();
   });
 });

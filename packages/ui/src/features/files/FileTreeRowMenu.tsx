@@ -23,7 +23,9 @@ import { useHost } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { useLayoutStore } from '@/store/layout';
-import { hasPermanentFileTab } from '@/store/run-pane-file-tabs';
+import { findOpenFileTab } from '@/store/run-pane-file-tabs';
+import { kindForPath } from '@/store/intent-subscriber';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 
 interface FileTreeRowMenuProps {
   entry: FileTreeEntry;
@@ -39,7 +41,10 @@ interface FileTreeRowMenuProps {
  * mount of `ContextMenuContent`.
  */
 function KeepOpenMenuItem({ entry }: { entry: FileTreeEntry }) {
-  const alreadyPermanent = useLayoutStore((s) => hasPermanentFileTab(s.run, entry.path));
+  const scopeKey = useActiveBasesStore((s) => s.scopeKey ?? undefined);
+  const target = { kind: kindForPath(entry.path), path: entry.path, scopeKey };
+  const existing = useLayoutStore((s) => findOpenFileTab(s.run, target));
+  const alreadyPermanent = existing != null && (existing.mode ?? 'permanent') === 'permanent';
   if (entry.type === 'directory' || alreadyPermanent) return null;
   return (
     <ContextMenuItem

@@ -52,7 +52,7 @@ function activeScopeKey(): string | undefined {
 }
 
 /** Derive the tab kind for a file path using the viewer router's classifier. */
-function kindForPath(path: string): FileTabKind {
+export function kindForPath(path: string): FileTabKind {
   const vk = pickViewerKind(path);
   if (vk === 'code') return 'code';
   return 'viewer';
