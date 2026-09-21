@@ -319,4 +319,22 @@ describe('WebFetchCard — degraded state (neither url nor query)', () => {
     );
     expect(screen.queryByText(/"selector"/)).not.toBeInTheDocument();
   });
+
+  it('still renders the error body when args are malformed but the call failed', () => {
+    render(
+      <Wrap>
+        <WebFetchCard
+          {...baseProps}
+          toolName="WebFetch"
+          args={{}}
+          result={'<error>missing required argument: url</error>'}
+          isError={true}
+        />
+      </Wrap>,
+    );
+    const trigger = screen.getByTestId('web-fetch-card-trigger');
+    expect(trigger).not.toBeDisabled();
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('web-fetch-card-error-body')).toHaveTextContent('missing required argument: url');
+  });
 });

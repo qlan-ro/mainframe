@@ -7,7 +7,8 @@
  * Family: Web. Collapsed by default.
  * Verb and target derive from ARGS, not toolName, so a new vendor spelling
  * needs no card change: a `url` arg means Fetch, a `query` arg means Search,
- * and neither means a header-only degraded card (never raw JSON).
+ * and neither means a degraded card whose body, if any, is result text alone
+ * (never raw JSON) — e.g. the error message from a malformed-args call.
  * Header: globe glyph + verb + target
  *   (Fetch: clickable url, opened via the host shell bridge; Search: quoted
  *   query, matching SearchCard's pattern; degraded: muted "No target") + StatusDot.
@@ -83,9 +84,7 @@ export const WebFetchCard: ToolCallMessagePartComponent = ({ toolName, args, res
   const operation: Operation = url ? 'fetch' : query ? 'search' : 'none';
 
   const { text: resultText } = resolveResultText(result);
-  // Fetch always shows its url row; search shows a body only once it has a
-  // result to summarize; the degraded state never has a body.
-  const hasBody = operation === 'fetch' ? true : operation === 'search' ? Boolean(resultText) : false;
+  const hasBody = Boolean(url) || Boolean(resultText);
   const verb = verbFor(operation, toolName);
 
   const target =
