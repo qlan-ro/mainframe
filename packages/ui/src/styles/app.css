@@ -56,6 +56,15 @@ code {
   -webkit-user-select: text;
 }
 
+/* Markdown Preview: only the innermost hovered annotatable block reveals its
+   add-note control/tint — an ancestor block (e.g. a list item wrapping a
+   paragraph) must not also light up while the pointer sits over a nested
+   one. jsdom can't hover in tests, so this is CSS-only, asserted by
+   MarkdownPreview.css.test.ts. */
+[data-md-block]:hover:not(:has([data-md-block]:hover)) > .md-note-reveal {
+  opacity: 1;
+}
+
 /* WebKit needs direct track painting because its native track can ignore scrollbar-color. */
 @layer base {
   @supports selector(*::-webkit-scrollbar) {

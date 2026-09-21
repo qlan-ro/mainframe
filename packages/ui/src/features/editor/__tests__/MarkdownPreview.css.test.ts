@@ -18,4 +18,11 @@ describe('app.css selection whitelist', () => {
     const groupedWhitelist = /\.mf-editor-selectable[\s\S]{0,200}?user-select:\s*text/.test(css);
     expect(optInRule != null || groupedWhitelist).toBe(true);
   });
+
+  it('reveals a markdown block note control only on the innermost hovered [data-md-block]', () => {
+    const css = readFileSync(resolve(__dirname, '../../../styles/app.css'), 'utf8');
+    const innermostHoverReveal =
+      /\[data-md-block\]:hover:not\(:has\(\[data-md-block\]:hover\)\)[^{]*\.md-note-reveal[^{]*\{[^}]*opacity:\s*1/;
+    expect(innermostHoverReveal.test(css)).toBe(true);
+  });
 });
