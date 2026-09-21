@@ -17,7 +17,7 @@
  * `openStub`, `PROJECT` constant or `splitTarget` survive here.
  */
 import type { AnchorHTMLAttributes, MouseEvent, ReactElement } from 'react';
-import { FileCode2 } from 'lucide-react';
+import { FileCode2, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   ContextMenu,
@@ -27,7 +27,7 @@ import {
   ContextMenuGroup,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
+import { useMenuCopyFeedback, type UseMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { toFileRef } from '@/lib/files/file-ref';
@@ -38,6 +38,48 @@ import { useOpenFile } from '../tools/chat-tool-context';
 const LINK_CLASS =
   'aui-md-a inline-flex items-center gap-1 border-b border-primary/40 text-primary no-underline hover:opacity-80 transition-opacity cursor-pointer';
 
+interface FileRefMenuProps {
+  relative: string;
+  absolute: string;
+  onOpen: () => void;
+  copyFeedback: UseMenuCopyFeedback;
+}
+
+/** Open file + the two copy-path rows — split out to keep FileRefLink's render under 50 lines. */
+function FileRefMenu({ relative, absolute, onOpen, copyFeedback }: FileRefMenuProps): ReactElement {
+  const { statusFor, onCopySelect } = copyFeedback;
+  const copyAbsoluteId = `chat-fileref-copy-absolute-${relative}`;
+  const copyRelativeId = `chat-fileref-copy-relative-${relative}`;
+  const copyAbsolute = onCopySelect(copyAbsoluteId, () => writeToClipboard(absolute));
+  const copyRelative = onCopySelect(copyRelativeId, () => writeToClipboard(relative));
+
+  return (
+    <ContextMenuContent>
+      <ContextMenuGroup>
+        <ContextMenuItem data-testid={`chat-fileref-open-${relative}`} onSelect={onOpen}>
+          <FolderOpen />
+          Open file
+        </ContextMenuItem>
+      </ContextMenuGroup>
+      <ContextMenuSeparator />
+      <ContextMenuGroup>
+        <CopyMenuItem
+          testId={copyAbsoluteId}
+          label="Copy absolute path"
+          status={statusFor(copyAbsoluteId)}
+          onSelect={copyAbsolute}
+        />
+        <CopyMenuItem
+          testId={copyRelativeId}
+          label="Copy relative path"
+          status={statusFor(copyRelativeId)}
+          onSelect={copyRelative}
+        />
+      </ContextMenuGroup>
+    </ContextMenuContent>
+  );
+}
+
 interface FileRefLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
   fileTarget: FileHrefTarget;
@@ -46,7 +88,7 @@ interface FileRefLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 export function FileRefLink({ href, fileTarget, className, children, ...props }: FileRefLinkProps): ReactElement {
   const bases = useActiveBasesStore((s) => s.bases);
   const { openFile } = useOpenFile();
-  const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
+  const copyFeedback = useMenuCopyFeedback();
 
   const ref = toFileRef(fileTarget.path, bases);
   const absolute = ref.absolute ?? ref.relative;
@@ -61,13 +103,8 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
     openFile(fileTarget.path, position);
   };
 
-  const copyAbsoluteId = `chat-fileref-copy-absolute-${relative}`;
-  const copyRelativeId = `chat-fileref-copy-relative-${relative}`;
-  const copyAbsolute = onCopySelect(copyAbsoluteId, () => writeToClipboard(absolute));
-  const copyRelative = onCopySelect(copyRelativeId, () => writeToClipboard(relative));
-
   return (
-    <ContextMenu onOpenChange={handleOpenChange}>
+    <ContextMenu onOpenChange={copyFeedback.handleOpenChange}>
       <ContextMenuTrigger asChild>
         <a
           {...props}
@@ -86,28 +123,7 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
           {children}
         </a>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuGroup>
-          <ContextMenuItem data-testid={`chat-fileref-open-${relative}`} onSelect={() => handleOpen()}>
-            Open file
-          </ContextMenuItem>
-        </ContextMenuGroup>
-        <ContextMenuSeparator />
-        <ContextMenuGroup>
-          <CopyMenuItem
-            testId={copyAbsoluteId}
-            label="Copy absolute path"
-            status={statusFor(copyAbsoluteId)}
-            onSelect={copyAbsolute}
-          />
-          <CopyMenuItem
-            testId={copyRelativeId}
-            label="Copy relative path"
-            status={statusFor(copyRelativeId)}
-            onSelect={copyRelative}
-          />
-        </ContextMenuGroup>
-      </ContextMenuContent>
+      <FileRefMenu relative={relative} absolute={absolute} onOpen={() => handleOpen()} copyFeedback={copyFeedback} />
     </ContextMenu>
   );
 }

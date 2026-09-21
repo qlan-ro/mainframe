@@ -12,6 +12,7 @@
  * message. See `suppressRadixTrigger` for how that fall-through is kept.
  */
 import { useState, type ReactNode } from 'react';
+import { FolderOpen } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -78,6 +79,7 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
       <ContextMenuContent>
         <ContextMenuGroup>
           <ContextMenuItem data-testid="tool-card-path-open" onSelect={handleOpen}>
+            <FolderOpen />
             Open file
           </ContextMenuItem>
         </ContextMenuGroup>
