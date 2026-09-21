@@ -231,3 +231,92 @@ describe('WebFetchCard — pending state', () => {
     expect(screen.queryByTestId('web-fetch-card-summary')).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Codex — verb/target derive from args, not toolName (todo #356)
+// ---------------------------------------------------------------------------
+
+describe('WebFetchCard — Codex fetch (openPage, no result summary)', () => {
+  it('renders "Fetch" and a clickable url with no summary element when the result text is empty', () => {
+    render(
+      <Wrap>
+        <WebFetchCard
+          {...baseProps}
+          toolName="WebFetch"
+          args={{ url: 'https://v2.tauri.app/develop/calling-rust/' }}
+          result={''}
+          isError={false}
+        />
+      </Wrap>,
+    );
+    fireEvent.click(screen.getByTestId('web-fetch-card-trigger'));
+    expect(screen.getByText('Fetch')).toBeInTheDocument();
+    expect(screen.getByTestId('web-fetch-card-url')).toHaveTextContent('https://v2.tauri.app/develop/calling-rust/');
+    expect(screen.queryByTestId('web-fetch-card-summary')).not.toBeInTheDocument();
+  });
+});
+
+describe('WebFetchCard — verb derives from args, not toolName', () => {
+  it('renders "Fetch" and the url row when a url arg is present, even under a WebSearch tool name', () => {
+    render(
+      <Wrap>
+        <WebFetchCard
+          {...baseProps}
+          toolName="WebSearch"
+          args={{ url: 'https://example.com/docs' }}
+          result={''}
+          isError={false}
+        />
+      </Wrap>,
+    );
+    expect(screen.getByText('Fetch')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('web-fetch-card-trigger'));
+    expect(screen.getByTestId('web-fetch-card-url')).toHaveTextContent('https://example.com/docs');
+  });
+});
+
+describe('WebFetchCard — Codex search (dynamic tool-call args shape)', () => {
+  it('renders "Search" and the quoted query from a query-only args object', () => {
+    render(
+      <Wrap>
+        <WebFetchCard {...baseProps} toolName="WebSearch" args={{ query: 'rust serde' }} result={''} isError={false} />
+      </Wrap>,
+    );
+    expect(screen.getByText('Search')).toBeInTheDocument();
+    expect(screen.getByText('"rust serde"')).toBeInTheDocument();
+  });
+});
+
+describe('WebFetchCard — degraded state (neither url nor query)', () => {
+  it('renders a header-only card with a disabled trigger and no body, for either tool name', () => {
+    render(
+      <Wrap>
+        <WebFetchCard {...baseProps} toolName="WebFetch" args={{}} result={''} isError={false} />
+      </Wrap>,
+    );
+    const trigger = screen.getByTestId('web-fetch-card-trigger');
+    expect(trigger).toBeDisabled();
+    expect(screen.getByTestId('web-fetch-card-no-target')).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.queryByTestId('web-fetch-card-url')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('web-fetch-card-summary')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the "Search" verb for a WebSearch tool name with no query', () => {
+    render(
+      <Wrap>
+        <WebFetchCard {...baseProps} toolName="WebSearch" args={{}} result={''} isError={false} />
+      </Wrap>,
+    );
+    expect(screen.getByText('Search')).toBeInTheDocument();
+  });
+
+  it('never renders raw JSON of the args', () => {
+    render(
+      <Wrap>
+        <WebFetchCard {...baseProps} toolName="web__browse" args={{ selector: '#go' }} result={''} isError={false} />
+      </Wrap>,
+    );
+    expect(screen.queryByText(/"selector"/)).not.toBeInTheDocument();
+  });
+});
