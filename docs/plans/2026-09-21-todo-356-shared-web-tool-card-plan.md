@@ -4,144 +4,160 @@
 
 A web search or web fetch performed by a Codex session must render in the same `WebFetchCard` that
 Claude's `WebFetch`/`WebSearch` render in — same globe, same verb, same clickable URL, same status
-and error treatment — instead of the generic JSON fallback. No new card component, no visual
-redesign. Two edits get there: the Codex adapter normalizes its web tool call to the canonical
-`WebFetch`/`WebSearch` name on **both** the live and history-reload paths, and the card derives its
-verb and target from the *arguments* rather than from a Claude-specific tool name, so it reads
-either family's argument shape and degrades to a header-only card when neither is present.
+and error treatment — instead of a mislabelled or unstyled card. No new card component, no visual
+redesign. Two edits get there: the Codex adapter reads the `action` its `webSearch` item already
+carries and normalizes each operation to the canonical `WebFetch` / `WebSearch` name on **both** the
+live and history-reload paths, and the card derives its verb and target from the *arguments* rather
+than from a Claude-specific tool name, degrading to a header-only card when neither is present.
 
 ## What the capture actually says (corrects the brief)
 
-The brief guessed the Codex spelling as `web__search` / `web__fetch`. The real captured spelling is
-**one** tool: namespace `web`, tool `run` (`web__run`), covering search *and* fetch, with the
-ChatGPT `web.run` argument shape — `search_query: [{q}]`, `open: [{ref_id, lineno}]`,
-`find: [{ref_id, pattern}]`, not `{url}` / `{query}`. Receipts in **Established facts**. The
-consequence: the adapter picks the canonical name from which command key is present, and the card
-must read `search_query[0].q` and `open[0].ref_id` in addition to Claude's `query` / `url`.
-Anything else in the brief that names `web__search`, `web__fetch` or a bare `fetch` describes a
-spelling nobody has captured — treat it as out of scope (the brief's own rule).
+The brief assumed Codex's web fetch arrives as a **dynamic tool call** (`web__fetch` / bare `fetch`)
+and renders as raw JSON. The evidence says otherwise on both counts:
+
+- The raw Responses-API spelling really is one tool — `function_call {name: "run", namespace: "web"}`
+  with `web.run`'s `{search_query:[{q}], open:[{ref_id}], find:[{ref_id,pattern}], …}` arguments.
+- But the **app-server item** for it is `webSearch`, not `dynamicToolCall`: codex's `WebSearchItem`
+  has 4 fields — `id, query, action, results` — and `WebSearchAction` is an internally-tagged enum
+  with `search {query, queries}`, `openPage {url}`, `findInPage {pattern}`, `other`.
+- Our `WebSearchItem` models only `{id, query}` (`thread_item_variants.rs:110`) and drops `action`
+  on the floor, so a Codex **fetch** today renders the Web card with the wrong verb ("Search") and
+  no URL — it is not the raw-JSON fallback the brief described.
+
+So the seam is `WebSearchItem` + its two renderers, **not** `dynamic_tool_call_name`. Receipts in
+**Established facts**. The item type is inferred from codex's own struct shape, not from a captured
+`item/completed` frame — Gate 0 below closes that gap before any code is written, and the
+alternative branch is spelled out so a surprise there is a redirect, not a replan.
 
 ## Files touched
 
 | File | Change |
 | --- | --- |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/dynamic_web_tool.rs` | **new**, small: `canonical_web_name(&DynamicToolCallItem) -> Option<&'static str>` (namespace `web` + tool `run`; `open`/`find`/`click` → `"WebFetch"`, else `search_query` → `"WebSearch"`) and `content_items_text(&DynamicToolCallItem) -> String` (concatenate `InputText` texts). |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/lib.rs` | declare the module (`pub(crate)`). |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/thread_item_render.rs` | `dynamic_tool_call_name` consults `canonical_web_name` first, falls through to today's `<ns>__<tool>` rule; `render_dynamic_tool_call` also emits a `tool_result` for a normalized web call (content = `content_items_text`, `is_error = success == Some(false)`, result id `{id}:result`, mirroring `web_search_render.rs`). Keep the file under the 300-line ceiling — it is at 194. |
-| `packages/core-rs/crates/mainframe-adapter-codex/src/history_convert.rs` | the `DynamicToolCall` reload arm emits the same tool-result message when `canonical_web_name` matches, so live and reload stay byte-identical. |
-| `packages/core-rs/crates/mainframe-adapter-codex/tests/event_mapper.rs`, `tests/live_vs_history_id_parity.rs` | new cases (see gates). Existing cases stay as they are — their fixture is `web`/`search`, which does **not** normalize under the confirmed rule. |
-| `packages/ui/src/features/chat/tools/cards/WebFetchCard.tsx` | target/verb derived from args; degraded header-only state. |
-| `packages/ui/src/features/chat/tools/cards/__tests__/WebFetchCard.test.tsx` | new cases appended; **no existing case may be edited** (acceptance criterion). |
-| `docs/research/adapters/codex/CONSUMED-SURFACE.md` | one row: the `web`/`run` dynamic tool call and its `web.run` argument keys are now consumed surface, with the breakage note (a renamed upstream command key silently degrades the card to header-only). |
+| `packages/core-rs/crates/mainframe-adapter-codex/src/thread_item_variants.rs` | `WebSearchItem` gains `action: Option<WebSearchAction>`; `query` becomes `#[serde(default)]` so an action-only item can never be dropped. New `WebSearchAction` enum mirroring codex's tags (`search`, `openPage`, `findInPage`, `other`) with an unknown-variant tolerance consistent with this crate's lenient style. Watch the 300-line ceiling — the file is near it; a new `web_search_action.rs` is fine if it crosses. |
+| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_render.rs` | live path: `openPage` → tool_use named `WebFetch` with input `{url}`; everything else (including a missing/`other` action) keeps today's `WebSearch` + `{query}`. The already-complete empty tool_result pair stays. |
+| `packages/core-rs/crates/mainframe-adapter-codex/src/web_search_history.rs` | reload path: identical mapping, identical ids (`{id}` / `{id}:result`). |
+| `packages/core-rs/crates/mainframe-adapter-codex/tests/{item_types,event_mapper,history,live_vs_history_id_parity}.rs` | new cases (see gates). |
+| `packages/ui/src/features/chat/tools/cards/WebFetchCard.tsx` | verb/target from args, not `toolName`; degraded header-only state. |
+| `packages/ui/src/features/chat/tools/cards/__tests__/WebFetchCard.test.tsx` | new cases appended; **no existing case edited** (acceptance criterion). |
+| `docs/research/adapters/codex/CONSUMED-SURFACE.md` | one row: `webSearch.action` is now consumed surface, with the breakage note (a renamed action tag silently reverts fetch to the Search face). |
 | `.changeset/*.md` | patch changeset. |
 
-`packages/ui/src/features/chat/tools/registry.ts` and `register-cards.ts` are **not** touched — the
-adapter puts a registry key on the wire.
+Not touched: `registry.ts` / `register-cards.ts` (the adapter puts an existing registry key on the
+wire), and `dynamic_tool_call_name` (see Out of scope).
 
 ## Card derivation rule (the whole UI change)
 
 ```
-url   = args.url (string)            ?? first http(s) args.open[].ref_id
-query = args.query (string)          ?? args.search_query[0].q
+url   = args.url   (string)
+query = args.query (string)
 url present   -> verb "Fetch",  URL row + summary body   (unchanged for Claude WebFetch)
 else query    -> verb "Search", quoted query, no URL row (unchanged for Claude WebSearch)
 else          -> degraded: globe + verb + muted "no target" (text-muted-foreground),
                  status dot, trigger disabled, no body, never raw JSON
 ```
 
-`open[].ref_id` is documented as "Reference id or URL" — only an `http`/`https` value is a clickable
-URL; an internal ref like `turn0search0` is not, and falls through to query, then to degraded. The
-degraded verb falls back to `toolName === 'WebSearch' ? 'Search' : 'Fetch'` (my call; the brief does
-not say). Existing `data-testid`s are unchanged; the degraded label gets one new id.
+Both families now put the URL under `url` and the query under `query`, so one rule covers them; the
+point of deriving from args rather than `toolName` is that the next vendor spelling needs no card
+change. The degraded verb falls back to `toolName === 'WebSearch' ? 'Search' : 'Fetch'` — my call,
+the brief does not say. Existing `data-testid`s unchanged; the degraded label gets one new id.
+
+## Out of scope (with the reason, so it is not re-litigated)
+
+- **`web__run` dynamic-tool-call normalization.** Unconfirmed as a path Mainframe ever receives —
+  the brief's own rule is "unconfirmed → out of scope". If Gate 0 shows `dynamicToolCall` instead,
+  see the branch note there.
+- **Parsing `webSearch.results`.** The brief excludes structured result parsing; the tool_result
+  content stays the empty string it is today, and the fetch card's body is the URL row.
+- **`findInPage` / `other` actions**, external-session rollout scanning (`rollout_reconstruct.rs`
+  reconstructs only `exec_command` and `mcp__*`, so a `web`/`run` call produces no item there at
+  all), MCP cards, mobile.
 
 ## Established facts
 
-- Codex 0.153.4 emits its web tool as `function_call` `{"name":"run","namespace":"web"}` with
-  arguments `{"search_query":[{"q":…}],"response_length":"long"}` — captured, not synthetic:
+- Codex 0.153.4's app-server `WebSearchItem` has **4** fields, `id / query / action / results`, and
+  `WebSearchAction` is a tagged enum `search {query, queries} | openPage {url} | findInPage {pattern}
+  | other`. Receipts: `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex` — the serde field
+  list `WebSearchItem id action results queries url findInPage pattern other` (strings line 446584),
+  `id query action results search queries url findInPage pattern other` (441956), the variant-count
+  strings `struct WebSearchItem with 4 elements`, `struct variant WebSearchAction::OpenPage with 1
+  element`, `::Search with 2 elements`, `::FindInPage with 2 elements`, and the snake_case mirror
+  `WebSearchAction queries open_page url find_in_page` (450341).
+- The raw Responses-API form of the same tool, captured (not synthetic):
   `~/.codex/sessions/2026/07/22/rollout-2026-07-22T14-20-25-019f898e-33a8-7b00-90ee-a67a362fd1e5.jsonl`
-  lines 588 and 895. These are the only two non-`mcp__` namespaced calls in the entire local rollout
-  corpus (`grep -rhoE '"namespace":"[^"]*"' ~/.codex/sessions | sort | uniq -c`: `collaboration` 286,
-  `mcp__*` 41, `clock` 13, `web` 2).
-- The `web.run` argument schema is `SearchCommands` with 11 fields —
-  `search_query, image_query, open, click, find, screenshot, finance, weather, sports, time,
-  response_length`; `OpenOperation` is `{ref_id, lineno}` with `ref_id` documented "Reference id or
-  URL to open.", `FindOperation` is `{ref_id, pattern}`, `SearchQuery` is `{q, recency, domains}`.
-  Receipt: `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex`, the
-  `codex_api::search::SearchCommands` region (strings lines 442040, 442044, 479809, 479819).
+  lines 588 and 895 — `{"type":"function_call","name":"run","namespace":"web","arguments":"{\"search_query\":[{\"q\":…}],\"response_length\":\"long\"}"}`.
+  These two lines are the **only** non-`mcp__` namespaced calls in the whole local corpus
+  (`grep -rhoE '"namespace":"[^"]*"' ~/.codex/sessions | sort | uniq -c` → `collaboration` 286,
+  `mcp__*` 41, `clock` 13, `web` 2). This proves the wire spelling, **not** the app-server item type.
+- The older hosted form shows the same action set on the wire:
+  `{"type":"web_search_call","action":{"type":"open_page","url":"https://v2.tauri.app/…"}}` and
+  `{"type":"search","query":…,"queries":[…]}` in the 2026-06-13 entries of that same rollout corpus.
+- `web.run`'s argument schema is `codex_api::search::SearchCommands` (11 fields: `search_query,
+  image_query, open, click, find, screenshot, finance, weather, sports, time, response_length`), with
+  `OpenOperation {ref_id, lineno}` — `ref_id` documented "Reference id or URL to open." Receipt:
+  strings lines 442040, 442044, 479809, 479819. Relevant only if Gate 0 takes the dynamic branch.
+- Today both web renderers hardcode the name: `web_search_render.rs:19` and
+  `web_search_history.rs:24` emit `tool_use_block(&w.id, "WebSearch", {query})` plus an empty
+  tool_result (`{id}:result`). They are already a matched live/reload pair — the precedent this
+  change follows.
+- Unknown JSON fields are ignored crate-wide (`item_types.rs:3-8`), and a whole item that fails to
+  deserialize is **dropped silently** on reload (`types.rs::deserialize_lenient_items`, lines 95-120).
+  That is why `query` must become `#[serde(default)]`: if codex ever omits it on an `openPage` item,
+  today's required `String` would make the fetch vanish rather than render.
 - `web__search` in `tests/event_mapper.rs:489` and `tests/live_vs_history_id_parity.rs:136` is a
   **synthetic** fixture — the file says so at `live_vs_history_id_parity.rs:131` ("no fixture in this
-  crate's captures contains one"). It is not evidence of a Codex spelling.
-- `dynamic_tool_call_name` / `dynamic_tool_call_input` at
-  `thread_item_render.rs:88` / `:95` are already `pub(crate)` and already shared with the reload path
-  (`history_convert.rs:17` imports both, used at `:163`). Normalizing inside them satisfies the
-  "both paths" acceptance criterion in one place.
-- A dynamic tool call emits a tool_use block and **no tool result** on either path today
-  (`thread_item_render.rs:105-112`; `history_convert.rs:162-171`, whose comment states the live path
-  "renders exactly this one tool_use block, no result"). Without adding one, a Codex web card can
-  never leave the in-flight state or show an error body — this is why the result emit is in scope.
-- `DynamicToolCallItem` carries `content_items: Option<Vec<DynamicToolCallContentItem>>` and
-  `success: Option<bool>` (`thread_item_variants.rs:228-241`); the content item is
-  `InputText { text } | InputImage { image_url }` (`:221-224`). That is the result payload.
-- The `webSearch` thread item is a *different*, older hosted-tool path: `WebSearchItem` is `{id,
-  query}` only (`thread_item_variants.rs:110`), rendered as an already-complete `WebSearch`
-  tool_use/tool_result pair by `web_search_render.rs:15` and `web_search_history.rs:16`. Older
-  rollouts show that hosted tool's raw form carrying `action: {"type":"open_page","url":…}` as well
-  as `{"type":"search","query":…}` (`~/.codex/sessions/.../rollout-…019f898e….jsonl`, the
-  `web_search_call` entries dated 2026-06-13). Our `WebSearchItem` has no `action` field, so an
-  `open_page` variant of *that* item cannot be routed today — untouched by this pass, see risks.
-- The external-session rollout reader reconstructs only `exec_command` and `mcp__*` function calls;
-  a `web`/`run` call is silently ignored there (`rollout_reconstruct.rs::handle_function_call`,
-  lines 77-105). Out of scope — that path renders no tool call at all, fallback or otherwise.
-- `resolveToolCard` needs no change: it is an exact-name lookup plus an `mcp__` prefix rule
-  (`packages/ui/src/features/chat/tools/registry.ts:24-30`), and both `WebFetch` and `WebSearch`
+  crate's captures contains one"). Not evidence of any Codex spelling; leave both tests untouched as
+  the regression case for the un-normalized dynamic path.
+- `resolveToolCard` needs no change: exact-name lookup plus an `mcp__` prefix rule
+  (`packages/ui/src/features/chat/tools/registry.ts:24-30`), and `WebFetch` + `WebSearch` both
   already map to `WebFetchCard` (`register-cards.ts:43-44`).
-- `docs/plans/` is gitignored (`.gitignore:53`) — the plan is committed with `git add -f`.
+- `docs/plans/` is gitignored (`.gitignore:53`) — this plan is committed with `git add -f`.
 
 ## Risks
 
-- **Codex may rename or re-shape `web.run`.** The mapping keys on `namespace == "web" && tool ==
-  "run"`; an upstream rename returns the fallback card, not a crash. The CONSUMED-SURFACE row records
-  this.
-- **A single `web.run` call can mix commands** (the binary's own example combines `search_query`,
-  `finance` and `find`). The precedence rule above picks one verb deterministically; a mixed call
-  shows the fetch face. Accepted.
-- **`content_items` is unverified against a live web call** — no local capture contains a
-  `dynamicToolCall` item with content items. The result emit must tolerate `None`/empty by emitting
-  nothing, so the worst case is today's behavior (no result), never a panic or an empty grey body.
-- **Only the `web`-normalized dynamic calls gain a tool result**, which is an asymmetry inside
-  `render_dynamic_tool_call`. Generalizing it to every dynamic tool call is a separate change with a
-  wider blast radius (every fallback card would start showing results) — deliberately not done here.
+- **The item type is inferred, not captured** (Gate 0 exists for exactly this).
+- **A renamed or added upstream action tag** falls back to the Search face rather than breaking —
+  recorded in CONSUMED-SURFACE.
+- **`openPage` may also carry a non-empty top-level `query`** (the item has both). The action wins;
+  state that in the code's one comment if it is not obvious from the match.
+- **A fetch's body is only the URL row**, since `results` stays unparsed — that is the brief's call,
+  and it matches Claude's `WebSearch`, whose result string is opaque too.
 
 ## Group 1 — shared Web card for Codex (the only implementation group)
 
-One agent, TDD inline: write the failing test and the fix in the same turn, Rust first then UI.
+One agent, TDD inline: write the failing test and the fix in the same turn, Rust first, then UI.
 
 Exit gates — each must be true and observable:
 
-1. The Codex adapter's live path turns a `dynamicToolCall` with `namespace: "web"`, `tool: "run"`,
-   `arguments: {"search_query":[{"q":…}]}` into a tool_use block named `WebSearch`, and the same item
-   with `{"open":[{"ref_id":"https://…"}]}` into one named `WebFetch`. Asserted in
-   `tests/event_mapper.rs`.
-2. The history-reload path produces the identical tool_use id **and** name for both of those items —
-   a new case in `tests/live_vs_history_id_parity.rs`, following
+0. **Confirm the item type before writing Rust.** Capture one real `item/completed` for a Codex web
+   fetch (the CLAUDE.md pointer for live protocol behavior is the codex protocol-debugger skill) and
+   record the frame in the PR. If it is `webSearch` with an `action`, proceed as planned. If it is
+   `dynamicToolCall {namespace:"web", tool:"run"}`, switch the Rust seam to `dynamic_tool_call_name`
+   (already `pub(crate)` and already shared by both paths — `thread_item_render.rs:88`,
+   `history_convert.rs:17`), map on the `web.run` command keys (`open[].ref_id` that parses as
+   http(s) → `WebFetch {url}`, `search_query[0].q` → `WebSearch {query}`), and note that that branch
+   additionally needs a tool_result emitted from `content_items` / `success`
+   (`thread_item_variants.rs:228-241`) because the dynamic path emits none today. Gates 5-8 are
+   identical either way.
+1. A `webSearch` item whose action is `openPage` produces a tool_use block named `WebFetch` with the
+   url as input, on the live path.
+2. A `webSearch` item with a `search` action, with no action at all, or with an action tag this
+   crate does not know, still produces exactly today's `WebSearch` + `{query}` pair — the existing
+   `web_search_renders_a_tool_use_and_tool_result_pair_named_web_search` case and the `history.rs`
+   WebSearch case pass unmodified.
+3. Live and history-reload emit the identical tool_use id **and** name for an `openPage` item — a new
+   case in `tests/live_vs_history_id_parity.rs` following
    `dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name`'s structure. This is the
-   acceptance criterion's "Rust test asserts live and reload emit the identical tool name".
-3. A normalized web call with `content_items` emits a matching tool_result (`{id}:result`) on both
-   paths, with `is_error` true when `success` is `false`; a call with no content items emits no
-   result, so the existing
-   `dynamic_tool_call_renders_a_tool_use_block_namespaced_by_the_tool_source` assertion that
-   `tool_results()` is empty still holds unmodified.
-4. A non-web dynamic tool call still gets `<namespace>__<tool>` — the two existing naming tests pass
-   untouched.
-5. `WebFetchCard` renders "Fetch" + a clickable URL for Codex `{"open":[{"ref_id":"https://…"}]}`
-   args, "Search" + the quoted query for `{"search_query":[{"q":…}]}` args, and the header-only
-   degraded card (trigger disabled, no body, no JSON) when neither resolves — new cases in the card's
-   test file.
-6. Clicking the URL row of a Codex-shaped call calls `useHost().shell.openExternal` with that URL,
-   through the same spy the existing tests use.
-7. **Every pre-existing case in `WebFetchCard.test.tsx` passes with zero edits to that file's
-   existing cases** — the acceptance criterion for "Claude rendering unchanged".
-8. The Codex CONSUMED-SURFACE doc has the `web`/`run` row.
-9. A patch changeset exists, and the repo's normal validation for both touched packages
-   (`mainframe-adapter-codex` tests + clippy/fmt, `packages/ui` unit tests + typecheck + lint) is
-   green — typecheck matters here because it covers test files that the build does not.
+   acceptance criterion's Rust parity test.
+4. A `webSearch` payload missing `query` deserializes instead of being dropped (`tests/item_types.rs`,
+   matching the crate's existing tolerance cases).
+5. `WebFetchCard` renders "Fetch" + a clickable URL for `{url}` args, "Search" + the quoted query for
+   `{query}` args, and the header-only degraded card (trigger disabled, no body, no JSON) when
+   neither is present — regardless of `toolName`.
+6. Clicking a URL row still calls `useHost().shell.openExternal` with that URL, via the spy the
+   existing tests already install.
+7. **Every pre-existing case in `WebFetchCard.test.tsx` passes with zero edits to it** — the
+   acceptance criterion for "Claude rendering unchanged".
+8. The Codex CONSUMED-SURFACE doc has the `webSearch.action` row, a patch changeset exists, and the
+   repo's normal validation for both touched packages is green (`mainframe-adapter-codex` tests plus
+   clippy/fmt; `packages/ui` unit tests, typecheck and lint — typecheck matters because it covers
+   test files the build does not).
