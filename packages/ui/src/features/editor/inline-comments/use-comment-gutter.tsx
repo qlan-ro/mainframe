@@ -13,7 +13,7 @@
  * then renders `submitBar` above the view and `portals` alongside it. This lets
  * both CmEditorWithComments and CmDiffEditorWithComments share one implementation.
  */
-import { useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
@@ -23,6 +23,7 @@ import { InlineCommentWidget } from './InlineCommentWidget';
 import { resolveCommentRange } from './resolve-comment-range';
 import { useReviewActions } from './use-review-actions';
 import { useCommentPortals } from './use-comment-portals';
+import { useCommentViewSync } from './use-comment-view-sync';
 import { SubmitReviewBar } from './SubmitReviewBar';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -66,6 +67,9 @@ export function useCommentGutter({
   model: injectedModel,
 }: UseCommentGutterOptions): UseCommentGutterResult {
   const viewRef = useRef<EditorView | null>(null);
+  // Mirrors viewRef in React state: an effect needs a render-triggering value
+  // to run once the view actually mounts, which a ref update alone can't do.
+  const [view, setView] = useState<EditorView | null>(null);
   // Always call our own model (never conditionally) so this hook's shape stays
   // stable across renders; injectedModel ?? ownModel picks which one is live.
   const ownModel = useFileNotes();
@@ -73,6 +77,7 @@ export function useCommentGutter({
   const { notes: comments, addNote: addComment, editNote: editComment, drafts: draftTexts, setDraft } = model;
 
   const { portalEntries, openPortalForWidget, closePortal } = useCommentPortals();
+  const { writeBackExtension } = useCommentViewSync({ view, model: injectedModel });
 
   const { handleSubmitReview, handleSendOne, removeComment } = useReviewActions({
     filePath,
@@ -138,8 +143,8 @@ export function useCommentGutter({
           }),
         ]
       : [];
-    return [...(extraExtensions ?? []), ...gutterExt];
-  }, [enableComments, extraExtensions]);
+    return [...(extraExtensions ?? []), ...gutterExt, writeBackExtension];
+  }, [enableComments, extraExtensions, writeBackExtension]);
 
   // ── Widget save / delete handlers ──────────────────────────────────────────
 
@@ -176,10 +181,11 @@ export function useCommentGutter({
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
 
-  const handleViewReady = useCallback((view: EditorView) => {
-    viewRef.current = view;
+  const handleViewReady = useCallback((readyView: EditorView) => {
+    viewRef.current = readyView;
+    setView(readyView);
     // Forward to the parent so an EditorContextMenu's viewRef resolves.
-    onViewReadyRef.current?.(view);
+    onViewReadyRef.current?.(readyView);
   }, []);
 
   const submitBar = showSubmitBar ? (
