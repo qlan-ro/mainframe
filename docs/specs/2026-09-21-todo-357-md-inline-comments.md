@@ -67,15 +67,23 @@ in the count. The header row is not annotatable from the table; Source is where 
 note on it belongs.
 
 The CSV tab gains a Preview/Source toggle where the other text viewers carry
-theirs. Source shows the raw file text with the line gutter. The file is read-only
-in both modes, and the filter control is hidden in Source, where it has nothing to
-filter.
+theirs, and opens on the table as it does today. Source shows the raw file text
+with the line gutter. The file is read-only in both modes. In Preview the toggle
+and the existing filter control share the header actions slot; the filter is
+hidden in Source, where it has nothing to filter.
 
 **SVG.** The existing "Code" mode becomes a Source view with the line gutter, so
 the markup can be annotated line by line, and its toggle label changes from "Code"
 to "Source" to match the other two viewers. The rendered Preview offers no control
 — an image has no lines to address — but notes and drafts survive a
 Preview → Source → Preview round-trip like every other mode toggle.
+
+**Editing markdown while notes are open.** Markdown Source is the one
+annotatable surface that is editable. Typing there moves a note's marker with the
+text it is anchored to, as the code editor's marker already does, and the note's
+recorded line range moves with it, so the same note points at the same text in
+Preview, in Source, and in the submitted message. The quoted text a note captured
+when it was created does not change.
 
 **Submitting.** One submit bar per file tab while the set holds at least one
 note, absent when it is empty, shown in every mode, reporting how many of the
@@ -94,8 +102,8 @@ the tab discards them, exactly as for code files today.
 ## Not Included
 
 - Persisting notes across tab close, app restart, or to the daemon — `deferred`
-- Re-anchoring existing notes when the markdown buffer is edited in Source; line
-  numbers stay as recorded, matching today's code-editor behavior — `deferred`
+- Re-capturing a note's quoted text when the buffer under it is edited; the
+  quote stays as captured even after its line range moves — `deferred`
 - Text-selection (sub-block) anchoring inside rendered prose, and sub-cell
   anchoring inside a CSV row — `deferred`
 - Making CSV or SVG editable; annotation stays a read gesture — `deferred`
@@ -123,8 +131,10 @@ the tab discards them, exactly as for code files today.
 - A note whose start line is past the end of the current buffer (the file was
   edited or reloaded shorter) renders no marker but stays in the set and in the
   count, and is still submitted.
-- Editing markdown in Source does not move existing notes; a note can end up
-  quoting text that no longer matches the line — same as the code editor today.
+- Editing markdown in Source moves a note's line range with the edited text, so
+  a note can end up quoting text that no longer matches its (now moved) lines.
+  Text typed over a note's whole range collapses it onto the line the edit left
+  behind; the note stays in the set and in the count.
 - CSV line numbering counts from the first line of the file as read: leading blank
   lines are counted but produce no row, and a trailing newline produces no extra
   row. Mid-file blank lines keep producing the single empty row they produce
@@ -148,9 +158,11 @@ the tab discards them, exactly as for code files today.
 2. A source view mounted after a note was created elsewhere shows a gutter marker
    on that note's lines, and adding or removing a note outside the source view
    adds or removes its marker there without remounting.
-3. While at least one note exists, exactly one element with the submit-bar testid
-   is present per file tab, in every mode of that tab, and its count covers notes
-   from all modes; with an empty set the testid has zero elements.
+3. While at least one note exists, exactly one `editor-submit-review` element
+   (with its `editor-submit-review-btn` action) is present per file tab, in every
+   mode of that tab, and its count covers notes from all modes; with an empty set
+   both testids have zero elements. Its label pluralises: one filled note of one
+   reads `1 of 1 agent note filled`.
 4. With notes created in two different modes, submitting produces exactly one
    message appended to the active session, whose body is the existing review
    format (`File: \`<path>\`` followed by `At line N:` / `At lines N-M:` blocks
@@ -184,52 +196,65 @@ the tab discards them, exactly as for code files today.
 13. A note created in Preview appears on its source lines in Source; a note
     created in Source over lines that a rendered block occupies shows that block's
     marker in Preview.
+14. Inserting two lines above an existing note in markdown Source moves that
+    note's marker, its Preview marker, and the line numbers in the submitted
+    message down by two; the note's quoted text is unchanged.
 
 *CSV*
 
-14. Hovering a table row reveals an add-note control; activating it opens the note
+15. Hovering a table row reveals an add-note control; activating it opens the note
     card for that row.
-15. The row-number column shows each row's source line number, and those numbers
+16. The row-number column shows each row's source line number, and those numbers
     are unchanged after sorting by any column and after applying a filter.
-16. For a file whose third row contains a quoted field with an embedded newline,
+17. For a file whose third row contains a quoted field with an embedded newline,
     the row-number column shows that row's first source line, the note created on
     it records the full multi-line range and quotes those raw source lines, and
     opening Source shows that note's marker on the same lines.
-17. The same holds for a file with CRLF line endings and for a file with lone-CR
+18. The same holds for a file with CRLF line endings and for a file with lone-CR
     line endings.
-18. For a file starting with two blank lines, the first data row's recorded line
+19. For a file starting with two blank lines, the first data row's recorded line
     number accounts for them.
-19. With a filter active that hides a noted row, the submit bar's count still
+20. With a filter active that hides a noted row, the submit bar's count still
     includes that note, and submitting includes it in the message.
-20. The CSV tab renders a Preview/Source segmented toggle in the viewer header
-    actions slot; Source renders the raw text in the comment-gutter editor,
-    neither mode accepts keystrokes into the document, and the filter control is
-    absent in Source.
+21. The CSV tab opens on the table, and renders a Preview/Source segmented
+    toggle in the viewer header actions slot alongside the existing
+    `viewer-csv-filter` control; Source renders the raw text in the
+    comment-gutter editor, neither mode accepts keystrokes into the document, and
+    `viewer-csv-filter` is absent in Source. The existing `viewer-csv`,
+    `viewer-csv-filter`, `viewer-csv-header-*`, `viewer-csv-empty` and `tbody tr`
+    e2e assertions pass without being re-pointed at a mode switch.
 
 *SVG*
 
-21. SVG Source renders the raw markup in the comment-gutter editor (not a
+22. SVG Source renders the raw markup in the comment-gutter editor (not a
     preformatted block), with the gutter, note card, and submit bar working as for
-    a code file, and the document is read-only.
-22. The SVG toggle segments read "Preview" and "Source", keeping the existing
+    a code file, and the document is read-only. The tab still opens on Preview,
+    the `viewer-svg-source` testid moves onto the gutter-editor root so the
+    existing visible/absent e2e assertions hold, and the markup stays
+    text-selectable via `.mf-editor-selectable`.
+23. The SVG toggle segments read "Preview" and "Source", keeping the existing
     `viewer-svg-preview-toggle` / `viewer-svg-source-toggle` testids.
-23. SVG Preview exposes no add-note control, and a note plus its draft survives
+24. SVG Preview exposes no add-note control, and a note plus its draft survives
     Preview → Source → Preview.
 
 *No regression and quality*
 
-24. A code file and the diff tab still add, edit, delete, send, and submit notes
+25. A code file and the diff tab still add, edit, delete, send, and submit notes
     as before; the existing code-editor and diff-editor comment tests pass with no
     assertion removed or weakened.
-25. New unit tests cover: markdown block position → line range (including a nested
+26. New unit tests cover: markdown block position → line range (including a nested
     list item and a fenced code block), CSV row → source line range (quoted
     multi-line field, CRLF, lone CR, leading blank lines), note-and-draft survival
-    across a mode toggle, merged submission ordering across two surfaces, and the
-    no-session submit leaving notes intact.
-26. Existing tests whose asserted text changed — the CSV row-number column, the
+    across a mode toggle, merged submission ordering across two surfaces, the
+    no-session submit leaving notes intact, and a note's range following an edit
+    made above it in markdown Source.
+27. Existing tests whose asserted text changed — the CSV row-number column, the
     SVG toggle label, and the submit-bar copy — are updated to the new expected
-    strings; no other existing test is loosened.
-27. Every touched file stays under 300 lines and every function under 50 lines;
+    strings; no other existing test is loosened. The existing `MarkdownPreview`
+    render and CSS-selection tests pass unchanged, so the per-block hover
+    wrappers must not break the prose child selectors or the
+    `.mf-editor-selectable` opt-in.
+28. Every touched file stays under 300 lines and every function under 50 lines;
     the gutter-orchestration hook, the editor tab, and the CSV viewer are near the
     ceiling and are decomposed rather than grown. A changeset is included.
 
@@ -284,9 +309,21 @@ the tab discards them, exactly as for code files today.
 - **Preview anchors at whole-block granularity using the renderer's source
   positions.** Arbitrary text-selection anchoring needs a source-offset mapping the
   renderer does not expose; Source covers the exact-range case. `reversible`
-- **Notes stay ephemeral and are not re-anchored across buffer edits.** Both match
-  the code and diff tabs; changing either is a decision for all surfaces at once.
-  `reversible`
+- **Notes stay ephemeral.** Matches the code and diff tabs; changing that is a
+  decision for all surfaces at once. `reversible`
+- **A note's recorded line range follows edits to the buffer under it; markdown
+  Source writes the mapped range back into the owned set.** The brief says line
+  numbers "stay as recorded", but the code disagrees in a way that only bites
+  once the model is lifted: `comment-gutter-state` already maps its anchors
+  through `tr.changes.mapPos`, while `CommentEntry.startLine` never moves, so the
+  code editor's marker already follows edits and its submitted payload already
+  does not. Preview and the view-less submit path read the owned set, so leaving
+  them unreconciled would put the Source marker and the Preview marker on
+  different blocks after one keystroke. Writing the mapped range back keeps every
+  surface on one truth and makes the payload accurate; the alternative — deriving
+  Source markers from the owned set and dropping CM mapping — is simpler but
+  regresses marker behavior the code editor has today. The captured quote stays
+  as captured. `reversible`
 - **The existing "agent notes" concept is what "inline comments" means here.** The
   codebase has exactly one annotation concept, labelled that way in its own submit
   bar; the todo reads as "this is missing on the viewers". `hard-to-reverse`
