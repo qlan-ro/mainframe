@@ -603,6 +603,98 @@ fn web_search_renders_a_tool_use_and_tool_result_pair_named_web_search() {
     );
 }
 
+/// Gate 1 (todo #356): an `openPage` action renders `WebFetch{url}`, with the
+/// paired tool_result content pinned exactly `""` — amended AC1's empty body
+/// is intentional, not an oversight (see the plan's "Established facts").
+#[test]
+fn web_search_open_page_action_renders_a_web_fetch_tool_use_with_an_empty_result() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "ws_1",
+            "type": "webSearch",
+            "query": "",
+            "action": { "type": "openPage", "url": "https://v2.tauri.app/develop/calling-rust/" },
+            "results": ["opaque", "unverified"],
+        }),
+    );
+    assert_eq!(
+        to_values(&rec.messages()[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "ws_1",
+            "name": "WebFetch",
+            "input": { "url": "https://v2.tauri.app/develop/calling-rust/" },
+        }])
+    );
+    let results = rec.tool_results();
+    assert_eq!(results.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&results[0]).unwrap(),
+        json!([{
+            "type": "tool_result",
+            "toolUseId": "ws_1",
+            "content": "",
+            "isError": false,
+        }])
+    );
+}
+
+/// Gate 2: a `search` action, no action at all, and an unrecognized action tag
+/// all still produce today's `WebSearch` + `{query}` pair, unmodified.
+#[test]
+fn web_search_search_action_still_renders_web_search() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "ws_2",
+            "type": "webSearch",
+            "query": "rust serde",
+            "action": { "type": "search", "query": "rust serde", "queries": ["rust serde"] },
+        }),
+    );
+    assert_eq!(
+        to_values(&rec.messages()[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "ws_2",
+            "name": "WebSearch",
+            "input": { "query": "rust serde" },
+        }])
+    );
+}
+
+#[test]
+fn web_search_unknown_action_tag_still_renders_web_search() {
+    let rec = Recorder::new();
+    let mut state = state();
+    item_completed(
+        &rec,
+        &mut state,
+        json!({
+            "id": "ws_3",
+            "type": "webSearch",
+            "query": "rust serde",
+            "action": { "type": "somethingUpstreamAddsLater" },
+        }),
+    );
+    assert_eq!(
+        to_values(&rec.messages()[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "ws_3",
+            "name": "WebSearch",
+            "input": { "query": "rust serde" },
+        }])
+    );
+}
+
 #[test]
 fn entered_review_mode_is_skipped_without_any_sink_call() {
     let rec = Recorder::new();

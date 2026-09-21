@@ -264,3 +264,76 @@ fn thread_read_turn_drops_an_unknown_typed_item_interleaved_with_known_ones() {
     assert!(matches!(&items[0], ThreadItem::AgentMessage(m) if m.text == "before"));
     assert!(matches!(&items[1], ThreadItem::Sleep(s) if s.duration_ms == 10));
 }
+
+// --- webSearch.action (todo #356) ---
+
+use mainframe_adapter_codex::item_types::WebSearchAction;
+
+#[test]
+fn web_search_open_page_action_round_trips() {
+    let item = parse(json!({
+        "id": "ws1",
+        "type": "webSearch",
+        "query": "",
+        "action": { "type": "openPage", "url": "https://v2.tauri.app/develop/calling-rust/" },
+    }));
+    match item {
+        ThreadItem::WebSearch(w) => match w.action {
+            Some(WebSearchAction::OpenPage { url }) => {
+                assert_eq!(url, "https://v2.tauri.app/develop/calling-rust/");
+            }
+            other => panic!("expected OpenPage, got {other:?}"),
+        },
+        other => panic!("expected WebSearch, got {other:?}"),
+    }
+}
+
+/// Gate 4: an action-only payload must deserialize (`query` defaults) rather
+/// than being dropped by `deserialize_lenient_items` — see thread_item_variants.rs.
+#[test]
+fn web_search_missing_query_deserializes_instead_of_being_dropped() {
+    let item = parse(json!({
+        "id": "ws2",
+        "type": "webSearch",
+        "action": { "type": "openPage", "url": "https://example.com" },
+    }));
+    match item {
+        ThreadItem::WebSearch(w) => assert_eq!(w.query, ""),
+        other => panic!("expected WebSearch, got {other:?}"),
+    }
+}
+
+#[test]
+fn web_search_missing_action_defaults_to_none() {
+    let item = parse(json!({ "id": "ws3", "type": "webSearch", "query": "rust serde" }));
+    match item {
+        ThreadItem::WebSearch(w) => assert_eq!(w.action, None),
+        other => panic!("expected WebSearch, got {other:?}"),
+    }
+}
+
+#[test]
+fn web_search_unknown_action_tag_falls_back_to_the_other_variant() {
+    let item = parse(json!({
+        "id": "ws4",
+        "type": "webSearch",
+        "query": "q",
+        "action": { "type": "somethingUpstreamAddsLater", "whatever": true },
+    }));
+    match item {
+        ThreadItem::WebSearch(w) => assert_eq!(w.action, Some(WebSearchAction::Other)),
+        other => panic!("expected WebSearch, got {other:?}"),
+    }
+}
+
+#[test]
+fn web_search_ignores_an_unread_results_field() {
+    let item = parse(json!({
+        "id": "ws5",
+        "type": "webSearch",
+        "query": "q",
+        "action": { "type": "search", "query": "q", "queries": ["q", "q2"] },
+        "results": ["opaque", "unverified"],
+    }));
+    assert!(matches!(item, ThreadItem::WebSearch(_)));
+}

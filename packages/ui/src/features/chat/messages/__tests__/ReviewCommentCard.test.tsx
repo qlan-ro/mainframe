@@ -50,7 +50,7 @@ describe('ReviewCommentCard — single comment', () => {
     render(<ReviewCommentCard review={singleReview} />);
     // The filename span shows the basename; the full path is the Hint tooltip label.
     await user.hover(screen.getByText('globals.css'));
-    const tooltip = screen.getByRole('tooltip');
+    const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('/Users/x/app/globals.css');
   });
 

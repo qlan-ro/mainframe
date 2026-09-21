@@ -8,6 +8,7 @@
 //! sites keep compiling unchanged.
 
 pub use crate::thread_item_variants::*;
+pub use crate::web_search_action::{WebSearchAction, WebSearchItem};
 
 /// `ThreadItem` — the tagged union of every item type Codex streams. Statuses stay
 /// `String` (not enums) to mirror the TS string-literal comparisons and tolerate
