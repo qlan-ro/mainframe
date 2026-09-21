@@ -27,7 +27,7 @@ import { useSettingsStore } from '@/store/settings';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
-import { soleProjectId, useSessionFilters } from '@/store/session-filters';
+import { useSessionFilters } from '@/store/session-filters';
 import { useUnreadStore } from '@/store/unread-store';
 // The auto-updater pill (renders null unless an update exists).
 import { UpdatePill } from '@/layout/UpdatePill';
@@ -144,7 +144,7 @@ export function SessionSidebar({ className }: { className?: string }) {
           </div>
           <HeaderActions />
         </div>
-        <SidebarActions filterProjectId={soleProjectId(filterProjectIds)} />
+        <SidebarActions />
         <ProjectScopeSelector
           projects={sortedProjects}
           attention={attention}

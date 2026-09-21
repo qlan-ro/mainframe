@@ -28,7 +28,7 @@ import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
-import { useNewChatHotkeyHandler } from '../features/sessions/new-thread/use-new-chat-hotkey-handler';
+import { useStartNewSession } from '../features/sessions/new-thread/use-start-new-session';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
@@ -63,10 +63,9 @@ function RuntimeBody({ port }: { port: number }) {
   }, [aui]);
 
   // ⌘N, ⌘K, ⌘⇧R, ⌘,, ⌘B and ⌘/ — the chords whose owner is the always-mounted
-  // shell. ⌘N resets the stale draft and switches to the new thread; with a
-  // project pill active useNewThreadAutoConfig seeds that project, without one
-  // the welcome screen's own picker resolves it.
-  useAppShortcutActions({ onNewSession: useNewChatHotkeyHandler(aui) });
+  // shell. ⌘N resolves the same target as every other "+" entry point (pill →
+  // active session's project → none) and opens the draft there.
+  useAppShortcutActions({ onNewSession: useStartNewSession() });
 
   // First-run coachmark tour — auto-opens only on an empty workspace.
   const showTour = useFirstRunTour();
