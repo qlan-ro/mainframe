@@ -54,15 +54,15 @@ that once submitted it is indistinguishable from a note made over the same lines
 in Source. A block the renderer cannot place in the source offers no control. A
 note created in Source shows its marker in Preview on every block whose lines
 overlap the note's range; a note that overlaps no block (a blank line between
-paragraphs, front matter) shows no marker in Preview but is still listed in the
+paragraphs) shows no marker in Preview but is still listed in the
 count and still submitted.
 
 **CSV.** The table annotates whole rows. The row-number column shows the row's
 line number in the original file, not its position in the current view, so it does
-not change when the table is sorted or filtered — and it is the same number the
-note records and the same line the row occupies in Source. A row whose quoted
-field contains newlines spans the several lines it really spans, and the note
-covers all of them. Notes on rows the active filter hides stay in the set and stay
+not change when the table is sorted or filtered — and it is the same line the row
+occupies in Source. A row whose quoted field contains newlines spans the several
+lines it really spans: the column shows the row's first line, and the note covers
+and quotes the whole range. Notes on rows the active filter hides stay in the set and stay
 in the count. The header row is not annotatable from the table; Source is where a
 note on it belongs.
 
@@ -77,8 +77,9 @@ to "Source" to match the other two viewers. The rendered Preview offers no contr
 — an image has no lines to address — but notes and drafts survive a
 Preview → Source → Preview round-trip like every other mode toggle.
 
-**Submitting.** One submit bar per file tab, shown in every mode, reporting how
-many of the tab's notes have text and offering a single submit action for all of
+**Submitting.** One submit bar per file tab while the set holds at least one
+note, absent when it is empty, shown in every mode, reporting how many of the
+tab's notes have text and offering a single submit action for all of
 them. Submitting sends one review message to the active session covering every
 note that has text, ordered by source line regardless of which mode or surface
 created it, in the existing review format, and then empties the set everywhere.
@@ -116,6 +117,9 @@ the tab discards them, exactly as for code files today.
   control, on the paragraph.
 - A Source note whose range spans several blocks marks all of them in Preview;
   clicking any of those markers opens that one note's editor.
+- When more than one note overlaps the same rendered block, the block shows one
+  marker and clicking it opens a card for each overlapping note, stacked beneath
+  the block in ascending start-line order.
 - A note whose start line is past the end of the current buffer (the file was
   edited or reloaded shorter) renders no marker but stays in the set and in the
   count, and is still submitted.
@@ -144,13 +148,14 @@ the tab discards them, exactly as for code files today.
 2. A source view mounted after a note was created elsewhere shows a gutter marker
    on that note's lines, and adding or removing a note outside the source view
    adds or removes its marker there without remounting.
-3. Exactly one element with the submit-bar testid is present per file tab, in
-   every mode of that tab, and its count covers notes from all modes.
+3. While at least one note exists, exactly one element with the submit-bar testid
+   is present per file tab, in every mode of that tab, and its count covers notes
+   from all modes; with an empty set the testid has zero elements.
 4. With notes created in two different modes, submitting produces exactly one
    message appended to the active session, whose body is the existing review
    format (`File: \`<path>\`` followed by `At line N:` / `At lines N-M:` blocks
    separated by `---`), with the blocks in ascending start-line order; after it
-   the note set is empty in both modes.
+   the note set is empty in both modes and the submit bar is absent.
 5. Sending one note from its card appends a message containing only that note and
    removes that note's marker and card from every surface; other notes and drafts
    are untouched.
@@ -187,9 +192,9 @@ the tab discards them, exactly as for code files today.
 15. The row-number column shows each row's source line number, and those numbers
     are unchanged after sorting by any column and after applying a filter.
 16. For a file whose third row contains a quoted field with an embedded newline,
-    the note created on that row records the full multi-line range and quotes
-    those raw source lines; opening Source shows that note's marker on the same
-    lines.
+    the row-number column shows that row's first source line, the note created on
+    it records the full multi-line range and quotes those raw source lines, and
+    opening Source shows that note's marker on the same lines.
 17. The same holds for a file with CRLF line endings and for a file with lone-CR
     line endings.
 18. For a file starting with two blank lines, the first data row's recorded line
