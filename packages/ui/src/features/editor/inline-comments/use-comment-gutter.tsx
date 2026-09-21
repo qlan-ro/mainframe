@@ -13,12 +13,12 @@
  * then renders `submitBar` above the view and `portals` alongside it. This lets
  * both CmEditorWithComments and CmDiffEditorWithComments share one implementation.
  */
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { addCommentEffect, buildCommentGutter, commentField } from './comment-gutter';
-import { useInlineComments } from './use-inline-comments';
+import { useFileNotes } from './use-file-notes';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { resolveCommentRange } from './resolve-comment-range';
 import { useReviewActions } from './use-review-actions';
@@ -58,22 +58,16 @@ export function useCommentGutter({
   filePath,
 }: UseCommentGutterOptions): UseCommentGutterResult {
   const viewRef = useRef<EditorView | null>(null);
-  const { comments, addComment, editComment, deleteComment } = useInlineComments();
+  const model = useFileNotes();
+  const { notes: comments, addNote: addComment, editNote: editComment, drafts: draftTexts, setDraft } = model;
 
-  const { portalEntries, portalsRef, setPortalEntries, openPortalForWidget, closePortal } = useCommentPortals();
-
-  // Per-portal draft text state.
-  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
+  const { portalEntries, openPortalForWidget, closePortal } = useCommentPortals();
 
   const { handleSubmitReview, handleSendOne, removeComment } = useReviewActions({
     filePath,
-    comments,
-    draftTexts,
-    deleteComment,
-    setPortals: setPortalEntries,
-    portalsRef,
-    setDraftTexts,
+    model,
     viewRef,
+    closePortal,
   });
 
   // ── Gutter callbacks ───────────────────────────────────────────────────────
@@ -146,9 +140,12 @@ export function useCommentGutter({
     [editComment, closePortal],
   );
 
-  const handleTextChange = useCallback((commentId: string, text: string) => {
-    setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
-  }, []);
+  const handleTextChange = useCallback(
+    (commentId: string, text: string) => {
+      setDraft(commentId, text);
+    },
+    [setDraft],
+  );
 
   // Count of comments that have any text (draft or saved).
   const filledCount = comments.filter((c) => {

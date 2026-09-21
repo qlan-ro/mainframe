@@ -1,101 +1,110 @@
 /**
- * useReviewActions — submit-review + per-comment-send callbacks for CmEditorWithComments.
+ * useReviewActions — submit-review + per-comment-send callbacks.
  *
- * Extracted to keep CmEditorWithComments under the 300-line limit.
- * Owns: buildItem, removeComment, handleSubmitReview, handleSendOne.
+ * Model-shaped so both useCommentGutter (a CM view + portals to tear down)
+ * and the lifted useFileTabNotes hosts (a table row or a rendered block —
+ * no view, no portal) can share one implementation.
  */
 import { useCallback } from 'react';
 import type { EditorView } from '@codemirror/view';
-import type { CommentEntry } from './use-inline-comments';
+import type { FileNote } from './use-file-notes';
 import { deleteCommentEffect } from './comment-gutter';
 import { useSendReview } from './use-send-review';
 import type { LineCommentInput } from '@/lib/editor/format-line-comment';
 
+interface ReviewActionsModel {
+  notes: FileNote[];
+  drafts: Record<string, string>;
+  deleteNote: (id: string) => void;
+}
+
 interface UseReviewActionsParams {
   filePath: string | undefined;
-  comments: CommentEntry[];
-  draftTexts: Record<string, string>;
-  deleteComment: (id: string) => void;
-  setPortals: React.Dispatch<React.SetStateAction<{ commentId: string; hostElement: HTMLDivElement }[]>>;
-  portalsRef: React.RefObject<{ commentId: string; hostElement: HTMLDivElement }[]>;
-  setDraftTexts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  viewRef: React.RefObject<EditorView | null>;
+  model: ReviewActionsModel;
+  /** CM view to dispatch a delete effect on; absent for row/block hosts with no view. */
+  viewRef?: React.RefObject<EditorView | null>;
+  /** Closes an open widget portal for the given note id; absent for row/block hosts. */
+  closePortal?: (id: string) => void;
 }
 
 export interface ReviewActions {
-  handleSubmitReview: () => void;
-  handleSendOne: (commentId: string) => void;
-  removeComment: (commentId: string) => void;
+  handleSubmitReview: () => Promise<void>;
+  handleSendOne: (noteId: string) => Promise<void>;
+  removeComment: (noteId: string) => void;
 }
 
-export function useReviewActions({
-  filePath,
-  comments,
-  draftTexts,
-  deleteComment,
-  setPortals,
-  portalsRef,
-  setDraftTexts,
-  viewRef,
-}: UseReviewActionsParams): ReviewActions {
+export function useReviewActions({ filePath, model, viewRef, closePortal }: UseReviewActionsParams): ReviewActions {
   const sendReview = useSendReview();
 
   const buildItem = useCallback(
-    (c: CommentEntry): LineCommentInput | null => {
-      const draft = draftTexts[c.id];
-      const comment = draft !== undefined ? draft : c.text;
+    (note: FileNote): LineCommentInput | null => {
+      const draft = model.drafts[note.id];
+      const comment = draft !== undefined ? draft : note.text;
       if (!comment.trim()) return null;
-      return { startLine: c.startLine, endLine: c.endLine, lineContent: c.lineContent, comment };
+      return { startLine: note.startLine, endLine: note.endLine, lineContent: note.lineContent, comment };
     },
-    [draftTexts],
+    [model.drafts],
   );
 
   const removeComment = useCallback(
-    (commentId: string) => {
-      const view = viewRef.current;
-      deleteComment(commentId);
+    (noteId: string) => {
+      const view = viewRef?.current;
+      model.deleteNote(noteId);
       if (view) {
-        view.dispatch({ effects: [deleteCommentEffect.of(commentId)] });
+        view.dispatch({ effects: [deleteCommentEffect.of(noteId)] });
       }
-      portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
-      setPortals((prev) => prev.filter((p) => p.commentId !== commentId));
+      closePortal?.(noteId);
     },
-    [deleteComment, viewRef, portalsRef, setPortals],
+    [model, viewRef, closePortal],
   );
 
-  const handleSubmitReview = useCallback(() => {
+  const handleSubmitReview = useCallback(async () => {
     if (!filePath) {
       console.warn('[editor] no file path, skipping review send');
       return;
     }
-    const items = comments.map(buildItem).filter((x): x is LineCommentInput => x !== null);
+    const items = model.notes
+      .map(buildItem)
+      .filter((x): x is LineCommentInput => x !== null)
+      .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
     if (items.length === 0) return;
-    sendReview(filePath, items).catch((err) => console.warn('[editor] review send failed', err));
-    for (const c of comments) {
-      removeComment(c.id);
+
+    let outcome;
+    try {
+      outcome = await sendReview(filePath, items);
+    } catch (err) {
+      console.warn('[editor] review send failed', err);
     }
-    setDraftTexts({});
-  }, [filePath, comments, buildItem, sendReview, removeComment, setDraftTexts]);
+    // A skipped send (no active session) must leave every note and draft in place.
+    if (outcome === 'no-session') return;
+
+    for (const note of model.notes) {
+      removeComment(note.id);
+    }
+  }, [filePath, model.notes, buildItem, sendReview, removeComment]);
 
   const handleSendOne = useCallback(
-    (commentId: string) => {
+    async (noteId: string) => {
       if (!filePath) {
         console.warn('[editor] no file path, skipping review send');
         return;
       }
-      const c = comments.find((x) => x.id === commentId);
-      if (!c) return;
-      const item = buildItem(c);
+      const note = model.notes.find((n) => n.id === noteId);
+      if (!note) return;
+      const item = buildItem(note);
       if (!item) return;
-      sendReview(filePath, [item]).catch((err) => console.warn('[editor] review send failed', err));
-      removeComment(commentId);
-      setDraftTexts((prev) => {
-        const next = { ...prev };
-        delete next[commentId];
-        return next;
-      });
+
+      let outcome;
+      try {
+        outcome = await sendReview(filePath, [item]);
+      } catch (err) {
+        console.warn('[editor] review send failed', err);
+      }
+      if (outcome === 'no-session') return;
+
+      removeComment(noteId);
     },
-    [filePath, comments, buildItem, sendReview, removeComment, setDraftTexts],
+    [filePath, model.notes, buildItem, sendReview, removeComment],
   );
 
   return { handleSubmitReview, handleSendOne, removeComment };
