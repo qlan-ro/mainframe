@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { addCommentEffect, buildCommentGutter, commentField } from './comment-gutter';
-import { useFileNotes } from './use-file-notes';
+import { useFileNotes, type UseFileNotesResult } from './use-file-notes';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { resolveCommentRange } from './resolve-comment-range';
 import { useReviewActions } from './use-review-actions';
@@ -36,6 +36,13 @@ export interface UseCommentGutterOptions {
   onViewReady?: (view: EditorView) => void;
   /** File path for the review send; when absent, submit is a no-op with a warning. */
   filePath?: string;
+  /**
+   * A note set owned above this view (markdown/CSV/SVG lifted hosts). When
+   * provided, this hook seeds/reconciles the CM gutter from it instead of
+   * creating its own, and renders no submit bar — the lifted host renders its
+   * own NotesSubmitBar once for the whole file tab.
+   */
+  model?: UseFileNotesResult;
 }
 
 export interface UseCommentGutterResult {
@@ -56,9 +63,13 @@ export function useCommentGutter({
   extraExtensions,
   onViewReady,
   filePath,
+  model: injectedModel,
 }: UseCommentGutterOptions): UseCommentGutterResult {
   const viewRef = useRef<EditorView | null>(null);
-  const model = useFileNotes();
+  // Always call our own model (never conditionally) so this hook's shape stays
+  // stable across renders; injectedModel ?? ownModel picks which one is live.
+  const ownModel = useFileNotes();
+  const model = injectedModel ?? ownModel;
   const { notes: comments, addNote: addComment, editNote: editComment, drafts: draftTexts, setDraft } = model;
 
   const { portalEntries, openPortalForWidget, closePortal } = useCommentPortals();
@@ -154,7 +165,9 @@ export function useCommentGutter({
     return text.trim().length > 0;
   }).length;
 
-  const showSubmitBar = enableComments && comments.length > 0;
+  // A lifted host owns its own NotesSubmitBar for the whole file tab; this
+  // hook's bar is only for the code/diff editor's own (uninjected) model.
+  const showSubmitBar = !injectedModel && enableComments && comments.length > 0;
 
   // ── View ready callback ────────────────────────────────────────────────────
 

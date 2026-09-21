@@ -15,6 +15,7 @@ import type { Extension } from '@codemirror/state';
 import type { CmEditorProps } from '../CmEditor';
 import { CmEditor } from '../CmEditor';
 import { useCommentGutter } from './use-comment-gutter';
+import type { UseFileNotesResult } from './use-file-notes';
 
 type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onViewReady'> & {
   enableComments?: boolean;
@@ -27,6 +28,8 @@ type CmEditorWithCommentsProps = Omit<CmEditorProps, 'extraExtensions' | 'onView
    * Required for review send; if absent, submit is a no-op with a console warning.
    */
   filePath?: string;
+  /** A note set owned above this editor (markdown/CSV/SVG Source mode); see useCommentGutter. */
+  model?: UseFileNotesResult;
 };
 
 export function CmEditorWithComments({
@@ -34,6 +37,7 @@ export function CmEditorWithComments({
   extraExtensions,
   onViewReady,
   filePath,
+  model,
   ...editorProps
 }: CmEditorWithCommentsProps) {
   const { commentExtensions, handleViewReady, submitBar, portals } = useCommentGutter({
@@ -41,6 +45,7 @@ export function CmEditorWithComments({
     extraExtensions,
     onViewReady,
     filePath,
+    model,
   });
 
   return (
