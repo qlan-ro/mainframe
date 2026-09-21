@@ -230,12 +230,39 @@ site (the new `model` prop is optional, so the code and diff paths pass nothing)
   `MAX_INLINE_LINES` rule (fact 15). The constant is exported from
   `resolve-comment-range.ts` by group 2, which is why groups 3 and 4 depend on
   group 2 as well as on group 1 — nobody redefines the cap.
-- **Nested blocks with an identical range render one control.** A loose list item
-  and its only paragraph share a source position, so a wrapper whose computed
-  range equals a direct child block's range renders no control of its own. Without
-  this, two elements carry `md-note-add-<line>` and both `getByTestId` and
-  Playwright strict mode throw on the duplicate. The innermost-block hover CSS rule
-  handles the remaining, genuinely different-range nesting.
+- **Nested blocks: testids key on the full range, identical ranges collapse.**
+  Markdown add controls and markers are `md-note-add-<startLine>-<endLine>` /
+  `md-note-marker-<startLine>-<endLine>`, **not** the start line alone. A start
+  line is not unique: running the real pipeline this repo drives
+  (`remark-parse` → `remark-gfm` → `remark-rehype`, `MarkdownPreview.tsx:115`)
+  over the annotated set gives `> a\n>\n> b` → `blockquote 1-3` + `p 1-1`,
+  `- one\n\n  second para\n\n- two` → `li 1-3` + `p 1-1`, and `> - a\n> - b` →
+  `blockquote 1-2` + `li 1-1`. Keying on the start line alone puts two elements
+  under one testid, and both `getByTestId` and Playwright strict mode throw.
+  Suppressing the outer block instead is **not** the fix: a blockquote always
+  starts on the line of its first inner block, so it would delete every
+  blockquote and every loose list item as an annotatable region, against the
+  spec's own list in AC 10 and its "records the block's first and last source
+  line" in AC 11.
+  On top of range keying, a block renders nothing of its own — no control, no
+  marker, no cards; it is a pass-through wrapper — when **any annotated
+  descendant, at any depth, has the identical range**. Descendant, not direct
+  child: `> - a` is `blockquote 1-1` → `ul` → `li 1-1` and `- - a` is
+  `li 1-1` → `ul` → `li 1-1`, so the identical block sits behind an unannotated
+  container in both. The collapse is what keeps `> a` (`blockquote 1-1` +
+  `p 1-1`), `> > a` (two blockquotes + `p`, all `1-1`) and a loose item's last
+  paragraph (`li 5-5` + `p 5-5`) down to one control, always the innermost.
+  `(startLine, endLine)` is then unique among rendered controls: unrelated blocks
+  occupy disjoint line spans and so differ in start, and an ancestor sharing a
+  descendant's exact range is suppressed. The innermost-block hover CSS rule
+  decides which of the surviving, genuinely different-range controls is *visible*
+  (spec: "only the innermost hovered region offers the control"); it is styling,
+  never the uniqueness mechanism. The predicate is a pure helper in group 4's
+  `markdown-block-range.ts`, red-tested in task 2 — the wrapper does not invent
+  its own tree walk. Spec AC 7 asks for testids keyed by source line and never by
+  index; the two-line form meets that rule and refines its `md-note-add-<line>`
+  example for markdown only. CSV rows cannot nest, so `csv-note-add-<startLine>`
+  is unchanged.
 
 ## Task groups
 
@@ -261,6 +288,10 @@ observed failing before any of them exists.
    lines; a nested list-item paragraph maps to the paragraph's own range; a
    fenced block's range includes both delimiter lines; a node with no `position`
    maps to `null`; a range longer than `MAX_INLINE_LINES` yields an empty quote.
+   Also cover the identical-range predicate of the *Nested blocks* decision:
+   `> a` suppresses the blockquote, `> - a` suppresses it through the
+   unannotated `ul`, `> a\n>\n> b` suppresses nothing, and `> > a` leaves only
+   the innermost paragraph.
    Build the input nodes by rendering `<Markdown>` from react-markdown with a
    spy component map that captures each `node`, so the positions are real rather
    than hand-written. Do not import `remark-parse` / `remark-rehype` directly —
@@ -352,7 +383,9 @@ Depends on groups 1 and 2 (for the exported `MAX_INLINE_LINES`). Touches only
 
 15. The pure hast-position → `{ startLine, endLine, lineContent }` mapper, over
     the markdown source string, returning `null` when the node has no `position`,
-    and honouring the shared line cap.
+    and honouring the shared line cap. Plus the identical-range predicate: given a
+    hast node, does any annotated descendant (walking `children` through
+    unannotated containers such as `ul` / `ol`) carry the same start and end line?
     *Verify:* group 1's mapper tests go green.
 
 ### Group 5 — `md-annotate-ui` (ui)
@@ -370,7 +403,11 @@ Depends on groups 2 and 4.
     (`MessageSquarePlus`) or the persistent `Sparkles` marker when a note
     overlaps its range, and mounts `InlineCommentWidget` beneath the block for
     every overlapping note in ascending start-line order. Testids
-    `md-note-add-<startLine>` and `md-note-marker-<startLine>`.
+    `md-note-add-<startLine>-<endLine>` and
+    `md-note-marker-<startLine>-<endLine>`, per the *Nested blocks* decision; a
+    block the identical-range collapse suppresses renders none of the three.
+    *Verify:* in a document containing `> a`, `> a\n>\n> b` and a loose list
+    item, every `md-note-*` testid in the tree is unique.
     *Verify:* clicking the control for a known block opens a card whose quoted
     text is that block's markdown source.
 18. `MarkdownPreview.tsx`: wrap the block elements listed under *Annotated
