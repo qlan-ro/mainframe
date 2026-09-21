@@ -173,3 +173,46 @@ fn dynamic_tool_call_reload_matches_the_live_tool_use_id_and_name() {
     assert_eq!(live_value["id"], json!("dyn_1"));
     assert_eq!(live_value["name"], json!("web__search"));
 }
+
+/// Todo #356 gate 3: an `openPage` `webSearch` item must produce the identical
+/// tool_use id, name, and empty tool_result content on both paths.
+#[test]
+fn web_search_open_page_reload_matches_the_live_tool_use_id_name_and_empty_result() {
+    let item = json!({
+        "id": "ws_1",
+        "type": "webSearch",
+        "query": "",
+        "action": { "type": "openPage", "url": "https://v2.tauri.app/develop/calling-rust/" },
+    });
+
+    let rec = Recorder::new();
+    let mut live_state = CodexSessionState {
+        thread_id: Some("t1".to_string()),
+        current_turn_id: Some("turn_1".to_string()),
+        ..CodexSessionState::default()
+    };
+    handle_notification(
+        "item/completed",
+        &json!({ "threadId": "t1", "turnId": "turn_1", "item": item.clone() }),
+        &rec.sink(),
+        &mut live_state,
+    );
+    let live_tool_use = serde_json::to_value(&rec.messages()[0][0]).unwrap();
+    let live_result = serde_json::to_value(&rec.tool_results()[0][0]).unwrap();
+
+    let thread_item: ThreadItem = serde_json::from_value(item).unwrap();
+    let reload_messages = convert_thread_items(
+        std::slice::from_ref(&thread_item),
+        "chat1",
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+    let reload_tool_use = serde_json::to_value(&reload_messages[0].content[0]).unwrap();
+    let reload_result = serde_json::to_value(&reload_messages[1].content[0]).unwrap();
+
+    assert_eq!(live_tool_use["id"], reload_tool_use["id"]);
+    assert_eq!(live_tool_use["name"], reload_tool_use["name"]);
+    assert_eq!(live_tool_use["name"], json!("WebFetch"));
+    assert_eq!(live_result["content"], json!(""));
+    assert_eq!(live_result["content"], reload_result["content"]);
+}
