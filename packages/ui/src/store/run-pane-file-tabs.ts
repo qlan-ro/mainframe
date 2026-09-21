@@ -49,6 +49,16 @@ export function activeFileTab(run: RunState | null): RunTab | null {
   return null;
 }
 
+/**
+ * True when `path` is open anywhere as a permanent file tab. Ignores
+ * `scopeKey`, matching the tree's existing selected-row path comparison
+ * (`activeFileTab(run)?.path`) rather than introducing a second identity rule.
+ */
+export function hasPermanentFileTab(run: RunState | null, path: string): boolean {
+  if (!run) return false;
+  return run.panes.some((p) => p.tabs.some((t) => isFileTab(t) && t.path === path && t.mode === 'permanent'));
+}
+
 /** What the caller wants opened — the descriptor an `open-file`/`open-diff` intent carries. */
 export interface OpenFileTarget {
   kind: FileTabKind;
