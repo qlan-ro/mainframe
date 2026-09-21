@@ -66,6 +66,7 @@ export function AutomationsHost(): React.ReactElement | null {
       <DialogContent
         data-testid="automations-host"
         showCloseButton={false}
+        resizeKey="automations"
         // No autofocus: the first focusable is the header's Hint-wrapped close
         // button, and focusing it opens its tooltip — whose layer then eats
         // the first Escape meant for the dialog.

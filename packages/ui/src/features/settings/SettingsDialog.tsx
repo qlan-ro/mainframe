@@ -60,6 +60,7 @@ export function SettingsDialog({ port }: { port: number }) {
       <DialogContent
         data-testid="settings-dialog"
         showCloseButton={false}
+        resizeKey="settings"
         className="flex h-[600px] max-w-[760px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[760px]"
       >
         {/* Explicit close instead of the stock one: the e2e suite addresses it
