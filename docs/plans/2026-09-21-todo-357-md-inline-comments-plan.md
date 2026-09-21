@@ -41,25 +41,25 @@ Verified while planning. Receipts are file:line in this worktree or in
    `node_modules/mdast-util-to-hast/lib/state.js:337`. `position.start.line` /
    `position.end.line` are 1-based source lines.
 3. **A fenced code block carries position on BOTH `<pre>` and `<code>`.**
-   `node_modules/mdast-util-to-hast/lib/handlers/code.js` calls
+   `node_modules/mdast-util-to-hast/lib/handlers/code.js:42,47` calls
    `state.patch(node, result)` once on the `<code>` element and again after
    wrapping it in `<pre>`. The range covers the fence delimiter lines (it is the
    mdast `code` node's own position), which is what spec AC 11 requires.
-4. **`code` cannot be the fence anchor.** `MarkdownPreview.tsx:81-84` branches on
+4. **`code` cannot be the fence anchor.** `MarkdownPreview.tsx:77-78` branches on
    `className?.startsWith('language-')`; a fence with no language has no
    className and takes the inline-code branch. `pre` (today a Fragment,
-   `MarkdownPreview.tsx:94`) is the reliable block anchor.
+   `MarkdownPreview.tsx:91`) is the reliable block anchor.
 5. **CodeMirror splits lines on `/\r\n?|\n/`.**
    `const DefaultSplit = /\r\n?|\n/;` —
    `node_modules/@codemirror/state/dist/index.js:608`, used by
    `Text.of(string.split(… || DefaultSplit))` at `:2693`. This is the exact rule
    CSV row-end numbering must match for "the same lines in Source" to hold.
 6. **`commentField` stores ONE document position per comment, anchored at the
-   END line.** `use-comment-gutter.tsx:151` dispatches
+   END line.** `use-comment-gutter.tsx:157` dispatches
    `addCommentEffect.of({ id, line: endLine, text: '' })`; the field converts the
-   line to `doc.line(n).from` (`comment-gutter-state.ts:177-180`) and remaps it
-   with `tr.changes.mapPos(a.pos, 1)` (`comment-gutter-state.ts:161-163`).
-   `CommentEntry.startLine` in `use-inline-comments.ts:18-24` is never remapped.
+   line to `doc.line(n).from` (`comment-gutter-state.ts:170`) and remaps it
+   with `tr.changes.mapPos(a.pos, 1)` (`comment-gutter-state.ts:159`).
+   `CommentEntry.startLine` in `use-inline-comments.ts:17-24` is never remapped.
    So the CM marker already follows edits while the submitted payload does not —
    the spec's "range follows edits" decision needs a **second, start-side**
    anchor, not just a write-back.
@@ -69,15 +69,15 @@ Verified while planning. Receipts are file:line in this worktree or in
    143, 150-153, 169-171, 186-189) — no `toEqual` on a whole entry. Adding
    `startLine`/`endLine` fields is non-breaking.
 8. **`useSendReview` already no-ops without a chatId but signals nothing.**
-   `use-send-review.ts:16-19` warns and returns; `use-review-actions.ts:69-79`
+   `use-send-review.ts:14-16` warns and returns; `use-review-actions.ts:73-77`
    deletes every comment and clears drafts regardless. That is the bug spec AC 6
    fixes.
 9. **`use-send-review.test.ts` never asserts the returned promise's value** — all
    three describes assert `mockGetOrCreate` / `mockSendMessage` calls only. Giving
    the returned function a return value is invisible to it.
 10. **`CmEditorWithComments.test.tsx` module-mocks `../use-inline-comments` with
-    a literal object** (lines 90-100) and sets
-    `mockSendReview = vi.fn().mockResolvedValue(undefined)` (line 22). Any new
+    a literal object** (lines 92-100) and sets
+    `mockSendReview = vi.fn().mockResolvedValue(undefined)` (line 23). Any new
     key on the model is `undefined` there, and `undefined` is not an explicit
     "skipped" signal — both facts are load-bearing for keeping that file
     unchanged (see Risks).
@@ -90,25 +90,26 @@ Verified while planning. Receipts are file:line in this worktree or in
     needs its own testid must wrap it.
 13. **`useDaemonPort` throws outside its provider** —
     `features/sessions/runtime/daemon-port-context.tsx:22`. `useActiveIdentity`
-    runs `useAuiState` (`use-active-identity.ts:19-20`) and needs the aui runtime.
+    runs `useAuiState` (`features/sessions/use-active-identity.ts:17`) and needs the aui
+    runtime.
     Any component that reaches the send path needs those mocked in unit tests.
-14. **`parseCsv` trims before parsing** — `csv-parser.ts:105`
+14. **`parseCsv` trims before parsing** — `csv-parser.ts:99`
     `const normalized = text.trim();`. Row-end detection already accepts LF, CRLF
-    and lone CR (`csv-parser.ts:36-41`), and a trailing newline already produces
-    no extra row (loop guard `pos < normalized.length`, `:110`).
+    and lone CR (`csv-parser.ts:36-40`), and a trailing newline already produces
+    no extra row (loop guard `pos < normalized.length`, `:105`).
 15. **`resolve-comment-range` caps quoted content at 50 lines**
-    (`MAX_INLINE_LINES`, `resolve-comment-range.ts:16`) and returns
-    `lineContent: ''` past the cap (`:50-53`). Reuse it for block/row quotes so
+    (`MAX_INLINE_LINES`, `resolve-comment-range.ts:17`, module-private today) and
+    returns `lineContent: ''` past the cap (`:51-53`). Reuse it for block/row quotes so
     one rule governs every surface.
 16. **app.css re-enables selection for a grouped whitelist including
-    `.mf-editor-selectable`, `pre` and `code`** — `packages/ui/src/styles/app.css:47-57`.
+    `.mf-editor-selectable`, `pre` and `code`** — `packages/ui/src/styles/app.css:48-57`.
     There is currently no `:has()` rule anywhere in `packages/ui/src/styles/`.
 17. **e2e pins that must keep passing** (`packages/e2e/tests-tauri/viewers.spec.ts`):
     `viewer-svg-source` has count 0 in Preview (:181, :195) and
     `toContainText('<rect width="100" height="50" fill="red"/>')` in Source
-    (:190-191); `[data-testid="viewer-csv"] tbody tr` has count 3 unfiltered and
-    1 filtered (:210-214, :229-231); `viewer-csv-empty` renders on no match
-    (:236-237); the SVG tab opens with `viewer-svg-preview-toggle` active (:179).
+    (:192); `[data-testid="viewer-csv"] tbody tr` has count 3 unfiltered
+    (:210-211) and 1 filtered (:227-228); `viewer-csv-empty` renders on no match
+    (:233-234); the SVG tab opens with `viewer-svg-preview-toggle` active (:179).
 18. **`Segmented`** (`features/viewers/Segmented.tsx`) is the shared toggle and is
     already used by both `MarkdownEditorTab` and `SvgViewer` in the `ViewerShell`
     `actions` slot.
@@ -130,6 +131,8 @@ Core / shared (`packages/ui/src/features/editor/inline-comments/`):
 | `use-inline-comments.ts` | additive `setCommentRange(id, startLine, endLine)`. |
 | `comment-gutter-state.ts` | second (start-side) anchor + `startLine` in the effect payload and in `getCommentsFromState`. |
 | `comment-gutter.ts` | re-export whatever the barrel gains. |
+| `CmEditorWithComments.tsx` | additive optional `model` prop, forwarded to `useCommentGutter`. |
+| `resolve-comment-range.ts` | export `MAX_INLINE_LINES`. |
 
 Markdown (`packages/ui/src/features/editor/`):
 `MarkdownEditorTab.tsx`, `MarkdownPreview.tsx`, **new**
@@ -141,6 +144,7 @@ CSV / SVG (`packages/ui/src/features/viewers/`):
 `SvgViewer.tsx`.
 
 Tests: new `__tests__/use-file-notes.test.ts`,
+`__tests__/use-comment-view-sync.test.tsx`,
 `__tests__/markdown-block-range.test.ts`,
 `__tests__/MarkdownEditorTab.notes.test.tsx`,
 `__tests__/CsvViewer.notes.test.tsx`; updated
@@ -153,7 +157,8 @@ owned by the `notes-model-core` group so no two groups write `.changeset/`.
 Untouched on purpose: `packages/core-rs`, every daemon route, `EditorTab.tsx`,
 `viewer-router.tsx` (both already pass `path` to the three hosts),
 `format-line-comment.ts`, `InlineCommentWidget.tsx`,
-`CmEditorWithComments.tsx` / `CmDiffEditorWithComments.tsx` call sites.
+`CmDiffEditorWithComments.tsx`, and every existing `CmEditorWithComments` call
+site (the new `model` prop is optional, so the code and diff paths pass nothing).
 
 ## Constraints
 
@@ -181,6 +186,10 @@ Untouched on purpose: `packages/core-rs`, every daemon route, `EditorTab.tsx`,
   its own `useInlineComments()` + local draft state, then picks:
   `const model = injected ?? own`. That is what keeps the existing module mock
   (fact 10) live on the code/diff path.
+- **`useFileNotes` composes `useInlineComments()`**, adding drafts on top and
+  delegating `setNoteRange` to the new `setCommentRange`. There is exactly one
+  note store; task 5 is what makes the lifted range write-back possible, not a
+  spare method.
 - **One hook for the three lifted hosts.** `useFileTabNotes({ filePath })`
   (exported from `use-file-notes.ts`) returns
   `{ model, gutterProps, submitBar, noteCountForLines, openNote }` so
@@ -218,7 +227,15 @@ Untouched on purpose: `packages/core-rs`, every daemon route, `EditorTab.tsx`,
   row at their real line number. The first surviving row is the header. Row line
   ranges count breaks with the CodeMirror rule (fact 5).
 - **Quote text** is always the raw source line(s), capped by the existing
-  `MAX_INLINE_LINES` rule (fact 15) — export the constant rather than redefining it.
+  `MAX_INLINE_LINES` rule (fact 15). The constant is exported from
+  `resolve-comment-range.ts` by group 2, which is why groups 3 and 4 depend on
+  group 2 as well as on group 1 — nobody redefines the cap.
+- **Nested blocks with an identical range render one control.** A loose list item
+  and its only paragraph share a source position, so a wrapper whose computed
+  range equals a direct child block's range renders no control of its own. Without
+  this, two elements carry `md-note-add-<line>` and both `getByTestId` and
+  Playwright strict mode throw on the duplicate. The innermost-block hover CSS rule
+  handles the remaining, genuinely different-range nesting.
 
 ## Task groups
 
@@ -244,8 +261,11 @@ observed failing before any of them exists.
    lines; a nested list-item paragraph maps to the paragraph's own range; a
    fenced block's range includes both delimiter lines; a node with no `position`
    maps to `null`; a range longer than `MAX_INLINE_LINES` yields an empty quote.
-   Build the input nodes by running the same remark pipeline the preview uses, so
-   the positions are real rather than hand-written.
+   Build the input nodes by rendering `<Markdown>` from react-markdown with a
+   spy component map that captures each `node`, so the positions are real rather
+   than hand-written. Do not import `remark-parse` / `remark-rehype` directly —
+   `packages/ui/package.json` declares `unified` but not those, and they resolve
+   today only through `shamefully-hoist`.
    *Verify:* fails on a missing module.
 3. New `inline-comments/__tests__/use-file-notes.test.ts`: add/edit/delete; a
    draft set on a note is readable back; `setNoteRange` moves a note's recorded
@@ -267,13 +287,17 @@ first).
 5. `use-inline-comments.ts`: additive `setCommentRange(id, startLine, endLine)`.
    No other change to the file's exported shape.
    *Verify:* `use-inline-comments.test.ts` passes untouched.
-6. `comment-gutter-state.ts`: the two-anchor change of Design decision 1, plus
+6. `comment-gutter-state.ts`: the two-anchor change of the *Two-anchor
+   comment field* decision, plus
    `startLine`/`endLine` on `getCommentsFromState`. Re-export from
    `comment-gutter.ts`.
-   *Verify:* `comment-gutter.test.ts` passes untouched, and a new case shows that
-   inserting a line above a two-line comment moves both its start and its end.
+   *Verify:* every pre-existing case in `comment-gutter.test.ts` still passes
+   unedited, and a case appended to that file shows that inserting a line above a
+   two-line comment moves both its start and its end.
 7. Extract `SubmitReviewBar.tsx` (verbatim markup and strings) and
-   `use-comment-portals.ts` out of `use-comment-gutter.tsx`.
+   `use-comment-portals.ts` out of `use-comment-gutter.tsx`. Also export
+   `MAX_INLINE_LINES` from `resolve-comment-range.ts` — it is module-private
+   today (fact 15) and groups 3 and 4 import it.
    *Verify:* `CmEditorWithComments.test.tsx` and
    `CmDiffEditorWithComments.test.tsx` pass with no edit to either file; the
    hook file is back under 300 lines.
@@ -283,15 +307,15 @@ first).
    case); on subsequent owned-set changes, add or remove anchors to match; on CM
    document changes, push the mapped `startLine`/`endLine` back into the owned
    set via `setNoteRange`. Active only when a model was injected.
-   *Verify:* a test mounting the wrapper with a pre-populated injected model
-   shows a gutter marker without any user gesture, and a note removed from the
+   *Verify:* in a new `inline-comments/__tests__/use-comment-view-sync.test.tsx`,
+   mounting the wrapper with a pre-populated injected model shows a gutter marker without any user gesture, and a note removed from the
    model outside the view loses its marker without a remount.
 9. `use-comment-gutter.tsx`: accept `model` and render its own bar only when
-   `model` is absent (Design decisions 2 and 4).
+   `model` is absent (the *Injected model* and *Bar ownership* decisions).
    *Verify:* with an injected model exactly one bar renders; with none, today's
    bar renders.
-10. `use-send-review.ts` + `use-review-actions.ts`: the outcome signal of Design
-    decision 5, and sorting submitted items by `startLine` (ties by `endLine`).
+10. `use-send-review.ts` + `use-review-actions.ts`: the outcome signal of the
+    *Skipped-send signal* decision, and sorting submitted items by `startLine` (ties by `endLine`).
     Removal must keep working when `viewRef.current` is null, since a table row
     or a rendered block has no view.
     *Verify:* with no chatId, submit and single-note send leave the note set and
@@ -308,7 +332,8 @@ Shares no file with groups 3–7.
 
 ### Group 3 — `csv-parser-ranges` (core)
 
-Depends on group 1. Touches only `viewers/csv-parser.ts`.
+Depends on groups 1 and 2 (for the exported `MAX_INLINE_LINES`). Touches only
+`viewers/csv-parser.ts`.
 
 13. Parse from offset 0; expose `startLine`/`endLine` per row and per header;
     drop leading/trailing all-empty rows while counting their lines; keep
@@ -322,7 +347,8 @@ Depends on group 1. Touches only `viewers/csv-parser.ts`.
 
 ### Group 4 — `md-block-range` (core)
 
-Depends on group 1. Touches only `editor/markdown-block-range.ts`.
+Depends on groups 1 and 2 (for the exported `MAX_INLINE_LINES`). Touches only
+`editor/markdown-block-range.ts`.
 
 15. The pure hast-position → `{ startLine, endLine, lineContent }` mapper, over
     the markdown source string, returning `null` when the node has no `position`,
@@ -347,7 +373,8 @@ Depends on groups 2 and 4.
     `md-note-add-<startLine>` and `md-note-marker-<startLine>`.
     *Verify:* clicking the control for a known block opens a card whose quoted
     text is that block's markdown source.
-18. `MarkdownPreview.tsx`: wrap the mapped block elements of Design decision 7 in
+18. `MarkdownPreview.tsx`: wrap the block elements listed under *Annotated
+    markdown blocks* in
     `MarkdownAnnotatedBlock`, add the `h4`–`h6` entries, keep the map a module
     constant, memoize the `<Markdown>` element on `value`, and accept an optional
     notes context (absent → today's plain render).
@@ -429,7 +456,7 @@ Depends on group 2.
   and CSV Source wrappers must give it `min-h-0 flex-1` or the document collapses.
 - **CSV parse change is the one hard-to-reverse decision** (spec's own wording):
   row identity and the row-number column's meaning key every downstream note. The
-  leading/trailing-blank rule of Design decision 8 is the contract; test it before
+  leading/trailing-blank rule of the *CSV numbering* decision is the contract; test it before
   the viewer consumes it, which is why group 3 depends on group 1.
 - **`tbody tr` counts.** The sibling-`<tr>` card (task 23) changes the row count
   whenever a card is open. The e2e assertions never open one, but a new unit test
@@ -442,7 +469,7 @@ Depends on group 2.
 - `packages/ui` unit tests, typecheck and lint pass; the pre-existing comment,
   markdown-preview and gutter suites pass without edits, and the only updated
   test strings are the CSV row-number column and the SVG "Source" label.
-- No file over 300 lines, no function over 50; `use-comment-gutter.tsx`,
-  `CsvViewer.tsx` and `MarkdownEditorTab.test.tsx` are smaller than they are today.
+- No file over 300 lines, no function over 50; `use-comment-gutter.tsx` (275
+  today) and `CsvViewer.tsx` (196 today) both end up smaller than they are now.
 - `git diff packages/core-rs` is empty and no daemon route changed (spec AC 8).
 - The changeset from task 12 is committed.
