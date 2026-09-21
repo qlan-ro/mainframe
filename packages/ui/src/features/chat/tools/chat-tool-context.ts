@@ -14,16 +14,22 @@ export function useChatId(): string | undefined {
   return extras?.state.chatId;
 }
 
+/** 0-based line/character reveal target, forwarded as-is to the open-file intent. */
+export interface OpenFilePosition {
+  line: number;
+  character: number;
+}
+
 export interface OpenFileIntent {
-  openFile: (path: string) => void;
+  openFile: (path: string, position?: OpenFilePosition) => void;
   /** Open a diff tab showing pre-resolved original-vs-modified content. */
   openDiff: (path: string, original: string, modified: string) => void;
   revealFile: (path: string) => void;
 }
 
 export function useOpenFile(): OpenFileIntent {
-  const openFile = useCallback((path: string) => {
-    emitSurfaceIntent({ type: 'open-file', path });
+  const openFile = useCallback((path: string, position?: OpenFilePosition) => {
+    emitSurfaceIntent({ type: 'open-file', path, line: position?.line, character: position?.character });
   }, []);
   const openDiff = useCallback((path: string, original: string, modified: string) => {
     emitSurfaceIntent({ type: 'open-diff', path, original, modified });
