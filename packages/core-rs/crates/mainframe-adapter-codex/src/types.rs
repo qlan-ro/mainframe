@@ -234,6 +234,11 @@ pub struct TokenUsageEnvelope {
     pub total: Option<CamelUsage>,
     #[serde(default)]
     pub last: Option<CamelUsage>,
+    /// Absent on codex-cli 0.144.3 (see
+    /// `tests/fixtures/collab-delegation-0.144.3.jsonl`), present from 0.153.4;
+    /// `#[serde(default)]` keeps the older capture deserializing without it.
+    #[serde(default)]
+    pub model_context_window: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -309,7 +314,7 @@ pub struct ReasoningEffortOption {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,

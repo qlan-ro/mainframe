@@ -48,6 +48,9 @@ pub struct CodexSessionState {
     pub current_turn_id: Option<String>,
     pub current_turn_plan: Option<CurrentTurnPlan>,
     pub last_usage: Option<LastUsage>,
+    /// The id `turn_model::resolve_turn_model` settled on for the current/last
+    /// turn — the id whose window the context percentage divides by.
+    pub resolved_turn_model: Option<String>,
     /// child thread id → delegation card.
     pub sub_agent_cards: HashMap<String, SubAgentCard>,
     /// child thread id → spawn prompt (captured from `spawnAgent` items).

@@ -75,7 +75,7 @@ export function createEnvironmentSlice(): ChatEnvironmentSlice {
 /**
  * The chat row's persisted CLI-reported context usage (daemon persists it from
  * `get_context_usage` after each turn), mapped to the contextUsage slice shape.
- * Null when the chat has never reported (legacy rows, codex).
+ * Null when the chat has never reported (legacy rows).
  */
 function persistedContextUsage(chat: Chat | null): ChatThreadState['contextUsage'] {
   if (chat == null) return null;
