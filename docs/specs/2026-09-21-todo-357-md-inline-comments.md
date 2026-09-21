@@ -29,7 +29,7 @@ though nothing was sent.
 Every file the workspace opens as text supports agent notes. A file tab owns one
 note set: each note covers a range of source lines, quotes the source text of
 those lines, and holds the user's draft until it is submitted. Code files and the
-diff tab keep the behavior they have today.
+diff tab keep exactly what they have today, including their submit bar.
 
 **Adding a note in a rendered view.** Hovering an annotatable region — a rendered
 markdown block (paragraph, heading, list item, fenced code block, table,
@@ -85,11 +85,11 @@ recorded line range moves with it, so the same note points at the same text in
 Preview, in Source, and in the submitted message. The quoted text a note captured
 when it was created does not change.
 
-**Submitting.** One submit bar per file tab while the set holds at least one
-note, absent when it is empty, shown in every mode, reporting how many of the
-tab's notes have text and offering a single submit action for all of
-them. Submitting sends one review message to the active session covering every
-note that has text, ordered by source line regardless of which mode or surface
+**Submitting.** On markdown, CSV and SVG tabs, one submit bar per file tab while
+the set holds at least one note, absent when it is empty, shown in every mode,
+reporting how many of the tab's notes have text and offering a single submit
+action for all of them. Submitting sends one review message to the active
+session covering every note that has text, ordered by source line regardless of which mode or surface
 created it, in the existing review format, and then empties the set everywhere.
 Sending a single note from its card sends only that note and removes it from every
 surface that shows it. When there is no active session, both submit and
@@ -108,7 +108,7 @@ the tab discards them, exactly as for code files today.
   anchoring inside a CSV row — `deferred`
 - Making CSV or SVG editable; annotation stays a read gesture — `deferred`
 - Changes to the review message format, to the per-note send gesture, or to the
-  diff tab's annotation path beyond the shared submit-bar restyle — `declined`
+  code-kind and diff-tab annotation path, including their submit bar — `declined`
 - Threaded replies, resolve/unresolve state, and agent-authored comments —
   `declined`
 - Annotation in the image and PDF viewers; both are binary and not
@@ -158,11 +158,12 @@ the tab discards them, exactly as for code files today.
 2. A source view mounted after a note was created elsewhere shows a gutter marker
    on that note's lines, and adding or removing a note outside the source view
    adds or removes its marker there without remounting.
-3. While at least one note exists, exactly one `editor-submit-review` element
-   (with its `editor-submit-review-btn` action) is present per file tab, in every
-   mode of that tab, and its count covers notes from all modes; with an empty set
-   both testids have zero elements. Its label pluralises: one filled note of one
-   reads `1 of 1 agent note filled`.
+3. On a markdown, CSV or SVG tab, while at least one note exists, exactly one
+   `editor-submit-review` element (with its `editor-submit-review-btn` action) is
+   present per file tab, in every mode of that tab, and its count covers notes
+   from all modes; with an empty set both testids have zero elements. Its label
+   pluralises: one filled note of one reads `1 of 1 agent note filled`. This
+   criterion does not apply to code or diff tabs (see 25).
 4. With notes created in two different modes, submitting produces exactly one
    message appended to the active session, whose body is the existing review
    format (`File: \`<path>\`` followed by `At line N:` / `At lines N-M:` blocks
@@ -183,8 +184,8 @@ the tab discards them, exactly as for code files today.
 *Markdown*
 
 9. Opening a markdown file and switching to Source shows the same comment gutter
-   and submit bar a code file shows, and a note added there reaches the session on
-   submit.
+   a code file shows, plus the tab's own submit bar, and a note added there
+   reaches the session on submit.
 10. In Preview, hovering a paragraph, a heading, a list item, a fenced code block,
     a table, and a blockquote each reveals an add-note control; activating it
     opens the note card beneath that block.
@@ -240,18 +241,19 @@ the tab discards them, exactly as for code files today.
 *No regression and quality*
 
 25. A code file and the diff tab still add, edit, delete, send, and submit notes
-    as before; the existing code-editor and diff-editor comment tests pass with no
-    assertion removed or weakened.
+    as before, and the existing code-editor and diff-editor comment tests pass
+    unchanged. Their submit bar is untouched: it still sits above the editor and
+    reads `N agent notes` with a `Submit review (N)` button.
 26. New unit tests cover: markdown block position → line range (including a nested
     list item and a fenced code block), CSV row → source line range (quoted
     multi-line field, CRLF, lone CR, leading blank lines), note-and-draft survival
     across a mode toggle, merged submission ordering across two surfaces, the
     no-session submit leaving notes intact, and a note's range following an edit
     made above it in markdown Source.
-27. Existing tests whose asserted text changed — the CSV row-number column, the
-    SVG toggle label, and the submit-bar copy — are updated to the new expected
-    strings; no other existing test is loosened. The existing `MarkdownPreview`
-    render and CSS-selection tests pass unchanged, so the per-block hover
+27. Existing tests whose asserted text changed — the CSV row-number column and
+    the SVG toggle label — are updated to the new expected strings; no other
+    existing test is loosened. The existing `MarkdownPreview` render and
+    CSS-selection tests pass unchanged, so the per-block hover
     wrappers must not break the prose child selectors or the
     `.mf-editor-selectable` opt-in.
 28. Every touched file stays under 300 lines and every function under 50 lines;
@@ -260,14 +262,16 @@ the tab discards them, exactly as for code files today.
 
 ## Decisions
 
-- **Submit bar follows the design direction everywhere, including code and diff
-  tabs: sticky bottom, "N of M agent notes filled", primary button.** The brief
-  says code and diff "keep exactly what they have today" while the approved design
-  direction specifies a different bar; one tab cannot have two bars. The
-  no-regression criterion is about behavior (count, disabled-until-filled, submit,
-  clear), all unchanged, so the restyle is the narrower deviation — and the
-  existing e2e substring assertion `3 agent notes` still matches "3 of 3 agent
-  notes filled". `reversible`
+- **The design-direction submit bar (sticky bottom, "N of M agent notes filled",
+  primary "Submit review (M)") applies only to the tabs that host the lifted note
+  set — markdown, CSV and SVG. Code and diff keep today's bar above the editor,
+  reading "N agent notes" with a secondary button.** The brief fences the
+  code-kind and diff path in three places and the design direction scopes its
+  lifted model to `MarkdownEditorTab`, `CsvViewer` and `SvgViewer`, so nothing
+  authorises restyling the wrapper's own bar; a lifted host suppresses the
+  wrapper's bar and renders its own, so no tab shows two. Accepted cost: two bar
+  styles coexist until a separate all-surfaces decision, as with persistence.
+  `reversible`
 - **Innermost hovered block wins; ancestors suppress their control while a
   descendant is hovered.** Two stacked controls on a list item and its paragraph
   is worse than the rare case of wanting the outer range, which Source still
