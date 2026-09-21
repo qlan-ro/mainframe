@@ -49,12 +49,13 @@ Why — on receipts, not on the brief's premise:
   receipt is real and the brief's stated premise ("Codex's search item carries no result payload")
   is wrong as written. This plan does not lean on it.
 - But `results`' element type is **unnamed**: `WebSearchResult` appears **0 times** in
-  `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex`, and in both serde field tables —
-  `WebSearchItem id action results queries url findInPage pattern other` (strings line 446584) and
-  `WebSearchItem query action results` (line 453672) — `results` is followed immediately by the
-  `WebSearchAction` fields, with no element-struct field names anywhere in the binary. It is a
-  `Vec<String>` or opaque JSON, and its **content is unverified**: we know the field exists, not
-  what text it holds nor whether it is ever populated for `openPage`.
+  `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex`. In the serde field table at strings
+  line 446584 — `WebSearchItem id action results queries url findInPage pattern other` — `results`
+  is followed by the `WebSearchAction` fields; in the one at 453672 —
+  `… WebSearchItem query action results FileChangeItem …` — it is followed by the next item's name.
+  In neither table is it followed by element-struct field names, and no such struct exists anywhere
+  in the binary. So it is a `Vec<String>` or opaque JSON, and its **content is unverified**: we know
+  the field exists, not what text it holds nor whether it is ever populated for `openPage`.
 - Every captured `open_page` item in the local corpus is action-only, with no result payload of any
   kind: `{"type":"web_search_call","status":"completed","action":{"type":"open_page","url":"https://v2.tauri.app/develop/calling-rust/"}}`
   (`~/.codex/sessions/2026/06/13/rollout-2026-06-13T07-54-52-019ebf55-33d4-74f1-aa87-e87f352f2f08.jsonl`,
@@ -139,8 +140,9 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
 - **`results` is a field we can see but not read.** No `WebSearchResult` type exists in the binary
   (`strings -a … | grep -c 'WebSearchResult'` → `0`), and the deserializer struct-name table at
   strings line 450535 lists only `struct WebSearchItem`, `struct variant WebSearchAction::OpenPage /
-  ::FindInPage / ::Search` — no element struct. In both serde field tables `results` is followed
-  straight by the action fields. So the element type is a bare `String` or opaque JSON, and nothing
+  ::FindInPage / ::Search` — no element struct. In the serde field tables `results` is followed by
+  the action fields (446584) or by the next item's name `FileChangeItem` (453672), never by element
+  field names. So the element type is a bare `String` or opaque JSON, and nothing
   in the binary or the capture corpus says what it contains or when it is populated. This is the
   receipt behind **Acceptance criterion 1 — amended**.
 - The raw Responses-API form of the same tool, captured (not synthetic):
