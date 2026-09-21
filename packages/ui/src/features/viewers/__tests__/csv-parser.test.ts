@@ -96,4 +96,23 @@ describe('parseCsv — source line ranges', () => {
       { cells: ['3', '4'], _index: 2, startLine: 4, endLine: 4 },
     ]);
   });
+
+  it('exposes the header row own source line range', () => {
+    const { headerRange } = parseCsv('a,b\n1,2');
+    expect(headerRange).toEqual({ startLine: 1, endLine: 1 });
+  });
+
+  it('pushes the header range past two leading blank lines', () => {
+    const { headerRange } = parseCsv('\n\na,b\n1,2');
+    expect(headerRange).toEqual({ startLine: 3, endLine: 3 });
+  });
+
+  it('spans the header range over an embedded newline in a quoted header field', () => {
+    const { headerRange } = parseCsv('"a\nb",c\n1,2');
+    expect(headerRange).toEqual({ startLine: 1, endLine: 2 });
+  });
+
+  it('reports a null header range for empty input', () => {
+    expect(parseCsv('').headerRange).toBeNull();
+  });
 });
