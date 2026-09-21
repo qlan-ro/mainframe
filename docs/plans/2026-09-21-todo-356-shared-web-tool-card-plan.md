@@ -19,12 +19,18 @@ and renders as raw JSON. The evidence says otherwise on both counts:
   with `web.run`'s `{search_query:[{q}], open:[{ref_id}], find:[{ref_id,pattern}], …}` arguments.
 - But the **app-server item** for it is `webSearch`, not `dynamicToolCall`: codex's `WebSearchItem`
   has 4 fields — `id, query, action, results` — and `WebSearchAction` is an internally-tagged enum
-  with `search {query, queries}`, `openPage {url}`, `findInPage {pattern}`, `other`.
+  with `search {query, queries}`, `openPage {url}`, `findInPage {url, pattern}`, `other`.
 - Our `WebSearchItem` models only `{id, query}` (`thread_item_variants.rs:110`) and drops `action`
   on the floor, so a Codex **fetch** today renders the Web card with the wrong verb ("Search") and
   no URL — it is not the raw-JSON fallback the brief described.
 
-So the seam is `WebSearchItem` + its two renderers, **not** `dynamic_tool_call_name`. Receipts in
+So the seam is `WebSearchItem` + its two renderers, **not** `dynamic_tool_call_name`. That also ties
+off **acceptance criterion 2**, whose "…and when it arrives as a dynamic tool call" clause a reviewer
+will look for: `dynamicToolCall` is codex's carrier for tools the **client** declares in the
+`thread/start` `dynamicTools` param, and Mainframe declares none (`session.rs:212-259` sends only
+`model / cwd / persistExtendedHistory / persistFullHistory / approvalPolicy / sandbox /
+experimentalRawEvents`). `web.run` is codex-owned, so that arrival shape is structurally impossible
+here, not merely unobserved — the clause is satisfied vacuously and needs no code. Receipts in
 **Established facts**. The item type is inferred from codex's own struct shape, not from a captured
 `item/completed` frame — Gate 0 below closes that gap before any code is written, and the
 alternative branch is spelled out so a surprise there is a redirect, not a replan.
@@ -63,9 +69,13 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
 
 ## Out of scope (with the reason, so it is not re-litigated)
 
-- **`web__run` dynamic-tool-call normalization.** Unconfirmed as a path Mainframe ever receives —
-  the brief's own rule is "unconfirmed → out of scope". If Gate 0 shows `dynamicToolCall` instead,
-  see the branch note there.
+- **`web__run` dynamic-tool-call normalization.** Not merely unconfirmed — structurally unreachable:
+  `dynamicToolCall` carries only tools the client declares via `thread/start`'s `dynamicTools`, and
+  Mainframe declares none (receipt in Established facts). The captured `{"namespace":"web",
+  "name":"run"}` rollout lines are the **Responses-API** wire form, which codex converts to
+  `WebSearchAction` before the app-server layer — its typed `SearchCommands` parser and the plural
+  `search {query, queries}` tag are that conversion. Writing a normalizer for this path would be
+  dead code. If Gate 0 nonetheless shows `dynamicToolCall`, see the branch note there.
 - **Parsing `webSearch.results`.** The brief excludes structured result parsing; the tool_result
   content stays the empty string it is today, and the fetch card's body is the URL row.
 - **`findInPage` / `other` actions**, external-session rollout scanning (`rollout_reconstruct.rs`
@@ -75,8 +85,9 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
 ## Established facts
 
 - Codex 0.153.4's app-server `WebSearchItem` has **4** fields, `id / query / action / results`, and
-  `WebSearchAction` is a tagged enum `search {query, queries} | openPage {url} | findInPage {pattern}
-  | other`. Receipts: `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex` — the serde field
+  `WebSearchAction` is a tagged enum `search {query, queries} | openPage {url} | findInPage {url,
+  pattern} | other` — `FindInPage` carries **2** fields per its variant-count string, the `url` being
+  the one the serde field table already lists once and shares. Receipts: `strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex` — the serde field
   list `WebSearchItem id action results queries url findInPage pattern other` (strings line 446584),
   `id query action results search queries url findInPage pattern other` (441956), the variant-count
   strings `struct WebSearchItem with 4 elements`, `struct variant WebSearchAction::OpenPage with 1
@@ -107,6 +118,17 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
   **synthetic** fixture — the file says so at `live_vs_history_id_parity.rs:131` ("no fixture in this
   crate's captures contains one"). Not evidence of any Codex spelling; leave both tests untouched as
   the regression case for the un-normalized dynamic path.
+- `dynamicTools` is a **`thread/start` request param**, not an event shape: the binary's param-struct
+  serde field list reads `dynamicTools selectedCapabilityRoots mockExperimentalField
+  experimentalRawEvents` (`strings -a /opt/homebrew/Caskroom/codex/0.153.4/bin/codex | grep -o
+  'dynamicTools[A-Za-z_]*'`), and `experimentalRawEvents` in that same list is a key Mainframe
+  demonstrably does send (`session.rs:255`). Mainframe never sends `dynamicTools`
+  (`thread_params_base`, `session.rs:212-223`, plus the `thread/start` arm at `session.rs:252-256`),
+  so no codex-owned tool — `web.run` included — can reach us as a `dynamicToolCall`.
+- Mainframe sends **no tools config at all** on turn start: `CodexTurnConfig` is
+  `collaborationMode / serviceTier / personality / summary` only (`turn_config.rs:20-33`). Whether
+  the web tool is available at all is codex's and the account's decision, not ours — which is why
+  Gate 0 has a no-capture fallback.
 - `resolveToolCard` needs no change: exact-name lookup plus an `mcp__` prefix rule
   (`packages/ui/src/features/chat/tools/registry.ts:24-30`), and `WebFetch` + `WebSearch` both
   already map to `WebFetchCard` (`register-cards.ts:43-44`).
@@ -114,7 +136,10 @@ the brief does not say. Existing `data-testid`s unchanged; the degraded label ge
 
 ## Risks
 
-- **The item type is inferred, not captured** (Gate 0 exists for exactly this).
+- **The item type is inferred from codex's own struct shape, not from a captured frame.** Gate 0
+  exists for exactly this, and its no-capture fallback is only safe because every added branch
+  degrades to today's behavior; if that stops being true during implementation, the capture becomes
+  mandatory again.
 - **A renamed or added upstream action tag** falls back to the Search face rather than breaking —
   recorded in CONSUMED-SURFACE.
 - **`openPage` may also carry a non-empty top-level `query`** (the item has both). The action wins;
@@ -128,9 +153,17 @@ One agent, TDD inline: write the failing test and the fix in the same turn, Rust
 
 Exit gates — each must be true and observable:
 
-0. **Confirm the item type before writing Rust.** Capture one real `item/completed` for a Codex web
-   fetch (the CLAUDE.md pointer for live protocol behavior is the codex protocol-debugger skill) and
-   record the frame in the PR. If it is `webSearch` with an `action`, proceed as planned. If it is
+0. **Confirm the item type before writing Rust — time-boxed, not a blocker.** Try to capture one
+   real `item/completed` for a Codex web fetch (the CLAUDE.md pointer for live protocol behavior is
+   the codex protocol-debugger skill) and record the frame in the PR. **If no capture is obtainable**
+   — the web tool is not enabled for the account, nothing in the local `~/.codex/sessions` corpus is
+   recent (one `web_search_call`, June 2026; two `namespace:"web"` calls, July 2026), and Mainframe
+   sends no tools config to turn it on — **proceed on the binary-schema receipt and say so in the
+   PR**. That is safe because every branch this change adds degrades to today's exact behavior when
+   the shape surprises us: an absent `action`, an unknown action tag, and a missing `query` all land
+   on the existing `WebSearch` + `{query}` pair, and the card's degraded state replaces raw JSON
+   rather than any current rendering. Do not burn a long session chasing the frame. If the capture
+   arrives and is `webSearch` with an `action`, proceed as planned. If it is
    `dynamicToolCall {namespace:"web", tool:"run"}`, switch the Rust seam to `dynamic_tool_call_name`
    (already `pub(crate)` and already shared by both paths — `thread_item_render.rs:88`,
    `history_convert.rs:17`), map on the `web.run` command keys (`open[].ref_id` that parses as
