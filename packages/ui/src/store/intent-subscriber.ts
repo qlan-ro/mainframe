@@ -16,10 +16,13 @@
  * file:// LSP URIs — the same canonical relative key in the pane model.
  *
  * Behaviour mirrored from 04-engine.jsx openTargetWS:
- *  - open-file: openFileTab(path, 'preview') in the workspace's first pane
- *    (`openFileTab` lights the surface itself). When the intent carries a
- *    `line`/`character` position, also stashes a reveal target in
- *    useEditorStore so CmEditor can scroll to it on mount.
+ *  - open-file: openFileTab(path, intent.mode ?? 'preview') in the workspace's
+ *    first pane (`openFileTab` lights the surface itself). `mode: 'permanent'`
+ *    is how the file-tree's commit gestures (double-click, accelerator-click,
+ *    middle-click, "Keep open") request a pinned tab instead of the default
+ *    preview. When the intent carries a `line`/`character` position, also
+ *    stashes a reveal target in useEditorStore so CmEditor can scroll to it on
+ *    mount.
  *  - reveal-file: ensure the workspace is visible and stash the path in
  *    useFilesStore.revealTarget; FileTree auto-expands ancestors and scrolls.
  */
@@ -75,7 +78,9 @@ export function subscribeToFileIntents(): () => void {
       const kind = kindForPath(path);
 
       // openFileTab lights the workspace itself — no separate activation needed.
-      useLayoutStore.getState().openFileTab({ kind, path, title, scopeKey: activeScopeKey() }, 'preview');
+      useLayoutStore
+        .getState()
+        .openFileTab({ kind, path, title, scopeKey: activeScopeKey() }, intent.mode ?? 'preview');
 
       // Stash a reveal target if both line and character are provided.
       if (typeof line === 'number' && typeof character === 'number') {
@@ -102,7 +107,10 @@ export function subscribeToFileIntents(): () => void {
       // HEAD-vs-working.
       useLayoutStore
         .getState()
-        .openFileTab({ kind: 'diff', path, title, original, modified, scopeKey: activeScopeKey() }, 'preview');
+        .openFileTab(
+          { kind: 'diff', path, title, original, modified, scopeKey: activeScopeKey() },
+          intent.mode ?? 'preview',
+        );
       return;
     }
 

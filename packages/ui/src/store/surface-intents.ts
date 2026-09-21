@@ -1,6 +1,9 @@
+import type { TabMode } from './run-pane';
+
 export type SurfaceIntent =
-  | { type: 'open-file'; path: string; line?: number; character?: number }
-  | { type: 'open-diff'; path: string; original?: string; modified?: string }
+  /** `mode` requests a permanent tab; omitted (or 'preview') keeps today's preview behavior. */
+  | { type: 'open-file'; path: string; line?: number; character?: number; mode?: TabMode }
+  | { type: 'open-diff'; path: string; original?: string; modified?: string; mode?: TabMode }
   | { type: 'reveal-file'; path: string }
   | { type: 'activate-surface'; surface: 'chat' | 'workspace' }
   /** Trigger the file-open picker / command palette. */

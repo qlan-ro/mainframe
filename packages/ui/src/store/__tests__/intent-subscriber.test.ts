@@ -159,6 +159,68 @@ describe('open-file intent subscriber', () => {
   });
 });
 
+describe('open-file / open-diff mode plumbing (todo #358)', () => {
+  it('open-file without mode still defaults to preview (unchanged shape)', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
+    expect(tabs()[0]!.mode).toBe('preview');
+
+    unsub();
+  });
+
+  it('open-file with mode: permanent opens a permanent tab that does not take the preview slot', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
+    emitSurfaceIntent({ type: 'open-file', path: '/src/b.ts', mode: 'permanent' });
+
+    expect(tabs()).toHaveLength(2);
+    expect(tabs()[0]!.path).toBe('/src/a.ts');
+    expect(tabs()[0]!.mode).toBe('preview');
+    expect(tabs()[1]!.path).toBe('/src/b.ts');
+    expect(tabs()[1]!.mode).toBe('permanent');
+
+    unsub();
+  });
+
+  it('open-file with mode: permanent against an already-open preview promotes it in place (same id, no new tab)', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts' });
+    const firstId = tabs()[0]!.id;
+
+    emitSurfaceIntent({ type: 'open-file', path: '/src/a.ts', mode: 'permanent' });
+
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.id).toBe(firstId);
+    expect(tabs()[0]!.mode).toBe('permanent');
+
+    unsub();
+  });
+
+  it('open-diff without mode still defaults to preview (unchanged shape)', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-diff', path: '/src/x.ts' });
+    expect(tabs()[0]!.mode).toBe('preview');
+
+    unsub();
+  });
+
+  it('open-diff with mode: permanent opens a permanent diff tab', () => {
+    const unsub = subscribeToFileIntents();
+
+    emitSurfaceIntent({ type: 'open-diff', path: '/src/x.ts', mode: 'permanent' });
+
+    expect(tabs()).toHaveLength(1);
+    expect(tabs()[0]!.kind).toBe('diff');
+    expect(tabs()[0]!.mode).toBe('permanent');
+
+    unsub();
+  });
+});
+
 describe('reveal-file intent subscriber', () => {
   it('reveal-file lights the workspace surface AND opens the Files panel', () => {
     // A file revealed into a closed panel is a file the user cannot see.
