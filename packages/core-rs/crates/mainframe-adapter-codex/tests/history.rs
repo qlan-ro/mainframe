@@ -358,6 +358,55 @@ fn converts_web_search_to_a_tool_use_plus_tool_result_pair_named_web_search() {
     );
 }
 
+/// Gate 3 (todo #356): reload must resolve an `openPage` item to the same
+/// WebFetch{url} + empty tool_result pair the live path renders.
+#[test]
+fn converts_web_search_open_page_action_to_a_web_fetch_tool_use_with_an_empty_result() {
+    let out = convert(json!([
+        {
+            "id": "ws1",
+            "type": "webSearch",
+            "query": "",
+            "action": { "type": "openPage", "url": "https://v2.tauri.app/develop/calling-rust/" },
+            "results": ["opaque", "unverified"],
+        }
+    ]));
+    assert_eq!(out.len(), 2);
+    assert_eq!(out[0].r#type, ChatMessageType::Assistant);
+    assert_eq!(
+        content_json(&out[0]),
+        json!([{
+            "type": "tool_use",
+            "id": "ws1",
+            "name": "WebFetch",
+            "input": { "url": "https://v2.tauri.app/develop/calling-rust/" },
+        }])
+    );
+    assert_eq!(out[1].r#type, ChatMessageType::ToolResult);
+    assert_eq!(
+        content_json(&out[1]),
+        json!([{ "type": "tool_result", "toolUseId": "ws1", "content": "", "isError": false }])
+    );
+}
+
+/// Gate 2 (reload half): a `search` action still converts to today's
+/// `WebSearch{query}` pair, unmodified.
+#[test]
+fn converts_web_search_search_action_to_web_search_unmodified() {
+    let out = convert(json!([
+        {
+            "id": "ws2",
+            "type": "webSearch",
+            "query": "rust serde",
+            "action": { "type": "search", "query": "rust serde", "queries": ["rust serde"] },
+        }
+    ]));
+    assert_eq!(
+        content_json(&out[0]),
+        json!([{ "type": "tool_use", "id": "ws2", "name": "WebSearch", "input": { "query": "rust serde" } }])
+    );
+}
+
 #[test]
 fn sets_chat_id_on_all_messages() {
     let out = convert_with(
