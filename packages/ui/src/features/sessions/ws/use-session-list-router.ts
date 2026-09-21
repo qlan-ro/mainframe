@@ -51,7 +51,8 @@ function rememberActiveSession(active: SessionItem | undefined, items: readonly 
     useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
   }
   // Follow the active session with its remembered workspace layout, keyed by the
-  // stable daemon chat id. Skipped for the __LOCALID_* draft (no remoteId yet).
+  // stable daemon chat id. This function only runs for a real (non-draft) active
+  // item — the draft's own layout key is set in the caller's draft branch instead.
   // ALSO skipped when flipping focus BETWEEN the two chats of an open split:
   // the surface arrangement belongs to the visible split there, and swapping
   // per-session layouts made the workspace blink in and out per zone click.
