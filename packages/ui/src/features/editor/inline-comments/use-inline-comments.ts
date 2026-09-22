@@ -11,6 +11,7 @@
  *   deleteComment(id)         — remove a comment
  *   hasCommentOnLine(line)    — true when any comment covers the line
  *   getCommentsForLine(line)  — all comments whose range includes the line
+ *   setCommentRange(id, s, e) — move a comment's recorded range (edit tracking write-back)
  */
 import { useCallback, useState } from 'react';
 
@@ -35,6 +36,7 @@ export interface UseInlineCommentsResult {
   deleteComment: (id: string) => void;
   hasCommentOnLine: (line: number) => boolean;
   getCommentsForLine: (line: number) => CommentEntry[];
+  setCommentRange: (id: string, startLine: number, endLine: number) => void;
 }
 
 /**
@@ -72,5 +74,17 @@ export function useInlineComments(): UseInlineCommentsResult {
     [comments],
   );
 
-  return { comments, addComment, editComment, deleteComment, hasCommentOnLine, getCommentsForLine };
+  const setCommentRange = useCallback((id: string, startLine: number, endLine: number) => {
+    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, startLine, endLine } : c)));
+  }, []);
+
+  return {
+    comments,
+    addComment,
+    editComment,
+    deleteComment,
+    hasCommentOnLine,
+    getCommentsForLine,
+    setCommentRange,
+  };
 }

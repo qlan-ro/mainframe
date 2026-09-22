@@ -188,6 +188,23 @@ describe('commentField position mapping', () => {
     expect(byId['A']!.line).toBe(3); // was 2, shifted to 3
     expect(byId['B']!.line).toBe(5); // was 4, shifted to 5
   });
+
+  it('inserting a line above a two-line comment moves both its start and its end', () => {
+    // Doc: "L1\nL2\nL3\nL4\n" — a two-line comment spans L2-L3 (lines 2-3).
+    const doc = 'L1\nL2\nL3\nL4\n';
+    const state = makeState(doc);
+
+    const withComment = state.update({
+      effects: [addCommentEffect.of({ id: 'range', line: 3, startLine: 2, text: '' })],
+    }).state;
+    expect(getCommentsFromState(withComment)[0]).toMatchObject({ startLine: 2, endLine: 3 });
+
+    const afterInsert = insertAt(withComment, 0, 'L0\n');
+
+    const comment = getCommentsFromState(afterInsert)[0]!;
+    expect(comment.startLine).toBe(3);
+    expect(comment.endLine).toBe(4);
+  });
 });
 
 // ── Block widget decorations ─────────────────────────────────────────────────

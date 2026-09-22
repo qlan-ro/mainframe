@@ -13,49 +13,18 @@
  * then renders `submitBar` above the view and `portals` alongside it. This lets
  * both CmEditorWithComments and CmDiffEditorWithComments share one implementation.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
-import { MessageSquare } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { addCommentEffect, buildCommentGutter, commentField, type CommentBlockWidget } from './comment-gutter';
-import { useInlineComments } from './use-inline-comments';
+import { addCommentEffect, buildCommentGutter, commentField } from './comment-gutter';
+import { useFileNotes, type UseFileNotesResult } from './use-file-notes';
 import { InlineCommentWidget } from './InlineCommentWidget';
 import { resolveCommentRange } from './resolve-comment-range';
 import { useReviewActions } from './use-review-actions';
-
-// ── SubmitReviewBar ──────────────────────────────────────────────────────────
-
-interface SubmitReviewBarProps {
-  count: number;
-  filledCount: number;
-  onSubmit: () => void;
-}
-
-function SubmitReviewBar({ count, filledCount, onSubmit }: SubmitReviewBarProps) {
-  return (
-    <div
-      data-testid="editor-submit-review"
-      className="flex h-7.5 shrink-0 items-center gap-2 border-b border-border bg-card px-3"
-    >
-      <MessageSquare className="size-3 shrink-0 text-primary" aria-hidden />
-      <span className="text-xs text-muted-foreground">
-        {count} agent {count === 1 ? 'note' : 'notes'}
-      </span>
-      <div className="flex-1" />
-      <Button
-        data-testid="editor-submit-review-btn"
-        variant="secondary"
-        size="xs"
-        onClick={onSubmit}
-        disabled={filledCount === 0}
-      >
-        Submit review ({count})
-      </Button>
-    </div>
-  );
-}
+import { useCommentPortals } from './use-comment-portals';
+import { useCommentViewSync } from './use-comment-view-sync';
+import { SubmitReviewBar } from './SubmitReviewBar';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +37,13 @@ export interface UseCommentGutterOptions {
   onViewReady?: (view: EditorView) => void;
   /** File path for the review send; when absent, submit is a no-op with a warning. */
   filePath?: string;
+  /**
+   * A note set owned above this view (markdown/CSV/SVG lifted hosts). When
+   * provided, this hook seeds/reconciles the CM gutter from it instead of
+   * creating its own, and renders no submit bar — the lifted host renders its
+   * own NotesSubmitBar once for the whole file tab.
+   */
+  model?: UseFileNotesResult;
 }
 
 export interface UseCommentGutterResult {
@@ -81,12 +57,6 @@ export interface UseCommentGutterResult {
   portals: ReactNode;
 }
 
-/** Portal descriptor: the comment id + the host element from the block widget. */
-interface WidgetPortal {
-  commentId: string;
-  hostElement: HTMLDivElement;
-}
-
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useCommentGutter({
@@ -94,50 +64,27 @@ export function useCommentGutter({
   extraExtensions,
   onViewReady,
   filePath,
+  model: injectedModel,
 }: UseCommentGutterOptions): UseCommentGutterResult {
   const viewRef = useRef<EditorView | null>(null);
-  const { comments, addComment, editComment, deleteComment } = useInlineComments();
+  // Mirrors viewRef in React state: an effect needs a render-triggering value
+  // to run once the view actually mounts, which a ref update alone can't do.
+  const [view, setView] = useState<EditorView | null>(null);
+  // Always call our own model (never conditionally) so this hook's shape stays
+  // stable across renders; injectedModel ?? ownModel picks which one is live.
+  const ownModel = useFileNotes();
+  const model = injectedModel ?? ownModel;
+  const { notes: comments, addNote: addComment, editNote: editComment, drafts: draftTexts, setDraft } = model;
 
-  // Active portals: each entry corresponds to an open (visible) comment widget.
-  const [portalEntries, setPortalEntries] = useState<WidgetPortal[]>([]);
-  const portalsRef = useRef<WidgetPortal[]>([]);
-
-  // Per-portal draft text state.
-  const [draftTexts, setDraftTexts] = useState<Record<string, string>>({});
+  const { portalEntries, openPortalForWidget, closePortal } = useCommentPortals();
+  const { writeBackExtension } = useCommentViewSync({ view, model: injectedModel });
 
   const { handleSubmitReview, handleSendOne, removeComment } = useReviewActions({
     filePath,
-    comments,
-    draftTexts,
-    deleteComment,
-    setPortals: setPortalEntries,
-    portalsRef,
-    setDraftTexts,
+    model,
     viewRef,
+    closePortal,
   });
-
-  // ── Portal management helpers ──────────────────────────────────────────────
-
-  /** Open a portal into the block widget host for `commentId` (if not already open). */
-  const openPortalForWidget = useCallback((commentId: string, widget: CommentBlockWidget) => {
-    if (portalsRef.current.some((p) => p.commentId === commentId)) return;
-
-    // Register a destroy callback on the widget so we clean up if CM6 removes it.
-    widget.setDestroyCallback(() => {
-      portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
-      setPortalEntries((prev) => prev.filter((p) => p.commentId !== commentId));
-    });
-
-    const entry: WidgetPortal = { commentId, hostElement: widget.hostElement };
-    portalsRef.current = [...portalsRef.current, entry];
-    setPortalEntries((prev) => [...prev, entry]);
-  }, []);
-
-  /** Close (unmount) a portal without deleting the comment data. */
-  const closePortal = useCallback((commentId: string) => {
-    portalsRef.current = portalsRef.current.filter((p) => p.commentId !== commentId);
-    setPortalEntries((prev) => prev.filter((p) => p.commentId !== commentId));
-  }, []);
 
   // ── Gutter callbacks ───────────────────────────────────────────────────────
 
@@ -154,7 +101,7 @@ export function useCommentGutter({
 
       // Anchor the block widget BELOW endLine so it appears after the last
       // selected line (not after the first).
-      view.dispatch({ effects: [addCommentEffect.of({ id, line: endLine, text: '' })] });
+      view.dispatch({ effects: [addCommentEffect.of({ id, line: endLine, startLine, text: '' })] });
 
       // Open the portal using the widget that was just created.
       const widget = view.state.field(commentField).widgets.get(id);
@@ -196,8 +143,8 @@ export function useCommentGutter({
           }),
         ]
       : [];
-    return [...(extraExtensions ?? []), ...gutterExt];
-  }, [enableComments, extraExtensions]);
+    return [...(extraExtensions ?? []), ...gutterExt, writeBackExtension];
+  }, [enableComments, extraExtensions, writeBackExtension]);
 
   // ── Widget save / delete handlers ──────────────────────────────────────────
 
@@ -209,9 +156,12 @@ export function useCommentGutter({
     [editComment, closePortal],
   );
 
-  const handleTextChange = useCallback((commentId: string, text: string) => {
-    setDraftTexts((prev) => ({ ...prev, [commentId]: text }));
-  }, []);
+  const handleTextChange = useCallback(
+    (commentId: string, text: string) => {
+      setDraft(commentId, text);
+    },
+    [setDraft],
+  );
 
   // Count of comments that have any text (draft or saved).
   const filledCount = comments.filter((c) => {
@@ -220,15 +170,9 @@ export function useCommentGutter({
     return text.trim().length > 0;
   }).length;
 
-  const showSubmitBar = enableComments && comments.length > 0;
-
-  // ── Cleanup portals on unmount ─────────────────────────────────────────────
-
-  useEffect(() => {
-    return () => {
-      portalsRef.current = [];
-    };
-  }, []);
+  // A lifted host owns its own NotesSubmitBar for the whole file tab; this
+  // hook's bar is only for the code/diff editor's own (uninjected) model.
+  const showSubmitBar = !injectedModel && enableComments && comments.length > 0;
 
   // ── View ready callback ────────────────────────────────────────────────────
 
@@ -237,10 +181,11 @@ export function useCommentGutter({
   const onViewReadyRef = useRef(onViewReady);
   onViewReadyRef.current = onViewReady;
 
-  const handleViewReady = useCallback((view: EditorView) => {
-    viewRef.current = view;
+  const handleViewReady = useCallback((readyView: EditorView) => {
+    viewRef.current = readyView;
+    setView(readyView);
     // Forward to the parent so an EditorContextMenu's viewRef resolves.
-    onViewReadyRef.current?.(view);
+    onViewReadyRef.current?.(readyView);
   }, []);
 
   const submitBar = showSubmitBar ? (

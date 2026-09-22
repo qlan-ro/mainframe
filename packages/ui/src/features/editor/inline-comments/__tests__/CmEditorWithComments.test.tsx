@@ -58,14 +58,16 @@ vi.mock('../../CmEditor', () => ({
   },
 }));
 
-// Capture the gutter's onOpenComment so tests can open a portal on demand.
+// Capture the gutter's onOpenComment/onAddComment so tests can drive them on demand.
 let capturedOnOpen: ((id: string) => void) | null = null;
+let capturedOnAdd: ((line: number) => void) | null = null;
 
 vi.mock('../comment-gutter', () => ({
   addCommentEffect: { of: vi.fn() },
   deleteCommentEffect: { of: vi.fn((id: string) => ({ type: 'delete', id })) },
-  buildCommentGutter: (cfg: { onOpenComment: (id: string) => void }) => {
+  buildCommentGutter: (cfg: { onOpenComment: (id: string) => void; onAddComment: (line: number) => void }) => {
     capturedOnOpen = cfg.onOpenComment;
+    capturedOnAdd = cfg.onAddComment;
     return [];
   },
   commentField: {},
@@ -103,6 +105,7 @@ vi.mock('../use-inline-comments', () => ({
 // ── Import component under test (after mocks are in place) ───────────────────
 
 import { CmEditorWithComments } from '../CmEditorWithComments';
+import { addCommentEffect } from '../comment-gutter';
 
 /** The preview/editor surfaces here render v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
@@ -263,5 +266,19 @@ describe('CmEditorWithComments — per-comment send', () => {
     expect(mockDeleteComment).toHaveBeenCalledWith('c3');
     expect(mockDeleteComment).not.toHaveBeenCalledWith('c1');
     expect(mockDeleteComment).not.toHaveBeenCalledWith('c2');
+  });
+});
+
+describe('CmEditorWithComments — gutter add over a multi-line selection', () => {
+  it('anchors the new comment at BOTH the selection start and end line', async () => {
+    render(<CmEditorWithComments {...baseProps} filePath="src/foo.ts" />);
+
+    // resolveCommentRange is stubbed to { startLine: 3, endLine: 5 } above,
+    // simulating a click while lines 3-5 are selected.
+    await act(async () => {
+      capturedOnAdd?.(5);
+    });
+
+    expect(addCommentEffect.of).toHaveBeenCalledWith(expect.objectContaining({ line: 5, startLine: 3 }));
   });
 });

@@ -3,47 +3,47 @@
 /**
  * CsvViewer.tsx
  *
- * Renders a CSV file as a sortable, filterable table.
- * Features (per artboard spec):
- *   - Filter chip in the ViewerShell actions (header) slot.
- *   - Sticky header row (bg-card) with sort (asc → desc → off) per column.
- *   - Accent-colored ▲/▼ sort arrows (text-primary span).
- *   - Row-number gutter column.
- *   - Right-aligned numeric columns (auto-detected).
- *   - Live filter input that narrows rows.
- *   - Zebra striping via odd/even row classes.
- *   - statusRight slot wired with row/col counts.
+ * Renders a CSV file as a sortable, filterable table (Preview) or the raw
+ * text in the comment-gutter editor (Source). Both modes are read-only; the
+ * file tab owns one agent-notes set (`useFileTabNotes`) that survives the
+ * toggle, with one NotesSubmitBar shown in both modes.
+ *
+ * Table rendering (header, sort, rows, empty-filter row) lives in CsvTable;
+ * Source lives in CsvSource — both extracted to keep this file under the
+ * 300-line limit once it also owns the mode toggle and the note wiring.
  *
  * No external CSV dep — uses the hand-rolled `csv-parser.ts`.
  * data-testid="viewer-csv" on the root.
  */
 import { useMemo, useState } from 'react';
-import { Search, ChevronsUpDown } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { parseCsv, isNumericColumn, type CsvRow } from './csv-parser';
+import { CsvTable, type SortState } from './CsvTable';
+import { CsvSource } from './CsvSource';
 import { ViewerShell } from './ViewerShell';
+import { Segmented } from './Segmented';
 import { splitCsvStatus } from './viewer-status';
+import { useFileTabNotes } from '@/features/editor/inline-comments/use-file-notes';
 
 interface CsvViewerProps {
   content: string | null;
   path: string;
 }
 
-type SortDir = 'asc' | 'desc' | null;
+type CsvMode = 'preview' | 'source';
 
-interface SortState {
-  colIndex: number;
-  dir: SortDir;
-}
-
-function nextSortDir(current: SortDir): SortDir {
+function nextSortDir(current: SortState['dir']): SortState['dir'] {
   if (current === null) return 'asc';
   if (current === 'asc') return 'desc';
   return null;
 }
 
 export function CsvViewer({ content, path }: CsvViewerProps) {
+  const [mode, setMode] = useState<CsvMode>('preview');
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState<SortState>({ colIndex: -1, dir: null });
+
+  const { model, submitBar, handleSendOne, removeComment } = useFileTabNotes({ filePath: path });
 
   const parsed = useMemo(() => (content !== null ? parseCsv(content) : null), [content]);
 
@@ -94,10 +94,9 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
     total: filter.trim() ? totalRows : undefined,
   });
 
-  // Filter chip — lives in the ViewerShell header actions slot.
-  // A v2 InputGroup is the primitive for this, but its 36px frame does not fit
-  // the 28px viewer header — the compact chip stays, on v2 tokens.
-  const filterChip = (
+  // Filter chip — lives in the ViewerShell header actions slot, hidden in
+  // Source where there is nothing to filter.
+  const filterChip = mode === 'preview' && (
     <div className="inline-flex h-5 items-center gap-1 rounded-sm bg-muted px-2">
       <Search className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />
       <input
@@ -111,84 +110,50 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
     </div>
   );
 
+  const toggle = (
+    <Segmented
+      value={mode}
+      onChange={(id) => setMode(id as CsvMode)}
+      options={[
+        { id: 'preview', label: 'Preview', testId: 'viewer-csv-preview-toggle' },
+        { id: 'source', label: 'Source', testId: 'viewer-csv-source-toggle' },
+      ]}
+    />
+  );
+
   return (
-    <ViewerShell path={path} status={statusLeft} statusRight={statusRight} actions={filterChip}>
+    <ViewerShell
+      path={path}
+      status={statusLeft}
+      statusRight={statusRight}
+      actions={
+        <>
+          {filterChip}
+          {toggle}
+        </>
+      }
+    >
       <div data-testid="viewer-csv" className="flex h-full flex-col">
-        {/* Table */}
+        {submitBar}
         {content === null ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
+        ) : mode === 'source' ? (
+          <CsvSource content={content} path={path} model={model} />
         ) : !parsed || parsed.headers.length === 0 ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
         ) : (
-          <div className="flex-1 overflow-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead className="sticky top-0 bg-card">
-                <tr>
-                  {/* Row-number gutter */}
-                  <th className="w-10 border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 select-none">
-                    #
-                  </th>
-                  {parsed.headers.map((header, i) => {
-                    const isActive = sort.colIndex === i;
-                    const isNum = numericCols.has(i);
-                    return (
-                      <th
-                        key={i}
-                        data-testid={`viewer-csv-header-${header}`}
-                        onClick={() => handleHeaderClick(i)}
-                        className={[
-                          'cursor-pointer border-b border-border px-3.5 py-1.5 font-semibold select-none',
-                          'hover:bg-muted',
-                          isNum ? 'text-right' : 'text-left',
-                          isActive ? 'text-foreground' : 'text-muted-foreground',
-                        ].join(' ')}
-                      >
-                        <span className={['inline-flex items-center gap-1', isNum ? 'flex-row-reverse' : ''].join(' ')}>
-                          {header}
-                          {isActive && sort.dir === 'asc' && <span className="text-xs text-primary">▲</span>}
-                          {isActive && sort.dir === 'desc' && <span className="text-xs text-primary">▼</span>}
-                          {isActive && (
-                            <ChevronsUpDown className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />
-                          )}
-                        </span>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {displayRows.map((row, rowIdx) => (
-                  <tr key={row._index} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-muted/40'}>
-                    <td className="border-r border-b border-border px-3.5 py-1.5 text-right font-mono text-xs text-muted-foreground/50 tabular-nums">
-                      {rowIdx + 1}
-                    </td>
-                    {parsed.headers.map((_header, colIdx) => (
-                      <td
-                        key={colIdx}
-                        className={[
-                          'border-b border-border px-3.5 py-1.5',
-                          numericCols.has(colIdx) ? 'text-right font-mono text-xs tabular-nums' : 'text-left',
-                          'text-foreground',
-                        ].join(' ')}
-                      >
-                        {row.cells[colIdx] ?? ''}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {displayRows.length === 0 && filter.trim() && (
-                  <tr data-testid="viewer-csv-empty">
-                    <td
-                      colSpan={parsed.headers.length + 1}
-                      className="px-3 py-10 text-center text-xs text-muted-foreground"
-                    >
-                      {`No rows match "${filter}".`}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <CsvTable
+            headers={parsed.headers}
+            rows={displayRows}
+            numericCols={numericCols}
+            sort={sort}
+            onHeaderClick={handleHeaderClick}
+            filter={filter}
+            rawText={content}
+            model={model}
+            onSendOne={handleSendOne}
+            onDeleteNote={removeComment}
+          />
         )}
       </div>
     </ViewerShell>

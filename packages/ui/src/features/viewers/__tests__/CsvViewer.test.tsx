@@ -19,11 +19,24 @@
  * 13. Filter input lives in the ViewerShell actions (header), not a separate sub-bar.
  * 14. Sort arrows use accent-colored ▲/▼ spans (not plain text ↑/↓).
  * 15. Sticky thead uses bg-card, not bg-background.
+ *
+ * The row-number gutter now shows each row's real source line (`row.startLine`,
+ * 1-based, counting the header row) instead of its display position — see
+ * CsvViewer.notes.test.tsx for the note-taking behaviors this unlocks.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CsvViewer } from '../CsvViewer';
+
+// useFileTabNotes -> useReviewActions -> useSendReview reads these contexts
+// directly; neither provider is mounted here (fact 13 / plan Risks).
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: undefined, chatId: undefined, projectPath: undefined }),
+}));
 
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
@@ -155,6 +168,24 @@ describe('CsvViewer', () => {
       (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('same key'),
     );
     expect(keyWarnings).toHaveLength(0);
+  });
+
+  it('the row-number gutter shows the source line and does not move under sort or filter', () => {
+    render(<CsvViewer content={SORT_CSV} path="/data/table.csv" />);
+    const tbody = document.querySelector('tbody')!;
+
+    // SORT_CSV = 'name,score\nZoe,10\nAbe,20' — header is line 1, Zoe is line 2, Abe is line 3.
+    const gutterBefore = Array.from(tbody.querySelectorAll('tr')).map((tr) => tr.querySelector('td')!.textContent);
+    expect(gutterBefore).toEqual(['2', '3']);
+
+    fireEvent.click(screen.getByTestId('viewer-csv-header-name'));
+    const gutterAfterSort = Array.from(tbody.querySelectorAll('tr')).map((tr) => tr.querySelector('td')!.textContent);
+    // Sorted ascending by name: Abe (line 3) then Zoe (line 2) — gutter follows the row, not the position.
+    expect(gutterAfterSort).toEqual(['3', '2']);
+
+    fireEvent.change(screen.getByTestId('viewer-csv-filter'), { target: { value: 'Zoe' } });
+    const gutterAfterFilter = Array.from(tbody.querySelectorAll('tr')).map((tr) => tr.querySelector('td')!.textContent);
+    expect(gutterAfterFilter).toEqual(['2']);
   });
 
   it('renders inside ViewerShell (viewer-shell present)', () => {

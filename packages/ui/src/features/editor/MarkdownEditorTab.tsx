@@ -8,7 +8,8 @@
  * there is no duplicate chrome bar.
  */
 import { useState } from 'react';
-import { CmEditor } from './CmEditor';
+import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
+import { useFileTabNotes } from './inline-comments/use-file-notes';
 import { MarkdownPreview } from './MarkdownPreview';
 import { ViewerShell } from '@/features/viewers/ViewerShell';
 import { Segmented } from '@/features/viewers/Segmented';
@@ -38,6 +39,7 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
   // Markdown opens rendered (Preview) by default — like the other special viewers
   // (svg/csv/image/pdf). Switch to Source to edit.
   const [mode, setMode] = useState<Mode>('preview');
+  const { model, submitBar, openNote, openNoteId, handleSendOne } = useFileTabNotes({ filePath: path });
 
   const { left: status, right: statusRight } = splitMarkdownStatus(countWords(value), countLines(value));
 
@@ -56,18 +58,25 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
 
   return (
     <ViewerShell path={path} status={status} statusRight={statusRight} actions={toggle}>
-      {mode === 'edit' ? (
-        <CmEditor
-          value={value}
-          language="markdown"
-          readOnly={readOnly}
-          onChange={onChange}
-          onSave={onSave}
-          path={path}
-        />
-      ) : (
-        <MarkdownPreview value={value} />
-      )}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {submitBar}
+        <div className="min-h-0 flex-1">
+          {mode === 'edit' ? (
+            <CmEditorWithComments
+              value={value}
+              language="markdown"
+              readOnly={readOnly}
+              onChange={onChange}
+              onSave={onSave}
+              path={path}
+              filePath={path}
+              model={model}
+            />
+          ) : (
+            <MarkdownPreview value={value} notes={{ model, openNoteId, openNote, handleSendOne }} />
+          )}
+        </div>
+      </div>
     </ViewerShell>
   );
 }

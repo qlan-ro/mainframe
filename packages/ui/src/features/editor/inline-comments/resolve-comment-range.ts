@@ -14,7 +14,8 @@ export interface CommentRange {
   lineContent: string;
 }
 
-const MAX_INLINE_LINES = 50;
+/** Quotes longer than this are dropped to avoid sending large diffs inline. */
+export const MAX_INLINE_LINES = 50;
 
 /**
  * Resolve the effective line range for a new comment.

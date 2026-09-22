@@ -32,14 +32,20 @@ export interface InlineCommentState {
    * passed/read `line`.  Derived from pos at query time — not stored.
    */
   line?: number;
+  /** 1-based start line, derived from the start-side anchor at query time. */
+  startLine: number;
+  /** 1-based end line, derived from the end-side anchor at query time (= deprecated `line`). */
+  endLine: number;
 }
 
 // ── StateEffects ─────────────────────────────────────────────────────────────
 
 export interface AddCommentPayload {
   id: string;
-  /** 1-based line number. The StateField converts this to a doc position internally. */
+  /** 1-based end line. The StateField converts this to a doc position internally. */
   line: number;
+  /** 1-based start line; defaults to `line` when omitted (legacy single-line dispatches). */
+  startLine?: number;
   text: string;
 }
 
@@ -50,6 +56,9 @@ export const deleteCommentEffect = StateEffect.define<string>(); // id
 
 interface CommentAnchor {
   id: string;
+  /** Start-side document position; mapped with mapPos(-1) so it doesn't creep past inserted text. */
+  startPos: number;
+  /** End-side document position; mapped with mapPos(1). Anchors the block widget. */
   pos: number;
   text: string;
 }
@@ -153,9 +162,13 @@ export const commentField = StateField.define<CommentFieldValue>({
   },
 
   update(value, tr: Transaction) {
-    // 1. Map existing anchor positions through the document changes.
+    // 1. Map existing anchor positions through the document changes. The start
+    // side maps with bias -1 (stays put when text is inserted right at it) and
+    // the end side with bias 1, so a comment's range only grows when an edit
+    // actually falls inside it.
     let anchors = value.anchors.map((a) => ({
       ...a,
+      startPos: tr.changes.mapPos(a.startPos, -1),
       pos: tr.changes.mapPos(a.pos, 1),
     }));
 
@@ -164,11 +177,13 @@ export const commentField = StateField.define<CommentFieldValue>({
     for (const effect of tr.effects) {
       if (effect.is(addCommentEffect)) {
         changed = true;
-        // Convert the 1-based line number to a document position (start of line).
+        // Convert the 1-based line numbers to document positions (start of line).
         const totalLines = tr.state.doc.lines;
-        const safeLineNum = Math.max(1, Math.min(effect.value.line, totalLines));
-        const pos = tr.state.doc.line(safeLineNum).from;
-        anchors = [...anchors, { id: effect.value.id, pos, text: effect.value.text }];
+        const safeEndLine = Math.max(1, Math.min(effect.value.line, totalLines));
+        const safeStartLine = Math.max(1, Math.min(effect.value.startLine ?? effect.value.line, totalLines));
+        const pos = tr.state.doc.line(safeEndLine).from;
+        const startPos = tr.state.doc.line(safeStartLine).from;
+        anchors = [...anchors, { id: effect.value.id, startPos, pos, text: effect.value.text }];
       } else if (effect.is(deleteCommentEffect)) {
         changed = true;
         anchors = anchors.filter((a) => a.id !== effect.value);
@@ -203,12 +218,18 @@ export function getCommentsFromState(state: {
   doc: { lineAt: (pos: number) => { number: number } };
 }): InlineCommentState[] {
   const value = state.field(commentField);
-  return value.anchors.map((a) => ({
-    id: a.id,
-    pos: a.pos,
-    line: state.doc.lineAt(a.pos).number,
-    text: a.text,
-  }));
+  return value.anchors.map((a) => {
+    const endLine = state.doc.lineAt(a.pos).number;
+    const startLine = state.doc.lineAt(a.startPos).number;
+    return {
+      id: a.id,
+      pos: a.pos,
+      line: endLine,
+      startLine,
+      endLine,
+      text: a.text,
+    };
+  });
 }
 
 /**

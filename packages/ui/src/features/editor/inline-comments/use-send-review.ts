@@ -5,17 +5,23 @@ import { chatControllerRegistry } from '@/features/sessions/runtime/chat-control
 import { formatReview, type LineCommentInput } from '@/lib/editor/format-line-comment';
 import type { AppendMessage } from '@assistant-ui/react';
 
+/**
+ * 'no-session' signals the caller to keep every note and draft intact — the
+ * send never reached the daemon, so nothing was submitted to clear.
+ */
+export type SendReviewOutcome = 'sent' | 'no-session' | 'empty';
+
 export function useSendReview() {
   const port = useDaemonPort();
   const { chatId } = useActiveIdentity();
 
   return useCallback(
-    async (filePath: string, items: LineCommentInput[]) => {
+    async (filePath: string, items: LineCommentInput[]): Promise<SendReviewOutcome> => {
       if (!chatId) {
         console.warn('[editor] no active chatId, skipping review send');
-        return;
+        return 'no-session';
       }
-      if (items.length === 0) return;
+      if (items.length === 0) return 'empty';
 
       const controller = chatControllerRegistry.getOrCreate(chatId, port);
 
@@ -31,6 +37,7 @@ export function useSendReview() {
       };
 
       await controller.sendMessage(message);
+      return 'sent';
     },
     [chatId, port],
   );

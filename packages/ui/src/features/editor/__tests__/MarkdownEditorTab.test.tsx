@@ -16,6 +16,17 @@ vi.mock('@/store/surface-intents', () => ({
   emitSurfaceIntent: vi.fn(),
 }));
 
+// MarkdownEditorTab now lifts a useFileTabNotes model, whose useReviewActions
+// -> useSendReview reads these contexts directly; neither provider is mounted
+// here, so both need a stub (fact 13 / the plan's Risks section — same
+// harness the SvgViewer and CsvViewer suites need).
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectId: undefined, chatId: undefined, projectPath: undefined }),
+}));
+
 // ---------------------------------------------------------------------------
 // Mock for shiki to avoid loading WASM in jsdom.
 // Returns fake colored tokens so we can assert the highlighted output.

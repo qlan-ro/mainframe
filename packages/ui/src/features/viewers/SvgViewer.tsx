@@ -5,22 +5,31 @@
  *
  * Renders SVG files safely in two modes:
  *   Preview — renders via <img src={objectURL}> (avoids dangerouslySetInnerHTML
- *              on untrusted SVG; object URLs sandbox script execution).
- *   Source  — shows the raw SVG text in a styled <pre>.
+ *              on untrusted SVG; object URLs sandbox script execution). No
+ *              annotation affordance — an image is not line-addressable.
+ *   Source  — the read-only comment-gutter editor over the raw SVG markup, so
+ *              the file can be annotated line by line like a code file.
  *
- * A Preview ⇄ Source toggle button pair appears in the viewer header.
+ * A Preview ⇄ Source toggle appears in the viewer header. The file tab owns
+ * one agent-notes set (survives the toggle) with one NotesSubmitBar shown in
+ * both modes.
  *
  * Props:
  *   content — raw SVG text string; null while loading.
- *   path    — file path used by ViewerShell for breadcrumb + reveal.
+ *   path    — file path used by ViewerShell for breadcrumb + reveal, and as
+ *             the review-send target.
  *
- * data-testid="viewer-svg" on the root; toggle buttons carry their own testids.
+ * data-testid="viewer-svg" on the root; toggle buttons carry their own testids;
+ * Source mode's editor host carries data-testid="viewer-svg-source".
  */
 import { useEffect, useState } from 'react';
 import { ViewerShell } from './ViewerShell';
 import { Segmented } from './Segmented';
 import { checkerStyle } from './viewer-checker';
 import { splitSvgStatus } from './viewer-status';
+import { CmEditorWithComments } from '@/features/editor/inline-comments/CmEditorWithComments';
+import { useFileTabNotes } from '@/features/editor/inline-comments/use-file-notes';
+import { inferLanguage } from '@/lib/editor/file-types';
 
 interface SvgViewerProps {
   content: string | null;
@@ -48,6 +57,7 @@ function parseSvgMeta(svg: string): { viewBox: string; w: number; h: number } | 
 export function SvgViewer({ content, path }: SvgViewerProps) {
   const [mode, setMode] = useState<SvgMode>('preview');
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const { model, submitBar } = useFileTabNotes({ filePath: path });
 
   // Create an object URL whenever the SVG content changes.
   // Revoke the previous one via effect cleanup to avoid memory leaks.
@@ -71,14 +81,14 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
     ? splitSvgStatus({ viewBox: svgMeta.viewBox, w: svgMeta.w, h: svgMeta.h, bytes })
     : { left: 'SVG · Loading…', right: '' };
 
-  // Preview/Code segmented toggle — lives in the ViewerShell breadcrumb header.
+  // Preview/Source segmented toggle — lives in the ViewerShell breadcrumb header.
   const seg = (
     <Segmented
       value={mode}
       onChange={(id) => setMode(id as SvgMode)}
       options={[
         { id: 'preview', label: 'Preview', testId: 'viewer-svg-preview-toggle' },
-        { id: 'source', label: 'Code', testId: 'viewer-svg-source-toggle' },
+        { id: 'source', label: 'Source', testId: 'viewer-svg-source-toggle' },
       ]}
     />
   );
@@ -86,26 +96,30 @@ export function SvgViewer({ content, path }: SvgViewerProps) {
   return (
     <ViewerShell path={path} status={statusLeft} statusRight={statusRight || undefined} actions={seg}>
       <div data-testid="viewer-svg" className="flex h-full flex-col">
-        <div className="flex flex-1 overflow-auto">
-          {content === null ? (
-            <span className="m-auto text-sm text-muted-foreground">Loading…</span>
-          ) : mode === 'preview' ? (
-            <div className="flex flex-1 items-center justify-center p-8" style={checkerStyle}>
-              <div className="rounded-lg bg-background p-9 shadow-md">
-                {objectUrl && (
-                  <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />
-                )}
-              </div>
+        {submitBar}
+        {content === null ? (
+          <div className="flex flex-1 items-center justify-center overflow-auto">
+            <span className="text-sm text-muted-foreground">Loading…</span>
+          </div>
+        ) : mode === 'preview' ? (
+          <div className="flex flex-1 items-center justify-center overflow-auto p-8" style={checkerStyle}>
+            <div className="rounded-lg bg-background p-9 shadow-md">
+              {objectUrl && <img src={objectUrl} alt="SVG preview" className="max-h-full max-w-full object-contain" />}
             </div>
-          ) : (
-            <pre
-              data-testid="viewer-svg-source"
-              className="mf-editor-selectable flex-1 overflow-auto bg-mf-code-bg px-4.5 py-4 font-mono text-xs leading-relaxed text-mf-code-fg"
-            >
-              {content}
-            </pre>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div data-testid="viewer-svg-source" className="mf-editor-selectable flex min-h-0 flex-1 flex-col">
+            <CmEditorWithComments
+              value={content}
+              language={inferLanguage(path)}
+              readOnly
+              onChange={() => undefined}
+              path={path}
+              filePath={path}
+              model={model}
+            />
+          </div>
+        )}
       </div>
     </ViewerShell>
   );
