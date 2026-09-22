@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use mainframe_adapter_api::Adapter;
 use mainframe_adapter_codex::CodexAdapter;
 use mainframe_types::adapter::SessionOptions;
