@@ -56,6 +56,43 @@ describe('FileTree', () => {
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts' });
   });
 
+  it('double-clicking a file row commits it as a permanent tab', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.doubleClick(await screen.findByTestId('file-tree-row-src/a.ts'));
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts', mode: 'permanent' });
+  });
+
+  it('accelerator-click (Ctrl, non-mac) on a file row opens it as a permanent tab', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.click(await screen.findByTestId('file-tree-row-src/a.ts'), { ctrlKey: true });
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts', mode: 'permanent' });
+    expect(emitSurfaceIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a bare meta-click (mac accelerator, not the non-mac one) on a file row still previews', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.click(await screen.findByTestId('file-tree-row-src/a.ts'), { metaKey: true });
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts' });
+  });
+
+  it('middle-click (mouseUp button 1) on a file row opens it as a permanent tab', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.mouseUp(await screen.findByTestId('file-tree-row-src/a.ts'), { button: 1 });
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/a.ts', mode: 'permanent' });
+    expect(emitSurfaceIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a left mouseUp (button 0) on a file row does not emit anything by itself', async () => {
+    getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]);
+    render(<FileTree port={1} projectId="p1" />);
+    fireEvent.mouseUp(await screen.findByTestId('file-tree-row-src/a.ts'), { button: 0 });
+    expect(emitSurfaceIntent).not.toHaveBeenCalled();
+  });
+
   it('expanding a directory lazily loads and renders its children', async () => {
     getFileTree.mockResolvedValueOnce([dir('src', 'src')]); // root
     getFileTree.mockResolvedValueOnce([file('a.ts', 'src/a.ts')]); // src children

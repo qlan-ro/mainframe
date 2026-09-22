@@ -7,7 +7,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { addRunTab, closeRunTab, emptyRun, type RunState, type RunTab } from '../run-pane';
-import { isFileTab, moveTabToPaneEdge, openFileTab, promoteFileTab, type OpenFileTarget } from '../run-pane-file-tabs';
+import {
+  findOpenFileTab,
+  isFileTab,
+  moveTabToPaneEdge,
+  openFileTab,
+  promoteFileTab,
+  type OpenFileTarget,
+} from '../run-pane-file-tabs';
 
 const code = (path: string, extra: Partial<OpenFileTarget> = {}): OpenFileTarget => ({
   kind: 'code',
@@ -284,6 +291,34 @@ describe('moveTabToPaneEdge', () => {
   it('an unknown tab id is a no-op', () => {
     const { run } = openFileTab(null, code('/a.ts'), 'permanent');
     expect(moveTabToPaneEdge(run, 'nope', 'right')).toBe(run);
+  });
+});
+
+// ── findOpenFileTab ──────────────────────────────────────────────────────────
+
+describe('findOpenFileTab', () => {
+  it('finds a tab by kind + path + scope across panes', () => {
+    const base = split();
+    const p1 = base.panes[1]!.id;
+    const { run, tabId } = openFileTab(base, code('/a.ts', { scopeKey: 'proj:/wt' }), 'permanent', p1);
+
+    const found = findOpenFileTab(run, { kind: 'code', path: '/a.ts', scopeKey: 'proj:/wt' });
+    expect(found?.id).toBe(tabId);
+  });
+
+  it('is the same identity check openFileTab uses — a scope mismatch is a miss', () => {
+    const { run } = openFileTab(null, code('/a.ts', { scopeKey: 'proj:/wt-a' }), 'permanent');
+    expect(findOpenFileTab(run, { kind: 'code', path: '/a.ts', scopeKey: 'proj:/wt-b' })).toBeNull();
+  });
+
+  it('a kind mismatch on the same path is a miss (a permanent diff tab does not shadow a code tab)', () => {
+    const { run } = openFileTab(null, { kind: 'diff', path: '/a.ts', title: 'a.ts' }, 'permanent');
+    expect(findOpenFileTab(run, { kind: 'code', path: '/a.ts' })).toBeNull();
+  });
+
+  it('returns null for an empty run', () => {
+    expect(findOpenFileTab(null, { kind: 'code', path: '/a.ts' })).toBeNull();
+    expect(findOpenFileTab(emptyRun(), { kind: 'code', path: '/a.ts' })).toBeNull();
   });
 });
 

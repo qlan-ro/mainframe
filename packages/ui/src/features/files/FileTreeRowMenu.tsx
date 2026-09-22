@@ -22,12 +22,38 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useHost } from '@/lib/host';
 import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
+import { useLayoutStore } from '@/store/layout';
+import { findOpenFileTab } from '@/store/run-pane-file-tabs';
+import { kindForPath } from '@/store/intent-subscriber';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 
 interface FileTreeRowMenuProps {
   entry: FileTreeEntry;
   /** Absolute on-disk path for Reveal/Copy Path; falls back to the relative path when no base is known. */
   fullPath: string;
   children: ReactNode;
+}
+
+/**
+ * "Keep open" — files only, hidden once already open as permanent. A child
+ * component (not inlined in `FileTreeRowMenu`) so the layout-store
+ * subscription exists only while the menu is mounted, matching Radix's lazy
+ * mount of `ContextMenuContent`.
+ */
+function KeepOpenMenuItem({ entry }: { entry: FileTreeEntry }) {
+  const scopeKey = useActiveBasesStore((s) => s.scopeKey ?? undefined);
+  const target = { kind: kindForPath(entry.path), path: entry.path, scopeKey };
+  const existing = useLayoutStore((s) => findOpenFileTab(s.run, target));
+  const alreadyPermanent = existing != null && (existing.mode ?? 'permanent') === 'permanent';
+  if (entry.type === 'directory' || alreadyPermanent) return null;
+  return (
+    <ContextMenuItem
+      data-testid={`file-tree-keep-open-${entry.path}`}
+      onSelect={() => emitSurfaceIntent({ type: 'open-file', path: entry.path, mode: 'permanent' })}
+    >
+      Keep open
+    </ContextMenuItem>
+  );
 }
 
 export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuProps) {
@@ -51,6 +77,7 @@ export function FileTreeRowMenu({ entry, fullPath, children }: FileTreeRowMenuPr
           {isDir ? 'Find in folder' : 'Find in file'}
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <KeepOpenMenuItem entry={entry} />
         <ContextMenuItem
           data-testid="file-tree-reveal"
           disabled={!isLocalDaemon}
