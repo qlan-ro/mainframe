@@ -139,6 +139,11 @@ export function useTriggerField({ value, onChange, triggers, textareaRef }: UseT
       const current = snapshot.current;
       if (!current.active) return false;
       const length = current.entries.length;
+      // Escape and Backspace stay armed with no entries — a drilled-into
+      // category may legitimately list nothing. Navigation/selection keys
+      // fall through to the field's own behavior instead, matching "no
+      // trigger were in play" for an unmatched token.
+      if (length === 0 && e.key !== 'Escape' && e.key !== 'Backspace') return false;
 
       switch (e.key) {
         case 'ArrowDown':

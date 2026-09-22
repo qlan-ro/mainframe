@@ -236,6 +236,20 @@ describe('TriggerTextField', () => {
     expect(textarea.value).toBe('a\nb');
   });
 
+  it('Enter inserts a newline after an unmatched $ token, instead of being swallowed (todo #353)', async () => {
+    const user = userEvent.setup();
+    render(<Field />);
+    const textarea = screen.getByTestId('notify-message') as HTMLTextAreaElement;
+
+    await user.click(textarea);
+    await user.keyboard('$nomatch');
+    expect(screen.queryByTestId('notify-message-trigger-popover')).not.toBeInTheDocument();
+
+    await user.keyboard('{Enter}b');
+
+    expect(textarea.value).toBe('$nomatch\nb');
+  });
+
   it('renders the T13 variable-picker affordance slot', () => {
     render(<Field />);
     expect(screen.getByTestId('notify-message-var-picker')).toBeInTheDocument();

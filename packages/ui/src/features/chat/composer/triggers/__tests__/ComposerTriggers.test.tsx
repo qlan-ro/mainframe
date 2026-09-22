@@ -387,6 +387,65 @@ describe('ComposerAddMention — click opens the picker without submitting (todo
 });
 
 // ---------------------------------------------------------------------------
+// Todo #353 — an unmatched `/token` must not swallow Enter. This suite mounts
+// the real `Unstable_TriggerPopoverRoot` + assistant-ui plugin registry,
+// which is the only place aui's composer-input early-return (a handled key
+// short-circuits before the submit branch) is exercised — a unit test on
+// `useTriggerField` alone cannot pin this.
+// ---------------------------------------------------------------------------
+
+function SubmitHarness({ onNew }: { onNew: () => Promise<void> }) {
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
+    isRunning: false,
+    messages: [],
+    onNew,
+  });
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ComposerTriggers>
+        <ComposerPrimitive.Root>
+          <ComposerPrimitive.Input data-testid="composer-input" />
+        </ComposerPrimitive.Root>
+      </ComposerTriggers>
+    </AssistantRuntimeProvider>
+  );
+}
+
+describe('ComposerTriggers — Enter after an unmatched trigger token (todo #353)', () => {
+  beforeEach(() => {
+    __skills = [{ name: 'my-skill', displayName: 'My Skill', description: 'desc', invocationName: 'my-skill' }];
+    getFileTreeMock.mockReset().mockResolvedValue([]);
+  });
+
+  it('submits the composer when Enter is pressed after a slash token matches nothing', async () => {
+    const onNew = vi.fn(async () => {});
+    render(<SubmitHarness onNew={onNew} />);
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+
+    typeInto(input, '/zzz');
+    await waitFor(() => expect(screen.queryByTestId('composer-trigger-popover')).not.toBeInTheDocument());
+
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => expect(onNew).toHaveBeenCalledTimes(1));
+  });
+
+  it('still inserts the highlighted entry and does not submit when the menu has matches', async () => {
+    const onNew = vi.fn(async () => {});
+    render(<SubmitHarness onNew={onNew} />);
+    const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+
+    typeInto(input, '/');
+    await screen.findByTestId('composer-skill-item-my-skill');
+
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => expect(input.value).toBe('/my-skill '));
+    expect(onNew).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The combobox ARIA relationship (S8) — the input carries role/aria-expanded/
 // aria-controls/aria-activedescendant, and aria-controls resolves to the
 // portalled listbox even though it's outside the input's own DOM subtree.

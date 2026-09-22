@@ -88,12 +88,21 @@ function ComposerInputField({
 }) {
   const triggerAria = useTriggerFieldAria();
   // Escape leaves the composer and parks focus on the transcript (⌘L brings it
-  // back). The `/` and `@` trigger menu owns Escape while it is open — closing
-  // the menu must not also throw the caret out of the field. No preventDefault
-  // here: the session panel and files panel dismiss themselves on a document-
-  // level Escape listener gated on `!event.defaultPrevented`, and React's
-  // synthetic handler (attached below `document`) would otherwise stand them
-  // down before that listener runs.
+  // back). The `/` and `@` trigger menu owns Escape while a token is armed —
+  // even with no matching entries, the trigger hook still consumes Escape to
+  // disarm itself and calls preventDefault() on the SAME native event before
+  // this handler runs (assistant-ui's plugin registry is consulted from a
+  // document-level CAPTURE listener, which always fires before this bubble-
+  // phase handler). Gating on `e.defaultPrevented` reads that fact off the
+  // event itself; a React-context "armed" flag was tried first and dropped —
+  // the trigger's own preventDefault() can land a state update (closing the
+  // token) whose re-render commits, via a microtask checkpoint, in the gap
+  // between the two listeners, so the context value this handler closes over
+  // is already stale by the time it runs. No preventDefault of our own here:
+  // the session panel and files panel dismiss themselves on a document-level
+  // Escape listener gated on `!event.defaultPrevented`, and React's synthetic
+  // handler (attached below `document`) would otherwise stand them down
+  // before that listener runs.
   //
   // `cancelOnEscape={false}` below turns off aui's OWN document-level Escape
   // handler (`useEscapeKeydown` in ComposerPrimitive.Input), which calls the
@@ -108,12 +117,12 @@ function ComposerInputField({
   // Stop button is the one real way to cancel a run.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Escape' && triggerAria['aria-expanded'] !== true && focusOwningTranscript(e.currentTarget)) {
+      if (e.key === 'Escape' && !e.defaultPrevented && focusOwningTranscript(e.currentTarget)) {
         return;
       }
       onKeyDown(e);
     },
-    [onKeyDown, triggerAria],
+    [onKeyDown],
   );
   return (
     <ComposerPrimitive.Input

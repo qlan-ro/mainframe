@@ -121,6 +121,34 @@ describe('useTriggerField — detection and filtering', () => {
     type('@x/');
     expect(screen.getByTestId('composer-file-item-x/sub')).toBeInTheDocument();
   });
+
+  it('leaves Enter and arrow keys unhandled when a token is detected but matches nothing', () => {
+    const handled: boolean[] = [];
+    render(<Field onHandled={(h) => handled.push(h)} />);
+    const input = type('/zzz');
+
+    const enterNotPrevented = fireEvent.keyDown(input, { key: 'Enter' });
+    expect(handled[handled.length - 1]).toBe(false);
+    expect(enterNotPrevented).toBe(true);
+
+    const arrowNotPrevented = fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(handled[handled.length - 1]).toBe(false);
+    expect(arrowNotPrevented).toBe(true);
+  });
+
+  it('still consumes and disarms Escape when a token matches nothing', () => {
+    const handled: boolean[] = [];
+    render(<Field onHandled={(h) => handled.push(h)} />);
+    const input = type('/zzz');
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(handled[handled.length - 1]).toBe(true);
+
+    // Disarmed: typing Enter now should be unhandled for an unrelated reason
+    // (no active token at all), confirming Escape actually rewound it.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(handled[handled.length - 1]).toBe(false);
+  });
 });
 
 describe('useTriggerField — Escape', () => {

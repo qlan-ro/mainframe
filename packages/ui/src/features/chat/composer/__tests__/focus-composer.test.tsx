@@ -8,7 +8,7 @@
  * `Composer` with the same mock shell `Composer.test.tsx` uses, adding only a
  * controllable trigger-field-aria mock to force the menu-open branch.
  */
-import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -154,6 +154,20 @@ function renderComposerInTranscript() {
   );
 }
 
+/**
+ * The trigger hook preventDefaults Escape on the SAME native event whenever a
+ * token is armed (`use-trigger-field.ts`'s Escape case), before any render
+ * can flip context — so the composer reads `e.defaultPrevented`, not a
+ * render-timing-dependent "armed" flag, to decide whether to park focus. This
+ * mock's `Input` never runs that real handler, so the tests simulate its
+ * effect by preventing the event before dispatch.
+ */
+function pressEscape(input: HTMLElement, { prevented = false }: { prevented?: boolean } = {}) {
+  const event = createEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+  if (prevented) event.preventDefault();
+  return fireEvent(input, event);
+}
+
 describe('Escape in the composer (AC 13)', () => {
   beforeEach(() => {
     triggerExpanded = false;
@@ -164,7 +178,7 @@ describe('Escape in the composer (AC 13)', () => {
     const input = screen.getByTestId('chat-composer-input');
     input.focus();
 
-    const event = fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+    const event = pressEscape(input);
 
     expect(document.activeElement).not.toBe(input);
     expect(document.activeElement).toHaveAttribute('data-mf-chat-thread');
@@ -182,7 +196,7 @@ describe('Escape in the composer (AC 13)', () => {
     });
     document.addEventListener('keydown', documentListener);
 
-    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+    pressEscape(input);
 
     document.removeEventListener('keydown', documentListener);
     expect(documentListener).toHaveBeenCalledTimes(1);
@@ -195,8 +209,27 @@ describe('Escape in the composer (AC 13)', () => {
     const input = screen.getByTestId('chat-composer-input');
     input.focus();
 
-    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
+    pressEscape(input, { prevented: true });
 
     expect(document.activeElement).toBe(input);
+  });
+
+  it('leaves focus in the composer for an armed-but-unmatched token, so a following Enter is not swallowed', () => {
+    triggerExpanded = false;
+    renderComposerInTranscript();
+    const input = screen.getByTestId('chat-composer-input');
+    input.focus();
+
+    // The trigger hook still preventDefaults Escape for an unmatched token
+    // (it stays armed enough to disarm itself) — same signal as a matched menu.
+    pressEscape(input, { prevented: true });
+    expect(document.activeElement).toBe(input);
+
+    // The mocked ComposerPrimitive.Input never submits on its own, but this
+    // proves Escape's focus-park branch did not fire (it would have moved
+    // focus off `input` above) and that the composer's own handler leaves a
+    // following Enter alone.
+    const enterEvent = fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', cancelable: true, bubbles: true });
+    expect(enterEvent).toBe(true);
   });
 });
