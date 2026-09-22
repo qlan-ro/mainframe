@@ -150,13 +150,16 @@ test.describe('§45 Sessions panel', () => {
 
   // SP1: new-session button behaviour.
   //
-  // The anchored "NEW SESSION IN…" popover is gone: the "+" is ONE CLICK and
-  // opens a projectless draft whose WELCOME SCREEN owns the project choice
-  // (`welcome-project` → `welcome-project-<id>`). Until a project is picked the
-  // draft has no config, so the sidebar shows no draft row, the composer stays
-  // hidden, and — the D3 invariant this test really guards — no chat and no
-  // `sessions-row` exists yet.
-  test('SP1: new-session button opens the welcome screen project picker (no filter active)', async () => {
+  // The anchored "NEW SESSION IN…" popover is gone: the "+" is ONE CLICK, and
+  // its WELCOME SCREEN owns the project choice (`welcome-project` →
+  // `welcome-project-<id>`) whenever neither an active filter pill nor the
+  // session active at click time resolves one. Here `beforeAll` seeds and
+  // selects a chat in `project`, so that session IS the signal: the resolver
+  // inherits its project directly, and the draft row + composer are live
+  // immediately — no choose-project dead-end. The D3 invariant this test
+  // really guards still holds regardless: no chat and no new `sessions-row`
+  // exists until the first send.
+  test("SP1: new-session button inherits the active session's project (no filter pill)", async () => {
     const { page } = app;
     const sidebar = sessionsSidebar(page);
     const rowsBefore = await page.getByTestId('sessions-row').count();
@@ -164,13 +167,14 @@ test.describe('§45 Sessions panel', () => {
     await sidebar.newButton().click();
 
     await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('welcome-project')).toBeVisible();
-    // Nothing to send into yet — the composer only mounts once a project resolves.
-    await expect(page.getByTestId('chat-composer-input')).toHaveCount(0);
+    await expect(page.getByTestId('welcome-project')).toContainText(path.basename(project.projectPath), {
+      timeout: 10_000,
+    });
+    // The resolved project makes the composer and the draft row live right away.
+    await expect(page.getByTestId('chat-composer-input')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
 
-    // No draft row and no session: the project pick precedes any draft config,
-    // and the chat itself is still created on first send only.
-    await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0);
+    // Still no new session: the chat itself is created on first send only.
     const rowsAfter = await page.getByTestId('sessions-row').count();
     expect(rowsAfter).toBe(rowsBefore);
   });

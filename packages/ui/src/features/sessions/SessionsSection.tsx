@@ -40,10 +40,7 @@ export function SessionsSection({ groups, projectNames, colorOf, draft, hasFilte
 
   const actions = (
     <>
-      <SessionsNewButton
-        filterProjectId={soleProject}
-        filterProjectName={soleProject != null ? (projectNames[soleProject] ?? null) : null}
-      />
+      <SessionsNewButton filterProjectName={soleProject != null ? (projectNames[soleProject] ?? null) : null} />
       <SessionSortMenu mode={sortMode} onChange={setSortMode} />
       <SessionsMoreMenu />
     </>

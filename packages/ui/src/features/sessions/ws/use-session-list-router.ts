@@ -32,6 +32,7 @@ import { useUnreadStore } from '../../../store/unread-store';
 import { useZonesStore } from '../../chat/zones/zones-store';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
+import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
@@ -50,7 +51,8 @@ function rememberActiveSession(active: SessionItem | undefined, items: readonly 
     useLastSessionStore.getState().setLastForProject(active.custom.projectId, active.remoteId);
   }
   // Follow the active session with its remembered workspace layout, keyed by the
-  // stable daemon chat id. Skipped for the __LOCALID_* draft (no remoteId yet).
+  // stable daemon chat id. This function only runs for a real (non-draft) active
+  // item — the draft's own layout key is set in the caller's draft branch instead.
   // ALSO skipped when flipping focus BETWEEN the two chats of an open split:
   // the surface arrangement belongs to the visible split there, and swapping
   // per-session layouts made the workspace blink in and out per zone click.
@@ -189,8 +191,23 @@ export function useSessionListRouter(): void {
       // unselected). Adopt the remote item, exactly like the manual sidebar click.
       const draftRemoteId = threadItems.find((t) => t.id === mainThreadId)?.remoteId;
       if (draftRemoteId != null && items.some((t) => t.id === draftRemoteId)) {
+        // Carry the draft's arrangement onto the real chat id before switching, so
+        // the handoff cannot re-seed chat-only (adoptSession is itself re-entrant-safe).
+        useLayoutStore.getState().adoptSession(mainThreadId, draftRemoteId);
         void threads.switchToThread(draftRemoteId);
         return;
+      }
+
+      // Layout follows the draft (todo #354): give it its own key so a surface
+      // toggle made while composing never writes through to the previously
+      // active chat. Guarded on activeSessionId so the effect's frequent
+      // re-runs stay a no-op after the first. lastActiveRef must move too, or
+      // reactivating the left session later short-circuits before
+      // rememberActiveSession ever restores its layout.
+      if (isDraftSessionId(mainThreadId) && useLayoutStore.getState().activeSessionId !== mainThreadId) {
+        useLayoutStore.getState().setActiveSession(mainThreadId);
+        lastLayoutSessionId = mainThreadId;
+        lastActiveRef.current = mainThreadId;
       }
 
       // Archive-induced empty state: aui `switchToNewThread()`s off the archived

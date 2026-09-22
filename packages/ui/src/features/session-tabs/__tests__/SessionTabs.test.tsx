@@ -35,8 +35,8 @@ vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [], loading: false, reloadProjects: () => {} }),
 }));
 
-vi.mock('@/features/sessions/new-thread/use-new-chat-hotkey-handler', () => ({
-  useNewChatHotkeyHandler: () => newSession,
+vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
+  useStartNewSession: () => newSession,
 }));
 
 import { SessionTabs } from '../SessionTabs';

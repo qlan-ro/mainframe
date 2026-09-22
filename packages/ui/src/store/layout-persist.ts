@@ -27,6 +27,11 @@ export function sanitizeRun(run: RunState | null): RunState | null {
   return { ...run, panes, flex: panes.map((_, i) => run.flex[i] ?? 1) };
 }
 
+/** A local (uncommitted) new-thread draft id — never persisted or GC-exempt by daemon id. */
+export function isDraftSessionId(id: string): boolean {
+  return id.startsWith('__LOCALID_');
+}
+
 /**
  * Serialize the sessions Map to a plain object for persistence.
  * Sanitizes run tabs, skips volatile __LOCALID_* draft sessions.
@@ -34,7 +39,7 @@ export function sanitizeRun(run: RunState | null): RunState | null {
 export function serializeSessions(sessions: Map<string, SessionWorkspace>): Record<string, SessionWorkspace> {
   const out: Record<string, SessionWorkspace> = {};
   for (const [id, ws] of sessions) {
-    if (id.startsWith('__LOCALID_')) continue;
+    if (isDraftSessionId(id)) continue;
     out[id] = { layout: ws.layout, run: sanitizeRun(ws.run) };
   }
   return out;
@@ -47,12 +52,18 @@ export function reviveSessions(obj: Record<string, SessionWorkspace> | undefined
   return new Map(Object.entries(obj ?? {}));
 }
 
-/** Drop persisted entries whose id is no longer a live chat; identity-stable when nothing changed. */
+/**
+ * Drop persisted entries whose id is no longer a live chat; identity-stable when
+ * nothing changed. Exempts the active draft (no daemon id to appear in
+ * `validIds` yet) so the router's frequent re-runs never wipe it off screen.
+ */
 export function prunePersistedSessions(
   sessions: Map<string, SessionWorkspace>,
   validIds: Set<string>,
+  activeSessionId?: string | null,
 ): Map<string, SessionWorkspace> {
-  const next = new Map([...sessions].filter(([id]) => validIds.has(id)));
+  const keep = (id: string) => validIds.has(id) || (id === activeSessionId && isDraftSessionId(id));
+  const next = new Map([...sessions].filter(([id]) => keep(id)));
   return next.size === sessions.size ? sessions : next;
 }
 

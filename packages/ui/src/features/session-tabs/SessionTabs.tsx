@@ -19,7 +19,7 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { useNewChatHotkeyHandler } from '@/features/sessions/new-thread/use-new-chat-hotkey-handler';
+import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
@@ -68,7 +68,7 @@ export function SessionTabs() {
   const draftId = useSessionTabsStore((s) => s.draftId);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const pinTab = useSessionTabsStore((s) => s.pinTab);
-  const newSession = useNewChatHotkeyHandler(aui);
+  const newSession = useStartNewSession();
   const { projects } = useProjects();
   const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 

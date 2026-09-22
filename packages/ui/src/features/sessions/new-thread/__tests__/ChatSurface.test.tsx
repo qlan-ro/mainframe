@@ -35,6 +35,7 @@ let __draftMap = new Map<string, { projectId: string; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
 let __filterProjectIds: Set<string> = new Set();
+let __pendingProjectId: string | null = null;
 let __initialization: { status: 'idle' | 'initializing' | 'ready' | 'error'; retry?: () => Promise<unknown> } = {
   status: 'ready',
 };
@@ -65,6 +66,9 @@ vi.mock('@/store/session-filters', () => ({
   useSessionFilters: (sel: (s: { filterProjectIds: Set<string> }) => unknown) =>
     sel({ filterProjectIds: __filterProjectIds }),
   soleProjectId: (ids: ReadonlySet<string>) => (ids.size === 1 ? [...ids][0]! : null),
+}));
+vi.mock('../pending-draft-project', () => ({
+  usePendingDraftProject: (sel: (s: { projectId: string | null }) => unknown) => sel({ projectId: __pendingProjectId }),
 }));
 vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => undefined }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
@@ -105,6 +109,7 @@ describe('ChatSurface', () => {
     __projects = [{ id: 'proj-a' }];
     __loading = false;
     __filterProjectIds = new Set();
+    __pendingProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
     __initialization = { status: 'ready' };
   });
@@ -164,6 +169,17 @@ describe('ChatSurface', () => {
   it('hides ChatThread during the initial idle render for a project-filtered draft', () => {
     __draftMap = new Map();
     __filterProjectIds = new Set(['proj-a']);
+    __initialization = { status: 'idle' };
+    render(<ChatSurface />);
+
+    expect(screen.getByText('Initializing session…')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('waits on a pending target instead of flashing choose-a-project on the no-pill path', () => {
+    __draftMap = new Map();
+    __filterProjectIds = new Set();
+    __pendingProjectId = 'proj-a';
     __initialization = { status: 'idle' };
     render(<ChatSurface />);
 

@@ -3,32 +3,19 @@
  * Kanban (the todos board) and Automations as labeled rows — the labeled
  * successors of the old header cluster's icon-only Zap/ListTodo buttons.
  *
- * New Thread mirrors SessionsNewButton's one-click semantics: with a project
- * filter active it opens that project's draft; otherwise the projectless
- * draft, whose welcome screen owns the project pick.
+ * New Thread routes through the shared useStartNewSession resolver (pill →
+ * active session's project → none), the same as every other "+" entry point.
  */
 import { SquareKanban, SquarePen, Zap } from 'lucide-react';
-import { useAui } from '@assistant-ui/react';
 import { SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useAutomationsNav } from '@/features/automations/data/use-automations-nav';
 import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
-import { resetNewThreadDraft } from './new-thread/reset-new-thread-draft';
-import { useOpenDraft } from './use-open-draft';
+import { useStartNewSession } from './new-thread/use-start-new-session';
 
-export function SidebarActions({ filterProjectId }: { filterProjectId: string | null }) {
-  const aui = useAui();
-  const openDraft = useOpenDraft();
+export function SidebarActions() {
+  const newThread = useStartNewSession();
   const openAutomations = useAutomationsNav((s) => s.openHost);
   const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
-
-  const newThread = () => {
-    if (filterProjectId != null) {
-      void openDraft({ projectId: filterProjectId });
-      return;
-    }
-    resetNewThreadDraft(aui.threads.getState().newThreadId);
-    void aui.threads.switchToNewThread();
-  };
 
   return (
     <SidebarGroup className="p-0">

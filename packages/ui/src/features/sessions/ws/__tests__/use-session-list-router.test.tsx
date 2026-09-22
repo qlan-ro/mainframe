@@ -19,7 +19,12 @@
  *  - unmount → calls router.dispose() exactly once
  *  - active thread change → restores that session's persisted workspace layout
  *  - activating a never-visited session → seeds it with INITIAL_LAYOUT
- *  - activating the __LOCALID_* draft thread → does not touch the layout store
+ *  - activating a __LOCALID_* draft → makes it the layout store's active session
+ *    with a chat-only arrangement (todo #354)
+ *  - a workspace toggle made while on the draft leaves the previously active
+ *    chat's remembered entry untouched
+ *  - the first-send handoff adopts the draft's layout entry onto the remote id
+ *  - a draft never writes lastSessionId / lastForProject
  *  - a burst of onReload() calls coalesces into a leading reload plus at most
  *    one trailing reload per 200ms window, not one reload per event
  */
@@ -834,17 +839,67 @@ describe('useSessionListRouter — active thread change wires per-session layout
     expect(useLayoutStore.getState().layout.bottom).toBeNull();
   });
 
-  it('does not touch the layout store while the active thread is the __LOCALID_* draft', () => {
-    // Prime an active real session first (as if the user was on chat-prior).
+  it("activating a __LOCALID_* draft makes it the layout store's active session with a chat-only arrangement", () => {
     useLayoutStore.getState().setActiveSession('chat-prior');
+    useLayoutStore.getState().toggleSurface('workspace');
 
-    // The draft thread has no `custom`, so it is filtered out of `items` entirely —
-    // there is no remoteId to key a workspace off of. Ephemeral: skip the switch.
     mainThreadIdValue = '__LOCALID_new';
     fakeThreadItems = [];
 
     renderHook(() => useSessionListRouter());
 
+    expect(useLayoutStore.getState().activeSessionId).toBe('__LOCALID_new');
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    expect(useLayoutStore.getState().layout.bottom).toBeNull();
+  });
+
+  it("a workspace toggle made while on the draft leaves the previously active chat's remembered entry untouched, and restores it on return", () => {
+    mainThreadIdValue = 'chat-prior';
+    fakeThreadItems = [{ id: 'chat-prior', remoteId: 'chat-prior', custom: { projectId: 'p1', updatedAt: 1000 } }];
+    const { rerender } = renderHook(() => useSessionListRouter());
     expect(useLayoutStore.getState().activeSessionId).toBe('chat-prior');
+
+    mainThreadIdValue = '__LOCALID_new';
+    rerender();
+    useLayoutStore.getState().toggleSurface('workspace'); // opened only on the draft
+
+    mainThreadIdValue = 'chat-prior';
+    rerender();
+
+    expect(useLayoutStore.getState().activeSessionId).toBe('chat-prior');
+    expect(useLayoutStore.getState().layout.top).not.toContain('workspace');
+  });
+
+  it("adopts the draft's layout entry onto the remote id on the first-send handoff", () => {
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+
+    mainThreadIdValue = '__LOCALID_new';
+    rerender();
+    useLayoutStore.getState().toggleSurface('workspace'); // composed with the workspace open
+
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-new', status: 'regular' },
+      { id: 'chat-new', remoteId: 'chat-new', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledWith('chat-new');
+    expect(useLayoutStore.getState().sessions.has('__LOCALID_new')).toBe(false);
+    expect(useLayoutStore.getState().sessions.get('chat-new')?.layout.top).toContain('workspace');
+  });
+
+  it('does not write lastSessionId or lastForProject while on a draft', () => {
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [];
+
+    renderHook(() => useSessionListRouter());
+
+    expect(setLastSessionIdSpy).not.toHaveBeenCalled();
+    expect(setLastForProjectSpy).not.toHaveBeenCalled();
   });
 });

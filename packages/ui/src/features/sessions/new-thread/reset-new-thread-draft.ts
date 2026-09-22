@@ -26,9 +26,14 @@
  * `@session[…]` binding would attach another project's transcript. Clearing them
  * here keeps the whole draft (config + readiness + composition + references) on
  * one reset point.
+ *
+ * The layout store's per-draft entry (todo #354) is dropped here too: a reused
+ * slot must never carry a previous, abandoned draft's Workspace arrangement
+ * forward into the next New.
  */
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
+import { useLayoutStore } from '@/store/layout';
 import { clearDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { abandonCreateForLocal } from '../runtime/new-thread-coordinator';
@@ -42,4 +47,5 @@ export function resetNewThreadDraft(newThreadId: string | null | undefined): voi
   clearDraftDiscarded(newThreadId);
   useComposerSegments.getState().clear(newThreadId);
   useSessionReferences.getState().clear(newThreadId);
+  useLayoutStore.getState().dropSession(newThreadId);
 }

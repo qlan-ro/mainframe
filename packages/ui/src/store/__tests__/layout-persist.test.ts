@@ -175,6 +175,20 @@ describe('layout store persistence', () => {
     expect(useLayoutStore.getState().sessions.has('chat-b')).toBe(true);
   });
 
+  it('keeps the active __LOCALID_* entry while dropping a stale local id and an unknown chat id', () => {
+    const s = useLayoutStore.getState();
+    s.setActiveSession('__LOCALID_stale');
+    s.setActiveSession('chat-b');
+    s.setActiveSession('__LOCALID_active'); // active draft, stays active through the prune
+
+    useLayoutStore.getState().pruneSessions(new Set(['chat-b']));
+
+    const sessions = useLayoutStore.getState().sessions;
+    expect(sessions.has('__LOCALID_stale')).toBe(false);
+    expect(sessions.has('chat-b')).toBe(true);
+    expect(sessions.has('__LOCALID_active')).toBe(true);
+  });
+
   it('persists sessions to the daemon-scoped key and sanitizes on write', () => {
     useLayoutStore.getState().setActiveSession('chat-x');
     // mutates active session layout → triggers persist

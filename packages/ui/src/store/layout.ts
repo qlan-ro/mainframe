@@ -21,6 +21,7 @@ import {
 import { killAndDisposeCachedTerminals } from './terminal-cleanup';
 import { releaseUrlTunnels } from './url-tunnel-cleanup';
 import { layoutPersistOptions, prunePersistedSessions } from './layout-persist';
+import { adoptSessionEntry, dropSessionEntry } from './layout-sessions';
 import {
   isSurfaceFloor,
   layoutCanSplit,
@@ -42,10 +43,8 @@ export interface SessionWorkspace {
 
 // ── store ─────────────────────────────────────────────────────────────────
 
-/** Injected by features/chat/zones (store/ cannot import features/): true
- *  while the chat split is on screen. Workspace placement consults it so a
- *  surface lit mid-split lands in the bottom strip instead of taking half the
- *  top row and starving the split below its width floor. */
+/** Injected by features/chat/zones (store/ cannot import features/): true while the
+ *  chat split is on screen, so a surface lit mid-split lands in the bottom strip. */
 let chatSplitVisibleProbe: () => boolean = () => false;
 export function registerChatSplitVisibleProbe(probe: () => boolean): void {
   chatSplitVisibleProbe = probe;
@@ -76,28 +75,19 @@ export interface LayoutStore {
   /** Place the workspace surface side-by-side ('v') or in the bottom strip ('h'). */
   splitSurface: (orientation: 'v' | 'h') => void;
 
-  /** Set while the chat split parked the workspace in the strip — holds the
-   *  top-row side it came from so the restore returns it there. Transient by
-   *  design: after a reload the restore simply doesn't fire, which errs toward
-   *  never overriding an arrangement. */
+  /** Set while the chat split parked the workspace in the strip — holds the top-row
+   *  side it came from so the restore returns it there. Transient by design. */
   workspaceSystemMoved: 'top-left' | 'top-right' | null;
   /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
    *  the bottom strip when the chat splits… */
   moveWorkspaceForChatSplit: () => void;
   /** …and returns beside the chat on unsplit. */
   restoreWorkspaceAfterChatSplit: () => void;
-  /**
-   * Open (or focus) a file-backed tab in the workspace and light the surface.
-   * Returns the id of the tab now focused.
-   */
+  /** Open (or focus) a file-backed tab in the workspace and light the surface; returns its id. */
   openFileTab: (target: OpenFileTarget, mode: TabMode, paneId?: string) => string;
   /** Promote a preview tab to permanent (double-click / first edit). */
   promoteFileTab: (tabId: string) => void;
-  /**
-   * Append a tab to the workspace (terminal/preview launches). Returns true when the tab
-   * was added, false when an explicit `paneId` was given but that pane no longer
-   * exists (M6 — the caller must dispose the orphaned terminal).
-   */
+  /** Append a tab (terminal/preview). False when an explicit `paneId` no longer exists (M6). */
   addRunTab: (tab: RunTab, paneId?: string) => boolean;
   activateRunTab: (paneId: string, tabId: string) => void;
   /** Point a URL tab at a newly committed URL. The tab's id — and its webview — survive. */
@@ -108,6 +98,10 @@ export interface LayoutStore {
   releaseRunScope: (scopeKey: string) => void;
   /** GC: remove persisted entries for sessions no longer in the thread list. */
   pruneSessions: (validIds: Set<string>) => void;
+  /** Drop a session's workspace (kill-before-remove); re-seeds chat-only if it was active. */
+  dropSession: (sessionId: string) => void;
+  /** Move a session's workspace onto a new key (draft → real chat handoff); never disposes. */
+  adoptSession: (fromId: string, toId: string) => void;
 }
 
 export const useLayoutStore = create<LayoutStore>()(
@@ -124,9 +118,8 @@ export const useLayoutStore = create<LayoutStore>()(
       set({ layout: next.layout, run: next.run, sessions: nextSessions });
     }
 
-    /** placeInLayout for the workspace, but split-aware: while the chat split
-     *  is visible a newly lit workspace goes UNDER it (bottom strip), claimed
-     *  as system-moved so unsplitting brings it up beside the chat. */
+    /** placeInLayout, but split-aware: while the chat split is visible a newly lit
+     *  workspace goes to the bottom strip, claimed as system-moved to return later. */
     function placeWorkspace(layout: WorkspaceLayout): WorkspaceLayout {
       if (chatSplitVisibleProbe() && layout.bottom == null && !layout.top.includes('workspace')) {
         set({ workspaceSystemMoved: 'top-right' });
@@ -150,10 +143,8 @@ export const useLayoutStore = create<LayoutStore>()(
         set({ activeSessionId: sessionId, layout: ws.layout, run: ws.run, sessions: nextSessions });
       },
 
-      // Hiding the workspace PRESERVES its panes and kills nothing: the surface
-      // now holds the user's open files, and the terminal cache detaches without
-      // disposing, so re-showing reattaches live output. Kill-before-remove
-      // stays on the real close paths (closeRunTab / closePane / releaseRunScope).
+      // Hiding PRESERVES panes and kills nothing (detach, not dispose);
+      // kill-before-remove stays on closeRunTab / closePane / releaseRunScope.
       toggleSurface(surface) {
         const { layout, run } = get();
         // Dynamic floor: the last lit surface (chat or workspace) can't be hidden.
@@ -227,9 +218,7 @@ export const useLayoutStore = create<LayoutStore>()(
       addRunTab(tab, paneId) {
         const { layout, run } = get();
         const nextRun = addRunTabReducer(run, tab, paneId);
-        // The reducer returns null to signal a no-op (explicit paneId gone). Report
-        // false so the subscriber disposes the orphaned terminal (Task 10). On
-        // success it returns a real RunState; commit it and light the workspace.
+        // null = explicit paneId gone; false tells the subscriber to dispose the orphan.
         if (nextRun === null) return false;
         writeWorkspace({ layout: placeWorkspace(layout), run: nextRun });
         return true;
@@ -254,8 +243,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
         if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
         if (tab?.kind === 'url') releaseUrlTunnels([tabId]);
-        // Preview destruction is handled by the PreviewInstance lifecycle hook's
-        // cleanup effect when the component unmounts after the tab is removed.
+        // Preview destruction: PreviewInstance's own unmount cleanup, once removed.
         const nextRun = closeRunTabReducer(run, paneId, tabId);
         writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
       },
@@ -265,8 +253,7 @@ export const useLayoutStore = create<LayoutStore>()(
         if (!run) return;
         killAndDisposeCachedTerminals(tabIdsInPane(run, paneId, 'terminal'));
         releaseUrlTunnels(tabIdsInPane(run, paneId, 'url'));
-        // Preview destruction is handled by the PreviewInstance lifecycle hook's
-        // cleanup effect when components unmount after the pane is removed.
+        // Preview destruction: PreviewInstance's own unmount cleanup, once removed.
         const nextRun = closePaneReducer(run, paneId);
         writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
       },
@@ -276,16 +263,32 @@ export const useLayoutStore = create<LayoutStore>()(
         if (!run) return;
         killAndDisposeCachedTerminals(tabIdsForScope(run, scopeKey, 'terminal'));
         releaseUrlTunnels(tabIdsForScope(run, scopeKey, 'url'));
-        // Preview/console bodies tear down via their unmount cleanup once the
-        // tabs are removed (PreviewInstance destroys its webview).
+        // Preview/console bodies tear down via their own unmount cleanup once removed.
         const nextRun = releaseRunScopeReducer(run, scopeKey);
         writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
       },
 
       pruneSessions(validIds) {
-        const { sessions } = get();
-        const next = prunePersistedSessions(sessions, validIds);
+        const { sessions, activeSessionId } = get();
+        const next = prunePersistedSessions(sessions, validIds, activeSessionId);
         if (next !== sessions) set({ sessions: next });
+      },
+
+      dropSession(sessionId) {
+        const { sessions, activeSessionId } = get();
+        const nextSessions = dropSessionEntry(sessions, sessionId);
+        if (activeSessionId === sessionId) {
+          set({ sessions: nextSessions, layout: structuredClone(INITIAL_LAYOUT), run: null });
+        } else if (nextSessions !== sessions) {
+          set({ sessions: nextSessions });
+        }
+      },
+
+      adoptSession(fromId, toId) {
+        const { sessions, activeSessionId } = get();
+        const nextSessions = adoptSessionEntry(sessions, fromId, toId);
+        if (nextSessions === sessions) return;
+        set({ sessions: nextSessions, activeSessionId: activeSessionId === fromId ? toId : activeSessionId });
       },
     };
   }, layoutPersistOptions),

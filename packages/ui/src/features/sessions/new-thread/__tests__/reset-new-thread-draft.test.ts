@@ -15,6 +15,7 @@ import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
+import { useLayoutStore } from '@/store/layout';
 const abandonCreateForLocal = vi.fn();
 vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
@@ -27,6 +28,12 @@ beforeEach(() => {
   useDiscardedDraftStore.setState({ ids: new Set() });
   useComposerSegments.setState({ byThread: {} });
   useSessionReferences.setState({ byThread: {} });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: null,
+  });
   abandonCreateForLocal.mockReset();
 });
 
@@ -111,5 +118,30 @@ describe('resetNewThreadDraft', () => {
 
     expect(useSessionReferences.getState().byThread['__LOCALID_1']).toEqual({});
     expect(useSessionReferences.getState().byThread['chat-42']).toEqual({ Bar: '/tmp/b.jsonl' });
+  });
+
+  // -------------------------------------------------------------------------
+  // todo #354: a reused draft slot must never carry a previous, abandoned
+  // draft's Workspace arrangement into the next New.
+  // -------------------------------------------------------------------------
+  it("drops the reused slot's layout entry", () => {
+    useLayoutStore.getState().setActiveSession('__LOCALID_1');
+    useLayoutStore.getState().toggleSurface('workspace');
+    useLayoutStore.getState().setActiveSession('chat-42'); // move away; entry persists
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(useLayoutStore.getState().sessions.has('__LOCALID_1')).toBe(false);
+  });
+
+  it('re-seeds a chat-only arrangement in place when the reused slot was the active session', () => {
+    useLayoutStore.getState().setActiveSession('__LOCALID_1');
+    useLayoutStore.getState().toggleSurface('workspace');
+    expect(useLayoutStore.getState().layout.top).toContain('workspace');
+
+    resetNewThreadDraft('__LOCALID_1');
+
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    expect(useLayoutStore.getState().layout.bottom).toBeNull();
   });
 });

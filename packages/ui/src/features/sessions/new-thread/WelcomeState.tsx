@@ -8,9 +8,9 @@
  * (no branch, no suggestions — and the composer stays hidden, since the first
  * send needs a project to create the chat in).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FolderOpen, GitBranch } from 'lucide-react';
-import { useAui } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { ProjectChip } from '@/components/ui/project-chip';
 import {
   DropdownMenu,
@@ -22,6 +22,8 @@ import {
 import { getGitBranch } from '@/lib/api/git';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { ProjectAvatar } from '../ProjectAvatar';
 import { useProjects } from '../use-projects';
 import { useDaemonPort } from '../runtime/daemon-port-context';
@@ -29,9 +31,20 @@ import { useRepoSuggestions } from './use-repo-suggestions';
 import { useSelectDraftProject } from './use-select-draft-project';
 import { SuggestionRow } from './SuggestionRow';
 
-/** The chip IS the project picker — the draft's project is chosen (or changed) here. */
+/**
+ * The chip IS the project picker — the draft's project is chosen (or changed)
+ * here. Entries are ordered most-recently-active first, the same recency
+ * ranking the sessions sidebar uses — off the REGULAR projection, so a
+ * project whose only sessions are archived doesn't outrank one with a live
+ * session (chat-to-thread-custom.ts's archived-leak note).
+ */
 function ProjectPicker({ projectId }: { projectId: string | undefined }) {
   const { projects } = useProjects();
+  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const sortedProjects = useMemo(
+    () => sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems)),
+    [projects, threadItems],
+  );
   const selectProject = useSelectDraftProject();
   const projectName = projectId == null ? null : (projects.find((p) => p.id === projectId)?.name ?? projectId);
 
@@ -56,7 +69,7 @@ function ProjectPicker({ projectId }: { projectId: string | undefined }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent data-testid="welcome-project-picker" align="start" sideOffset={6} className="w-60">
         <DropdownMenuLabel className="text-muted-foreground">Start in…</DropdownMenuLabel>
-        {projects.map((project) => (
+        {sortedProjects.map((project) => (
           <DropdownMenuItem
             key={project.id}
             data-testid={`welcome-project-${project.id}`}

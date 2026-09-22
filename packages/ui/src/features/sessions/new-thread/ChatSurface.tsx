@@ -48,6 +48,7 @@ import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
 import { useDraftConfigStore } from '../runtime/draft-config';
 import { IDLE_INITIALIZATION, useNewThreadReady } from '../runtime/new-thread-ready-store';
+import { usePendingDraftProject } from './pending-draft-project';
 
 export function ChatSurface() {
   // Seeds the draft + marks-ready when a project pill is active (skips the picker).
@@ -98,6 +99,10 @@ export function ChatSurface() {
   // scoped project, so a multi-project scope can never show "Initializing…" for
   // a seed that will not fire.
   const filterProjectId = useSessionFilters((s) => soleProjectId(s.filterProjectIds));
+  // Set by useStartNewSession's no-pill path between the switch and
+  // initializeDraft's synchronous ready-flip — without it that gap would show
+  // the choose-a-project welcome for a target that is already resolved.
+  const pendingProjectId = usePendingDraftProject((s) => s.projectId);
   const initialization = useNewThreadReady((s) =>
     mainThreadId ? s.getInitialization(mainThreadId) : IDLE_INITIALIZATION,
   );
@@ -119,7 +124,7 @@ export function ChatSurface() {
 
   const isInitializing =
     initialization.status === 'initializing' ||
-    (initialization.status === 'idle' && filterProjectId != null && draftCfg == null && !isReady);
+    (initialization.status === 'idle' && (filterProjectId ?? pendingProjectId) != null && draftCfg == null && !isReady);
 
   if (isNewLocal && (isInitializing || initialization.status === 'error')) {
     return (

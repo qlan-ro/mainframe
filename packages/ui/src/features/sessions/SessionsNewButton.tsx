@@ -1,36 +1,23 @@
 /**
  * The "New session" action, on the first group header — ONE CLICK, always.
  *
- * With a project filter active the target is known and the button opens that
- * project's draft; without one it opens the projectless draft and the welcome
- * screen's own picker resolves the project (the old anchored "NEW SESSION IN…"
- * popover is gone). Re-clicking retargets the single reused draft rather than
- * stacking a second one.
+ * Target resolution (pill → active session's project → none) is shared with
+ * every other "+" entry point via useStartNewSession; without a target the
+ * welcome screen's own picker resolves the project (the old anchored "NEW
+ * SESSION IN…" popover is gone). Re-clicking retargets the single reused
+ * draft rather than stacking a second one.
  */
 import { PlusIcon } from 'lucide-react';
-import { useAui } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { resetNewThreadDraft } from './new-thread/reset-new-thread-draft';
-import { useOpenDraft } from './use-open-draft';
+import { useStartNewSession } from './new-thread/use-start-new-session';
 
 interface SessionsNewButtonProps {
-  filterProjectId: string | null;
   filterProjectName: string | null;
 }
 
-export function SessionsNewButton({ filterProjectId, filterProjectName }: SessionsNewButtonProps) {
-  const aui = useAui();
-  const openDraft = useOpenDraft();
-
-  const open = () => {
-    if (filterProjectId != null) {
-      void openDraft({ projectId: filterProjectId });
-      return;
-    }
-    resetNewThreadDraft(aui.threads.getState().newThreadId);
-    void aui.threads.switchToNewThread();
-  };
+export function SessionsNewButton({ filterProjectName }: SessionsNewButtonProps) {
+  const startNewSession = useStartNewSession();
 
   const label = filterProjectName != null ? `New session in ${filterProjectName}` : 'New session';
   return (
@@ -44,7 +31,7 @@ export function SessionsNewButton({ filterProjectId, filterProjectName }: Sessio
         data-tut="new-session"
         aria-label={label}
         className="size-6"
-        onClick={open}
+        onClick={startNewSession}
       >
         <PlusIcon />
       </Button>

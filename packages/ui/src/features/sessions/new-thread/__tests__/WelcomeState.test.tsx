@@ -5,6 +5,7 @@ import type { Suggestion } from '@qlan-ro/mainframe-types';
 
 let __suggestions: Suggestion[] = [];
 let __suggestionsArg: string | null | undefined;
+let __threadItems: Array<{ id: string; status: string; custom?: { projectId: string; updatedAt: number } }> = [];
 const setText = vi.fn();
 const selectProject = vi.fn();
 
@@ -37,17 +38,20 @@ vi.mock('../use-repo-suggestions', () => ({
   },
 }));
 vi.mock('../use-select-draft-project', () => ({ useSelectDraftProject: () => selectProject }));
+let __projects: Array<{ id: string; name: string }> = [
+  { id: 'proj-a', name: 'Mainframe' },
+  { id: 'proj-b', name: 'Sidecar' },
+];
 vi.mock('../../use-projects', () => ({
-  useProjects: () => ({
-    projects: [
-      { id: 'proj-a', name: 'Mainframe' },
-      { id: 'proj-b', name: 'Sidecar' },
-    ],
-  }),
+  useProjects: () => ({ projects: __projects }),
 }));
 vi.mock('../../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/lib/api/git', () => ({ getGitBranch: vi.fn().mockResolvedValue({ branch: 'main' }) }));
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ composer: { setText } }) }));
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ composer: { setText } }),
+  useAuiState: (sel: (s: { threads: { threadItems: typeof __threadItems } }) => unknown) =>
+    sel({ threads: { threadItems: __threadItems } }),
+}));
 
 import { WelcomeState } from '../WelcomeState';
 
@@ -67,6 +71,11 @@ describe('WelcomeState', () => {
   beforeEach(() => {
     __suggestions = [];
     __suggestionsArg = undefined;
+    __projects = [
+      { id: 'proj-a', name: 'Mainframe' },
+      { id: 'proj-b', name: 'Sidecar' },
+    ];
+    __threadItems = [];
     setText.mockReset();
     selectProject.mockReset();
   });
@@ -120,6 +129,11 @@ describe('WelcomeState — no project picked yet', () => {
   beforeEach(() => {
     __suggestions = [];
     __suggestionsArg = undefined;
+    __projects = [
+      { id: 'proj-a', name: 'Mainframe' },
+      { id: 'proj-b', name: 'Sidecar' },
+    ];
+    __threadItems = [];
     setText.mockReset();
     selectProject.mockReset();
   });
@@ -156,5 +170,51 @@ describe('WelcomeState — no project picked yet', () => {
     fireEvent.click(screen.getByTestId('welcome-project-proj-b'));
 
     expect(selectProject).toHaveBeenCalledExactlyOnceWith('proj-b');
+  });
+});
+
+describe('WelcomeState — project picker ordering', () => {
+  beforeEach(() => {
+    __suggestions = [];
+    __suggestionsArg = undefined;
+    __threadItems = [];
+    setText.mockReset();
+    selectProject.mockReset();
+  });
+
+  const orderedPickerIds = () =>
+    screen.getAllByTestId(/^welcome-project-proj-/).map((el) => el.getAttribute('data-testid'));
+
+  it('puts the most-recently-active project first and a session-less project last', () => {
+    __projects = [
+      { id: 'proj-a', name: 'Mainframe' },
+      { id: 'proj-b', name: 'Sidecar' },
+      { id: 'proj-c', name: 'Idle' },
+    ];
+    __threadItems = [
+      { id: 'chat-a', status: 'regular', custom: { projectId: 'proj-a', updatedAt: 100 } },
+      { id: 'chat-b', status: 'regular', custom: { projectId: 'proj-b', updatedAt: 200 } },
+    ];
+
+    render(<WelcomeState />);
+    openPicker();
+
+    expect(orderedPickerIds()).toEqual(['welcome-project-proj-b', 'welcome-project-proj-a', 'welcome-project-proj-c']);
+  });
+
+  it('ranks a project whose only sessions are archived behind one with an older live session', () => {
+    __projects = [
+      { id: 'proj-archived', name: 'Archived-only' },
+      { id: 'proj-live', name: 'Live' },
+    ];
+    __threadItems = [
+      { id: 'chat-archived', status: 'archived', custom: { projectId: 'proj-archived', updatedAt: 999 } },
+      { id: 'chat-live', status: 'regular', custom: { projectId: 'proj-live', updatedAt: 50 } },
+    ];
+
+    render(<WelcomeState />);
+    openPicker();
+
+    expect(orderedPickerIds()).toEqual(['welcome-project-proj-live', 'welcome-project-proj-archived']);
   });
 });
