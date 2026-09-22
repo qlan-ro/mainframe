@@ -17,11 +17,32 @@ SVG (new gutter Source mode) all annotate one shared, source-line-anchored set o
 notes with one submit bar; adds per-row source line ranges to the CSV parse and a
 hast-position → source-line-range mapping for rendered markdown blocks; and fixes
 the shared bug where a submit with no active session discards the notes it never
-sent. Code-kind files and the diff tab keep today's behavior and today's submit
-bar, byte for byte.
+sent. Code-kind files and the diff tab keep today's submit bar and today's
+gestures; the no-session fix is the single behavior change that reaches them,
+because they submit through the same shared path (spec AC 6, AC 25).
 
 Size: this is not a short-form lane. The source diff spans the shared comment
 subsystem plus three viewers and a parser; ~900–1200 lines across ~18 files.
+
+## Status on re-issue (2026-09-22)
+
+This plan is re-issued after `4cbaa0d7` amended the spec to name the no-session
+fix as the one behavior change reaching code and diff tabs. Only the four
+passages that had promised those tabs were untouched have moved; every group,
+task, established fact and decision below stands as reviewed.
+
+All seven groups already have commits on `todo/357-md-inline-comments`
+(`e522694d`…`2182f220`), the worktree is clean, and a full `packages/ui` vitest
+run at `4cbaa0d7` is green apart from one pre-existing flake in
+`features/automations/__tests__/AutomationsScope.test.tsx` — it passes when run
+alone and touches no file in this lane. An implementer picking up a group below
+should verify its tasks against the landed code and close whatever gap remains,
+not rebuild it.
+
+Re-verified against that landed code: `useSendReview` returns `'no-session'`
+when there is no `chatId`, and `useReviewActions` returns early on that outcome
+for both the submit and the single-note path with no branch on file kind — so
+the amended AC 6 and AC 25 already hold.
 
 ## Established facts
 
@@ -201,10 +222,13 @@ site (the new `model` prop is optional, so the code and diff paths pass nothing)
   (spec AC 25).
 - **Skipped-send signal.** `useSendReview`'s returned function resolves to
   `'sent' | 'no-session' | 'empty'`. `useReviewActions` awaits it and returns
-  early — deleting nothing, clearing no draft — **only** on `'no-session'`. A
-  mock that resolves `undefined` therefore still falls through to today's
-  clear-everything path, which is why `CmEditorWithComments.test.tsx` stays
-  unchanged (facts 9, 10).
+  early — deleting nothing, clearing no draft — **only** on `'no-session'`. The
+  fix lands in the shared path and is deliberately **not** branched by file
+  kind, so code and diff tabs get it too — the one crack in "code and diff
+  unchanged" that the spec itself names. It stays invisible to
+  `CmEditorWithComments.test.tsx`, whose mock resolves `undefined` and so falls
+  through to today's clear-everything path; that is why the file needs no edit
+  (facts 9, 10).
 - **Markdown Preview is a static component map plus context.** The map stays a
   module constant; the wrappers read the note set and the open-note id from a
   React context that `MarkdownPreview` provides. Building the map inside render
@@ -350,8 +374,9 @@ first).
     Removal must keep working when `viewRef.current` is null, since a table row
     or a rendered block has no view.
     *Verify:* with no chatId, submit and single-note send leave the note set and
-    the drafts intact; `use-send-review.test.ts` and
-    `CmEditorWithComments.test.tsx` pass unchanged.
+    the drafts intact — on a code or diff tab as much as on a lifted one (spec
+    AC 6, AC 25); `use-send-review.test.ts` and `CmEditorWithComments.test.tsx`
+    pass with no edit to either file.
 11. `NotesSubmitBar.tsx`: "N of M agent notes filled" + a primary
     `Submit review (M)`, keeping the `editor-submit-review` /
     `editor-submit-review-btn` testids, singular at one of one.
@@ -504,8 +529,10 @@ Depends on group 2.
 - Every acceptance criterion in `docs/specs/2026-09-21-todo-357-md-inline-comments.md`
   is demonstrably met, with 1–8 exercised by group 5's cross-surface suite.
 - `packages/ui` unit tests, typecheck and lint pass; the pre-existing comment,
-  markdown-preview and gutter suites pass without edits, and the only updated
-  test strings are the CSV row-number column and the SVG "Source" label.
+  markdown-preview and gutter suites pass without edits, and the only existing
+  test strings that change are the CSV row-number column and the SVG "Source"
+  label (spec AC 27). Appending a case to an existing suite is not an edit to
+  its assertions.
 - No file over 300 lines, no function over 50; `use-comment-gutter.tsx` (275
   today) and `CsvViewer.tsx` (196 today) both end up smaller than they are now.
 - `git diff packages/core-rs` is empty and no daemon route changed (spec AC 8).
