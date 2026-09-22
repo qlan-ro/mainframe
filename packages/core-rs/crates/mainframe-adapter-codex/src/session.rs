@@ -775,8 +775,7 @@ impl AdapterSession for CodexSession {
     }
 
     fn get_context_files(&self) -> ContextFiles {
-        // TODO(port): read Codex-equivalent context files.
-        ContextFiles::default()
+        crate::context_files::collect_codex_context_files(&self.project_path)
     }
 
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {

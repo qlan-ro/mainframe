@@ -1,8 +1,6 @@
 //! Ported from `src/server/routes/skills.ts` — adapter skill CRUD.
 //!
-//! Same shape as `agents.rs`: the `Adapter` trait has no skill methods, only the
-//! Claude adapter supports them via `mainframe_adapter_claude::skills`, so the
-//! `adapter?.listSkills` gate is "registered adapter whose id is claude".
+//! Listing uses each CLI catalog; skill mutations are Claude-only.
 
 use std::sync::Arc;
 
@@ -63,6 +61,21 @@ async fn list(
     };
     match adapter.id() {
         "claude" => ok(skills::list_skills(&project_path).await),
+        "codex" => match mainframe_adapter_codex::skills::list_skills(
+            &project_path,
+            ctx.resolved_path.as_str(),
+        )
+        .await
+        {
+            Ok(skills) => ok(skills),
+            Err(error) => {
+                tracing::warn!(?error, "Failed to list Codex skills");
+                fail(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to list Codex skills",
+                )
+            }
+        },
         "mock-cli" => ok(mainframe_adapter_mock::skills::list_skills(&project_path).await),
         _ => fail(StatusCode::NOT_FOUND, NOT_SUPPORTED),
     }
@@ -202,6 +215,42 @@ mod tests {
             status,
             serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
         )
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn list_codex_skills_uses_cli_catalog() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let binary = temp.path().join("codex");
+        std::fs::write(&binary, r#"#!/bin/sh
+while IFS= read -r line; do
+case "$line" in
+  *'"method":"initialize"'*) printf '%s\n' '{"id":1,"result":{}}' ;;
+  *'"method":"skills/list"'*) printf '%s\n' '{"id":2,"result":{"data":[{"cwd":"/tmp","skills":[{"name":"review","description":"Review code","path":"/tmp/review/SKILL.md","scope":"repo","enabled":true},{"name":"disabled","description":"Hidden","path":"/tmp/hidden/SKILL.md","scope":"user","enabled":false}],"errors":[]}]}}' ;;
+esac
+done
+"#).unwrap();
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut ctx = AppCtx::test_ctx();
+        Arc::get_mut(&mut ctx).unwrap().resolved_path =
+            mainframe_runtime::ResolvedPath::from_value(temp.path().to_str().unwrap());
+        ctx.adapter_registry
+            .register(Arc::new(mainframe_adapter_codex::CodexAdapter::default()));
+        let response = list(
+            State(ctx),
+            Path("codex".into()),
+            Query(ProjectPathQuery {
+                project_path: Some("/tmp".into()),
+            }),
+        )
+        .await;
+        let (status, body) = read(response).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"].as_array().unwrap().len(), 1);
+        assert_eq!(body["data"][0]["name"], "review");
+        assert_eq!(body["data"][0]["adapterId"], "codex");
+        assert_eq!(body["data"][0]["scope"], "project");
     }
 
     #[tokio::test]

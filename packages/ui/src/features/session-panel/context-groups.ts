@@ -1,12 +1,3 @@
-/**
- * context-groups — the memory files the adapter loaded for this session.
- *
- * The daemon collects `CLAUDE.md` *and* `AGENTS.md` from both `<project>/` and
- * `<project>/.claude/`, so the payload holds 0–4 files rather than the two the
- * design sketches; every collected file gets a row. Global paths stay absolute
- * and project paths stay project-relative — the daemon distinguishes the two
- * scopes that way deliberately (issue #222), so the path is passed through.
- */
 import type { ContextFile, SessionContext } from '@qlan-ro/mainframe-types';
 import { estimateTokens } from './context-tokens';
 

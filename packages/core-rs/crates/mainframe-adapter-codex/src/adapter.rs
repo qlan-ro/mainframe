@@ -165,6 +165,12 @@ impl CodexAdapter {
 }
 
 impl Adapter for CodexAdapter {
+    fn get_context_files(&self, project_path: &str) -> Option<mainframe_adapter_api::ContextFiles> {
+        Some(crate::context_files::collect_codex_context_files(
+            project_path,
+        ))
+    }
+
     fn id(&self) -> &str {
         "codex"
     }
