@@ -49,12 +49,36 @@ pub async fn resolve_claude_config_path(base_path: &str, requested_path: &str) -
 }
 
 /// Resolve a requested path for reading: validated inside the project base, or —
-/// as a fallback — under `~/.claude/`. Mirrors `resolveReadablePath`.
+/// as a fallback — under `~/.claude/` or a Codex global instruction file.
 pub async fn resolve_readable_path(base_path: &str, requested_path: &str) -> Option<String> {
     match resolve_and_validate_path(base_path, requested_path).await {
         Some(p) => Some(p),
-        None => resolve_claude_config_path(base_path, requested_path).await,
+        None => {
+            if let Some(path) = resolve_claude_config_path(base_path, requested_path).await {
+                return Some(path);
+            }
+            let config = std::env::var_os("CODEX_HOME")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))?;
+            resolve_codex_instruction_path(base_path, requested_path, &config).await
+        }
     }
+}
+
+async fn resolve_codex_instruction_path(
+    base: &str,
+    requested: &str,
+    config: &Path,
+) -> Option<String> {
+    let config = tokio::fs::canonicalize(config).await.ok()?;
+    let target = tokio::fs::canonicalize(Path::new(base).join(requested))
+        .await
+        .ok()?;
+    ["AGENTS.md", "AGENTS.override.md"]
+        .into_iter()
+        .any(|name| target == config.join(name))
+        .then(|| path_to_string(&target))
 }
 
 fn claude_dir() -> Option<PathBuf> {
@@ -70,6 +94,49 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn codex_instructions_are_readable_without_exposing_other_config_files() {
+        let tmp = tempdir().unwrap();
+        let config = tmp.path().join(".codex");
+        fs::create_dir(&config).unwrap();
+        let instructions = config.join("AGENTS.md");
+        let auth = config.join("auth.json");
+        fs::write(&instructions, "instructions").unwrap();
+        fs::write(&auth, "private").unwrap();
+        assert_eq!(
+            resolve_codex_instruction_path(
+                tmp.path().to_str().unwrap(),
+                instructions.to_str().unwrap(),
+                &config
+            )
+            .await,
+            Some(real(&instructions))
+        );
+        assert_eq!(
+            resolve_codex_instruction_path(
+                tmp.path().to_str().unwrap(),
+                auth.to_str().unwrap(),
+                &config
+            )
+            .await,
+            None
+        );
+        #[cfg(unix)]
+        {
+            fs::remove_file(&instructions).unwrap();
+            std::os::unix::fs::symlink(&auth, &instructions).unwrap();
+            assert_eq!(
+                resolve_codex_instruction_path(
+                    tmp.path().to_str().unwrap(),
+                    instructions.to_str().unwrap(),
+                    &config
+                )
+                .await,
+                None
+            );
+        }
+    }
 
     /// Realpath of a str, for building the expected canonical results the way the
     /// TS test's `fs.realpathSync(tmpDir)` does (macOS `/tmp` → `/private/tmp`).

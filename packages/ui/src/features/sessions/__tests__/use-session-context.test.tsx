@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { DaemonEvent } from '@qlan-ro/mainframe-types';
+import type { DaemonEvent, SessionContext } from '@qlan-ro/mainframe-types';
 
 const getSessionContext = vi.fn();
 const useActiveIdentity = vi.fn();
@@ -20,7 +20,7 @@ vi.mock('@/lib/daemon/ws-client', () => ({
 
 import { useSessionContext } from '../use-session-context';
 
-const EMPTY = {
+const EMPTY: SessionContext = {
   globalFiles: [],
   projectFiles: [],
   mentions: [],
@@ -60,4 +60,22 @@ describe('useSessionContext', () => {
     act(() => vi.advanceTimersByTime(600));
     expect(getSessionContext).toHaveBeenCalledTimes(2);
   });
+});
+
+it('ignores a Claude context response after switching to Codex', async () => {
+  let resolveClaude!: (value: SessionContext) => void;
+  getSessionContext.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveClaude = resolve;
+      }),
+  );
+  useActiveIdentity.mockReturnValue({ chatId: 'claude-chat' });
+  const { result, rerender } = renderHook(() => useSessionContext());
+  useActiveIdentity.mockReturnValue({ chatId: 'codex-chat' });
+  await act(async () => rerender());
+  await act(async () =>
+    resolveClaude({ ...EMPTY, projectFiles: [{ path: 'CLAUDE.md', content: 'old', source: 'project' }] }),
+  );
+  expect(result.current.context).toEqual(EMPTY);
 });
