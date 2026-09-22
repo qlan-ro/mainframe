@@ -39,7 +39,7 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
   // Markdown opens rendered (Preview) by default — like the other special viewers
   // (svg/csv/image/pdf). Switch to Source to edit.
   const [mode, setMode] = useState<Mode>('preview');
-  const { model, submitBar, openNote, openNoteId } = useFileTabNotes({ filePath: path });
+  const { model, submitBar, openNote, openNoteId, handleSendOne } = useFileTabNotes({ filePath: path });
 
   const { left: status, right: statusRight } = splitMarkdownStatus(countWords(value), countLines(value));
 
@@ -73,7 +73,7 @@ export function MarkdownEditorTab({ value, path, onChange, onSave, readOnly = fa
               model={model}
             />
           ) : (
-            <MarkdownPreview value={value} notes={{ model, openNoteId, openNote }} />
+            <MarkdownPreview value={value} notes={{ model, openNoteId, openNote, handleSendOne }} />
           )}
         </div>
       </div>

@@ -79,9 +79,8 @@ export function MarkdownAnnotatedBlock({ node, children }: MarkdownAnnotatedBloc
         </button>
       )}
       {children}
-      {overlapping
-        .filter((note) => note.id === ctx.openNoteId)
-        .map((note) => (
+      {overlapping.some((note) => note.id === ctx.openNoteId) &&
+        overlapping.map((note) => (
           <div key={note.id} className="my-2">
             <InlineCommentWidget
               text={ctx.model.drafts[note.id] ?? note.text}
@@ -95,6 +94,7 @@ export function MarkdownAnnotatedBlock({ node, children }: MarkdownAnnotatedBloc
               }}
               onClose={() => ctx.openNote(NO_OPEN_NOTE)}
               onDelete={() => ctx.model.deleteNote(note.id)}
+              onSend={() => void ctx.handleSendOne(note.id)}
             />
           </div>
         ))}

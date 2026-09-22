@@ -24,7 +24,6 @@ import { ViewerShell } from './ViewerShell';
 import { Segmented } from './Segmented';
 import { splitCsvStatus } from './viewer-status';
 import { useFileTabNotes } from '@/features/editor/inline-comments/use-file-notes';
-import { useReviewActions } from '@/features/editor/inline-comments/use-review-actions';
 
 interface CsvViewerProps {
   content: string | null;
@@ -44,11 +43,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
   const [filter, setFilter] = useState('');
   const [sort, setSort] = useState<SortState>({ colIndex: -1, dir: null });
 
-  const { model, submitBar } = useFileTabNotes({ filePath: path });
-  // A second, stateless instance over the same model — useFileTabNotes only
-  // exposes the whole-tab submit; the table's per-row send/delete need the
-  // same callbacks useReviewActions already derives from `model`.
-  const { handleSendOne, removeComment } = useReviewActions({ filePath: path, model });
+  const { model, submitBar, handleSendOne, removeComment } = useFileTabNotes({ filePath: path });
 
   const parsed = useMemo(() => (content !== null ? parseCsv(content) : null), [content]);
 

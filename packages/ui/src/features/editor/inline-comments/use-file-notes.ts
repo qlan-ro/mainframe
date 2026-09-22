@@ -103,6 +103,10 @@ export interface UseFileTabNotesResult {
   openNote: (id: string) => void;
   /** The note id a non-CM surface should currently render its widget for, if any. */
   openNoteId: string | null;
+  /** Sends a single note's review comment and removes it from every surface. */
+  handleSendOne: (noteId: string) => Promise<void>;
+  /** Deletes a note without sending it. */
+  removeComment: (noteId: string) => void;
 }
 
 /**
@@ -115,7 +119,7 @@ export interface UseFileTabNotesResult {
  */
 export function useFileTabNotes({ filePath }: UseFileTabNotesOptions): UseFileTabNotesResult {
   const model = useFileNotes();
-  const { handleSubmitReview } = useReviewActions({ filePath, model });
+  const { handleSubmitReview, handleSendOne, removeComment } = useReviewActions({ filePath, model });
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
   const filledCount = model.notes.filter((note) => {
@@ -144,5 +148,7 @@ export function useFileTabNotes({ filePath }: UseFileTabNotesOptions): UseFileTa
     noteCountForLines,
     openNote,
     openNoteId,
+    handleSendOne,
+    removeComment,
   };
 }

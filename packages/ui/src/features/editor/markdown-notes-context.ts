@@ -18,6 +18,8 @@ export interface MarkdownNotesContextValue {
   /** The note id whose widget is open on a Preview block, if any. */
   openNoteId: string | null;
   openNote: (id: string) => void;
+  /** Sends a single note's review comment and removes it from every surface. */
+  handleSendOne: (noteId: string) => Promise<void>;
 }
 
 const MarkdownNotesContext = createContext<MarkdownNotesContextValue | null>(null);

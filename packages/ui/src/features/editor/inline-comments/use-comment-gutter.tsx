@@ -101,7 +101,7 @@ export function useCommentGutter({
 
       // Anchor the block widget BELOW endLine so it appears after the last
       // selected line (not after the first).
-      view.dispatch({ effects: [addCommentEffect.of({ id, line: endLine, text: '' })] });
+      view.dispatch({ effects: [addCommentEffect.of({ id, line: endLine, startLine, text: '' })] });
 
       // Open the portal using the widget that was just created.
       const widget = view.state.field(commentField).widgets.get(id);
