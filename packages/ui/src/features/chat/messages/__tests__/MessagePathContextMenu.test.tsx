@@ -5,9 +5,15 @@
  * Mock strategy: seed the real useActiveBasesStore (zustand, not a module
  * mock) and stub navigator.clipboard.writeText + window.getSelection. Uses
  * fireEvent.contextMenu per the shipped precedent (markdown-text.test.tsx).
+ * `@/store/surface-intents` is module-mocked so the Open-file item's
+ * `useOpenFile()` call has something to assert against (#355).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+
+const emitSurfaceIntent = vi.fn();
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown) => emitSurfaceIntent(intent) }));
+
 import { MessagePathContextMenu } from '../MessagePathContextMenu';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 
@@ -39,6 +45,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
   writeText.mockClear();
+  emitSurfaceIntent.mockClear();
   useActiveBasesStore.setState({ bases: { worktreePath: '/w', projectPath: '/p' }, scopeKey: null });
   stubSelection('');
 });
@@ -59,18 +66,29 @@ describe('MessagePathContextMenu — trigger element', () => {
 });
 
 describe('MessagePathContextMenu — right-click on the path pill, no selection', () => {
-  it('shows exactly the two copy items, in order, enabled', () => {
+  it('shows Open file above the two copy items, in order, all enabled', () => {
     render(<Fixture filePath="/w/src/a.ts" />);
     fireEvent.contextMenu(screen.getByText('nested text'));
 
+    const open = screen.getByTestId('tool-card-path-open');
     const absolute = screen.getByTestId('tool-card-path-copy-absolute');
     const relative = screen.getByTestId('tool-card-path-copy-relative');
+    expect(open).not.toHaveAttribute('data-disabled');
     expect(absolute).not.toHaveAttribute('data-disabled');
     expect(relative).not.toHaveAttribute('data-disabled');
 
     const items = screen.getAllByRole('menuitem');
-    expect(items[0]).toBe(absolute);
-    expect(items[1]).toBe(relative);
+    expect(items[0]).toBe(open);
+    expect(items[1]).toBe(absolute);
+    expect(items[2]).toBe(relative);
+  });
+
+  it('Open file emits an open-file intent for the resolved path', () => {
+    render(<Fixture filePath="/w/src/a.ts" />);
+    fireEvent.contextMenu(screen.getByText('nested text'));
+    fireEvent.click(screen.getByTestId('tool-card-path-open'));
+
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: '/w/src/a.ts' });
   });
 
   it('resolves the same path when right-clicking a child node inside the pill (closest, not target)', () => {

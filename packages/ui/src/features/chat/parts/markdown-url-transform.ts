@@ -2,7 +2,12 @@
  * URL transform and remark plugin for the markdown renderer.
  *
  * `urlTransform` extends react-markdown's default sanitiser to allow the same
- * app-protocol URLs that Tauri permits via plugin-opener (slack://, vscode://, etc.).
+ * app-protocol URLs that Tauri permits via plugin-opener (slack://, vscode://, etc.),
+ * and — scoped to `href` only — a `file:` target, so a transcript file link
+ * reaches `SmartLink` instead of being stripped to a dead anchor. The scoping
+ * matters because react-markdown runs this transform over every URL-valued
+ * property, `img src` included, and a live `file://` image source is out of
+ * scope for this change.
  *
  * `remarkAppLinks` converts bare app-protocol URLs in plain text into clickable
  * links — remark-gfm only autolinks http(s) URLs.
@@ -11,6 +16,7 @@ import { defaultUrlTransform } from 'react-markdown';
 import type { Root, Text, Link } from 'mdast';
 import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
+import { parseFileHref } from '@/lib/files/file-href';
 
 /**
  * App protocols allowed by plugin-opener on Tauri.
@@ -23,7 +29,7 @@ const EXTRA_SAFE_PROTOCOLS =
 const APP_URL_RE =
   /\b((?:slack|vscode|vscode-insiders|cursor|jetbrains|idea|zed|figma|linear|notion|discord|tel):\/\/[^\s<>)\]]*)/gi;
 
-export function urlTransform(url: string): string {
+export function urlTransform(url: string, key?: string): string {
   const colon = url.indexOf(':');
   if (colon !== -1) {
     const slash = url.indexOf('/');
@@ -34,6 +40,9 @@ export function urlTransform(url: string): string {
     if (isProtocol && EXTRA_SAFE_PROTOCOLS.test(url.slice(0, colon))) {
       return url;
     }
+  }
+  if (key === 'href' && parseFileHref(url) !== null) {
+    return url;
   }
   return defaultUrlTransform(url);
 }

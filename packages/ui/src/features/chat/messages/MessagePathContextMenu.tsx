@@ -12,12 +12,21 @@
  * message. See `suppressRadixTrigger` for how that fall-through is kept.
  */
 import { useState, type ReactNode } from 'react';
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuGroup } from '@/components/ui/context-menu';
+import { FolderOpen } from 'lucide-react';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { toFileRef } from '@/lib/files/file-ref';
+import { useOpenFile } from '../tools/chat-tool-context';
 
 /**
  * Stop Radix from opening this trigger WITHOUT stopping the native menu.
@@ -39,6 +48,7 @@ function suppressRadixTrigger(event: React.MouseEvent): void {
 export function MessagePathContextMenu({ children }: { children: ReactNode }) {
   const [path, setPath] = useState<string | null>(null);
   const bases = useActiveBasesStore((s) => s.bases);
+  const { openFile } = useOpenFile();
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -55,6 +65,9 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
 
   const copyAbsolute = onCopySelect('tool-card-path-copy-absolute', () => writeToClipboard(absolute));
   const copyRelative = onCopySelect('tool-card-path-copy-relative', () => writeToClipboard(relative));
+  const handleOpen = () => {
+    if (path != null) openFile(path);
+  };
 
   return (
     <ContextMenu onOpenChange={handleOpenChange}>
@@ -64,6 +77,13 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem data-testid="tool-card-path-open" onSelect={handleOpen}>
+            <FolderOpen />
+            Open file
+          </ContextMenuItem>
+        </ContextMenuGroup>
+        <ContextMenuSeparator />
         <ContextMenuGroup>
           <CopyMenuItem
             testId="tool-card-path-copy-absolute"
