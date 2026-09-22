@@ -1,5 +1,12 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`0b68c88`](https://github.com/qlan-ro/mainframe/commit/0b68c889995bdda629e76cab1f96940d5707248e), [`d5f0ec8`](https://github.com/qlan-ro/mainframe/commit/d5f0ec8bf8bfaa90204f81d102ff3c26623e9ffa), [`f0bbf3c`](https://github.com/qlan-ro/mainframe/commit/f0bbf3c7b2beb6adc25f6243a9107c7f55b6494c), [`49dc81f`](https://github.com/qlan-ro/mainframe/commit/49dc81f45a1fd87b35462240c5271eeb45c84ebc), [`dc5f441`](https://github.com/qlan-ro/mainframe/commit/dc5f441fdc934942e7ce65255a2ba192163fad4e), [`dfad3c4`](https://github.com/qlan-ro/mainframe/commit/dfad3c43f2405067f2371406d5ad1dc5914b5614), [`e3c528d`](https://github.com/qlan-ro/mainframe/commit/e3c528d9c4ee24868b8de5e1aca2186f8c35044f), [`c3593e8`](https://github.com/qlan-ro/mainframe/commit/c3593e80ccff547b1ba4a8254193569cde08a2ea), [`0ba4b2f`](https://github.com/qlan-ro/mainframe/commit/0ba4b2f94f03e7ce39cc53711cdc520931aa965d), [`b3d6a2d`](https://github.com/qlan-ro/mainframe/commit/b3d6a2d95b394e604346167777ccf7cd835f9ba9)]:
+  - @qlan-ro/mainframe-ui@2.3.2
+
 ## 2.0.5
 
 ### Patch Changes
