@@ -94,7 +94,8 @@ created it, in the existing review format, and then empties the set everywhere.
 Sending a single note from its card sends only that note and removes it from every
 surface that shows it. When there is no active session, both submit and
 single-note send do nothing at all: every note and every draft is still there
-afterwards.
+afterwards. Because every tab submits through the same path, this is the one
+behavior change code files and the diff tab also get.
 
 Notes stay ephemeral — nothing is written to disk or to the daemon, and closing
 the tab discards them, exactly as for code files today.
@@ -109,6 +110,7 @@ the tab discards them, exactly as for code files today.
 - Making CSV or SVG editable; annotation stays a read gesture — `deferred`
 - Changes to the review message format, to the per-note send gesture, or to the
   code-kind and diff-tab annotation path, including their submit bar — `declined`
+  (the shared no-session discard fix is the sole exception; see `## Decisions`)
 - Threaded replies, resolve/unresolve state, and agent-authored comments —
   `declined`
 - Annotation in the image and PDF viewers; both are binary and not
@@ -173,7 +175,8 @@ the tab discards them, exactly as for code files today.
    removes that note's marker and card from every surface; other notes and drafts
    are untouched.
 6. With no active session, activating submit appends no message and leaves every
-   note and every draft present; the same holds for single-note send.
+   note and every draft present; the same holds for single-note send. This holds
+   on a markdown, CSV, SVG, code and diff tab alike.
 7. Add-note controls, markers, and note cards carry `data-testid`s keyed by source
    line or note id (`md-note-add-<line>`, `csv-note-add-<line>`) — never by array
    index or display position.
@@ -241,9 +244,11 @@ the tab discards them, exactly as for code files today.
 *No regression and quality*
 
 25. A code file and the diff tab still add, edit, delete, send, and submit notes
-    as before, and the existing code-editor and diff-editor comment tests pass
-    unchanged. Their submit bar is untouched: it still sits above the editor and
-    reads `N agent notes` with a `Submit review (N)` button.
+    as before, with one intended change: with no active session their submit and
+    single-note send now leave notes and drafts in place instead of discarding
+    them (see 6). The existing code-editor and diff-editor comment tests pass
+    unchanged apart from that case. Their submit bar is untouched: it still sits
+    above the editor and reads `N agent notes` with a `Submit review (N)` button.
 26. New unit tests cover: markdown block position → line range (including a nested
     list item and a fenced code block), CSV row → source line range (quoted
     multi-line field, CRLF, lone CR, leading blank lines), note-and-draft survival
@@ -280,10 +285,13 @@ the tab discards them, exactly as for code files today.
   no block shows no marker but is still counted and submitted.** Overlap is what
   the existing line-query model already answers, and dropping an unmarked note
   from the count would lose work silently. `reversible`
-- **The no-session fix covers per-note send as well as submit.** Both go through
-  the same send path and both currently discard the note after a skipped send; the
-  brief only names submit, but fixing one and not the other leaves the same bug.
-  `reversible`
+- **The no-session fix covers per-note send as well as submit, and lands in the
+  shared path, so code and diff tabs get it too.** Both gestures go through
+  `use-review-actions` / `use-send-review`, which every tab uses, and both
+  currently discard the note after a skipped send; fixing one gesture, or
+  branching the fix by file kind to keep the code path bit-identical, would
+  preserve a data-loss bug to honour a scope fence. This is the one deliberate
+  crack in the "code and diff unchanged" rule. `reversible`
 - **CSV parses the untrimmed text: leading and trailing blank lines count for
   numbering but produce no rows; mid-file blank lines keep today's single empty
   row.** Line 1 must be the file's first line for source numbers to be true, and
