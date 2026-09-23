@@ -50,7 +50,12 @@ export function ReviewCommentCard({ review }: { review: ReviewComment }) {
   return (
     <div
       data-testid="chat-user-review-comment"
-      className="max-w-[75%] overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      // Declares its own end alignment (like `UserAttachments`' `ml-auto`) rather
+      // than relying on the chat kit's `MessageContent`, which end-aligns only
+      // children carrying its `data-slot` marker — this card's root has none.
+      // `self-end` also drops the implicit flex-stretch cross size, so the card
+      // shrinks to its content instead of always filling the 75% cap (#362).
+      className="max-w-[75%] self-end overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
       <div className="flex items-center gap-2 border-b border-border bg-muted px-3 py-1.5">
         <CodeIcon size={12} className="shrink-0 text-primary" />
