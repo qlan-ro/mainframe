@@ -10,6 +10,7 @@
 mod marker_tests;
 mod meta_tests;
 mod result_content_tests;
+mod result_image_tests;
 mod segment_tests;
 mod tool_call_tests;
 
