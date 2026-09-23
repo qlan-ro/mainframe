@@ -94,6 +94,7 @@ fn tool_call(id: &str, name: &str, category: ToolCategory, result: Option<&str>)
             truncated: None,
             full_bytes: None,
             ask_user_question: None,
+            images: Vec::new(),
         }),
         parent_tool_use_id: None,
     })
