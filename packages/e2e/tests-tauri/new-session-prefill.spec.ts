@@ -8,6 +8,21 @@
  * UI — `createTauriChat` creates the chat over REST and never takes the
  * draft-commit path, so it can't reproduce this (see its own docstring).
  *
+ * `beforeAll` reaches that first-send path through `openDraftInheritingProject`
+ * (sessions-draft.spec.ts) rather than the welcome screen's project-picker
+ * dropdown: it seeds a real, project-backed chat with `createTauriChat` first,
+ * so the sidebar "+" inherits that chat's project directly — no
+ * `welcome-project` Radix trigger, no `onSelect`/`flushSync` frame. That
+ * dropdown path — `pickProjectFromWelcome`'s `welcome-project-<id>` click —
+ * is what reproduced a separate, pre-existing race in `use-draft-row.ts`'s
+ * discard-on-navigate-away effect (see git history on this file for the
+ * live-verified repro); it archived the just-created chat ~36ms after
+ * creation. `sessions-draft.spec.ts`'s "first send creates exactly one chat"
+ * test takes the same inherited-project route and does not hit that race, so
+ * this spec now shares it instead of the dropdown path. The race itself is
+ * unrelated to #359's fix and is tracked separately (see the project's issue
+ * tracker) rather than fixed here.
+ *
  * Only the recording's FIRST turn is used (a plain "4" reply, no tool call) —
  * deliberately, not the richer second turn composer-advanced.spec.ts selects
  * from: that turn's Bash tool call is a SECOND `in` marker the mock replays
@@ -21,8 +36,6 @@
  *   sessions-new-button        — the sidebar "+" (SessionsNewButton.tsx)
  *   sessions-welcome           — WelcomeState root (the draft empty state)
  *   welcome-project            — the welcome screen's project trigger
- *   welcome-project-<id>       — one project row inside its dropdown
- *   welcome-project-picker     — the dropdown content itself
  *   chat-header-project        — the header's project chip (draft or real chat)
  *   chat-selection-toolbar     — floating toolbar on a text selection
  *   chat-selection-new-session — its "New session" action
@@ -31,50 +44,65 @@
  * A selection must sit inside `.aui-md` — `body` is `user-select: none`
  * (globals.css), so a Range outside it is accepted by `addRange` but reads as
  * an empty string (see composer-advanced.spec.ts's identical walker).
- *
- * TODO(bug): quarantined. `beforeAll`'s own first send — driven through the
- * welcome-flow project pick, never through `createTauriChat` — reproduces a
- * SEPARATE, pre-existing race in `use-draft-row.ts`'s discard-on-navigate-away
- * effect: its own docstring assumes the coordinator's `clearDraftConfig(localId)`
- * and assistant-ui's `newThreadId`/`mainThreadId` update land in the same tick,
- * so `hasDraft` is already false by the time the effect re-runs. Live-verified
- * (2026-09-23, mock adapter) that assumption doesn't hold here: the daemon log
- * shows the just-created chat archived ~36ms after creation (`chat created` →
- * `chat archived`, both timestamped, no other daemon activity between them),
- * and instrumenting `resetNewThreadDraft` to log its caller's stack showed the
- * SAME localId being reset multiple times right after the send — including
- * once from inside a Radix `onSelect`/`flushSync` frame — while `beforeAll`
- * never calls any of `resetNewThreadDraft`'s five call sites itself. This is
- * the same class of bug #359 fixes elsewhere (`use-draft-row.ts`'s own comment
- * traces the "no-id-flip" assumption to the assistant-ui 0.15 migration, #602)
- * but a different file, outside this plan's five listed changes. Filed as a
- * finding, not fixed here — re-verify once `use-draft-row.ts` is patched.
  */
 
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { DAEMON_PORT } from '../fixtures/daemon.js';
 import { TOAST } from '../helpers/tauri/testids.js';
+
+const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 function baseName(p: string): string {
   const parts = p.split('/');
   return parts[parts.length - 1] as string;
 }
 
-/** No active session yet, so "+" opens the welcome screen projectless. */
-async function openProjectlessDraft(page: Page): Promise<void> {
-  await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
-  await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
+/** `GET /api/chats?project=<id>` — mirrors sessions-draft.spec.ts's identically-named helper. */
+async function fetchProjectChatIds(projectId: string): Promise<string[]> {
+  const res = await fetch(`${DAEMON_BASE}/api/chats?project=${encodeURIComponent(projectId)}`);
+  expect(res.ok).toBe(true);
+  const body = (await res.json()) as { data?: { id: string }[] };
+  return (body.data ?? []).map((chat) => chat.id);
 }
 
-/** See sessions-draft.spec.ts's identically-named helper for the toHaveCount(0) rationale. */
-async function pickProjectFromWelcome(page: Page, projectId: string): Promise<void> {
-  await page.getByTestId('welcome-project').click({ timeout: 10_000 });
-  await page.getByTestId(`welcome-project-${projectId}`).click({ timeout: 10_000 });
-  await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0, { timeout: 10_000 });
+/**
+ * Poll the daemon until EXACTLY ONE chat exists in `projectId` that did not exist
+ * before, and return its id — the daemon is the authority on "a chat was
+ * created" (see sessions-draft.spec.ts's identically-named helper for why a
+ * sidebar DOM diff is not).
+ */
+async function waitForCreatedChat(projectId: string, before: string[]): Promise<string> {
+  const known = new Set(before);
+  let created: string[] = [];
+  await expect
+    .poll(
+      async () => {
+        created = (await fetchProjectChatIds(projectId)).filter((id) => !known.has(id));
+        return created.length;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(1);
+  return created[0] as string;
+}
+
+/**
+ * The one-click "+" with a project-backed session already active and no
+ * filter pill: `resolveNewSessionProject` inherits that session's project, so
+ * the welcome screen opens with it already picked — draft row and composer
+ * live immediately, no dropdown step (mirrors sessions-draft.spec.ts's
+ * identically-named helper).
+ */
+async function openDraftInheritingProject(page: Page, project: TauriProject): Promise<void> {
+  await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
+  await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
+    timeout: 10_000,
+  });
 }
 
 /**
@@ -117,16 +145,25 @@ async function selectTextInLastAssistantMessage(page: Page, needle: string): Pro
 test.describe('§new-session-prefill', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  /** The chat committed by `beforeAll`'s own first send — distinct from the
+   *  chat `createTauriChat` seeds to give "+" a project to inherit. */
+  let committedChatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'messaging' });
     project = await createTauriProject(app.page);
 
     const { page } = app;
-    await openProjectlessDraft(page);
-    await pickProjectFromWelcome(page, project.projectId);
+    // Seed a real, project-backed chat first so the sidebar "+" inherits its
+    // project directly (openDraftInheritingProject below) instead of going
+    // through the welcome screen's project-picker dropdown — see the file
+    // docstring for why that dropdown path is avoided here.
+    const seededChatId = await createTauriChat(page, project.projectId, 'default');
+    const chatsBeforeDraft = await fetchProjectChatIds(project.projectId);
+
+    await openDraftInheritingProject(page, project);
     // Let the draft settle (config resolved, composer mounted) before typing —
-    // sessions-draft.spec.ts's identical picker→submit sequence waits on both
+    // sessions-draft.spec.ts's identical inherit→submit sequence waits on both
     // of these first for the same reason.
     await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath), {
@@ -139,11 +176,13 @@ test.describe('§new-session-prefill', () => {
 
     // First send commits the draft — the new-thread slot then reads empty for
     // one macrotask (#359's root cause) until it observes the settled draft.
-    // Confirm the commit itself (a real sessions-row appears) before waiting
-    // on the reply — sessions-draft.spec.ts's "first send creates exactly one
-    // chat" test asserts the identical thing before its own waitForIdle.
+    // Confirm the commit itself via the daemon (a second, distinct chat now
+    // exists in the project) before waiting on the reply — sessions-draft.spec.ts's
+    // "first send creates exactly one chat" test asserts the identical thing
+    // before its own waitForIdle.
     await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
-    await expect(page.getByTestId('sessions-row')).toHaveCount(1, { timeout: 20_000 });
+    committedChatId = await waitForCreatedChat(project.projectId, chatsBeforeDraft);
+    expect(committedChatId).not.toBe(seededChatId);
     await waitForIdle(page, 60_000);
   });
 
@@ -153,7 +192,6 @@ test.describe('§new-session-prefill', () => {
   });
 
   test('"New session" on selected reply text opens a draft in the source project, prefilled, with no error toast', async () => {
-    test.skip(true, 'TODO(bug): pre-existing use-draft-row.ts race — see comment above the describe');
     const { page } = app;
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     await expect(lastAssistant).toContainText('4', { timeout: 10_000 });
@@ -172,13 +210,15 @@ test.describe('§new-session-prefill', () => {
   });
 
   test('the sidebar "+" from the same freshly committed chat also opens a draft in the active project, not "Choose a project"', async () => {
-    test.skip(true, 'TODO(bug): pre-existing use-draft-row.ts race — see comment above the describe');
     const { page } = app;
     // Return to the real chat committed in beforeAll (the New-session test
-    // above branched off it into a separate draft) — exactly one real
-    // `sessions-row` exists for this project.
-    await page.getByTestId('sessions-row').first().click();
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath), {
+    // above branched off it into a separate draft) — addressed by its own id
+    // since the seeded chat from beforeAll also has a `sessions-row`. A real
+    // (non-draft) chat's header never renders `chat-header-project`
+    // (ChatCardHeaderReal carries no project chip — only ChatCardHeaderDraft
+    // does), so the switch is confirmed via the row's `data-active` instead.
+    await sessionsSidebar(page).row(committedChatId).click();
+    await expect(sessionsSidebar(page).row(committedChatId)).toHaveAttribute('data-active', 'true', {
       timeout: 10_000,
     });
 
