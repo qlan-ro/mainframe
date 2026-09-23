@@ -47,7 +47,7 @@ function ComposerAttachmentTile() {
   const isImage = type === 'image';
 
   return (
-    <Attachment data-testid="composer-attachment-tile" size="sm" className="max-w-56">
+    <Attachment data-testid="composer-attachment-tile" size="sm" className="w-56">
       {isImage ? (
         <>
           <AttachmentPreviewDialog>
