@@ -29,9 +29,13 @@ export function useOpenNewThreadDraft(): (args: OpenNewThreadDraftArgs) => Promi
       runtimeThreads: aui.threads,
       setReturnTarget: (id) => useDraftReturnTarget.getState().setReturnTarget(id),
       resetNewThreadDraft,
-      initializeDraft: ({ localId, projectId }) =>
-        initializeDraft({ localId, projectId, port, defaultAdapterId, adapters }),
-      setText: (text) => aui.composer.setText(text),
+      initializeDraft: ({ localId, projectId, adapterId }) =>
+        initializeDraft({ localId, projectId, port, defaultAdapterId, adapters, adapterId }),
+      // The live main-thread composer, not `aui.composer` — that's rebound to a
+      // message's edit composer inside a message (e.g. the instruction chip) and
+      // is a scoped stand-in elsewhere. `threads.thread('main')` is a root scope
+      // no provider shadows.
+      setText: (text) => aui.threads.thread('main').composer().setText(text),
       mfToastError: (title, options) => mfToast.error(title, options),
     });
 }
