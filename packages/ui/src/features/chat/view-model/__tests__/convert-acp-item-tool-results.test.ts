@@ -115,6 +115,38 @@ describe('convertAcpItems — tool result shapes', () => {
     expect(toolResultOf(item)).toBe('OK');
   });
 
+  it('a text entry plus two image entries yields {content,images} with images in source order (todo #363)', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't7',
+      title: 'Read',
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'tmp/p1.png' } },
+        { type: 'content', content: { type: 'image', data: 'b64-one', mimeType: 'image/png' } },
+        { type: 'content', content: { type: 'image', data: 'b64-two', mimeType: 'image/jpeg' } },
+      ],
+    };
+    expect(toolResultOf(item)).toEqual({
+      content: 'tmp/p1.png',
+      images: [
+        { mediaType: 'image/png', data: 'b64-one' },
+        { mediaType: 'image/jpeg', data: 'b64-two' },
+      ],
+    });
+  });
+
+  it('an item without image entries yields the same result shape as today (no images field)', () => {
+    const item: AccumulatedItem = {
+      kind: 'tool-call',
+      id: 't8',
+      title: 'Bash',
+      status: 'completed',
+      content: [{ type: 'content', content: { type: 'text', text: 'no images here' } }],
+    };
+    expect(toolResultOf(item)).toBe('no images here');
+  });
+
   it('a text block whose _meta askUserQuestion is an array yields the {content,askUserQuestion} result shape', () => {
     const item: AccumulatedItem = {
       kind: 'tool-call',
