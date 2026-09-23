@@ -201,6 +201,7 @@ mod tests {
                 truncated: None,
                 full_bytes: None,
                 ask_user_question: None,
+                images: Vec::new(),
             }),
         }
     }
@@ -226,6 +227,7 @@ mod tests {
                 truncated: None,
                 full_bytes: None,
                 ask_user_question: None,
+                images: Vec::new(),
             }),
         }
     }
@@ -454,6 +456,7 @@ mod tests {
                 truncated: None,
                 full_bytes: None,
                 ask_user_question: None,
+                images: Vec::new(),
             }),
         };
         let messages = vec![

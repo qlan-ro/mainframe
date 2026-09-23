@@ -126,6 +126,7 @@ fn tool_result(tool_use_id: &str, is_error: bool) -> MessageContent {
         structured_patch: None,
         original_file: None,
         modified_file: None,
+        images: Vec::new(),
         parent_tool_use_id: None,
     })
 }

@@ -218,6 +218,7 @@ pub fn attach_subagent_tool_results(
                     structured_patch,
                     original_file,
                     modified_file,
+                    images,
                     ..
                 })) = results.get(&id)
             {
@@ -228,6 +229,7 @@ pub fn attach_subagent_tool_results(
                     structured_patch: structured_patch.clone(),
                     original_file: original_file.clone(),
                     modified_file: modified_file.clone(),
+                    images: images.clone(),
                     parent_tool_use_id: parent,
                 }));
             }
@@ -335,6 +337,10 @@ mod tests {
                 structured_patch: None,
                 original_file: None,
                 modified_file: None,
+                images: vec![mainframe_types::content::ToolResultImage {
+                    media_type: "image/png".to_string(),
+                    data: "AAAA".to_string(),
+                }],
                 parent_tool_use_id: None,
             }),
         );
@@ -345,11 +351,15 @@ mod tests {
             MessageContent::Node(MessageContentNode::ToolResult {
                 tool_use_id,
                 parent_tool_use_id,
+                images,
                 ..
             }) => {
                 assert_eq!(tool_use_id, "child");
                 // parentToolUseId inherited from the tool_use block.
                 assert_eq!(parent_tool_use_id.as_deref(), Some("agent-tu"));
+                // images carry through the field-by-field rebuild (todo #363).
+                assert_eq!(images.len(), 1);
+                assert_eq!(images[0].media_type, "image/png");
             }
             _ => panic!("expected tool_result"),
         }
