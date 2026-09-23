@@ -10,12 +10,7 @@
  */
 import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { mfToast } from '@/lib/toast';
-import { useAdapters } from '@/store/adapters';
-import { useSettingsStore } from '@/store/settings';
-import { initializeDraft } from '@/features/sessions/new-thread/initialize-draft';
-import { resetNewThreadDraft } from '@/features/sessions/new-thread/reset-new-thread-draft';
-import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useOpenNewThreadDraft } from '@/features/sessions/new-thread/use-open-new-thread-draft';
 import { useChatExtras } from '../runtime/chat-extras';
 
 export interface InstructionActions {
@@ -39,9 +34,7 @@ export function useInstructionActions(): InstructionActions {
   // live composer regardless of that rebinding.
   const aui = useAui();
   const extras = useChatExtras();
-  const port = useDaemonPort();
-  const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
-  const adapters = useAdapters();
+  const openNewThreadDraft = useOpenNewThreadDraft();
 
   const projectId = extras?.state.chatConfig?.projectId ?? null;
   const adapterId = extras?.state.chatConfig?.adapterId;
@@ -62,28 +55,9 @@ export function useInstructionActions(): InstructionActions {
         console.warn('[smart-actions] source chat has no project; cannot start a session');
         return;
       }
-      void (async () => {
-        try {
-          // Clear the reused draft slot before switching, so the new draft never
-          // inherits an abandoned one's project.
-          resetNewThreadDraft(aui.threads.getState().newThreadId);
-          // `switchToNewThread` owns the slot — `newThreadId` is only readable
-          // once it resolves, and prefilling earlier would fill the previously
-          // active thread's composer (#212). It is typed `void` but implemented
-          // async, so the await is load-bearing.
-          await aui.threads.switchToNewThread();
-          const localId = aui.threads.getState().newThreadId;
-          if (localId == null) throw new Error('No draft session was created');
-          await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters, adapterId });
-          aui.threads.thread('main').composer().setText(insertText);
-        } catch (error) {
-          mfToast.error('Couldn’t start a new session', {
-            description: error instanceof Error ? error.message : String(error),
-          });
-        }
-      })();
+      void openNewThreadDraft({ projectId, adapterId, prefill: insertText });
     },
-    [aui, projectId, adapterId, port, defaultAdapterId, adapters],
+    [projectId, adapterId, openNewThreadDraft],
   );
 
   return { append, runInNewSession };
