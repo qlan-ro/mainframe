@@ -1632,6 +1632,12 @@ mod tests {
         assert_eq!(rec.results, 0);
         assert_eq!(rec.errors, 0);
     }
+
+    // Synthetic-suppression cases (todo #363) live in a sibling file — this
+    // module is already 1600+ lines — nested here so it shares `RecordingSink`,
+    // `session()` and `feed()` via `super::*` without any visibility changes.
+    // Default file-module lookup places it at `events/tests/events_synthetic_tests.rs`.
+    mod events_synthetic_tests;
 }
 
 // PORT STATUS: src/plugins/builtin/claude/events.ts (227 lines)
