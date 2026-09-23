@@ -15,9 +15,9 @@
     "test:tools": "node --test 'scripts/testid-inventory/**/*.test.mjs'"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@types/node": "^26.1.1",
-    "dotenv": "^17.4.2",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "dotenv": "^18.0.1",
     "typescript": "^6.0.3"
   }
 }
