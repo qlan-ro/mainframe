@@ -84,6 +84,10 @@ interface SyntheticMainframeMeta {
     kind: 'image' | 'file';
     sizeBytes?: number;
   }>;
+  reviewComment?: {
+    file: string;
+    comments: Array<{ start: number; end?: number; code: string; body: string }>;
+  };
 }
 
 interface SyntheticMessageState {
@@ -690,5 +694,34 @@ describe('UserMessage — SR: session reference lines and chips', () => {
     expect(chip).not.toBeNull();
     expect(chip).toHaveTextContent('/zzz');
     expect(screen.getByTestId('chat-user-message')).toHaveTextContent('do the thing');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — RC: review-comment user turn end-alignment (todo #362)
+// ---------------------------------------------------------------------------
+
+describe('UserMessage — RC: review-comment card end-alignment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the review-comment card taking part in the end-aligned user-turn layout', () => {
+    __messageFixture = makeFixture({
+      content: [{ type: 'text', text: 'File: `docs/x.md`\n\nAt lines 13-15:\n```\ncode\n```\ncomment here' }],
+      mainframe: {
+        reviewComment: {
+          file: 'docs/x.md',
+          comments: [{ start: 13, end: 15, code: 'code', body: 'comment here' }],
+        },
+      },
+    });
+    renderUserMessage();
+    const card = screen.getByTestId('chat-user-review-comment');
+    // The card must declare its own end alignment (self-end), the same way
+    // UserAttachments declares its own with `ml-auto` — MessageContent only
+    // end-aligns children carrying the kit's `data-slot` marker, and the card
+    // has none, so it needs an explicit alignment class of its own.
+    expect(card.className).toContain('self-end');
   });
 });
