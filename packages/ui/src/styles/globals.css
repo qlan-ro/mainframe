@@ -261,6 +261,8 @@
   }
   html {
     @apply font-sans;
+    /* WKWebView can strand a root rubber-band mid-bounce, leaving the whole shell shifted over the window background. */
+    overscroll-behavior: none;
   }
 }
 
