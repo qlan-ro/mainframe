@@ -73,6 +73,7 @@ fn build_recovered_snapshot(
         recovered: Some(true),
         workflow_name: None,
         run_id: None,
+        reported_type: None,
     }
 }
 

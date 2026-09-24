@@ -196,6 +196,7 @@ mod tests {
                 command: "x".to_string(),
                 description: String::new(),
                 workflow_name: None,
+                reported_type: None,
             },
             output_path.to_string(),
         );
@@ -353,6 +354,7 @@ mod tests {
                 command: String::new(),
                 description: "subagent".to_string(),
                 workflow_name: None,
+                reported_type: None,
             },
             "/p/a1.out".to_string(),
         );

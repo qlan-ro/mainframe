@@ -548,6 +548,7 @@ mod tests {
                 command: "x".to_string(),
                 description: String::new(),
                 workflow_name: None,
+                reported_type: None,
             },
             output_path.to_string(),
         );

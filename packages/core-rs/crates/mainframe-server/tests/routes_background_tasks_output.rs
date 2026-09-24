@@ -39,6 +39,7 @@ fn seed(tracker: &BackgroundTaskTracker, chat_id: &str, task_id: &str, output_pa
             command: "sleep 100".to_string(),
             description: String::new(),
             workflow_name: None,
+            reported_type: None,
         },
         output_path,
     );

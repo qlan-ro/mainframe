@@ -1405,6 +1405,7 @@ mod scan_loaded_history_tests {
                 command: "cmd".to_string(),
                 description: "reviewer".to_string(),
                 workflow_name: None,
+                reported_type: None,
             },
             "/tmp/mf-273-a-1.log".to_string(),
         );

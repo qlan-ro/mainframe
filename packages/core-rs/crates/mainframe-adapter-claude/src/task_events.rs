@@ -200,6 +200,7 @@ impl ClaudeTaskEvents {
     ) {
         let meta = payload.tool_use_id.as_deref().and_then(|t| self.consume(t));
         let kind = map_task_kind(payload.task_type.as_deref(), meta.is_some());
+        let reported_type = payload.task_type.clone();
         if kind == BackgroundWorkKind::Workflow {
             self.workflow_store
                 .seed(chat_id, &payload.task_id, payload.workflow_name.clone());
@@ -228,6 +229,7 @@ impl ClaudeTaskEvents {
                     .unwrap_or_else(|| "<unknown>".to_string()),
                 description: payload.description.unwrap_or_default(),
                 workflow_name: payload.workflow_name,
+                reported_type,
             },
             output_path,
         );
@@ -596,6 +598,16 @@ mod tests {
             tracker.get("chat-a", "k1").unwrap().kind,
             BackgroundWorkKind::Bash
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unmapped_task_type_lands_in_other_and_carries_its_reported_type() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        let te = ClaudeTaskEvents::new(tracker.clone(), Arc::new(ClaudeWorkflowStore::new()));
+        te.handle_task_started("chat-a", started_typed("c1", Some("container_exec")), ctx());
+        let task = tracker.get("chat-a", "c1").unwrap();
+        assert_eq!(task.kind, BackgroundWorkKind::Other);
+        assert_eq!(task.reported_type.as_deref(), Some("container_exec"));
     }
 
     #[tokio::test(start_paused = true)]

@@ -2157,6 +2157,7 @@ mod tests {
             command: command.to_string(),
             description: description.to_string(),
             workflow_name: None,
+            reported_type: None,
         }
     }
 

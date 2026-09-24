@@ -1530,6 +1530,7 @@ mod background_activity {
             recovered: None,
             workflow_name: None,
             run_id: None,
+            reported_type: None,
         }
     }
 

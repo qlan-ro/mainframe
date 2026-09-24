@@ -200,6 +200,7 @@ mod tests {
                 command: "sleep 1".into(),
                 description: "d".into(),
                 workflow_name: None,
+                reported_type: None,
             },
             "/tmp/mf-out".into(),
         );
@@ -225,6 +226,7 @@ mod tests {
             recovered: Some(true),
             workflow_name: None,
             run_id: None,
+            reported_type: None,
         };
         let id = task.id.clone();
         ctx.background_tasks

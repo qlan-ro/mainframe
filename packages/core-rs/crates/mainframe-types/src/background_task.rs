@@ -64,6 +64,10 @@ pub struct BackgroundTask {
     pub workflow_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
+    /// The CLI's raw `task_type`, kept alongside the mapped `kind` so an
+    /// unrecognised upstream type can still be shown as-is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reported_type: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,6 +171,7 @@ mod tests {
             recovered: None,
             workflow_name: None,
             run_id: None,
+            reported_type: None,
         }
     }
 
@@ -199,15 +204,18 @@ mod tests {
             recovered: None,
             workflow_name: None,
             run_id: None,
+            reported_type: None,
         };
         let s = serde_json::to_string(&task).unwrap();
         assert!(s.contains(r#""outputPath":null"#));
         assert!(s.contains(r#""endedAt":null"#));
         assert!(s.contains(r#""usage":null"#));
-        // `recovered`, `workflowName`, `runId` are the skip-when-absent fields.
+        // `recovered`, `workflowName`, `runId`, `reportedType` are the
+        // skip-when-absent fields.
         assert!(!s.contains("recovered"));
         assert!(!s.contains("workflowName"));
         assert!(!s.contains("runId"));
+        assert!(!s.contains("reportedType"));
     }
 
     #[test]

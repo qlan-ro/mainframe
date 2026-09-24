@@ -43,6 +43,9 @@ pub struct TaskSeed {
     /// Set for a `local_workflow` task_type; carried onto the started
     /// `BackgroundTask` so `run_id` (learned later) has a name to sit beside.
     pub workflow_name: Option<String>,
+    /// The CLI's raw `task_type`, carried through to the tracked task
+    /// regardless of what `kind` it mapped to.
+    pub reported_type: Option<String>,
 }
 
 /// The terminal-transition update passed to [`BackgroundTaskTracker::end`].
@@ -137,6 +140,7 @@ impl BackgroundTaskTracker {
             recovered: None,
             workflow_name: seed.workflow_name,
             run_id: None,
+            reported_type: seed.reported_type,
         };
         {
             let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
@@ -333,6 +337,7 @@ mod tests {
             command: "pnpm dev".to_string(),
             description: description.to_string(),
             workflow_name: None,
+            reported_type: None,
         }
     }
 
@@ -568,6 +573,7 @@ mod tests {
             recovered: Some(true),
             workflow_name: None,
             run_id: None,
+            reported_type: None,
         }
     }
 
@@ -629,6 +635,7 @@ mod tests {
             command: "x".to_string(),
             description: String::new(),
             workflow_name: None,
+            reported_type: None,
         }
     }
 
@@ -859,6 +866,7 @@ mod tests {
                 command: "pnpm dev".to_string(),
                 description: "dev server".to_string(),
                 workflow_name: None,
+                reported_type: None,
             },
             "/tmp/claude-501/-Users-x-proj/sess/tasks/t9.output".to_string(),
         );
@@ -899,6 +907,22 @@ mod tests {
         let mut rx = tracker.subscribe();
         tracker.link_run_id("chat-ghost", "task-1", "run-1", None);
         assert!(drain(&mut rx).is_empty());
+    }
+
+    #[test]
+    fn start_copies_reported_type_through_onto_the_tracked_task() {
+        let tracker = BackgroundTaskTracker::new();
+        let mut seed = plain_seed("t-reported");
+        seed.reported_type = Some("container_exec".to_string());
+        tracker.start("chat-a", seed, "/p/t-reported".to_string());
+        assert_eq!(
+            tracker
+                .get("chat-a", "t-reported")
+                .unwrap()
+                .reported_type
+                .as_deref(),
+            Some("container_exec")
+        );
     }
 
     #[test]

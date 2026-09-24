@@ -113,6 +113,7 @@ fn seed(h: &Harness, id: &str, kind: BackgroundWorkKind, description: &str) {
             command: "cmd".to_string(),
             description: description.to_string(),
             workflow_name: None,
+            reported_type: None,
         },
         format!("/tmp/mf-273-{id}.log"),
     );

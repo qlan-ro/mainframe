@@ -42,6 +42,7 @@ pub(crate) fn open_activity(
             command: title.to_string(),
             description: title.to_string(),
             workflow_name: None,
+            reported_type: None,
         },
         String::new(),
     );

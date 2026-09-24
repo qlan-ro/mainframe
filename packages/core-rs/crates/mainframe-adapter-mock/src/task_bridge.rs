@@ -148,6 +148,7 @@ impl TaskBridge {
                 },
                 description: description.to_string(),
                 workflow_name: workflow_name.clone(),
+                reported_type: None,
             },
             String::new(),
         );
