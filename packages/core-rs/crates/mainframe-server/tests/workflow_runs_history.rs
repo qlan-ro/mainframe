@@ -130,6 +130,7 @@ async fn harness(session_id: &str) -> Harness {
         Arc::clone(&store),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     let ctx = Arc::new(AppCtx {

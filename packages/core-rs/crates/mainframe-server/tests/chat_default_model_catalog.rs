@@ -149,6 +149,7 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     Harness {

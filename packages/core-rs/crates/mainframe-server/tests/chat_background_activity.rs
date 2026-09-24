@@ -90,6 +90,7 @@ fn harness() -> Harness {
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     Harness {
