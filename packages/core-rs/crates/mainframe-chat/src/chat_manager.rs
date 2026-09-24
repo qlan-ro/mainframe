@@ -35,8 +35,8 @@ use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
 };
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, DisplayStatus, MessageContent, ProcessState, Project,
-    QueuedMessageRef, TodoItem,
+    Chat, ChatMessage, ChatMessageType, DisplayStatus, MessageContent, NewChat, ProcessState,
+    Project, QueuedMessageRef, TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{SessionContext, SessionMention, SkillFileEntry};
@@ -74,6 +74,7 @@ mod deps_lifecycle;
 mod deps_offer;
 mod deps_permission;
 mod deps_recovery;
+mod discard;
 mod errors;
 mod external_facade;
 mod history;

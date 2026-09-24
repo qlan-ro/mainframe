@@ -90,6 +90,20 @@ export interface Chat {
   tags?: string[];
   /** Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list. */
   automationRunId?: string | null;
+  /**
+   * Fixed at creation. A temporary chat is left out of default listings,
+   * refuses pin/tag/archive/unarchive, and is removed only by an explicit
+   * discard or by removing its project. Always serialized.
+   */
+  temporary: boolean;
+  /** Derived as `projectId === NO_PROJECT_ID` on the daemon; never a stored field. Always serialized. */
+  noProject: boolean;
+  /**
+   * ISO time of the chat's latest vendor-context loss (its stored provider
+   * session was started with no persistence and can no longer be resumed).
+   * Drives the "earlier context was not preserved" notice.
+   */
+  contextLostAt?: string | null;
 }
 
 export interface Project {

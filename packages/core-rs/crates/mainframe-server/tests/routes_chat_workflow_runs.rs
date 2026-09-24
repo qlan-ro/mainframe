@@ -33,7 +33,13 @@ async fn succeeds_for_a_real_chat_row_with_no_claude_session_yet() {
         .db
         .call({
             let project_id = project_id.clone();
-            move |db| db.chats.create(&project_id, "claude", None, None, None)
+            move |db| {
+                db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id,
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })
+            }
         })
         .await
         .unwrap()

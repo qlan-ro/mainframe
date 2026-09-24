@@ -7,6 +7,7 @@ use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
 use mainframe_db::{ChatTagsRepository, ChatsRepository, ProjectsRepository};
+use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
 
 fn mem() -> Rc<Connection> {
     let conn = Connection::open_in_memory().unwrap();
@@ -74,10 +75,18 @@ fn deleting_a_project_also_deletes_its_chats() {
 
     let project = repo.create("/some/path", None).unwrap();
     chats
-        .create(&project.id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     chats
-        .create(&project.id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
 
     repo.remove(&project.id).unwrap();
@@ -114,11 +123,45 @@ fn delete_is_atomic() {
 
     let project = repo.create("/atomic/path", None).unwrap();
     chats
-        .create(&project.id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
 
     repo.remove(&project.id).unwrap();
 
     assert!(repo.get(&project.id).unwrap().is_none());
     assert_eq!(chats.list(&project.id).unwrap().len(), 0);
+}
+
+// ── hidden scratch project row (#346) ───────────────────────────────────────
+
+#[test]
+fn list_never_returns_the_hidden_scratch_project_row() {
+    let repo = ProjectsRepository::new(mem());
+    repo.create("/path/to/repo", None).unwrap();
+
+    let ids: Vec<String> = repo.list().unwrap().into_iter().map(|p| p.id).collect();
+    assert!(!ids.contains(&NO_PROJECT_ID.to_string()));
+}
+
+#[test]
+fn get_returns_none_for_the_hidden_scratch_project_row() {
+    let repo = ProjectsRepository::new(mem());
+    assert!(repo.get(NO_PROJECT_ID).unwrap().is_none());
+}
+
+#[test]
+fn get_by_path_returns_none_for_the_scratch_sentinel_path() {
+    let repo = ProjectsRepository::new(mem());
+    assert!(repo.get_by_path("mainframe:no-project").unwrap().is_none());
+}
+
+#[test]
+fn remove_refuses_the_hidden_scratch_project_row() {
+    let repo = ProjectsRepository::new(mem());
+    let err = repo.remove(NO_PROJECT_ID).unwrap_err();
+    assert!(err.to_string().contains("scratch"));
 }

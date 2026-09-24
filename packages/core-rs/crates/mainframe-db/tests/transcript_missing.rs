@@ -12,6 +12,7 @@ use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
 use mainframe_db::{ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_types::chat::NewChat;
 
 fn setup() -> (ChatsRepository, ProjectsRepository, String) {
     let conn = Connection::open_in_memory().unwrap();
@@ -27,7 +28,11 @@ fn setup() -> (ChatsRepository, ProjectsRepository, String) {
 fn defaults_to_false_on_new_chats() {
     let (chats, _projects, project_id) = setup();
     let chat = chats
-        .create(&project_id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     assert_eq!(
         chats.get(&chat.id).unwrap().unwrap().transcript_missing,
@@ -39,7 +44,11 @@ fn defaults_to_false_on_new_chats() {
 fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
     let (chats, _projects, project_id) = setup();
     let chat = chats
-        .create(&project_id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
 
     chats
@@ -75,7 +84,11 @@ fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
 fn includes_transcript_missing_in_list_results() {
     let (chats, _projects, project_id) = setup();
     let chat = chats
-        .create(&project_id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     chats
         .update(
@@ -99,7 +112,11 @@ fn includes_transcript_missing_in_list_results() {
 fn clear_session_clears_identity_and_resets_the_transcript_flag() {
     let (chats, _projects, project_id) = setup();
     let chat = chats
-        .create(&project_id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     chats
         .update(
@@ -127,7 +144,11 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
 fn clear_worktree_clears_binding_so_chat_rebinds_to_project_root() {
     let (chats, _projects, project_id) = setup();
     let chat = chats
-        .create(&project_id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     chats
         .update(

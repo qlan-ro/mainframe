@@ -110,6 +110,11 @@ fn make_chat(
         detected_prs: None,
         tags: None,
         automation_run_id: None,
+        temporary: false,
+        no_project: false,
+        context_lost_at: None,
+        vendor_session_ephemeral: false,
+        scratch_path: None,
     }
 }
 

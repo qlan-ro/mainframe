@@ -23,21 +23,8 @@ impl LifecycleManagerDeps for LcDeps {
                 .await;
         }))
     }
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat {
-        self.deps.chats_create(
-            project_id,
-            adapter_id,
-            model,
-            permission_mode,
-            automation_run_id,
-        )
+    fn chats_create(&self, new_chat: &NewChat) -> Chat {
+        self.deps.chats_create(new_chat)
     }
     fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate) {
         self.deps.chats_update(chat_id, &ChatUpdate::from(patch));

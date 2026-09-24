@@ -71,8 +71,11 @@ fn harness() -> Harness {
     let project_id_for_chat = project.id.clone();
     let chat = db
         .call_blocking(move |d| {
-            d.chats
-                .create(&project_id_for_chat, "claude", None, None, None)
+            d.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project_id_for_chat,
+                adapter_id: "claude".to_string(),
+                ..Default::default()
+            })
         })
         .unwrap();
 
@@ -90,6 +93,7 @@ fn harness() -> Harness {
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     Harness {
@@ -181,7 +185,7 @@ async fn read_paths_enrich_background_activity() {
     assert_live(listed_all.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
     let filtered = h
         .manager
-        .list_filtered(Some(&h.project_id), None, false, false);
+        .list_filtered(Some(&h.project_id), None, false, false, false);
     assert_live(filtered.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
 }
 

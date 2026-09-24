@@ -304,6 +304,7 @@ async fn run_daemon() {
         Arc::clone(&claude_workflows),
         resolved_path.clone(),
         Some(facade_hub.as_chat_surface()),
+        data_dir.clone(),
     );
     // No in-memory CLI sessions survive a restart, so reset any persisted
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.

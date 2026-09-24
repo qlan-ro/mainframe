@@ -177,6 +177,29 @@ mod tests {
             json!({ "success": false, "error": "database is locked" })
         );
     }
+
+    #[tokio::test]
+    async fn get_one_404s_for_the_hidden_scratch_project_row() {
+        let ctx = AppCtx::test_ctx();
+        let (status, body) =
+            body_json(get_one(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
+                .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "Project not found");
+    }
+
+    #[tokio::test]
+    async fn list_never_returns_the_hidden_scratch_project_row() {
+        let ctx = AppCtx::test_ctx();
+        let (_, body) = body_json(list(State(ctx.clone())).await).await;
+        let ids: Vec<String> = body["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(!ids.contains(&"mainframe-no-project".to_string()));
+    }
 }
 
 // PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)

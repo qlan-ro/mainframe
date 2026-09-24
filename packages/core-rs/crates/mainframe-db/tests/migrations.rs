@@ -34,7 +34,7 @@ fn schema_sql(db: &Connection) -> String {
     sqls.join("\n")
 }
 
-const ALL_CHATS_COLUMNS: [&str; 32] = [
+const ALL_CHATS_COLUMNS: [&str; 36] = [
     "id",
     "adapter_id",
     "project_id",
@@ -67,6 +67,10 @@ const ALL_CHATS_COLUMNS: [&str; 32] = [
     "session_file_path",
     "automation_run_id",
     "dismissed_worktrees",
+    "temporary",
+    "vendor_session_ephemeral",
+    "context_lost_at",
+    "scratch_path",
 ];
 
 // Builds an intermediate historical DB by replaying the real migration chain up to
@@ -233,6 +237,54 @@ fn applies_every_data_backfill_when_upgrading_legacy_intermediate() {
         )
         .unwrap();
     assert_eq!(plan_mode, "true");
+}
+
+#[test]
+fn migration_28_backfills_a_pre_28_chat_as_not_temporary_with_its_project_unchanged() {
+    let db = Connection::open_in_memory().unwrap();
+    // Stop just before migration 28 so the row predates the new columns.
+    run_migrations(&db, 27).unwrap();
+
+    let now = "2026-01-01T00:00:00.000Z";
+    db.execute(
+        "INSERT INTO projects (id, name, path, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?)",
+        rusqlite::params!["p1", "proj", "/tmp/p1", now, now],
+    )
+    .unwrap();
+    db.execute(
+        "INSERT INTO chats (id, adapter_id, project_id, status, created_at, updated_at) \
+         VALUES (?, ?, ?, ?, ?, ?)",
+        rusqlite::params!["c1", "claude", "p1", "active", now, now],
+    )
+    .unwrap();
+
+    run_migrations(&db, LATEST_VERSION).unwrap();
+
+    let (project_id, temporary): (String, i64) = db
+        .query_row(
+            "SELECT project_id, temporary FROM chats WHERE id = 'c1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(project_id, "p1");
+    assert_eq!(temporary, 0);
+}
+
+#[test]
+fn migration_28_seeds_the_hidden_scratch_project_row() {
+    let db = Connection::open_in_memory().unwrap();
+    initialize_schema(&db).unwrap();
+
+    let (name, path): (String, String) = db
+        .query_row(
+            "SELECT name, path FROM projects WHERE id = 'mainframe-no-project'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(name, "No project");
+    assert_eq!(path, "mainframe:no-project");
 }
 
 #[test]

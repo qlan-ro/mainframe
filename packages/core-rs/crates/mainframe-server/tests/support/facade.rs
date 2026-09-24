@@ -59,7 +59,13 @@ impl FacadeServer {
         self.server
             .ctx
             .db
-            .call(move |d| d.chats.create(&project_id, &profile, None, None, None))
+            .call(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id,
+                    adapter_id: profile,
+                    ..Default::default()
+                })
+            })
             .await
             .unwrap()
             .id
@@ -114,6 +120,7 @@ pub async fn spawn_facade_server_with(
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         Some(facade_hub.as_chat_surface()),
+        data_dir.path().to_path_buf(),
     );
 
     let path = data_dir.path().to_string_lossy().into_owned();
@@ -124,8 +131,11 @@ pub async fn spawn_facade_server_with(
     let profile_for_chat = profile.clone();
     let chat = db
         .call_blocking(move |d| {
-            d.chats
-                .create(&project.id, &profile_for_chat, None, None, None)
+            d.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project.id,
+                adapter_id: profile_for_chat,
+                ..Default::default()
+            })
         })
         .unwrap();
 

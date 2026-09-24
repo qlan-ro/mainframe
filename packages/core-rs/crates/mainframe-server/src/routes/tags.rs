@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
+use crate::routes::chat_discard::refuse_if_temporary;
 use crate::routes::projects::parse_body;
 
 #[derive(Deserialize)]
@@ -125,6 +126,16 @@ async fn set_chat_tags(
     let Some(parsed): Option<SetChatTagsBody> = parse_body(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
+    let lookup = id.clone();
+    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => {
+            if let Some(resp) = refuse_if_temporary(&chat, "tag") {
+                return resp;
+            }
+        }
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    }
     let tags = parsed.tags;
     let result = ctx
         .db

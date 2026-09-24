@@ -95,15 +95,17 @@ impl ChatManagerDeps for StoreDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         self.store.lock().unwrap().get(id).cloned()
     }
-    fn chats_create(
-        &self,
-        _project_id: &str,
-        _adapter_id: &str,
-        _model: Option<&str>,
-        _permission_mode: Option<&str>,
-        _automation_run_id: Option<&str>,
-    ) -> Chat {
+    fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
         test_chat("new")
+    }
+    fn chats_delete(&self, chat_id: &str) {
+        self.store.lock().unwrap().remove(chat_id);
+    }
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        _scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        Box::pin(async { Ok(()) })
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
         self.updates
@@ -134,6 +136,7 @@ impl ChatManagerDeps for StoreDeps {
         _tags_all: Option<&[String]>,
         _has_worktree: bool,
         _include_archived: bool,
+        _include_temporary: bool,
     ) -> Vec<Chat> {
         self.store.lock().unwrap().values().cloned().collect()
     }

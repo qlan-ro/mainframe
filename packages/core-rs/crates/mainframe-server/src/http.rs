@@ -57,6 +57,8 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // the manager is unwired (its construction is a documented blocker).
         .merge(routes::chats::router())
         .merge(routes::chat_commands::router())
+        .merge(routes::chat_create::router())
+        .merge(routes::chat_discard::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())
         .merge(routes::worktree_offer::router())

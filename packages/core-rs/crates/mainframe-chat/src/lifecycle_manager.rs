@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions};
-use mainframe_types::chat::{Chat, ChatStatus, ProcessState, ResolvedTuning};
+use mainframe_types::chat::{Chat, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
@@ -63,14 +63,7 @@ pub enum LifecycleError {
 pub trait LifecycleManagerDeps: Send + Sync {
     // db ----------------------------------------------------------------------
     fn chats_get(&self, id: &str) -> Option<Chat>;
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat;
+    fn chats_create(&self, new_chat: &NewChat) -> Chat;
     fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
@@ -225,24 +218,15 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .or_else(|| self.deps.chats_get(chat_id))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_chat(
         &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
+        new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-        automation_run_id: Option<&str>,
     ) -> Chat {
-        let mut chat = self.deps.chats_create(
-            project_id,
-            adapter_id,
-            model,
-            permission_mode,
-            automation_run_id,
-        );
+        let project_id = new_chat.project_id.clone();
+        let adapter_id = new_chat.adapter_id.clone();
+        let mut chat = self.deps.chats_create(&new_chat);
         if let (Some(wt), Some(branch)) = (worktree_path, branch_name) {
             self.deps.chats_update(
                 &chat.id,
@@ -257,7 +241,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
         info!(
             chat_id = chat.id,
-            project_id, adapter_id, worktree_path, "chat created"
+            project_id = project_id.as_str(),
+            adapter_id = adapter_id.as_str(),
+            worktree_path,
+            "chat created"
         );
         self.active_chats.insert(
             chat.id.clone(),
@@ -274,22 +261,16 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         chat
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_chat_with_defaults(
         &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
+        mut new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-        automation_run_id: Option<&str>,
     ) -> Chat {
-        let mut effective_model = model.map(str::to_string);
-        let mut effective_mode = permission_mode.map(str::to_string);
+        let adapter_id = new_chat.adapter_id.clone();
         let mut effective_plan_mode = false;
 
-        if effective_model.is_none() || effective_mode.is_none() || !effective_plan_mode {
+        if new_chat.model.is_none() || new_chat.permission_mode.is_none() || !effective_plan_mode {
             let default_model = self
                 .deps
                 .settings_get("provider", &format!("{adapter_id}.defaultModel"));
@@ -300,12 +281,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 .deps
                 .settings_get("provider", &format!("{adapter_id}.defaultPlanMode"));
 
-            if effective_model.is_none()
+            if new_chat.model.is_none()
                 && let Some(m) = default_model
             {
-                let models = self.deps.adapter_snapshot_models(adapter_id);
-                effective_model = normalize_saved_default_model(Some(&m), &models);
-                if effective_model.is_none() {
+                let models = self.deps.adapter_snapshot_models(&adapter_id);
+                new_chat.model = normalize_saved_default_model(Some(&m), &models);
+                if new_chat.model.is_none() {
                     warn!(
                         adapter_id,
                         configured_model = %m,
@@ -313,27 +294,17 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     );
                 }
             }
-            if effective_mode.is_none()
+            if new_chat.permission_mode.is_none()
                 && let Some(m) = default_mode
             {
-                effective_mode = Some(m);
+                new_chat.permission_mode = Some(m);
             }
             if default_plan_mode.as_deref() == Some("true") {
                 effective_plan_mode = true;
             }
         }
 
-        let mut chat = self
-            .create_chat(
-                project_id,
-                adapter_id,
-                effective_model.as_deref(),
-                effective_mode.as_deref(),
-                worktree_path,
-                branch_name,
-                automation_run_id,
-            )
-            .await;
+        let mut chat = self.create_chat(new_chat, worktree_path, branch_name).await;
         if effective_plan_mode {
             chat.plan_mode = Some(true);
             self.deps.chats_update(
@@ -746,14 +717,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
 
         let new_chat = self
             .create_chat(
-                &source_chat.project_id,
-                &source_chat.adapter_id,
-                source_chat.model.as_deref(),
-                source_chat
-                    .permission_mode
-                    .map(|m| format!("{m:?}").to_lowercase())
-                    .as_deref(),
-                None,
+                NewChat {
+                    project_id: source_chat.project_id.clone(),
+                    adapter_id: source_chat.adapter_id.clone(),
+                    model: source_chat.model.clone(),
+                    permission_mode: source_chat
+                        .permission_mode
+                        .map(|m| format!("{m:?}").to_lowercase()),
+                    // A fork always creates a durable, project-scoped chat (an
+                    // existing caller passing temporary=false, rule 2).
+                    temporary: false,
+                    automation_run_id: None,
+                    scratch_root: None,
+                },
                 None,
                 None,
             )
@@ -1185,14 +1161,7 @@ mod tests {
         fn chats_get(&self, _id: &str) -> Option<Chat> {
             Some(self.chat.clone())
         }
-        fn chats_create(
-            &self,
-            _p: &str,
-            _a: &str,
-            _m: Option<&str>,
-            _pm: Option<&str>,
-            _run_id: Option<&str>,
-        ) -> Chat {
+        fn chats_create(&self, _new_chat: &NewChat) -> Chat {
             self.chat.clone()
         }
         fn chats_update(&self, _chat_id: &str, patch: &LifecycleChatUpdate) {

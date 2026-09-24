@@ -17,14 +17,15 @@ pub trait ChatManagerDeps: Send + Sync {
     fn strip_command_tags(&self, text: &str) -> String;
 
     fn chats_get(&self, id: &str) -> Option<Chat>;
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat;
+    fn chats_create(&self, new_chat: &NewChat) -> Chat;
+    /// Hard-delete a chat row (discard step 4). `chat_tags` cascade via the
+    /// schema's `ON DELETE CASCADE`.
+    fn chats_delete(&self, chat_id: &str);
+    /// `remove_dir_all(scratch_path)` (discard step 3). `NotFound` counts as
+    /// success; any other error is surfaced so the row is not deleted and a
+    /// retry stays possible.
+    fn remove_scratch_dir<'a>(&'a self, scratch_path: &'a str)
+    -> BoxFuture<'a, Result<(), String>>;
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn chats_list_all(&self) -> Vec<Chat>;
@@ -36,6 +37,7 @@ pub trait ChatManagerDeps: Send + Sync {
         tags_all: Option<&[String]>,
         has_worktree: bool,
         include_archived: bool,
+        include_temporary: bool,
     ) -> Vec<Chat>;
     fn chats_reset_working_to_idle(&self) -> i64;
     /// `db.chats.addMention(chatId, mention)` — the boolean "changed" result the DB
