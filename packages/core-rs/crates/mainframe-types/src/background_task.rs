@@ -99,6 +99,23 @@ pub struct BackgroundActivityTask {
     pub kind: BackgroundWorkKind,
     pub description: String,
     pub started_at: i64,
+    pub status: BackgroundTaskStatus,
+    pub tool_name: BackgroundTaskToolName,
+    pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_output_line: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<BackgroundTaskUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovered: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reported_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workflow_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -127,6 +144,16 @@ pub fn to_activity_task(task: &BackgroundTask) -> BackgroundActivityTask {
             task.description.clone()
         },
         started_at: task.started_at,
+        status: task.status,
+        tool_name: task.tool_name,
+        command: task.command.clone(),
+        output_path: task.output_path.clone(),
+        ended_at: task.ended_at,
+        last_output_line: task.last_output_line.clone(),
+        summary: task.summary.clone(),
+        usage: task.usage.clone(),
+        recovered: task.recovered,
+        reported_type: task.reported_type.clone(),
         workflow_name: task.workflow_name.clone(),
         run_id: task.run_id.clone(),
     }
@@ -258,6 +285,16 @@ mod tests {
                 kind: BackgroundWorkKind::Bash,
                 description: "dev server".to_string(),
                 started_at: 1000,
+                status: BackgroundTaskStatus::Running,
+                tool_name: BackgroundTaskToolName::Bash,
+                command: "pnpm dev".to_string(),
+                output_path: Some("/tmp/b-1.output".to_string()),
+                ended_at: None,
+                last_output_line: None,
+                summary: None,
+                usage: None,
+                recovered: None,
+                reported_type: None,
                 workflow_name: None,
                 run_id: None,
             }
@@ -275,6 +312,16 @@ mod tests {
                 kind: BackgroundWorkKind::Bash,
                 description: "pnpm dev".to_string(),
                 started_at: 1000,
+                status: BackgroundTaskStatus::Running,
+                tool_name: BackgroundTaskToolName::Bash,
+                command: "pnpm dev".to_string(),
+                output_path: Some("/tmp/b-1.output".to_string()),
+                ended_at: None,
+                last_output_line: None,
+                summary: None,
+                usage: None,
+                recovered: None,
+                reported_type: None,
                 workflow_name: None,
                 run_id: None,
             }
@@ -304,6 +351,16 @@ mod tests {
             kind,
             description: description.to_string(),
             started_at: 1000,
+            status: BackgroundTaskStatus::Running,
+            tool_name: BackgroundTaskToolName::Bash,
+            command: description.to_string(),
+            output_path: None,
+            ended_at: None,
+            last_output_line: None,
+            summary: None,
+            usage: None,
+            recovered: None,
+            reported_type: None,
             workflow_name: None,
             run_id: None,
         };
@@ -323,6 +380,73 @@ mod tests {
         );
         assert_eq!(activity.by_kind.len(), 3);
         assert_eq!(activity.tasks, tasks);
+    }
+
+    #[test]
+    fn to_activity_task_field_set_running_task_has_only_the_required_keys() {
+        let mut task = make_task();
+        task.output_path = None; // a running task with no optional fields populated at all
+        let json = serde_json::to_value(to_activity_task(&task)).unwrap();
+        let keys: std::collections::BTreeSet<String> =
+            json.as_object().unwrap().keys().cloned().collect();
+        let expected: std::collections::BTreeSet<String> = [
+            "id",
+            "kind",
+            "description",
+            "startedAt",
+            "status",
+            "toolName",
+            "command",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn to_activity_task_field_set_terminal_task_has_every_optional_key() {
+        let mut task = make_task();
+        task.status = BackgroundTaskStatus::Completed;
+        task.ended_at = Some(2000);
+        task.last_output_line = Some("done".to_string());
+        task.summary = Some("ok".to_string());
+        task.usage = Some(BackgroundTaskUsage {
+            total_tokens: 10,
+            tool_uses: 1,
+            duration_ms: 500,
+        });
+        task.recovered = Some(true);
+        task.reported_type = Some("container_exec".to_string());
+        task.workflow_name = Some("deploy".to_string());
+        task.run_id = Some("run_1".to_string());
+        let activity = to_activity_task(&task);
+        assert_eq!(activity.reported_type.as_deref(), Some("container_exec"));
+        let json = serde_json::to_value(activity).unwrap();
+        let keys: std::collections::BTreeSet<String> =
+            json.as_object().unwrap().keys().cloned().collect();
+        let expected: std::collections::BTreeSet<String> = [
+            "id",
+            "kind",
+            "description",
+            "startedAt",
+            "status",
+            "toolName",
+            "command",
+            "outputPath",
+            "endedAt",
+            "lastOutputLine",
+            "summary",
+            "usage",
+            "recovered",
+            "reportedType",
+            "workflowName",
+            "runId",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(keys, expected);
     }
 
     #[test]
