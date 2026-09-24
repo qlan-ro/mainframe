@@ -86,8 +86,11 @@ function errorDetails(raw: unknown): ApiErrorDetail[] {
  * The daemon to attribute the outcome to is captured BEFORE the fetch, not
  * after: switching the active daemon mid-flight would otherwise let a
  * response from the old target mark or clear the new one's marker.
+ *
+ * Exported for call sites that parse the response themselves (result-typed
+ * outcomes rather than throw-on-failure), e.g. `lib/api/background-tasks.ts`.
  */
-async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
+export async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
   const { kind, id } = getActiveDaemon();
   const res = await fetch(url, init);
   if (kind === 'remote') {
