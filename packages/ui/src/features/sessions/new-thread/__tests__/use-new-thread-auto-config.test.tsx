@@ -139,8 +139,10 @@ beforeEach(() => {
     threadListItem: null,
     thread: { messages: [] },
   };
-  // Reset the real ready store.
-  useNewThreadReady.setState({ readyIds: new Set<string>() });
+  // Reset the real ready store — both the ready set AND in-flight
+  // initializations, since the guard added for #359 reads the latter and a
+  // beginInitialization call in one test must not leak into the next.
+  useNewThreadReady.setState({ readyIds: new Set<string>(), initializations: new Map() });
   useDiscardedDraftStore.setState({ ids: new Set<string>() });
 });
 
@@ -282,6 +284,22 @@ const guardCases: { name: string; setup: () => void; expectedReady: boolean }[] 
     setup: () => {
       setLocalThreadWithProject('__LOCALID_x', 'proj-42');
       markDraftDiscarded('__LOCALID_x');
+    },
+    expectedReady: false,
+  },
+  {
+    // Regression (#359): a filter-pill-matching project used to let this
+    // effect race an explicit initialization already in flight (e.g. the
+    // instruction chip's openNewThreadDraft, which carries the source chat's
+    // adapterId) — initializeDraft lets the later attempt win, so
+    // auto-config's later, adapter-less attempt silently replaced the
+    // explicit one.
+    name: 'an initialization for the local id is already in flight',
+    setup: () => {
+      setLocalThreadWithProject('__LOCALID_x', 'proj-42');
+      useNewThreadReady.getState().beginInitialization('__LOCALID_x', async () => {
+        throw new Error('unused');
+      });
     },
     expectedReady: false,
   },

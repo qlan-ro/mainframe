@@ -41,7 +41,19 @@ export function useNewThreadAutoConfig(): void {
     // hasn't landed yet. Without this guard we'd instantly re-seed the exact
     // draft the user just closed (see discarded-drafts.ts).
     const readyStore = useNewThreadReady.getState();
-    if (!isNewLocal || readyStore.isReady(localId) || getDraftConfig(localId) || isDraftDiscarded(localId)) return;
+    // A pill-matching project lets this effect race an explicit initialization
+    // already in flight (e.g. the instruction chip's `openNewThreadDraft`, which
+    // carries the source chat's adapterId). `initializeDraft` lets the later
+    // attempt win, so without this guard auto-config's later, adapter-less
+    // attempt would silently replace the explicit one (#359).
+    if (
+      !isNewLocal ||
+      readyStore.isReady(localId) ||
+      getDraftConfig(localId) ||
+      isDraftDiscarded(localId) ||
+      readyStore.getInitialization(localId).status === 'initializing'
+    )
+      return;
     const promise = initializeDraft({
       localId,
       projectId: filterProjectId,
