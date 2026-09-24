@@ -163,6 +163,26 @@ describe('useSelectDraftProject', () => {
     expect(clearProjectFilter).not.toHaveBeenCalled();
   });
 
+  it('initializes the draft with projectId: null for "No project"', async () => {
+    await select()(null);
+
+    expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
+      localId: '__LOCALID_1',
+      projectId: null,
+      port: 31415,
+      defaultAdapterId: 'gemini',
+      adapters: [{ id: 'gemini', installed: true }],
+    });
+  });
+
+  it('clears an active project filter unconditionally when picking "No project"', async () => {
+    __filterProjectIds = new Set(['proj-a']);
+
+    await select()(null);
+
+    expect(clearProjectFilter).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it('toasts and resolves when initialization fails', async () => {
     __initError = new Error('daemon unreachable');
 

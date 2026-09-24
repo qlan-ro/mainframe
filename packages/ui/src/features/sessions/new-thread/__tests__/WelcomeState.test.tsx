@@ -173,6 +173,61 @@ describe('WelcomeState — no project picked yet', () => {
   });
 });
 
+describe('WelcomeState — "No project" explicitly chosen (todo #346)', () => {
+  beforeEach(() => {
+    __suggestions = [];
+    __suggestionsArg = undefined;
+    __projects = [
+      { id: 'proj-a', name: 'Mainframe' },
+      { id: 'proj-b', name: 'Sidecar' },
+    ];
+    __threadItems = [];
+    setText.mockReset();
+    selectProject.mockReset();
+  });
+
+  it('reads "No project" on the trigger', () => {
+    render(<WelcomeState projectId={null} />);
+    expect(screen.getByTestId('welcome-project')).toHaveTextContent('No project');
+  });
+
+  it('prompts for a task, not "choose a project" — "No project" counts as a choice', () => {
+    render(<WelcomeState projectId={null} />);
+    expect(screen.getByTestId('sessions-welcome')).toHaveTextContent(
+      'Describe a task, or pick a starting point below.',
+    );
+  });
+
+  it('renders no branch pill', () => {
+    render(<WelcomeState projectId={null} />);
+    expect(screen.queryByTestId('welcome-branch')).toBeNull();
+  });
+
+  it('asks the repo suggestions for no project (null, not a stale project id)', () => {
+    render(<WelcomeState projectId={null} />);
+    expect(__suggestionsArg).toBeNull();
+  });
+
+  it('offers the no-project entry in the picker and switches to a project from there', () => {
+    render(<WelcomeState projectId={null} />);
+    openPicker();
+
+    expect(screen.getByTestId('welcome-project-picker-no-project')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('welcome-project-proj-a'));
+
+    expect(selectProject).toHaveBeenCalledExactlyOnceWith('proj-a');
+  });
+
+  it('picking "No project" from the picker (on a project-scoped draft) calls select(null)', () => {
+    render(<WelcomeState projectId="proj-a" />);
+    openPicker();
+
+    fireEvent.click(screen.getByTestId('welcome-project-picker-no-project'));
+
+    expect(selectProject).toHaveBeenCalledExactlyOnceWith(null);
+  });
+});
+
 describe('WelcomeState — project picker ordering', () => {
   beforeEach(() => {
     __suggestions = [];

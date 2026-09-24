@@ -93,6 +93,12 @@ describe('resolveActiveScope — draft fallback for a not-yet-created thread', (
   it('returns an empty scope when neither custom nor draft exists', () => {
     expect(resolveActiveScope(undefined, undefined)).toEqual({ isWorktree: false });
   });
+
+  it('resolves an undefined projectId for a "No project" draft (todo #346)', () => {
+    const scope = resolveActiveScope(undefined, makeDraft({ projectId: null }));
+    expect(scope.projectId).toBeUndefined();
+    expect(scope.adapterId).toBe('codex');
+  });
 });
 
 describe('bridgeScopeGap — first-send gap continuity', () => {

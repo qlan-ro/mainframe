@@ -18,7 +18,7 @@ import { useAdapters } from '@/store/adapters';
 import { initializeDraft } from './initialize-draft';
 import { resetNewThreadDraft } from './reset-new-thread-draft';
 
-export function useSelectDraftProject(): (projectId: string) => Promise<void> {
+export function useSelectDraftProject(): (projectId: string | null) => Promise<void> {
   const aui = useAui();
   const port = useDaemonPort();
   const filterProjectIds = useSessionFilters((s) => s.filterProjectIds);
@@ -26,11 +26,13 @@ export function useSelectDraftProject(): (projectId: string) => Promise<void> {
   const defaultAdapterId = useSettingsStore((s) => s.general.defaultAdapterId);
   const adapters = useAdapters();
 
-  return async (projectId: string) => {
+  return async (projectId: string | null) => {
     const threads = aui.threads.getState();
     const localId = threads.newThreadId ?? threads.mainThreadId;
     if (localId == null) return;
-    if (filterProjectIds.size > 0 && !filterProjectIds.has(projectId)) clearProjectFilter();
+    // "No project" never matches an active pill — clear it unconditionally,
+    // the same way a mismatching project pick does.
+    if (filterProjectIds.size > 0 && (projectId == null || !filterProjectIds.has(projectId))) clearProjectFilter();
     resetNewThreadDraft(threads.newThreadId);
     try {
       await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters });

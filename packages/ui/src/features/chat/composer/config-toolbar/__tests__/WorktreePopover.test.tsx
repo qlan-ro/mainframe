@@ -73,6 +73,8 @@ function makeChat(overrides?: Partial<Chat>): Chat {
     totalTokensInput: 0,
     totalTokensOutput: 0,
     lastContextTokensInput: 0,
+    temporary: false,
+    noProject: false,
     ...overrides,
   };
 }
@@ -575,5 +577,31 @@ describe('WorktreePopover — draft panel reflects the stashed choice', () => {
     fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
 
     expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. No-project chat/draft (todo #346) — worktrees disabled, no daemon call
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — no-project chat', () => {
+  it('disables the trigger and explains why, without fetching branch data', () => {
+    renderPopover(makeChat({ noProject: true }));
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-label', 'Worktrees unavailable — no project');
+
+    // Radix disables opening for a disabled trigger — no fetch fires.
+    fireEvent.click(trigger);
+    expect(getGitBranchesMock).not.toHaveBeenCalled();
+    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
+  });
+
+  it('disables the trigger for a no-project draft the same way', () => {
+    setDraftConfig(DRAFT_ID, { projectId: null, adapterId: 'claude' });
+    renderPopover(makeDraftChat({ noProject: true }));
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toBeDisabled();
   });
 });

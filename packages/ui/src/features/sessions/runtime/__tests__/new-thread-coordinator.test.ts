@@ -132,6 +132,58 @@ describe('new-thread-coordinator — optional fields are forwarded when present'
   });
 });
 
+describe('new-thread-coordinator — no-project draft (todo #346)', () => {
+  it('sends noProject: true in place of projectId', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: null,
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-np' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockCreateChat).toHaveBeenCalledWith(31415, {
+      noProject: true,
+      adapterId: 'claude',
+      model: 'snapshot-model',
+      permissionMode: 'default',
+    });
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('projectId' in body).toBe(false);
+  });
+
+  it('never sends worktreePath/branchName for a no-project draft, even if stashed', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: null,
+      adapterId: 'claude',
+      // Defensive shape only — the UI disables these controls for no-project.
+      worktreePath: '/wt/should-not-send',
+      branchName: 'should-not-send',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-np2' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('worktreePath' in body).toBe(false);
+    expect('branchName' in body).toBe(false);
+  });
+
+  it('never calls enableWorktree for a no-project draft, even with a stashed pendingWorktree', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: null,
+      adapterId: 'claude',
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-np3' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockEnableWorktree).not.toHaveBeenCalled();
+  });
+});
+
 describe('new-thread-coordinator — POST failure propagates and preserves draft', () => {
   it('rejects with the original error message when createChat rejects', async () => {
     setDraftConfig('__LOCALID_a', {

@@ -31,7 +31,7 @@ let __itemStatus: string | undefined = 'new';
 let __messageCount = 0;
 let __projects: { id: string }[] = [{ id: 'proj-a' }];
 let __loading = false;
-let __draftMap = new Map<string, { projectId: string; adapterId: string }>([
+let __draftMap = new Map<string, { projectId: string | null; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
 let __filterProjectIds: Set<string> = new Set();
@@ -120,6 +120,17 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('empty-firstrun')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
+  });
+
+  it('does not show the first-run hero once the draft is set to "No project" (todo #346)', () => {
+    __projects = [];
+    __loading = false;
+    __draftMap = new Map([['__LOCALID_1', { projectId: null, adapterId: 'claude' }]]);
+    render(<ChatSurface />);
+
+    expect(screen.queryByTestId('empty-firstrun')).toBeNull();
+    expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
+    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
   });
 
   it('does not show the first-run hero while projects are still loading', () => {

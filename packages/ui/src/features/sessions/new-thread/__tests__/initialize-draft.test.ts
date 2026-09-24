@@ -201,6 +201,22 @@ describe('initializeDraft', () => {
   });
 });
 
+describe('initializeDraft — "No project" (todo #346)', () => {
+  it('stores projectId: null on the snapshot for a no-project draft', async () => {
+    getProviderSettings.mockResolvedValue({});
+
+    await initializeDraft({
+      localId: '__LOCALID_np',
+      projectId: null,
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+    });
+
+    expect(getDraftConfig('__LOCALID_np')).toMatchObject({ projectId: null });
+  });
+});
+
 describe('reinitializeDraftAdapter', () => {
   it('keeps the complete snapshot ready while switching and after a rejection', async () => {
     const prior = { ...expectedCompleteSnapshot };

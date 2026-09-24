@@ -15,10 +15,11 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[])
 // Draft-mode collaborators — not exercised by the non-draft structural suite
 // below, but ChatCardHeader reads them unconditionally to detect a draft
 // thread. Safe empty-ish defaults keep the existing (non-draft) tests inert.
-let fakeDrafts = new Map<string, { projectId: string; adapterId: string }>();
+let fakeDrafts = new Map<string, { projectId: string | null; adapterId: string }>();
 vi.mock('../../../sessions/runtime/draft-config', () => ({
-  useDraftConfigStore: (sel: (s: { drafts: Map<string, { projectId: string; adapterId: string }> }) => unknown) =>
-    sel({ drafts: fakeDrafts }),
+  useDraftConfigStore: (
+    sel: (s: { drafts: Map<string, { projectId: string | null; adapterId: string }> }) => unknown,
+  ) => sel({ drafts: fakeDrafts }),
 }));
 let fakeProjects: { id: string; name: string }[] = [];
 vi.mock('../../../sessions/use-projects', () => ({
@@ -192,6 +193,26 @@ describe('ChatCardHeader — draft variant', () => {
     expect(screen.getByTestId('chat-header')).toHaveTextContent('New Session');
     expect(screen.getByTestId('chat-header-project')).toHaveTextContent('Mainframe');
     expect(screen.queryByTestId('chat-header-model')).toBeNull();
+  });
+
+  it('shows the "No project" label once the draft is explicitly set to no project (todo #346)', () => {
+    fakeState = { threadListItem: { id: '__LOCALID_1', status: 'new' } };
+    fakeDrafts = new Map([['__LOCALID_1', { projectId: null, adapterId: 'claude' }]]);
+
+    renderHeader();
+
+    expect(screen.getByTestId('chat-header')).toHaveTextContent('No project');
+    expect(screen.queryByTestId('chat-header-project')).toBeNull();
+  });
+
+  it('shows neither a project chip nor "No project" before anything has resolved', () => {
+    fakeState = { threadListItem: { id: '__LOCALID_1', status: 'new' } };
+    fakeDrafts = new Map(); // no draftCfg yet — still deciding
+
+    renderHeader();
+
+    expect(screen.queryByTestId('chat-header-project')).toBeNull();
+    expect(screen.getByTestId('chat-header')).not.toHaveTextContent('No project');
   });
 
   it('renders the normal header (model chip) for a real chat', () => {

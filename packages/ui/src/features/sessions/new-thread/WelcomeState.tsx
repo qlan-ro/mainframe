@@ -8,83 +8,18 @@
  * (no branch, no suggestions — and the composer stays hidden, since the first
  * send needs a project to create the chat in).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FolderOpen, GitBranch } from 'lucide-react';
-import { useAui, useAuiState } from '@assistant-ui/react';
-import { ProjectChip } from '@/components/ui/project-chip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronDown, GitBranch } from 'lucide-react';
+import { useAui } from '@assistant-ui/react';
 import { getGitBranch } from '@/lib/api/git';
 import { BranchPopover } from '@/features/git/BranchPopover';
-import { projectColor } from '@/features/sessions/sidebar/project-color';
-import { regularThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
-import { ProjectAvatar } from '../ProjectAvatar';
-import { useProjects } from '../use-projects';
 import { useDaemonPort } from '../runtime/daemon-port-context';
 import { useRepoSuggestions } from './use-repo-suggestions';
 import { useSelectDraftProject } from './use-select-draft-project';
 import { SuggestionRow } from './SuggestionRow';
+import { WelcomeProjectPicker } from './WelcomeProjectPicker';
 
-/**
- * The chip IS the project picker — the draft's project is chosen (or changed)
- * here. Entries are ordered most-recently-active first, the same recency
- * ranking the sessions sidebar uses — off the REGULAR projection, so a
- * project whose only sessions are archived doesn't outrank one with a live
- * session (chat-to-thread-custom.ts's archived-leak note).
- */
-function ProjectPicker({ projectId }: { projectId: string | undefined }) {
-  const { projects } = useProjects();
-  const threadItems = useAuiState((s) => s.threads.threadItems);
-  const sortedProjects = useMemo(
-    () => sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems)),
-    [projects, threadItems],
-  );
-  const selectProject = useSelectDraftProject();
-  const projectName = projectId == null ? null : (projects.find((p) => p.id === projectId)?.name ?? projectId);
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          data-testid="welcome-project"
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted"
-        >
-          {projectId != null && projectName != null ? (
-            <ProjectChip projectId={projectId} name={projectName} size={18} />
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
-              <FolderOpen size={14} aria-hidden />
-              Choose a project
-            </span>
-          )}
-          <ChevronDown size={12} className="text-muted-foreground" aria-hidden />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent data-testid="welcome-project-picker" align="start" sideOffset={6} className="w-60">
-        <DropdownMenuLabel className="text-muted-foreground">Start in…</DropdownMenuLabel>
-        {sortedProjects.map((project) => (
-          <DropdownMenuItem
-            key={project.id}
-            data-testid={`welcome-project-${project.id}`}
-            onSelect={() => void selectProject(project.id)}
-          >
-            <ProjectAvatar name={project.name} color={projectColor(project.id)} />
-            <span className="min-w-0 flex-1 truncate">{project.name}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-export function WelcomeState({ projectId }: { projectId?: string }) {
+export function WelcomeState({ projectId }: { projectId?: string | null }) {
   const port = useDaemonPort();
   const aui = useAui();
   const { suggestions } = useRepoSuggestions(projectId ?? null);
@@ -107,6 +42,7 @@ export function WelcomeState({ projectId }: { projectId?: string }) {
   }, [loadBranch]);
 
   const insert = (prefill: string) => aui.composer.setText(prefill);
+  const selectProject = useSelectDraftProject();
 
   return (
     // Fill the scroll area and center the column vertically + horizontally (spec
@@ -114,7 +50,7 @@ export function WelcomeState({ projectId }: { projectId?: string }) {
     <div data-testid="sessions-welcome" className="flex min-h-full flex-col justify-center py-10">
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-5">
         <div className="flex items-center gap-2">
-          <ProjectPicker projectId={projectId} />
+          <WelcomeProjectPicker projectId={projectId} onSelect={(id) => void selectProject(id)} />
           {projectId != null && branch != null && (
             // The draft's branch manager (the titlebar chip is gone): a fresh
             // session starts from whatever branch is picked here.
@@ -144,7 +80,10 @@ export function WelcomeState({ projectId }: { projectId?: string }) {
         <div className="flex flex-col gap-1.5">
           <h1 className="text-lg font-semibold text-foreground">What should we take on?</h1>
           <p className="text-sm text-muted-foreground">
-            {projectId != null
+            {/* undefined = nothing resolved yet; null ("No project") and a real
+                project id both count as a made choice (spec: "No project" counts
+                as a choice"). */}
+            {projectId !== undefined
               ? 'Describe a task, or pick a starting point below.'
               : 'Choose a project to get started.'}
           </p>

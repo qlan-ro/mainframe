@@ -7,7 +7,8 @@ import { resolveDraftDefaults } from './resolve-draft-defaults';
 
 export interface InitializeDraftArgs {
   localId: string;
-  projectId: string;
+  /** null means "No project" (todo #346). */
+  projectId: string | null;
   port: number;
   defaultAdapterId: string | null;
   adapters: AdapterInfo[];

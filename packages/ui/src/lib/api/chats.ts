@@ -87,7 +87,12 @@ export async function getToolResultContent(port: number, chatId: string, toolUse
 // ── Sessions sidebar additions ─────────────────────────────────────────────
 
 export interface CreateChatBody {
-  projectId: string;
+  /**
+   * Exactly one of `projectId` or `noProject: true` — the daemon rejects a
+   * body carrying both or neither (todo #346).
+   */
+  projectId?: string;
+  noProject?: boolean;
   adapterId: string;
   model?: string;
   /**

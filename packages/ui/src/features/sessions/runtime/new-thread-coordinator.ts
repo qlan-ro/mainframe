@@ -103,7 +103,10 @@ async function applyDraftTuning(port: number, chatId: string, cfg: InitializedDr
  * with an error toast (the popover that reported errors inline is long gone).
  */
 async function applyPendingWorktree(port: number, chatId: string, cfg: DraftCfg): Promise<void> {
-  if (!cfg.pendingWorktree) return;
+  // A no-project draft never carries a pendingWorktree (the popover disables
+  // it), but skip defensively rather than ask the daemon to isolate a chat
+  // that has no project to branch from.
+  if (!cfg.pendingWorktree || cfg.projectId == null) return;
   const { baseBranch, branchName } = cfg.pendingWorktree;
   try {
     await enableWorktree(port, chatId, baseBranch, branchName);
@@ -152,12 +155,14 @@ export function createForLocal(localId: string, port: number): Promise<{ remoteI
     try {
       if (!workflow.chatId) {
         const chat: Chat = await createChat(port, {
-          projectId: cfg.projectId,
+          ...(cfg.projectId != null ? { projectId: cfg.projectId } : { noProject: true }),
           adapterId: cfg.adapterId,
           model: cfg.model,
           permissionMode: cfg.permissionMode,
-          ...(cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
-          ...(cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
+          // Never send worktree fields for a no-project chat — the daemon
+          // rejects the combination, and a no-project draft never has one set.
+          ...(cfg.projectId != null && cfg.worktreePath !== undefined ? { worktreePath: cfg.worktreePath } : {}),
+          ...(cfg.projectId != null && cfg.branchName !== undefined ? { branchName: cfg.branchName } : {}),
         });
         workflow.chatId = chat.id;
       }

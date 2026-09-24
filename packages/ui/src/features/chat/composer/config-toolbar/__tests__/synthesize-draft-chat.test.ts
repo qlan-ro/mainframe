@@ -181,6 +181,31 @@ describe('synthesizeDraftChat — placeholder fields', () => {
 // 7. Pre-send worktree attach (todo #223)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 8. "No project" draft (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('synthesizeDraftChat — "No project" draft', () => {
+  it('sets noProject:true and temporary:false, with an empty projectId placeholder', () => {
+    const draft: DraftCfg = { projectId: null, adapterId: 'claude' };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.noProject).toBe(true);
+    expect(chat.temporary).toBe(false);
+    expect(chat.projectId).toBe('');
+  });
+
+  it('sets noProject:false for a project-scoped draft', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude' };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.noProject).toBe(false);
+    expect(chat.projectId).toBe('p1');
+  });
+});
+
 describe('synthesizeDraftChat — pre-send worktree attach', () => {
   it('carries worktreePath and branchName from the draft', () => {
     const draft: DraftCfg = {

@@ -46,7 +46,9 @@ export function resolveActiveScope(custom: SessionCustom | undefined, draft: Dra
   }
   if (draft) {
     return {
-      projectId: draft.projectId,
+      // A draft explicitly set to "No project" has no project-scoped surface
+      // to resolve — same as never having picked one.
+      projectId: draft.projectId ?? undefined,
       adapterId: draft.adapterId,
       branchName: draft.branchName ?? draft.pendingWorktree?.branchName,
       worktreePath: draft.worktreePath,

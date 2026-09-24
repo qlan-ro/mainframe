@@ -15,7 +15,8 @@ import { create } from 'zustand';
 import type { EffortLevel, PermissionMode } from '@qlan-ro/mainframe-types';
 
 export interface DraftCfg {
-  projectId: string;
+  /** null means "No project" — an explicit, equally-valid choice (todo #346). */
+  projectId: string | null;
   adapterId: string;
   /**
    * Initialization resolves model, permission, plan, effort, and feature values

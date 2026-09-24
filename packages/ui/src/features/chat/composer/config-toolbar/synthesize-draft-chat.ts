@@ -21,7 +21,12 @@ export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
   return {
     id,
     adapterId: d.adapterId,
-    projectId: d.projectId,
+    // No sentinel project id exists client-side; a synthesized draft chat is
+    // discarded on first send, so an empty placeholder is enough — every
+    // consumer reads `noProject`, never this string, to detect the no-project case.
+    projectId: d.projectId ?? '',
+    noProject: d.projectId == null,
+    temporary: false,
     model: d.model,
     permissionMode,
     planMode: d.planMode ?? d.permissionMode === 'plan',

@@ -105,6 +105,8 @@ function makeChat(overrides?: Partial<Chat>): Chat {
     ultracode: false,
     fast: false,
     adaptiveThinking: false,
+    temporary: false,
+    noProject: false,
     ...overrides,
   };
 }
