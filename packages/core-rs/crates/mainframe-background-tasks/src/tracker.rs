@@ -1,7 +1,7 @@
 //! Ported from `packages/core/src/background-tasks/tracker.ts`.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use dashmap::DashMap;
 use tokio::sync::broadcast;
@@ -79,6 +79,17 @@ fn now_ms() -> i64 {
 
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
+/// A synchronous, fire-and-forget observer installed via
+/// [`BackgroundTaskTracker::set_event_sink`]. Wrapped so the tracker can keep
+/// deriving `Debug` — a bare `Arc<dyn Fn(..)>` does not implement it.
+struct EventSink(Arc<dyn Fn(&TaskEvent) + Send + Sync>);
+
+impl std::fmt::Debug for EventSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("EventSink(..)")
+    }
+}
+
 #[derive(Debug)]
 pub struct BackgroundTaskTracker {
     emitter: broadcast::Sender<TaskEvent>,
@@ -86,6 +97,12 @@ pub struct BackgroundTaskTracker {
     /// Tracker-private: chatId → taskId → pid. Advisory only — every kill re-runs
     /// lsofWriters.
     pid_by_chat: Arc<DashMap<String, HashMap<String, u32>>>,
+    /// Set once at boot (`install_task_event_sink`). Called synchronously,
+    /// before the broadcast send, so a caller observing this sink sees the
+    /// event before the `tracker.*` call that produced it returns — unlike
+    /// `subscribe()`'s receiver, which is only drained once the current task
+    /// yields.
+    sink: OnceLock<EventSink>,
 }
 
 impl Default for BackgroundTaskTracker {
@@ -101,6 +118,7 @@ impl BackgroundTaskTracker {
             emitter,
             by_chat: Arc::new(DashMap::new()),
             pid_by_chat: Arc::new(DashMap::new()),
+            sink: OnceLock::new(),
         }
     }
 
@@ -108,6 +126,28 @@ impl BackgroundTaskTracker {
     /// (BROADCAST class). Replaces the TS `on(event, listener)` registration.
     pub fn subscribe(&self) -> broadcast::Receiver<TaskEvent> {
         self.emitter.subscribe()
+    }
+
+    /// Installs the synchronous sink (idempotent — a second call is a no-op
+    /// and logs a warning; boot wires exactly one).
+    pub fn set_event_sink(&self, sink: Arc<dyn Fn(&TaskEvent) + Send + Sync>) {
+        if self.sink.set(EventSink(sink)).is_err() {
+            tracing::warn!(
+                target: "background-tasks:tracker",
+                "set_event_sink called more than once; ignoring the second sink"
+            );
+        }
+    }
+
+    /// Every event goes through here: the synchronous sink first (if
+    /// installed), then the broadcast — so `subscribe()` users are unchanged.
+    /// Every call site emits after its `DashMap` guard is released, so a sink
+    /// can never deadlock against the map.
+    fn emit(&self, event: TaskEvent) {
+        if let Some(sink) = self.sink.get() {
+            (sink.0)(&event);
+        }
+        let _ = self.emitter.send(event);
     }
 
     pub fn start(&self, chat_id: &str, seed: TaskSeed, output_path: String) -> BackgroundTask {
@@ -157,7 +197,7 @@ impl BackgroundTaskTracker {
                 task: task.clone(),
             }
         };
-        let _ = self.emitter.send(event);
+        self.emit(event);
         task
     }
 
@@ -189,7 +229,7 @@ impl BackgroundTaskTracker {
         if let Some(mut chat) = self.by_chat.get_mut(chat_id) {
             chat.insert(task_id.to_string(), next.clone());
         }
-        let _ = self.emitter.send(TaskEvent::Ended {
+        self.emit(TaskEvent::Ended {
             chat_id: chat_id.to_string(),
             task: next.clone(),
         });
@@ -223,7 +263,7 @@ impl BackgroundTaskTracker {
         }
         let updated = task.clone();
         drop(chat);
-        let _ = self.emitter.send(TaskEvent::Updated {
+        self.emit(TaskEvent::Updated {
             chat_id: chat_id.to_string(),
             task: updated,
         });
@@ -248,7 +288,7 @@ impl BackgroundTaskTracker {
                     task,
                 }
             };
-            let _ = self.emitter.send(event);
+            self.emit(event);
         }
     }
 
@@ -323,6 +363,7 @@ impl BackgroundTaskTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     fn make_seed(id: &str) -> TaskSeed {
         seed_with(id, BackgroundWorkKind::Bash, "dev server")
@@ -937,6 +978,78 @@ mod tests {
         let mut rx = tracker.subscribe();
         tracker.link_run_id("chat-a", "task-1", "run-1", None);
         assert!(drain(&mut rx).is_empty());
+    }
+
+    // --- set_event_sink (todo #328, Task 6) ---
+
+    #[test]
+    fn end_records_into_the_sink_before_it_returns() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start("chat-a", make_seed("t1"), "/p/t1".to_string());
+        let log: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let log2 = log.clone();
+        tracker.set_event_sink(Arc::new(move |ev| {
+            if let TaskEvent::Ended { task, .. } = ev {
+                log2.lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(task.id.clone());
+            }
+        }));
+        tracker.end(
+            "chat-a",
+            "t1",
+            TerminalUpdate {
+                status: BackgroundTaskStatus::Completed,
+                output_path: String::new(),
+                summary: String::new(),
+                usage: None,
+            },
+        );
+        // No await between the tracker call above and this read: if the sink
+        // ran, its record is here synchronously.
+        assert_eq!(*log.lock().unwrap_or_else(|p| p.into_inner()), vec!["t1"]);
+    }
+
+    #[test]
+    fn end_all_running_records_one_ended_per_running_task_before_it_returns() {
+        let tracker = BackgroundTaskTracker::new();
+        tracker.start("chat-a", make_seed("r1"), "/p/r1".to_string());
+        tracker.start(
+            "chat-a",
+            seed_with("r2", BackgroundWorkKind::Agent, "dev server"),
+            "/p/r2".to_string(),
+        );
+        let log: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let log2 = log.clone();
+        tracker.set_event_sink(Arc::new(move |ev| {
+            if let TaskEvent::Ended { task, .. } = ev {
+                log2.lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(task.id.clone());
+            }
+        }));
+        tracker.end_all_running("chat-a");
+        let mut recorded = log.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        recorded.sort();
+        assert_eq!(recorded, vec!["r1", "r2"]);
+    }
+
+    #[test]
+    fn set_event_sink_called_twice_ignores_the_second_sink() {
+        let tracker = BackgroundTaskTracker::new();
+        let first: Arc<Mutex<u32>> = Arc::new(Mutex::new(0));
+        let first2 = first.clone();
+        tracker.set_event_sink(Arc::new(move |_ev| {
+            *first2.lock().unwrap_or_else(|p| p.into_inner()) += 1;
+        }));
+        let second: Arc<Mutex<u32>> = Arc::new(Mutex::new(0));
+        let second2 = second.clone();
+        tracker.set_event_sink(Arc::new(move |_ev| {
+            *second2.lock().unwrap_or_else(|p| p.into_inner()) += 1;
+        }));
+        tracker.start("chat-a", make_seed("t1"), "/p/t1".to_string());
+        assert_eq!(*first.lock().unwrap_or_else(|p| p.into_inner()), 1);
+        assert_eq!(*second.lock().unwrap_or_else(|p| p.into_inner()), 0);
     }
 }
 

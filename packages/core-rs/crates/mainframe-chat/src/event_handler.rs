@@ -2058,7 +2058,7 @@ mod tests {
     }
 
     // ── event-handler-background-activity.test.ts ────────────────────────────
-    use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed};
+    use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent, TaskSeed};
     use mainframe_types::background_task::{
         BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
     };
@@ -2186,6 +2186,64 @@ mod tests {
         assert_eq!(
             tracker.get("chat-bg", "b-1").unwrap().status,
             BackgroundTaskStatus::Stopped
+        );
+    }
+
+    /// `daemon` task 6, verify (c): with a real tracker sink writing into the
+    /// SAME ordered log `emit_event` writes into (mirroring how the daemon's
+    /// synchronous sink and `DaemonChatDeps::emit_event` both write onto one
+    /// bus), every `Ended` produced by `on_exit`'s sweep lands before the
+    /// `ChatUpdated` `on_exit` emits right after it.
+    #[test]
+    fn on_exit_emits_every_ended_event_before_chat_updated() {
+        let tracker = Arc::new(BackgroundTaskTracker::new());
+        tracker.start(
+            "chat-bg",
+            seed("a-1", BackgroundWorkKind::Agent, "", "agent"),
+            "/p/a-1".to_string(),
+        );
+        tracker.start(
+            "chat-bg",
+            seed("b-1", BackgroundWorkKind::Bash, "dev", ""),
+            "/p/b-1".to_string(),
+        );
+        let deps = BgDeps::new(cell(ProcessState::Working, None), tracker.clone());
+
+        let sink_deps = Arc::clone(&deps);
+        tracker.set_event_sink(Arc::new(move |ev: &TaskEvent| {
+            if let TaskEvent::Ended { chat_id, task } = ev {
+                sink_deps
+                    .events
+                    .lock()
+                    .unwrap()
+                    .push(DaemonEvent::BackgroundTaskEnded {
+                        chat_id: chat_id.clone(),
+                        task: task.clone(),
+                    });
+            }
+        }));
+
+        bg_sink(deps.clone()).on_exit(Some(0));
+
+        let events = deps.events.lock().unwrap();
+        let chat_updated_idx = events
+            .iter()
+            .position(|e| matches!(e, DaemonEvent::ChatUpdated { .. }))
+            .expect("on_exit emits a ChatUpdated");
+        let ended_indices: Vec<usize> = events
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| matches!(e, DaemonEvent::BackgroundTaskEnded { .. }))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(
+            ended_indices.len(),
+            2,
+            "expected 2 Ended entries: {events:?}"
+        );
+        assert!(
+            ended_indices.iter().all(|&i| i < chat_updated_idx),
+            "expected every Ended before ChatUpdated (idx {chat_updated_idx}): {ended_indices:?}"
         );
     }
 

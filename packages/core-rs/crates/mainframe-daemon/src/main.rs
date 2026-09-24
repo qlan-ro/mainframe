@@ -17,6 +17,7 @@ mod cli;
 mod github_issues_port;
 mod plugin_host_db;
 mod quota_store;
+mod task_event_bridge;
 
 #[cfg(test)]
 mod github_issues_port_tests;
@@ -49,7 +50,7 @@ use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_schedule
 use mainframe_background_tasks::reconcile::{
     ReconcileDb, ReconcileDeps, reconcile_background_tasks,
 };
-use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskEvent};
+use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::ClaudeWorkflowStore};
 use mainframe_launch::{
     BroadcastFn, ChildRegistryPort, FileChildRegistry, LaunchRegistry, PortTunnelRegistry,
@@ -220,8 +221,11 @@ async fn run_daemon() {
     adapters.seed_static_snapshots();
 
     // Forward tracker emissions through the broadcast (index.ts wires
-    // background_task.started/updated/ended onto broadcastEvent).
-    spawn_task_event_bridge(Arc::clone(&background_tasks), broadcast.clone());
+    // background_task.started/updated/ended onto broadcastEvent). Installed
+    // as a synchronous sink, not a spawned forwarder, so a background-task
+    // event never lands on the bus after a `chat.updated` emitted right
+    // after it in the same handler (see `on_exit`'s CLI-exit sweep).
+    task_event_bridge::install_task_event_sink(&background_tasks, broadcast.clone());
     spawn_workflow_run_bridge(Arc::clone(&claude_workflows), broadcast.clone());
 
     // uncaughtException cleanup (index.ts `process.on('uncaughtException')`): a
@@ -538,35 +542,6 @@ async fn run_daemon() {
     liveness.stop();
     lsp_manager.shutdown_all().await;
     // `db` (the actor thread) closes when the last `Db` handle drops at exit.
-}
-
-/// Drain the tracker's `TaskEvent` broadcast and re-emit as daemon
-/// `background_task.started`/`updated`/`ended` events. Mirrors the three
-/// `backgroundTasks.on` forwarders in index.ts.
-fn spawn_task_event_bridge(
-    tracker: Arc<BackgroundTaskTracker>,
-    bus: broadcast::Sender<DaemonEvent>,
-) {
-    let mut rx = tracker.subscribe();
-    tokio::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Ok(TaskEvent::Started { chat_id, task }) => {
-                    let _ = bus.send(DaemonEvent::BackgroundTaskStarted { chat_id, task });
-                }
-                Ok(TaskEvent::Updated { chat_id, task }) => {
-                    let _ = bus.send(DaemonEvent::BackgroundTaskUpdated { chat_id, task });
-                }
-                Ok(TaskEvent::Ended { chat_id, task }) => {
-                    let _ = bus.send(DaemonEvent::BackgroundTaskEnded { chat_id, task });
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(dropped = n, "task-event bridge lagged");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
-        }
-    });
 }
 
 /// Non-blocking background-task reconcile (`reconcileBackgroundTasks(...).catch`).
