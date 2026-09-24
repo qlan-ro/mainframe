@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
 mod fork_chat;
+mod fork_history;
 mod plan_mode;
 mod resume_snapshot;
 
