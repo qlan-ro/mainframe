@@ -875,6 +875,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 project_path: effective_path,
                 chat_id: Some(claude_session_id.clone()),
                 mainframe_chat_id: chat_id.to_string(),
+                fork_source: None,
             },
         ) else {
             return;
@@ -984,6 +985,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     project_path: chat.worktree_path.clone().unwrap_or(project_path),
                     chat_id: chat.claude_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
+                    fork_source: None,
                 },
             )
             .ok_or_else(|| {

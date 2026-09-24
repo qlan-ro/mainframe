@@ -33,10 +33,25 @@ export interface SessionResult {
   is_error?: boolean;
 }
 
+/**
+ * What a fork's first spawn resumes from: the parent's provider session id
+ * (never itself a resume target) plus whatever pins the fork point (Claude: a
+ * snapshot transcript path). See `mainframe-adapter-claude::fork` (todo #343).
+ */
+export interface ForkSource {
+  sourceSessionId: string;
+  resumePath?: string;
+}
+
 export interface SessionOptions {
   projectPath: string;
   chatId?: string; // Claude session ID for resume (CLI-side identifier)
   mainframeChatId: string; // Mainframe-side chat identifier — used by tracker/WS/routes
+  /**
+   * Set only for a fork's spawn (own session id absent, or present but its
+   * transcript missing). Populated from `chats.pending_fork` (todo #343).
+   */
+  forkSource?: ForkSource;
 }
 
 export interface SessionSpawnOptions {
@@ -255,6 +270,8 @@ export interface AdapterInfo {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
+    fork?: boolean;
   };
 }
 
@@ -376,6 +393,8 @@ export interface Adapter {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
+    fork?: boolean;
   };
 
   isInstalled(): Promise<boolean>;

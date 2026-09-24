@@ -159,6 +159,7 @@ fn session_with_options(
             project_path: project_path.to_string(),
             chat_id,
             mainframe_chat_id: CHAT.to_string(),
+            fork_source: None,
         },
         None,
         tracker,

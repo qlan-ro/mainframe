@@ -127,6 +127,8 @@ impl Adapter for ClaudeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: true,
+            // Flipped to `true` once fork.rs lands (todo #343, Group 2).
+            fork: false,
         }
     }
 
@@ -334,6 +336,7 @@ mod tests {
             project_path: "/tmp".to_string(),
             chat_id: Some(chat_id.to_string()),
             mainframe_chat_id: "mf".to_string(),
+            fork_source: None,
         }
     }
 

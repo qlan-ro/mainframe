@@ -132,6 +132,7 @@ async fn spawn_test_session(
             project_path: project_dir.path().to_str().unwrap().to_string(),
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
+            fork_source: None,
         },
         None,
         ResolvedPath::from_value("/usr/bin:/bin"),

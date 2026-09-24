@@ -153,6 +153,7 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         detected_prs: None,
         tags: None,
         automation_run_id: None,
+        parent_chat_id: None,
     })
 }
 

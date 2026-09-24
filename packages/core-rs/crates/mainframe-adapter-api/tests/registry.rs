@@ -202,6 +202,7 @@ impl Adapter for FakeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            fork: false,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

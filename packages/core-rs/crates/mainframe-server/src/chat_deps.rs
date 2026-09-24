@@ -185,6 +185,7 @@ impl DaemonChatDeps {
                 project_path: effective_path,
                 chat_id: Some(claude_session_id),
                 mainframe_chat_id: chat_id.to_string(),
+                fork_source: None,
             },
         )
     }
@@ -1193,6 +1194,7 @@ pub(crate) fn fallback_chat(
         detected_prs: None,
         tags: None,
         automation_run_id: None,
+        parent_chat_id: None,
     }
 }
 
@@ -1936,6 +1938,7 @@ mod scan_loaded_history_tests {
             mainframe_types::adapter::AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                fork: false,
             }
         }
         fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
