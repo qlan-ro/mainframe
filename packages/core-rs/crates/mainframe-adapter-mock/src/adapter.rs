@@ -22,6 +22,10 @@ pub struct MockCliAdapter {
     /// behaves exactly as before: transcripts, but no background-task events.
     tracker: Option<Arc<BackgroundTaskTracker>>,
     workflows: Option<Arc<ClaudeWorkflowStore>>,
+    /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
+    /// need the no-persistence chat behavior opt in via `with_no_persistence`
+    /// (todo #346 — the mock adapter must be able to report either value).
+    no_persistence: bool,
 }
 
 impl MockCliAdapter {
@@ -37,6 +41,13 @@ impl MockCliAdapter {
             workflows: Some(workflows),
             ..Self::default()
         }
+    }
+
+    /// Opt the mock adapter into reporting the no-persistence capability, so
+    /// integration tests can exercise both the on and off paths (todo #346).
+    pub fn with_no_persistence(mut self, value: bool) -> Self {
+        self.no_persistence = value;
+        self
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -128,6 +139,7 @@ impl Adapter for MockCliAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            no_persistence: self.no_persistence,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -196,5 +208,16 @@ mod tests {
     #[test]
     fn adapter_trait_resolves_a_plan_mode_handler() {
         assert!(Adapter::create_plan_mode_handler(&MockCliAdapter::default()).is_some());
+    }
+
+    #[test]
+    fn no_persistence_defaults_to_false() {
+        assert!(!Adapter::capabilities(&MockCliAdapter::default()).no_persistence);
+    }
+
+    #[test]
+    fn with_no_persistence_reports_the_requested_value() {
+        let adapter = MockCliAdapter::default().with_no_persistence(true);
+        assert!(Adapter::capabilities(&adapter).no_persistence);
     }
 }

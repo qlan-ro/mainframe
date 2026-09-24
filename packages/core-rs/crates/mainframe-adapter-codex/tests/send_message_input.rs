@@ -84,6 +84,7 @@ async fn send_and_capture(
                 tuning: None,
                 small_fast_model: None,
                 default_model: None,
+                no_persistence: None,
             }),
             Some(recorder.sink()),
         )

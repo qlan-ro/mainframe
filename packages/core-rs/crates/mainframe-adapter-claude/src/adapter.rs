@@ -127,6 +127,11 @@ impl Adapter for ClaudeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: true,
+            // Verified interactively on 2.1.280 against Mainframe's stream-json spawn
+            // (no --print): streaming, four turns, a permission gate and an interrupt
+            // all work with --no-session-persistence, and no session JSONL is written.
+            // See docs/research/adapters/claude/CONSUMED-SURFACE.md.
+            no_persistence: true,
         }
     }
 

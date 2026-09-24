@@ -1020,6 +1020,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     tuning,
                     small_fast_model,
                     default_model,
+                    // TODO(todo #346, G2b): decide `chat.temporary &&
+                    // adapter_supports_no_persistence(adapter_id)` here once those
+                    // deps land. `None` preserves today's persist-normally behavior.
+                    no_persistence: None,
                 }),
                 Some(sink),
             )

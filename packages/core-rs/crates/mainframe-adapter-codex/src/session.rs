@@ -97,6 +97,11 @@ struct PendingConfig {
     plan_mode: bool,
     tuning: Option<ResolvedTuning>,
     codex_provider_tuning: CodexProviderTuning,
+    /// Set only for a temporary chat whose adapter reports the no-persistence
+    /// capability (todo #346). `ensure_thread` reads it to force a fresh
+    /// `thread/start { ephemeral: true }` and to skip `thread/resume` even when
+    /// `resume_thread_id` is set.
+    no_persistence: bool,
 }
 
 impl Default for PendingConfig {
@@ -108,6 +113,7 @@ impl Default for PendingConfig {
             plan_mode: false,
             tuning: None,
             codex_provider_tuning: CodexProviderTuning::default(),
+            no_persistence: false,
         }
     }
 }
@@ -230,6 +236,7 @@ impl CodexSession {
         client: &Arc<JsonRpcClient>,
         model: Option<&str>,
         permission_mode: ExecutionMode,
+        no_persistence: bool,
     ) -> Result<(), AdapterError> {
         if self
             .state
@@ -241,25 +248,30 @@ impl CodexSession {
             return Ok(());
         }
 
-        let (new_thread_id, reported_model) = if let Some(resume) = &self.resume_thread_id {
-            let mut p = self.thread_params_base(model);
-            p.insert("threadId".into(), json!(resume));
-            let res: ThreadResumeResult = de(client
-                .request("thread/resume", Some(Value::Object(p)))
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?)?;
-            (res.thread.id, res.model)
-        } else {
-            let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
-            let mut p = self.thread_params_base(model);
-            p.insert("approvalPolicy".into(), json!(approval_policy));
-            p.insert("sandbox".into(), json!(sandbox));
-            p.insert("experimentalRawEvents".into(), json!(true));
-            let res: ThreadStartResult = de(client
-                .request("thread/start", Some(Value::Object(p)))
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?)?;
-            (res.thread.id, res.model)
+        let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
+        let base = self.thread_params_base(model);
+        let request = build_thread_request(
+            self.resume_thread_id.as_deref(),
+            no_persistence,
+            base,
+            &approval_policy,
+            json!(sandbox),
+        );
+        let (new_thread_id, reported_model) = match request {
+            ThreadRequest::Resume(p) => {
+                let res: ThreadResumeResult = de(client
+                    .request("thread/resume", Some(Value::Object(p)))
+                    .await
+                    .map_err(|e| AdapterError::Message(e.0))?)?;
+                (res.thread.id, res.model)
+            }
+            ThreadRequest::Start(p) => {
+                let res: ThreadStartResult = de(client
+                    .request("thread/start", Some(Value::Object(p)))
+                    .await
+                    .map_err(|e| AdapterError::Message(e.0))?)?;
+                (res.thread.id, res.model)
+            }
         };
 
         {
@@ -275,6 +287,43 @@ impl CodexSession {
             .on_init(&new_thread_id);
         Ok(())
     }
+}
+
+/// The JSON-RPC method + params `ensure_thread` should send, decided purely
+/// from whether a resume target exists and whether the spawn is no-persistence
+/// (todo #346, AC 3). A no-persistence spawn always starts fresh with
+/// `ephemeral: true` and never resumes, even when `resume_thread_id` is
+/// `Some` — the caller must not be able to leak a resume target into it.
+enum ThreadRequest {
+    Resume(Map<String, Value>),
+    Start(Map<String, Value>),
+}
+
+/// Pure decision + params builder shared by `ensure_thread`'s `thread/start`
+/// and `thread/resume` calls (todo #346, AC 3). `base` is the shared
+/// cwd/persist-history/model map from `thread_params_base`.
+fn build_thread_request(
+    resume_thread_id: Option<&str>,
+    no_persistence: bool,
+    base: Map<String, Value>,
+    approval_policy: &str,
+    sandbox: Value,
+) -> ThreadRequest {
+    if !no_persistence && let Some(resume) = resume_thread_id {
+        let mut p = base;
+        p.insert("threadId".into(), json!(resume));
+        return ThreadRequest::Resume(p);
+    }
+    let mut p = base;
+    p.insert("approvalPolicy".into(), json!(approval_policy));
+    p.insert("sandbox".into(), sandbox);
+    p.insert("experimentalRawEvents".into(), json!(true));
+    if no_persistence {
+        // Codex's native no-vendor-transcript mechanism (todo #346 spike, verified
+        // interactively on 0.155.1 alongside persistExtendedHistory/persistFullHistory).
+        p.insert("ephemeral".into(), json!(true));
+    }
+    ThreadRequest::Start(p)
 }
 
 /// Codex has no CLI-native `auto` mode, so it coerces to the same
@@ -455,6 +504,7 @@ impl AdapterSession for CodexSession {
                 tuning: None,
                 small_fast_model: None,
                 default_model: None,
+                no_persistence: None,
             });
             let sink = sink.unwrap_or_else(null_sink);
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
@@ -465,6 +515,7 @@ impl AdapterSession for CodexSession {
                 cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
                 cfg.plan_mode = options.plan_mode.unwrap_or(false);
                 cfg.tuning = options.tuning.clone();
+                cfg.no_persistence = options.no_persistence.unwrap_or(false);
             }
 
             if std::fs::metadata(&self.project_path).is_err() {
@@ -563,7 +614,15 @@ impl AdapterSession for CodexSession {
             let input =
                 serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
 
-            let (model, default_model, permission_mode, plan_mode, tuning, codex_tuning) = {
+            let (
+                model,
+                default_model,
+                permission_mode,
+                plan_mode,
+                tuning,
+                codex_tuning,
+                no_persistence,
+            ) = {
                 let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
                 (
                     cfg.model.clone(),
@@ -572,10 +631,11 @@ impl AdapterSession for CodexSession {
                     cfg.plan_mode,
                     cfg.tuning.clone(),
                     cfg.codex_provider_tuning.clone(),
+                    cfg.no_persistence,
                 )
             };
 
-            self.ensure_thread(&client, model.as_deref(), permission_mode)
+            self.ensure_thread(&client, model.as_deref(), permission_mode, no_persistence)
                 .await?;
 
             let (thread_id, resolved_model) = {
@@ -956,6 +1016,96 @@ mod tests {
             permission_mode_policy(ExecutionMode::Yolo),
             ("never".to_string(), "danger-full-access".to_string())
         );
+    }
+
+    // --- todo #346: build_thread_request (AC 3) ---
+    fn base_params() -> Map<String, Value> {
+        let mut p = Map::new();
+        p.insert("cwd".into(), json!("/tmp/proj"));
+        p.insert("persistExtendedHistory".into(), json!(true));
+        p.insert("persistFullHistory".into(), json!(true));
+        p
+    }
+
+    fn params_of(req: ThreadRequest) -> Map<String, Value> {
+        match req {
+            ThreadRequest::Resume(p) => p,
+            ThreadRequest::Start(p) => p,
+        }
+    }
+
+    #[test]
+    fn normal_spawn_with_no_resume_id_starts_without_ephemeral() {
+        let req = build_thread_request(
+            None,
+            false,
+            base_params(),
+            "on-request",
+            json!("workspace-write"),
+        );
+        assert!(matches!(req, ThreadRequest::Start(_)));
+        let p = params_of(req);
+        assert!(!p.contains_key("ephemeral"));
+        assert!(!p.contains_key("threadId"));
+    }
+
+    #[test]
+    fn normal_spawn_with_a_resume_id_resumes() {
+        let req = build_thread_request(
+            Some("thread-1"),
+            false,
+            base_params(),
+            "on-request",
+            json!("workspace-write"),
+        );
+        assert!(matches!(req, ThreadRequest::Resume(_)));
+        let p = params_of(req);
+        assert_eq!(p["threadId"], json!("thread-1"));
+        assert!(!p.contains_key("ephemeral"));
+    }
+
+    #[test]
+    fn no_persistence_spawn_starts_fresh_with_ephemeral_true() {
+        let req = build_thread_request(
+            None,
+            true,
+            base_params(),
+            "on-request",
+            json!("workspace-write"),
+        );
+        assert!(matches!(req, ThreadRequest::Start(_)));
+        let p = params_of(req);
+        assert_eq!(p["ephemeral"], json!(true));
+        assert!(!p.contains_key("threadId"));
+    }
+
+    #[test]
+    fn no_persistence_spawn_never_resumes_even_with_a_resume_id_supplied() {
+        let req = build_thread_request(
+            Some("thread-1"),
+            true,
+            base_params(),
+            "on-request",
+            json!("workspace-write"),
+        );
+        assert!(matches!(req, ThreadRequest::Start(_)));
+        let p = params_of(req);
+        assert_eq!(p["ephemeral"], json!(true));
+        assert!(!p.contains_key("threadId"));
+    }
+
+    #[test]
+    fn no_persistence_spawn_keeps_the_persist_history_params() {
+        let req = build_thread_request(
+            None,
+            true,
+            base_params(),
+            "on-request",
+            json!("workspace-write"),
+        );
+        let p = params_of(req);
+        assert_eq!(p["persistExtendedHistory"], json!(true));
+        assert_eq!(p["persistFullHistory"], json!(true));
     }
 }
 

@@ -1936,6 +1936,7 @@ mod scan_loaded_history_tests {
             mainframe_types::adapter::AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                no_persistence: false,
             }
         }
         fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
