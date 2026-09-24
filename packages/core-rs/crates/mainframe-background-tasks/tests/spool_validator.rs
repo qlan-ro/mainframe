@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use mainframe_background_tasks::spool_validator::{
-    Platform, RealpathFn, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
+    Platform, RealpathFn, SpoolCheck, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
 };
 
 fn identity_realpath() -> RealpathFn {
@@ -198,5 +198,94 @@ async fn honors_claude_code_tmpdir_env_var() {
             "task-xyz"
         )
         .await
+    );
+}
+
+// --- SpoolValidator::check (todo #328, Task 5) ---
+
+#[tokio::test]
+async fn check_reports_valid_for_a_well_formed_existing_spool_path() {
+    let v = make_spool_validator(SpoolValidatorDeps {
+        platform: Platform::Linux,
+        getuid: Some(Arc::new(|| 501)),
+        env: empty_env(),
+        realpath: Some(identity_realpath()),
+        tmpdir: None,
+    });
+    assert_eq!(
+        v.check(
+            "/tmp/claude-501/project-slug/session-abc/tasks/task-xyz.output",
+            "task-xyz"
+        )
+        .await,
+        SpoolCheck::Valid
+    );
+}
+
+#[tokio::test]
+async fn check_reports_missing_file_for_a_legitimate_path_with_no_file_yet() {
+    // realpath fails only for the full output path (mirrors a real ENOENT from
+    // canonicalize on an absent file); succeeds for everything else, including
+    // the parent directory the missing-file branch re-resolves against.
+    let realpath: RealpathFn = Arc::new(|p: String| {
+        Box::pin(async move {
+            if p.ends_with("task-missing.output") {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "enoent"))
+            } else {
+                Ok(p)
+            }
+        })
+    });
+    let v = make_spool_validator(SpoolValidatorDeps {
+        platform: Platform::Linux,
+        getuid: Some(Arc::new(|| 501)),
+        env: empty_env(),
+        realpath: Some(realpath),
+        tmpdir: None,
+    });
+    // A path that genuinely doesn't exist on disk, so `symlink_metadata`
+    // (unseamed — always the real syscall) also reports NotFound.
+    assert_eq!(
+        v.check(
+            "/tmp/claude-501/project-slug/session-check-328/tasks/task-missing.output",
+            "task-missing"
+        )
+        .await,
+        SpoolCheck::MissingFile
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn check_reports_invalid_for_a_dangling_symlink_inside_the_spool() {
+    let spool = tempfile::tempdir().unwrap();
+    let tasks_dir = spool
+        .path()
+        .join("claude-501")
+        .join("p")
+        .join("s")
+        .join("tasks");
+    std::fs::create_dir_all(&tasks_dir).unwrap();
+    let output_path = tasks_dir.join("task-dangling.output");
+    // A symlink whose target does not exist: symlink_metadata succeeds (the
+    // link entry is real), but canonicalize/realpath fails to resolve it.
+    std::os::unix::fs::symlink(spool.path().join("nowhere"), &output_path).unwrap();
+
+    let mut env = HashMap::new();
+    env.insert(
+        "CLAUDE_CODE_TMPDIR".to_string(),
+        spool.path().to_string_lossy().into_owned(),
+    );
+    let v = make_spool_validator(SpoolValidatorDeps {
+        platform: Platform::Linux,
+        getuid: Some(Arc::new(|| 501)),
+        env,
+        realpath: None, // real tokio::fs::canonicalize — genuinely fails on the dangling link
+        tmpdir: None,
+    });
+    assert_eq!(
+        v.check(&output_path.to_string_lossy(), "task-dangling")
+            .await,
+        SpoolCheck::Invalid
     );
 }

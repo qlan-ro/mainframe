@@ -22,7 +22,7 @@ use mainframe_background_tasks::kill::{
     KillArgs, KillResult, SessionLike, StopResult, kill_background_task,
 };
 use mainframe_background_tasks::spool_validator::{
-    Platform, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
+    Platform, SpoolCheck, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
 };
 
 use crate::ctx::AppCtx;
@@ -109,10 +109,15 @@ async fn output(
     let Some(output_path) = task.output_path.clone() else {
         return fail(StatusCode::CONFLICT, "no_output");
     };
-    let valid = default_validator().validate(&output_path, &task.id).await;
-    if !valid {
-        tracing::warn!(%chat_id, %task_id, %output_path, "spool-root validation failed");
-        return fail(StatusCode::CONFLICT, "invalid_path");
+    match default_validator().check(&output_path, &task.id).await {
+        SpoolCheck::Valid => {}
+        SpoolCheck::MissingFile => {
+            return fail(StatusCode::CONFLICT, "no_output");
+        }
+        SpoolCheck::Invalid => {
+            tracing::warn!(%chat_id, %task_id, %output_path, "spool-root validation failed");
+            return fail(StatusCode::CONFLICT, "invalid_path");
+        }
     }
     let max_bytes = q.bytes.unwrap_or(DEFAULT_READ_BYTES).min(MAX_READ_BYTES);
     match read_tail(&output_path, max_bytes).await {

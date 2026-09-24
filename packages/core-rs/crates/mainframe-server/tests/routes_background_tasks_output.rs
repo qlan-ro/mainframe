@@ -84,6 +84,87 @@ async fn returns_the_tail_of_a_spool_file_under_the_real_spool_root() {
 }
 
 #[tokio::test]
+async fn returns_no_output_when_the_tasks_dir_exists_but_the_file_does_not() {
+    let uid = oracle_uid();
+    if uid == 0 {
+        // Running as root: `claude-0` is the correct root and this test is meaningless.
+        return;
+    }
+
+    let base = base_tmp_dir();
+    let root = format!("{base}/claude-{uid}");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&root)
+        .unwrap();
+    let scratch = TempDir::new_in(&root).unwrap();
+    let tasks_dir = scratch.path().join("sess-missing").join("tasks");
+    std::fs::create_dir_all(&tasks_dir).unwrap();
+    // No file written at output_path — the tasks/ dir exists but the CLI
+    // hasn't (yet, or ever) written this task's output.
+    let output_path = tasks_dir.join("task-missing.output");
+
+    let server = spawn_test_server(None).await;
+    seed(
+        &server.ctx.background_tasks,
+        "chat-missing",
+        "task-missing",
+        output_path.to_string_lossy().into_owned(),
+    );
+
+    let resp = reqwest::get(
+        server.http_url("/api/chats/chat-missing/background-tasks/task-missing/output"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["error"], "no_output");
+}
+
+#[tokio::test]
+async fn rejects_a_symlink_inside_the_spool_pointing_outside_it() {
+    let uid = oracle_uid();
+    if uid == 0 {
+        // Running as root: `claude-0` is the correct root and this test is meaningless.
+        return;
+    }
+
+    let base = base_tmp_dir();
+    let root = format!("{base}/claude-{uid}");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&root)
+        .unwrap();
+    let scratch = TempDir::new_in(&root).unwrap();
+    let tasks_dir = scratch.path().join("sess-link").join("tasks");
+    std::fs::create_dir_all(&tasks_dir).unwrap();
+    let output_path = tasks_dir.join("task-link.output");
+    let outside = TempDir::new().unwrap();
+    let target = outside.path().join("target.txt");
+    std::fs::write(&target, b"outside the spool").unwrap();
+    std::os::unix::fs::symlink(&target, &output_path).unwrap();
+
+    let server = spawn_test_server(None).await;
+    seed(
+        &server.ctx.background_tasks,
+        "chat-link",
+        "task-link",
+        output_path.to_string_lossy().into_owned(),
+    );
+
+    let resp =
+        reqwest::get(server.http_url("/api/chats/chat-link/background-tasks/task-link/output"))
+            .await
+            .unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["error"], "invalid_path");
+}
+
+#[tokio::test]
 async fn rejects_a_path_outside_the_spool_root() {
     let outside = TempDir::new().unwrap();
     let output_path = outside.path().join("task-outside.output");
