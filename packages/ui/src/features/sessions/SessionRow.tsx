@@ -215,12 +215,20 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
 
   // Variant D: the indented wrapper (left rule) only exists for a nested row —
   // everything else (fallback glyph, hover card) renders on the plain row.
-  return lineage.nested ? (
+  // Indentation goes one step per level and stops at two: a depth-2 row (a
+  // fork of a fork) gets a second nested wrapper so it reads as a child of
+  // its own (already-indented) parent rather than a sibling of it.
+  if (!lineage.nested) return row;
+  const nestedOnce = (
     <div data-testid="sessions-row-fork-nest" className="ml-3.5 border-l-2 border-sidebar-border pl-2">
       {row}
     </div>
-  ) : (
-    row
+  );
+  if (lineage.depth < 2) return nestedOnce;
+  return (
+    <div data-testid="sessions-row-fork-nest-2" className="ml-3.5 border-l-2 border-sidebar-border pl-2">
+      {nestedOnce}
+    </div>
   );
 }
 

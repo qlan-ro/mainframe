@@ -33,24 +33,30 @@ pub enum ResumeTarget {
 }
 
 /// Decide the resume target without ever using the parent's session id as a
-/// bare `--resume` value: an own session id is only usable when its own
-/// transcript still exists on disk (covers a first turn that crashed after
-/// `on_init` but before the CLI wrote the transcript — the fork source is
-/// still pinned then, so resolution falls back to it).
+/// bare `--resume` value.
+///
+/// When there is no pending fork source, this is existing (pre-#343)
+/// behavior: an own session id always resumes plainly, regardless of
+/// transcript presence on disk — the CLI itself is responsible for failing
+/// loudly if that id turns out to be unresumable. The `own_transcript_present`
+/// probe only matters when a fork source is also pinned, to decide whether a
+/// fork's own first-turn transcript has appeared yet (covers a first turn
+/// that crashed after `on_init` but before the CLI wrote the transcript — the
+/// fork source is still pinned then, so resolution falls back to it).
 pub fn resolve_resume(
     own_id: Option<&str>,
     own_transcript_present: bool,
     fork_source: Option<&ForkSource>,
 ) -> ResumeTarget {
-    if let Some(id) = own_id
-        && own_transcript_present
-    {
-        return ResumeTarget::Own(id.to_string());
+    match (own_id, fork_source) {
+        (Some(id), None) => ResumeTarget::Own(id.to_string()),
+        (Some(id), Some(_)) if own_transcript_present => ResumeTarget::Own(id.to_string()),
+        (_, Some(source)) => match source.resume_path.as_deref() {
+            Some(path) => ResumeTarget::Fork(path.to_string()),
+            None => ResumeTarget::Fresh,
+        },
+        (None, None) => ResumeTarget::Fresh,
     }
-    if let Some(path) = fork_source.and_then(|f| f.resume_path.as_deref()) {
-        return ResumeTarget::Fork(path.to_string());
-    }
-    ResumeTarget::Fresh
 }
 
 /// Drop a trailing line with no terminating `\n` — an idle live parent CLI may
@@ -177,11 +183,17 @@ mod tests {
         assert_eq!(resolve_resume(None, false, None), ResumeTarget::Fresh);
     }
 
+    /// Existing (pre-#343) behavior: a regular chat with a stored session id
+    /// and no pending fork always resumes plainly, even when the transcript
+    /// presence probe says no — that probe only gates the fork-source arms.
+    /// The CLI is responsible for failing loudly if `own-id` turns out to be
+    /// unresumable; Mainframe must not silently start a fresh session over
+    /// the top of it.
     #[test]
-    fn own_id_present_but_no_transcript_and_no_fork_source_is_fresh() {
+    fn own_id_present_with_no_fork_source_resumes_plainly_regardless_of_transcript_presence() {
         assert_eq!(
             resolve_resume(Some("own-id"), false, None),
-            ResumeTarget::Fresh
+            ResumeTarget::Own("own-id".to_string())
         );
     }
 
@@ -199,10 +211,13 @@ mod tests {
                     let target = resolve_resume(own_id, own_present, source_opt);
                     match target {
                         ResumeTarget::Own(id) => {
-                            // Only reachable when an own id was actually supplied and
-                            // its own transcript was confirmed present.
+                            // Only reachable when an own id was actually supplied.
+                            // With no fork source, an own id resumes plainly
+                            // regardless of transcript presence (existing
+                            // behavior); with a fork source pending, it only
+                            // wins once its own transcript is confirmed present.
                             assert_eq!(Some(id.as_str()), own_id);
-                            assert!(own_present);
+                            assert!(source_opt.is_none() || own_present);
                         }
                         ResumeTarget::Fork(path) => {
                             // Never the bare parent session id — always the pinned

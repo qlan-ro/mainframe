@@ -20,6 +20,13 @@ import type { ForkFallback } from '../SessionRowMetaLine';
 export interface ForkRowLineage {
   /** True when the row's own `depth` (from the group's `nestForks` pass) places it under its parent. */
   nested: boolean;
+  /**
+   * The row's own indent depth, 0-2, straight from `nestForks`. Indentation
+   * goes one step per level and stops at two — a depth-2 row (a fork of a
+   * fork) renders two indent steps, not one, so it never reads as a sibling
+   * of its own parent.
+   */
+  depth: 0 | 1 | 2;
   /** Set only for a non-nested fork — the row's own trailing fallback glyph. */
   fallback?: ForkFallback;
   /** Set whenever the item has a `parentChatId`, nested or not — the hover card's forked-from line. */
@@ -40,13 +47,13 @@ export function useForkLineageRow(item: SessionItem, depth: 0 | 1 | 2): ForkRowL
     if (parentChatId != null) aui.threads.switchToThread(parentChatId);
   }, [aui, parentChatId]);
 
-  if (parentChatId == null) return { nested: depth > 0 };
+  if (parentChatId == null) return { nested: depth > 0, depth };
 
   if (depth > 0) {
     // nestForks only nests onto a parent present in this same group, so the
     // title always resolves locally — no daemon round trip for a nested row.
     const title = allItems.find((it) => it.id === parentChatId)?.title ?? 'Untitled session';
-    return { nested: true, parentState: { kind: 'linked', title } };
+    return { nested: true, depth, parentState: { kind: 'linked', title } };
   }
 
   let state: ParentLineageState | undefined;
@@ -59,9 +66,10 @@ export function useForkLineageRow(item: SessionItem, depth: 0 | 1 | 2): ForkRowL
     state = { kind: 'deleted' };
   }
 
-  if (state == null) return { nested: false }; // still resolving — no placeholder glyph while pending
+  if (state == null) return { nested: false, depth: 0 }; // still resolving — no placeholder glyph while pending
   return {
     nested: false,
+    depth: 0,
     parentState: state,
     fallback: {
       hint: parentLineageText(state),

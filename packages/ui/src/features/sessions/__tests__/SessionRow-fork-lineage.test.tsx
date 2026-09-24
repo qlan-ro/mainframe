@@ -36,6 +36,7 @@ const PORT = 31415;
 const THREADS = [
   { status: 'regular' as const, remoteId: 'parent-1', title: 'Parent Chat' },
   { status: 'regular' as const, remoteId: 'fork-1', title: 'Fork Chat' },
+  { status: 'regular' as const, remoteId: 'grandfork-1', title: 'Grandfork Chat' },
 ];
 
 const adapter: RemoteThreadListAdapter = {
@@ -136,6 +137,24 @@ describe('SessionRow — nested fork (depth > 0)', () => {
     expect(nest.querySelector('[data-chat-id="fork-1"]')).toBeTruthy();
     expect(screen.getByTestId('sessions-row-fork-nest-glyph')).toBeTruthy();
     expect(screen.queryByTestId('sessions-row-parent-link')).toBeNull();
+  });
+
+  it('wraps a depth-2 fork-of-fork row in two nest wrappers, not a single one', async () => {
+    const grandforkItem = makeItem('grandfork-1', 'Grandfork Chat', 'fork-1');
+    renderRow(grandforkItem, 2, {
+      allItems: [parentItem, forkItem, grandforkItem],
+      listedIds: new Set(['parent-1', 'fork-1', 'grandfork-1']),
+      unfilteredIds: new Set(['parent-1', 'fork-1', 'grandfork-1']),
+    });
+
+    await waitFor(() => expect(screen.getByText('Grandfork Chat')).toBeTruthy());
+    const outer = screen.getByTestId('sessions-row-fork-nest-2');
+    const inner = screen.getByTestId('sessions-row-fork-nest');
+    // The depth-2 row is nested inside the depth-1 wrapper, which is nested
+    // inside the depth-2 wrapper — two indent steps, not a single one that
+    // would make it look like a sibling of its own parent.
+    expect(outer.contains(inner)).toBe(true);
+    expect(inner.querySelector('[data-chat-id="grandfork-1"]')).toBeTruthy();
   });
 
   it('renders no nest wrapper for a root chat (depth 0, no parent)', async () => {

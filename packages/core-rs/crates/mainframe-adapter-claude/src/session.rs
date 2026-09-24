@@ -1113,12 +1113,20 @@ impl ClaudeSession {
     /// source, else nothing. Re-checked on every call (spawn, and every
     /// history read) rather than cached, since a fork's own transcript can
     /// appear between calls once its first turn completes.
+    ///
+    /// The transcript-presence probe only matters while a fork source is
+    /// pending — it decides whether the fork's own first turn has landed yet.
+    /// A regular (non-fork) chat with a stored session id must keep existing
+    /// behavior and resume plainly without this probe, so it is skipped
+    /// entirely when there is no fork source: a canonical-path miss here
+    /// (e.g. a CLI worktree relocation) must not turn into a silent fresh
+    /// session that overwrites `claude_session_id`.
     async fn resume_target(&self) -> crate::fork::ResumeTarget {
-        let own_transcript_present = match &self.resume_session_id {
-            Some(id) => {
+        let own_transcript_present = match (&self.resume_session_id, &self.fork_source) {
+            (Some(id), Some(_)) => {
                 crate::transcript::is_claude_transcript_present(id, &self.project_path, None).await
             }
-            None => false,
+            _ => false,
         };
         crate::fork::resolve_resume(
             self.resume_session_id.as_deref(),
