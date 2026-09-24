@@ -3,14 +3,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
+import { __resetParentChatCacheForTests } from '@/features/sessions/use-parent-chat';
+import { ApiRequestError } from '@/lib/api/http';
 
 let fakeState: any = { threadListItem: { title: 'Fixture Chat', custom: { detectedPrs: [] } } };
+const switchToThreadMock = vi.fn();
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: any) => unknown) => sel({ threads: { threadItems: [] }, ...fakeState }),
+  // ChatHeaderParentLink's hook reads this unconditionally (to resolve/activate
+  // a fork's parent); the structural suite below never sets a parentChatId, so
+  // it's never invoked, but the mock still has to exist.
+  useAui: () => ({ threads: { switchToThread: switchToThreadMock } }),
 }));
 
 const mockEmit = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => mockEmit(...a) }));
+
+// The deleted-parent case (AC 16): a parent absent from threadItems entirely
+// falls through to use-parent-chat's GET /api/chats/:id, which 404s.
+const getChatMock = vi.fn();
+vi.mock('@/lib/api/chats', () => ({ getChat: (...args: unknown[]) => getChatMock(...args) }));
 
 // Draft-mode collaborators — not exercised by the non-draft structural suite
 // below, but ChatCardHeader reads them unconditionally to detect a draft
@@ -43,9 +56,11 @@ function renderHeader() {
   // nothing). Compose it INTO the host wrapper rather than beside it.
   return render(
     <TooltipProvider>
-      <HostProvider host={fakeHost}>
-        <ChatCardHeader />
-      </HostProvider>
+      <DaemonPortProvider port={31415}>
+        <HostProvider host={fakeHost}>
+          <ChatCardHeader />
+        </HostProvider>
+      </DaemonPortProvider>
     </TooltipProvider>,
   );
 }
@@ -62,6 +77,9 @@ beforeEach(() => {
   fakeDrafts = new Map();
   fakeProjects = [];
   mockEmit.mockReset();
+  switchToThreadMock.mockReset();
+  getChatMock.mockReset();
+  __resetParentChatCacheForTests();
 });
 
 describe('ChatCardHeader — structure', () => {
@@ -201,5 +219,64 @@ describe('ChatCardHeader — draft variant', () => {
 
     expect(screen.getByTestId('chat-header')).toHaveTextContent('Fix bug');
     expect(screen.getByTestId('chat-header-model')).toBeInTheDocument();
+  });
+});
+
+describe('ChatCardHeader — fork parent link (todo #343, AC 16)', () => {
+  it('renders no parent link for a non-fork', () => {
+    fakeState = { threadListItem: { title: 'Fix bug', custom: { detectedPrs: [] } } };
+
+    renderHeader();
+
+    expect(screen.queryByTestId('chat-header-parent-link')).toBeNull();
+  });
+
+  it('shows "Forked from <title>" and activates the parent on click, for a listed parent', () => {
+    fakeState = {
+      threadListItem: { title: 'Fix bug (fork)', custom: { detectedPrs: [], parentChatId: 'parent-1' } },
+      threads: {
+        threadItems: [{ id: 'parent-1', remoteId: 'parent-1', status: 'regular', title: 'Fix bug' }],
+      },
+    };
+
+    renderHeader();
+
+    const link = screen.getByTestId('chat-header-parent-link');
+    expect(link).toHaveTextContent('Forked from "Fix bug"');
+
+    fireEvent.click(link);
+    expect(switchToThreadMock).toHaveBeenCalledWith('parent-1');
+  });
+
+  it('reads "(archived)" and is not interactive for an archived parent', () => {
+    fakeState = {
+      threadListItem: { title: 'Fix bug (fork)', custom: { detectedPrs: [], parentChatId: 'parent-1' } },
+      threads: {
+        threadItems: [{ id: 'parent-1', remoteId: 'parent-1', status: 'archived', title: 'Fix bug' }],
+      },
+    };
+
+    renderHeader();
+
+    const link = screen.getByTestId('chat-header-parent-link');
+    expect(link).toHaveTextContent('Forked from "Fix bug" (archived)');
+
+    fireEvent.click(link);
+    expect(switchToThreadMock).not.toHaveBeenCalled();
+  });
+
+  it('reads "a deleted chat" and is not interactive when the parent row no longer exists', async () => {
+    getChatMock.mockRejectedValue(new ApiRequestError('not found', [], 404));
+    fakeState = {
+      threadListItem: { title: 'Fix bug (fork)', custom: { detectedPrs: [], parentChatId: 'gone-1' } },
+      threads: { threadItems: [] },
+    };
+
+    renderHeader();
+    const link = await screen.findByTestId('chat-header-parent-link');
+    expect(link).toHaveTextContent('Forked from a deleted chat');
+
+    fireEvent.click(link);
+    expect(switchToThreadMock).not.toHaveBeenCalled();
   });
 });
