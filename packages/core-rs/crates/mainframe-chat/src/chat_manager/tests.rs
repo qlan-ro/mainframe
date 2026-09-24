@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 mod chat_surface_wiring;
 mod fork_chat;
 mod fork_history;
+mod fork_sweep;
 mod fork_title;
 mod plan_mode;
 mod resume_snapshot;
@@ -68,6 +69,9 @@ pub(crate) struct StoreDeps {
     /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
     /// that resume an unsent fork.
     pending_forks: Mutex<HashMap<String, PendingForkState>>,
+    /// `fork_snapshots_dir()` override, for the startup-sweep tests (a real
+    /// tempdir the sweep can list and remove from).
+    fork_snapshots_dir: Mutex<Option<String>>,
 }
 
 /// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
@@ -118,6 +122,9 @@ impl StoreDeps {
     }
     pub(crate) fn chat_count(&self) -> usize {
         self.store.lock().unwrap().len()
+    }
+    pub(crate) fn set_fork_snapshots_dir(&self, dir: &str) {
+        *self.fork_snapshots_dir.lock().unwrap() = Some(dir.to_string());
     }
 }
 
@@ -499,6 +506,18 @@ impl ChatManagerDeps for StoreDeps {
     }
     fn clear_pending_fork(&self, chat_id: &str) {
         self.pending_forks.lock().unwrap().remove(chat_id);
+    }
+    fn fork_snapshots_dir(&self) -> String {
+        self.fork_snapshots_dir
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("mainframe-fork-snapshots-test-default")
+                    .to_string_lossy()
+                    .into_owned()
+            })
     }
 }
 
