@@ -18,6 +18,8 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     totalTokensInput: 0,
     totalTokensOutput: 0,
     lastContextTokensInput: 0,
+    temporary: false,
+    noProject: false,
     ...overrides,
   };
 }
@@ -168,6 +170,15 @@ describe('chatToThreadCustom — worktree, branch, transcript & timestamp fields
       (r) => r.custom.transcriptMissing,
       true,
     ],
+  ]);
+});
+
+describe('chatToThreadCustom — temporary & noProject (todo #346)', () => {
+  runFieldRows([
+    ['custom.temporary forwards chat.temporary when false', { temporary: false }, (r) => r.custom.temporary, false],
+    ['custom.temporary forwards chat.temporary when true', { temporary: true }, (r) => r.custom.temporary, true],
+    ['custom.noProject forwards chat.noProject when false', { noProject: false }, (r) => r.custom.noProject, false],
+    ['custom.noProject forwards chat.noProject when true', { noProject: true }, (r) => r.custom.noProject, true],
   ]);
 });
 

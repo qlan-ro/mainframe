@@ -34,6 +34,8 @@ function makeCustom(): SessionCustom {
     detectedPrs: [],
     worktreeMissing: false,
     transcriptMissing: false,
+    temporary: false,
+    noProject: false,
     updatedAt: 1749284160000,
   };
 }

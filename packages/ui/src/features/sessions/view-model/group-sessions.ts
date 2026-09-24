@@ -9,6 +9,13 @@
  * it does not change the default. See `arrangeByProject` below.
  *
  * Pure: `now` is a parameter so calendar-day bucketing is deterministic in tests.
+ *
+ * A non-project chat (`custom.noProject`) is pulled out before any day or
+ * project bucketing and always lands in its own trailing "No project" group —
+ * in 'recent' mode after Earlier, in 'project' mode after every ghost section
+ * (todo #346). It must never fall into a ghost section: ghost sections key off
+ * a session's raw `projectId`, and a no-project chat's `projectId` is the
+ * daemon's hidden scratch project id, not a real (removed) project.
  */
 import type { SessionItem } from './chat-to-thread-custom';
 
@@ -48,14 +55,35 @@ function byRecency(a: SessionItem, b: SessionItem): number {
   return b.custom.updatedAt - a.custom.updatedAt || compareStrings(a.id, b.id);
 }
 
+/**
+ * Pulls non-project chats out of a (non-pinned) item list, so every grouping
+ * mode below builds its normal sections from `rest` alone and appends the
+ * no-project items as one trailing group.
+ */
+function splitNoProject(items: SessionItem[]): { noProject: SessionItem[]; rest: SessionItem[] } {
+  const noProject: SessionItem[] = [];
+  const rest: SessionItem[] = [];
+  for (const it of items) {
+    (it.custom.noProject ? noProject : rest).push(it);
+  }
+  return { noProject, rest };
+}
+
+const NO_PROJECT_LABEL = 'No project';
+
+function noProjectSection(items: SessionItem[]): SessionGroupResult[] {
+  return items.length > 0 ? [{ label: NO_PROJECT_LABEL, items: [...items].sort(byRecency) }] : [];
+}
+
 function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number): SessionGroupResult[] {
+  const { noProject, rest: dated } = splitNoProject(rest);
   const todayKey = dayKey(now);
   const yesterdayKey = dayKey(now - 86_400_000);
 
   const today: SessionItem[] = [];
   const yesterday: SessionItem[] = [];
   const earlier: SessionItem[] = [];
-  for (const it of rest) {
+  for (const it of dated) {
     const k = dayKey(it.custom.updatedAt);
     if (k === todayKey) today.push(it);
     else if (k === yesterdayKey) yesterday.push(it);
@@ -67,6 +95,7 @@ function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number):
   if (today.length > 0) out.push({ label: 'Today', items: today.sort(byRecency) });
   if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byRecency) });
   if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byRecency) });
+  out.push(...noProjectSection(noProject));
   return out;
 }
 
@@ -98,8 +127,9 @@ function ghostSections(buckets: Map<string, SessionItem[]>): SessionGroupResult[
  * grouping never silently drops a session.
  */
 function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: ProjectRef[]): SessionGroupResult[] {
+  const { noProject, rest: withProject } = splitNoProject(rest);
   const byProject = new Map<string, SessionItem[]>();
-  for (const it of rest) {
+  for (const it of withProject) {
     const bucket = byProject.get(it.custom.projectId);
     if (bucket) bucket.push(it);
     else byProject.set(it.custom.projectId, [it]);
@@ -116,6 +146,7 @@ function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: 
     }
   }
   out.push(...ghostSections(byProject));
+  out.push(...noProjectSection(noProject));
   return out;
 }
 

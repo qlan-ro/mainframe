@@ -25,6 +25,8 @@ function makeCustom(overrides?: Partial<SessionCustom>): SessionCustom {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    temporary: false,
+    noProject: false,
     transcriptMissing: false,
     updatedAt: 0,
     ...overrides,

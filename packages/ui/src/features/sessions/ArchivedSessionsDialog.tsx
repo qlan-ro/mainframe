@@ -18,7 +18,7 @@ import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
 import { DialogRowList } from './DialogRowList';
 import { archivedThreadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { filterArchivedSessions } from '@/features/sessions/view-model/archived-sessions';
+import { archivedRowProjectName, filterArchivedSessions } from '@/features/sessions/view-model/archived-sessions';
 import { soleProjectId } from '@/store/session-filters';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 
@@ -135,9 +135,7 @@ export function ArchivedSessionsDialog({
                 id={item.id}
                 title={item.title ?? 'Untitled session'}
                 projectName={
-                  soleProjectId(filterProjectIds) === null
-                    ? (projectNames.get(item.custom.projectId) ?? 'Unknown project')
-                    : null
+                  soleProjectId(filterProjectIds) === null ? archivedRowProjectName(item, projectNames) : null
                 }
                 updatedAt={item.custom.updatedAt}
                 restoring={restoring}

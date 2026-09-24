@@ -129,9 +129,11 @@ function RowBody({ item, badge, colorOf, projectName, showPinGlyph, renameSlot, 
         </span>
         <SessionRowMetaLine
           projectName={projectName}
+          noProject={custom.noProject}
           worktreePath={custom.worktreePath}
           branchName={custom.branchName}
           worktreeMissing={custom.worktreeMissing}
+          temporary={custom.temporary}
           detectedPrs={custom.detectedPrs}
           tags={custom.tags}
           colorOf={colorOf}
@@ -290,6 +292,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                 title={title}
                 projectId={custom.projectId}
                 projectName={projectName}
+                noProject={custom.noProject}
                 worktreePath={custom.worktreePath}
                 branchName={custom.branchName}
                 worktreeMissing={custom.worktreeMissing}

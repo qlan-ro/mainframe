@@ -27,6 +27,8 @@ function item(
       hasPending: false,
       detectedPrs,
       worktreeMissing: false,
+      temporary: false,
+      noProject: false,
       transcriptMissing: false,
       updatedAt: 1748779200000,
       worktreePath,
@@ -40,6 +42,12 @@ const s1 = item('s1', 'proj-a', ['bug', 'urgent']);
 const s2 = item('s2', 'proj-a', ['bug'], [], '/wt');
 const s3 = item('s3', 'proj-b', ['perf'], PR);
 const s4 = item('s4', 'proj-c', []);
+
+/** A non-project chat: same shape as the daemon's hidden scratch project id. */
+function noProjectItem(id: string): SessionItem {
+  const base = item(id, 'mainframe-no-project', []);
+  return { ...base, custom: { ...base.custom, noProject: true } };
+}
 
 // ---------------------------------------------------------------------------
 // applySessionFilters
@@ -113,5 +121,27 @@ describe('applySessionFilters — cross-dimension AND-match', () => {
       selectedSynthetic: new Set<SyntheticTag>(synthetic),
     });
     expect(result.map((i) => i.id)).toEqual(expectedIds);
+  });
+});
+
+describe('applySessionFilters — a project pill hides non-project chats (todo #346)', () => {
+  it('excludes a non-project chat once a project scope is active, needing no dedicated code', () => {
+    const np = noProjectItem('np1');
+    const result = applySessionFilters([s1, np], {
+      filterProjectIds: new Set(['proj-a']),
+      selectedTags: new Set(),
+      selectedSynthetic: new Set(),
+    });
+    expect(result.map((i) => i.id)).toEqual(['s1']);
+  });
+
+  it('keeps a non-project chat when no project scope is active', () => {
+    const np = noProjectItem('np1');
+    const result = applySessionFilters([s1, np], {
+      filterProjectIds: new Set(),
+      selectedTags: new Set(),
+      selectedSynthetic: new Set(),
+    });
+    expect(result.map((i) => i.id)).toEqual(['s1', 'np1']);
   });
 });

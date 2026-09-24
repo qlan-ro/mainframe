@@ -10,6 +10,7 @@
 import { AlertTriangle, FolderGit2, GitBranch } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Badge } from '@/components/ui/badge';
+import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
@@ -24,6 +25,32 @@ function FieldLabel({ children }: { children: string }) {
     >
       {children}
     </span>
+  );
+}
+
+/** Never both — a chat with no real project never has a projectName to show. */
+function ProjectRow({
+  projectId,
+  projectName,
+  noProject,
+}: {
+  projectId?: string;
+  projectName?: string;
+  noProject: boolean;
+}) {
+  if (!noProject && (projectName == null || projectId == null)) return null;
+  return (
+    <div data-testid="sessions-meta-card-project" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Project</FieldLabel>
+      {noProject ? (
+        <NoProjectLabel data-testid="sessions-meta-card-no-project" size={14} />
+      ) : (
+        <>
+          <ProjectAvatar name={projectName!} color={projectColor(projectId!)} size={14} />
+          <span className="truncate">{projectName}</span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -100,6 +127,8 @@ interface SessionMetaCardProps {
   title: string;
   projectId?: string;
   projectName?: string;
+  /** True for a chat with no real project — renders NoProjectLabel instead of the project name (todo #346). */
+  noProject?: boolean;
   worktreePath?: string;
   branchName?: string;
   worktreeMissing: boolean;
@@ -116,6 +145,7 @@ export function SessionMetaCard({
   title,
   projectId,
   projectName,
+  noProject = false,
   worktreePath,
   branchName,
   worktreeMissing,
@@ -135,13 +165,7 @@ export function SessionMetaCard({
       >
         {title}
       </span>
-      {projectName != null && projectId != null && (
-        <div data-testid="sessions-meta-card-project" className="flex items-center gap-1.5 text-xs">
-          <FieldLabel>Project</FieldLabel>
-          <ProjectAvatar name={projectName} color={projectColor(projectId)} size={14} />
-          <span className="truncate">{projectName}</span>
-        </div>
-      )}
+      <ProjectRow projectId={projectId} projectName={projectName} noProject={noProject} />
       <WorktreeOrBranchRow worktreePath={worktreePath} branchName={branchName} />
       <PrRow detectedPrs={detectedPrs} />
       <TagsRow tags={tags} colorOf={colorOf} />

@@ -50,6 +50,8 @@ function makeChat(overrides?: { adapterId?: string; model?: string }): Chat {
     totalTokensInput: 0,
     totalTokensOutput: 0,
     lastContextTokensInput: 0,
+    temporary: false,
+    noProject: false,
     model: overrides?.model,
   };
 }

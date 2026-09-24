@@ -104,6 +104,8 @@ const FIXTURE: Chat = {
   totalTokensInput: 0,
   totalTokensOutput: 0,
   lastContextTokensInput: 0,
+  temporary: false,
+  noProject: false,
   pinned: true,
   tags: ['backend'],
   detectedPrs: [{ number: 7, url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', source: 'created' as const }],

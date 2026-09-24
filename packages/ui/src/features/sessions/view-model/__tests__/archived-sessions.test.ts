@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
-import { filterArchivedSessions } from '../archived-sessions';
+import { archivedRowProjectName, filterArchivedSessions } from '../archived-sessions';
 
 // ---------------------------------------------------------------------------
 // Fixture helpers — mirror group-sessions.test.ts style
@@ -25,6 +25,8 @@ function item(
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    temporary: false,
+    noProject: false,
     transcriptMissing: false,
     updatedAt,
     ...overrides,
@@ -137,5 +139,50 @@ describe('filterArchivedSessions — sorts by custom.updatedAt descending', () =
     const result = filterArchivedSessions(items, new Set(['proj-1']));
 
     expect(result.map((i) => i.id)).toEqual(['p1-late', 'p1-early']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// a project pill hides non-project chats (todo #346) — needs no dedicated
+// code: a no-project chat's projectId never matches a real project id.
+// ---------------------------------------------------------------------------
+
+describe('filterArchivedSessions — a project pill hides non-project chats', () => {
+  it('excludes a non-project archived chat when a project scope is active', () => {
+    const items = [
+      item('a', 'archived', 'proj-1', BASE_UPDATED_AT),
+      item('np', 'archived', 'mainframe-no-project', BASE_UPDATED_AT, { noProject: true }),
+    ];
+
+    const result = filterArchivedSessions(items, new Set(['proj-1']));
+
+    expect(result.map((i) => i.id)).toEqual(['a']);
+  });
+
+  it('keeps a non-project archived chat when no project scope is active', () => {
+    const items = [item('np', 'archived', 'mainframe-no-project', BASE_UPDATED_AT, { noProject: true })];
+
+    expect(filterArchivedSessions(items, new Set()).map((i) => i.id)).toEqual(['np']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archivedRowProjectName — the row's project column (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('archivedRowProjectName', () => {
+  it('returns "No project" for a chat with no real project, ahead of any name lookup', () => {
+    const row = item('np', 'archived', 'mainframe-no-project', BASE_UPDATED_AT, { noProject: true });
+    expect(archivedRowProjectName(row, new Map([['mainframe-no-project', 'Should never be read']]))).toBe('No project');
+  });
+
+  it("returns the project's resolved name for a project-attached chat", () => {
+    const row = item('a', 'archived', 'proj-1', BASE_UPDATED_AT);
+    expect(archivedRowProjectName(row, new Map([['proj-1', 'Alpha']]))).toBe('Alpha');
+  });
+
+  it('falls back to "Unknown project" for a project id absent from the live list', () => {
+    const row = item('a', 'archived', 'proj-removed', BASE_UPDATED_AT);
+    expect(archivedRowProjectName(row, new Map())).toBe('Unknown project');
   });
 });
