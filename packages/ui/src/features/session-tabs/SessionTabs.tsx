@@ -16,7 +16,6 @@
 import { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useAui, useAuiState } from '@assistant-ui/react';
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
@@ -24,11 +23,10 @@ import { useAdaptersStore } from '@/store/adapters';
 import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useForkChat } from '@/features/sessions/use-fork-chat';
-import type { SessionCustom, ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { forkAvailability, type ForkAvailability } from '@/features/sessions/view-model/fork-availability';
 import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
-import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
+import { SessionTabPill } from './SessionTabPill';
+import { toTabEntry } from './tab-entry';
 import { useSessionTabsStore } from './store';
 import {
   canonicalTabId,
@@ -41,52 +39,6 @@ import {
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsSync } from './use-session-tabs-sync';
-
-/**
- * A tab with no thread-list entry yet (a brand-new `__LOCALID_*` draft) has no
- * `SessionCustom` at all, so there is no capability to check — it reads as
- * "Nothing to fork yet" directly rather than through the adapter-capability
- * check first (which would otherwise misreport a blank adapter name).
- */
-function tabForkAvailability(
-  custom: SessionCustom | undefined,
-  adaptersById: Readonly<Record<string, AdapterInfo>>,
-): ForkAvailability {
-  if (custom == null) return { enabled: false, reason: 'Nothing to fork yet' };
-  const adapter = adaptersById[custom.adapterId];
-  return forkAvailability({
-    capabilityFork: adapter?.capabilities.fork ?? false,
-    adapterName: adapter?.name ?? custom.adapterId,
-    claudeSessionId: custom.claudeSessionId,
-    transcriptMissing: custom.transcriptMissing,
-    directoryMissing: custom.directoryMissing ?? false,
-    isRunning: custom.isRunning ?? false,
-    hasPending: custom.hasPending,
-  });
-}
-
-function toTabEntry(
-  id: string,
-  items: readonly ThreadListEntry[],
-  projectNames: ReadonlyMap<string, string>,
-  activeId: string | null,
-  preview: boolean,
-  adaptersById: Readonly<Record<string, AdapterInfo>>,
-): SessionTabEntry {
-  const entry = items.find((t) => t.id === id);
-  const isDraft = entry == null || entry.status === 'new';
-  const custom = entry?.custom as SessionCustom | undefined;
-  const projectId = custom?.projectId;
-  return {
-    id,
-    title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
-    projectId,
-    projectName: projectId != null ? projectNames.get(projectId) : undefined,
-    active: id === activeId,
-    preview,
-    forkAvailability: tabForkAvailability(custom, adaptersById),
-  };
-}
 
 export function SessionTabs() {
   useSessionTabsSync();
