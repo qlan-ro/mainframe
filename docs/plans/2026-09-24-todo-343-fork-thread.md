@@ -60,6 +60,9 @@ Pending-fork lifecycle (daemon-internal; never on the `Chat` wire type):
 - `on_init` persists `claude_session_id` and `session_file_path`. — `mainframe-chat/src/event_handler.rs` `on_init`.
 - Title generation starts only when the title is empty. — `mainframe-chat/src/chat_manager/send.rs` `assign_initial_title`.
 - `ChatManager::get_chat` derives `display_status` (Waiting when a permission is pending) and `directory_missing`. — `mainframe-chat/src/chat_manager/reads.rs` `get_chat`, `chat_manager/shared.rs` `enrich_chat`.
+- `enrich_chat` sets `display_status = Working` when the main turn runs **or** any live background task exists, but `is_running = Some(working && !has_pending)` tracks the main turn only. So `display_status` is not a "turn in flight" signal; `is_running` plus a pending permission is. — `chat_manager/shared.rs` `enrich_chat`.
+- `load_chat` returns `Flight::Skip` for a chat already in `active_chats`, which `create_chat` populates. So `do_load_chat` never runs for a chat created in this daemon run. — `mainframe-chat/src/lifecycle_manager.rs` `load_chat`, `create_chat`.
+- Every history read without a live session goes through `build_history_session`, which returns `None` when `claude_session_id` is `None`: `get_messages` / `get_display_messages` on a cache miss (via `history_session`), `get_messages_from_disk`, and the permission-restore loader. The server's `session_for_scan` has the same `claude_session_id?` early return. — `chat_manager/shared.rs` `build_history_session`, `chat_manager/history.rs`, `chat_manager/deps_permission.rs`, `mainframe-server/src/chat_deps.rs` `session_for_scan`.
 - `parse_body` treats an empty or whitespace body as `{}`, so a `deny_unknown_fields` empty struct accepts "no body" and rejects unknown fields. — `mainframe-server/src/routes/projects.rs` `parse_body`.
 - Migrations form an append-only `add_column_if_missing` chain, with `LATEST_VERSION = 27`. — `mainframe-db/src/migrations.rs`.
 - `ChatsRepository::get` has no status filter, so archived rows come back. `GET /api/chats/{id}` returns 404 only for a missing row. — `mainframe-db/src/chats.rs` `get`; `mainframe-server/src/routes/chats.rs` `get_one`.
@@ -169,16 +172,24 @@ Exit:
 Files:
 - `packages/core-rs/crates/mainframe-chat/src/`: a new `fork.rs` (pure helpers)
   and `chat_manager/fork_api.rs`, plus edits to `lifecycle_manager.rs`
-  (`do_load_chat`, `do_start_chat`), `chat_manager/send.rs`,
-  `event_handler.rs` (`on_result`) and the deps traits and fakes.
-- `mainframe-server/src/{chat_deps.rs,routes/chat_commands.rs}`.
+  (`do_load_chat`, `do_start_chat`), `chat_manager/shared.rs`
+  (`build_history_session`), `chat_manager/send.rs`, `event_handler.rs`
+  (`on_result`) and the deps traits and fakes (a pending-fork read on
+  `ChatManagerDeps`).
+- `mainframe-server/src/{chat_deps.rs,routes/chat_commands.rs}` (`chat_deps.rs`
+  covers both the deps impl and `session_for_scan`).
 - The daemon startup wiring for the sweep (`mainframe-daemon`).
 
 1. `ChatManager::fork_chat(id) -> Result<Chat, ForkError>`:
    - Checks, in the spec's order, against `get_chat` (enriched): not found
      (404), no adapter fork capability (422, message names `AdapterInfo.name`),
      no `claude_session_id` (409), `transcript_missing` (409),
-     `directory_missing` (409), `display_status` working or waiting (409).
+     `directory_missing` (409), turn in flight (409).
+   - "Turn in flight" means the main turn: `is_running == Some(true)` or a
+     pending permission (`display_status == Waiting`). It is **not**
+     `display_status == Working`, which live background tasks also set. An
+     idle chat with a background shell or agent still running can fork (spec
+     edge case).
    - Then pins into `<data_dir>/fork-snapshots/<nanoid>/`. `TranscriptMissing`
      maps to 409, `Failed` to 500, and a failed pin removes the directory.
    - Then `create_fork`. On insert failure it removes the directory.
@@ -189,9 +200,17 @@ Files:
    - `fork_title(parent_title)`: `Untitled (fork)` for an untitled parent, and
      no stacked ` (fork)` marker.
    - Error-to-status mapping.
-3. `do_load_chat` and `do_start_chat`:
-   - Proceed when `claude_session_id` is `None` but a pending fork exists.
-   - Pass `fork_source` in `SessionOptions`.
+3. Every session builder learns the pending fork. When `claude_session_id` is
+   `None` and a pending fork exists, build the session with `chat_id: None` and
+   `fork_source` set, instead of returning early:
+   - `build_history_session` in `chat_manager/shared.rs`. This is the path an
+     unsent fork's messages take in the common no-restart case: `fork_chat`
+     puts the chat in `active_chats`, so `load_chat` skips it and `do_load_chat`
+     never runs. It also covers `get_messages_from_disk` and the
+     permission-restore loader, which share it.
+   - `session_for_scan` in `mainframe-server/src/chat_deps.rs`.
+   - `do_load_chat` and `do_start_chat` (after a restart, and for the first
+     send).
    - The fork's cwd is its recorded worktree path or its project path, the same
      as the parent's.
 4. First-message title: `assign_initial_title` also runs generation when the
@@ -210,15 +229,21 @@ TDD (red first):
 - Route tests with a fake fork-capable adapter:
   - success returns `parentChatId` and the inherited fields;
   - a capability-less adapter returns 422 and the message names the adapter;
-  - working, waiting and no-session chats return 409;
+  - running (`is_running`), waiting and no-session chats return 409;
+  - an idle chat with live background tasks (so `display_status` is Working
+    but `is_running` is false) forks successfully;
   - a transcript-missing chat returns 409;
   - an unknown id returns 404;
   - an unknown field returns 400;
   - a pin failure returns 500;
   - every failure leaves the chat count unchanged.
 - `fork_title` unit tests.
-- Lifecycle tests: an unsent fork loads history through `fork_source`, and
-  start passes `fork_source`.
+- History test (AC 1): a freshly forked chat, still in `active_chats`, returns
+  the parent's messages from `get_display_messages` before its first send, with
+  no `load_chat` in between.
+- `session_for_scan` returns a session for an unsent fork.
+- Lifecycle tests: after a restart an unsent fork loads history through
+  `fork_source`, and start passes `fork_source`.
 - Title tests: provisional → generated; renamed → kept; generation disabled
   → provisional kept.
 - Retire-on-result and the sweep.
@@ -246,7 +271,8 @@ Files (under `packages/ui/src/features/`):
 
 Load the `mainframe-design-system` skill before writing markup.
 
-1. `SessionCustom` gains `parentChatId` and `directoryMissing`.
+1. `SessionCustom` gains `parentChatId`, `directoryMissing` and `isRunning`
+   (from `Chat.isRunning`, default `false`). `isRunning` is consumed by Group 5.
 2. `fork-lineage.ts` (pure):
    - `nestForks(groupItems)` reorders one group. Each parent is followed by its
      descendants in contiguous depth-first order, with siblings in the group's
@@ -275,6 +301,8 @@ Load the `mainframe-design-system` skill before writing markup.
      prop drilling.
 
 TDD (red first):
+- `chatToThreadCustom` maps `parentChatId`, `directoryMissing` and `isRunning`
+  (absent → `false`).
 - `fork-lineage` unit tests (AC 13): each sort mode, contiguity, the two-level
   cap, the other-group fork staying unnested, self-reference and cycles,
   counts.
@@ -299,9 +327,11 @@ Files (under `packages/ui/src/`):
 - tests;
 - `.changeset/<name>.md` (minor bump for `@qlan-ro/mainframe-ui`).
 
-1. `forkAvailability({ capabilityFork, adapterName, claudeSessionId, transcriptMissing, directoryMissing, displayStatus })`
+1. `forkAvailability({ capabilityFork, adapterName, claudeSessionId, transcriptMissing, directoryMissing, isRunning, hasPending })`
    returns enabled, or the first failing reason, with the spec's exact copy
-   and order. A missing capability counts as unable to fork.
+   and order. A missing capability counts as unable to fork. The turn-in-flight
+   check is `isRunning || hasPending`, never `displayStatus`, because live
+   background tasks alone make `displayStatus` "working".
 2. `useForkChat()`:
    - Call `forkChat`. On `ok`, make sure the thread list holds the new chat
      (reload if needed), then `switchToThread(newId)`.
@@ -312,9 +342,12 @@ Files (under `packages/ui/src/`):
 
 TDD (red first):
 - `fork-availability` unit tests: every reason, in order, including an adapter
-  payload with no capability.
+  payload with no capability, and enabled for an idle chat whose
+  `displayStatus` is "working" only because of background tasks
+  (`isRunning: false`, `hasPending: false`).
 - Menu tests (AC 17): placement relative to the neighbor ids; disabled with the
-  exact Hint for no capability, no session, working and waiting; enabled
+  exact Hint for no capability, no session, running and waiting; enabled for
+  an idle chat with background tasks; enabled
   activation calls the API and switches to the returned chat; a failure shows
   the toast.
 
