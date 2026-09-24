@@ -35,6 +35,7 @@ import { ChatSelectionToolbar } from './ChatSelectionToolbar';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { CompactingPill } from '../messages/SystemMessage';
+import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useRotatingPhrase } from './use-rotating-phrase';
@@ -198,6 +199,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 rail instead of running under it, with a symmetric left inset. */}
             <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
               <LoadErrorBanner />
+              <ContextNotPreservedNotice />
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
               {/* Inline "thinking/working" indicator — sits after the last message,

@@ -34,7 +34,7 @@ export function ReviewPanel() {
   const setReviewOpen = useOverlaysStore((s) => s.setReviewOpen);
 
   const port = useDaemonPort();
-  const { projectId, chatId } = useActiveIdentity();
+  const { projectId, chatId, noProject } = useActiveIdentity();
   const aui = useAui();
 
   const [scope, setScope] = useState<ChangeScope>(DEFAULT_SCOPE);
@@ -46,7 +46,7 @@ export function ReviewPanel() {
     baseBranch,
     mergeBase,
     error: loadError,
-  } = useWorkingChanges({ port, projectId, chatId, scope, enabled: reviewOpen });
+  } = useWorkingChanges({ port, projectId, chatId, scope, enabled: reviewOpen, noProject });
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [viewed, setViewed] = useState<Set<string>>(new Set());

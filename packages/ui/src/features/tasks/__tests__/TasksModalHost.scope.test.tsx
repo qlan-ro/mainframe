@@ -106,7 +106,7 @@ function byProject(projectId: string): Todo[] {
 }
 
 function identity(projectId: string | undefined): ReturnType<typeof useActiveIdentity> {
-  return { projectName: 'Mainframe', projectId, isWorktree: false };
+  return { projectName: 'Mainframe', projectId, isWorktree: false, noProject: false };
 }
 
 // ---------------------------------------------------------------------------

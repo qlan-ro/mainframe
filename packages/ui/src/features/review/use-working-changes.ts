@@ -53,6 +53,13 @@ export interface UseWorkingChangesOptions {
   scope?: ChangeScope;
   /** Defaults to true; the review modal only fetches while it is open. */
   enabled?: boolean;
+  /**
+   * A non-project chat has no git repo and no session-file cwd worth reading
+   * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every
+   * scope, including `session`, which needs only `chatId` and would otherwise
+   * still fire against the chat's scratch directory.
+   */
+  noProject?: boolean;
 }
 
 export interface ChangesSummary {
@@ -111,6 +118,7 @@ export function useWorkingChanges({
   chatId,
   scope = 'uncommitted',
   enabled = true,
+  noProject = false,
 }: UseWorkingChangesOptions): WorkingChanges {
   const [payload, setPayload] = useState<ChangesPayload>(EMPTY);
   const [loading, setLoading] = useState(false);
@@ -120,7 +128,7 @@ export function useWorkingChanges({
   const refetch = useCallback(() => setRefreshKey((key) => key + 1), []);
 
   // `session` resolves the worktree from the chat; the other two need a project.
-  const canFetch = enabled && (scope === 'session' ? Boolean(chatId) : Boolean(projectId));
+  const canFetch = enabled && !noProject && (scope === 'session' ? Boolean(chatId) : Boolean(projectId));
 
   useEffect(() => {
     if (!canFetch) {

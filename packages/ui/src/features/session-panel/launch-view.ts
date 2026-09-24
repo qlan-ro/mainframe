@@ -9,7 +9,15 @@
  * `running`.
  */
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
-import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
+import { isLaunchStatusLive, NO_CONFIGS_LABEL } from '@/features/run/derive-launch-control';
+
+/** A non-project chat has nothing to launch against — say so, not "no configs" (todo #346). */
+export const NO_PROJECT_LAUNCH_LABEL = 'Launch isn’t available for a chat with no project.';
+
+/** The Launch section's empty-row copy: distinguishes "no project" from "project has no configs". */
+export function launchEmptyStateLabel(noProject: boolean): string {
+  return noProject ? NO_PROJECT_LAUNCH_LABEL : NO_CONFIGS_LABEL;
+}
 
 export interface LaunchRow {
   config: LaunchConfiguration;
