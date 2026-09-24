@@ -20,11 +20,15 @@ form of this plan applies.
 |---|---|---|---|
 | `daemon` | core | `packages/core-rs/**` | — |
 | `client-state` | core | `packages/types/src/**`, `packages/ui/src/lib/api/**`, `packages/ui/src/features/chat/controller/**`, `packages/ui/src/features/chat/runtime/chat-extras.ts` | — |
-| `activity-ui` | ui | `packages/ui/src/features/session-panel/**`, `packages/e2e/tests-tauri/session-panel.spec.ts`, `.changeset/*` | `client-state` |
+| `activity-ui` | ui | `packages/ui/src/features/session-panel/**`, `packages/e2e/tests-tauri/session-panel.spec.ts`, `.changeset/*` | `client-state`, `daemon` |
 
 `daemon` and `client-state` share no files. They agree on the wire through the contract in
 the next section, not through a shared fixture file. `activity-ui` consumes `client-state`'s
-types, API module, reducer state and extras actions.
+types, API module, reducer state and extras actions. It also depends on `daemon` because
+its Tauri e2e step runs against the daemon binary built from `packages/core-rs`
+(`e2e/fixtures/daemon.ts` reads `packages/core-rs/target/debug`). That binary only builds
+once `daemon`'s struct-field and literal sweeps have landed, and the e2e expectation also
+relies on the event ordering from `daemon` task 6.
 
 ## Wire contract (both sides implement exactly this)
 
@@ -72,6 +76,12 @@ an absent file in a valid spool directory returns 409 `no_output`.
 **Kill route** `POST …/{taskId}/kill` returns `{success:true}`, 404 `task not found`, or
 502 `{success:false, error}` (unchanged). The one change: a recovered task with no live
 writer now returns success.
+
+**Event ordering.** On the daemon bus, every `background_task.started`/`.updated`/`.ended`
+that the tracker emits is sent before the tracker call that produced it returns. So a
+`background_task.ended` always precedes any `chat.updated` emitted after that `tracker.end`
+in the same handler, including the CLI-exit sweep in `on_exit`. The client reducer rules
+below rely on this: an `ended` for a listed task arrives before the snapshot that omits it.
 
 ---
 
@@ -135,10 +145,43 @@ TDD per task: write the failing Rust test first, then the change.
    test and the `rejects_a_path_outside_the_spool_root` test still pass. Unit tests in
    `mainframe-background-tasks/tests/spool_validator.rs` cover `check` for the three
    outcomes, using the injectable `realpath`.
+6. **Tracker events reach the bus synchronously** (spec edge case "Stop while the CLI
+   exits", AC13). Today `on_exit` calls `tracker_end_all_running` and then immediately
+   emits `DaemonEvent::ChatUpdated` through `enrich_and_emit`, which goes straight onto the
+   bus. The tracker's `Ended` events instead go through its own broadcast and the spawned
+   `spawn_task_event_bridge` task in `mainframe-daemon/src/main.rs`, which cannot run until
+   the current task yields. So the client receives the snapshot first, drops the running
+   rows, and then ignores each `ended` as unlisted. The fix:
+   - `BackgroundTaskTracker` (`tracker.rs`) gains an optional synchronous sink,
+     `set_event_sink(Arc<dyn Fn(&TaskEvent) + Send + Sync>)`, stored in a `OnceLock`. It
+     needs a manual `Debug`, or a wrapper type, because the struct derives `Debug`. A
+     private `emit(event)` helper replaces the four `self.emitter.send(...)` sites. It
+     calls the sink first, then sends on the broadcast so `subscribe()` users (reconcile
+     and the tests) are unchanged. Every call site already emits after its DashMap guard
+     is released; keep it that way so a sink can never deadlock against the map.
+   - In `mainframe-daemon`, replace `spawn_task_event_bridge` with
+     `install_task_event_sink(tracker, bus)` in a new bin-crate module
+     `src/task_event_bridge.rs`. It maps each `TaskEvent` variant to
+     `BackgroundTaskStarted`/`Updated`/`Ended` and calls `bus.send` inline. The lag warning
+     goes away because nothing is buffered. `main.rs` calls the installer where it spawned
+     the bridge, before any adapter session can start.
+
+   *Verify:* three failing-first tests.
+   - (a) `tracker.rs` unit test: with a sink that records into a `Mutex<Vec<_>>`, the
+     `Ended` event for a task is recorded before `end()` returns, and `end_all_running`
+     records one `Ended` per running task before it returns, with no await in between.
+   - (b) `task_event_bridge.rs` unit test (`#[cfg(test)]`) that pins the bus order. Install
+     the sink on a tracker and a `broadcast::channel::<DaemonEvent>`, subscribe, start two
+     tasks, drain, then call `end_all_running` followed by
+     `bus.send(DaemonEvent::ChatUpdated {..})` exactly as `on_exit` does. Receiving from
+     the bus yields both `BackgroundTaskEnded` events before the `ChatUpdated`.
+   - (c) `event_handler.rs` `BgDeps` test through the real `on_exit`. `BgDeps` records
+     `emit_event` calls into a shared ordered log, and the tracker's sink writes to the same
+     log. After `on_exit`, every `Ended` entry precedes the `ChatUpdated` entry.
 
 **Group exit:** `cargo test` passes for `mainframe-types`, `mainframe-background-tasks`,
 `mainframe-adapter-claude`, `mainframe-adapter-codex`, `mainframe-adapter-mock`,
-`mainframe-chat` and `mainframe-server`. `cargo clippy` is clean for those crates. AC12 is
+`mainframe-chat`, `mainframe-server` and `mainframe-daemon`. `cargo clippy` is clean for those crates. AC12 is
 satisfied by the existing `returns_the_tail_of_a_spool_file_under_the_real_spool_root` and
 `spool_root_default_uid.rs` tests, which must still pass. No uid code is touched.
 
@@ -334,7 +377,9 @@ the tone classes `text-success`/`text-destructive`/`text-muted-foreground`,
    rail dot. `session-panel-activity-empty` appears only after `activity-dismiss-<id>`, or
    after a further user turn clears it.
 
-**Group exit (lane exit):** UI typecheck, lint and the touched test files pass. The group
+**Group exit (lane exit):** UI typecheck, lint and the touched test files pass. The
+updated `session-panel.spec.ts` passes against the debug daemon built from the landed
+`daemon` group (`cargo build -p mainframe-daemon` in `packages/core-rs`). The group
 adds a changeset covering `@qlan-ro/mainframe-types` and `@qlan-ro/mainframe-ui` (they are
 a fixed group), minor bump, describing stop, details and terminal rows.
 
@@ -347,6 +392,11 @@ a fixed group), minor bump, describing stop, details and terminal rows.
   `isRunning: true` and on CLI-initiated turns, so it cannot mark "the next user turn".
   The plan uses the local send and retry. A turn started from another client (mobile) does
   not clear terminal rows; the cap and dismissal still bound them.
+- **Event ordering.** The reducer's snapshot and ended rules are only correct if `ended`
+  reaches the client before a snapshot that omits the task. `daemon` task 6 guarantees
+  this on the bus. The WebSocket fan-out preserves bus order per client. If a later change
+  reintroduces an asynchronous hop between tracker and bus, exit-swept rows vanish again,
+  and test (b) fails.
 - **Dangling-link classification.** `canonicalize` fails with `NotFound` for a dangling
   symlink too. Without the `symlink_metadata` pre-check, a dangling link would be misread
   as `no_output`.
@@ -390,6 +440,10 @@ a fixed group), minor bump, describing stop, details and terminal rows.
 - The Rust `AdapterCapabilities` is `Copy` with a non-optional `auto_mode: bool`, and TS
   has `autoMode?: boolean`. Receipt: `mainframe-types/src/adapter.rs` `AdapterCapabilities`,
   `packages/types/src/adapter.ts` `AdapterInfo`.
+- `on_exit` sweeps the tracker and then emits `ChatUpdated` synchronously onto the bus,
+  while tracker events reach the bus only through a spawned forwarding task. Receipt:
+  `mainframe-chat/src/event_handler.rs` `on_exit`, `chat_manager/shared.rs`
+  `enrich_and_emit`, `mainframe-daemon/src/main.rs` `spawn_task_event_bridge`.
 - `Chat.backgroundActivity` is built from running tasks only, via `to_activity_task`.
   Receipt: `mainframe-chat/src/chat_manager/shared.rs` `enrich_chat`.
 - `chat.updated` with `isRunning: true` maps to `run.started` on every broadcast, and a
