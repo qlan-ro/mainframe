@@ -36,6 +36,10 @@ export interface ChatRuntimeExtras {
   readonly acceptWorktreeOffer: (worktreePath: string) => Promise<void>;
   readonly dismissWorktreeOffer: (worktreePath: string) => Promise<void>;
   readonly clearWorktreeSwitch: () => void;
+  /** Request cancellation of a running background task (todo #328). */
+  readonly stopBackgroundTask: (taskId: string) => Promise<void>;
+  /** Remove a terminal background-task row from the panel. */
+  readonly dismissBackgroundTask: (taskId: string) => void;
 }
 
 function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
@@ -67,6 +71,8 @@ export function buildChatExtras(
     acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
     dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
     clearWorktreeSwitch: () => controller.clearWorktreeSwitch(),
+    stopBackgroundTask: (taskId) => controller.stopBackgroundTask(taskId),
+    dismissBackgroundTask: (taskId) => controller.dismissBackgroundTask(taskId),
   };
 }
 

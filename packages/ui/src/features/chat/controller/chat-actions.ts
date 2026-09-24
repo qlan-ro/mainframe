@@ -56,6 +56,9 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta);
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started' });
+  // A new user turn is the "next turn" retention boundary (todo #328 AC14) —
+  // clear terminal background rows from the prior turn; running rows are untouched.
+  host.dispatch({ type: 'background.turn.started' });
 
   let attachmentIds: string[] | undefined;
   try {
@@ -91,6 +94,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string): 
 
   host.dispatch({ type: 'local.message.retrying', clientId });
   host.dispatch({ type: 'run.started' });
+  host.dispatch({ type: 'background.turn.started' });
 
   try {
     await host.load();

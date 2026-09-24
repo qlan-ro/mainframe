@@ -1,24 +1,20 @@
 /**
- * Per-chat controller — the ONE desktop chat controller (desktop-cutover
- * pass; the legacy `chat-thread-controller.ts` is deleted). Two planes over
- * one reducer:
- *  - `AcpSessionPlane` (transcript, run frames, gates) on the shared
- *    per-adapter `/acp/{profile}` facade client — SUBSCRIBED only while
- *    active (D2 dormancy, todo #350 T33; gating logic in `chat-activation.ts`,
- *    load/bind in `chat-plane-loader.ts`). `load()` seeds config and binds
- *    the client unconditionally (prompt/cancel/reply work dormant too); a
- *    switch-back reactivates from the last settled item, never a full
- *    replay.
- *  - `ChatWsSubscription` (side-band: config, background tasks, worktree
- *    offers, workflow runs) gated to the active thread exactly as before.
+ * Per-chat controller — the ONE desktop chat controller (desktop-cutover pass; the legacy
+ * `chat-thread-controller.ts` is deleted). Two planes over one reducer:
+ *  - `AcpSessionPlane` (transcript, run frames, gates) on the shared per-adapter `/acp/{profile}`
+ *    facade client — SUBSCRIBED only while active (D2 dormancy, todo #350 T33; gating logic in
+ *    `chat-activation.ts`, load/bind in `chat-plane-loader.ts`). `load()` seeds config and binds
+ *    the client unconditionally (prompt/cancel/reply work dormant too); a switch-back reactivates
+ *    from the last settled item, never a full replay.
+ *  - `ChatWsSubscription` (side-band: config, background tasks, worktree offers, workflow runs)
+ *    gated to the active thread exactly as before.
  *
- * Created once per thread id in the global registry and kept warm across
- * switches. A new (`__LOCALID_*`) thread adopts its daemon id via
- * `setRemoteId` once createChat resolves; that's also where the adapter
- * profile becomes known. A `__LOCALID_*` thread can be marked active before
- * it has a remote id (nothing to attach yet) — adoption re-checks
- * activation. Queued cancel/edit and attachment upload stay REST; sends go
- * through `session/prompt` with the `_mainframe.dev` send meta.
+ * Created once per thread id in the global registry and kept warm across switches. A new
+ * (`__LOCALID_*`) thread adopts its daemon id via `setRemoteId` once createChat resolves; that's
+ * also where the adapter profile becomes known. A `__LOCALID_*` thread can be marked active before
+ * it has a remote id (nothing to attach yet) — adoption re-checks activation. Queued cancel/edit
+ * and attachment upload stay REST; sends go through `session/prompt` with the `_mainframe.dev`
+ * send meta.
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
@@ -42,6 +38,7 @@ import {
   sendChatMessage,
   type ChatActionHost,
 } from './chat-actions';
+import { dismissBackgroundTask, stopBackgroundTask } from './chat-background-actions';
 import { ChatPlaneLoader } from './chat-plane-loader';
 import { ChatActivation } from './chat-activation';
 import { ChatLiveSubscription } from './chat-live-subscription';
@@ -267,6 +264,13 @@ export class AcpChatController {
   /** Drops the settled confirmation once the banner has shown it. */
   public clearWorktreeSwitch(): void {
     this.dispatch({ type: 'worktree.switch.cleared' });
+  }
+
+  public stopBackgroundTask(taskId: string): Promise<void> {
+    return stopBackgroundTask(this.actionHost, taskId);
+  }
+  public dismissBackgroundTask(taskId: string): void {
+    dismissBackgroundTask(this.actionHost, taskId);
   }
 
   /**
