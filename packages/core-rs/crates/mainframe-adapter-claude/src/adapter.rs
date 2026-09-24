@@ -127,8 +127,8 @@ impl Adapter for ClaudeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: true,
-            // Flipped to `true` once fork.rs lands (todo #343, Group 2).
-            fork: false,
+            // fork.rs (todo #343, Group 2) implements pin_fork_point below.
+            fork: true,
         }
     }
 
@@ -324,6 +324,16 @@ impl Adapter for ClaudeAdapter {
     fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
         Some(Arc::new(ClaudePlanModeHandler))
     }
+
+    fn pin_fork_point(
+        &self,
+        request: mainframe_adapter_api::ForkPinRequest,
+    ) -> BoxFuture<
+        '_,
+        Result<mainframe_types::adapter::ForkSource, mainframe_adapter_api::ForkPinError>,
+    > {
+        Box::pin(crate::fork::pin_fork_point(request))
+    }
 }
 
 #[cfg(test)]
@@ -346,6 +356,7 @@ mod tests {
         assert_eq!(a.id(), "claude");
         assert_eq!(a.name(), "Claude Code");
         assert!(a.capabilities().plan_mode);
+        assert!(a.capabilities().fork);
         assert!(a.has_probe_models());
     }
 
