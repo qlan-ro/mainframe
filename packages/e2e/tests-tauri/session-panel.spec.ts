@@ -893,7 +893,7 @@ test.describe('§session-panel — Activity card (task-subagent)', () => {
     await closeTauriApp(app);
   });
 
-  test('a delegated subagent shows one running Agent row until its result lands', async () => {
+  test('a delegated subagent shows one running Agent row, then settles as Completed instead of vanishing (#328)', async () => {
     const { page } = app;
     await sendMessage(page, 'Delegate finding the greeting export to a subagent');
     await waitForIdle(page, 60_000);
@@ -913,8 +913,19 @@ test.describe('§session-panel — Activity card (task-subagent)', () => {
     await sendMessage(page, 'Thanks — what did it find?');
     await waitForIdle(page, 60_000);
 
-    await expect(row).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('session-panel-activity-empty')).toBeVisible();
+    // The row settles into a terminal state instead of disappearing (AC13):
+    // the panel is a short record of the turn's background work, not only a
+    // live gauge. The rail badge and dot count only running work, so both
+    // clear even though the row is still listed.
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toContainText('Completed');
     await expect(page.getByTestId('session-panel-rail-activity-dot')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-activity-empty')).toHaveCount(0);
+
+    // A terminal row leaves only on dismissal or the next user turn (AC15).
+    await row.hover();
+    await card.getByTestId('activity-dismiss-mock-toolu_task_1').click();
+    await expect(row).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-activity-empty')).toBeVisible();
   });
 });

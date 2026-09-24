@@ -20,8 +20,14 @@ import type { ActivityRowState } from './activity-kinds';
 import { formatElapsed } from './background-activity-view';
 
 const SLOT = 'relative flex h-5 w-11 shrink-0 items-center justify-end';
+// Unconditionally `pointer-events-none`: this reading is decorative text, never
+// a control, and it visually overlaps the button it swaps for on hover/focus.
+// A real Chromium click (not just jsdom) enforces hit-testing that a
+// hover-only `group-hover:pointer-events-none` couldn't reliably beat — the
+// button's own hover transition and this span's fade aren't guaranteed to
+// land in the same frame, so the plain always-off rule is what actually holds.
 const READING =
-  'font-mono text-xs tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0';
+  'pointer-events-none font-mono text-xs tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0';
 const OVERLAY_BUTTON =
   'absolute inset-y-0 right-0 flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 pointer-events-none transition-opacity hover:bg-foreground/8 hover:text-foreground group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto';
 
