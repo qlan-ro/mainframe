@@ -286,8 +286,25 @@ pub async fn kill_background_task(args: KillArgs<'_>) -> KillResult {
         }
         // Preserve prior behavior: no live writer / no outputPath (and stop_task
         // already failed) → via:'none'; an OS signal that ran but left survivors →
-        // via:'signal'.
+        // via:'signal'. A recovered (orphaned) task with no live process behind it
+        // has nothing left to kill — settle it instead of reporting a failure,
+        // whether or not a session was present.
         OsKillOutcome::Err { reason, error } => {
+            if matches!(reason, OsKillReason::NoWriter | OsKillReason::NoOutputPath)
+                && task.recovered == Some(true)
+            {
+                args.tracker.end(
+                    args.chat_id,
+                    args.task_id,
+                    TerminalUpdate {
+                        status: BackgroundTaskStatus::Stopped,
+                        output_path: task.output_path.clone().unwrap_or_default(),
+                        summary: "No live process — marked stopped.".to_string(),
+                        usage: None,
+                    },
+                );
+                return KillResult::Ok { via: Via::None };
+            }
             let err = stop_err.unwrap_or(error);
             if reason == OsKillReason::Survivors {
                 KillResult::Err {
@@ -458,7 +475,7 @@ mod tests {
     use super::*;
     use crate::lsof::{ExecCode, ExecFn, ExecOk, LsofExecError, set_exec_for_tests};
     use crate::seam_test_guard;
-    use crate::tracker::TaskSeed;
+    use crate::tracker::{TaskEvent, TaskSeed};
     use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
     use std::collections::VecDeque;
     use std::fs;
@@ -721,6 +738,94 @@ mod tests {
                 error: "task not found".to_string(),
                 via: Via::None
             }
+        );
+    }
+
+    fn adopt_recovered(tracker: &BackgroundTaskTracker, chat: &str, id: &str, output_path: &str) {
+        use crate::tracker::AdoptOptions;
+        use mainframe_types::background_task::{BackgroundTask, BackgroundTaskToolName};
+        tracker.adopt(
+            chat,
+            BackgroundTask {
+                id: id.to_string(),
+                kind: BackgroundWorkKind::Bash,
+                tool_name: BackgroundTaskToolName::Bash,
+                tool_use_id: String::new(),
+                command: "<recovered>".to_string(),
+                description: String::new(),
+                output_path: Some(output_path.to_string()),
+                started_at: 1,
+                ended_at: None,
+                status: BackgroundTaskStatus::Running,
+                last_output_line: None,
+                summary: None,
+                usage: None,
+                recovered: Some(true),
+                workflow_name: None,
+                run_id: None,
+                reported_type: None,
+            },
+            AdoptOptions { emit: false },
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_recovered_orphan_with_no_writer_and_no_session_settles_to_stopped() {
+        let _guard = seam_test_guard();
+        set_lsof_constant(vec![]);
+        record_tree_kill();
+        let tracker = BackgroundTaskTracker::new();
+        adopt_recovered(&tracker, "c", "rec-1", "/p/rec-1.out");
+        let mut rx = tracker.subscribe();
+        let r = kill_background_task(KillArgs {
+            chat_id: "c",
+            task_id: "rec-1",
+            session: None,
+            tracker: &tracker,
+        })
+        .await;
+        assert_eq!(r, KillResult::Ok { via: Via::None });
+        let t = tracker.get("c", "rec-1").unwrap();
+        assert_eq!(t.status, BackgroundTaskStatus::Stopped);
+        assert_eq!(
+            t.summary.as_deref(),
+            Some("No live process — marked stopped.")
+        );
+        let mut saw_ended = false;
+        while let Ok(ev) = rx.try_recv() {
+            if let TaskEvent::Ended { task, .. } = ev
+                && task.id == "rec-1"
+            {
+                saw_ended = true;
+            }
+        }
+        assert!(saw_ended, "expected a subscriber to see TaskEvent::Ended");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_non_recovered_task_with_no_writer_and_no_session_still_errors() {
+        let _guard = seam_test_guard();
+        set_lsof_constant(vec![]);
+        record_tree_kill();
+        let tracker = BackgroundTaskTracker::new();
+        seed(&tracker, "c", "t1", "/p/t1.out");
+        let r = kill_background_task(KillArgs {
+            chat_id: "c",
+            task_id: "t1",
+            session: None,
+            tracker: &tracker,
+        })
+        .await;
+        assert_eq!(
+            r,
+            KillResult::Err {
+                error: "no live writer".to_string(),
+                via: Via::None
+            }
+        );
+        assert_eq!(
+            tracker.get("c", "t1").unwrap().status,
+            BackgroundTaskStatus::Running
         );
     }
 
