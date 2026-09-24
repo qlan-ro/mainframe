@@ -255,6 +255,8 @@ export interface AdapterInfo {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /** Supports stopping a background task. Absent means unsupported. */
+    stopBackgroundTask?: boolean;
   };
 }
 
@@ -376,6 +378,8 @@ export interface Adapter {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /** Supports stopping a background task. Absent means unsupported. */
+    stopBackgroundTask?: boolean;
   };
 
   isInstalled(): Promise<boolean>;
