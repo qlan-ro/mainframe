@@ -75,8 +75,9 @@ the static total duration.
   - the reported task type for unrecognised work
   - the summary, last output line, and usage (tokens, tool uses, duration), each only
     when the daemon supplied it
-- **Output tail.** When the detail view opens, it requests a bounded tail of the task's
-  output (at most 8 KiB, the daemon's default). It shows one of these states:
+- **Output tail.** When the detail view of a non-agent row opens, it requests a bounded
+  tail of the task's output (at most 8 KiB, the daemon's default). It shows one of these
+  states:
   - loading
   - output lines (monospace, wrapping, scrolled to the end)
   - **empty**: the output exists but has no content yet
@@ -84,6 +85,11 @@ the static total duration.
     request is made when the task has no output location at all.
   - **error**: a readable message that differs from the none state
   A Refresh control re-requests the tail. There is no live following.
+- **Agent rows have no output tail.** The CLI writes an agent's output location as a link
+  to the agent's own transcript, which lives outside the directory the daemon may read. An
+  agent row's detail view therefore makes no tail request and shows no Refresh control.
+  Its output area reads "This agent's output is its transcript, which isn't shown here."
+  That is neither the none state (output does exist) nor the error state (nothing failed).
 
 **Terminal-row retention.**
 - When the daemon reports that a row already listed has completed, failed, or stopped, the
@@ -118,6 +124,9 @@ the static total duration.
 - Codex sub-agents in the Activity model, and any Codex stop implementation (#327).
   `deferred`
 - Live-following output tail and a full-output viewer. `deferred`
+- Showing an agent's transcript (its output location) in the detail view. `deferred`
+- Relaxing the output path validation to follow links out of the spool directory.
+  `declined`
 - Populating the last-output-line field. The daemon never sets it today. The detail view
   shows it only when present. `deferred`
 - A confirmation step before stopping. `declined`
@@ -154,10 +163,19 @@ the static total duration.
 - **Detail view of a row that leaves the list.** If a dismissal, the next turn, or the cap
   removes the row while its detail view is open, the view returns to the list. If the task
   settles while its detail view is open, the view updates in place.
-- **Output location present but no file yet.** The detail view shows the none state, not an
-  error.
-- **Path validation.** A tail read whose path fails validation shows the error state. Reads
-  stay bounded at 8 KiB and path-validated.
+- **Output location present but no file yet.** Today the daemon validates the path before
+  reading, and validation resolves the real path, so a missing file fails validation and
+  returns `invalid_path` (409), the same answer as a path outside the spool directory. This
+  todo splits the two: when the output file itself is absent and its directory resolves
+  inside the spool directory, the daemon answers `no_output` and the detail view shows the
+  none state. If the directory is also missing or resolves elsewhere, the answer stays
+  `invalid_path`.
+- **Path validation.** Any path that resolves outside the spool directory, including
+  through a link, still fails as `invalid_path` and shows the error state. Reads stay
+  bounded at 8 KiB and path-validated.
+- **A non-agent task whose output is a link out of the spool directory.** Only agent outputs
+  are links today. If another kind ever writes one, its tail read fails validation and the
+  row shows the error state, which is truthful.
 - **Adapter list not loaded.** The stop capability is treated as unsupported until the
   session's adapter is known.
 - **Task description is empty.** The row title falls back to the command, as it does today.
@@ -192,15 +210,17 @@ the static total duration.
    the full command, and the duration. It also contains the summary and usage whenever
    the task record carries them. `activity-drill-back-<taskId>` returns to the list.
    Activating a workflow row whose run is known still opens the workflow run panel.
-10. Opening the detail view of a task that has an output location requests the output tail
-    with a byte limit of 8 KiB or less. If the tail has content,
+10. Opening the detail view of a non-agent task that has an output location requests the
+    output tail with a byte limit of 8 KiB or less. If the tail has content,
     `activity-output-lines-<taskId>` shows it. If it has none,
     `activity-output-empty-<taskId>` appears. If the task has no output location, or the
-    daemon reports `no_output`, `activity-output-none-<taskId>` appears. Any other failure
-    shows `activity-output-error-<taskId>` with a message. Activating
-    `activity-output-refresh-<taskId>` sends a new request.
-11. For an output location whose file does not exist yet, the output endpoint returns the
-    `no_output` failure, not "read failed". A Rust route test pins this.
+    daemon reports `no_output`, `activity-output-none-<taskId>` appears. Any other failure,
+    including `invalid_path`, shows `activity-output-error-<taskId>` with a message.
+    Activating `activity-output-refresh-<taskId>` sends a new request.
+11. For an output location whose file does not exist but whose directory resolves inside
+    the spool directory, the output endpoint returns the `no_output` failure, not
+    `invalid_path` and not "read failed". An output location that is a link resolving
+    outside the spool directory still returns `invalid_path`. Rust route tests pin both.
 12. With the daemon running as an ordinary (non-root) user, a real background shell task's
     output tail returns the content the CLI wrote under that user's `claude-<uid>` spool
     directory. The existing spool-root regression test from #338 still passes. This todo
@@ -250,10 +270,16 @@ the static total duration.
     by task id and never by list index: `activity-stop-`, `activity-stop-error-`,
     `activity-dismiss-`, `activity-drill-open-`, `activity-drill-back-`, `activity-detail-`,
     `activity-output-refresh-`, `activity-output-lines-`, `activity-output-empty-`,
-    `activity-output-none-`, and `activity-output-error-`. The existing
+    `activity-output-none-`, `activity-output-error-`, and `activity-output-transcript-`.
+    The existing
     `session-panel-task-<taskId>` and `session-panel-kind-<kind>` stay.
 21. `pnpm` typecheck, lint, and UI tests pass, and `cargo test` passes for the touched
     crates. The PR includes a changeset.
+22. Opening the detail view of an agent row sends no output-tail request, renders
+    `activity-output-transcript-<taskId>` with the text "This agent's output is its
+    transcript, which isn't shown here.", and renders none of
+    `activity-output-none-<taskId>`, `activity-output-error-<taskId>`, or
+    `activity-output-refresh-<taskId>`.
 
 ## Decisions
 
@@ -305,8 +331,18 @@ the static total duration.
 - **The output tail is on demand: fetched once when the detail view opens, with a Refresh
   control and the daemon's default limit of 8 KiB or less.** This is the brief's
   recommendation. Follow mode is deferred. `reversible`
-- **A missing output file reads as the none state, not an error.** An agent's or a
-  just-started task's output file may not exist yet. That is not a failure. `reversible`
+- **The daemon answers `no_output` for an absent output file whose directory is inside the
+  spool directory, instead of today's `invalid_path`.** Today validation resolves the real
+  path first, so "not written yet" and "outside the spool" are the same 409 rejection, and
+  the brief requires "no output" and a failure to be distinct. Checking the directory keeps
+  reads path-validated. Uncertain: if the CLI creates the tasks directory after
+  `task_started`, a very new task shows the error state until Refresh. `reversible`
+- **Agent rows show a transcript note and never request the tail; validation is not
+  relaxed.** The CLI writes an agent's output as a link to its subagent transcript outside
+  the spool directory (verified on disk; see CLEAR.md on `initTaskOutputAsSymlink`), so every
+  agent tail read fails as `invalid_path`. Showing that as an error on the most common row
+  kind would be false, "none" would also be false, and relaxing validation would expose
+  raw transcript JSON. Gated on the row kind, not the adapter. `reversible`
 - **The last output line is shown only when present, and populating it is deferred.** This
   contradicts the brief: the field exists, but the daemon never sets it. `reversible`
 - **The client API wraps kill and output-tail only.** The broadcast makes a list call
