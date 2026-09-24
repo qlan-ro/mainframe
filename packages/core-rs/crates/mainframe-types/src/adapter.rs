@@ -328,6 +328,12 @@ pub struct AdapterCapabilities {
     pub plan_mode: bool,
     /// Whether this adapter supports the CLI's native `auto` permission mode.
     pub auto_mode: bool,
+    /// Whether this adapter's session can stop a background task
+    /// (`ClaudeSession::stop_background_task` sends a stop over stdin; Codex
+    /// and Mock report unsupported). Absent on read means unsupported, and
+    /// the field is always emitted on write.
+    #[serde(default)]
+    pub stop_background_task: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -673,6 +679,24 @@ mod tests {
         );
         // empty → None
         assert_eq!(clamp_effort_to_supported(E::High, &[], None), None);
+    }
+
+    #[test]
+    fn adapter_capabilities_defaults_stop_background_task_to_false_when_absent() {
+        let parsed: AdapterCapabilities =
+            serde_json::from_value(json!({"planMode": true, "autoMode": false})).unwrap();
+        assert!(!parsed.stop_background_task);
+    }
+
+    #[test]
+    fn adapter_capabilities_always_emits_stop_background_task() {
+        let caps = AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+            stop_background_task: false,
+        };
+        let v = serde_json::to_value(caps).unwrap();
+        assert_eq!(v["stopBackgroundTask"], json!(false));
     }
 }
 

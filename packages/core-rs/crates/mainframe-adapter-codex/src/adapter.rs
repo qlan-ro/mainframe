@@ -181,6 +181,7 @@ impl Adapter for CodexAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            stop_background_task: false,
         }
     }
 
@@ -363,6 +364,12 @@ mod tests {
     use super::*;
     use crate::types::ReasoningEffortOption;
     use mainframe_types::adapter::EffortLevel;
+
+    #[test]
+    fn codex_reports_stop_background_task_unsupported() {
+        let a = CodexAdapter::default();
+        assert!(!Adapter::capabilities(&a).stop_background_task);
+    }
 
     // --- list-models.test.ts ---
     #[test]

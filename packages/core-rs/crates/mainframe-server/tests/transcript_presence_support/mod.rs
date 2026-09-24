@@ -66,6 +66,7 @@ impl Adapter for StubAdapter {
         AdapterCapabilities {
             plan_mode: false,
             auto_mode: false,
+            stop_background_task: false,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

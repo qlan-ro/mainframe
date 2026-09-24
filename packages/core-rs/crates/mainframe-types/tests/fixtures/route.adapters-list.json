@@ -32,7 +32,8 @@
       "catalogSource": "probed",
       "capabilities": {
         "planMode": true,
-        "autoMode": true
+        "autoMode": true,
+        "stopBackgroundTask": true
       }
     }
   ]

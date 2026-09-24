@@ -421,6 +421,7 @@ mod tests {
             mainframe_types::adapter::AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                stop_background_task: false,
             }
         }
         fn is_installed(

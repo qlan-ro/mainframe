@@ -127,6 +127,7 @@ impl Adapter for ClaudeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: true,
+            stop_background_task: true,
         }
     }
 
@@ -344,6 +345,12 @@ mod tests {
         assert_eq!(a.name(), "Claude Code");
         assert!(a.capabilities().plan_mode);
         assert!(a.has_probe_models());
+    }
+
+    #[test]
+    fn claude_reports_stop_background_task_supported() {
+        let a = ClaudeAdapter::default();
+        assert!(a.capabilities().stop_background_task);
     }
 
     #[test]
