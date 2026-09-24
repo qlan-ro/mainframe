@@ -186,4 +186,18 @@ pub trait ChatManagerDeps: Send + Sync {
         &self,
         adapter_id: &str,
     ) -> Vec<mainframe_types::adapter::AdapterModel>;
+
+    /// Rule 7's per-spawn capability read: `adapters.get(adapterId)?.capabilities()
+    /// .noPersistence`. Never derived from the adapter id itself (AC 2) — an
+    /// unregistered adapter answers `false`, same as one that never opted in.
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
+    /// `fs.mkdir(path, { recursive: true })` for a non-project chat's scratch
+    /// cwd. Run before every spawn (rule 6): the first call creates it, and a
+    /// later one recreates a deleted directory at the same path.
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
+    /// `db.chats.markContextLost(chatId, contextLostAt)` (rule 7): the one DB
+    /// path that atomically stamps the loss time and clears `claude_session_id`
+    /// / `session_file_path` / `vendor_session_ephemeral` — `chats_update`'s
+    /// generic patch cannot write an explicit NULL for the first two columns.
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
 }

@@ -119,6 +119,15 @@ impl LifecycleManagerDeps for LcDeps {
     fn path_exists(&self, path: &str) -> bool {
         self.deps.path_exists(path)
     }
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
+        self.deps.adapter_supports_no_persistence(adapter_id)
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.deps.ensure_dir(path)
+    }
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        self.deps.mark_context_lost(chat_id, context_lost_at);
+    }
 }
 
 pub(super) fn build(

@@ -14,6 +14,8 @@ use mainframe_adapter_api::BoxFuture;
 use mainframe_types::chat::{Chat, ProcessState};
 use mainframe_types::events::DaemonEvent;
 
+use crate::chat_cwd::chat_cwd;
+
 /// The narrow surface `reconcileTranscriptPresence` needs. The TS deps hold `db`,
 /// `adapters`, `emitEvent` and `syncChatFields`; the adapter's `isTranscriptPresent`
 /// predicate is folded into `is_transcript_present` here — a `None` result covers
@@ -56,6 +58,13 @@ pub async fn reconcile_transcript_presence(
         return current;
     }
 
+    // Rule 7: a session started with no vendor persistence never wrote a
+    // transcript, so there is nothing to reconcile — this covers both the
+    // history-load call site and the periodic external-session sweep.
+    if chat.vendor_session_ephemeral {
+        return current;
+    }
+
     // A chat that never spawned a CLI session is new, not degraded — clear any stale flag.
     let Some(session_id) = chat.claude_session_id.clone() else {
         if current {
@@ -64,10 +73,14 @@ pub async fn reconcile_transcript_presence(
         return false;
     };
 
-    let Some(project_path) = deps.projects_get_path(&chat.project_id) else {
+    let project_path = deps.projects_get_path(&chat.project_id);
+    let Some(cwd) = chat_cwd(
+        chat.worktree_path.as_deref(),
+        chat.scratch_path.as_deref(),
+        project_path,
+    ) else {
         return current;
     };
-    let cwd = chat.worktree_path.clone().unwrap_or(project_path);
 
     let present = deps
         .is_transcript_present(
@@ -120,6 +133,13 @@ mod tests {
                 synced: Mutex::new(Vec::new()),
                 updated: Mutex::new(Vec::new()),
             }
+        }
+
+        /// Mirrors `projects_get_path` returning `None` for the hidden
+        /// `NO_PROJECT_ID` row (rule 1) — the scratch path must still resolve.
+        fn without_project(mut self) -> Self {
+            self.has_project = false;
+            self
         }
     }
     impl TranscriptPresenceDeps for FakeDeps {
@@ -252,6 +272,31 @@ mod tests {
 
         assert!(result);
         assert_eq!(deps.events.lock().unwrap().len(), 0);
+    }
+
+    // ── rule 7: a no-persistence session never wrote a transcript ────────────
+    #[tokio::test]
+    async fn skips_a_vendor_ephemeral_chat_without_checking_presence() {
+        let deps = FakeDeps::new(Some(false));
+        let mut chat = chat_with(Some("sess-1"), Some(false));
+        chat.vendor_session_ephemeral = true;
+        let result = reconcile_transcript_presence(&deps, &mut chat).await;
+
+        assert!(!result);
+        assert_eq!(deps.events.lock().unwrap().len(), 0);
+        assert_eq!(deps.updated.lock().unwrap().len(), 0);
+    }
+
+    // ── rule 6: the scratch cwd stands in for a project the hidden row hides ─
+    #[tokio::test]
+    async fn falls_back_to_the_scratch_path_when_the_project_cannot_be_resolved() {
+        let deps = FakeDeps::new(Some(false)).without_project();
+        let mut chat = chat_with(Some("sess-1"), None);
+        chat.scratch_path = Some("/data/scratch/chat-1".to_string());
+        let result = reconcile_transcript_presence(&deps, &mut chat).await;
+
+        assert!(result);
+        assert_eq!(chat.transcript_missing, Some(true));
     }
 }
 

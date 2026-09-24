@@ -102,6 +102,7 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         updated_at: patch.updated_at.clone(),
         plan_mode: patch.plan_mode,
         transcript_missing: patch.transcript_missing,
+        vendor_session_ephemeral: patch.vendor_session_ephemeral,
         ..Default::default()
     }
 }
@@ -180,8 +181,12 @@ impl DaemonChatDeps {
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
         let claude_session_id = chat.claude_session_id.clone()?;
-        let project_path = self.projects_get_path(&chat.project_id)?;
-        let effective_path = chat.worktree_path.clone().unwrap_or(project_path);
+        let project_path = self.projects_get_path(&chat.project_id);
+        let effective_path = mainframe_chat::chat_cwd::chat_cwd(
+            chat.worktree_path.as_deref(),
+            chat.scratch_path.as_deref(),
+            project_path,
+        )?;
         self.create_session(
             &chat.adapter_id,
             SessionOptions {
@@ -739,6 +744,32 @@ impl ChatManagerDeps for DaemonChatDeps {
 
     fn path_exists(&self, path: &str) -> bool {
         std::path::Path::new(path).exists()
+    }
+
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
+        self.adapters
+            .get(adapter_id)
+            .is_some_and(|adapter| adapter.capabilities().no_persistence)
+    }
+
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        let path = path.to_string();
+        Box::pin(async move {
+            if let Err(err) = tokio::fs::create_dir_all(&path).await {
+                tracing::warn!(%err, path, "failed to create the chat's scratch directory");
+            }
+        })
+    }
+
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        let id = chat_id.to_string();
+        let at = context_lost_at.to_string();
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.mark_context_lost(&id, &at))
+        {
+            tracing::warn!(%err, chat_id, "chats.markContextLost failed");
+        }
     }
 
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {

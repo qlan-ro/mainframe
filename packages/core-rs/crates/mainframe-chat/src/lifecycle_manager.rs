@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
+use mainframe_runtime::time::now_iso8601;
 use mainframe_services::settings::normalize_saved_default_model;
 use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatStatus, NewChat, ProcessState, ResolvedTuning};
@@ -13,7 +14,9 @@ use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
+use crate::chat_cwd::chat_cwd;
 use crate::message_cache::MessageCache;
+use crate::no_persistence;
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
@@ -45,6 +48,8 @@ pub struct LifecycleChatUpdate {
     pub plan_mode: Option<bool>,
     pub title: Option<String>,
     pub status: Option<ChatStatus>,
+    /// Rule 7's flag write, persisted before every spawn.
+    pub vendor_session_ephemeral: Option<bool>,
 }
 
 /// Errors surfaced by lifecycle ops (strings cross the wire; copied verbatim).
@@ -143,6 +148,15 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool>;
     /// `existsSync(worktreePath)`.
     fn path_exists(&self, path: &str) -> bool;
+    /// Rule 7's per-spawn capability read, from the adapter registry — never
+    /// derived from the adapter id itself (AC 2).
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
+    /// `fs.mkdir(scratchPath, { recursive: true })`, run before every spawn
+    /// (rule 6) so a non-project chat's scratch directory exists on first use
+    /// and is recreated if it was deleted since.
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
+    /// Rule 7's context-loss write (`db.chats.markContextLost`).
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
 }
 
 /// Single-flight decision computed under the guard, applied after the guard drops.
@@ -811,8 +825,36 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
+    /// Rule 7's context-loss transition. No-op unless
+    /// `no_persistence::context_was_lost` is true for `chat`'s current fields;
+    /// otherwise persists the loss, clears the dead resume target on both the
+    /// passed-in `chat` and the active cell (if any), and broadcasts the
+    /// update — called before either `do_load_chat` or `do_start_chat` reads
+    /// `claude_session_id` as a resume target.
+    fn mark_context_lost_if_needed(&self, chat_id: &str, chat: &mut Chat) {
+        if !no_persistence::context_was_lost(
+            chat.vendor_session_ephemeral,
+            chat.claude_session_id.as_deref(),
+        ) {
+            return;
+        }
+        let now = now_iso8601();
+        self.deps.mark_context_lost(chat_id, &now);
+        chat.context_lost_at = Some(now);
+        chat.claude_session_id = None;
+        chat.session_file_path = None;
+        chat.vendor_session_ephemeral = false;
+        if let Some(cell) = self.get_active(chat_id) {
+            cell.lock().unwrap_or_else(|e| e.into_inner()).chat = chat.clone();
+        }
+        self.deps.emit_event(DaemonEvent::ChatUpdated {
+            chat: chat.clone(),
+            reason: None,
+        });
+    }
+
     async fn do_load_chat(&self, chat_id: &str) {
-        let Some(chat) = self.deps.chats_get(chat_id) else {
+        let Some(mut chat) = self.deps.chats_get(chat_id) else {
             warn!(chat_id, "doLoadChat: chat not found");
             return;
         };
@@ -825,15 +867,28 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             })),
         );
 
-        let Some(project_path) = self.deps.projects_get_path(&chat.project_id) else {
+        // Rule 7: before any resume target is read below, a dead ephemeral
+        // session's context loss must be marked (clears `claude_session_id`, so
+        // the early return just past it fires and no session is created).
+        self.mark_context_lost_if_needed(chat_id, &mut chat);
+
+        let project_path = self.deps.projects_get_path(&chat.project_id);
+        let Some(effective_path) = chat_cwd(
+            chat.worktree_path.as_deref(),
+            chat.scratch_path.as_deref(),
+            project_path.clone(),
+        ) else {
             return;
         };
         // Before the early returns below: a chat with no session still needs a
         // baseline, and it must be re-seeded on every activation after a restart.
-        if let Some(fut) = self.deps.seed_worktree_baseline(chat_id, &project_path) {
+        // A non-project chat has no worktrees to baseline (`project_path` is
+        // `None` for the hidden scratch row, rule 1).
+        if let Some(project_path) = &project_path
+            && let Some(fut) = self.deps.seed_worktree_baseline(chat_id, project_path)
+        {
             fut.await;
         }
-        let effective_path = chat.worktree_path.clone().unwrap_or(project_path);
 
         if let Some(wt) = &chat.worktree_path
             && !self.deps.path_exists(wt)
@@ -914,7 +969,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             LifecycleError::Message(format!("Chat {chat_id} not found after load"))
         })?;
 
-        let (spawned, process, chat) = {
+        let (spawned, process, mut chat) = {
             let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             (
                 guard.session.as_ref().is_some_and(|s| s.is_spawned()),
@@ -940,24 +995,45 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             )));
         }
 
-        let project_path = self
-            .deps
-            .projects_get_path(&chat.project_id)
-            .ok_or_else(|| {
-                LifecycleError::Message(format!("Project {} not found", chat.project_id))
-            })?;
-        if chat.worktree_path.is_none() && !self.deps.path_exists(&project_path) {
+        let project_path = self.deps.projects_get_path(&chat.project_id);
+        let effective_path = chat_cwd(
+            chat.worktree_path.as_deref(),
+            chat.scratch_path.as_deref(),
+            project_path,
+        )
+        .ok_or_else(|| LifecycleError::Message(format!("Project {} not found", chat.project_id)))?;
+        // A non-project chat has no project directory to check — its cwd is
+        // its own scratch path, ensured to exist just below.
+        if chat.worktree_path.is_none()
+            && !chat.no_project
+            && !self.deps.path_exists(&effective_path)
+        {
             return Err(LifecycleError::Message(format!(
-                "Project directory does not exist or is not accessible: {project_path}"
+                "Project directory does not exist or is not accessible: {effective_path}"
             )));
         }
+
+        // Rule 6: created lazily on first spawn and recreated if deleted since,
+        // every time (a no-op scratch_path is `None` for a project chat).
+        if let Some(scratch) = chat.scratch_path.clone() {
+            self.deps.ensure_dir(&scratch).await;
+        }
+
+        // Rule 7: clear a dead resume target (and stamp the loss) before it is
+        // read into `SessionOptions.chat_id` below.
+        self.mark_context_lost_if_needed(chat_id, &mut chat);
+
+        let no_persistence = no_persistence::should_start_without_persistence(
+            chat.temporary,
+            self.deps.adapter_supports_no_persistence(&chat.adapter_id),
+        );
 
         let session = self
             .deps
             .create_session(
                 &chat.adapter_id,
                 SessionOptions {
-                    project_path: chat.worktree_path.clone().unwrap_or(project_path),
+                    project_path: effective_path,
                     chat_id: chat.claude_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
                 },
@@ -985,6 +1061,22 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         );
         let tuning = self.deps.resolve_tuning(chat_id).await;
         let default_model = self.default_model_for(&chat.adapter_id);
+
+        // Rule 7's flag write: persisted and mirrored into the active chat
+        // before the spawn, so `on_init`'s stored provider id lands with the
+        // right ephemeral flag already in place.
+        self.deps.chats_update(
+            &chat.id,
+            &LifecycleChatUpdate {
+                vendor_session_ephemeral: Some(no_persistence),
+                ..Default::default()
+            },
+        );
+        cell.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .chat
+            .vendor_session_ephemeral = no_persistence;
+
         let process = session
             .spawn(
                 Some(SessionSpawnOptions {
@@ -996,10 +1088,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     tuning,
                     small_fast_model,
                     default_model,
-                    // TODO(todo #346, G2b): decide `chat.temporary &&
-                    // adapter_supports_no_persistence(adapter_id)` here once those
-                    // deps land. `None` preserves today's persist-normally behavior.
-                    no_persistence: None,
+                    no_persistence: Some(no_persistence),
                 }),
                 Some(sink),
             )
@@ -1021,6 +1110,46 @@ mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
     use std::collections::HashSet;
+
+    /// A `SessionSink` that drops every callback — enough to let a spawn
+    /// decision test (todo #346, G2b) reach `session.spawn()` without a real
+    /// event-handler wiring.
+    struct NoopSink;
+    impl SessionSink for NoopSink {
+        fn on_init(&self, _session_id: &str) {}
+        fn on_message(
+            &self,
+            _content: Vec<mainframe_types::chat::MessageContent>,
+            _metadata: Option<mainframe_types::adapter::MessageMetadata>,
+        ) {
+        }
+        fn on_tool_result(
+            &self,
+            _content: Vec<mainframe_types::chat::MessageContent>,
+            _vendor_id: Option<String>,
+        ) {
+        }
+        fn on_permission(&self, _request: mainframe_types::adapter::ControlRequest) {}
+        fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
+        fn on_exit(&self, _code: Option<i32>) {}
+        fn on_error(&self, _error: AdapterError) {}
+        fn on_compact(&self, _vendor_id: Option<&str>) {}
+        fn on_compact_start(&self) {}
+        fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
+        fn on_plan_file(&self, _file_path: &str) {}
+        fn on_skill_file(&self, _entry: mainframe_types::context::SkillFileEntry) {}
+        fn on_queued_processed(&self, _uuid: &str) {}
+        fn on_todo_update(&self, _todos: Vec<mainframe_types::chat::TodoItem>) {}
+        fn on_pr_detected(&self, _pr: mainframe_types::adapter::DetectedPr) {}
+        fn on_cli_message(&self, _text: &str) {}
+        fn on_skill_loaded(&self, _entry: mainframe_adapter_api::LoadedSkill) {}
+        fn on_subagent_child(
+            &self,
+            _parent_tool_use_id: &str,
+            _blocks: Vec<mainframe_types::chat::MessageContent>,
+        ) {
+        }
+    }
 
     pub(super) fn chat_over(id: &str, worktree: Option<&str>, status: ChatStatus) -> Chat {
         let mut c = test_chat(id);
@@ -1106,6 +1235,19 @@ mod tests {
         saved_default_model: Mutex<Option<String>>,
         /// `adapter_snapshot_models` answer, for `default_model_for` coverage.
         snapshot_models: Mutex<Vec<AdapterModel>>,
+        /// `adapter_supports_no_persistence` answer (todo #346, G2b).
+        adapter_no_persistence: Mutex<bool>,
+        /// Every `ensure_dir` path, in order.
+        pub(super) ensure_dir_calls: Mutex<Vec<String>>,
+        /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
+        pub(super) mark_context_lost_calls: Mutex<Vec<(String, String)>>,
+        /// Every `vendor_session_ephemeral` value `chats_update` observed.
+        pub(super) vendor_session_ephemeral_updates: Mutex<Vec<bool>>,
+        /// When `Some`, `create_session` hands out a clone of it instead of
+        /// `None` — lets a spawn-decision test reach past session creation.
+        session: Mutex<Option<Arc<dyn AdapterSession>>>,
+        /// Every `SessionOptions` passed to `create_session`, in order.
+        pub(super) create_session_calls: Mutex<Vec<mainframe_types::adapter::SessionOptions>>,
     }
 
     impl FakeDeps {
@@ -1140,7 +1282,26 @@ mod tests {
                 disabled,
                 saved_default_model: Mutex::new(None),
                 snapshot_models: Mutex::new(Vec::new()),
+                adapter_no_persistence: Mutex::new(false),
+                ensure_dir_calls: Mutex::new(Vec::new()),
+                mark_context_lost_calls: Mutex::new(Vec::new()),
+                vendor_session_ephemeral_updates: Mutex::new(Vec::new()),
+                session: Mutex::new(None),
+                create_session_calls: Mutex::new(Vec::new()),
             })
+        }
+
+        /// Like [`Self::new`], but `adapter_supports_no_persistence` answers
+        /// `true` and `create_session` hands out `session` (so `do_start_chat`
+        /// reaches the rule-7 flag write before its `spawn()` call).
+        pub(super) fn no_persistence_capable(
+            chat: Chat,
+            session: Arc<dyn AdapterSession>,
+        ) -> Arc<Self> {
+            let deps = Self::build(chat, Vec::new(), true, false);
+            *deps.session.lock().unwrap() = Some(session);
+            *deps.adapter_no_persistence.lock().unwrap() = true;
+            deps
         }
 
         fn set_present_paths(&self, paths: &[&str]) {
@@ -1168,6 +1329,12 @@ mod tests {
             if let Some(title) = &patch.title {
                 self.title_updates.lock().unwrap().push(title.clone());
             }
+            if let Some(v) = patch.vendor_session_ephemeral {
+                self.vendor_session_ephemeral_updates
+                    .lock()
+                    .unwrap()
+                    .push(v);
+            }
         }
         fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
             let mut all = vec![self.chat.clone()];
@@ -1189,11 +1356,12 @@ mod tests {
         fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
             self.snapshot_models.lock().unwrap().clone()
         }
-        fn create_session(&self, _a: &str, _o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
-            None
+        fn create_session(&self, _a: &str, o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
+            self.create_session_calls.lock().unwrap().push(o);
+            self.session.lock().unwrap().clone()
         }
         fn build_sink(&self, _chat_id: &str, _session_id: &str) -> Arc<dyn SessionSink> {
-            unreachable!("not exercised")
+            Arc::new(NoopSink)
         }
         fn emit_event(&self, event: DaemonEvent) {
             self.events.lock().unwrap().push(event);
@@ -1273,6 +1441,19 @@ mod tests {
                 .unwrap()
                 .as_ref()
                 .is_none_or(|paths| paths.contains(path))
+        }
+        fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
+            *self.adapter_no_persistence.lock().unwrap()
+        }
+        fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+            self.ensure_dir_calls.lock().unwrap().push(path.to_string());
+            Box::pin(async {})
+        }
+        fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+            self.mark_context_lost_calls
+                .lock()
+                .unwrap()
+                .push((chat_id.to_string(), context_lost_at.to_string()));
         }
     }
 
@@ -1475,6 +1656,112 @@ mod tests {
                 if error.contains("Project directory does not exist or is not accessible")
                     && error.contains("/proj")
         )));
+    }
+
+    // ── rule 7: the no-persistence spawn decision (todo #346, G2b) ───────────
+    #[tokio::test]
+    async fn temporary_and_capable_writes_the_ephemeral_flag_before_spawning() {
+        let mut chat = chat_over("c1", None, ChatStatus::Active);
+        chat.temporary = true;
+        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert_eq!(
+            deps.vendor_session_ephemeral_updates
+                .lock()
+                .unwrap()
+                .as_slice(),
+            &[true]
+        );
+    }
+
+    #[tokio::test]
+    async fn not_temporary_never_writes_the_ephemeral_flag_even_when_capable() {
+        let chat = chat_over("c1", None, ChatStatus::Active); // temporary: false (default)
+        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert_eq!(
+            deps.vendor_session_ephemeral_updates
+                .lock()
+                .unwrap()
+                .as_slice(),
+            &[false]
+        );
+    }
+
+    #[tokio::test]
+    async fn temporary_without_the_capability_never_writes_the_ephemeral_flag() {
+        let mut chat = chat_over("c1", None, ChatStatus::Active);
+        chat.temporary = true;
+        let deps = FakeDeps::new(chat, Vec::new());
+        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert_eq!(
+            deps.vendor_session_ephemeral_updates
+                .lock()
+                .unwrap()
+                .as_slice(),
+            &[false]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dead_ephemeral_resume_target_is_cleared_before_the_spawn_reads_it() {
+        let mut chat = chat_over("c1", None, ChatStatus::Active);
+        chat.temporary = true;
+        chat.vendor_session_ephemeral = true;
+        chat.claude_session_id = Some("dead-sess".to_string());
+        let deps = FakeDeps::no_persistence_capable(chat, FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert_eq!(deps.mark_context_lost_calls.lock().unwrap().len(), 1);
+        assert_eq!(deps.mark_context_lost_calls.lock().unwrap()[0].0, "c1");
+        // The dead id must never reach `create_session` as a resume target.
+        let calls = deps.create_session_calls.lock().unwrap();
+        assert!(calls.iter().all(|o| o.chat_id.is_none()));
+    }
+
+    #[tokio::test]
+    async fn a_non_project_chat_ensures_its_scratch_directory_on_every_start() {
+        let mut chat = chat_over("c1", None, ChatStatus::Active);
+        chat.scratch_path = Some("/data/scratch/c1".to_string());
+        let deps = FakeDeps::new(chat, Vec::new());
+        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert_eq!(
+            deps.ensure_dir_calls.lock().unwrap().as_slice(),
+            &["/data/scratch/c1".to_string()]
+        );
+        // Its cwd is the scratch path, not the (unrelated) project path.
+        assert_eq!(
+            deps.create_session_calls.lock().unwrap()[0].project_path,
+            "/data/scratch/c1"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_project_chat_never_calls_ensure_dir() {
+        let chat = chat_over("c1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("c1").await;
+
+        assert!(deps.ensure_dir_calls.lock().unwrap().is_empty());
     }
 
     // ── join_flight lost-wakeup regression ───────────────────────────────────

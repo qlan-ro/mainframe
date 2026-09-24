@@ -54,6 +54,12 @@ pub(crate) struct StoreDeps {
     /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
     /// can inject a recorder (or leave `None` for the unresolved-handler path).
     plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
+    /// What `adapter_supports_no_persistence` answers (todo #346, G2b).
+    no_persistence_capability: Mutex<bool>,
+    /// Every `ensure_dir` path, in order.
+    ensure_dir_calls: Mutex<Vec<String>>,
+    /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
+    mark_context_lost_calls: Mutex<Vec<(String, String)>>,
 }
 
 impl StoreDeps {
@@ -121,6 +127,9 @@ impl ChatManagerDeps for StoreDeps {
             }
             if let Some(title) = patch.title.clone() {
                 c.title = Some(title);
+            }
+            if let Some(vse) = patch.vendor_session_ephemeral {
+                c.vendor_session_ephemeral = vse;
             }
         }
     }
@@ -370,6 +379,25 @@ impl ChatManagerDeps for StoreDeps {
         if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
             c.worktree_path = None;
             c.branch_name = None;
+        }
+    }
+    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
+        *self.no_persistence_capability.lock().unwrap()
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
+        Box::pin(async {})
+    }
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        self.mark_context_lost_calls
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), context_lost_at.to_string()));
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            c.context_lost_at = Some(context_lost_at.to_string());
+            c.claude_session_id = None;
+            c.session_file_path = None;
+            c.vendor_session_ephemeral = false;
         }
     }
 }
