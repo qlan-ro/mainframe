@@ -269,6 +269,11 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'background.upsert':
     case 'background.ended':
     case 'background.snapshot':
+    case 'background.dismissed':
+    case 'background.turn.started':
+    case 'background.stop.requested':
+    case 'background.stop.failed':
+    case 'background.removed':
     case 'worktree.offer.added':
     case 'worktree.offer.removed':
     case 'worktree.offer.snapshot':

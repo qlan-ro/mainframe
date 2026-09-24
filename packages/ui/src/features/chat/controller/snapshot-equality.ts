@@ -23,7 +23,15 @@ export function sameBackgroundTasks(
       // A workflow's name and run id are learned after the first projection, so
       // ignoring them would freeze the reconnect snapshot on the anonymous row.
       c.workflowName === t.workflowName &&
-      c.runId === t.runId
+      c.runId === t.runId &&
+      // The widened projection (todo #328) can also change in place — a running
+      // row that gains a summary/last-output-line as it runs, for instance.
+      c.status === t.status &&
+      c.command === t.command &&
+      c.toolName === t.toolName &&
+      c.recovered === t.recovered &&
+      c.reportedType === t.reportedType &&
+      c.outputPath === t.outputPath
     );
   });
 }

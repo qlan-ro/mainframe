@@ -37,9 +37,10 @@ export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleRes
     case 'background_task.updated':
       if (event.chatId !== chatId) return { kind: 'noop' };
       // A non-running payload (e.g. an adopt replay of a finished task) means
-      // the task is no longer live — treat it as ended so it can't stick.
+      // the task is no longer live — settle it as a terminal row instead of a
+      // running one so it can't stick as "running".
       if (event.task.status !== 'running') {
-        return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
+        return { kind: 'event', event: { type: 'background.ended', task: toActivityTask(event.task) } };
       }
       return { kind: 'event', event: { type: 'background.upsert', task: toActivityTask(event.task) } };
 
@@ -49,7 +50,7 @@ export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleRes
 
     case 'background_task.ended':
       if (event.chatId !== chatId) return { kind: 'noop' };
-      return { kind: 'event', event: { type: 'background.ended', taskId: event.task.id } };
+      return { kind: 'event', event: { type: 'background.ended', task: toActivityTask(event.task) } };
 
     case 'worktree.offer.raised':
       if (event.chatId !== chatId) return { kind: 'noop' };

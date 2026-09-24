@@ -6,12 +6,18 @@
  * follows the two-plane seam the controller composes; the reducer contract is
  * unchanged — `reduceChatThreadState` delegates these events here.
  */
-import type { BackgroundActivityTask, Chat, ClaudeWorkflowRun, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
+import type { Chat, ClaudeWorkflowRun, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
+import {
+  createBackgroundActivitySlice,
+  reduceBackgroundActivityEvent,
+  type BackgroundActivityEvent,
+  type BackgroundActivitySlice,
+} from './background-activity-state';
 import { seedWorkflowRuns, upsertWorkflowRun, type WorkflowRunsSlice } from './chat-workflow-runs';
-import { sameBackgroundTasks, sameWorktreeOffers } from './snapshot-equality';
+import { sameWorktreeOffers } from './snapshot-equality';
 import type { ChatThreadState } from './chat-thread-state';
 
-export interface ChatEnvironmentSlice {
+export interface ChatEnvironmentSlice extends BackgroundActivitySlice {
   /**
    * Latest chat metadata from the daemon's `chat.updated` broadcast — model,
    * planMode, permissionMode, effort, features, etc. Null until the first
@@ -20,13 +26,6 @@ export interface ChatEnvironmentSlice {
    * agent exiting plan mode), instead of a stale one-shot REST snapshot.
    */
   readonly chatConfig: Chat | null;
-  /**
-   * Live background work (agents / bg bash / workflows) keyed by task id — fed
-   * by `background_task.*` events, resynced from `chat.updated`'s
-   * `backgroundActivity` snapshot. Drives the session panel's Background
-   * Activity section and its rail badge.
-   */
-  readonly backgroundTasks: Readonly<Record<string, BackgroundActivityTask>>;
   /**
    * Claude CLI workflow runs keyed by the CLI task id — fed by
    * `claude_workflow.run.updated` and re-seeded from a dedicated REST read,
@@ -52,23 +51,21 @@ export type EnvironmentEvent =
   | { type: 'chat.config.updated'; chat: Chat }
   | { type: 'workflow.runs.seeded'; runs: ClaudeWorkflowRun[] }
   | { type: 'workflow.run.updated'; run: ClaudeWorkflowRun }
-  | { type: 'background.upsert'; task: BackgroundActivityTask }
-  | { type: 'background.ended'; taskId: string }
-  | { type: 'background.snapshot'; tasks: BackgroundActivityTask[] }
   | { type: 'worktree.offer.added'; offer: WorktreeSwitchOffer }
   | { type: 'worktree.offer.removed'; worktreePath: string }
   | { type: 'worktree.offer.snapshot'; offers: WorktreeSwitchOffer[] }
   | { type: 'worktree.switch.started'; worktreePath: string }
   | { type: 'worktree.switch.failed' }
-  | { type: 'worktree.switch.cleared' };
+  | { type: 'worktree.switch.cleared' }
+  | BackgroundActivityEvent;
 
 export function createEnvironmentSlice(): ChatEnvironmentSlice {
   return {
     chatConfig: null,
-    backgroundTasks: {} as Readonly<Record<string, BackgroundActivityTask>>,
     workflowRuns: {} as WorkflowRunsSlice,
     worktreeOffers: {} as Readonly<Record<string, WorktreeSwitchOffer>>,
     switching: null,
+    ...createBackgroundActivitySlice(),
   };
 }
 
@@ -152,25 +149,21 @@ export function reduceEnvironmentEvent(state: ChatThreadState, event: Environmen
     }
 
     case 'background.upsert':
-      return {
-        ...state,
-        backgroundTasks: { ...state.backgroundTasks, [event.task.id]: event.task },
-      };
-
-    case 'background.ended': {
-      if (!(event.taskId in state.backgroundTasks)) return state;
-      const backgroundTasks = { ...state.backgroundTasks };
-      delete backgroundTasks[event.taskId];
-      return { ...state, backgroundTasks };
-    }
-
-    case 'background.snapshot': {
-      // chat.updated fires on every turn boundary — bail identity-stable when
-      // the snapshot matches so the composer doesn't re-render on churn.
-      if (sameBackgroundTasks(state.backgroundTasks, event.tasks)) return state;
-      const backgroundTasks: Record<string, BackgroundActivityTask> = {};
-      for (const task of event.tasks) backgroundTasks[task.id] = task;
-      return { ...state, backgroundTasks };
+    case 'background.ended':
+    case 'background.snapshot':
+    case 'background.dismissed':
+    case 'background.turn.started':
+    case 'background.stop.requested':
+    case 'background.stop.failed':
+    case 'background.removed': {
+      const next = reduceBackgroundActivityEvent(
+        { backgroundTasks: state.backgroundTasks, backgroundStops: state.backgroundStops },
+        event,
+      );
+      if (next.backgroundTasks === state.backgroundTasks && next.backgroundStops === state.backgroundStops) {
+        return state;
+      }
+      return { ...state, ...next };
     }
 
     case 'worktree.offer.added':
