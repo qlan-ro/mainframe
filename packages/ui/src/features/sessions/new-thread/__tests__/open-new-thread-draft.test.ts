@@ -15,8 +15,11 @@ function makeDeps(overrides: Partial<OpenNewThreadDraftDeps> = {}): OpenNewThrea
   return {
     filterProjectIds: new Set(),
     clearProjectFilter: vi.fn(),
+    // Settled by default (mainThreadId === newThreadId) so the wait resolves on
+    // its first read; only the tests in the "not yet observable" describe below
+    // model the unsettled tick.
     runtimeThreads: {
-      getState: vi.fn(() => ({ newThreadId: undefined, mainThreadId: null })),
+      getState: vi.fn(() => ({ newThreadId: '__LOCALID_default', mainThreadId: '__LOCALID_default' })),
       switchToNewThread: vi.fn(async () => {}),
     },
     setReturnTarget: vi.fn(),
@@ -33,7 +36,7 @@ describe('openNewThreadDraft — project filter clearing', () => {
     const deps = makeDeps({
       filterProjectIds: new Set(['proj-old']),
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: 'id-1', mainThreadId: null })),
+        getState: vi.fn(() => ({ newThreadId: 'id-1', mainThreadId: 'id-1' })),
         switchToNewThread: vi.fn(async () => {}),
       },
     });
@@ -74,7 +77,7 @@ describe('openNewThreadDraft — rememberReturn timing', () => {
     const deps = makeDeps({
       runtimeThreads: {
         getState: vi.fn(() => ({
-          newThreadId: switched ? 'id-1' : undefined,
+          newThreadId: switched ? '__LOCALID_1' : undefined,
           mainThreadId: switched ? '__LOCALID_1' : 'chat-existing',
         })),
         switchToNewThread: vi.fn(async () => {
@@ -97,7 +100,12 @@ describe('openNewThreadDraft — reset + switch + re-read ordering', () => {
       runtimeThreads: {
         getState: vi.fn(() => {
           calls.push('getState');
-          return { newThreadId: switched ? '__LOCALID_2' : '__LOCALID_1', mainThreadId: null };
+          // Pre-switch the slot holds an abandoned draft (id-1), settled
+          // (mainThreadId already equals it) — the post-switch draft (id-2)
+          // is what resetNewThreadDraft below cleared then re-created.
+          return switched
+            ? { newThreadId: '__LOCALID_2', mainThreadId: '__LOCALID_2' }
+            : { newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' };
         }),
         switchToNewThread: vi.fn(async () => {
           calls.push('switchToNewThread');
@@ -127,11 +135,15 @@ describe('openNewThreadDraft — reset + switch + re-read ordering', () => {
     ]);
   });
 
-  it('a fake returning undefined before the switch and an id after still initializes the post-switch id', async () => {
+  it('a fake returning undefined before the switch and a settled id after still initializes the post-switch id', async () => {
     let switched = false;
     const deps = makeDeps({
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: switched ? '__LOCALID_9' : undefined, mainThreadId: null })),
+        getState: vi.fn(() =>
+          switched
+            ? { newThreadId: '__LOCALID_9', mainThreadId: '__LOCALID_9' }
+            : { newThreadId: undefined, mainThreadId: null },
+        ),
         switchToNewThread: vi.fn(async () => {
           switched = true;
         }),
@@ -144,19 +156,80 @@ describe('openNewThreadDraft — reset + switch + re-read ordering', () => {
   });
 });
 
-describe('openNewThreadDraft — newThreadId still null after the switch', () => {
-  it('does not initialize and does not set text', async () => {
+describe('openNewThreadDraft — the switched draft is not yet observable', () => {
+  it('regression: newThreadId reads null right after the switch, then settles a tick later — still initializes and prefills', async () => {
+    vi.useFakeTimers();
+    try {
+      let ticks = 0;
+      const deps = makeDeps({
+        runtimeThreads: {
+          getState: vi.fn(() => {
+            ticks += 1;
+            // First read (pre-switch) and the first post-switch read are still
+            // empty; the settled draft appears from the second post-switch read on.
+            return ticks <= 2
+              ? { newThreadId: null, mainThreadId: null }
+              : { newThreadId: '__LOCALID_x', mainThreadId: '__LOCALID_x' };
+          }),
+          switchToNewThread: vi.fn(async () => {}),
+        },
+      });
+
+      const promise = openNewThreadDraft({ projectId: 'proj-a', prefill: 'hello' }, deps);
+      await vi.advanceTimersByTimeAsync(32);
+      await promise;
+
+      expect(deps.initializeDraft).toHaveBeenCalledWith({
+        localId: '__LOCALID_x',
+        projectId: 'proj-a',
+        adapterId: undefined,
+      });
+      expect(deps.setText).toHaveBeenCalledWith('hello');
+      expect(deps.mfToastError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounded wait: the id never settles — shows an error toast and never initializes or sets text', async () => {
+    vi.useFakeTimers();
+    try {
+      const deps = makeDeps({
+        runtimeThreads: {
+          getState: vi.fn(() => ({ newThreadId: null, mainThreadId: null })),
+          switchToNewThread: vi.fn(async () => {}),
+        },
+      });
+
+      const promise = openNewThreadDraft({ projectId: 'proj-a', prefill: 'hello' }, deps);
+      await vi.advanceTimersByTimeAsync(1100);
+      await promise;
+
+      expect(deps.initializeDraft).not.toHaveBeenCalled();
+      expect(deps.setText).not.toHaveBeenCalled();
+      expect(deps.mfToastError).toHaveBeenCalledWith('Couldn’t open a new session', {
+        description: 'The new session never became active. Try again.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('forwards adapterId to initializeDraft when the switched draft is observable on the first read', async () => {
     const deps = makeDeps({
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: undefined, mainThreadId: null })),
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
         switchToNewThread: vi.fn(async () => {}),
       },
     });
 
-    await openNewThreadDraft({ projectId: 'proj-a', prefill: 'hello' }, deps);
+    await openNewThreadDraft({ projectId: 'proj-a', adapterId: 'codex' }, deps);
 
-    expect(deps.initializeDraft).not.toHaveBeenCalled();
-    expect(deps.setText).not.toHaveBeenCalled();
+    expect(deps.initializeDraft).toHaveBeenCalledWith({
+      localId: '__LOCALID_1',
+      projectId: 'proj-a',
+      adapterId: 'codex',
+    });
   });
 });
 
@@ -164,7 +237,7 @@ describe('openNewThreadDraft — initializeDraft rejects', () => {
   it('surfaces mfToast.error and never calls setText', async () => {
     const deps = makeDeps({
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: null })),
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
         switchToNewThread: vi.fn(async () => {}),
       },
       initializeDraft: vi.fn(async () => {
@@ -184,7 +257,7 @@ describe('openNewThreadDraft — prefill', () => {
     const order: string[] = [];
     const deps = makeDeps({
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: null })),
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
         switchToNewThread: vi.fn(async () => {}),
       },
       initializeDraft: vi.fn(async () => {
@@ -205,7 +278,7 @@ describe('openNewThreadDraft — prefill', () => {
   it('with prefill omitted, setText is never called', async () => {
     const deps = makeDeps({
       runtimeThreads: {
-        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: null })),
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
         switchToNewThread: vi.fn(async () => {}),
       },
     });
@@ -234,7 +307,10 @@ describe('openNewThreadDraft — the aui `threads` scope', () => {
       runtimeThreads: {
         getState: vi.fn((): { newThreadId: string | null; mainThreadId: string } => {
           calls.push('getState');
-          return { newThreadId: switched ? '__LOCALID_7' : null, mainThreadId: 'thread-main' };
+          return {
+            newThreadId: switched ? '__LOCALID_7' : null,
+            mainThreadId: switched ? '__LOCALID_7' : 'thread-main',
+          };
         }),
         switchToNewThread: vi.fn((): void => {
           calls.push('switchToNewThread');
@@ -248,7 +324,11 @@ describe('openNewThreadDraft — the aui `threads` scope', () => {
     expect(calls).toEqual(['getState', 'getState', 'switchToNewThread', 'getState']);
     expect(deps.setReturnTarget).toHaveBeenCalledWith('thread-main');
     expect(deps.resetNewThreadDraft).toHaveBeenCalledWith(null);
-    expect(deps.initializeDraft).toHaveBeenCalledWith({ localId: '__LOCALID_7', projectId: 'proj-a' });
+    expect(deps.initializeDraft).toHaveBeenCalledWith({
+      localId: '__LOCALID_7',
+      projectId: 'proj-a',
+      adapterId: undefined,
+    });
     expect(deps.setText).toHaveBeenCalledWith('hello');
   });
 });

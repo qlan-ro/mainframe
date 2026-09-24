@@ -23,7 +23,7 @@
  * (`min-h-0 overflow-y-auto` in Composer.tsx) so shrinking it clips its
  * content instead of letting it paint past the pane.
  */
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { AlertTriangleIcon, ArrowDownIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -161,10 +161,14 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
   const threadId = useAuiState((s) => s.threadListItem?.id ?? null);
   const { viewportRef, contentRef } = useThreadBottomPin(threadId);
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
+  // Split view mounts one ChatThread per zone; this scopes selection ownership
+  // to whichever zone's DOM subtree holds the selection (#359).
+  const rootRef = useRef<HTMLDivElement>(null);
   return (
     <ComposerEditProvider>
       <SkillsProvider>
         <ThreadPrimitive.Root
+          ref={rootRef}
           data-testid="chat-thread"
           className="flex h-full flex-col overflow-hidden bg-background text-foreground"
         >
@@ -252,7 +256,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
           </ThreadPrimitive.Viewport>
 
           {/* Floating Quote / New-session actions on text selection inside a message (portals to body). */}
-          <ChatSelectionToolbar />
+          <ChatSelectionToolbar scopeRef={rootRef} />
         </ThreadPrimitive.Root>
       </SkillsProvider>
     </ComposerEditProvider>

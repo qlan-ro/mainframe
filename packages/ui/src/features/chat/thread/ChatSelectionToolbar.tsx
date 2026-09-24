@@ -10,17 +10,27 @@
  * `window.getSelection()` directly at click time; `Root`'s own `onMouseDown`
  * (and each `Action`'s) already prevents the browser from clearing the
  * selection before the click handler runs.
+ *
+ * In split view each zone mounts one of these, and both portal to the same
+ * fixed position for any selection anywhere (SelectionToolbarPrimitive.Root's
+ * own behavior). `scopeRef` — the zone's own `ThreadPrimitive.Root` element —
+ * lets only the toolbar whose zone holds the selection act on it; the other
+ * stays mounted (so its own primitive still tracks selection info) but hidden
+ * via `display: none` rather than unmounted (#359).
  */
+import type { RefObject } from 'react';
 import { QuoteIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { useOpenNewThreadDraft } from '@/features/sessions/new-thread/use-open-new-thread-draft';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useAppendQuoteSegment } from '../composer/segments/use-append-quote-segment';
+import { useSelectionInScope } from './use-selection-in-scope';
 
-export function ChatSelectionToolbar() {
+export function ChatSelectionToolbar({ scopeRef }: { scopeRef?: RefObject<HTMLElement | null> } = {}) {
   const appendQuoteSegment = useAppendQuoteSegment();
   const openNewThreadDraft = useOpenNewThreadDraft();
   const projectId = useChatExtras()?.state.chatConfig?.projectId;
+  const inScope = useSelectionInScope(scopeRef);
 
   const handleQuote = () => {
     const text = window.getSelection()?.toString().trim();
@@ -40,7 +50,7 @@ export function ChatSelectionToolbar() {
   };
 
   return (
-    <SelectionToolbar.Root>
+    <SelectionToolbar.Root style={inScope ? undefined : { display: 'none' }}>
       <SelectionToolbar.Action
         icon={QuoteIcon}
         label="Quote"
