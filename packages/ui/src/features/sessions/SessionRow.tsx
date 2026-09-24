@@ -115,6 +115,8 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       onOpenInSplit={() => {
         if (!openInSplit(mainThreadId, item.id)) aui.threads.switchToThread(item.id);
       }}
+      forkAvailability={actions.forkAvailability}
+      onFork={actions.onFork}
       claudeSessionId={custom.claudeSessionId}
     >
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>

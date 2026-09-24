@@ -5,7 +5,7 @@
  * including the parts the hover actions overlay.
  */
 import type { ReactNode } from 'react';
-import { ArchiveIcon, Columns2, CopyIcon, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
+import { ArchiveIcon, Columns2, CopyIcon, GitFork, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,6 +13,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Hint } from '@/components/ui/hint';
+import type { ForkAvailability } from './view-model/fork-availability';
 
 interface SessionContextMenuProps {
   pinned: boolean;
@@ -24,6 +26,8 @@ interface SessionContextMenuProps {
   onTags: () => void;
   onArchive: () => void;
   onOpenInSplit: () => void;
+  forkAvailability: ForkAvailability;
+  onFork: () => void;
   claudeSessionId?: string;
   children: ReactNode;
 }
@@ -37,6 +41,8 @@ export function SessionContextMenu({
   onTags,
   onArchive,
   onOpenInSplit,
+  forkAvailability,
+  onFork,
   claudeSessionId,
   children,
 }: SessionContextMenuProps) {
@@ -64,6 +70,24 @@ export function SessionContextMenu({
           <Columns2 />
           Open in Split
         </ContextMenuItem>
+        {forkAvailability.enabled ? (
+          <ContextMenuItem data-testid="sessions-ctx-fork" onSelect={onFork}>
+            <GitFork />
+            Fork
+          </ContextMenuItem>
+        ) : (
+          // A disabled item carries `data-disabled:pointer-events-none`, so the
+          // Hint has to wrap the whole item (RunningHint's established idiom) —
+          // triggering on the item itself would never fire.
+          <Hint label={forkAvailability.reason}>
+            <span className="flex">
+              <ContextMenuItem data-testid="sessions-ctx-fork" disabled>
+                <GitFork />
+                Fork
+              </ContextMenuItem>
+            </span>
+          </Hint>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive}>
           <ArchiveIcon />
