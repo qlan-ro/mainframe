@@ -14,6 +14,7 @@ use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
+mod fork_chat;
 mod plan_mode;
 mod resume_snapshot;
 
@@ -54,6 +55,25 @@ pub(crate) struct StoreDeps {
     /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
     /// can inject a recorder (or leave `None` for the unresolved-handler path).
     plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
+    /// `adapter_fork_info(adapter_id).fork` — todo #343's fork_chat tests flip
+    /// this on; every other test leaves the trait default (`false`).
+    fork_capable: Mutex<bool>,
+    /// When `Some`, `pin_fork_point` fails with this instead of echoing the
+    /// source session id back as the snapshot path.
+    pin_failure: Mutex<Option<PinFailure>>,
+    /// When `Some`, `create_fork` fails with this message instead of inserting.
+    create_fork_failure: Mutex<Option<String>>,
+    /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
+    /// that resume an unsent fork.
+    pending_forks: Mutex<HashMap<String, PendingForkState>>,
+}
+
+/// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
+#[derive(Clone)]
+pub(crate) enum PinFailure {
+    Unsupported,
+    TranscriptMissing,
+    Failed(String),
 }
 
 impl StoreDeps {
@@ -70,8 +90,32 @@ impl StoreDeps {
         }
         Arc::new(d)
     }
-    fn events(&self) -> Vec<DaemonEvent> {
+    pub(crate) fn events(&self) -> Vec<DaemonEvent> {
         self.events.lock().unwrap().clone()
+    }
+    pub(crate) fn set_fork_capable(&self, fork: bool) {
+        *self.fork_capable.lock().unwrap() = fork;
+    }
+    pub(crate) fn fail_pin(&self, message: &str) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::Failed(message.to_string()));
+    }
+    pub(crate) fn fail_pin_transcript_missing(&self) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::TranscriptMissing);
+    }
+    pub(crate) fn fail_pin_unsupported(&self) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::Unsupported);
+    }
+    pub(crate) fn fail_create_fork(&self, message: &str) {
+        *self.create_fork_failure.lock().unwrap() = Some(message.to_string());
+    }
+    pub(crate) fn set_pending_fork(&self, chat_id: &str, pending: PendingForkState) {
+        self.pending_forks
+            .lock()
+            .unwrap()
+            .insert(chat_id.to_string(), pending);
+    }
+    pub(crate) fn chat_count(&self) -> usize {
+        self.store.lock().unwrap().len()
     }
 }
 
@@ -368,6 +412,91 @@ impl ChatManagerDeps for StoreDeps {
             c.worktree_path = None;
             c.branch_name = None;
         }
+    }
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        AdapterForkInfo {
+            name: adapter_id.to_string(),
+            fork: *self.fork_capable.lock().unwrap(),
+        }
+    }
+    fn pin_fork_point<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
+        let failure = self.pin_failure.lock().unwrap().clone();
+        Box::pin(async move {
+            match failure {
+                Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
+                Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
+                Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
+                None => Ok(ForkSource {
+                    source_session_id: request.source_session_id,
+                    resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
+                }),
+            }
+        })
+    }
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+        if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
+            return Err(message);
+        }
+        let id = format!("fork-{}", self.store.lock().unwrap().len());
+        let chat = Chat {
+            id: id.clone(),
+            adapter_id: insert.adapter_id.clone(),
+            project_id: insert.project_id.clone(),
+            title: insert.title.clone(),
+            claude_session_id: None,
+            session_file_path: None,
+            model: insert.model.clone(),
+            permission_mode: insert.permission_mode,
+            plan_mode: Some(insert.plan_mode),
+            status: ChatStatus::Active,
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+            total_cost: 0.0,
+            total_tokens_input: 0,
+            total_tokens_output: 0,
+            last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
+            context_files: None,
+            mentions: None,
+            modified_files: None,
+            worktree_path: insert.worktree_path.clone(),
+            branch_name: insert.branch_name.clone(),
+            process_state: None,
+            display_status: None,
+            is_running: None,
+            background_activity: None,
+            worktree_missing: None,
+            directory_missing: None,
+            missing_directory_path: None,
+            transcript_missing: None,
+            todos: None,
+            pinned: None,
+            effort: Some(insert.effort),
+            fast: Some(insert.fast),
+            ultracode: Some(insert.ultracode),
+            adaptive_thinking: Some(insert.adaptive_thinking),
+            detected_prs: None,
+            tags: None,
+            automation_run_id: None,
+            parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
+        };
+        self.store.lock().unwrap().insert(id.clone(), chat.clone());
+        self.pending_forks
+            .lock()
+            .unwrap()
+            .insert(id, insert.pending_fork.clone());
+        Ok(chat)
+    }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.pending_forks.lock().unwrap().get(chat_id).cloned()
+    }
+    fn clear_pending_fork(&self, chat_id: &str) {
+        self.pending_forks.lock().unwrap().remove(chat_id);
     }
 }
 
