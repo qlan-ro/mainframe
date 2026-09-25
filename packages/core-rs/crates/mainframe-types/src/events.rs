@@ -116,6 +116,12 @@ pub enum DaemonEvent {
     },
     #[serde(rename = "chat.ended")]
     ChatEnded { chat_id: String },
+    /// Idle whole-chat offload (todo #178): the daemon released the chat's CLI
+    /// process, cached history, and registry cell as one unit. Connection-global
+    /// (see `mainframe-server::websocket::CONNECTION_GLOBAL_EVENT_TYPES`) so a
+    /// client reaches every subscriber, not only one subscribed to this chat.
+    #[serde(rename = "chat.offloaded")]
+    ChatOffloaded { chat_id: String },
     #[serde(rename = "process.started")]
     ProcessStarted {
         chat_id: String,
