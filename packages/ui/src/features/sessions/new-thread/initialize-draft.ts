@@ -17,7 +17,7 @@ export interface InitializeDraftArgs {
 export async function initializeDraft(args: InitializeDraftArgs): Promise<DraftCfg> {
   const retry = () => initializeDraft(args);
   const store = useNewThreadReady.getState();
-  const attempt = store.beginInitialization(args.localId, retry);
+  const attempt = store.beginInitialization(args.localId, retry, args.projectId);
 
   try {
     const providers = await getProviderSettings(args.port);

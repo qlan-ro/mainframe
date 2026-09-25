@@ -24,6 +24,9 @@ export interface DraftInitialization {
   retry?: () => Promise<DraftCfg>;
   error?: unknown;
   attempt?: number;
+  /** The target project this attempt is resolving for — the in-flight value a
+   *  second New-session trigger reads when the draft has no config yet. */
+  projectId?: string;
 }
 
 /** Exported so subscribers select this shared identity as their no-thread
@@ -37,7 +40,7 @@ interface NewThreadReadyState {
   readonly initializations: ReadonlyMap<string, DraftInitialization>;
   isReady: (localId: string) => boolean;
   getInitialization: (localId: string) => DraftInitialization;
-  beginInitialization: (localId: string, retry: () => Promise<DraftCfg>) => number;
+  beginInitialization: (localId: string, retry: () => Promise<DraftCfg>, projectId?: string) => number;
   beginReadyReplacement: (localId: string) => number;
   completeInitialization: (localId: string, attempt: number) => boolean;
   failInitialization: (localId: string, attempt: number, error: unknown) => void;
@@ -51,11 +54,11 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
   initializations: new Map<string, DraftInitialization>(),
   isReady: (localId) => get().readyIds.has(localId),
   getInitialization: (localId) => get().initializations.get(localId) ?? IDLE_INITIALIZATION,
-  beginInitialization: (localId, retry) => {
+  beginInitialization: (localId, retry, projectId) => {
     const attempt = ++nextInitializationAttempt;
     set((state) => {
       const initializations = new Map(state.initializations);
-      initializations.set(localId, { status: 'initializing', retry, attempt });
+      initializations.set(localId, { status: 'initializing', retry, attempt, projectId });
       const readyIds = new Set(state.readyIds);
       readyIds.delete(localId);
       return { initializations, readyIds };
@@ -78,7 +81,7 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
     set((state) => {
       const initializations = new Map(state.initializations);
       const current = initializations.get(localId);
-      initializations.set(localId, { status: 'ready', retry: current?.retry, attempt });
+      initializations.set(localId, { status: 'ready', retry: current?.retry, attempt, projectId: current?.projectId });
       return { initializations };
     });
     return true;
@@ -88,7 +91,13 @@ export const useNewThreadReady = create<NewThreadReadyState>((set, get) => ({
       const current = state.initializations.get(localId);
       if (current?.attempt !== attempt) return state;
       const initializations = new Map(state.initializations);
-      initializations.set(localId, { status: 'error', retry: current.retry, error, attempt });
+      initializations.set(localId, {
+        status: 'error',
+        retry: current.retry,
+        error,
+        attempt,
+        projectId: current.projectId,
+      });
       return { initializations };
     }),
   cancelInitialization: (localId, attempt) =>
