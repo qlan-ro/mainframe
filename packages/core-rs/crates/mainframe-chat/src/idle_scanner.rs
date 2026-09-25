@@ -1,11 +1,14 @@
-//! Ported from `packages/core/src/chat/idle-scanner.ts`.
+//! Ported from `packages/core/src/chat/idle-scanner.ts`; extended (todo #178)
+//! from a bare CLI-process kill into a trigger for the full idle whole-chat
+//! offload (`idle_offload.rs`).
 
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use dashmap::DashMap;
+use mainframe_adapter_api::BoxFuture;
 use tokio::task::JoinHandle;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::types::ActiveChat;
 
@@ -21,11 +24,20 @@ pub type ActiveChatRegistry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 
 type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 
-/// Periodically kills CLI sessions that have been idle longer than the
-/// threshold. The chat record and `claudeSessionId` are preserved so the next
-/// user message re-spawns via `--resume`.
+/// The offload half of the scan (`idle_offload::ChatOffload`, wired as a trait
+/// object so the scanner's periodic task needs no `Weak<ChatManager>`). Given a
+/// candidate chat id, re-checks everything and either offloads it or no-ops.
+pub trait IdleOffloader: Send + Sync {
+    fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
+}
+
+/// Periodically offloads (todo #178: CLI process + daemon cache + registry
+/// cell, as one unit) chats idle longer than the threshold. The chat record
+/// and `claudeSessionId` are untouched, so the next user message re-spawns via
+/// `--resume`.
 pub struct IdleSessionScanner {
     active_chats: ActiveChatRegistry,
+    offloader: Arc<dyn IdleOffloader>,
     threshold_ms: i64,
     interval_ms: u64,
     now: NowFn,
@@ -33,9 +45,10 @@ pub struct IdleSessionScanner {
 }
 
 impl IdleSessionScanner {
-    pub fn new(active_chats: ActiveChatRegistry) -> Self {
+    pub fn new(active_chats: ActiveChatRegistry, offloader: Arc<dyn IdleOffloader>) -> Self {
         Self::with_config(
             active_chats,
+            offloader,
             IDLE_THRESHOLD_MS,
             IDLE_SCAN_INTERVAL_MS,
             Arc::new(now_ms),
@@ -44,12 +57,14 @@ impl IdleSessionScanner {
 
     pub fn with_config(
         active_chats: ActiveChatRegistry,
+        offloader: Arc<dyn IdleOffloader>,
         threshold_ms: i64,
         interval_ms: u64,
         now: NowFn,
     ) -> Self {
         Self {
             active_chats,
+            offloader,
             threshold_ms,
             interval_ms,
             now,
@@ -62,6 +77,7 @@ impl IdleSessionScanner {
             return;
         }
         let active_chats = self.active_chats.clone();
+        let offloader = self.offloader.clone();
         let threshold_ms = self.threshold_ms;
         let now = self.now.clone();
         let period = std::time::Duration::from_millis(self.interval_ms);
@@ -73,7 +89,7 @@ impl IdleSessionScanner {
             ticker.tick().await;
             loop {
                 ticker.tick().await;
-                scan_registry(&active_chats, threshold_ms, &now).await;
+                scan_registry(&active_chats, offloader.as_ref(), threshold_ms, &now).await;
             }
         }));
     }
@@ -85,38 +101,56 @@ impl IdleSessionScanner {
     }
 
     pub async fn scan(&self) {
-        scan_registry(&self.active_chats, self.threshold_ms, &self.now).await;
+        scan_registry(
+            &self.active_chats,
+            self.offloader.as_ref(),
+            self.threshold_ms,
+            &self.now,
+        )
+        .await;
     }
 }
 
-async fn scan_registry(active_chats: &ActiveChatRegistry, threshold_ms: i64, now: &NowFn) {
-    let now = now();
-    // Snapshot the registry (clone the per-entity Arcs) so no DashMap shard guard
-    // is held across the `.await` on `session.kill()` (CONCURRENCY rules 2-3).
-    let entries: Vec<(String, Arc<Mutex<ActiveChat>>)> = active_chats
+/// Candidate selection (plan "Design"): a pure read of the registry, no I/O
+/// and no chat-state mutation. A chat qualifies when its session is spawned,
+/// reports an activity time, and has been idle past `threshold_ms`. Every
+/// other check (pending permission, in-flight activity) belongs to the
+/// offload's own re-check, so a race between this read and that re-check
+/// (AC4) always resolves in favor of NOT offloading a chat that woke up.
+pub fn select_idle_candidates(
+    active_chats: &ActiveChatRegistry,
+    now: i64,
+    threshold_ms: i64,
+) -> Vec<String> {
+    active_chats
         .iter()
-        .map(|e| (e.key().clone(), e.value().clone()))
-        .collect();
-    for (chat_id, cell) in entries {
-        let session = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-            guard.session.clone()
-        };
-        let Some(session) = session else { continue };
-        if !session.is_spawned() {
-            continue;
-        }
-        let Some(last) = session.last_activity_at() else {
-            continue;
-        };
-        let idle_ms = now - last;
-        if idle_ms <= threshold_ms {
-            continue;
-        }
-        info!(chat_id, idle_ms, "evicting idle claude session");
-        if let Err(err) = session.kill().await {
-            warn!(?err, chat_id, "failed to kill idle session");
-        }
+        .filter_map(|entry| {
+            let session = {
+                let guard = entry.value().lock().unwrap_or_else(|e| e.into_inner());
+                guard.session.clone()
+            }?;
+            if !session.is_spawned() {
+                return None;
+            }
+            let last = session.last_activity_at()?;
+            if now - last <= threshold_ms {
+                return None;
+            }
+            Some(entry.key().clone())
+        })
+        .collect()
+}
+
+async fn scan_registry(
+    active_chats: &ActiveChatRegistry,
+    offloader: &dyn IdleOffloader,
+    threshold_ms: i64,
+    now: &NowFn,
+) {
+    let candidates = select_idle_candidates(active_chats, now(), threshold_ms);
+    for chat_id in candidates {
+        info!(chat_id, "idle scanner: offload candidate");
+        offloader.offload(&chat_id).await;
     }
 }
 
@@ -128,6 +162,7 @@ fn now_ms() -> i64 {
 mod tests {
     use super::*;
     use crate::test_support::{FakeSession, test_chat};
+    use std::sync::Mutex as StdMutex;
 
     fn registry() -> ActiveChatRegistry {
         Arc::new(DashMap::new())
@@ -144,50 +179,76 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn evicts_sessions_idle_longer_than_threshold() {
+    #[test]
+    fn selects_sessions_idle_longer_than_threshold() {
         let now: i64 = 10_000_000;
         let threshold_ms: i64 = 2 * 60 * 60 * 1000;
         let idle = FakeSession::with_activity(true, Some(now - threshold_ms - 1));
         let active = FakeSession::with_activity(true, Some(now - 1000));
         let reg = registry();
-        insert(&reg, "idle-chat", idle.clone());
-        insert(&reg, "active-chat", active.clone());
+        insert(&reg, "idle-chat", idle);
+        insert(&reg, "active-chat", active);
 
-        let scanner =
-            IdleSessionScanner::with_config(reg, threshold_ms, 60_000, Arc::new(move || now));
-        scanner.scan().await;
+        let candidates = select_idle_candidates(&reg, now, threshold_ms);
 
-        assert_eq!(idle.kills(), 1);
-        assert_eq!(active.kills(), 0);
+        assert_eq!(candidates, vec!["idle-chat".to_string()]);
     }
 
-    #[tokio::test]
-    async fn skips_sessions_that_are_not_spawned() {
+    #[test]
+    fn skips_sessions_that_are_not_spawned() {
         let now: i64 = 10_000_000;
         let threshold_ms: i64 = 1000;
         let dead = FakeSession::with_activity(false, Some(now - 10_000));
         let reg = registry();
-        insert(&reg, "dead", dead.clone());
+        insert(&reg, "dead", dead);
 
-        let scanner =
-            IdleSessionScanner::with_config(reg, threshold_ms, 60_000, Arc::new(move || now));
-        scanner.scan().await;
-
-        assert_eq!(dead.kills(), 0);
+        assert!(select_idle_candidates(&reg, now, threshold_ms).is_empty());
     }
 
-    #[tokio::test]
-    async fn skips_sessions_without_last_activity_at_tracking() {
+    #[test]
+    fn skips_sessions_without_last_activity_at_tracking() {
         let now: i64 = 10_000_000;
         let session = FakeSession::with_activity(true, None);
         let reg = registry();
-        insert(&reg, "x", session.clone());
+        insert(&reg, "x", session);
 
-        let scanner = IdleSessionScanner::with_config(reg, 100, 60_000, Arc::new(move || now));
+        assert!(select_idle_candidates(&reg, now, 100).is_empty());
+    }
+
+    struct RecordingOffloader {
+        calls: StdMutex<Vec<String>>,
+    }
+
+    impl IdleOffloader for RecordingOffloader {
+        fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
+            self.calls.lock().unwrap().push(chat_id.to_string());
+            Box::pin(async {})
+        }
+    }
+
+    #[tokio::test]
+    async fn scan_drives_the_offloader_for_every_idle_candidate_only() {
+        let now: i64 = 10_000_000;
+        let threshold_ms: i64 = 2 * 60 * 60 * 1000;
+        let idle = FakeSession::with_activity(true, Some(now - threshold_ms - 1));
+        let active = FakeSession::with_activity(true, Some(now - 1000));
+        let reg = registry();
+        insert(&reg, "idle-chat", idle);
+        insert(&reg, "active-chat", active);
+        let offloader = Arc::new(RecordingOffloader {
+            calls: StdMutex::new(Vec::new()),
+        });
+
+        let scanner = IdleSessionScanner::with_config(
+            reg,
+            offloader.clone(),
+            threshold_ms,
+            60_000,
+            Arc::new(move || now),
+        );
         scanner.scan().await;
 
-        assert_eq!(session.kills(), 0);
+        assert_eq!(offloader.calls.lock().unwrap().clone(), vec!["idle-chat"]);
     }
 }
 
@@ -198,6 +259,14 @@ mod tests {
 // notes: CONCURRENCY.tsv); `stop()` aborts. The first interval tick is skipped so the
 // notes: loop fires after one period (setInterval semantics); `unref()` has no tokio
 // notes: analogue (dropped — ordered shutdown aborts the handle). `scan()` snapshots
-// notes: the SHARED_MAP and drops the chat lock before `session.kill().await` (rules
-// notes: 2-3). Injected `now` closure mirrors the TS `now = () => Date.now()` seam;
-// notes: all three idle-scanner test cases ported.
+// notes: the SHARED_MAP via `select_idle_candidates` (no shard guard held across an
+// notes: `.await`, rules 2-3). Injected `now` closure mirrors the TS `now = () =>
+// notes: Date.now()` seam; all three original idle-scanner test cases ported as pure
+// notes: `select_idle_candidates` checks.
+// notes: todo #178 split the bare `session.kill()` into candidate selection (here,
+// notes: pure) + a full offload re-check-and-release sequence (`idle_offload.rs`,
+// notes: `IdleOffloader` trait object) so a race between the two steps always favors
+// notes: NOT offloading a chat that woke up (AC4). Behavioral offload coverage
+// notes: (kill/cache/registry/event, permission skip, race, idempotency — AC1-5)
+// notes: lives in `chat_manager::tests::offload`, where a real `ChatManager` wires the
+// notes: real `ChatOffload` end to end.

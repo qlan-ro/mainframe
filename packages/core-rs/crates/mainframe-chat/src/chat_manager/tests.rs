@@ -14,6 +14,7 @@ use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
+mod offload;
 mod plan_mode;
 mod resume_snapshot;
 

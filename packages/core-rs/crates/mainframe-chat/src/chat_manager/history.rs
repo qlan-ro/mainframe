@@ -7,19 +7,42 @@ impl ChatManager {
     /// Mainframe chatId and restores any pending permission from history.
     pub async fn get_messages(&self, chat_id: &str) -> Vec<ChatMessage> {
         self.lifecycle.await_loading(chat_id).await;
+        // Wait out an in-flight offload before reading the cache/registry: an
+        // offload that just cleared the cache must not race a reader that
+        // would otherwise see a half-cleared cache and skip straight to disk
+        // (harmless) or, conversely, read a cache the offload is about to
+        // clear (todo #178).
+        self.lifecycle.await_offload(chat_id).await;
 
+        if let Some(cached) = self.cached_messages(chat_id) {
+            return cached;
+        }
+
+        // Single-flight the on-disk read (Established facts: two concurrent
+        // misses used to both hit disk). The follower re-reads the cache the
+        // leader just populated instead of loading a second time.
+        if !self.lifecycle.claim_history(chat_id).await {
+            return self.cached_messages(chat_id).unwrap_or_default();
+        }
+        let result = self.load_history_into_cache(chat_id).await;
+        self.lifecycle.release_history(chat_id);
+        result
+    }
+
+    fn cached_messages(&self, chat_id: &str) -> Option<Vec<ChatMessage>> {
         let cached = self
             .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(chat_id)
             .cloned();
-        if let Some(cached) = cached
-            && !cached.is_empty()
-        {
-            return cached;
-        }
+        cached.filter(|c| !c.is_empty())
+    }
 
+    /// The lead caller's actual disk read behind `claim_history`'s single
+    /// flight: load, remap, and (when non-empty) cache + restore any pending
+    /// permission found in the transcript.
+    async fn load_history_into_cache(&self, chat_id: &str) -> Vec<ChatMessage> {
         let Some(session) = self.history_session(chat_id) else {
             return Vec::new();
         };

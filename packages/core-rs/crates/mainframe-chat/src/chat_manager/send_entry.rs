@@ -11,6 +11,10 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
     ) -> Result<(), SendError> {
+        // Register before reading any registry/cache state (todo #178); the
+        // guard drops on every return path below, `?` included.
+        let _send_guard = self.lifecycle.begin_send(chat_id).await;
+
         let chat = self.get_chat(chat_id);
         if let Some(chat) = &chat
             && chat.worktree_missing == Some(true)
@@ -30,19 +34,7 @@ impl ChatManager {
 
         let (post, session) = self.require_live_session(chat_id)?;
         info!(chat_id, "user message sent");
-
-        // Stamp turn start right before dispatch (for onResult turnDurationMs).
-        post.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .turn_started_at = Some(now_ms());
-        // The manager has taken ownership of this prompt — accepted whether it
-        // dispatches immediately or lands behind a running turn (plan task 10;
-        // `send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
-        self.event_handler.notify_chat_surface(
-            crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
-                chat_id: chat_id.to_string(),
-            },
-        );
+        self.mark_turn_accepted(&post, chat_id);
 
         if let Some(cmd) = command {
             return self
@@ -51,6 +43,22 @@ impl ChatManager {
         }
         self.send_plain_text(&post, &session, chat_id, content, attachment_ids)
             .await
+    }
+
+    /// Stamp turn start (for `onResult`'s `turnDurationMs`) and tell the chat
+    /// surface the manager has taken ownership of this prompt — accepted
+    /// whether it dispatches immediately or lands behind a running turn (plan
+    /// task 10; `send_plain_text`/`dispatch_command` fire the matching
+    /// `TurnStarted`).
+    fn mark_turn_accepted(&self, post: &Arc<Mutex<ActiveChat>>, chat_id: &str) {
+        post.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .turn_started_at = Some(now_ms());
+        self.event_handler.notify_chat_surface(
+            crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
+                chat_id: chat_id.to_string(),
+            },
+        );
     }
 
     fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {

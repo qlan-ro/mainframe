@@ -165,6 +165,20 @@ struct Guards {
     loading: HashMap<String, Arc<Notify>>,
     starting: HashMap<String, Arc<Notify>>,
     interrupting: HashMap<String, Arc<Notify>>,
+    /// In-flight idle offload per chat (todo #178, `flight_claims.rs`). An
+    /// offload claims this slot only when every other map below is empty for
+    /// the chat and no send is registered; `load_chat`/`start_chat`/
+    /// `get_messages`/`send_message` all wait it out before touching the
+    /// registry or cache.
+    offloading: HashMap<String, Arc<Notify>>,
+    /// In-flight `send_message` calls per chat (todo #178, `flight_claims.rs`).
+    /// A count, not a flag: nothing in this codebase serializes concurrent
+    /// sends to the same chat today, so offload must treat any of them as busy.
+    sending: HashMap<String, usize>,
+    /// In-flight on-disk transcript read behind `get_messages` per chat (todo
+    /// #178, `flight_claims.rs`) — single-flights the read the Established
+    /// facts call out as racy (two concurrent misses both hit disk).
+    history: HashMap<String, Arc<Notify>>,
 }
 
 /// Join an in-flight single-flight `Notify` without a lost wakeup. `notify_waiters`
@@ -388,6 +402,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn load_chat(&self, chat_id: &str) {
+        // Wait out an in-flight offload FIRST: it may be about to remove this
+        // chat's registry cell, and this call must see the post-offload state
+        // (empty registry → fresh load) rather than a half-torn-down cell.
+        self.await_offload(chat_id).await;
         // Single-flight: await an in-flight load, else claim the slot (guard is
         // dropped before any `.await` — std MutexGuard is not Send).
         let action = {
@@ -451,6 +469,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn start_chat(&self, chat_id: &str) {
+        // See `load_chat`'s matching wait: a start racing an offload must not
+        // read the registry mid-teardown.
+        self.await_offload(chat_id).await;
         if let Some(cell) = self.get_active(chat_id) {
             let (spawned, process) = {
                 let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
@@ -1032,6 +1053,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         Ok(())
     }
 }
+
+/// Offload/send/history single-flight claims sharing the `Guards` above
+/// (todo #178). A child module so it can see the private `Guards`/`Flight`/
+/// `join_flight` without widening their visibility.
+mod flight_claims;
 
 #[cfg(test)]
 mod title_logging_tests;
