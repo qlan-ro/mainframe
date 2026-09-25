@@ -72,6 +72,12 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_id: Option<String>,
     pub mainframe_chat_id: String,
+    /// The chat's stored transcript path (`Chat::session_file_path`), when known.
+    /// Claude's history load resolves this first, falling back to the path
+    /// derived from `project_path` — see `locate_claude_transcript`. Omitted from
+    /// the wire shape when absent so it never changes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_file_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

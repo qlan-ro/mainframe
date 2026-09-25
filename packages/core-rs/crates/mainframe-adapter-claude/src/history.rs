@@ -23,7 +23,8 @@ use crate::history_subagents::{
     collect_subagent_assistant_blocks, collect_subagent_tool_results, inject_agent_children,
 };
 use crate::skill_path::resolve_skill_path;
-use crate::transcript::{SessionJsonlPath, get_session_jsonl_path};
+use crate::transcript::{SessionJsonlPath, get_session_jsonl_path, locate_claude_transcript};
+use mainframe_types::transcript::TranscriptLocation;
 
 fn is_strict_true(v: Option<&Value>) -> bool {
     matches!(v, Some(Value::Bool(true)))
@@ -42,19 +43,39 @@ pub struct DiscoveredFiles {
     pub subagent_files: HashSet<String>,
 }
 
-pub async fn discover_session_jsonl_files(session_id: &str, project_path: &str) -> DiscoveredFiles {
+/// Discovers a session's primary transcript plus its sidechain/subagent files.
+///
+/// The primary file resolves through `locate_claude_transcript`: the stored
+/// `session_file_path` first (it can survive a worktree relocation the derived
+/// path misses), then the path derived from `project_path`. Sidechain and
+/// subagent files are then scanned next to whichever file that resolved to,
+/// not next to the always-derived project directory — a relocated transcript
+/// carries its sidechains with it.
+pub async fn discover_session_jsonl_files(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+) -> DiscoveredFiles {
     let SessionJsonlPath {
-        jsonl_path,
-        project_dir,
+        jsonl_path: derived_jsonl_path,
+        project_dir: derived_project_dir,
     } = get_session_jsonl_path(session_id, project_path);
 
-    if tokio::fs::metadata(&jsonl_path).await.is_err() {
-        return DiscoveredFiles {
-            primary_path: jsonl_path,
-            all_files: Vec::new(),
-            subagent_files: HashSet::new(),
+    let jsonl_path =
+        match locate_claude_transcript(session_id, project_path, session_file_path).await {
+            Some(TranscriptLocation::Present(path)) => path,
+            _ => {
+                return DiscoveredFiles {
+                    primary_path: derived_jsonl_path,
+                    all_files: Vec::new(),
+                    subagent_files: HashSet::new(),
+                };
+            }
         };
-    }
+    let project_dir = Path::new(&jsonl_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(derived_project_dir);
 
     let mut jsonl_files = vec![jsonl_path.clone()];
     let mut subagent_files: HashSet<String> = HashSet::new();
@@ -108,8 +129,13 @@ pub async fn discover_session_jsonl_files(session_id: &str, project_path: &str) 
     }
 }
 
-pub async fn load_history(session_id: &str, project_path: &str) -> Vec<ChatMessage> {
-    let discovered = discover_session_jsonl_files(session_id, project_path).await;
+pub async fn load_history(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+) -> Vec<ChatMessage> {
+    let discovered =
+        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
@@ -234,8 +260,13 @@ pub async fn load_history(session_id: &str, project_path: &str) -> Vec<ChatMessa
     messages
 }
 
-pub async fn extract_plan_file_paths(session_id: &str, project_path: &str) -> Vec<String> {
-    let discovered = discover_session_jsonl_files(session_id, project_path).await;
+pub async fn extract_plan_file_paths(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+) -> Vec<String> {
+    let discovered =
+        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
@@ -272,8 +303,13 @@ pub async fn extract_plan_file_paths(session_id: &str, project_path: &str) -> Ve
     plan_files
 }
 
-pub async fn extract_skill_file_paths(session_id: &str, project_path: &str) -> Vec<SkillFileEntry> {
-    let discovered = discover_session_jsonl_files(session_id, project_path).await;
+pub async fn extract_skill_file_paths(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+) -> Vec<SkillFileEntry> {
+    let discovered =
+        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
@@ -365,6 +401,7 @@ fn path_resolve(base: &str, p: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn path_resolve_absolute_passthrough() {
@@ -387,20 +424,153 @@ mod tests {
     #[tokio::test]
     async fn missing_session_returns_empty() {
         assert!(
-            load_history("no-such-session-xyz", "/tmp/no-such-project-xyz")
+            load_history("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
                 .await
                 .is_empty()
         );
         assert!(
-            extract_plan_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz")
+            extract_plan_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
                 .await
                 .is_empty()
         );
         assert!(
-            extract_skill_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz")
+            extract_skill_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
                 .await
                 .is_empty()
         );
+    }
+
+    // --- AC8: stored session_file_path resolution (#178 G2) ---
+
+    fn assistant_line(uuid: &str, text: &str, extra: Value) -> String {
+        let mut entry = json!({
+            "type": "assistant",
+            "uuid": uuid,
+            "timestamp": "2026-09-25T00:00:00Z",
+            "message": { "content": [{ "type": "text", "text": text }] },
+        });
+        if let Some(o) = extra.as_object() {
+            for (k, v) in o {
+                entry[k] = v.clone();
+            }
+        }
+        entry.to_string()
+    }
+
+    fn assistant_text(msg: &ChatMessage) -> &str {
+        match &msg.content[0] {
+            MessageContent::Leaf(mainframe_types::content::LeafContent::Text { text, .. }) => text,
+            other => panic!("expected a text block, got {other:?}"),
+        }
+    }
+
+    /// `get_session_jsonl_path` always derives under the real `~/.claude/projects`
+    /// tree (mirrors `transcript.rs`'s tests) — cleaned up on drop, even on panic,
+    /// so a failing assertion never leaves a stray directory behind.
+    struct RemoveDirOnDrop(String);
+    impl Drop for RemoveDirOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_session_file_path_wins_over_the_derived_path_when_both_exist() {
+        let dir = tempfile::tempdir().unwrap();
+        let stored_path = dir.path().join("relocated.jsonl");
+        std::fs::write(
+            &stored_path,
+            assistant_line("stored-1", "from the stored path", json!({})),
+        )
+        .unwrap();
+
+        let session_id = format!("mf178-g2-{}-a", std::process::id());
+        let project_path = format!("mf178-g2-project-{}-a", std::process::id());
+        let derived = get_session_jsonl_path(&session_id, &project_path);
+        std::fs::create_dir_all(&derived.project_dir).unwrap();
+        std::fs::write(
+            &derived.jsonl_path,
+            assistant_line("derived-1", "from the derived path", json!({})),
+        )
+        .unwrap();
+        let _cleanup = RemoveDirOnDrop(derived.project_dir.clone());
+
+        let history = load_history(
+            &session_id,
+            &project_path,
+            Some(stored_path.to_str().unwrap()),
+        )
+        .await;
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(assistant_text(&history[0]), "from the stored path");
+    }
+
+    #[tokio::test]
+    async fn falls_back_to_the_derived_path_when_the_stored_path_is_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("gone.jsonl");
+
+        let session_id = format!("mf178-g2-{}-b", std::process::id());
+        let project_path = format!("mf178-g2-project-{}-b", std::process::id());
+        let derived = get_session_jsonl_path(&session_id, &project_path);
+        std::fs::create_dir_all(&derived.project_dir).unwrap();
+        std::fs::write(
+            &derived.jsonl_path,
+            assistant_line("derived-2", "from the derived path", json!({})),
+        )
+        .unwrap();
+        let _cleanup = RemoveDirOnDrop(derived.project_dir.clone());
+
+        let history = load_history(&session_id, &project_path, Some(gone.to_str().unwrap())).await;
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(assistant_text(&history[0]), "from the derived path");
+    }
+
+    #[tokio::test]
+    async fn discovers_sidechain_files_next_to_the_resolved_stored_path_not_the_derived_directory()
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let session_id = format!("mf178-g2-{}-c", std::process::id());
+        let stored_path = dir.path().join(format!("{session_id}.jsonl"));
+        std::fs::write(
+            &stored_path,
+            assistant_line("primary-1", "primary message", json!({})),
+        )
+        .unwrap();
+        // A sidechain file matching by sessionId, sitting next to the resolved
+        // (stored) file — not next to the always-derived project directory,
+        // which is never created in this test.
+        let sidechain_path = dir.path().join("sidechain.jsonl");
+        std::fs::write(
+            &sidechain_path,
+            assistant_line(
+                "sidechain-1",
+                "sidechain message",
+                json!({ "sessionId": session_id }),
+            ),
+        )
+        .unwrap();
+
+        let project_path = format!("mf178-g2-project-{}-c-untouched", std::process::id());
+        let discovered = discover_session_jsonl_files(
+            &session_id,
+            &project_path,
+            Some(stored_path.to_str().unwrap()),
+        )
+        .await;
+        assert_eq!(discovered.all_files.len(), 2);
+
+        let history = load_history(
+            &session_id,
+            &project_path,
+            Some(stored_path.to_str().unwrap()),
+        )
+        .await;
+        let texts: HashSet<&str> = history.iter().map(assistant_text).collect();
+        assert!(texts.contains("primary message"));
+        assert!(texts.contains("sidechain message"));
     }
 }
 

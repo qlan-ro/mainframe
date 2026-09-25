@@ -342,6 +342,12 @@ pub struct ClaudeSession {
     pub id: String,
     pub project_path: String,
     resume_session_id: Option<String>,
+    /// The chat's stored transcript path, when known. Threaded from
+    /// `SessionOptions::session_file_path` into every history read
+    /// (`load_history`/`extract_plan_files`/`extract_skill_files`) so a
+    /// relocated transcript (e.g. a worktree move) still resolves — see
+    /// `locate_claude_transcript`.
+    session_file_path: Option<String>,
     on_exit: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     pub control: Arc<ControlRequestChannel>,
     base_permission_mode: Mutex<String>,
@@ -369,6 +375,7 @@ impl ClaudeSession {
             id,
             project_path: options.project_path.clone(),
             resume_session_id: options.chat_id,
+            session_file_path: options.session_file_path,
             on_exit: Mutex::new(on_exit),
             control,
             base_permission_mode: Mutex::new("default".to_string()),
@@ -1095,21 +1102,36 @@ impl ClaudeSession {
         let Some(resume) = &self.resume_session_id else {
             return Ok(vec![]);
         };
-        Ok(crate::history::load_history(resume, &self.project_path).await)
+        Ok(crate::history::load_history(
+            resume,
+            &self.project_path,
+            self.session_file_path.as_deref(),
+        )
+        .await)
     }
 
     pub async fn extract_plan_files(&self) -> Result<Vec<String>, AdapterError> {
         let Some(resume) = &self.resume_session_id else {
             return Ok(vec![]);
         };
-        Ok(crate::history::extract_plan_file_paths(resume, &self.project_path).await)
+        Ok(crate::history::extract_plan_file_paths(
+            resume,
+            &self.project_path,
+            self.session_file_path.as_deref(),
+        )
+        .await)
     }
 
     pub async fn extract_skill_files(&self) -> Result<Vec<SkillFileEntry>, AdapterError> {
         let Some(resume) = &self.resume_session_id else {
             return Ok(vec![]);
         };
-        Ok(crate::history::extract_skill_file_paths(resume, &self.project_path).await)
+        Ok(crate::history::extract_skill_file_paths(
+            resume,
+            &self.project_path,
+            self.session_file_path.as_deref(),
+        )
+        .await)
     }
 }
 
@@ -1307,6 +1329,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "test-chat-id".to_string(),
+                session_file_path: None,
             },
             None,
             Arc::new(BackgroundTaskTracker::new()),

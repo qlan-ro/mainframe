@@ -29,6 +29,7 @@ fn options(thread_id: Option<&str>) -> SessionOptions {
         project_path: "/tmp/mf339-project".to_string(),
         chat_id: thread_id.map(str::to_string),
         mainframe_chat_id: "chat-mf339".to_string(),
+        session_file_path: None,
     }
 }
 
