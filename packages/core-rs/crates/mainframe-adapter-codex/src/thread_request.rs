@@ -15,6 +15,27 @@ pub(crate) enum ThreadRequest {
     Start(Map<String, Value>),
 }
 
+impl ThreadRequest {
+    /// The JSON-RPC method this request sends. `ensure_thread` uses this plus
+    /// [`Self::into_params`] to make a single `client.request(..)` call
+    /// instead of matching per variant (todo #346 review fix) —
+    /// `thread/start` and `thread/resume` both answer with the same
+    /// `{ thread: { id }, model }` shape (`ThreadStartResult`).
+    pub(crate) fn method(&self) -> &'static str {
+        match self {
+            ThreadRequest::Resume(_) => "thread/resume",
+            ThreadRequest::Start(_) => "thread/start",
+        }
+    }
+
+    /// The request params, regardless of variant.
+    pub(crate) fn into_params(self) -> Map<String, Value> {
+        match self {
+            ThreadRequest::Resume(p) | ThreadRequest::Start(p) => p,
+        }
+    }
+}
+
 /// Pure decision + params builder shared by `ensure_thread`'s `thread/start`
 /// and `thread/resume` calls (todo #346, AC 3). `base` is the shared
 /// cwd/persist-history/model map from `CodexSession::thread_params_base`.

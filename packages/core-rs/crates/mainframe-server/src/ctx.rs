@@ -234,46 +234,7 @@ impl AppCtx {
     /// `ctx.db` and call handlers directly (the route modules are mounted by the
     /// next task, so `build_app` does not yet include them).
     pub(crate) fn test_ctx() -> Arc<AppCtx> {
-        use dashmap::DashMap;
-        use mainframe_db::DatabaseManager;
-
-        let db = crate::db::Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:")))
-            .expect("open in-memory db");
-        let (broadcast, _keep) = broadcast::channel::<DaemonEvent>(64);
-        std::mem::forget(_keep);
-        let watcher = FileWatcherService::new(|_| {});
-        Arc::new(AppCtx {
-            db,
-            git: GitFactory,
-            services: Services {
-                attachments: Arc::new(AttachmentStore::new(
-                    std::env::temp_dir().join("mf-routes-test"),
-                )),
-                push: Arc::new(PushService::new()),
-                watcher: Arc::new(watcher),
-            },
-            broadcast,
-            adapter_registry: Arc::new(AdapterRegistry::new()),
-            background_tasks: Arc::new(BackgroundTaskTracker::new()),
-            claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
-            chat_manager: None,
-            launch_registry: None,
-            tunnel_manager: None,
-            port_tunnels: None,
-            lsp_manager: None,
-            plugin_manager: None,
-            automations: None,
-            quota: None,
-            data_dir: std::env::temp_dir(),
-            version: "0.0.0-test".into(),
-            port: 0,
-            auth_secret: None,
-            resolved_path: ResolvedPath::from_value("/usr/bin:/bin"),
-            tunnel_url: Arc::new(RwLock::new(None)),
-            ws_clients: Arc::new(DashMap::new()),
-            facade_hub: Arc::new(FacadeHub::default()),
-            facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        })
+        crate::chat_test_support::test_ctx()
     }
 
     /// Like [`Self::test_ctx`], but with a REAL `ChatManager` (via
@@ -285,86 +246,7 @@ impl AppCtx {
     /// the returned ctx's `adapter_registry` before creating a chat under its
     /// id (see `chat_test_support::StubAdapter`).
     pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
-        use dashmap::DashMap;
-        use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-        use mainframe_db::DatabaseManager;
-        use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
-
-        use crate::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
-
-        struct NoopQuotaSettings;
-        impl QuotaSettingsStore for NoopQuotaSettings {
-            fn get(&self, _category: &str, _key: &str) -> Option<String> {
-                None
-            }
-            fn get_by_category(
-                &self,
-                _category: &str,
-            ) -> std::collections::HashMap<String, String> {
-                std::collections::HashMap::new()
-            }
-            fn set(&self, _category: &str, _key: &str, _value: &str) {}
-        }
-
-        let db = crate::db::Db::spawn(|| DatabaseManager::open(std::path::Path::new(":memory:")))
-            .expect("open in-memory db");
-        let (broadcast, _keep) = broadcast::channel::<DaemonEvent>(64);
-        std::mem::forget(_keep);
-        let watcher = FileWatcherService::new(|_| {});
-        let adapter_registry = Arc::new(AdapterRegistry::new());
-        let data_dir =
-            std::env::temp_dir().join(format!("mf-routes-cm-test-{}", nanoid::nanoid!()));
-        let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-            settings: Box::new(NoopQuotaSettings),
-            emit_event: Box::new(|_| {}),
-            now: None,
-        }));
-        let manager = crate::chat_deps::build_chat_manager(
-            db.clone(),
-            adapter_registry.clone(),
-            Arc::new(BackgroundTaskTracker::new()),
-            Arc::new(AttachmentStore::new(data_dir.join("attachments"))),
-            Arc::new(PushService::new()),
-            GitFactory,
-            broadcast.clone(),
-            Arc::new(NoopLaunchStopper),
-            Arc::new(NoopScopeTunnelStopper),
-            quota,
-            Arc::new(ClaudeWorkflowStore::new()),
-            ResolvedPath::from_value("/usr/bin:/bin"),
-            None,
-            data_dir.clone(),
-        );
-        Arc::new(AppCtx {
-            db,
-            git: GitFactory,
-            services: Services {
-                attachments: Arc::new(AttachmentStore::new(data_dir.join("attachments"))),
-                push: Arc::new(PushService::new()),
-                watcher: Arc::new(watcher),
-            },
-            broadcast,
-            adapter_registry,
-            background_tasks: Arc::new(BackgroundTaskTracker::new()),
-            claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
-            chat_manager: Some(manager),
-            launch_registry: None,
-            tunnel_manager: None,
-            port_tunnels: None,
-            lsp_manager: None,
-            plugin_manager: None,
-            automations: None,
-            quota: None,
-            data_dir,
-            version: "0.0.0-test".into(),
-            port: 0,
-            auth_secret: None,
-            resolved_path: ResolvedPath::from_value("/usr/bin:/bin"),
-            tunnel_url: Arc::new(RwLock::new(None)),
-            ws_clients: Arc::new(DashMap::new()),
-            facade_hub: Arc::new(FacadeHub::default()),
-            facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
-        })
+        crate::chat_test_support::test_ctx_with_chat_manager()
     }
 }
 

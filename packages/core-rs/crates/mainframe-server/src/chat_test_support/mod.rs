@@ -20,6 +20,10 @@ use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
+mod app_ctx;
+
+pub(crate) use app_ctx::{test_ctx, test_ctx_with_chat_manager};
+
 static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Registers under whatever `id` it is built with (route tests use `"claude"`

@@ -36,10 +36,10 @@ use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
 use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
-use crate::thread_request::{ThreadRequest, build_thread_request};
+use crate::thread_request::build_thread_request;
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
-use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
+use crate::types::{ThreadStartResult, TurnStartResult};
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 
@@ -258,22 +258,16 @@ impl CodexSession {
             &approval_policy,
             json!(sandbox),
         );
-        let (new_thread_id, reported_model) = match request {
-            ThreadRequest::Resume(p) => {
-                let res: ThreadResumeResult = de(client
-                    .request("thread/resume", Some(Value::Object(p)))
-                    .await
-                    .map_err(|e| AdapterError::Message(e.0))?)?;
-                (res.thread.id, res.model)
-            }
-            ThreadRequest::Start(p) => {
-                let res: ThreadStartResult = de(client
-                    .request("thread/start", Some(Value::Object(p)))
-                    .await
-                    .map_err(|e| AdapterError::Message(e.0))?)?;
-                (res.thread.id, res.model)
-            }
-        };
+        // `thread/start` and `thread/resume` answer with the same
+        // `{ thread: { id }, model }` shape, so one call + one deserialize
+        // covers both (todo #346 review fix).
+        let method = request.method();
+        let params = request.into_params();
+        let res: ThreadStartResult = de(client
+            .request(method, Some(Value::Object(params)))
+            .await
+            .map_err(|e| AdapterError::Message(e.0))?)?;
+        let (new_thread_id, reported_model) = (res.thread.id, res.model);
 
         {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
