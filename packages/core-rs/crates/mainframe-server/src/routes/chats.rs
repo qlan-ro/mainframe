@@ -136,7 +136,7 @@ async fn list_for_project(
     }
 }
 
-async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+pub(crate) async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     if let Some(cm) = ctx.chat_manager.as_ref() {
         return match cm.get_chat(&id) {
             Some(chat) => ok(chat),
@@ -748,6 +748,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_pinned_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx();
+        let (_, _, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let resp = set_pinned(
+            State(ctx.clone()),
+            Path(temp_id),
+            axum::body::Bytes::from(r#"{"pinned":true}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot pin a temporary chat");
+    }
+
+    #[tokio::test]
     async fn set_effort_rejects_bad_level_400() {
         let ctx = AppCtx::test_ctx();
         let resp = set_effort(
@@ -792,6 +808,144 @@ mod tests {
         let (status, body) = read(resp).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"], "Chat not found");
+    }
+
+    // ── includeTemporary (todo #346, AC 26) ───────────────────────────────────
+
+    async fn seed_one_temporary_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
+        ctx.db
+            .call(|db| {
+                let project = db.projects.create("/tmp/temp-list", None)?;
+                let normal = db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })?;
+                let temp = db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                })?;
+                Ok((project.id, normal.id, temp.id))
+            })
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn list_excludes_temporary_by_default_and_includes_it_when_asked() {
+        let ctx = AppCtx::test_ctx();
+        let (_, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let excluded = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
+        assert!(excluded.contains(&normal_id));
+        assert!(!excluded.contains(&temp_id));
+
+        let included = ids_of(
+            list(
+                State(ctx.clone()),
+                Query(ListQuery {
+                    project: None,
+                    tags: None,
+                    synthetic: None,
+                    include_temporary: Some(true),
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(included.contains(&normal_id));
+        assert!(included.contains(&temp_id));
+    }
+
+    #[tokio::test]
+    async fn list_for_project_excludes_temporary_by_default_and_includes_it_when_asked() {
+        let ctx = AppCtx::test_ctx();
+        let (project_id, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let excluded = ids_of(
+            list_for_project(
+                State(ctx.clone()),
+                Path(project_id.clone()),
+                Query(ListForProjectQuery {
+                    include_temporary: None,
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(excluded.contains(&normal_id));
+        assert!(!excluded.contains(&temp_id));
+
+        let included = ids_of(
+            list_for_project(
+                State(ctx.clone()),
+                Path(project_id),
+                Query(ListForProjectQuery {
+                    include_temporary: Some(true),
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(included.contains(&normal_id));
+        assert!(included.contains(&temp_id));
+    }
+
+    // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
+    // real ChatManager) ───────────────────────────────────────────────────────
+
+    async fn create_temporary_chat(ctx: &Arc<AppCtx>) -> String {
+        ctx.chat_manager
+            .as_ref()
+            .unwrap()
+            .create_chat_with_defaults(
+                mainframe_types::chat::NewChat {
+                    project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
+            .await
+            .id
+    }
+
+    #[tokio::test]
+    async fn archive_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let id = create_temporary_chat(&ctx).await;
+
+        let (status, body) = read(
+            archive(
+                State(ctx.clone()),
+                Path(id),
+                Query(ArchiveQuery {
+                    delete_worktree: None,
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot archive a temporary chat");
+    }
+
+    #[tokio::test]
+    async fn unarchive_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let id = create_temporary_chat(&ctx).await;
+
+        let (status, body) = read(unarchive(State(ctx.clone()), Path(id)).await).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot unarchive a temporary chat");
     }
 
     #[tokio::test]

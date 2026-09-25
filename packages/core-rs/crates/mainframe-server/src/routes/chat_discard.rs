@@ -122,6 +122,65 @@ mod tests {
     fn refuse_if_temporary_fails_for_a_temporary_chat() {
         assert!(refuse_if_temporary(&test_chat(true), "pin").is_some());
     }
+
+    // ── discard success (todo #346, AC 26 — needs a real ChatManager) ────────
+
+    #[tokio::test]
+    async fn discard_deletes_the_row_and_scratch_dir_and_404s_on_the_next_get() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let created = ctx
+            .chat_manager
+            .as_ref()
+            .unwrap()
+            .create_chat_with_defaults(
+                NewChat {
+                    project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
+            .await;
+        let chat_id = created.id;
+
+        let scratch_path = ctx
+            .db
+            .call({
+                let chat_id = chat_id.clone();
+                move |db| Ok(db.chats.get(&chat_id)?.and_then(|c| c.scratch_path))
+            })
+            .await
+            .unwrap()
+            .expect("a temporary non-project chat has a scratch path");
+        std::fs::create_dir_all(&scratch_path).unwrap();
+        assert!(std::path::Path::new(&scratch_path).exists());
+
+        let (status, _) = read(discard(State(ctx.clone()), Path(chat_id.clone())).await).await;
+        assert_eq!(status, StatusCode::OK);
+
+        assert!(
+            !std::path::Path::new(&scratch_path).exists(),
+            "the scratch directory must be removed"
+        );
+        let lookup = chat_id.clone();
+        assert!(
+            ctx.db
+                .call(move |db| db.chats.get(&lookup))
+                .await
+                .unwrap()
+                .is_none(),
+            "the row must be deleted"
+        );
+
+        let (status, body) =
+            read(crate::routes::chats::get_one(State(ctx.clone()), Path(chat_id)).await).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "Chat not found");
+    }
 }
 
 // PORT STATUS: new for #346 (no TS twin)

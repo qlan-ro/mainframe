@@ -146,3 +146,148 @@ async fn non_project_scratch_cwd_is_lazy_stable_and_recreated_when_deleted() {
         "the scratch path itself never moves across a restart"
     );
 }
+
+// ── AC 12: mid-life respawn paths (config respawn, degraded-recovery rebind,
+// next send after a CLI exit), each with the capability on and off ──────────
+
+/// Sets a worktree on `chat_id`, backed by a real directory (`continue_here`'s
+/// caller `do_start_chat` requires it to exist to spawn).
+fn give_worktree(h: &support::Harness, chat_id: &str, path: &str) {
+    std::fs::create_dir_all(path).unwrap();
+    let (chat_id, path) = (chat_id.to_string(), path.to_string());
+    h.db.call_blocking(move |d| {
+        d.chats.update(
+            &chat_id,
+            &mainframe_db::chats::ChatUpdate {
+                worktree_path: Some(Some(path)),
+                branch_name: Some(Some("wt".to_string())),
+                ..Default::default()
+            },
+        )
+    })
+    .unwrap();
+}
+
+#[tokio::test]
+async fn config_respawn_starts_fresh_when_capable_and_resumes_without_the_capability() {
+    for capable in [true, false] {
+        let h = support::harness();
+        let chat = support::create_chat(&h, true);
+        let adapter = support::TestAdapter::new(capable);
+        let manager = support::rebuild_manager(&h, adapter);
+        manager.start_chat(&chat.id).await;
+        let first_id = support::get_chat(&h, &chat.id)
+            .claude_session_id
+            .expect("on_init must have stored a provider id");
+
+        // A model change crossing endpoints needs a respawn (rule: the endpoint
+        // is fixed in the child's environment at spawn).
+        manager
+            .update_chat_config(
+                &chat.id,
+                None,
+                Some("cliproxy/model-x".to_string()),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        // `update_chat_config`'s auto-restart only fires for a session the deps
+        // report as still spawned; drive the respawn's next start explicitly,
+        // matching the spec's "the next message starts a fresh vendor session".
+        manager.start_chat(&chat.id).await;
+
+        let after = support::get_chat(&h, &chat.id);
+        let second_id = after
+            .claude_session_id
+            .expect("the respawn must store a provider id");
+        if capable {
+            assert!(
+                after.context_lost_at.is_some(),
+                "capable: the config respawn must mark context loss"
+            );
+            assert_ne!(first_id, second_id, "capable: a fresh id must be minted");
+        } else {
+            assert!(
+                after.context_lost_at.is_none(),
+                "incapable: context is never marked lost"
+            );
+            assert_eq!(first_id, second_id, "incapable: the same id must resume");
+        }
+    }
+}
+
+#[tokio::test]
+async fn degraded_recovery_rebind_starts_fresh_when_capable_and_resumes_without_the_capability() {
+    for capable in [true, false] {
+        let h = support::harness();
+        let chat = support::create_chat(&h, true);
+        give_worktree(&h, &chat.id, &format!("{}/wt", h.data_dir.path().display()));
+        let adapter = support::TestAdapter::new(capable);
+        let manager = support::rebuild_manager(&h, adapter);
+        manager.start_chat(&chat.id).await;
+        let first_id = support::get_chat(&h, &chat.id)
+            .claude_session_id
+            .expect("on_init must have stored a provider id");
+
+        // Rebinds the chat off its (here: still-present, but the recovery flow
+        // doesn't care) worktree onto the project root.
+        manager.continue_in_project_root(&chat.id).await.unwrap();
+        manager.start_chat(&chat.id).await;
+
+        let after = support::get_chat(&h, &chat.id);
+        let second_id = after
+            .claude_session_id
+            .expect("the rebind's respawn must store a provider id");
+        if capable {
+            assert!(
+                after.context_lost_at.is_some(),
+                "capable: the degraded-recovery rebind must mark context loss"
+            );
+            assert_ne!(first_id, second_id, "capable: a fresh id must be minted");
+        } else {
+            assert!(after.context_lost_at.is_none());
+            assert_eq!(first_id, second_id, "incapable: the same id must resume");
+        }
+    }
+}
+
+#[tokio::test]
+async fn next_send_after_a_cli_exit_starts_fresh_when_capable_and_resumes_without_the_capability() {
+    for capable in [true, false] {
+        let h = support::harness();
+        let chat = support::create_chat(&h, true);
+        let adapter = support::TestAdapter::new(capable);
+        let manager = support::rebuild_manager(&h, adapter);
+        manager.start_chat(&chat.id).await;
+        let first_id = support::get_chat(&h, &chat.id)
+            .claude_session_id
+            .expect("on_init must have stored a provider id");
+
+        // Model an unexpected CLI exit: the fake session's `interrupt` marks
+        // itself unspawned (a real CLI exits on SIGINT), leaving the same
+        // "no live session" shape a crash would.
+        manager.interrupt_chat(&chat.id).await;
+        // `send_message` respawns whenever the live session is not spawned —
+        // the same guard an unexpected CLI exit leaves behind.
+        manager
+            .send_message(&chat.id, "hello again", None, None)
+            .await
+            .unwrap();
+
+        let after = support::get_chat(&h, &chat.id);
+        let second_id = after
+            .claude_session_id
+            .expect("the post-exit respawn must store a provider id");
+        if capable {
+            assert!(
+                after.context_lost_at.is_some(),
+                "capable: the post-exit respawn must mark context loss"
+            );
+            assert_ne!(first_id, second_id, "capable: a fresh id must be minted");
+        } else {
+            assert!(after.context_lost_at.is_none());
+            assert_eq!(first_id, second_id, "incapable: the same id must resume");
+        }
+    }
+}

@@ -21,6 +21,8 @@ use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
 
+mod spawn_prep;
+
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
 /// and resolves to the same launch scope (`worktreePath ?? projectPath`).
 pub fn is_last_active_chat_for_scope(
@@ -832,18 +834,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     /// update — called before either `do_load_chat` or `do_start_chat` reads
     /// `claude_session_id` as a resume target.
     fn mark_context_lost_if_needed(&self, chat_id: &str, chat: &mut Chat) {
-        if !no_persistence::context_was_lost(
-            chat.vendor_session_ephemeral,
-            chat.claude_session_id.as_deref(),
-        ) {
+        let now = now_iso8601();
+        if !no_persistence::take_context_loss(chat, &now) {
             return;
         }
-        let now = now_iso8601();
         self.deps.mark_context_lost(chat_id, &now);
-        chat.context_lost_at = Some(now);
-        chat.claude_session_id = None;
-        chat.session_file_path = None;
-        chat.vendor_session_ephemeral = false;
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock().unwrap_or_else(|e| e.into_inner()).chat = chat.clone();
         }
@@ -996,44 +991,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
 
         let project_path = self.deps.projects_get_path(&chat.project_id);
-        let effective_path = chat_cwd(
-            chat.worktree_path.as_deref(),
-            chat.scratch_path.as_deref(),
-            project_path,
-        )
-        .ok_or_else(|| LifecycleError::Message(format!("Project {} not found", chat.project_id)))?;
-        // A non-project chat has no project directory to check — its cwd is
-        // its own scratch path, ensured to exist just below.
-        if chat.worktree_path.is_none()
-            && !chat.no_project
-            && !self.deps.path_exists(&effective_path)
-        {
-            return Err(LifecycleError::Message(format!(
-                "Project directory does not exist or is not accessible: {effective_path}"
-            )));
-        }
-
-        // Rule 6: created lazily on first spawn and recreated if deleted since,
-        // every time (a no-op scratch_path is `None` for a project chat).
-        if let Some(scratch) = chat.scratch_path.clone() {
-            self.deps.ensure_dir(&scratch).await;
-        }
-
         // Rule 7: clear a dead resume target (and stamp the loss) before it is
         // read into `SessionOptions.chat_id` below.
         self.mark_context_lost_if_needed(chat_id, &mut chat);
-
-        let no_persistence = no_persistence::should_start_without_persistence(
-            chat.temporary,
-            self.deps.adapter_supports_no_persistence(&chat.adapter_id),
-        );
+        // Rule 6/7: the effective cwd (ensuring a non-project chat's scratch
+        // directory along the way) and the no-persistence decision.
+        let plan = self.resolve_spawn_plan(&chat, project_path).await?;
 
         let session = self
             .deps
             .create_session(
                 &chat.adapter_id,
                 SessionOptions {
-                    project_path: effective_path,
+                    project_path: plan.cwd,
                     chat_id: chat.claude_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
                 },
@@ -1065,17 +1035,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // Rule 7's flag write: persisted and mirrored into the active chat
         // before the spawn, so `on_init`'s stored provider id lands with the
         // right ephemeral flag already in place.
-        self.deps.chats_update(
-            &chat.id,
-            &LifecycleChatUpdate {
-                vendor_session_ephemeral: Some(no_persistence),
-                ..Default::default()
-            },
-        );
-        cell.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .vendor_session_ephemeral = no_persistence;
+        self.apply_no_persistence_flag(&chat.id, &cell, plan.no_persistence);
 
         let process = session
             .spawn(
@@ -1088,7 +1048,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     tuning,
                     small_fast_model,
                     default_model,
-                    no_persistence: Some(no_persistence),
+                    no_persistence: Some(plan.no_persistence),
                 }),
                 Some(sink),
             )

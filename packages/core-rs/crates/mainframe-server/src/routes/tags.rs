@@ -162,6 +162,53 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+    use crate::ctx::AppCtx;
+
+    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+        let status = resp.status();
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+        )
+    }
+
+    #[tokio::test]
+    async fn set_chat_tags_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx();
+        let chat_id = ctx
+            .db
+            .call(|db| {
+                let project = db.projects.create("/tmp/tags-temp", None)?;
+                db.chats
+                    .create(&mainframe_types::chat::NewChat {
+                        project_id: project.id,
+                        adapter_id: "claude".to_string(),
+                        temporary: true,
+                        ..Default::default()
+                    })
+                    .map(|c| c.id)
+            })
+            .await
+            .unwrap();
+
+        let resp = set_chat_tags(
+            State(ctx.clone()),
+            Path(chat_id),
+            axum::body::Bytes::from(r#"{"tags":["feature"]}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot tag a temporary chat");
+    }
+}
+
 // PORT STATUS: src/server/routes/tags.ts (6 endpoints, 98 lines)
 // confidence: high
 // todos: 0

@@ -195,6 +195,8 @@ mod tests {
         let (status, body) = read(resp).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["error"], "Project not found");
+        let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+        assert!(rows.is_empty(), "a rejected create must write no chat row");
     }
 
     #[tokio::test]
@@ -243,6 +245,80 @@ mod tests {
         )
         .await;
         assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
+    }
+
+    // ── success paths (todo #346, AC 26 — need a real ChatManager) ───────────
+
+    #[tokio::test]
+    async fn create_succeeds_with_a_project() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let project = ctx
+            .db
+            .call(|db| db.projects.create("/tmp/create-with-project", None))
+            .await
+            .unwrap();
+
+        let resp = create(
+            State(ctx.clone()),
+            axum::body::Bytes::from(format!(
+                r#"{{"projectId":"{}","adapterId":"claude"}}"#,
+                project.id
+            )),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"]["projectId"], project.id);
+        assert_eq!(body["data"]["temporary"], false);
+
+        let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn create_succeeds_with_no_project() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+
+        let resp = create(
+            State(ctx.clone()),
+            axum::body::Bytes::from(r#"{"noProject":true,"adapterId":"claude"}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"]["projectId"], NO_PROJECT_ID);
+        assert_eq!(body["data"]["noProject"], true);
+
+        let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0].scratch_path.is_some(),
+            "a non-project chat is given a scratch path (daemon-internal, not on the wire)"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_succeeds_with_temporary() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+
+        let resp = create(
+            State(ctx.clone()),
+            axum::body::Bytes::from(r#"{"noProject":true,"adapterId":"claude","temporary":true}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["data"]["temporary"], true);
+
+        let rows = ctx.db.call(|db| db.chats.list_all()).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].temporary);
     }
 }
 

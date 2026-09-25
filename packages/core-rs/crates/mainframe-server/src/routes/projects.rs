@@ -200,6 +200,79 @@ mod tests {
             .collect();
         assert!(!ids.contains(&"mainframe-no-project".to_string()));
     }
+
+    // ── DELETE via a real ChatManager (todo #346, AC 10/26) ───────────────────
+
+    #[tokio::test]
+    async fn removing_a_project_deletes_its_temporary_chat_and_stops_the_process() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let adapter = crate::chat_test_support::StubAdapter::new("claude", false);
+        ctx.adapter_registry.register(adapter.clone());
+        let project_dir =
+            std::env::temp_dir().join(format!("mf-remove-temp-{}", nanoid::nanoid!()));
+        std::fs::create_dir_all(&project_dir).unwrap();
+        let project_path = project_dir.to_string_lossy().into_owned();
+        let project = ctx
+            .db
+            .call(move |db| db.projects.create(&project_path, None))
+            .await
+            .unwrap();
+        let chat = ctx
+            .chat_manager
+            .as_ref()
+            .unwrap()
+            .create_chat_with_defaults(
+                mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
+            .await;
+        ctx.chat_manager
+            .as_ref()
+            .unwrap()
+            .start_chat(&chat.id)
+            .await;
+
+        let (status, _) =
+            body_json(remove(State(ctx.clone()), Path(project.id.clone())).await).await;
+        assert_eq!(
+            adapter.kills.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "removing the project must stop the temporary chat's live process"
+        );
+        assert_eq!(status, StatusCode::OK);
+
+        assert!(
+            ctx.db
+                .call(move |db| db.chats.get(&chat.id))
+                .await
+                .unwrap()
+                .is_none(),
+            "the temporary chat's row must be deleted along with its project"
+        );
+        assert!(
+            ctx.db
+                .call(move |db| db.projects.get(&project.id))
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_refuses_the_hidden_scratch_project() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        let (status, body) =
+            body_json(remove(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
+                .await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["success"], false);
+    }
 }
 
 // PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)

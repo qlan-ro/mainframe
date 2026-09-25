@@ -1,20 +1,15 @@
-//! The minimal `Adapter`/`AdapterSession` double for `temporary_chat_lifecycle.rs`.
-//!
-//! Its session id models the one behavior these tests read: a supplied resume
-//! id (`SessionOptions.chat_id: Some(id)`) is kept verbatim, a fresh spawn
-//! (`None`) mints a new one — the same shape a real CLI's resume vs. fresh
-//! start takes, so "the provider id changed" and "the session was resumed"
-//! are directly observable without spawning one.
+//! A minimal `Adapter`/`AdapterSession` pair that actually "spawns" (unlike
+//! `routes/session_transcripts.rs`'s `StubAdapter`, whose `create_session` is
+//! `unreachable!`) — for route tests that need `ctx.chat_manager` wired to a
+//! real `ChatManager` (todo #346, AC 26) and drive it through a create/start
+//! round trip without touching a real CLI process.
+#![cfg(test)]
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-
-/// Process-wide (not per-adapter) so a fresh `TestAdapter` built to model a
-/// restart still mints an id distinct from the one before it.
-static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 
 use mainframe_adapter_api::{
-    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
+    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput,
     StopBackgroundTaskResult,
 };
 use mainframe_types::adapter::{
@@ -25,34 +20,36 @@ use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
 
-pub const ADAPTER_ID: &str = "temp-chat-test-cli";
+static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 
-/// `no_persistence` mirrors the registry capability under test; every session
-/// it hands out records its id into `spawn_ids` and its cwd into
-/// `project_paths` so a test can read what a whole scenario spawned (e.g.
-/// before/after a restart).
-pub struct TestAdapter {
+/// Registers under whatever `id` it is built with (route tests use `"claude"`
+/// to match their bodies' `adapterId`). `no_persistence` mirrors the
+/// registry capability the rule-7 spawn decision reads.
+pub(crate) struct StubAdapter {
+    id: String,
     no_persistence: bool,
-    pub spawn_ids: Arc<Mutex<Vec<String>>>,
-    pub project_paths: Arc<Mutex<Vec<String>>>,
+    /// How many `StubSession::kill` calls this adapter's sessions have seen
+    /// (shared across every session it hands out) — lets a caller prove a
+    /// project/chat teardown actually stopped a live process.
+    pub(crate) kills: Arc<AtomicUsize>,
 }
 
-impl TestAdapter {
-    pub fn new(no_persistence: bool) -> Arc<Self> {
+impl StubAdapter {
+    pub(crate) fn new(id: &str, no_persistence: bool) -> Arc<Self> {
         Arc::new(Self {
+            id: id.to_string(),
             no_persistence,
-            spawn_ids: Arc::new(Mutex::new(Vec::new())),
-            project_paths: Arc::new(Mutex::new(Vec::new())),
+            kills: Arc::new(AtomicUsize::new(0)),
         })
     }
 }
 
-impl Adapter for TestAdapter {
+impl Adapter for StubAdapter {
     fn id(&self) -> &str {
-        ADAPTER_ID
+        &self.id
     }
     fn name(&self) -> &str {
-        "Temp Chat Test CLI"
+        &self.id
     }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
@@ -73,64 +70,54 @@ impl Adapter for TestAdapter {
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         let id = options.chat_id.clone().unwrap_or_else(|| {
             let n = NEXT_SESSION_ID.fetch_add(1, Ordering::SeqCst);
-            format!("sess-{n}")
+            format!("stub-sess-{n}")
         });
-        self.spawn_ids.lock().unwrap().push(id.clone());
-        self.project_paths
-            .lock()
-            .unwrap()
-            .push(options.project_path.clone());
-        Arc::new(TestSession {
+        Arc::new(StubSession {
             id,
+            adapter_id: self.id.clone(),
             project_path: options.project_path,
-            spawned: std::sync::atomic::AtomicBool::new(false),
+            kills: self.kills.clone(),
         })
     }
     fn kill_all(&self) {}
 }
 
-struct TestSession {
+struct StubSession {
     id: String,
+    adapter_id: String,
     project_path: String,
-    /// Tracks the real spawn/kill lifecycle (a fresh instance always starts
-    /// unspawned — every restart scenario here re-derives its manager rather
-    /// than reusing a live session, so that part of the old always-`false`
-    /// comment still holds) — but a `send_message`-driven respawn within the
-    /// SAME manager (AC 12's "next send after a CLI exit" path) needs a session
-    /// that actually reports spawned once `spawn()` has run.
-    spawned: std::sync::atomic::AtomicBool,
+    kills: Arc<AtomicUsize>,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
     Box::pin(async { Ok(()) })
 }
 
-impl AdapterSession for TestSession {
+impl AdapterSession for StubSession {
     fn id(&self) -> &str {
         &self.id
     }
     fn adapter_id(&self) -> &str {
-        ADAPTER_ID
+        &self.adapter_id
     }
     fn project_path(&self) -> &str {
         &self.project_path
     }
     fn is_spawned(&self) -> bool {
-        self.spawned.load(Ordering::SeqCst)
+        false
     }
     fn spawn(
         &self,
         _options: Option<SessionSpawnOptions>,
-        sink: Option<Arc<dyn SessionSink>>,
+        sink: Option<Arc<dyn mainframe_adapter_api::SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
         Box::pin(async move {
-            self.spawned.store(true, Ordering::SeqCst);
             if let Some(sink) = sink {
                 sink.on_init(&self.id);
             }
             Ok(AdapterProcess {
                 id: self.id.clone(),
-                adapter_id: ADAPTER_ID.to_string(),
+                adapter_id: self.adapter_id.clone(),
                 chat_id: self.id.clone(),
                 pid: 0,
                 status: AdapterProcessStatus::Running,
@@ -140,14 +127,7 @@ impl AdapterSession for TestSession {
         })
     }
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.spawned.store(false, Ordering::SeqCst);
-        ok()
-    }
-    fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
-        // A real CLI exits on SIGINT; model the same "session gone, chat
-        // untouched" shape an unexpected exit leaves for `send_message`'s
-        // `!session_is_spawned` respawn guard (AC 12, todo #346).
-        self.spawned.store(false, Ordering::SeqCst);
+        self.kills.fetch_add(1, Ordering::SeqCst);
         ok()
     }
     fn get_process_info(&self) -> Option<AdapterProcess> {
@@ -165,6 +145,9 @@ impl AdapterSession for TestSession {
         &self,
         _response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        ok()
+    }
+    fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         ok()
     }
     fn set_model(&self, _model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
@@ -187,10 +170,7 @@ impl AdapterSession for TestSession {
         Box::pin(async { Ok(false) })
     }
     fn get_context_files(&self) -> ContextFiles {
-        ContextFiles {
-            global: Vec::new(),
-            project: Vec::new(),
-        }
+        ContextFiles::default()
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
@@ -216,3 +196,5 @@ impl AdapterSession for TestSession {
         ok()
     }
 }
+
+// Not a port; test scaffolding only. No PORT STATUS trailer.
