@@ -162,9 +162,9 @@ user sees after sending holds all pre-offload messages followed by the new turn.
 9. Golden test (Rust): one recorded Claude session, driven through the live
    stream pipeline and through transcript cold-reload, yields the same ordered
    facade item sequence, with the same ids, roles, kinds, and content, once
-   timestamps are excluded. Each divergence the test finds is either fixed in
-   this work or listed in the test as a named exception that links a follow-up
-   todo.
+   timestamps are excluded. Timestamps are the only excluded field: the test
+   has no exception list, and any other divergence it finds is fixed in this
+   work before the criterion passes.
 10. Wire contract: `chat.offloaded` with `{ chatId: string }` is in the Rust
     daemon event enum and in the shared TypeScript `DaemonEvent` union. A new
     fixture passes the existing daemon-event round-trip test. The event is in
@@ -209,7 +209,7 @@ user sees after sending holds all pre-offload messages followed by the new turn.
 7. **An on-screen chat defers its renderer release until the user navigates away** — `reversible`. Blanking a transcript while the user reads it is worse than holding one graph a little longer.
 8. **The loading spinner shows for any history load of an empty, non-draft thread, not only after offload** — `reversible`. The renderer cannot tell an offloaded chat from one never opened since restart, and today that load shows a blank thread.
 9. **History loads resolve the transcript by stored session file path first, derived path second** — `reversible`. This adopts the brief. The code is currently inconsistent: the presence check already uses this order, but the history load uses only the derived path, and offload makes cold-reload a common path.
-10. **The golden test compares the facade item sequence with timestamps excluded; each divergence is fixed or becomes a named, todo-linked exception** — `reversible`. The brief asked for "identical", which is unachievable for daemon-minted timestamps. An id-parity test already exists (`live_vs_history_id_parity.rs`), and this widens it to content.
+10. **The golden test requires identical facade item sequences, excluding only timestamps; every other divergence is fixed in this work** — `reversible`. This holds the brief's "identical" ruling. Timestamps are the one exclusion because the daemon mints them when it receives each live event, so they can never match a transcript read. No exception list is allowed, because a deferred content divergence is exactly what a user would see after reopening an offloaded chat. An id-parity test already exists (`live_vs_history_id_parity.rs`), and this widens it to content. If a divergence proves too large to fix here, the work returns to the spec gate rather than shipping a partial golden test.
 11. **The offload re-checks its conditions just before acting and skips a chat with any in-flight send, spawn, or load** — `reversible`. This adopts the brief's race ruling. The current scanner kills without a re-check.
 12. **The composer stays usable during the reload spinner** — `reversible`. The daemon single-flights the load ahead of a send, so sending early is safe.
 13. **Unsent composer drafts survive a renderer release** — `reversible`. Losing typed text to a background memory policy would be a regression that users can see.
