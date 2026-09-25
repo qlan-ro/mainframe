@@ -72,6 +72,19 @@ describe('openNewThreadDraft — project filter clearing', () => {
 });
 
 describe('openNewThreadDraft — rememberReturn timing', () => {
+  it('keeps the existing return target when triggered from the draft itself (pre-switch mainThreadId === newThreadId)', async () => {
+    const deps = makeDeps({
+      runtimeThreads: {
+        getState: vi.fn(() => ({ newThreadId: '__LOCALID_1', mainThreadId: '__LOCALID_1' })),
+        switchToNewThread: vi.fn(async () => {}),
+      },
+    });
+
+    await openNewThreadDraft({ projectId: 'proj-a' }, deps);
+
+    expect(deps.setReturnTarget).not.toHaveBeenCalled();
+  });
+
   it('snapshots mainThreadId as it was BEFORE the switch', async () => {
     let switched = false;
     const deps = makeDeps({
