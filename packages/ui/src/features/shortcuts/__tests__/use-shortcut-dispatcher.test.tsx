@@ -305,6 +305,38 @@ describe('D7 regression — the session-tab family fires from a focused text fie
   });
 });
 
+describe('todo #365 — auto-repeat ⌘N fires no additional new-session sequence', () => {
+  it('an auto-repeat ⌘N keydown does not call sessions.new but still prevents default', () => {
+    const { spies, unmount } = mountAllHandlers();
+
+    const event = press(window, { code: 'KeyN', metaKey: true, repeat: true });
+
+    expect(spies['sessions.new']).not.toHaveBeenCalled();
+    expect(event).toBe(false); // still prevented, so the OS repeat never reaches the browser default
+    unmount();
+  });
+
+  it('a fresh (non-repeat) ⌘N keydown still fires sessions.new', () => {
+    const { spies, unmount } = mountAllHandlers();
+
+    const event = press(window, { code: 'KeyN', metaKey: true, repeat: false });
+
+    expect(spies['sessions.new']).toHaveBeenCalledTimes(1);
+    expect(event).toBe(false);
+    unmount();
+  });
+
+  it('a repeating chord for an entry WITHOUT the repeat guard still fires every time', () => {
+    const { spies, unmount } = mountAllHandlers();
+
+    press(window, { code: 'KeyK', metaKey: true, repeat: true });
+    press(window, { code: 'KeyK', metaKey: true, repeat: true });
+
+    expect(spies['app.search-palette']).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+});
+
 describe('an id with no registered handler stays inert', () => {
   it('leaves the keystroke unprevented and calls nothing', () => {
     const { spies, unmount } = mountAllHandlers(['app.search-palette']);

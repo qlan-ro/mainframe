@@ -14,7 +14,15 @@ const TAB_BY_INDEX_CHORDS = Array.from({ length: 9 }, (_, i) => ({
 }));
 
 export const SHORTCUTS = [
-  { id: 'sessions.new', chord: { code: 'KeyN', mod: true }, label: 'New session', group: 'Sessions' },
+  {
+    id: 'sessions.new',
+    chord: { code: 'KeyN', mod: true },
+    label: 'New session',
+    group: 'Sessions',
+    // Holding ⌘N past the OS key-repeat delay must count as one trigger, not
+    // a New-session sequence per repeat keydown (todo #365).
+    ignoreRepeat: true,
+  },
   {
     id: 'sessions.tab-by-index',
     // ⌘1…⌘9 is the platform's "switch to the Nth tab" (Safari, VS Code, Slack),
