@@ -146,3 +146,50 @@ describe('useStartNewSession — pending-target lifetime', () => {
     expect(usePendingDraftProject.getState().projectId).toBeNull();
   });
 });
+
+describe('useStartNewSession — same-target repeat while the draft is in flight', () => {
+  it('is a no-op when the active thread is already the slot resolving the same pending target', async () => {
+    __mainThreadId = '__LOCALID_1';
+    __newThreadId = '__LOCALID_1';
+    __filterProjectIds = new Set(['proj-pill']);
+    usePendingDraftProject.getState().setPendingProject('proj-pill');
+
+    const { result } = renderHook(() => useStartNewSession());
+    act(() => result.current());
+
+    expect(openNewThreadDraft).not.toHaveBeenCalled();
+    expect(resetNewThreadDraft).not.toHaveBeenCalled();
+    expect(switchToNewThread).not.toHaveBeenCalled();
+  });
+
+  it('re-runs the full sequence when the pill changes to a different target mid-flight', async () => {
+    __mainThreadId = '__LOCALID_1';
+    __newThreadId = '__LOCALID_1';
+    __filterProjectIds = new Set(['proj-new']);
+    usePendingDraftProject.getState().setPendingProject('proj-old');
+
+    const { result } = renderHook(() => useStartNewSession());
+    await act(async () => {
+      result.current();
+      await flush();
+    });
+
+    expect(openNewThreadDraft).toHaveBeenCalledExactlyOnceWith({ projectId: 'proj-new' });
+  });
+
+  it('does not skip the no-target path when it is a different in-flight target with no active project or pill', async () => {
+    // A ready (not blocking) record on the active slot still lets a genuinely
+    // projectless trigger fall through as today's no-target path would — this
+    // only exercises resolution, not the no-op guard.
+    __mainThreadId = '__LOCALID_1';
+    __newThreadId = '__LOCALID_1';
+    __filterProjectIds = new Set();
+    __activeProjectId = undefined;
+
+    const { result } = renderHook(() => useStartNewSession());
+    act(() => result.current());
+
+    expect(useDraftReturnTarget.getState().returnThreadId).toBeNull();
+    expect(resetNewThreadDraft).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
+  });
+});
