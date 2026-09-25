@@ -37,9 +37,9 @@ export function useStartNewSession(): () => void {
       return;
     }
 
-    usePendingDraftProject.getState().setPendingProject(target);
+    const pendingToken = usePendingDraftProject.getState().setPendingProject(target);
     void openNewThreadDraft({ projectId: target })
       .catch(() => undefined)
-      .finally(() => usePendingDraftProject.getState().clearPendingProject());
+      .finally(() => usePendingDraftProject.getState().clearPendingProject(pendingToken));
   };
 }
