@@ -78,16 +78,29 @@ the file it resolved, not next to the derived directory.
 
 **Renderer.** Add a DI'd `OffloadRelease` class plus a hook mounted beside
 `useSessionListRouter`. It handles `chat.offloaded` like this:
-1. It resolves the thread item whose `remoteId` or `id` equals `chatId`.
-2. If that item is on screen, it defers the release. On screen means it is the main thread
-   or it is in the zones pair.
-3. Otherwise it releases now:
-   - mark the thread so its runtime hook stashes the composer draft on unmount;
-   - `detach()` the thread item, which stops its runtime and unmounts the subtree;
-   - after that, `chatControllerRegistry.dispose(chatId)`, which also drops the adopted
-     draft alias.
+1. It resolves **every** thread item whose `id` or `remoteId` equals `chatId`. A chat
+   created in this app session has two live items: the orphaned `__LOCALID_*` draft
+   (`remoteId` = chatId) and the canonical remote item (`id` = chatId). Both map to one
+   controller and both subtrees stay mounted (see Established facts).
+2. If **any** resolved item is on screen, it defers the release for the whole chat. On
+   screen means the item's id is the main thread or is in the zones pair.
+3. Otherwise it releases now, in this order:
+   - mark every resolved thread so its runtime hook stashes the composer draft on unmount;
+   - `detach()` **every** resolved item, which stops each runtime and unmounts each
+     subtree. No subtree may survive, because a surviving subtree's next render calls
+     `getOrCreate` under its own key and puts a controller back;
+   - only after all detaches, `chatControllerRegistry.dispose(chatId)` once, which drops
+     both keys (the chat id and the adopted draft alias).
+   An unknown `chatId` (no resolved items) still calls `dispose(chatId)`, which is a no-op
+   when the registry has no entry.
 
-Deferred chats are released when `mainThreadId` or the zones pair stops including them. The
+Checking only one item is wrong in both directions. If the check sees only the draft while
+the canonical item is main, it releases and disposes the on-screen controller, and the
+screen reloads blank with the spinner. If it detaches only the canonical item, the draft
+subtree re-creates a controller under the `__LOCALID_*` key and leaks.
+
+Deferred chats are released when `mainThreadId` or the zones pair stops including all of
+their resolved items. The
 thread's runtime hook restores a stashed draft (text and attachments) when it mounts again.
 `ChatThread` gets a centered `chat-thread-loading` spinner when all of these hold:
 - `loadState` is `loading`;
@@ -150,6 +163,12 @@ thread's runtime hook restores a stashed draft (text and attachments) when it mo
   `features/sessions/runtime/use-chat-runtime-hook.ts`.
 - `ChatControllerRegistry.dispose` removes every key that maps to the controller, including
   the adopted alias — `features/sessions/runtime/chat-controller-registry.ts`.
+- A chat created in this app session has two live thread items. After the first send, the
+  `chat.created` reload adds the canonical remote item (`id` = chatId) and the router
+  switches to it, leaving the `__LOCALID_*` draft item (`remoteId` = chatId) orphaned but
+  mounted. `adopt()` maps both keys to one controller —
+  `features/sessions/ws/use-session-list-router.ts` (first-send handoff branch),
+  `chat-controller-registry.ts` header and `adopt`.
 - Load dispatches `history.loading`, then awaits `session/resume` (active thread), then
   dispatches `history.ready` or `history.failed`. A new controller's first attach does a
   full replay — `features/chat/controller/chat-plane-loader.ts` `load`,
@@ -231,8 +250,14 @@ Files:
 - tests beside each.
 
 TDD:
-- AC11: release off screen, including the alias case; an unknown id is a no-op.
-- AC12: an on-screen chat is deferred, then released after a switch.
+- AC11: release off screen; an unknown id is a no-op. The alias case mounts both the
+  `__LOCALID_*` draft item and the canonical item for the same chat, and asserts that both
+  are detached, that the registry has no entry under either key after the release settles,
+  and that detach happens before dispose.
+- AC12: an on-screen chat is deferred, then released after a switch. The alias case mounts
+  both items with the canonical item as main (and, separately, in the zones pair), and
+  asserts that neither item is detached, the controller is not disposed, and the
+  transcript stays until the switch away.
 - AC13: the spinner shows, hides on ready and on error, and is absent on a draft.
 - AC14: the draft survives a release.
 
@@ -249,8 +274,8 @@ column. Verify with single-file vitest runs, the UI typecheck, and the types `ts
   must not change (spec). The DB `processState` of an idle chat is already cleared.
   Confirm that the sidebar row and `displayStatus` match the pre-offload state.
 - **The dying thread subtree re-renders after `dispose`** and recreates a controller.
-  Order the release as detach, then dispose. AC11 asserts that the registry is empty after
-  the release settles.
+  Order the release as detach every resolved item (draft and canonical), then dispose once.
+  AC11 asserts that the registry is empty under both keys after the release settles.
 - **The golden test may expose large live/history divergences.** Spec decision 10 sends
   those back to the spec gate rather than accepting them.
 - **The `SessionOptions` field ripples through every adapter and test constructor.**
