@@ -22,6 +22,9 @@ vi.mock('../../../sessions/runtime/chat-controller-registry', () => ({
 }));
 
 const addAttachmentSpy = vi.fn().mockResolvedValue(undefined);
+// Draft-stash unmount capture (#178) reads composer.getState() unconditionally —
+// stub it alongside addAttachment so unmount() doesn't throw in these tests.
+const composerGetStateSpy = vi.fn(() => ({ text: '', attachments: [] }));
 
 type ExternalStoreOpts = {
   onNew?: (msg: AppendMessage) => Promise<void>;
@@ -33,7 +36,7 @@ const capturedOnNew: { current: ((msg: AppendMessage) => Promise<void>) | undefi
 vi.mock('@assistant-ui/react', () => ({
   useExternalStoreRuntime: (opts: ExternalStoreOpts) => {
     capturedOnNew.current = opts.onNew;
-    return { thread: { composer: { addAttachment: addAttachmentSpy } } };
+    return { thread: { composer: { addAttachment: addAttachmentSpy, getState: composerGetStateSpy } } };
   },
   useAuiState: vi.fn(() => undefined),
 }));

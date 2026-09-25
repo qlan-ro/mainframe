@@ -28,6 +28,7 @@ import { projectChatThreadRepository } from '../controller/project-messages';
 import { buildChatExtras, isRunningFromState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
+import { captureIfMarked, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
 // Controller state → useSyncExternalStore
@@ -152,6 +153,38 @@ export function useChatThreadRuntime(
     },
   });
   runtimeRef.current = runtime;
+
+  // Draft continuity across an offload release (#178): a stash left by
+  // OffloadRelease for this SAME thread id (no id-flip on reopen — see the
+  // controller registry header) is restored into the composer once, mirroring
+  // the load-once effect above.
+  useEffect(() => {
+    const draft = takeStash(controller.getThreadId());
+    if (draft == null) return;
+    const composer = runtimeRef.current?.thread?.composer;
+    if (composer == null) return;
+    composer.setText(draft.text);
+    for (const file of draft.attachments) {
+      void composer.addAttachment(file).catch((error: unknown) => {
+        console.warn('[chat-runtime] could not restore a stashed attachment', error);
+      });
+    }
+  }, [controller]);
+
+  // Capture the composer draft on unmount, but only when OffloadRelease marked
+  // this thread first (markForStash) — an unmount from delete/archive never
+  // remounts, so stashing there would leak forever with nothing to restore.
+  useEffect(() => {
+    return () => {
+      const composer = runtimeRef.current?.thread?.composer;
+      if (composer == null) return;
+      const composerState = composer.getState();
+      const attachments = composerState.attachments
+        .map((attachment) => attachment.file)
+        .filter((file): file is File => file != null);
+      captureIfMarked(controller.getThreadId(), { text: composerState.text, attachments });
+    };
+  }, [controller]);
 
   return runtime;
 }

@@ -28,6 +28,7 @@ import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
+import { useOffloadRelease } from '../features/sessions/runtime/use-offload-release';
 import { useStartNewSession } from '../features/sessions/new-thread/use-start-new-session';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
@@ -48,6 +49,10 @@ const TRAFFIC_LIGHTS_SPACER_WIDTH = 80;
 
 function RuntimeBody({ port }: { port: number }) {
   useSessionListRouter();
+  // Idle whole-chat offload (#178): releases a chat's controller/thread subtree
+  // on chat.offloaded, deferring while it's on screen. Beside useSessionListRouter
+  // for the same reason (needs the live thread list under the provider).
+  useOffloadRelease();
   useSandboxWsRouter();
   // The app's ONE keydown listener — every app chord dispatches through it.
   useShortcutDispatcher();
