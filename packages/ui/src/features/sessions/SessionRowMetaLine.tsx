@@ -38,7 +38,7 @@ interface SessionRowMetaLineProps {
   branchName?: string;
   /** The only glanceable failure signal on the row; the cause is in the hover card. */
   worktreeMissing?: boolean;
-  /** Excluded from default listings, deleted rather than archived on close — inert until a view opts into showing temporary chats (todo #346). */
+  /** Excluded from default listings, deleted rather than archived on close — the sidebar always shows these now (todo #346). */
   temporary?: boolean;
   detectedPrs: DetectedPr[];
   tags: string[];

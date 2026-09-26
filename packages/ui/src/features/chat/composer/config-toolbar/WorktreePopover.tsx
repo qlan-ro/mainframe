@@ -93,6 +93,12 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
   // A no-project chat (or draft) has no project to branch from — worktrees
   // are disabled with an explanation and never call the daemon (todo #346).
   const noProjectDisabled = chat.noProject;
+  // Temporary and worktree are mutually exclusive (todo #346): the
+  // daemon discard only removes the chat's scratch path, so a temporary chat
+  // with a worktree would orphan it. Covers both a temporary draft and a real
+  // temporary chat — `chat.temporary` reflects both via synthesizeDraftChat.
+  const temporaryDisabled = chat.temporary === true;
+  const worktreeDisabled = noProjectDisabled || temporaryDisabled;
 
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState('');
@@ -106,7 +112,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
   // Fetch on popover open (not mount). An isolated chat only lists worktrees to
   // move between, so it skips the branch fetch the New form would need.
   useEffect(() => {
-    if (!open || noProjectDisabled) return;
+    if (!open || worktreeDisabled) return;
     let cancelled = false;
 
     setLoading(true);
@@ -135,10 +141,14 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
     return () => {
       cancelled = true;
     };
-  }, [open, chat.worktreePath, chat.projectId, port, noProjectDisabled]);
+  }, [open, chat.worktreePath, chat.projectId, port, worktreeDisabled]);
 
   const handleEnable = useCallback(
     async (baseBranch: string, branchName: string) => {
+      // Defensive backstop (todo #346) — the trigger is disabled for
+      // a temporary chat/draft so this form should be unreachable, but never
+      // stage a worktree onto one regardless.
+      if (temporaryDisabled) return;
       if (isLocalDraft) {
         patchDraftConfig(chat.id, { pendingWorktree: { baseBranch, branchName } });
         setOpen(false);
@@ -155,11 +165,13 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
         setSubmitting(false);
       }
     },
-    [port, chat.id, isLocalDraft],
+    [port, chat.id, isLocalDraft, temporaryDisabled],
   );
 
   const handleAttach = useCallback(
     async (wt: WorktreeEntry) => {
+      // Same defensive backstop as handleEnable (todo #346).
+      if (temporaryDisabled) return;
       const branch = wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached';
       if (isLocalDraft) {
         patchDraftConfig(chat.id, { worktreePath: wt.path, branchName: branch });
@@ -177,7 +189,7 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
         setSubmitting(false);
       }
     },
-    [port, chat.id, isLocalDraft],
+    [port, chat.id, isLocalDraft, temporaryDisabled],
   );
 
   // Cancel a stashed draft choice — the session starts in the main repo instead.
@@ -197,7 +209,12 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <WorktreeTrigger noProjectDisabled={noProjectDisabled} showIsolated={showIsolated} branchLabel={branchLabel} />
+      <WorktreeTrigger
+        noProjectDisabled={noProjectDisabled}
+        temporaryDisabled={temporaryDisabled}
+        showIsolated={showIsolated}
+        branchLabel={branchLabel}
+      />
 
       <PopoverContent
         data-testid="composer-worktree-popover"

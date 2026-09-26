@@ -50,13 +50,13 @@ interface RowActions {
   onArchive: () => void;
 }
 
-function useRowActions(item: SessionItem): RowActions {
+function useRowActions({ id, remoteId, custom }: SessionItem): RowActions {
   const port = useDaemonPort();
   const aui = useAui();
-  const onArchive = useArchiveSession(item.remoteId ?? item.id, item.custom.worktreePath != null);
+  const onArchive = useArchiveSession(remoteId ?? id, custom.worktreePath != null, custom.temporary);
 
   const setPinned = (pinned: boolean) => {
-    void pinChat(port, item.id, pinned)
+    void pinChat(port, id, pinned)
       .then(() => aui.threads.reload())
       .catch((e: unknown) => {
         console.warn('[SessionRow] pinChat failed', e);
@@ -67,7 +67,7 @@ function useRowActions(item: SessionItem): RowActions {
     onPin: () => setPinned(true),
     onUnpin: () => setPinned(false),
     onTags: (anchorRect = null) => {
-      useTagPopoverTarget.getState().open(item.remoteId ?? item.id, item.custom.tags ?? [], anchorRect);
+      useTagPopoverTarget.getState().open(remoteId ?? id, custom.tags ?? [], anchorRect);
     },
     onArchive,
   };
@@ -206,6 +206,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
   return (
     <SessionContextMenu
       pinned={custom.pinned}
+      temporary={custom.temporary}
       onOpenChange={handleMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
@@ -264,6 +265,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName }: SessionR
                       hovered ? (
                         <RowHoverActions
                           pinned={custom.pinned}
+                          temporary={custom.temporary}
                           onPin={actions.onPin}
                           onUnpin={actions.onUnpin}
                           onTags={actions.onTags}

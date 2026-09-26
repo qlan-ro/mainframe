@@ -36,6 +36,9 @@ vi.mock('@assistant-ui/react', () => {
     },
     useAuiState: (sel: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
       sel({ thread: { isRunning: false, messages: [{}] } }),
+    // DegradedChatCard (mounted unconditionally in the footer) reads this for
+    // its temporary-discard path; unused here since no test degrades the chat.
+    useAui: () => ({ threadListItem: { delete: vi.fn() } }),
   };
 });
 

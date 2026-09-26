@@ -8,6 +8,10 @@
  * losing the route to the previous session). Just the seeding half: reset the
  * slot's stale config/segments, initialize for the picked project, and clear a
  * mismatching project filter the way the full sequence does.
+ *
+ * `temporary` survives the reset+reinitialize: it is captured before the reset
+ * and passed into `initializeDraft`'s attempt-guarded write, so a superseded
+ * call writes nothing instead of patching a later draft (todo #346).
  */
 import { useAui } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
@@ -15,6 +19,7 @@ import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useSessionFilters } from '@/store/session-filters';
 import { useSettingsStore } from '@/store/settings';
 import { useAdapters } from '@/store/adapters';
+import { getDraftConfig } from '../runtime/draft-config';
 import { initializeDraft } from './initialize-draft';
 import { resetNewThreadDraft } from './reset-new-thread-draft';
 
@@ -30,12 +35,20 @@ export function useSelectDraftProject(): (projectId: string | null) => Promise<v
     const threads = aui.threads.getState();
     const localId = threads.newThreadId ?? threads.mainThreadId;
     if (localId == null) return;
+    const wasTemporary = getDraftConfig(localId)?.temporary === true;
     // "No project" never matches an active pill — clear it unconditionally,
     // the same way a mismatching project pick does.
     if (filterProjectIds.size > 0 && (projectId == null || !filterProjectIds.has(projectId))) clearProjectFilter();
     resetNewThreadDraft(threads.newThreadId);
     try {
-      await initializeDraft({ localId, projectId, port, defaultAdapterId, adapters });
+      await initializeDraft({
+        localId,
+        projectId,
+        port,
+        defaultAdapterId,
+        adapters,
+        ...(wasTemporary ? { temporary: true } : {}),
+      });
     } catch (error) {
       mfToast.error('Couldn’t initialize session', {
         description: error instanceof Error ? error.message : String(error),

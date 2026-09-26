@@ -30,20 +30,25 @@ before this change is neither.
 
 **Temporary chats.** While its CLI session is alive, a temporary chat behaves like any
 other chat: it streams, raises permission gates, and can be interrupted. It is left out
-of the default chat listings: both list endpoints, the sidebar, the archived-sessions
-dialog, and the command palette. A caller that explicitly asks for temporary chats gets
-them in both list endpoints. Fetching a temporary chat by id always works. A temporary
+of the default chat listings: both list endpoints and the archived-sessions dialog. A
+caller that explicitly asks for temporary chats gets them in both list endpoints. The
+desktop sidebar asks for them, so a temporary chat stays visible in the sidebar and the
+command palette until it is discarded. Fetching a temporary chat by id always works. A temporary
 chat cannot be pinned, tagged or archived, and each attempt fails. Only these events
 delete it:
 - an explicit discard, which stops its CLI process, clears its live state, removes its
   scratch directory if it has one, and then deletes the row;
 - removal of its project, which already hard-deletes every chat in that project.
 
-A daemon restart never deletes a temporary chat. In v1 the desktop UI has no action
-that creates a temporary chat. The API supports it, and side chats are the first
-consumer. When a temporary chat is shown in a sidebar row, the row's meta-line glyph
-cluster includes a `Timer` glyph with the hint "Temporary — deleted when closed". The
-default v1 sidebar never lists temporary chats, so this glyph does not appear there.
+A daemon restart never deletes a temporary chat. The draft composer toolbar has a
+`Timer` "Temporary" toggle, set before the first send. Once the chat exists the chip
+stays engaged and locked on a temporary chat, and is hidden on a normal one. The sidebar
+row of a temporary chat shows a `Timer` glyph in its meta-line glyph cluster, with the
+hint "Temporary — deleted when closed". Its close action is Discard instead of Archive,
+and it offers no pin or tag actions. Temporary and worktree are mutually exclusive in
+the UI, because discard does not remove a worktree: while a draft is temporary its
+worktree controls are disabled, and while a draft has a worktree the Temporary chip is
+disabled. Side chats (#344) are the other consumer.
 
 **No vendor persistence.** Each adapter reports whether it has a no-persistence
 capability, and the UI can see that flag in the adapter info. When a temporary chat's
@@ -129,8 +134,6 @@ composer.
 - Side chats, including deleting a temporary chat when its parent is archived. #344
   owns that and calls this todo's discard. — deferred
 - The parent-chat reference and the fork capability flag (#343). — deferred
-- A desktop UI action that creates a standalone temporary chat, and any "show temporary
-  chats" view. — deferred
 - Promoting a temporary chat to permanent. — deferred
 - Moving a non-project chat into a project, or changing any chat's project, after its
   first send. — deferred
@@ -229,8 +232,9 @@ composer.
    original project id.
 7. A temporary chat is absent from `GET /api/chats` and `GET
    /api/projects/{id}/chats` by default, and present when the request opts in to
-   temporary chats. It is absent from the sidebar, the archived-sessions dialog and the
-   command palette. `GET /api/chats/{id}` returns it.
+   temporary chats. The desktop sidebar opts in, so it appears there with the `Timer`
+   glyph and in the command palette, and it is absent from the archived-sessions dialog.
+   `GET /api/chats/{id}` returns it.
 8. The discard command on a temporary chat stops its process, deletes the row, and
    removes its scratch directory if it has one. Afterwards `GET /api/chats/{id}` returns
    not-found. The same command on a non-temporary chat returns `fail`, and the chat is
@@ -392,9 +396,9 @@ composer.
 - reversible — "Start with no project" on the first-run hero replaces the hero with the
   welcome screen, as the design walk proposed. That is the same state a normal "No
   project" pick reaches, so no combined hero-and-composer layout is invented.
-- reversible — The `Timer` temporary glyph is built into the row now, even though the
-  v1 default sidebar never shows it. The design direction settles this vocabulary for
-  #344.
+- reversible — The `Timer` temporary glyph marks temporary rows in the sidebar, and the
+  same icon is the composer's Temporary toggle. The design direction settles this
+  vocabulary for #344.
 - reversible — A no-project draft clears an active project pill, and a pill hides
   non-project chats. This matches today's behavior when a draft picks a project that
   differs from the pill.

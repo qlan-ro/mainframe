@@ -206,6 +206,36 @@ describe('synthesizeDraftChat — "No project" draft', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 9. Temporary toggle (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('synthesizeDraftChat — temporary', () => {
+  it('sets temporary:true when the draft has temporary:true', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', temporary: true };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.temporary).toBe(true);
+  });
+
+  it('sets temporary:false when the draft omits temporary', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude' };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.temporary).toBe(false);
+  });
+
+  it('sets temporary:false when the draft has temporary:false', () => {
+    const draft: DraftCfg = { projectId: 'p1', adapterId: 'claude', temporary: false };
+
+    const chat = synthesizeDraftChat('__LOCALID_x', draft);
+
+    expect(chat.temporary).toBe(false);
+  });
+});
+
 describe('synthesizeDraftChat — pre-send worktree attach', () => {
   it('carries worktreePath and branchName from the draft', () => {
     const draft: DraftCfg = {

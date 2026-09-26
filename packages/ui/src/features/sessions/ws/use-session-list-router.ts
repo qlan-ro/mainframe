@@ -34,11 +34,14 @@ import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
+import { isCreateInFlight } from '../runtime/new-thread-coordinator';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
 import { pickInitialSession } from '../view-model/initial-session';
 import { pickArchiveFallback } from '../view-model/session-fallback';
+import { reconcileDraftHandoff } from './reconcile-draft-handoff';
 import { createSessionListRouter } from './session-list-router';
+import { useGhostChatPrune } from './use-ghost-chat-prune';
 
 /** The previous layout-followed session, for the split-member gate below. */
 let lastLayoutSessionId: string | null = null;
@@ -210,18 +213,9 @@ export function useSessionListRouter(): void {
         lastActiveRef.current = mainThreadId;
       }
 
-      // Archive-induced empty state: aui `switchToNewThread()`s off the archived
-      // thread, so we land on a fresh draft rather than staying on the (now
-      // archived) session. If the real thread we just left is now archived, redirect
-      // to a fallback. A deliberate New leaves that thread 'regular', so it stays.
-      const leftItem = items.find((t) => t.id === prevRealActiveRef.current);
-      if (leftItem?.status === 'archived') {
-        const target = fallback();
-        if (target != null) {
-          prevRealActiveRef.current = null;
-          threads.switchToThread(target);
-        }
-      }
+      // See reconcileDraftHandoff for the deliberate-New-vs-involuntary-bump split.
+      const handoffTarget = reconcileDraftHandoff(prevRealActiveRef, items, fallback);
+      if (handoffTarget != null) threads.switchToThread(handoffTarget);
       return;
     }
     if (active == null) return; // unreachable (onDraft covers it) — narrows for TS
@@ -249,22 +243,29 @@ export function useSessionListRouter(): void {
   // land on the empty new-thread picker. Prefers the last session open before the
   // app closed (persisted by daemon chat id), falling back to the most-recent one
   // when it's gone or archived. One-shot — consumed on the first non-empty list —
-  // and only while the user is still on the boot draft (mainThreadId null or a
-  // __LOCALID_* new thread), so it never overrides a thread the user has already
-  // opened or a new chat they deliberately started.
+  // and only while on the boot draft (mainThreadId null/`__LOCALID_*`), so it
+  // never overrides a thread the user opened or a new chat they started sending.
+  //
+  // A create in flight for the draft means the user already chose it by sending.
+  // On a fresh install the first non-empty list is the reload triggered by that
+  // chat's own `chat.created`, which lands before the create workflow settles;
+  // switching then reads as abandoning the draft and destroys the new chat.
   const didAutoSelectRef = useRef(false);
   useEffect(() => {
     if (didAutoSelectRef.current || items.length === 0) return;
     didAutoSelectRef.current = true;
 
     const onBootDraft = mainThreadId == null || mainThreadId.startsWith('__LOCALID_');
-    if (!onBootDraft) return;
+    if (!onBootDraft || (mainThreadId != null && isCreateInFlight(mainThreadId))) return;
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
       threads.switchToThread(target);
     }
   }, [items, mainThreadId, threads]);
+
+  // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
+  useGhostChatPrune(items, threads);
 
   // GC: prune persisted layout entries for sessions no longer in the thread list.
   // Guard: only when the list is non-empty to avoid wiping everything before first load.

@@ -11,11 +11,13 @@
  */
 import { type ReactNode, useState } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
+import { useAui } from '@assistant-ui/react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { stageDiscard, takeDiscard } from '@/features/sessions/runtime/archive-confirm-bridge';
 import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';
 
 function MissingPath({ path }: { path: string }) {
@@ -39,6 +41,13 @@ function Cause({ title, body }: { title: string; body: ReactNode }) {
 export function DegradedChatCard() {
   const extras = useChatExtras();
   const port = useDaemonPort();
+  // This card itself adds no scoping: on the main surface `threadListItem`
+  // resolves to the active chat's item (the same default binding ChatSurface
+  // reads for `s.threadListItem`); in a split pane, ChatZone rebinds
+  // `threadListItem` to that zone's own chatId via its AuiProvider before
+  // mounting this card, so the same unscoped read resolves to the right item
+  // there too — no SessionRowItemScope needed in either case.
+  const aui = useAui();
   const [busy, setBusy] = useState(false);
   const [recreateError, setRecreateError] = useState<string | null>(null);
 
@@ -148,7 +157,24 @@ export function DegradedChatCard() {
           variant="outline"
           size="sm"
           disabled={busy}
-          onClick={() => run(() => archiveChat(port, chatId, true))}
+          // A temporary chat 409s on archive (todo #346), so it is discarded
+          // through aui's delete(): calling discardChat directly would leave a
+          // stale local entry behind (a ghost row). Archive self-heals on the
+          // next reload, since an archived chat stays listed.
+          onClick={() =>
+            run(async () => {
+              if (!chat.temporary) {
+                await archiveChat(port, chatId, true);
+                return;
+              }
+              stageDiscard(chatId);
+              try {
+                await aui.threadListItem.delete();
+              } finally {
+                takeDiscard(chatId); // clears a leaked flag if aui threw before the adapter consumed it
+              }
+            })
+          }
           className="text-destructive"
         >
           Delete chat

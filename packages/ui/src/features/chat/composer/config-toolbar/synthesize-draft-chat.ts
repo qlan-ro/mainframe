@@ -26,7 +26,7 @@ export function synthesizeDraftChat(id: string, d: DraftCfg): Chat {
     // consumer reads `noProject`, never this string, to detect the no-project case.
     projectId: d.projectId ?? '',
     noProject: d.projectId == null,
-    temporary: false,
+    temporary: d.temporary === true,
     model: d.model,
     permissionMode,
     planMode: d.planMode ?? d.permissionMode === 'plan',

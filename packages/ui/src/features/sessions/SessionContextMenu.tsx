@@ -16,6 +16,8 @@ import {
 
 interface SessionContextMenuProps {
   pinned: boolean;
+  /** Hides Pin/Tags (the daemon 409s them) and relabels Archive as Discard (todo #346). */
+  temporary: boolean;
   /** The row suppresses its hover card while the menu is up. */
   onOpenChange?: (open: boolean) => void;
   onPin: () => void;
@@ -30,6 +32,7 @@ interface SessionContextMenuProps {
 
 export function SessionContextMenu({
   pinned,
+  temporary,
   onOpenChange,
   onPin,
   onUnpin,
@@ -48,18 +51,22 @@ export function SessionContextMenu({
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-44">
-        <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>
-          {pinned ? <PinOffIcon /> : <PinIcon />}
-          {pinned ? 'Unpin' : 'Pin'}
-        </ContextMenuItem>
+        {!temporary && (
+          <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>
+            {pinned ? <PinOffIcon /> : <PinIcon />}
+            {pinned ? 'Unpin' : 'Pin'}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem data-testid="sessions-ctx-rename" onSelect={onRename}>
           <PencilIcon />
           Rename
         </ContextMenuItem>
-        <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
-          <TagIcon />
-          Tags
-        </ContextMenuItem>
+        {!temporary && (
+          <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
+            <TagIcon />
+            Tags
+          </ContextMenuItem>
+        )}
         <ContextMenuItem data-testid="sessions-ctx-open-split" onSelect={onOpenInSplit}>
           <Columns2 />
           Open in Split
@@ -67,7 +74,7 @@ export function SessionContextMenu({
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive}>
           <ArchiveIcon />
-          Archive
+          {temporary ? 'Discard' : 'Archive'}
         </ContextMenuItem>
         {claudeSessionId != null && (
           <>

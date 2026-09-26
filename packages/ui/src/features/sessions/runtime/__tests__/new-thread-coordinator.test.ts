@@ -7,6 +7,7 @@ import {
   type DraftCfg,
 } from '../draft-config';
 import { useNewThreadReady } from '../new-thread-ready-store';
+import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
 
 // ---------------------------------------------------------------------------
 // Mock createChat, setChatTuning, setChatConfig — no HTTP calls
@@ -17,6 +18,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   setChatTuning: vi.fn().mockResolvedValue(undefined),
   setChatConfig: vi.fn().mockResolvedValue(undefined),
   archiveChat: vi.fn().mockResolvedValue(undefined),
+  discardChat: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock enableWorktree (pendingWorktree carry) and the toast raised on its failure.
@@ -28,16 +30,23 @@ vi.mock('../../../../lib/toast', () => ({
   mfToast: { error: (...args: unknown[]) => toastErrorSpy(...args) },
 }));
 
+// Finding 2b's ghost-chat prune queue — asserted separately from the discard call itself.
+const markChatDiscardedMock = vi.fn();
+vi.mock('../ghost-chat-queue', () => ({
+  markChatDiscarded: (...args: unknown[]) => markChatDiscardedMock(...args),
+}));
+
 // Import AFTER the mock is registered so the module under test picks up the mock.
-import { abandonCreateForLocal, createForLocal } from '../new-thread-coordinator';
+import { abandonCreateForLocal, createForLocal, isCreateInFlight } from '../new-thread-coordinator';
 import { resetNewThreadDraft } from '../../new-thread/reset-new-thread-draft';
-import { createChat, setChatTuning, setChatConfig, archiveChat } from '../../../../lib/api/chats';
+import { createChat, setChatTuning, setChatConfig, archiveChat, discardChat } from '../../../../lib/api/chats';
 import { enableWorktree } from '../../../../lib/api/git';
 
 const mockCreateChat = createChat as MockedFunction<typeof createChat>;
 const mockSetChatTuning = setChatTuning as MockedFunction<typeof setChatTuning>;
 const mockSetChatConfig = setChatConfig as MockedFunction<typeof setChatConfig>;
 const mockArchiveChat = archiveChat as MockedFunction<typeof archiveChat>;
+const mockDiscardChat = discardChat as MockedFunction<typeof discardChat>;
 const mockEnableWorktree = enableWorktree as MockedFunction<typeof enableWorktree>;
 
 function setDraftConfig(localId: string, cfg: DraftCfg): void {
@@ -66,7 +75,9 @@ afterEach(() => {
   clearDraftConfig('__LOCALID_b');
   clearDraftConfig('__LOCALID_c');
   useNewThreadReady.setState({ readyIds: new Set(), initializations: new Map() });
+  useDraftReturnTarget.setState({ returnThreadId: null });
   vi.clearAllMocks();
+  markChatDiscardedMock.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -249,6 +260,53 @@ describe('new-thread-coordinator — clears the new-thread-ready flag on first s
     await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('create failed');
 
     expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Return-target retirement (todo #346) — see the module
+// docstring. A deliberate New stamps `useDraftReturnTarget` with the thread
+// it came from; once the draft commits here, that target is stale and must
+// be cleared, or a LATER archive/discard of the thread it named gets
+// misread by `reconcileDraftHandoff` as "still just a deliberate New".
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — retires the draft return target on commit (todo #346)', () => {
+  it('clears useDraftReturnTarget on a successful create', async () => {
+    useDraftReturnTarget.getState().setReturnTarget('chat-T');
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-99' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(useDraftReturnTarget.getState().returnThreadId).toBeNull();
+  });
+
+  it('does NOT clear useDraftReturnTarget when the create fails (nothing committed yet)', async () => {
+    useDraftReturnTarget.getState().setReturnTarget('chat-T');
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      permissionMode: 'default',
+    });
+    mockCreateChat.mockRejectedValueOnce(new Error('create failed'));
+
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('create failed');
+
+    expect(useDraftReturnTarget.getState().returnThreadId).toBe('chat-T');
+  });
+
+  it('is a no-op when nothing was staged as a return target', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(useDraftReturnTarget.getState().returnThreadId).toBeNull();
   });
 });
 
@@ -523,6 +581,98 @@ describe('new-thread-coordinator — explicit snapshot permissionMode', () => {
 // the chat (enable-worktree is chat-scoped, so it can't run on a draft)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// temporary — sent on createChat only when set; abandoning a temporary draft
+// discards (not archives) the chat it already created (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — temporary draft (todo #346)', () => {
+  it('sends temporary: true in the createChat body when the draft has it', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude', temporary: true });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-temp' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect(body.temporary).toBe(true);
+  });
+
+  it('omits temporary from the createChat body when the draft does not have it', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-nontemp' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('temporary' in body).toBe(false);
+  });
+
+  it('discards (not archives) an already-created chat when a temporary draft is abandoned', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude', temporary: true });
+    mockCreateChat
+      .mockResolvedValueOnce({ id: 'chat-temp-old' } as Chat)
+      .mockResolvedValueOnce({ id: 'chat-fresh' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    resetNewThreadDraft('__LOCALID_a');
+    setDraftConfig('__LOCALID_a', { projectId: 'p2', adapterId: 'codex' });
+    await expect(createForLocal('__LOCALID_a', 31415)).resolves.toEqual({ remoteId: 'chat-fresh' });
+
+    expect(mockDiscardChat).toHaveBeenCalledExactlyOnceWith(31415, 'chat-temp-old');
+    expect(mockArchiveChat).not.toHaveBeenCalled();
+  });
+
+  it('never sends worktreePath/branchName for a temporary draft, even if stashed', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      temporary: true,
+      // Defensive shape only — the composer keeps Temporary and worktree
+      // mutually exclusive, so a temporary draft should never carry these.
+      worktreePath: '/wt/should-not-send',
+      branchName: 'should-not-send',
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-temp-wt' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    const body = mockCreateChat.mock.calls[0]![1];
+    expect('worktreePath' in body).toBe(false);
+    expect('branchName' in body).toBe(false);
+  });
+
+  it('never calls enableWorktree for a temporary draft, even with a stashed pendingWorktree', async () => {
+    setDraftConfig('__LOCALID_a', {
+      projectId: 'p1',
+      adapterId: 'claude',
+      temporary: true,
+      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
+    });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-temp-wt2' } as Chat);
+
+    await createForLocal('__LOCALID_a', 31415);
+
+    expect(mockEnableWorktree).not.toHaveBeenCalled();
+  });
+
+  it('still archives a non-temporary abandoned draft', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat
+      .mockResolvedValueOnce({ id: 'chat-old' } as Chat)
+      .mockResolvedValueOnce({ id: 'chat-fresh' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    resetNewThreadDraft('__LOCALID_a');
+    setDraftConfig('__LOCALID_a', { projectId: 'p2', adapterId: 'codex' });
+    await expect(createForLocal('__LOCALID_a', 31415)).resolves.toEqual({ remoteId: 'chat-fresh' });
+
+    expect(mockArchiveChat).toHaveBeenCalledExactlyOnceWith(31415, 'chat-old', true);
+    expect(mockDiscardChat).not.toHaveBeenCalled();
+  });
+});
+
 describe('new-thread-coordinator — pendingWorktree is created right after the chat', () => {
   it('calls enableWorktree(port, chatId, baseBranch, branchName) and omits pendingWorktree from the createChat body', async () => {
     setDraftConfig('__LOCALID_a', {
@@ -562,5 +712,99 @@ describe('new-thread-coordinator — pendingWorktree is created right after the 
 
     expect(result).toEqual({ remoteId: 'chat-57' });
     expect(toastErrorSpy).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ghost-chat prune queue (todo #346) — a discard (never an archive)
+// must mark the chat so useSessionListRouter can prune aui's stale local entry.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// isCreateInFlight (todo #346) — the boot-select
+// guard's real signal: a workflow is open for `localId` from the moment
+// createForLocal first stages it until it settles.
+// ---------------------------------------------------------------------------
+
+describe('new-thread-coordinator — isCreateInFlight', () => {
+  it('is false for a local id with no workflow', () => {
+    expect(isCreateInFlight('__LOCALID_never_started')).toBe(false);
+  });
+
+  it('is true while createForLocal is awaiting the createChat POST', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    let resolveChat!: (chat: Chat) => void;
+    mockCreateChat.mockReturnValueOnce(
+      new Promise<Chat>((resolve) => {
+        resolveChat = resolve;
+      }),
+    );
+
+    const pending = createForLocal('__LOCALID_a', 31415);
+    expect(isCreateInFlight('__LOCALID_a')).toBe(true);
+
+    resolveChat({ id: 'chat-1' } as Chat);
+    await pending;
+
+    expect(isCreateInFlight('__LOCALID_a')).toBe(false);
+  });
+
+  it('is true through the tuning/worktree PATCH stages, after createChat already resolved', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude', effort: 'high' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+    let resolveTuning!: () => void;
+    mockSetChatTuning.mockReturnValueOnce(
+      new Promise<Chat>((resolve) => {
+        resolveTuning = () => resolve(undefined as unknown as Chat);
+      }),
+    );
+
+    const pending = createForLocal('__LOCALID_a', 31415);
+    await Promise.resolve(); // let createChat's .then() run
+    await Promise.resolve();
+    expect(isCreateInFlight('__LOCALID_a')).toBe(true);
+
+    resolveTuning();
+    await pending;
+
+    expect(isCreateInFlight('__LOCALID_a')).toBe(false);
+  });
+
+  it('is false again after abandonCreateForLocal', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-1' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+    expect(isCreateInFlight('__LOCALID_a')).toBe(true); // retained for retry
+
+    abandonCreateForLocal('__LOCALID_a');
+
+    expect(isCreateInFlight('__LOCALID_a')).toBe(false);
+  });
+});
+
+describe('new-thread-coordinator — ghost-chat prune queue (todo #346)', () => {
+  it('marks the chat discarded after a successful temporary-abandon discard', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude', temporary: true });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-ghost' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    abandonCreateForLocal('__LOCALID_a');
+    await mockDiscardChat.mock.results[0]!.value; // let the discard promise's .then() run
+
+    expect(markChatDiscardedMock).toHaveBeenCalledExactlyOnceWith('chat-ghost');
+  });
+
+  it('does NOT mark the chat discarded after an archive (it self-heals via the next reload)', async () => {
+    setDraftConfig('__LOCALID_a', { projectId: 'p1', adapterId: 'claude' });
+    mockCreateChat.mockResolvedValueOnce({ id: 'chat-archived' } as Chat);
+    mockSetChatConfig.mockRejectedValueOnce(new Error('config failed'));
+    await expect(createForLocal('__LOCALID_a', 31415)).rejects.toThrow('config failed');
+
+    abandonCreateForLocal('__LOCALID_a');
+    await mockArchiveChat.mock.results[0]!.value;
+
+    expect(markChatDiscardedMock).not.toHaveBeenCalled();
   });
 });

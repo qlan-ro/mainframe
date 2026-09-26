@@ -37,6 +37,12 @@ export interface DraftCfg {
    * enable-worktree right after createChat on first send.
    */
   pendingWorktree?: { baseBranch: string; branchName: string };
+  /**
+   * Create-time only — toggled in the composer before the first send. Sent as
+   * `temporary: true` on createChat; there is no live path once the chat
+   * exists (todo #346).
+   */
+  temporary?: boolean;
 }
 
 interface DraftConfigState {

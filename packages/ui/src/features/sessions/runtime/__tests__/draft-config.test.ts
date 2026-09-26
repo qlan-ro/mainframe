@@ -34,6 +34,18 @@ it('returns undefined before any set, then round-trips every field (required, op
   expect(getDraftConfig('__LOCALID_x')).toEqual(full);
 });
 
+it('round-trips temporary via patchDraftConfig (todo #346)', () => {
+  setDraftConfig('__LOCALID_x', { projectId: 'p1', adapterId: 'claude', permissionMode: 'default' });
+  patchDraftConfig('__LOCALID_x', { temporary: true });
+
+  expect(getDraftConfig('__LOCALID_x')).toEqual({
+    projectId: 'p1',
+    adapterId: 'claude',
+    permissionMode: 'default',
+    temporary: true,
+  });
+});
+
 it('round-trips a "No project" draft (projectId: null)', () => {
   setDraftConfig('__LOCALID_x', { projectId: null, adapterId: 'claude', permissionMode: 'default' });
 
