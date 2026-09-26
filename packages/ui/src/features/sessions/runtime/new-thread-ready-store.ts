@@ -26,7 +26,7 @@ export interface DraftInitialization {
   attempt?: number;
   /** The target project this attempt is resolving for — the in-flight value a
    *  second New-session trigger reads when the draft has no config yet. */
-  projectId?: string;
+  projectId?: string | null;
 }
 
 /** Exported so subscribers select this shared identity as their no-thread
@@ -40,7 +40,7 @@ interface NewThreadReadyState {
   readonly initializations: ReadonlyMap<string, DraftInitialization>;
   isReady: (localId: string) => boolean;
   getInitialization: (localId: string) => DraftInitialization;
-  beginInitialization: (localId: string, retry: () => Promise<DraftCfg>, projectId?: string) => number;
+  beginInitialization: (localId: string, retry: () => Promise<DraftCfg>, projectId?: string | null) => number;
   beginReadyReplacement: (localId: string) => number;
   completeInitialization: (localId: string, attempt: number) => boolean;
   failInitialization: (localId: string, attempt: number, error: unknown) => void;

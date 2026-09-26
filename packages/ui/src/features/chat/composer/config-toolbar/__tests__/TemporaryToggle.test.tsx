@@ -104,7 +104,7 @@ describe('TemporaryToggle — a11y', () => {
 });
 
 describe('TemporaryToggle — mutually exclusive with a worktree (todo #346)', () => {
-  it('locks off and hints "Not available with a worktree" when the draft has an attached worktree', () => {
+  it('locks off and hints "Not available with a worktree" when the draft has an attached worktree', async () => {
     const setTemporary = renderToggle(
       makeChat({ id: '__LOCALID_wt', temporary: false, worktreePath: '/repo/.worktrees/feat' }),
       true,
@@ -114,7 +114,7 @@ describe('TemporaryToggle — mutually exclusive with a worktree (todo #346)', (
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAttribute('aria-pressed', 'false');
 
-    void userEvent.click(button);
+    await userEvent.click(button);
     expect(setTemporary).not.toHaveBeenCalled();
   });
 
