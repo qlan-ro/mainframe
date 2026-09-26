@@ -128,4 +128,39 @@ describe('useChatThreadRuntime — draft-stash capture on unmount', () => {
 
     expect(takeStash('chat-capture-3')).toEqual({ text: '', attachments: [] });
   });
+
+  // #178 AC14's alias case (finding 3/7): a chat created THIS app session has
+  // two live thread items — the orphaned `__LOCALID_*` draft and the
+  // canonical daemon-id item — sharing ONE adopted controller whose
+  // `getThreadId()` always returns the constructor (`__LOCALID_*`) id for
+  // BOTH subtrees. Keying capture/restore by `controller.getThreadId()`
+  // collided both subtrees' unmount captures onto that single key, dropping
+  // whichever fired second. Passing `chatId` (the subtree's own thread-list-
+  // item id, matching what `OffloadRelease.markForStash` and
+  // `chatControllerRegistry.getOrCreate` use) must keep them independent.
+  it('captures each alias subtree under its OWN item id, not the shared controller id', () => {
+    const sharedController = makeController('__LOCALID_alias1');
+    markForStash('__LOCALID_alias1');
+    markForStash('chat-canonical-1');
+
+    // The orphaned draft subtree's composer is empty when it unmounts.
+    composerState = { text: '', attachments: [] };
+    const draftSubtree = renderHook(() =>
+      useChatThreadRuntime(sharedController, PORT, { active: false, chatId: '__LOCALID_alias1' }),
+    );
+    draftSubtree.unmount();
+
+    // The canonical subtree holds the text the user actually typed.
+    composerState = { text: 'typed in the canonical subtree', attachments: [] };
+    const canonicalSubtree = renderHook(() =>
+      useChatThreadRuntime(sharedController, PORT, { active: false, chatId: 'chat-canonical-1' }),
+    );
+    canonicalSubtree.unmount();
+
+    expect(takeStash('chat-canonical-1')).toEqual({
+      text: 'typed in the canonical subtree',
+      attachments: [],
+    });
+    expect(takeStash('__LOCALID_alias1')).toEqual({ text: '', attachments: [] });
+  });
 });

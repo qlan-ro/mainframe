@@ -78,9 +78,20 @@ async function restoreAttachments(
 export function useChatThreadRuntime(
   controller: AcpChatController,
   port: number,
-  opts?: { active?: boolean },
+  opts?: { active?: boolean; chatId?: string },
 ): AssistantRuntime {
   const state = useControllerState(controller); // uses controller.subscribeState (always)
+
+  // The draft-stash key: the caller's thread-list-item id when known (the
+  // same id `OffloadRelease.markForStash` and `chatControllerRegistry.getOrCreate`
+  // use), falling back to the controller's own constructor id for callers that
+  // don't pass one (tests, and any non-aliased single-item thread, where the
+  // two ids coincide anyway). An adopted draft's controller has TWO live
+  // thread-item ids (`__LOCALID_*` and the daemon chatId) sharing ONE
+  // controller whose `getThreadId()` always returns the constructor id — using
+  // that here for both subtrees would collide the two items onto one stash
+  // key (#178 AC14).
+  const stashKey = opts?.chatId ?? controller.getThreadId();
 
   // Seed from REST once on mount (deduped by loadPromise inside controller).
   // A __LOCALID_* thread is a no-op here — controller.load() early-returns until
@@ -159,7 +170,7 @@ export function useChatThreadRuntime(
   // controller registry header) is restored into the composer once, mirroring
   // the load-once effect above.
   useEffect(() => {
-    const draft = takeStash(controller.getThreadId());
+    const draft = takeStash(stashKey);
     if (draft == null) return;
     const composer = runtimeRef.current?.thread?.composer;
     if (composer == null) return;
@@ -169,7 +180,7 @@ export function useChatThreadRuntime(
         console.warn('[chat-runtime] could not restore a stashed attachment', error);
       });
     }
-  }, [controller]);
+  }, [stashKey]);
 
   // Capture the composer draft on unmount, but only when OffloadRelease marked
   // this thread first (markForStash) — an unmount from delete/archive never
@@ -182,9 +193,9 @@ export function useChatThreadRuntime(
       const attachments = composerState.attachments
         .map((attachment) => attachment.file)
         .filter((file): file is File => file != null);
-      captureIfMarked(controller.getThreadId(), { text: composerState.text, attachments });
+      captureIfMarked(stashKey, { text: composerState.text, attachments });
     };
-  }, [controller]);
+  }, [stashKey]);
 
   return runtime;
 }
