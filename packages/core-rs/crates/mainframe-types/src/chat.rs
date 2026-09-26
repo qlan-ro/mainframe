@@ -461,7 +461,11 @@ mod tests {
             "isError": false
         }))
         .unwrap();
-        assert!(!serde_json::to_string(&no_images).unwrap().contains("images"));
+        assert!(
+            !serde_json::to_string(&no_images)
+                .unwrap()
+                .contains("images")
+        );
     }
 
     #[test]
