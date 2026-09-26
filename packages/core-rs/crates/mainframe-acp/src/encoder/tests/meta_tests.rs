@@ -166,6 +166,7 @@ fn an_ask_user_question_result_carries_its_answers_in_the_text_block_meta() {
                 modified_file: None,
                 truncated: None,
                 full_bytes: None,
+                images: Vec::new(),
                 ask_user_question: Some(vec![mainframe_types::display::AskUserQuestionAnswer {
                     question: "Which db?".to_string(),
                     answer: vec!["sqlite".to_string()],

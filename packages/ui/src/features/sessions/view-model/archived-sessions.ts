@@ -16,3 +16,16 @@ export function filterArchivedSessions(items: SessionItem[], projectIds: Readonl
     .filter((item) => item.status === 'archived' && (projectIds.size === 0 || projectIds.has(item.custom.projectId)))
     .sort((a, b) => b.custom.updatedAt - a.custom.updatedAt);
 }
+
+/**
+ * The project label for one archived row: "No project" for a chat with no
+ * real project, its resolved name, or "Unknown project" as a last resort (a
+ * removed project's id is still on the row, but absent from the live list).
+ * `noProject` is checked first — a non-project chat's `projectId` is the
+ * daemon's hidden scratch project, never a real (possibly removed) one, so it
+ * must never fall through to "Unknown project" (todo #346).
+ */
+export function archivedRowProjectName(item: SessionItem, projectNames: ReadonlyMap<string, string>): string {
+  if (item.custom.noProject) return 'No project';
+  return projectNames.get(item.custom.projectId) ?? 'Unknown project';
+}

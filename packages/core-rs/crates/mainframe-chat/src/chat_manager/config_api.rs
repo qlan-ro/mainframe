@@ -111,42 +111,18 @@ impl ChatManager {
         Ok(new_chat_id)
     }
 
-    /// Remove a project and all its chats' live resources.
+    /// Remove a project and all its chats' live resources. Refuses the hidden
+    /// scratch project (rule 1): removing it would cascade-delete every
+    /// non-project chat's row.
     pub async fn remove_project(&self, project_id: &str) -> Result<(), String> {
+        if project_id == mainframe_types::chat::NO_PROJECT_ID {
+            return Err("cannot remove the hidden scratch project".to_string());
+        }
+        // Unfiltered `ChatsRepository::list` (via `chats_list`), so a temporary
+        // chat's live state and row are torn down along with the project (AC 10).
         let chats = self.deps.chats_list(project_id);
         for chat in chats {
-            let cell = self.get_active(&chat.id);
-            let session = cell
-                .as_ref()
-                .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
-            self.deps
-                .kill_tasks_for_chat(&chat.id, chat.worktree_path.clone(), session.clone())
-                .await;
-            if let Some(session) = &session
-                && let Err(err) = session.kill().await
-            {
-                tracing::warn!(
-                    ?err,
-                    chat_id = chat.id,
-                    "session.kill failed on project removal"
-                );
-            }
-            self.active_chats.remove(&chat.id);
-            self.messages
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .delete(&chat.id);
-            self.permissions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .forget(&chat.id);
-            self.deps.tracker_remove_chat(&chat.id);
-            self.event_handler.clear_display_state(&chat.id);
-            self.event_handler.notify_chat_surface(
-                crate::chat_surface::ChatSurfaceEvent::ChatEnded {
-                    chat_id: chat.id.clone(),
-                },
-            );
+            self.teardown_live_chat(&chat).await;
         }
         self.deps.projects_remove(project_id)?;
         info!(project_id, "project removed");

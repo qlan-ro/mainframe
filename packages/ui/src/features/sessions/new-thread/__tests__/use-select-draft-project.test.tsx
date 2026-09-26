@@ -70,6 +70,36 @@ beforeEach(() => {
   toastError.mockReset();
 });
 
+describe('useSelectDraftProject — preserves temporary across a project re-pick (todo #346)', () => {
+  it('passes temporary:true into initializeDraft, captured before the reset wipes it', async () => {
+    const { setDraftConfig: setStoredDraftConfig } = await import('@/features/sessions/runtime/draft-config');
+    setStoredDraftConfig('__LOCALID_1', {
+      projectId: 'proj-a',
+      adapterId: 'claude',
+      permissionMode: 'default',
+      temporary: true,
+    });
+
+    await select()('proj-b');
+
+    // temporary rides IN the same call, not a patch applied after
+    // it resolves — so a superseded call can never leak it onto a later draft.
+    expect(initializeDraft).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ localId: '__LOCALID_1', projectId: 'proj-b', temporary: true }),
+    );
+  });
+
+  it('omits temporary from the initializeDraft call when the prior draft never set it', async () => {
+    const { setDraftConfig: setStoredDraftConfig } = await import('@/features/sessions/runtime/draft-config');
+    setStoredDraftConfig('__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude', permissionMode: 'default' });
+
+    await select()('proj-b');
+
+    const call = initializeDraft.mock.calls[0]![0] as Record<string, unknown>;
+    expect('temporary' in call).toBe(false);
+  });
+});
+
 describe('useSelectDraftProject', () => {
   it('resets the reused draft slot and initializes it for the picked project', async () => {
     await select()('proj-b');
@@ -161,6 +191,26 @@ describe('useSelectDraftProject', () => {
     await select()('proj-b');
 
     expect(clearProjectFilter).not.toHaveBeenCalled();
+  });
+
+  it('initializes the draft with projectId: null for "No project"', async () => {
+    await select()(null);
+
+    expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
+      localId: '__LOCALID_1',
+      projectId: null,
+      port: 31415,
+      defaultAdapterId: 'gemini',
+      adapters: [{ id: 'gemini', installed: true }],
+    });
+  });
+
+  it('clears an active project filter unconditionally when picking "No project"', async () => {
+    __filterProjectIds = new Set(['proj-a']);
+
+    await select()(null);
+
+    expect(clearProjectFilter).toHaveBeenCalledExactlyOnceWith();
   });
 
   it('toasts and resolves when initialization fails', async () => {

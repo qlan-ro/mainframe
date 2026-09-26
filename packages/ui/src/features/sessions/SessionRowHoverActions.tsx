@@ -24,6 +24,8 @@ import { Hint } from '@/components/ui/hint';
 
 interface RowHoverActionsProps {
   pinned: boolean;
+  /** Temporary rows hide Pin/Tags (the daemon 409s them) and relabel Archive as Discard (todo #346). */
+  temporary: boolean;
   onPin: () => void;
   onUnpin: () => void;
   onTags: (rect: DOMRect) => void;
@@ -63,28 +65,36 @@ function ActionGlyph({
   );
 }
 
-export function RowHoverActions({ pinned, onPin, onUnpin, onTags, onArchive }: RowHoverActionsProps) {
+export function RowHoverActions({ pinned, temporary, onPin, onUnpin, onTags, onArchive }: RowHoverActionsProps) {
   return (
     <span className="flex shrink-0 items-center gap-0.5">
+      {!temporary && (
+        <ActionGlyph
+          label={pinned ? 'Unpin' : 'Pin'}
+          testId="sessions-row-action-pin"
+          onClick={stop(pinned ? onUnpin : onPin)}
+        >
+          {pinned ? <PinOffIcon /> : <PinIcon />}
+        </ActionGlyph>
+      )}
+      {!temporary && (
+        <ActionGlyph
+          label="Tags"
+          testId="sessions-row-action-tags"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onTags(e.currentTarget.getBoundingClientRect());
+          }}
+        >
+          <TagIcon />
+        </ActionGlyph>
+      )}
       <ActionGlyph
-        label={pinned ? 'Unpin' : 'Pin'}
-        testId="sessions-row-action-pin"
-        onClick={stop(pinned ? onUnpin : onPin)}
+        label={temporary ? 'Discard' : 'Archive'}
+        testId="sessions-row-action-archive"
+        onClick={stop(onArchive)}
       >
-        {pinned ? <PinOffIcon /> : <PinIcon />}
-      </ActionGlyph>
-      <ActionGlyph
-        label="Tags"
-        testId="sessions-row-action-tags"
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          onTags(e.currentTarget.getBoundingClientRect());
-        }}
-      >
-        <TagIcon />
-      </ActionGlyph>
-      <ActionGlyph label="Archive" testId="sessions-row-action-archive" onClick={stop(onArchive)}>
         <ArchiveIcon />
       </ActionGlyph>
     </span>

@@ -12,9 +12,20 @@
  *
  * Also exposes `worktreePath` and `projectPath` so callers (AppShell) can push
  * the canonical bases into `useActiveBasesStore` for the intent subscriber (F1 fix).
+ *
+ * `noProject` (todo #346): true for a non-project chat or a draft explicitly
+ * set to "No project". `projectId` is nulled out to `undefined` in that case —
+ * a real non-project chat's stored `projectId` is the daemon's hidden scratch
+ * project row, which is excluded from `GET /api/projects` and 404s every
+ * project-scoped route. Never re-derive this from the id: read the chat's own
+ * `noProject` flag (mirrors `WorktreePopover`'s `chat.noProject` read), so a
+ * caller downstream of this hook never sees the sentinel id and its existing
+ * `if (!projectId) return` guards (launch, branch, working-changes) already
+ * make git/launch/diff surfaces request-free for it.
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useProjects } from './use-projects';
 import { activeSessionCustom } from './view-model/chat-to-thread-custom';
 import { useActiveDraftConfig } from './use-active-draft-config';
@@ -36,6 +47,8 @@ export interface ActiveIdentity {
   projectPath?: string;
   /** Worktree isolation for the branch chip — true for a pending pre-send choice too. */
   isWorktree: boolean;
+  /** True for a non-project chat, or a draft explicitly set to "No project" (todo #346). */
+  noProject: boolean;
 }
 
 export function useActiveIdentity(): ActiveIdentity {
@@ -58,16 +71,23 @@ export function useActiveIdentity(): ActiveIdentity {
   });
   const scope = bridged.scope;
 
+  // A real chat's `noProject` comes off its own Chat object (the daemon's
+  // `chat.updated` broadcast), never re-derived from the sentinel project id.
+  // A draft has no Chat yet, so "No project" is whatever the picker chose.
+  const chatConfig = useChatExtras()?.state.chatConfig ?? null;
+  const noProject = chatId != null ? Boolean(chatConfig?.noProject) : draft !== undefined && draft.projectId === null;
+
   const { projects } = useProjects();
   const project = scope.projectId ? projects.find((p) => p.id === scope.projectId) : undefined;
   return {
     projectName: project?.name ?? 'Mainframe',
     branchName: scope.branchName,
-    projectId: scope.projectId,
+    projectId: noProject ? undefined : scope.projectId,
     adapterId: scope.adapterId,
     chatId,
     worktreePath: scope.worktreePath,
     projectPath: project?.path,
     isWorktree: scope.isWorktree ?? false,
+    noProject,
   };
 }

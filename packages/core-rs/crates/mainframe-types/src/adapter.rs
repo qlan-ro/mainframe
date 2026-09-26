@@ -65,6 +65,17 @@ pub struct SessionResult {
     pub is_error: Option<bool>,
 }
 
+/// What a fork's first spawn resumes from: the parent's provider session id
+/// (never itself a resume target — see `mainframe-adapter-claude::fork`) plus
+/// whatever pins the fork point (Claude: a snapshot transcript path).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSource {
+    pub source_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resume_path: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionOptions {
@@ -72,6 +83,11 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_id: Option<String>,
     pub mainframe_chat_id: String,
+    /// Set only for a fork's spawn (own session id absent, or present but its
+    /// transcript missing). `mainframe-chat`'s `build_history_session` /
+    /// `do_load_chat` / `do_start_chat` populate it from `chats.pending_fork`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_source: Option<ForkSource>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,6 +114,12 @@ pub struct SessionSpawnOptions {
     /// app-server reported none; other adapters ignore it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
+    /// Set only for a temporary chat whose adapter reports
+    /// `AdapterCapabilities.no_persistence`. The chat layer never sets this for a
+    /// non-temporary chat or for an adapter without the capability. A no-persistence
+    /// spawn never carries a resume target (todo #346).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_persistence: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -328,6 +350,17 @@ pub struct AdapterCapabilities {
     pub plan_mode: bool,
     /// Whether this adapter supports the CLI's native `auto` permission mode.
     pub auto_mode: bool,
+    /// The adapter's CLI has a native mechanism to run a session without writing
+    /// a vendor transcript (Claude `--no-session-persistence`, Codex
+    /// `thread/start.ephemeral`), verified interactively (todo #346 spike).
+    /// `#[serde(default)]` so a payload recorded before this field existed still
+    /// deserializes, defaulting to false (no mechanism).
+    #[serde(default)]
+    pub no_persistence: bool,
+    /// Whether this adapter can branch a chat's conversation into a new chat
+    /// (todo #343). Absent on the wire (older daemon) deserializes to `false`.
+    #[serde(default)]
+    pub fork: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -577,6 +610,94 @@ mod tests {
     fn control_update_set_mode_variant() {
         let v = json!({ "type": "setMode", "mode": "plan", "destination": "session" });
         roundtrip::<ControlUpdate>(v);
+    }
+
+    #[test]
+    fn adapter_capabilities_roundtrip_with_no_persistence() {
+        roundtrip::<AdapterCapabilities>(json!({
+            "planMode": true,
+            "autoMode": false,
+            "noPersistence": true,
+            "fork": false
+        }));
+    }
+
+    #[test]
+    fn adapter_capabilities_fork_absent_defaults_false() {
+        let caps: AdapterCapabilities =
+            serde_json::from_value(json!({ "planMode": true, "autoMode": false })).unwrap();
+        assert!(!caps.fork);
+        roundtrip::<AdapterCapabilities>(json!({
+            "planMode": true,
+            "autoMode": true,
+            "noPersistence": false,
+            "fork": true
+        }));
+    }
+
+    #[test]
+    fn adapter_capabilities_missing_no_persistence_defaults_false() {
+        let parsed: AdapterCapabilities = serde_json::from_value(json!({
+            "planMode": true,
+            "autoMode": false
+        }))
+        .unwrap();
+        assert!(!parsed.no_persistence);
+    }
+
+    #[test]
+    fn session_spawn_options_omits_no_persistence_when_absent() {
+        let opts = SessionSpawnOptions {
+            model: None,
+            permission_mode: None,
+            plan_mode: None,
+            executable_path: None,
+            system_prompt: None,
+            tuning: None,
+            small_fast_model: None,
+            default_model: None,
+            no_persistence: None,
+        };
+        let v = serde_json::to_value(&opts).unwrap();
+        assert!(v.as_object().unwrap().get("noPersistence").is_none());
+    }
+
+    #[test]
+    fn session_spawn_options_carries_no_persistence_true() {
+        let opts = SessionSpawnOptions {
+            model: None,
+            permission_mode: None,
+            plan_mode: None,
+            executable_path: None,
+            system_prompt: None,
+            tuning: None,
+            small_fast_model: None,
+            default_model: None,
+            no_persistence: Some(true),
+        };
+        let v = serde_json::to_value(&opts).unwrap();
+        assert_eq!(v["noPersistence"], json!(true));
+    }
+
+    #[test]
+    fn fork_source_camel_case_and_optional_resume_path() {
+        roundtrip::<ForkSource>(json!({ "sourceSessionId": "sess_1" }));
+        roundtrip::<ForkSource>(json!({
+            "sourceSessionId": "sess_1",
+            "resumePath": "/tmp/fork-snapshots/n1/sess_1.jsonl"
+        }));
+    }
+
+    #[test]
+    fn session_options_fork_source_omitted_when_absent() {
+        let opts = SessionOptions {
+            project_path: "/tmp".to_string(),
+            chat_id: None,
+            mainframe_chat_id: "mf_1".to_string(),
+            fork_source: None,
+        };
+        let s = serde_json::to_string(&opts).unwrap();
+        assert!(!s.contains("forkSource"));
     }
 
     #[test]

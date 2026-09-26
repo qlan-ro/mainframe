@@ -613,6 +613,7 @@ mod tests {
                 project_path: path.to_string(),
                 chat_id: None,
                 mainframe_chat_id: "test-chat-id".to_string(),
+                fork_source: None,
             },
             None,
             tracker,
@@ -1334,6 +1335,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "mf-chat-42".to_string(),
+                fork_source: None,
             },
             None,
             tracker.clone(),
@@ -1366,6 +1368,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "mf-chat-99".to_string(),
+                fork_source: None,
             },
             None,
             tracker.clone(),
@@ -1406,6 +1409,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "mf-chat-7".to_string(),
+                fork_source: None,
             },
             None,
             tracker.clone(),
@@ -1438,6 +1442,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "mf-chat-8".to_string(),
+                fork_source: None,
             },
             None,
             tracker.clone(),
@@ -1632,6 +1637,12 @@ mod tests {
         assert_eq!(rec.results, 0);
         assert_eq!(rec.errors, 0);
     }
+
+    // Synthetic-suppression cases (todo #363) live in a sibling file — this
+    // module is already 1600+ lines — nested here so it shares `RecordingSink`,
+    // `session()` and `feed()` via `super::*` without any visibility changes.
+    // Default file-module lookup places it at `events/tests/events_synthetic_tests.rs`.
+    mod events_synthetic_tests;
 }
 
 // PORT STATUS: src/plugins/builtin/claude/events.ts (227 lines)

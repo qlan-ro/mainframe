@@ -38,6 +38,8 @@ const MINIMAL_CHAT: Chat = {
   totalTokensInput: 0,
   totalTokensOutput: 0,
   lastContextTokensInput: 0,
+  temporary: false,
+  noProject: false,
 };
 
 /** Full Chat used by the chat.updated test per plan § 7.1. */
@@ -56,6 +58,8 @@ const FULL_CHAT: Chat = {
   totalTokensInput: 0,
   totalTokensOutput: 0,
   lastContextTokensInput: 0,
+  temporary: false,
+  noProject: false,
   detectedPrs: [],
 };
 

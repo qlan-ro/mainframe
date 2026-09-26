@@ -13,7 +13,9 @@
       "totalCost": 0,
       "totalTokensInput": 0,
       "totalTokensOutput": 0,
-      "lastContextTokensInput": 0
+      "lastContextTokensInput": 0,
+      "temporary": false,
+      "noProject": false
     },
     {
       "id": "chat_9f2a3b1c",
@@ -71,7 +73,9 @@
           "source": "created"
         }
       ],
-      "tags": ["bug", "flaky-test"]
+      "tags": ["bug", "flaky-test"],
+      "temporary": false,
+      "noProject": false
     }
   ]
 }

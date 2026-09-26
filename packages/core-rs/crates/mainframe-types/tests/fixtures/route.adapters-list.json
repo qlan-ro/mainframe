@@ -32,7 +32,9 @@
       "catalogSource": "probed",
       "capabilities": {
         "planMode": true,
-        "autoMode": true
+        "autoMode": true,
+        "noPersistence": false,
+        "fork": false
       }
     }
   ]

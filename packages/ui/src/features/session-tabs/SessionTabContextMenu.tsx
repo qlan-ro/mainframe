@@ -13,7 +13,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import { Columns2, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
+import { Columns2, GitFork, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -21,6 +21,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Hint } from '@/components/ui/hint';
+import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
 
 interface SessionTabContextMenuProps {
   /** A member of the open pair — the split actions invert for it. */
@@ -33,6 +35,8 @@ interface SessionTabContextMenuProps {
   onCloseSplit: () => void;
   onKeepOpen: () => void;
   onClose: () => void;
+  forkAvailability: ForkAvailability;
+  onFork: () => void;
   children: ReactNode;
 }
 
@@ -44,6 +48,8 @@ export function SessionTabContextMenu({
   onCloseSplit,
   onKeepOpen,
   onClose,
+  forkAvailability,
+  onFork,
   children,
 }: SessionTabContextMenuProps) {
   return (
@@ -66,6 +72,23 @@ export function SessionTabContextMenu({
             <PinIcon />
             Keep Open
           </ContextMenuItem>
+        )}
+        {forkAvailability.enabled ? (
+          <ContextMenuItem data-testid="session-tab-ctx-fork" onSelect={onFork}>
+            <GitFork />
+            Fork
+          </ContextMenuItem>
+        ) : (
+          // See SessionContextMenu's identical note: a disabled item's own
+          // `data-disabled:pointer-events-none` never lets a Hint on itself fire.
+          <Hint label={forkAvailability.reason}>
+            <span className="flex">
+              <ContextMenuItem data-testid="session-tab-ctx-fork" disabled>
+                <GitFork />
+                Fork
+              </ContextMenuItem>
+            </span>
+          </Hint>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="session-tab-ctx-close" onSelect={onClose}>

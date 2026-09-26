@@ -37,7 +37,11 @@ async fn seed_chat(server: &TestServer) -> String {
         .db
         .call(|db| {
             let project = db.projects.create("/tmp/port-tunnels-proj", Some("p"))?;
-            let chat = db.chats.create(&project.id, "claude", None, None, None)?;
+            let chat = db.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project.id,
+                adapter_id: "claude".to_string(),
+                ..Default::default()
+            })?;
             Ok(chat.id)
         })
         .await

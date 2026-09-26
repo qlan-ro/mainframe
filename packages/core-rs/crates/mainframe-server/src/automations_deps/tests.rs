@@ -122,7 +122,11 @@ fn request(project_id: Option<&str>) -> AgentRequest {
 }
 
 fn chat(id: &str) -> Chat {
-    let mut chat = fallback_chat("p1", "claude", None);
+    let mut chat = fallback_chat(&mainframe_types::chat::NewChat {
+        project_id: "p1".to_string(),
+        adapter_id: "claude".to_string(),
+        ..Default::default()
+    });
     chat.id = id.to_string();
     chat
 }

@@ -5,7 +5,7 @@
  * including the parts the hover actions overlay.
  */
 import type { ReactNode } from 'react';
-import { ArchiveIcon, Columns2, CopyIcon, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
+import { ArchiveIcon, Columns2, CopyIcon, GitFork, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,9 +13,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { Hint } from '@/components/ui/hint';
+import type { ForkAvailability } from './view-model/fork-availability';
 
 interface SessionContextMenuProps {
   pinned: boolean;
+  /** Hides Pin/Tags (the daemon 409s them) and relabels Archive as Discard (todo #346). */
+  temporary: boolean;
   /** The row suppresses its hover card while the menu is up. */
   onOpenChange?: (open: boolean) => void;
   onPin: () => void;
@@ -24,12 +28,15 @@ interface SessionContextMenuProps {
   onTags: () => void;
   onArchive: () => void;
   onOpenInSplit: () => void;
+  forkAvailability: ForkAvailability;
+  onFork: () => void;
   claudeSessionId?: string;
   children: ReactNode;
 }
 
 export function SessionContextMenu({
   pinned,
+  temporary,
   onOpenChange,
   onPin,
   onUnpin,
@@ -37,6 +44,8 @@ export function SessionContextMenu({
   onTags,
   onArchive,
   onOpenInSplit,
+  forkAvailability,
+  onFork,
   claudeSessionId,
   children,
 }: SessionContextMenuProps) {
@@ -48,26 +57,48 @@ export function SessionContextMenu({
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-44">
-        <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>
-          {pinned ? <PinOffIcon /> : <PinIcon />}
-          {pinned ? 'Unpin' : 'Pin'}
-        </ContextMenuItem>
+        {!temporary && (
+          <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>
+            {pinned ? <PinOffIcon /> : <PinIcon />}
+            {pinned ? 'Unpin' : 'Pin'}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem data-testid="sessions-ctx-rename" onSelect={onRename}>
           <PencilIcon />
           Rename
         </ContextMenuItem>
-        <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
-          <TagIcon />
-          Tags
-        </ContextMenuItem>
+        {!temporary && (
+          <ContextMenuItem data-testid="sessions-ctx-tags" onSelect={onTags}>
+            <TagIcon />
+            Tags
+          </ContextMenuItem>
+        )}
         <ContextMenuItem data-testid="sessions-ctx-open-split" onSelect={onOpenInSplit}>
           <Columns2 />
           Open in Split
         </ContextMenuItem>
+        {forkAvailability.enabled ? (
+          <ContextMenuItem data-testid="sessions-ctx-fork" onSelect={onFork}>
+            <GitFork />
+            Fork
+          </ContextMenuItem>
+        ) : (
+          // A disabled item carries `data-disabled:pointer-events-none`, so the
+          // Hint has to wrap the whole item (RunningHint's established idiom) —
+          // triggering on the item itself would never fire.
+          <Hint label={forkAvailability.reason}>
+            <span className="flex">
+              <ContextMenuItem data-testid="sessions-ctx-fork" disabled>
+                <GitFork />
+                Fork
+              </ContextMenuItem>
+            </span>
+          </Hint>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive}>
           <ArchiveIcon />
-          Archive
+          {temporary ? 'Discard' : 'Archive'}
         </ContextMenuItem>
         {claudeSessionId != null && (
           <>

@@ -9,6 +9,7 @@ use mainframe_db::schema::initialize_schema;
 use mainframe_db::{
     ChatListFilters, ChatTagsRepository, ChatsRepository, ProjectsRepository, TagsRepository,
 };
+use mainframe_types::chat::NewChat;
 
 struct Setup {
     projects: ProjectsRepository,
@@ -42,7 +43,14 @@ fn v(items: &[&str]) -> Vec<String> {
 fn list_populates_chat_tags_from_chat_tags() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
-    let chat = s.chats.create(&p.id, "claude", None, None, None).unwrap();
+    let chat = s
+        .chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
     s.chat_tags
         .set_for_chat(&chat.id, &v(&["feature", "ui"]), &s.tags)
         .unwrap();
@@ -57,7 +65,13 @@ fn list_populates_chat_tags_from_chat_tags() {
 fn list_returns_empty_tags_array_for_chats_with_no_tags() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
-    s.chats.create(&p.id, "claude", None, None, None).unwrap();
+    s.chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
     let result = s.chats.list(&p.id).unwrap();
     assert_eq!(result[0].tags, Some(vec![]));
 }
@@ -72,7 +86,11 @@ fn list_does_not_run_extra_queries_when_chat_tags_is_omitted() {
     let chats_no_tags = ChatsRepository::new(Rc::clone(&conn), None);
     let p = projects.create("/tmp/p", None).unwrap();
     chats_no_tags
-        .create(&p.id, "claude", None, None, None)
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
         .unwrap();
     let result = chats_no_tags.list(&p.id).unwrap();
     assert_eq!(result.len(), 1);
@@ -83,7 +101,14 @@ fn list_does_not_run_extra_queries_when_chat_tags_is_omitted() {
 fn get_populates_chat_tags_for_a_single_chat() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
-    let chat = s.chats.create(&p.id, "claude", None, None, None).unwrap();
+    let chat = s
+        .chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
     s.chat_tags
         .set_for_chat(&chat.id, &v(&["backend"]), &s.tags)
         .unwrap();
@@ -96,7 +121,14 @@ fn get_populates_chat_tags_for_a_single_chat() {
 fn get_returns_empty_tags_array_for_a_chat_with_no_tags() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
-    let chat = s.chats.create(&p.id, "claude", None, None, None).unwrap();
+    let chat = s
+        .chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
     let result = s.chats.get(&chat.id).unwrap();
     assert_eq!(result.unwrap().tags, Some(vec![]));
 }
@@ -120,8 +152,22 @@ fn list_filtered_throws_when_tags_all_given_but_chat_tags_is_absent() {
 fn list_filtered_includes_archived_chats_when_include_archived_is_true() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
-    let active = s.chats.create(&p.id, "claude", None, None, None).unwrap();
-    let archived = s.chats.create(&p.id, "claude", None, None, None).unwrap();
+    let active = s
+        .chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+    let archived = s
+        .chats
+        .create(&NewChat {
+            project_id: p.id.to_string(),
+            adapter_id: "claude".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
     s.chats
         .update(
             &archived.id,

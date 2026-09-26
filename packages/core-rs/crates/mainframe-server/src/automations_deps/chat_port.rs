@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use mainframe_automations::engine::BoxFuture;
 use mainframe_chat::chat_manager::ChatManager;
-use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
+use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, NewChat};
 use mainframe_types::content::LeafContent;
 
 pub trait AgentChatPort: Send + Sync {
@@ -65,13 +65,20 @@ impl AgentChatPort for ChatManagerPort {
         Box::pin(async move {
             self.chats
                 .create_chat_with_defaults(
-                    project_id,
-                    adapter_id,
-                    model,
-                    permission_mode,
+                    NewChat {
+                        project_id: project_id.to_string(),
+                        adapter_id: adapter_id.to_string(),
+                        model: model.map(str::to_string),
+                        permission_mode: permission_mode.map(str::to_string),
+                        automation_run_id: Some(automation_run_id.to_string()),
+                        // An existing caller passing temporary=false (rule 2):
+                        // automation-created chats are already hidden from the
+                        // default listing by `automation_run_id`.
+                        temporary: false,
+                        scratch_root: None,
+                    },
                     None,
                     branch_name,
-                    Some(automation_run_id),
                 )
                 .await
                 .id

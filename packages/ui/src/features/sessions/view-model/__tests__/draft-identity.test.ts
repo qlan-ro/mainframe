@@ -25,6 +25,8 @@ function makeCustom(overrides?: Partial<SessionCustom>): SessionCustom {
     hasPending: false,
     detectedPrs: [],
     worktreeMissing: false,
+    temporary: false,
+    noProject: false,
     transcriptMissing: false,
     updatedAt: 0,
     ...overrides,
@@ -92,6 +94,12 @@ describe('resolveActiveScope — draft fallback for a not-yet-created thread', (
 
   it('returns an empty scope when neither custom nor draft exists', () => {
     expect(resolveActiveScope(undefined, undefined)).toEqual({ isWorktree: false });
+  });
+
+  it('resolves an undefined projectId for a "No project" draft (todo #346)', () => {
+    const scope = resolveActiveScope(undefined, makeDraft({ projectId: null }));
+    expect(scope.projectId).toBeUndefined();
+    expect(scope.adapterId).toBe('codex');
   });
 });
 

@@ -3,12 +3,13 @@
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
-use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel};
-use mainframe_types::chat::{Chat, ChatStatus, ProcessState, TodoItem};
+use mainframe_types::adapter::{DetectedPr, DetectedPrSource, EffortLevel, ForkSource};
+use mainframe_types::chat::{Chat, ChatStatus, NO_PROJECT_ID, NewChat, ProcessState, TodoItem};
 use mainframe_types::context::{SessionMention, SkillFileEntry};
 use mainframe_types::settings::ExecutionMode;
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::chat_tags::ChatTagsRepository;
@@ -28,7 +29,44 @@ const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as pro
   session_file_path as sessionFilePath, \
   transcript_missing as transcriptMissing, \
   fast, ultracode, adaptive_thinking, \
-  automation_run_id as automationRunId";
+  automation_run_id as automationRunId, \
+  temporary, vendor_session_ephemeral as vendorSessionEphemeral, \
+  context_lost_at as contextLostAt, scratch_path as scratchPath, \
+  parent_chat_id as parentChatId";
+
+/// The still-pending fork state stored in `chats.pending_fork` (JSON), read and
+/// written only through `get_pending_fork` / `clear_pending_fork` (todo #343) —
+/// deliberately absent from the `Chat` wire type, like `dismissed_worktrees`.
+/// Retired once the fork's first turn produces a result (`on_result`), which
+/// also removes `snapshot_dir` from disk.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingFork {
+    pub fork_source: ForkSource,
+    pub snapshot_dir: String,
+    pub provisional_title: String,
+}
+
+/// Inputs to `ChatsRepository::create_fork`, gathered from the enriched parent
+/// chat by `ChatManager::fork_chat` (mainframe-chat, Group 3). Tags and pin
+/// state are deliberately absent — the fork inherits neither.
+#[derive(Debug, Clone)]
+pub struct ForkInsert<'a> {
+    pub parent_chat_id: &'a str,
+    pub project_id: &'a str,
+    pub adapter_id: &'a str,
+    pub model: Option<&'a str>,
+    pub permission_mode: Option<ExecutionMode>,
+    pub plan_mode: bool,
+    pub effort: Option<EffortLevel>,
+    pub fast: Option<bool>,
+    pub ultracode: Option<bool>,
+    pub adaptive_thinking: Option<bool>,
+    pub worktree_path: Option<&'a str>,
+    pub branch_name: Option<&'a str>,
+    pub title: Option<&'a str>,
+    pub pending_fork: &'a PendingFork,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct ChatListFilters {
@@ -36,6 +74,9 @@ pub struct ChatListFilters {
     pub tags_all: Option<Vec<String>>,
     pub has_worktree: bool,
     pub include_archived: bool,
+    /// Temporary chats are excluded from default listings (like the automation
+    /// filter, always-applied); this opts a caller back in.
+    pub include_temporary: bool,
 }
 
 /// Partial-update payload mirroring the TS `update(id, updates: Partial<Chat>)`.
@@ -70,6 +111,8 @@ pub struct ChatUpdate {
     pub adaptive_thinking: Option<Option<bool>>,
     pub plan_mode: Option<bool>,
     pub transcript_missing: Option<bool>,
+    pub vendor_session_ephemeral: Option<bool>,
+    pub context_lost_at: Option<String>,
 }
 
 fn parse_effort(value: Option<String>) -> Option<EffortLevel> {
@@ -166,6 +209,9 @@ impl ChatsRepository {
         }
         // Automation-created chats (ask_agent steps) are hidden from the default sidebar list.
         where_clauses.push("automation_run_id IS NULL".to_string());
+        if !filters.include_temporary {
+            where_clauses.push("temporary = 0".to_string());
+        }
         if let Some(project_id) = &filters.project_id {
             where_clauses.push("project_id = ?".to_string());
             params.push(SqlValue::Text(project_id.clone()));
@@ -217,45 +263,59 @@ impl ChatsRepository {
         }
     }
 
-    pub fn create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Result<Chat, DbError> {
+    /// `new_chat.scratch_root` is required and used only when `project_id ==
+    /// NO_PROJECT_ID`: the row's `scratch_path` becomes `<scratch_root>/<id>`.
+    /// Nothing is created on disk here — the directory is created lazily on
+    /// first spawn (rule 6).
+    pub fn create(&self, new_chat: &NewChat) -> Result<Chat, DbError> {
         let id = nanoid::nanoid!();
         let now = now_iso8601();
         // `model || null` / `permissionMode || null` — empty string binds NULL.
-        let model_bind = model.filter(|s| !s.is_empty());
-        let permission_bind = permission_mode.filter(|s| !s.is_empty());
-        let automation_run_id_bind = automation_run_id.filter(|s| !s.is_empty());
+        let model_bind = new_chat.model.as_deref().filter(|s| !s.is_empty());
+        let permission_bind = new_chat
+            .permission_mode
+            .as_deref()
+            .filter(|s| !s.is_empty());
+        let automation_run_id_bind = new_chat
+            .automation_run_id
+            .as_deref()
+            .filter(|s| !s.is_empty());
+        let scratch_path = if new_chat.project_id == NO_PROJECT_ID {
+            new_chat
+                .scratch_root
+                .as_deref()
+                .map(|root| format!("{root}/{id}"))
+        } else {
+            None
+        };
 
         self.db.execute(
-            "INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at, automation_run_id) \
-             VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)",
+            "INSERT INTO chats (id, adapter_id, project_id, model, permission_mode, status, created_at, updated_at, automation_run_id, temporary, scratch_path) \
+             VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)",
             rusqlite::params![
                 id,
-                adapter_id,
-                project_id,
+                new_chat.adapter_id,
+                new_chat.project_id,
                 model_bind,
                 permission_bind,
                 now,
                 now,
-                automation_run_id_bind
+                automation_run_id_bind,
+                i64::from(new_chat.temporary),
+                scratch_path,
             ],
         )?;
 
         Ok(Chat {
             id,
-            adapter_id: adapter_id.to_string(),
-            project_id: project_id.to_string(),
+            adapter_id: new_chat.adapter_id.clone(),
+            no_project: new_chat.project_id == NO_PROJECT_ID,
+            project_id: new_chat.project_id.clone(),
             title: None,
             claude_session_id: None,
             session_file_path: None,
-            model: model.map(str::to_string),
-            permission_mode: parse_execution_mode(permission_mode.map(str::to_string)),
+            model: new_chat.model.clone(),
+            permission_mode: parse_execution_mode(new_chat.permission_mode.clone()),
             plan_mode: Some(false),
             status: ChatStatus::Active,
             created_at: now.clone(),
@@ -287,8 +347,129 @@ impl ChatsRepository {
             adaptive_thinking: None,
             detected_prs: None,
             tags: None,
-            automation_run_id: automation_run_id.map(str::to_string),
+            automation_run_id: new_chat.automation_run_id.clone(),
+            temporary: new_chat.temporary,
+            context_lost_at: None,
+            vendor_session_ephemeral: false,
+            scratch_path,
+            parent_chat_id: None,
         })
+    }
+
+    /// A single INSERT that seeds a new chat from its parent's resolved config
+    /// (todo #343): project, adapter, model, permission mode, plan mode, tuning,
+    /// worktree, and a provisional title, plus the `parent_chat_id` lineage and
+    /// the `pending_fork` payload the daemon resolves the first spawn from.
+    /// Counters start at zero; the fork is unpinned, untagged, and carries no
+    /// automation run.
+    pub fn create_fork(&self, insert: &ForkInsert<'_>) -> Result<Chat, DbError> {
+        let id = nanoid::nanoid!();
+        let now = now_iso8601();
+        let permission_bind = insert
+            .permission_mode
+            .as_ref()
+            .map(enum_to_db_string)
+            .transpose()?;
+        let effort_bind = insert.effort.as_ref().map(enum_to_db_string).transpose()?;
+        let pending_fork_json = serde_json::to_string(insert.pending_fork)?;
+
+        self.db.execute(
+            "INSERT INTO chats (
+                id, adapter_id, project_id, model, permission_mode, plan_mode,
+                effort, fast, ultracode, adaptive_thinking,
+                worktree_path, branch_name, title,
+                parent_chat_id, pending_fork,
+                status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+            rusqlite::params![
+                id,
+                insert.adapter_id,
+                insert.project_id,
+                insert.model,
+                permission_bind,
+                i64::from(insert.plan_mode),
+                effort_bind,
+                insert.fast.map(i64::from),
+                insert.ultracode.map(i64::from),
+                insert.adaptive_thinking.map(i64::from),
+                insert.worktree_path,
+                insert.branch_name,
+                insert.title,
+                insert.parent_chat_id,
+                pending_fork_json,
+                now,
+                now,
+            ],
+        )?;
+
+        Ok(Chat {
+            id,
+            adapter_id: insert.adapter_id.to_string(),
+            project_id: insert.project_id.to_string(),
+            title: insert.title.map(str::to_string),
+            claude_session_id: None,
+            session_file_path: None,
+            model: insert.model.map(str::to_string),
+            permission_mode: insert.permission_mode,
+            plan_mode: Some(insert.plan_mode),
+            status: ChatStatus::Active,
+            created_at: now.clone(),
+            updated_at: now,
+            total_cost: 0.0,
+            total_tokens_input: 0,
+            total_tokens_output: 0,
+            last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
+            context_files: None,
+            mentions: None,
+            modified_files: None,
+            worktree_path: insert.worktree_path.map(str::to_string),
+            branch_name: insert.branch_name.map(str::to_string),
+            process_state: None,
+            display_status: None,
+            is_running: None,
+            background_activity: None,
+            worktree_missing: None,
+            directory_missing: None,
+            missing_directory_path: None,
+            transcript_missing: None,
+            todos: None,
+            pinned: None,
+            effort: Some(insert.effort),
+            fast: Some(insert.fast),
+            ultracode: Some(insert.ultracode),
+            adaptive_thinking: Some(insert.adaptive_thinking),
+            detected_prs: None,
+            tags: None,
+            automation_run_id: None,
+            temporary: false,
+            no_project: insert.project_id == NO_PROJECT_ID,
+            context_lost_at: None,
+            vendor_session_ephemeral: false,
+            scratch_path: None,
+            parent_chat_id: Some(Some(insert.parent_chat_id.to_string())),
+        })
+    }
+
+    /// Hard-delete a chat row (rule 5, discard step 4). `chat_tags` cascade via
+    /// `ON DELETE CASCADE` (`PRAGMA foreign_keys = ON`).
+    pub fn delete(&self, id: &str) -> Result<(), DbError> {
+        self.db
+            .execute("DELETE FROM chats WHERE id = ?", rusqlite::params![id])?;
+        Ok(())
+    }
+
+    /// Rule 7's context-loss write: the stored provider session can no longer be
+    /// resumed, so the resume target and the ephemeral flag are cleared together
+    /// with stamping the loss time.
+    pub fn mark_context_lost(&self, id: &str, context_lost_at: &str) -> Result<(), DbError> {
+        self.db.execute(
+            "UPDATE chats SET context_lost_at = ?, claude_session_id = NULL, \
+             session_file_path = NULL, vendor_session_ephemeral = 0 WHERE id = ?",
+            rusqlite::params![context_lost_at, id],
+        )?;
+        Ok(())
     }
 
     pub fn update(&self, id: &str, updates: &ChatUpdate) -> Result<(), DbError> {
@@ -406,6 +587,14 @@ impl ChatsRepository {
             sets.push("transcript_missing = ?");
             values.push(SqlValue::Integer(i64::from(v)));
         }
+        if let Some(v) = updates.vendor_session_ephemeral {
+            sets.push("vendor_session_ephemeral = ?");
+            values.push(SqlValue::Integer(i64::from(v)));
+        }
+        if let Some(v) = &updates.context_lost_at {
+            sets.push("context_lost_at = ?");
+            values.push(SqlValue::Text(v.clone()));
+        }
 
         if sets.is_empty() {
             return Ok(());
@@ -478,6 +667,26 @@ impl ChatsRepository {
             rusqlite::params![serde_json::to_string(&existing)?, chat_id],
         )?;
         Ok(true)
+    }
+
+    /// The still-pending fork state for a chat whose first turn hasn't produced
+    /// a result yet (todo #343). Daemon-internal, like `dismissed_worktrees`.
+    pub fn get_pending_fork(&self, chat_id: &str) -> Result<Option<PendingFork>, DbError> {
+        let raw = self.read_text_column("pending_fork", chat_id)?;
+        match raw.filter(|s| !s.is_empty()) {
+            Some(s) => Ok(Some(serde_json::from_str(&s)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Retire a fork's pending state once its first turn produces a result.
+    /// Callers are responsible for removing `PendingFork.snapshot_dir` from disk.
+    pub fn clear_pending_fork(&self, chat_id: &str) -> Result<(), DbError> {
+        self.db.execute(
+            "UPDATE chats SET pending_fork = NULL WHERE id = ?",
+            rusqlite::params![chat_id],
+        )?;
+        Ok(())
     }
 
     pub fn get_skill_files(&self, chat_id: &str) -> Result<Vec<SkillFileEntry>, DbError> {
@@ -748,6 +957,14 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
         )),
         tags: None,
         automation_run_id: row.get("automationRunId")?,
+        temporary: row.get::<_, i64>("temporary")? != 0,
+        no_project: row.get::<_, String>("projectId")? == NO_PROJECT_ID,
+        context_lost_at: row.get("contextLostAt")?,
+        vendor_session_ephemeral: row
+            .get::<_, Option<i64>>("vendorSessionEphemeral")?
+            .is_some_and(|n| n != 0),
+        scratch_path: row.get("scratchPath")?,
+        parent_chat_id: Some(row.get::<_, Option<String>>("parentChatId")?),
     })
 }
 

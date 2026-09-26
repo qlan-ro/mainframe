@@ -188,6 +188,24 @@ describe('MCPToolCard — error state', () => {
   });
 });
 
+// ── Image result (todo #363) ─────────────────────────────────────────────────
+
+describe('MCPToolCard — image result', () => {
+  const imageResult = { content: '', images: [{ mediaType: 'image/png', data: 'AAAA' }] };
+
+  it('renders a thumbnail in the expanded body instead of raw JSON/base64', () => {
+    renderCard({
+      toolName: 'mcp__screenshot__capture',
+      args: {},
+      result: imageResult,
+    });
+    fireEvent.click(screen.getByTestId('chat-mcp-pill'));
+    expect(screen.getByTestId('tool-result-image-test-id-0')).toBeInTheDocument();
+    expect(screen.queryByText(/AAAA/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('"images"');
+  });
+});
+
 // ── MCP tool name parsing edge cases ─────────────────────────────────────────
 
 describe('MCPToolCard — tool name parsing', () => {

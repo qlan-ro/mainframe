@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
+use crate::routes::chat_discard::refuse_if_temporary;
 use crate::routes::projects::parse_body;
 
 #[derive(Deserialize)]
@@ -125,6 +126,16 @@ async fn set_chat_tags(
     let Some(parsed): Option<SetChatTagsBody> = parse_body(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
+    let lookup = id.clone();
+    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => {
+            if let Some(resp) = refuse_if_temporary(&chat, "tag") {
+                return resp;
+            }
+        }
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    }
     let tags = parsed.tags;
     let result = ctx
         .db
@@ -149,6 +160,53 @@ pub fn router() -> Router<Arc<AppCtx>> {
             "/api/chats/{id}/tags",
             get(list_chat_tags).put(set_chat_tags),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+    use crate::ctx::AppCtx;
+
+    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
+        let status = resp.status();
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+        )
+    }
+
+    #[tokio::test]
+    async fn set_chat_tags_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx();
+        let chat_id = ctx
+            .db
+            .call(|db| {
+                let project = db.projects.create("/tmp/tags-temp", None)?;
+                db.chats
+                    .create(&mainframe_types::chat::NewChat {
+                        project_id: project.id,
+                        adapter_id: "claude".to_string(),
+                        temporary: true,
+                        ..Default::default()
+                    })
+                    .map(|c| c.id)
+            })
+            .await
+            .unwrap();
+
+        let resp = set_chat_tags(
+            State(ctx.clone()),
+            Path(chat_id),
+            axum::body::Bytes::from(r#"{"tags":["feature"]}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot tag a temporary chat");
+    }
 }
 
 // PORT STATUS: src/server/routes/tags.ts (6 endpoints, 98 lines)

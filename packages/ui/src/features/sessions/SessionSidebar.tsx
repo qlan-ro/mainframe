@@ -21,6 +21,7 @@ import { attentionCount } from '@/features/sessions/view-model/attention-counts'
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
+import { SessionLineageProvider } from '@/features/sessions/SessionLineageContext';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useAddProject } from '@/features/sessions/use-add-project';
 import { useSettingsStore } from '@/store/settings';
@@ -112,6 +113,13 @@ export function SessionSidebar({ className }: { className?: string }) {
     [filteredItems, sortMode, sortedProjects],
   );
 
+  // Fork lineage (todo #343): shared with every row via context rather than
+  // per-row prop drilling. `unfilteredIds` distinguishes a parent hidden by a
+  // filter from one absent from the loaded set entirely (archived/deleted).
+  const unfilteredIds = useMemo(() => new Set(allItems.map((i) => i.id)), [allItems]);
+  const listedIds = useMemo(() => new Set(groups.flatMap((g) => g.items.map((i) => i.id))), [groups]);
+  const lineage = useMemo(() => ({ allItems, listedIds, unfilteredIds }), [allItems, listedIds, unfilteredIds]);
+
   const projectNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const project of sortedProjects) map[project.id] = project.name;
@@ -157,13 +165,15 @@ export function SessionSidebar({ className }: { className?: string }) {
       </SidebarHeader>
 
       <SidebarScrollRegion tut="sessions-list">
-        <SessionsSection
-          groups={groups}
-          projectNames={projectNames}
-          colorOf={registry.colorOf}
-          draft={draft}
-          hasFilters={hasFilters}
-        />
+        <SessionLineageProvider value={lineage}>
+          <SessionsSection
+            groups={groups}
+            projectNames={projectNames}
+            colorOf={registry.colorOf}
+            draft={draft}
+            hasFilters={hasFilters}
+          />
+        </SessionLineageProvider>
       </SidebarScrollRegion>
 
       {/* The rule is load-bearing, not decoration: the footer butts straight up

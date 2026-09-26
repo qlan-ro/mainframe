@@ -121,6 +121,8 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     totalTokensInput: 0,
     totalTokensOutput: 0,
     lastContextTokensInput: 0,
+    temporary: false,
+    noProject: false,
     model: 'sonnet',
     effort: 'high',
     ...overrides,

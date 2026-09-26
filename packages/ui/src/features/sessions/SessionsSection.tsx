@@ -58,7 +58,11 @@ export function SessionsSection({ groups, projectNames, colorOf, draft, hasFilte
           <SidebarMenu>
             <DraftSessionRow
               projectId={draft.model.projectId}
-              projectName={projectNames[draft.model.projectId] ?? draft.model.projectId}
+              projectName={
+                draft.model.projectId != null
+                  ? (projectNames[draft.model.projectId] ?? draft.model.projectId)
+                  : 'No project'
+              }
               selected={draft.selected}
               showProject={showProject}
               onSelect={draft.onSelect}

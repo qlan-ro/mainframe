@@ -35,6 +35,10 @@ vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [], loading: false, reloadProjects: () => {} }),
 }));
 
+// Fork's own daemon call + useDaemonPort/useAui plumbing has its own suite
+// (use-fork-chat.test.tsx); irrelevant to this strip's rendering/switching.
+vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn() }));
+
 vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
   useStartNewSession: () => newSession,
 }));

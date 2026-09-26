@@ -13,10 +13,19 @@
  * works, its checkout is just gone; true `destructive` is reserved for the
  * irreversible actions in the menus.
  */
-import { FolderGit2, GitBranch, GitPullRequest } from 'lucide-react';
+import { FolderGit2, GitBranch, GitFork, GitPullRequest, Timer } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
+import { Hint } from '@/components/ui/hint';
+import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { TAG_DOT_STYLE } from '@/features/sessions/tags/tag-colors';
 import { cn } from '@/lib/utils';
+
+/** The fallback fork glyph's content — a non-nested fork whose parent isn't adjacent in this group. */
+export interface ForkFallback {
+  hint: string;
+  /** Absent when the parent is archived or deleted — the glyph is then inert. */
+  onActivate?: () => void;
+}
 
 const MAX_ROW_TAG_DOTS = 3;
 
@@ -30,13 +39,41 @@ const GLYPH_SIZE = 'size-3.5!';
 
 interface SessionRowMetaLineProps {
   projectName?: string;
+  /** True for a chat with no real project — renders NoProjectLabel instead of projectName/ProjectAvatar (todo #346). */
+  noProject?: boolean;
   worktreePath?: string;
   branchName?: string;
   /** The only glanceable failure signal on the row; the cause is in the hover card. */
   worktreeMissing?: boolean;
+  /** Excluded from default listings, deleted rather than archived on close — the sidebar always shows these now (todo #346). */
+  temporary?: boolean;
   detectedPrs: DetectedPr[];
   tags: string[];
   colorOf?: (name: string) => TagColor;
+  /** Set only for a non-nested fork (its parent isn't adjacent in this group) — todo #343. */
+  forkFallback?: ForkFallback;
+}
+
+/** The fallback glyph for a fork whose parent isn't nestable here — a Hint-wrapped GitFork. */
+function ForkFallbackGlyph({ forkFallback }: { forkFallback: ForkFallback }) {
+  return (
+    <Hint label={forkFallback.hint}>
+      <span
+        data-testid="sessions-row-parent-link"
+        className={cn('flex shrink-0 items-center', forkFallback.onActivate != null && 'cursor-pointer')}
+        onClick={
+          forkFallback.onActivate == null
+            ? undefined
+            : (e) => {
+                e.stopPropagation();
+                forkFallback.onActivate?.();
+              }
+        }
+      >
+        <GitFork aria-hidden className={cn(GLYPH_SIZE, 'shrink-0')} />
+      </span>
+    </Hint>
+  );
 }
 
 /** Worktree wins over branch: it names the checkout the session actually runs in. */
@@ -59,29 +96,39 @@ function WorktreeOrBranchGlyph({
 
 export function SessionRowMetaLine({
   projectName,
+  noProject = false,
   worktreePath,
   branchName,
   worktreeMissing = false,
+  temporary = false,
   detectedPrs,
   tags,
   colorOf,
+  forkFallback,
 }: SessionRowMetaLineProps) {
   const visibleTags = colorOf != null ? tags.slice(0, MAX_ROW_TAG_DOTS) : [];
 
   const hasContent =
     projectName != null ||
+    noProject ||
     worktreePath != null ||
     branchName != null ||
     detectedPrs.length > 0 ||
-    visibleTags.length > 0;
+    visibleTags.length > 0 ||
+    temporary ||
+    forkFallback != null;
   if (!hasContent) return null;
 
   return (
     <span data-testid="sessions-row-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {projectName != null && (
-        <span data-testid="sessions-row-project" className="min-w-0 flex-1 truncate-fade">
-          {projectName}
-        </span>
+      {noProject ? (
+        <NoProjectLabel data-testid="sessions-row-no-project" className="flex-1" />
+      ) : (
+        projectName != null && (
+          <span data-testid="sessions-row-project" className="min-w-0 flex-1 truncate-fade">
+            {projectName}
+          </span>
+        )
       )}
       {/* ml-auto, not a spacer: the glyphs sit at the row's end whether or not
           there is a project name to push them there. Tag dots lead the cluster —
@@ -105,6 +152,12 @@ export function SessionRowMetaLine({
         {detectedPrs.length > 0 && (
           <GitPullRequest aria-hidden data-testid="sessions-row-meta-pr" className={cn(GLYPH_SIZE, 'shrink-0')} />
         )}
+        {temporary && (
+          <Hint label="Temporary — deleted when closed">
+            <Timer aria-hidden data-testid="sessions-row-temporary-glyph" className={cn(GLYPH_SIZE, 'shrink-0')} />
+          </Hint>
+        )}
+        {forkFallback != null && <ForkFallbackGlyph forkFallback={forkFallback} />}
       </span>
     </span>
   );

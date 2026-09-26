@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { isSurfaceFloor, layoutCanSplit, useLayoutStore } from '@/store/layout';
 import { ProjectChip } from '@/components/ui/project-chip';
+import { NoProjectLabel } from '../../sessions/NoProjectLabel';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
+import { ChatHeaderParentLink } from './ChatHeaderParentLink';
 import { ChatModelChip } from './ChatModelChip';
 
 /**
@@ -20,17 +22,28 @@ const HEADER_ROOT_CLASS = 'flex h-9 shrink-0 items-center gap-[7px] pr-1.5 pl-2'
 
 /**
  * Trimmed header for a `__LOCALID_*` draft thread (no daemon chat yet): chat
- * icon, a fixed "New Session" title, and the draft's project chip. No model
- * chip / PR pills — that state doesn't exist until the chat is created on
- * first send.
+ * icon, a fixed "New Session" title, and the draft's project chip — or the
+ * "No project" label once the draft has been explicitly scoped to none
+ * (`noProjectChosen`; a not-yet-decided draft shows neither). No model chip /
+ * PR pills — that state doesn't exist until the chat is created on first send.
  */
-function ChatCardHeaderDraft({ projectId, projectName }: { projectId: string | null; projectName: string | null }) {
+function ChatCardHeaderDraft({
+  projectId,
+  projectName,
+  noProjectChosen,
+}: {
+  projectId: string | null;
+  projectName: string | null;
+  noProjectChosen: boolean;
+}) {
   return (
     <div data-testid="chat-header" data-drag-region className={HEADER_ROOT_CLASS}>
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">New Session</span>
-      {projectId != null && projectName != null && (
+      {projectId != null && projectName != null ? (
         <ProjectChip projectId={projectId} name={projectName} size={16} data-testid="chat-header-project" />
+      ) : (
+        noProjectChosen && <NoProjectLabel size={13} className="text-xs" data-testid="chat-header-no-project" />
       )}
       <span className="flex-1" />
     </div>
@@ -68,6 +81,7 @@ function ChatCardHeaderReal({ zone }: { zone?: ZoneHeaderControls }) {
         <MessageSquare size={13} className="shrink-0 text-primary" />
         <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
         <ChatModelChip />
+        <ChatHeaderParentLink />
         <span className="flex-1" />
         <Hint label="Close zone">
           <Button
@@ -91,6 +105,7 @@ function ChatCardHeaderReal({ zone }: { zone?: ZoneHeaderControls }) {
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatModelChip />
+      <ChatHeaderParentLink />
       <span className="flex-1" />
       {splitAvailable && (
         <>
@@ -151,7 +166,11 @@ export function ChatCardHeader({ zone }: { zone?: ZoneHeaderControls } = {}) {
   if (isDraft && zone == null) {
     const projectId = draftCfg?.projectId ?? null;
     const projectName = projectId != null ? (projects.find((p) => p.id === projectId)?.name ?? projectId) : null;
-    return <ChatCardHeaderDraft projectId={projectId} projectName={projectName} />;
+    // Distinguish "not yet decided" (draftCfg undefined) from an explicit
+    // "No project" pick (draftCfg set, projectId null) — only the latter shows
+    // the label; the former stays blank until a choice resolves.
+    const noProjectChosen = draftCfg !== undefined && draftCfg.projectId === null;
+    return <ChatCardHeaderDraft projectId={projectId} projectName={projectName} noProjectChosen={noProjectChosen} />;
   }
 
   return <ChatCardHeaderReal zone={zone} />;

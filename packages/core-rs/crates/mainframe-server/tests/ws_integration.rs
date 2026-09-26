@@ -162,8 +162,11 @@ async fn file_subscribe_rejects_chat_project_ownership_mismatch() {
         .ctx
         .db
         .call(move |db| {
-            db.chats
-                .create(&proj_a_for_chat, "claude", None, None, None)
+            db.chats.create(&mainframe_types::chat::NewChat {
+                project_id: proj_a_for_chat,
+                adapter_id: "claude".to_string(),
+                ..Default::default()
+            })
         })
         .await
         .unwrap()

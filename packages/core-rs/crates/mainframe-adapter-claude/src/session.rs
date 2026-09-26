@@ -284,7 +284,7 @@ fn build_spawn_command(
 /// Extracted so `session-spawn-args.test.ts` can assert on it directly.
 fn build_args(
     options: &SessionSpawnOptions,
-    resume: &Option<String>,
+    resume: &crate::fork::ResumeTarget,
     include_partial_messages: bool,
 ) -> (Vec<String>, String) {
     let mut args: Vec<String> = [
@@ -314,9 +314,33 @@ fn build_args(
         args.push(MAINFRAME_SYSTEM_PROMPT_APPEND.to_string());
     }
 
-    if let Some(r) = resume {
-        args.push("--resume".to_string());
-        args.push(r.clone());
+    let no_persistence = options.no_persistence == Some(true);
+    if no_persistence {
+        // Claude's native no-vendor-transcript mechanism (todo #346 spike, verified
+        // interactively on 2.1.280 against this exact stream-json spawn). A
+        // no-persistence spawn never has a session to resume, so it always starts
+        // fresh regardless of the resume target the caller passes.
+        args.push("--no-session-persistence".to_string());
+    }
+    let resume = if no_persistence {
+        &crate::fork::ResumeTarget::Fresh
+    } else {
+        resume
+    };
+    match resume {
+        crate::fork::ResumeTarget::Own(id) => {
+            args.push("--resume".to_string());
+            args.push(id.clone());
+        }
+        // A fork's own session id is never a resume target on its own: the
+        // pinned snapshot path always ships with --fork-session, so this is
+        // the one path in this function that can emit it (todo #343).
+        crate::fork::ResumeTarget::Fork(path) => {
+            args.push("--resume".to_string());
+            args.push(path.clone());
+            args.push("--fork-session".to_string());
+        }
+        crate::fork::ResumeTarget::Fresh => {}
     }
     if let Some(m) = &options.model {
         args.push("--model".to_string());
@@ -342,6 +366,10 @@ pub struct ClaudeSession {
     pub id: String,
     pub project_path: String,
     resume_session_id: Option<String>,
+    /// Set only for a fork's spawn (todo #343). Never resumed directly — only
+    /// `resume_target`'s `Fork` arm (via `fork_source.resume_path`) reaches
+    /// `--resume`, and always alongside `--fork-session`.
+    fork_source: Option<mainframe_types::adapter::ForkSource>,
     on_exit: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     pub control: Arc<ControlRequestChannel>,
     base_permission_mode: Mutex<String>,
@@ -369,6 +397,7 @@ impl ClaudeSession {
             id,
             project_path: options.project_path.clone(),
             resume_session_id: options.chat_id,
+            fork_source: options.fork_source,
             on_exit: Mutex::new(on_exit),
             control,
             base_permission_mode: Mutex::new("default".to_string()),
@@ -532,7 +561,8 @@ impl ClaudeSession {
             self.resolved_path.as_str(),
         )
         .await;
-        let (args, base_mode) = build_args(&options, &self.resume_session_id, include_partial);
+        let resume_target = self.resume_target().await;
+        let (args, base_mode) = build_args(&options, &resume_target, include_partial);
         *self
             .base_permission_mode
             .lock()
@@ -1091,26 +1121,95 @@ impl ClaudeSession {
         collect_claude_context_files(&self.project_path, None)
     }
 
-    pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
-        let Some(resume) = &self.resume_session_id else {
-            return Ok(vec![]);
+    /// Decide what this session should resume from right now (todo #343): its
+    /// own transcript when one already exists on disk, else the pinned fork
+    /// source, else nothing. Re-checked on every call (spawn, and every
+    /// history read) rather than cached, since a fork's own transcript can
+    /// appear between calls once its first turn completes.
+    ///
+    /// The transcript-presence probe only matters while a fork source is
+    /// pending — it decides whether the fork's own first turn has landed yet.
+    /// A regular (non-fork) chat with a stored session id must keep existing
+    /// behavior and resume plainly without this probe, so it is skipped
+    /// entirely when there is no fork source: a canonical-path miss here
+    /// (e.g. a CLI worktree relocation) must not turn into a silent fresh
+    /// session that overwrites `claude_session_id`.
+    async fn resume_target(&self) -> crate::fork::ResumeTarget {
+        let own_transcript_present = match (&self.resume_session_id, &self.fork_source) {
+            (Some(id), Some(_)) => {
+                crate::transcript::is_claude_transcript_present(id, &self.project_path, None).await
+            }
+            _ => false,
         };
-        Ok(crate::history::load_history(resume, &self.project_path).await)
+        crate::fork::resolve_resume(
+            self.resume_session_id.as_deref(),
+            own_transcript_present,
+            self.fork_source.as_ref(),
+        )
+    }
+
+    pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
+        match self.resume_target().await {
+            crate::fork::ResumeTarget::Own(id) => {
+                Ok(crate::history::load_history(&id, &self.project_path).await)
+            }
+            crate::fork::ResumeTarget::Fork(path) => {
+                let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
+                Ok(crate::history::load_history_in_dir(&session_id, &dir).await)
+            }
+            crate::fork::ResumeTarget::Fresh => Ok(vec![]),
+        }
     }
 
     pub async fn extract_plan_files(&self) -> Result<Vec<String>, AdapterError> {
-        let Some(resume) = &self.resume_session_id else {
-            return Ok(vec![]);
-        };
-        Ok(crate::history::extract_plan_file_paths(resume, &self.project_path).await)
+        match self.resume_target().await {
+            crate::fork::ResumeTarget::Own(id) => {
+                Ok(crate::history::extract_plan_file_paths(&id, &self.project_path).await)
+            }
+            crate::fork::ResumeTarget::Fork(path) => {
+                let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
+                Ok(crate::history::extract_plan_file_paths_in_dir(&session_id, &dir).await)
+            }
+            crate::fork::ResumeTarget::Fresh => Ok(vec![]),
+        }
     }
 
     pub async fn extract_skill_files(&self) -> Result<Vec<SkillFileEntry>, AdapterError> {
-        let Some(resume) = &self.resume_session_id else {
-            return Ok(vec![]);
-        };
-        Ok(crate::history::extract_skill_file_paths(resume, &self.project_path).await)
+        match self.resume_target().await {
+            crate::fork::ResumeTarget::Own(id) => {
+                Ok(crate::history::extract_skill_file_paths(&id, &self.project_path).await)
+            }
+            crate::fork::ResumeTarget::Fork(path) => {
+                let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
+                Ok(crate::history::extract_skill_file_paths_in_dir(
+                    &session_id,
+                    &dir,
+                    &self.project_path,
+                )
+                .await)
+            }
+            crate::fork::ResumeTarget::Fresh => Ok(vec![]),
+        }
     }
+}
+
+/// A `ResumeTarget::Fork(path)` carries the snapshot's `.jsonl` file path; its
+/// parent directory is the discovery dir, and the fork source's own
+/// `source_session_id` is the session id to discover within it (the snapshot
+/// file is named `<source_session_id>.jsonl` — see `fork::pin_fork_point`).
+fn fork_snapshot_lookup(
+    path: &str,
+    fork_source: &Option<mainframe_types::adapter::ForkSource>,
+) -> (String, String) {
+    let session_id = fork_source
+        .as_ref()
+        .map(|f| f.source_session_id.clone())
+        .unwrap_or_default();
+    let dir = std::path::Path::new(path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    (session_id, dir)
 }
 
 impl AdapterSession for ClaudeSession {
@@ -1146,6 +1245,7 @@ impl AdapterSession for ClaudeSession {
             tuning: None,
             small_fast_model: None,
             default_model: None,
+            no_persistence: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }
@@ -1307,6 +1407,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "test-chat-id".to_string(),
+                fork_source: None,
             },
             None,
             Arc::new(BackgroundTaskTracker::new()),
@@ -1327,6 +1428,7 @@ mod tests {
             tuning: None,
             small_fast_model: None,
             default_model: None,
+            no_persistence: None,
         }
     }
 
@@ -1338,7 +1440,11 @@ mod tests {
     // --- session-spawn-args.test.ts ---
     #[test]
     fn default_mode_passes_permission_mode_default() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Default)), &None, false);
+        let (args, _) = build_args(
+            &spawn_opts(Some(ExecutionMode::Default)),
+            &crate::fork::ResumeTarget::Fresh,
+            false,
+        );
         assert_eq!(mode_arg(&args), "default");
         assert!(
             args.iter()
@@ -1351,7 +1457,7 @@ mod tests {
     fn plan_mode_passes_permission_mode_plan() {
         let mut o = spawn_opts(Some(ExecutionMode::Default));
         o.plan_mode = Some(true);
-        let (args, _) = build_args(&o, &None, false);
+        let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
         assert_eq!(mode_arg(&args), "plan");
         assert!(
             args.iter()
@@ -1361,25 +1467,37 @@ mod tests {
 
     #[test]
     fn accept_edits_mode_passes_permission_mode_accept_edits() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::AcceptEdits)), &None, false);
+        let (args, _) = build_args(
+            &spawn_opts(Some(ExecutionMode::AcceptEdits)),
+            &crate::fork::ResumeTarget::Fresh,
+            false,
+        );
         assert_eq!(mode_arg(&args), "acceptEdits");
     }
 
     #[test]
     fn auto_mode_passes_permission_mode_auto() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Auto)), &None, false);
+        let (args, _) = build_args(
+            &spawn_opts(Some(ExecutionMode::Auto)),
+            &crate::fork::ResumeTarget::Fresh,
+            false,
+        );
         assert_eq!(mode_arg(&args), "auto");
     }
 
     #[test]
     fn yolo_mode_passes_permission_mode_bypass_permissions() {
-        let (args, _) = build_args(&spawn_opts(Some(ExecutionMode::Yolo)), &None, false);
+        let (args, _) = build_args(
+            &spawn_opts(Some(ExecutionMode::Yolo)),
+            &crate::fork::ResumeTarget::Fresh,
+            false,
+        );
         assert_eq!(mode_arg(&args), "bypassPermissions");
     }
 
     #[test]
     fn undefined_permission_mode_defaults_to_default() {
-        let (args, _) = build_args(&spawn_opts(None), &None, false);
+        let (args, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
         assert_eq!(mode_arg(&args), "default");
         assert!(
             args.iter()
@@ -1389,15 +1507,15 @@ mod tests {
 
     #[test]
     fn omits_append_system_prompt_by_default() {
-        let (args, _) = build_args(&spawn_opts(None), &None, false);
+        let (args, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
         assert!(!args.iter().any(|a| a == "--append-system-prompt"));
     }
 
     #[test]
     fn includes_partial_messages_flag_only_when_supported() {
-        let (without, _) = build_args(&spawn_opts(None), &None, false);
+        let (without, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
         assert!(!without.iter().any(|a| a == "--include-partial-messages"));
-        let (with, _) = build_args(&spawn_opts(None), &None, true);
+        let (with, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, true);
         let i = with
             .iter()
             .position(|a| a == "--include-partial-messages")
@@ -1411,7 +1529,7 @@ mod tests {
     fn includes_append_system_prompt_when_enabled() {
         let mut o = spawn_opts(None);
         o.system_prompt = Some("enabled".to_string());
-        let (args, _) = build_args(&o, &None, false);
+        let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
         let i = args
             .iter()
             .position(|a| a == "--append-system-prompt")
@@ -1429,9 +1547,104 @@ mod tests {
             ultracode: false,
             adaptive_thinking: false,
         });
-        let (args, _) = build_args(&o, &None, false);
+        let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
         assert!(!args.iter().any(|a| a == "--effort"));
         assert!(args.iter().any(|a| a == "--model"));
+    }
+
+    // --- todo #346: no-persistence spawn args ---
+    #[test]
+    fn omits_no_session_persistence_by_default() {
+        let (args, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
+        assert!(!args.iter().any(|a| a == "--no-session-persistence"));
+    }
+
+    #[test]
+    fn no_persistence_true_adds_the_flag() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
+        assert!(args.iter().any(|a| a == "--no-session-persistence"));
+    }
+
+    #[test]
+    fn no_persistence_spawn_never_resumes_even_with_a_resume_id_supplied() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(
+            &o,
+            &crate::fork::ResumeTarget::Own("sess-123".to_string()),
+            false,
+        );
+        assert!(!args.iter().any(|a| a == "--resume"));
+        assert!(!args.iter().any(|a| a == "sess-123"));
+    }
+
+    #[test]
+    fn normal_spawn_still_resumes_when_a_resume_id_is_supplied() {
+        let (args, _) = build_args(
+            &spawn_opts(None),
+            &crate::fork::ResumeTarget::Own("sess-123".to_string()),
+            false,
+        );
+        let i = args.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(args[i + 1], "sess-123");
+    }
+
+    #[test]
+    fn no_persistence_spawn_never_resumes_a_fork_snapshot() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(
+            &o,
+            &crate::fork::ResumeTarget::Fork("/snap/n1/parent.jsonl".to_string()),
+            false,
+        );
+        assert!(!args.iter().any(|a| a == "--resume"));
+        assert!(!args.iter().any(|a| a == "--fork-session"));
+    }
+
+    // --- fork argv (todo #343 Group 2, plan "AC 5 argv tests") ---
+
+    #[test]
+    fn fork_target_resumes_the_snapshot_with_fork_session() {
+        let (args, _) = build_args(
+            &spawn_opts(None),
+            &crate::fork::ResumeTarget::Fork("/snap/n1/parent.jsonl".to_string()),
+            false,
+        );
+        let i = args.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(args[i + 1], "/snap/n1/parent.jsonl");
+        assert!(args.iter().any(|a| a == "--fork-session"));
+    }
+
+    #[test]
+    fn own_target_resumes_plainly_without_fork_session() {
+        let (args, _) = build_args(
+            &spawn_opts(None),
+            &crate::fork::ResumeTarget::Own("own-session-id".to_string()),
+            false,
+        );
+        let i = args.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(args[i + 1], "own-session-id");
+        assert!(!args.iter().any(|a| a == "--fork-session"));
+    }
+
+    #[test]
+    fn resolve_resume_falls_back_to_fork_source_when_own_transcript_is_missing() {
+        let source = mainframe_types::adapter::ForkSource {
+            source_session_id: "parent-id".to_string(),
+            resume_path: Some("/snap/n1/parent-id.jsonl".to_string()),
+        };
+        let target = crate::fork::resolve_resume(Some("own-id"), false, Some(&source));
+        assert_eq!(
+            target,
+            crate::fork::ResumeTarget::Fork("/snap/n1/parent-id.jsonl".to_string())
+        );
+        let (args, _) = build_args(&spawn_opts(None), &target, false);
+        let i = args.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(args[i + 1], "/snap/n1/parent-id.jsonl");
+        assert!(args.iter().any(|a| a == "--fork-session"));
     }
 
     // --- control-requests.test.ts (ClaudeAdapter control requests block) ---

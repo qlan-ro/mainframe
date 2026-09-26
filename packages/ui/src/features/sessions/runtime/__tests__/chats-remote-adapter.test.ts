@@ -16,11 +16,14 @@ vi.mock('../../../../lib/api/chats', () => ({
   getChat: vi.fn(),
   renameChat: vi.fn(),
   archiveChat: vi.fn(),
+  discardChat: vi.fn(),
   unarchiveChat: vi.fn(),
 }));
 
 vi.mock('../archive-confirm-bridge', () => ({
   takeArchiveChoice: vi.fn(),
+  takeDiscard: vi.fn().mockReturnValue(false),
+  takeLocalOnlyRemoval: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock('../new-thread-coordinator', () => ({
@@ -72,8 +75,8 @@ vi.mock('../chat-controller-registry', () => ({
 // Import AFTER mocks so the module under test picks them up.
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
 import { useSessionListLoadState } from '../list-load-state';
-import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../../lib/api/chats';
-import { takeArchiveChoice } from '../archive-confirm-bridge';
+import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../../lib/api/chats';
+import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from '../archive-confirm-bridge';
 import { createForLocal } from '../new-thread-coordinator';
 
 // ---------------------------------------------------------------------------
@@ -84,8 +87,11 @@ const mockListChats = listChats as MockedFunction<typeof listChats>;
 const mockGetChat = getChat as MockedFunction<typeof getChat>;
 const mockRenameChat = renameChat as MockedFunction<typeof renameChat>;
 const mockArchiveChat = archiveChat as MockedFunction<typeof archiveChat>;
+const mockDiscardChat = discardChat as MockedFunction<typeof discardChat>;
 const mockUnarchiveChat = unarchiveChat as MockedFunction<typeof unarchiveChat>;
 const mockTakeArchiveChoice = takeArchiveChoice as MockedFunction<typeof takeArchiveChoice>;
+const mockTakeDiscard = takeDiscard as MockedFunction<typeof takeDiscard>;
+const mockTakeLocalOnlyRemoval = takeLocalOnlyRemoval as MockedFunction<typeof takeLocalOnlyRemoval>;
 const mockCreateForLocal = createForLocal as MockedFunction<typeof createForLocal>;
 
 // ---------------------------------------------------------------------------
@@ -104,6 +110,8 @@ const FIXTURE: Chat = {
   totalTokensInput: 0,
   totalTokensOutput: 0,
   lastContextTokensInput: 0,
+  temporary: false,
+  noProject: false,
   pinned: true,
   tags: ['backend'],
   detectedPrs: [{ number: 7, url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', source: 'created' as const }],
@@ -135,6 +143,19 @@ describe('chats-remote-adapter — list maps chats via chatToThreadCustom', () =
     expect(result.threads[0]?.status).toBe('regular');
     expect(result.threads[0]?.remoteId).toBe('chat-1');
     expect(custom(result.threads[0]?.custom).pinned).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chats-remote-adapter — list includes temporary chats (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — list requests temporary chats too (todo #346)', () => {
+  it('calls listChats(port, { includeTemporary: true })', async () => {
+    mockListChats.mockResolvedValueOnce([FIXTURE]);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.list();
+    expect(mockListChats).toHaveBeenCalledExactlyOnceWith(31415, { includeTemporary: true });
   });
 });
 
@@ -263,6 +284,29 @@ describe('chats-remote-adapter — archive consumes the staged choice via takeAr
 });
 
 // ---------------------------------------------------------------------------
+// chats-remote-adapter — archive/delete route to discardChat for a temporary
+// chat (todo #346), read via takeDiscard rather than a getChat round-trip.
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — archive calls discardChat when a discard is staged', () => {
+  it('calls discardChat(31415, chat-1) and never archiveChat', async () => {
+    mockTakeDiscard.mockReturnValueOnce(true);
+    mockDiscardChat.mockResolvedValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockDiscardChat).toHaveBeenCalledExactlyOnceWith(31415, 'chat-1');
+    expect(mockArchiveChat).not.toHaveBeenCalled();
+  });
+
+  it('never consults takeArchiveChoice once a discard is staged', async () => {
+    mockTakeDiscard.mockReturnValueOnce(true);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.archive('chat-1');
+    expect(mockTakeArchiveChoice).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // chats-remote-adapter — delete maps to archiveChat with the staged choice
 // ---------------------------------------------------------------------------
 
@@ -281,6 +325,49 @@ describe('chats-remote-adapter — delete consumes the staged choice via takeArc
     const adapter = makeChatsRemoteAdapter(31415);
     await adapter.delete('chat-1');
     expect(mockGetChat).not.toHaveBeenCalled();
+  });
+
+  it('calls discardChat when a discard is staged for the deleted chat (todo #346)', async () => {
+    mockTakeDiscard.mockReturnValueOnce(true);
+    mockDiscardChat.mockResolvedValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.delete('chat-1');
+    expect(mockDiscardChat).toHaveBeenCalledExactlyOnceWith(31415, 'chat-1');
+    expect(mockArchiveChat).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chats-remote-adapter — the ghost-chat prune's local-only removal short-
+// circuit (todo #346): the daemon copy is already gone, so
+// delete()/archive() must resolve WITHOUT calling the daemon again.
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — local-only removal never calls the daemon', () => {
+  it('resolves delete() without calling discardChat, archiveChat, or getChat', async () => {
+    mockTakeLocalOnlyRemoval.mockReturnValueOnce(true);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await expect(adapter.delete('chat-ghost')).resolves.toBeUndefined();
+    expect(mockDiscardChat).not.toHaveBeenCalled();
+    expect(mockArchiveChat).not.toHaveBeenCalled();
+    expect(mockGetChat).not.toHaveBeenCalled();
+  });
+
+  it('never even consults takeDiscard or takeArchiveChoice once staged', async () => {
+    mockTakeLocalOnlyRemoval.mockReturnValueOnce(true);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.delete('chat-ghost');
+    expect(mockTakeDiscard).not.toHaveBeenCalled();
+    expect(mockTakeArchiveChoice).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the normal archive/discard routing when nothing is staged', async () => {
+    mockTakeLocalOnlyRemoval.mockReturnValueOnce(false);
+    mockTakeArchiveChoice.mockReturnValueOnce({ deleteWorktree: true });
+    mockArchiveChat.mockResolvedValueOnce(undefined);
+    const adapter = makeChatsRemoteAdapter(31415);
+    await adapter.delete('chat-1');
+    expect(mockArchiveChat).toHaveBeenCalledExactlyOnceWith(31415, 'chat-1', true);
   });
 });
 

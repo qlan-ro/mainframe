@@ -295,6 +295,60 @@ describe('ReadFileCard — cat -n output rendered verbatim (no synthesized gutte
   });
 });
 
+describe('ReadFileCard — image result (todo #363)', () => {
+  const imageResult = {
+    content: '',
+    images: [{ mediaType: 'image/png', data: 'AAAA' }],
+  };
+
+  it('renders a thumbnail while collapsed', () => {
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/screenshot.png' }} result={imageResult} isError={false} />
+      </Wrap>,
+    );
+    // The collapsible starts closed (defaultOpen=false); the thumbnail lives
+    // outside CollapsibleTrigger/Content, so it is visible regardless.
+    expect(screen.getByTestId(`tool-result-image-${baseProps.toolCallId}-0`)).toBeInTheDocument();
+  });
+
+  it('does not show a "· N lines" meta label for an image-only result', () => {
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/screenshot.png' }} result={imageResult} isError={false} />
+      </Wrap>,
+    );
+    expect(screen.queryByText(/· \d+ line/)).not.toBeInTheDocument();
+  });
+
+  it('does not leak base64 image data or JSON into the DOM', () => {
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/screenshot.png' }} result={imageResult} isError={false} />
+      </Wrap>,
+    );
+    expect(screen.queryByText(/AAAA/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('"images"');
+  });
+
+  it('clicking the thumbnail opens the lightbox without toggling the card', () => {
+    render(
+      <Wrap>
+        <ReadFileCard {...baseProps} args={{ file_path: '/a/b/screenshot.png' }} result={imageResult} isError={false} />
+      </Wrap>,
+    );
+    const thumb = screen.getByTestId(`tool-result-image-${baseProps.toolCallId}-0`);
+    const img = thumb.querySelector('img');
+    if (img) fireEvent.load(img);
+
+    fireEvent.click(screen.getByLabelText('Open image'));
+
+    expect(screen.getByTestId('image-lightbox-dialog')).toBeInTheDocument();
+    // The card's own trigger must remain closed — the click never bubbled.
+    expect(screen.getByTestId('read-card-trigger')).toHaveAttribute('data-state', 'closed');
+  });
+});
+
 describe('ReadFileCard — truncated result', () => {
   it('falls back to CodePreview with truncated content when chatId is absent', () => {
     // mockUseChatId returns undefined by default. The condition

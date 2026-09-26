@@ -201,6 +201,111 @@ describe('initializeDraft', () => {
   });
 });
 
+describe('initializeDraft — "No project" (todo #346)', () => {
+  it('stores projectId: null on the snapshot for a no-project draft', async () => {
+    getProviderSettings.mockResolvedValue({});
+
+    await initializeDraft({
+      localId: '__LOCALID_np',
+      projectId: null,
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+    });
+
+    expect(getDraftConfig('__LOCALID_np')).toMatchObject({ projectId: null });
+  });
+});
+
+describe('initializeDraft — temporary passed in atomically (todo #346)', () => {
+  it('bakes temporary:true into the stored snapshot when passed', async () => {
+    getProviderSettings.mockResolvedValue({});
+
+    await initializeDraft({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+      temporary: true,
+    });
+
+    expect(getDraftConfig('__LOCALID_1')).toMatchObject({ temporary: true });
+  });
+
+  it('omits temporary from the stored snapshot when not passed', async () => {
+    getProviderSettings.mockResolvedValue({});
+
+    await initializeDraft({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+    });
+
+    expect('temporary' in (getDraftConfig('__LOCALID_1') ?? {})).toBe(false);
+  });
+
+  it("never leaks a superseded call's temporary:true onto the winning call's snapshot", async () => {
+    const supersededRequest = deferred<Record<string, ProviderConfig>>();
+    const winningRequest = deferred<Record<string, ProviderConfig>>();
+    getProviderSettings.mockReturnValueOnce(supersededRequest.promise).mockReturnValueOnce(winningRequest.promise);
+    const base = { localId: '__LOCALID_1', projectId: 'p1', port: 31415, defaultAdapterId: null, adapters };
+
+    // The superseded call captured temporary:true from a draft that existed
+    // before it started; the winning call (e.g. a fresh, non-temporary New)
+    // starts and resolves BEFORE the superseded one settles.
+    const supersededResult = initializeDraft({ ...base, temporary: true });
+    winningRequest.resolve({});
+    await initializeDraft(base);
+
+    // The superseded call's response arrives last — it must not overwrite the
+    // winner's snapshot with its captured `temporary: true`.
+    supersededRequest.resolve({});
+    await supersededResult;
+
+    expect('temporary' in (getDraftConfig('__LOCALID_1') ?? {})).toBe(false);
+  });
+});
+
+describe('reinitializeDraftAdapter — preserves temporary across an adapter switch (todo #346)', () => {
+  it('keeps temporary:true on the replacement snapshot', async () => {
+    const prior: DraftCfg = { ...expectedCompleteSnapshot, temporary: true };
+    useDraftConfigStore.getState().setDraft('__LOCALID_1', prior);
+    useNewThreadReady.getState().markReady('__LOCALID_1');
+    getProviderSettings.mockResolvedValue({ codex: { defaultMode: 'yolo', defaultEffort: 'high' } });
+
+    await reinitializeDraftAdapter({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+      adapterId: 'codex',
+    });
+
+    expect(getDraftConfig('__LOCALID_1')).toMatchObject({ adapterId: 'codex', temporary: true });
+  });
+
+  it('leaves temporary unset on the replacement snapshot when the prior draft never set it', async () => {
+    useDraftConfigStore.getState().setDraft('__LOCALID_1', expectedCompleteSnapshot);
+    useNewThreadReady.getState().markReady('__LOCALID_1');
+    getProviderSettings.mockResolvedValue({ codex: { defaultMode: 'yolo', defaultEffort: 'high' } });
+
+    await reinitializeDraftAdapter({
+      localId: '__LOCALID_1',
+      projectId: 'p1',
+      port: 31415,
+      defaultAdapterId: null,
+      adapters,
+      adapterId: 'codex',
+    });
+
+    expect('temporary' in (getDraftConfig('__LOCALID_1') ?? {})).toBe(false);
+  });
+});
+
 describe('reinitializeDraftAdapter', () => {
   it('keeps the complete snapshot ready while switching and after a rejection', async () => {
     const prior = { ...expectedCompleteSnapshot };

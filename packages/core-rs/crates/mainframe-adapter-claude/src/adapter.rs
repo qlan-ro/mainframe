@@ -127,6 +127,13 @@ impl Adapter for ClaudeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: true,
+            // Verified interactively on 2.1.280 against Mainframe's stream-json spawn
+            // (no --print): streaming, four turns, a permission gate and an interrupt
+            // all work with --no-session-persistence, and no session JSONL is written.
+            // See docs/research/adapters/claude/CONSUMED-SURFACE.md.
+            no_persistence: true,
+            // fork.rs (todo #343, Group 2) implements pin_fork_point below.
+            fork: true,
         }
     }
 
@@ -322,6 +329,16 @@ impl Adapter for ClaudeAdapter {
     fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
         Some(Arc::new(ClaudePlanModeHandler))
     }
+
+    fn pin_fork_point(
+        &self,
+        request: mainframe_adapter_api::ForkPinRequest,
+    ) -> BoxFuture<
+        '_,
+        Result<mainframe_types::adapter::ForkSource, mainframe_adapter_api::ForkPinError>,
+    > {
+        Box::pin(crate::fork::pin_fork_point(request))
+    }
 }
 
 #[cfg(test)]
@@ -334,6 +351,7 @@ mod tests {
             project_path: "/tmp".to_string(),
             chat_id: Some(chat_id.to_string()),
             mainframe_chat_id: "mf".to_string(),
+            fork_source: None,
         }
     }
 
@@ -343,6 +361,7 @@ mod tests {
         assert_eq!(a.id(), "claude");
         assert_eq!(a.name(), "Claude Code");
         assert!(a.capabilities().plan_mode);
+        assert!(a.capabilities().fork);
         assert!(a.has_probe_models());
     }
 

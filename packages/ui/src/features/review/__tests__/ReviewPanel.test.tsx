@@ -75,13 +75,15 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
 
+let mockIdentity = {
+  projectId: 'proj-1' as string | undefined,
+  chatId: 'chat-1' as string | undefined,
+  projectName: 'Test Project',
+  worktreePath: '/Users/me/proj/.worktrees/feat-wt',
+  noProject: false,
+};
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({
-    projectId: 'proj-1',
-    chatId: 'chat-1',
-    projectName: 'Test Project',
-    worktreePath: '/Users/me/proj/.worktrees/feat-wt',
-  }),
+  useActiveIdentity: () => mockIdentity,
 }));
 
 const { ReviewPanel } = await import('../ReviewPanel');
@@ -109,6 +111,13 @@ beforeEach(() => {
   mockGitCommit.mockReset();
   mockGitCommit.mockResolvedValue({ commit: 'abc123' });
   mockAppend.mockReset();
+  mockIdentity = {
+    projectId: 'proj-1',
+    chatId: 'chat-1',
+    projectName: 'Test Project',
+    worktreePath: '/Users/me/proj/.worktrees/feat-wt',
+    noProject: false,
+  };
   act(() => {
     useOverlaysStore.setState({ reviewOpen: false, paletteOpen: false, findInPath: null });
   });
@@ -405,5 +414,21 @@ describe('ReviewPanel — viewed counter', () => {
     await waitFor(() => {
       expect(screen.getByText('1/1 viewed')).toBeTruthy();
     });
+  });
+});
+
+describe('ReviewPanel — noProject chat (todo #346)', () => {
+  it('fires no git/session-file request and shows no changes', async () => {
+    mockIdentity = { ...mockIdentity, projectId: undefined, noProject: true };
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+    expect(screen.getByText('No changes to review')).toBeTruthy();
+    expect(mockGetGitStatus).not.toHaveBeenCalled();
+    expect(mockGetWorkingStat).not.toHaveBeenCalled();
+    expect(mockGetBranchDiffs).not.toHaveBeenCalled();
+    expect(mockGetSessionFiles).not.toHaveBeenCalled();
   });
 });

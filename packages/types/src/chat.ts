@@ -90,6 +90,27 @@ export interface Chat {
   tags?: string[];
   /** Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list. */
   automationRunId?: string | null;
+  /**
+   * Fixed at creation. A temporary chat is left out of default listings,
+   * refuses pin/tag/archive/unarchive, and is removed only by an explicit
+   * discard or by removing its project. Always serialized.
+   */
+  temporary: boolean;
+  /** Derived as `projectId === NO_PROJECT_ID` on the daemon; never a stored field. Always serialized. */
+  noProject: boolean;
+  /**
+   * ISO time of the chat's latest vendor-context loss (its stored provider
+   * session was started with no persistence and can no longer be resumed).
+   * Drives the "earlier context was not preserved" notice.
+   */
+  contextLostAt?: string | null;
+  /**
+   * The chat this one was forked from, or `null` for a chat with no parent
+   * (todo #343). Deliberately generic — never fork-specific in name or
+   * semantics, since side chats (#344) reuse it as "temporary and has a
+   * parent". Survives archive/unarchive; never cascades from the parent.
+   */
+  parentChatId?: string | null;
 }
 
 export interface Project {
@@ -121,6 +142,17 @@ export interface DiffHunk {
 }
 
 /**
+ * An image block carried inside a `tool_result` (todo #363) — a Claude tool
+ * such as `Read` returning a PNG. Mirrors the Rust
+ * `mainframe_types::content::ToolResultImage`. `data` is base64, never
+ * transformed; there is no downscaling or caching (out of scope).
+ */
+export interface ToolResultImage {
+  mediaType: string;
+  data: string;
+}
+
+/**
  * `parentToolUseId` is set on a content block to indicate it originated from a
  * subagent stream event (CLI emits with `parent_tool_use_id`). The display
  * pipeline groups these blocks under the parent's Agent/Task `tool_use` as
@@ -142,6 +174,7 @@ export type MessageContent =
       structuredPatch?: DiffHunk[];
       originalFile?: string;
       modifiedFile?: string;
+      images?: ToolResultImage[];
       parentToolUseId?: string;
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }

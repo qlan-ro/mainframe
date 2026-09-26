@@ -21,7 +21,8 @@ use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::pr_detection::scan_history_for_prs;
 use mainframe_adapter_api::{
-    AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
+    AdapterError, AdapterRegistry, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest,
+    PlanModeActionHandler,
 };
 use mainframe_adapter_claude::external_session_cache::{
     ExternalSessionCache, new_external_session_cache,
@@ -35,7 +36,8 @@ use mainframe_background_tasks::kill::{
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
-    ChatManager, ChatManagerDeps, ChatUpdate, ProcessedAttachments,
+    AdapterForkInfo, ChatManager, ChatManagerDeps, ChatUpdate, ForkCreateInput,
+    ProcessedAttachments,
 };
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
@@ -44,6 +46,7 @@ use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::external_session_service::{
     ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
 };
+use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
@@ -62,8 +65,8 @@ use mainframe_types::adapter::{
 };
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, Project, ResolvedTuning,
-    TodoItem,
+    Chat, ChatMessage, ChatMessageType, ChatStatus, MessageContent, NewChat, Project,
+    ResolvedTuning, TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
@@ -102,6 +105,7 @@ fn to_db_update(patch: &ChatUpdate) -> mainframe_db::chats::ChatUpdate {
         updated_at: patch.updated_at.clone(),
         plan_mode: patch.plan_mode,
         transcript_missing: patch.transcript_missing,
+        vendor_session_ephemeral: patch.vendor_session_ephemeral,
         ..Default::default()
     }
 }
@@ -138,6 +142,51 @@ fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::C
     }
 }
 
+/// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`
+/// (todo #343). Field-for-field; the two exist separately only because
+/// `mainframe-chat` does not depend on `mainframe-db`.
+fn to_db_pending_fork(pending: &PendingForkState) -> mainframe_db::chats::PendingFork {
+    mainframe_db::chats::PendingFork {
+        fork_source: pending.fork_source.clone(),
+        snapshot_dir: pending.snapshot_dir.clone(),
+        provisional_title: pending.provisional_title.clone(),
+    }
+}
+
+/// The DB repository's `PendingFork` → `mainframe_chat::fork::PendingForkState`.
+fn from_db_pending_fork(pending: mainframe_db::chats::PendingFork) -> PendingForkState {
+    PendingForkState {
+        fork_source: pending.fork_source,
+        snapshot_dir: pending.snapshot_dir,
+        provisional_title: pending.provisional_title,
+    }
+}
+
+/// `ChatManager::fork_chat`'s `ForkCreateInput` → the DB repository's
+/// `ForkInsert<'a>` (todo #343). A free function rather than a method so it can
+/// borrow from `input` and `pending_fork` with independent lifetimes.
+fn to_db_fork_insert<'a>(
+    input: &'a ForkCreateInput,
+    pending_fork: &'a mainframe_db::chats::PendingFork,
+) -> mainframe_db::chats::ForkInsert<'a> {
+    mainframe_db::chats::ForkInsert {
+        parent_chat_id: &input.parent_chat_id,
+        project_id: &input.project_id,
+        adapter_id: &input.adapter_id,
+        model: input.model.as_deref(),
+        permission_mode: input.permission_mode,
+        plan_mode: input.plan_mode,
+        effort: input.effort,
+        fast: input.fast,
+        ultracode: input.ultracode,
+        adaptive_thinking: input.adaptive_thinking,
+        worktree_path: input.worktree_path.as_deref(),
+        branch_name: input.branch_name.as_deref(),
+        title: input.title.as_deref(),
+        pending_fork,
+    }
+}
+
 /// The daemon-side `ChatManagerDeps`. Cheap to clone-share (every field is an
 /// `Arc`/handle), constructed once at boot in [`build_chat_manager`].
 pub struct DaemonChatDeps {
@@ -161,6 +210,13 @@ pub struct DaemonChatDeps {
     /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
     /// per-chat workflow-run store (D5's CLI-exit sweep target).
     claude_workflows: Arc<ClaudeWorkflowStore>,
+    /// The daemon's data directory (`AppCtx::data_dir`). A non-project chat's
+    /// scratch cwd is `<data_dir>/scratch/<chatId>` (todo #346 rule 2), and
+    /// `fork_snapshots_dir` joins `"fork-snapshots"` onto it (todo #343).
+    /// Threaded in rather than read via `mainframe_runtime::config::get_data_dir()`
+    /// at request time: that helper does synchronous I/O, which a request-path
+    /// deps method must not do.
+    data_dir: std::path::PathBuf,
 }
 
 impl DaemonChatDeps {
@@ -176,15 +232,27 @@ impl DaemonChatDeps {
     /// must never feed the mention scan) outweighs the extra I/O here.
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
-        let claude_session_id = chat.claude_session_id.clone()?;
-        let project_path = self.projects_get_path(&chat.project_id)?;
-        let effective_path = chat.worktree_path.clone().unwrap_or(project_path);
+        // An unsent fork (todo #343) has no `claude_session_id` yet; it scans
+        // its pending fork's snapshot instead, same as every other session
+        // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
+        let own_id = chat.claude_session_id.clone();
+        let fork_source = ChatManagerDeps::get_pending_fork(self, chat_id).map(|p| p.fork_source);
+        if own_id.is_none() && fork_source.is_none() {
+            return None;
+        }
+        let project_path = self.projects_get_path(&chat.project_id);
+        let effective_path = mainframe_chat::chat_cwd::chat_cwd(
+            chat.worktree_path.as_deref(),
+            chat.scratch_path.as_deref(),
+            project_path,
+        )?;
         self.create_session(
             &chat.adapter_id,
             SessionOptions {
                 project_path: effective_path,
-                chat_id: Some(claude_session_id),
+                chat_id: own_id,
                 mainframe_chat_id: chat_id.to_string(),
+                fork_source,
             },
         )
     }
@@ -278,27 +346,14 @@ impl ChatManagerDeps for DaemonChatDeps {
             .flatten()
     }
 
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat {
-        let (pid, aid) = (project_id.to_string(), adapter_id.to_string());
-        let model = model.map(str::to_string);
-        let mode = permission_mode.map(str::to_string);
-        let run_id = automation_run_id.map(str::to_string);
-        let created = self.db.call_blocking(move |d| {
-            d.chats.create(
-                &pid,
-                &aid,
-                model.as_deref(),
-                mode.as_deref(),
-                run_id.as_deref(),
-            )
-        });
+    fn chats_create(&self, new_chat: &NewChat) -> Chat {
+        // The scratch root is a daemon concern (rule 2's `<data_dir>/scratch`);
+        // the caller only ever knows the chat is non-project, never the path.
+        let db_new_chat = NewChat {
+            scratch_root: Some(self.data_dir.join("scratch").to_string_lossy().into_owned()),
+            ..new_chat.clone()
+        };
+        let created = self.db.call_blocking(move |d| d.chats.create(&db_new_chat));
         match created {
             Ok(chat) => chat,
             // The trait signature is infallible (mirrors the synchronous
@@ -307,10 +362,36 @@ impl ChatManagerDeps for DaemonChatDeps {
             // the caller does not crash. TODO(port): revisit if the ported
             // orchestration ever grows a fallible create path.
             Err(err) => {
-                tracing::error!(%err, project_id, adapter_id, "chats.create failed");
-                fallback_chat(project_id, adapter_id, permission_mode)
+                tracing::error!(
+                    %err,
+                    project_id = new_chat.project_id,
+                    adapter_id = new_chat.adapter_id,
+                    "chats.create failed"
+                );
+                fallback_chat(new_chat)
             }
         }
+    }
+
+    fn chats_delete(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self.db.call_blocking(move |d| d.chats.delete(&id)) {
+            tracing::warn!(%err, chat_id, "chats.delete failed");
+        }
+    }
+
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        let path = scratch_path.to_string();
+        Box::pin(async move {
+            match tokio::fs::remove_dir_all(&path).await {
+                Ok(()) => Ok(()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(err) => Err(err.to_string()),
+            }
+        })
     }
 
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
@@ -357,12 +438,14 @@ impl ChatManagerDeps for DaemonChatDeps {
         tags_all: Option<&[String]>,
         has_worktree: bool,
         include_archived: bool,
+        include_temporary: bool,
     ) -> Vec<Chat> {
         let filters = mainframe_db::chats::ChatListFilters {
             project_id: project_id.map(str::to_string),
             tags_all: tags_all.map(<[String]>::to_vec),
             has_worktree,
             include_archived,
+            include_temporary,
         };
         self.db
             .call_blocking(move |d| d.chats.list_filtered(&filters))
@@ -723,6 +806,32 @@ impl ChatManagerDeps for DaemonChatDeps {
         std::path::Path::new(path).exists()
     }
 
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
+        self.adapters
+            .get(adapter_id)
+            .is_some_and(|adapter| adapter.capabilities().no_persistence)
+    }
+
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        let path = path.to_string();
+        Box::pin(async move {
+            if let Err(err) = tokio::fs::create_dir_all(&path).await {
+                tracing::warn!(%err, path, "failed to create the chat's scratch directory");
+            }
+        })
+    }
+
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        let id = chat_id.to_string();
+        let at = context_lost_at.to_string();
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.mark_context_lost(&id, &at))
+        {
+            tracing::warn!(%err, chat_id, "chats.markContextLost failed");
+        }
+    }
+
     fn should_notify_permission(&self, tool_name: Option<&str>) -> bool {
         let tool_name = tool_name.map(str::to_string);
         self.db
@@ -797,6 +906,70 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.claude_workflows.stop_all_running(chat_id);
     }
+
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        match self.adapters.get(adapter_id) {
+            Some(adapter) => AdapterForkInfo {
+                name: adapter.name().to_string(),
+                fork: adapter.capabilities().fork,
+            },
+            None => AdapterForkInfo {
+                name: adapter_id.to_string(),
+                fork: false,
+            },
+        }
+    }
+
+    fn pin_fork_point<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<mainframe_types::adapter::ForkSource, ForkPinError>> {
+        let adapter = self.adapters.get(adapter_id);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                return Err(ForkPinError::Unsupported);
+            };
+            adapter.pin_fork_point(request).await
+        })
+    }
+
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+        let input = insert.clone();
+        let db_pending = to_db_pending_fork(&input.pending_fork);
+        self.db
+            .call_blocking(move |d| {
+                let fork_insert = to_db_fork_insert(&input, &db_pending);
+                d.chats.create_fork(&fork_insert)
+            })
+            .map_err(|err| err.to_string())
+    }
+
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get_pending_fork(&id))
+            .ok()
+            .flatten()
+            .map(from_db_pending_fork)
+    }
+
+    fn clear_pending_fork(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.clear_pending_fork(&id))
+        {
+            tracing::warn!(%err, chat_id, "chats.clear_pending_fork failed");
+        }
+    }
+
+    fn fork_snapshots_dir(&self) -> String {
+        self.data_dir
+            .join("fork-snapshots")
+            .to_string_lossy()
+            .into_owned()
+    }
 }
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
@@ -828,7 +1001,14 @@ impl ExternalSessionDeps for DaemonChatDeps {
     }
 
     fn chats_create(&self, project_id: &str, adapter_id: &str) -> Chat {
-        <Self as ChatManagerDeps>::chats_create(self, project_id, adapter_id, None, None, None)
+        <Self as ChatManagerDeps>::chats_create(
+            self,
+            &NewChat {
+                project_id: project_id.to_string(),
+                adapter_id: adapter_id.to_string(),
+                ..Default::default()
+            },
+        )
     }
 
     fn chats_update(&self, chat_id: &str, updates: &ExternalChatUpdate) {
@@ -962,6 +1142,9 @@ pub fn build_chat_manager(
     // The chat-surface observer (todo #350): the ACP facade hub in the daemon
     // boot; `None` in harnesses that exercise the legacy surface only.
     chat_surface: Option<Arc<dyn mainframe_chat::chat_surface::ChatSurface>>,
+    // A non-project chat's scratch root (todo #346) and `fork_snapshots_dir`
+    // (todo #343) both join onto this.
+    data_dir: std::path::PathBuf,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
         db,
@@ -977,6 +1160,7 @@ pub fn build_chat_manager(
         claude_external_session_cache: new_external_session_cache(),
         chat_manager: OnceLock::new(),
         claude_workflows,
+        data_dir,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
     let mut manager = ChatManager::new(deps.clone()).with_external_sessions(external_sessions);
@@ -1144,21 +1328,20 @@ impl AttachmentLister for AttachmentListerHandle {
 /// Unpersisted `Chat` stub for the (near-impossible) `db.chats.create` failure —
 /// mirrors the shape `ChatsRepository::create` returns on success. Also the
 /// automations-deps tests' Chat fixture (pub(crate) for that reason).
-pub(crate) fn fallback_chat(
-    project_id: &str,
-    adapter_id: &str,
-    permission_mode: Option<&str>,
-) -> Chat {
+pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
     let now = now_iso8601();
     Chat {
         id: nanoid::nanoid!(),
-        adapter_id: adapter_id.to_string(),
-        project_id: project_id.to_string(),
+        adapter_id: new_chat.adapter_id.clone(),
+        no_project: new_chat.project_id == mainframe_types::chat::NO_PROJECT_ID,
+        project_id: new_chat.project_id.clone(),
         title: None,
         claude_session_id: None,
         session_file_path: None,
         model: None,
-        permission_mode: permission_mode
+        permission_mode: new_chat
+            .permission_mode
+            .as_deref()
             .filter(|s| !s.is_empty())
             .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok()),
         plan_mode: Some(false),
@@ -1192,7 +1375,12 @@ pub(crate) fn fallback_chat(
         adaptive_thinking: None,
         detected_prs: None,
         tags: None,
-        automation_run_id: None,
+        automation_run_id: new_chat.automation_run_id.clone(),
+        temporary: new_chat.temporary,
+        context_lost_at: None,
+        vendor_session_ephemeral: false,
+        scratch_path: None,
+        parent_chat_id: None,
     }
 }
 
@@ -1265,6 +1453,7 @@ mod scan_loaded_history_tests {
                 structured_patch: None,
                 original_file: None,
                 modified_file: None,
+                images: Vec::new(),
                 parent_tool_use_id: None,
             })],
             timestamp: "2026-01-01T00:00:02.000Z".to_string(),
@@ -1373,6 +1562,7 @@ mod scan_loaded_history_tests {
             claude_external_session_cache: new_external_session_cache(),
             chat_manager: OnceLock::new(),
             claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+            data_dir: std::env::temp_dir().join("mf-chat-deps-test-data"),
         }
     }
 
@@ -1455,7 +1645,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "claude", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         let mut rx = deps.broadcast.subscribe();
 
@@ -1507,7 +1703,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "codex".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         let mut rx = deps.broadcast.subscribe();
 
@@ -1557,7 +1759,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "codex".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         let mut rx = deps.broadcast.subscribe();
 
@@ -1596,7 +1804,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "codex", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "codex".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         let mut rx = deps.broadcast.subscribe();
 
@@ -1761,7 +1975,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "claude", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         let session = PlanSkillSession {
             plan_paths: vec!["/repo/PLAN.md".to_string()],
@@ -1936,6 +2156,8 @@ mod scan_loaded_history_tests {
             mainframe_types::adapter::AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                no_persistence: false,
+                fork: false,
             }
         }
         fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -1970,7 +2192,13 @@ mod scan_loaded_history_tests {
             .unwrap();
         let chat = deps
             .db
-            .call_blocking(move |d| d.chats.create(&project.id, "dual", None, None, None))
+            .call_blocking(move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "dual".to_string(),
+                    ..Default::default()
+                })
+            })
             .unwrap();
         deps.db
             .call_blocking({

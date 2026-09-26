@@ -18,6 +18,8 @@ function item(id: string, remoteId?: string): SessionItem {
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
+      temporary: false,
+      noProject: false,
       transcriptMissing: false,
       updatedAt: 0,
     },

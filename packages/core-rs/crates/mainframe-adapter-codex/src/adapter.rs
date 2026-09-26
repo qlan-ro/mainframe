@@ -181,6 +181,13 @@ impl Adapter for CodexAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            // Verified interactively on 0.155.1: thread/start ephemeral:true alongside
+            // Mainframe's persist-history params keeps four-turn streaming, an approval
+            // gate and an interrupt working, with no rollout file or threads row. See
+            // docs/research/adapters/codex/CONSUMED-SURFACE.md.
+            no_persistence: true,
+            // Codex has no top-level fork mechanism yet (todo #368 tracks it).
+            fork: false,
         }
     }
 
