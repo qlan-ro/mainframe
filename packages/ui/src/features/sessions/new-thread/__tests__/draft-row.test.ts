@@ -29,3 +29,15 @@ describe('draftRowVisible', () => {
     expect(draftRowVisible(model, new Set(['proj-b', 'proj-c']))).toBe(false);
   });
 });
+
+describe('draftRowVisible — a "No project" draft (todo #346)', () => {
+  const noProjectModel: DraftRowModel = { newThreadId: '__LOCALID_1', projectId: null };
+
+  it('is true in All view (empty scope)', () => {
+    expect(draftRowVisible(noProjectModel, new Set())).toBe(true);
+  });
+
+  it('is false under ANY active project pill — a no-project draft never matches one', () => {
+    expect(draftRowVisible(noProjectModel, new Set(['proj-a']))).toBe(false);
+  });
+});

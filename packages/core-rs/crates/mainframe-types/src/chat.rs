@@ -43,6 +43,31 @@ pub struct TodoItem {
 /// Back-compat alias for existing imports.
 pub type ChatEffort = EffortLevel;
 
+/// Id of the hidden scratch project row that owns every non-project chat's
+/// `project_id`. Excluded from every `ProjectsRepository` read; removal is
+/// refused at every layer that would otherwise cascade-delete non-project
+/// chats.
+pub const NO_PROJECT_ID: &str = "mainframe-no-project";
+
+/// Fields for a new chat, threaded from the create route through the lifecycle
+/// manager down to `ChatsRepository::create`. Owned strings (rather than
+/// borrows) because the request crosses several trait-object boundaries
+/// (`dyn LifecycleManagerDeps`, `dyn ChatManagerDeps`, ...).
+#[derive(Debug, Clone, Default)]
+pub struct NewChat {
+    pub project_id: String,
+    pub adapter_id: String,
+    pub model: Option<String>,
+    pub permission_mode: Option<String>,
+    pub automation_run_id: Option<String>,
+    /// Fixed at creation; see `Chat::temporary`.
+    pub temporary: bool,
+    /// `<data_dir>/scratch` — the root the repository appends the minted chat
+    /// id under. Only meaningful when `project_id == NO_PROJECT_ID`; ignored
+    /// otherwise.
+    pub scratch_root: Option<String>,
+}
+
 /// Per-chat / per-session tuning override. Tri-state per field:
 ///   absent (`None`)         → not part of this partial (PATCH); leave as-is
 ///   present null (`Some(None)`) → explicitly inherit (provider → model default)
@@ -218,6 +243,29 @@ pub struct Chat {
     /// Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automation_run_id: Option<String>,
+    /// Fixed at creation. A temporary chat is left out of default listings,
+    /// refuses pin/tag/archive/unarchive, and is removed only by an explicit
+    /// discard or by removing its project.
+    #[serde(default)]
+    pub temporary: bool,
+    /// Derived on read as `project_id == NO_PROJECT_ID`; never a stored column.
+    #[serde(default)]
+    pub no_project: bool,
+    /// ISO time of the chat's latest vendor-context loss (its stored provider
+    /// session was started with no persistence and can no longer be resumed).
+    /// Drives the "earlier context was not preserved" notice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_lost_at: Option<String>,
+    /// Whether the stored provider session (`claude_session_id`) was started
+    /// with the adapter's no-persistence mechanism, so it is never a resume
+    /// target. Daemon-internal — deliberately absent from the wire `Chat`.
+    #[serde(skip)]
+    pub vendor_session_ephemeral: bool,
+    /// Non-project cwd `<data_dir>/scratch/<chatId>`, stored at create so every
+    /// cwd consumer can read it off the `Chat`. Daemon-internal — deliberately
+    /// absent from the wire `Chat`.
+    #[serde(skip)]
+    pub scratch_path: Option<String>,
     /// The chat this one was forked from, or `null` for a chat with no parent
     /// (todo #343). Deliberately generic — never fork-specific in name or
     /// semantics, since side chats (#344) reuse it as "temporary and has a
@@ -413,7 +461,9 @@ mod tests {
             "totalTokensInput": 0,
             "totalTokensOutput": 0,
             "lastContextTokensInput": 0,
-            "effort": null
+            "effort": null,
+            "temporary": false,
+            "noProject": false
         });
         roundtrip::<Chat>(v);
     }
@@ -432,7 +482,9 @@ mod tests {
             "totalCost": 0.0,
             "totalTokensInput": 0,
             "totalTokensOutput": 0,
-            "lastContextTokensInput": 0
+            "lastContextTokensInput": 0,
+            "temporary": false,
+            "noProject": false
         });
         let no_parent: Chat = serde_json::from_value(base.clone()).unwrap();
         assert_eq!(no_parent.parent_chat_id, None);

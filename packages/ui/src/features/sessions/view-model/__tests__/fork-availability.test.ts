@@ -4,6 +4,8 @@ import { forkAvailability, type ForkAvailabilityInput } from '../fork-availabili
 const BASE: ForkAvailabilityInput = {
   capabilityFork: true,
   adapterName: 'Codex',
+  temporary: false,
+  noProject: false,
   claudeSessionId: 'sess-1',
   transcriptMissing: false,
   directoryMissing: false,
@@ -20,6 +22,20 @@ describe('forkAvailability', () => {
     expect(forkAvailability({ ...BASE, capabilityFork: false, claudeSessionId: undefined })).toEqual({
       enabled: false,
       reason: "Forking isn't available for Codex chats yet",
+    });
+  });
+
+  it('a temporary chat cannot be forked, checked before session presence (todo #346)', () => {
+    expect(forkAvailability({ ...BASE, temporary: true, claudeSessionId: undefined })).toEqual({
+      enabled: false,
+      reason: "Temporary chats can't be forked",
+    });
+  });
+
+  it('a chat with no project cannot be forked (todo #346)', () => {
+    expect(forkAvailability({ ...BASE, noProject: true })).toEqual({
+      enabled: false,
+      reason: "Chats with no project can't be forked",
     });
   });
 

@@ -7,7 +7,7 @@
  * `shouldFilter={false}` and only contributes the input, listbox semantics and
  * keyboard navigation the v1 version hand-rolled.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandList } from '@/components/ui/command';
@@ -16,6 +16,7 @@ import { useOverlaysStore } from '@/store/overlays';
 import { threadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+import { useProjects } from '@/features/sessions/use-projects';
 import { parseQuery, type ParsedQuery } from '@/features/palette/palette-modes';
 import { useSpotlightResults, type SpotlightRow } from '@/features/palette/use-spotlight-results';
 import { SpotlightRowView } from './SpotlightRow';
@@ -55,6 +56,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const sessions = threadItemsToSessionItems(threadItems);
   const port = useDaemonPort();
   const { projectId, projectPath, chatId } = useActiveIdentity();
+  const { projects } = useProjects();
+  const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 
   const { rows, loading } = useSpotlightResults({
     parsed,
@@ -63,6 +66,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     projectPath,
     chatId,
     sessions,
+    projectNames,
     switchToThread: (id) => aui.threads.switchToThread(id),
   });
 

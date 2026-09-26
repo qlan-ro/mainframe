@@ -314,6 +314,19 @@ fn build_args(
         args.push(MAINFRAME_SYSTEM_PROMPT_APPEND.to_string());
     }
 
+    let no_persistence = options.no_persistence == Some(true);
+    if no_persistence {
+        // Claude's native no-vendor-transcript mechanism (todo #346 spike, verified
+        // interactively on 2.1.280 against this exact stream-json spawn). A
+        // no-persistence spawn never has a session to resume, so it always starts
+        // fresh regardless of the resume target the caller passes.
+        args.push("--no-session-persistence".to_string());
+    }
+    let resume = if no_persistence {
+        &crate::fork::ResumeTarget::Fresh
+    } else {
+        resume
+    };
     match resume {
         crate::fork::ResumeTarget::Own(id) => {
             args.push("--resume".to_string());
@@ -1232,6 +1245,7 @@ impl AdapterSession for ClaudeSession {
             tuning: None,
             small_fast_model: None,
             default_model: None,
+            no_persistence: None,
         });
         Box::pin(ClaudeSession::spawn(self, options, sink))
     }
@@ -1414,6 +1428,7 @@ mod tests {
             tuning: None,
             small_fast_model: None,
             default_model: None,
+            no_persistence: None,
         }
     }
 
@@ -1535,6 +1550,58 @@ mod tests {
         let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
         assert!(!args.iter().any(|a| a == "--effort"));
         assert!(args.iter().any(|a| a == "--model"));
+    }
+
+    // --- todo #346: no-persistence spawn args ---
+    #[test]
+    fn omits_no_session_persistence_by_default() {
+        let (args, _) = build_args(&spawn_opts(None), &crate::fork::ResumeTarget::Fresh, false);
+        assert!(!args.iter().any(|a| a == "--no-session-persistence"));
+    }
+
+    #[test]
+    fn no_persistence_true_adds_the_flag() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(&o, &crate::fork::ResumeTarget::Fresh, false);
+        assert!(args.iter().any(|a| a == "--no-session-persistence"));
+    }
+
+    #[test]
+    fn no_persistence_spawn_never_resumes_even_with_a_resume_id_supplied() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(
+            &o,
+            &crate::fork::ResumeTarget::Own("sess-123".to_string()),
+            false,
+        );
+        assert!(!args.iter().any(|a| a == "--resume"));
+        assert!(!args.iter().any(|a| a == "sess-123"));
+    }
+
+    #[test]
+    fn normal_spawn_still_resumes_when_a_resume_id_is_supplied() {
+        let (args, _) = build_args(
+            &spawn_opts(None),
+            &crate::fork::ResumeTarget::Own("sess-123".to_string()),
+            false,
+        );
+        let i = args.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(args[i + 1], "sess-123");
+    }
+
+    #[test]
+    fn no_persistence_spawn_never_resumes_a_fork_snapshot() {
+        let mut o = spawn_opts(None);
+        o.no_persistence = Some(true);
+        let (args, _) = build_args(
+            &o,
+            &crate::fork::ResumeTarget::Fork("/snap/n1/parent.jsonl".to_string()),
+            false,
+        );
+        assert!(!args.iter().any(|a| a == "--resume"));
+        assert!(!args.iter().any(|a| a == "--fork-session"));
     }
 
     // --- fork argv (todo #343 Group 2, plan "AC 5 argv tests") ---

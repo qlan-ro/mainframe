@@ -194,6 +194,36 @@ describe('useWorkingChanges — enabled gate', () => {
   });
 });
 
+describe('useWorkingChanges — noProject gate (todo #346)', () => {
+  it('fetches nothing for the uncommitted scope on a noProject chat', async () => {
+    const { result } = renderHook(() => useWorkingChanges(options({ noProject: true })));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getGitStatus).not.toHaveBeenCalled();
+    expect(getGitBranch).not.toHaveBeenCalled();
+    expect(result.current.files).toEqual([]);
+  });
+
+  it('fetches nothing for the branch scope on a noProject chat', async () => {
+    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'branch', noProject: true })));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getBranchDiffs).not.toHaveBeenCalled();
+    expect(result.current.files).toEqual([]);
+  });
+
+  it('fetches nothing for the session scope on a noProject chat, even with a chatId', async () => {
+    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session', noProject: true })));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getSessionFiles).not.toHaveBeenCalled();
+    expect(result.current.files).toEqual([]);
+  });
+});
+
 describe('useWorkingChanges — invalidation', () => {
   it('refetches on a context.updated for the active chat', async () => {
     const { result } = renderHook(() => useWorkingChanges(options()));

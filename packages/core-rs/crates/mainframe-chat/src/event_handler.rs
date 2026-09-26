@@ -493,12 +493,13 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
             return;
         };
-        let (project_id, worktree_path, session_process_id) = {
+        let (project_id, worktree_path, scratch_path, session_process_id) = {
             let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             guard.chat.claude_session_id = Some(session_id.to_string());
             (
                 guard.chat.project_id.clone(),
                 guard.chat.worktree_path.clone(),
+                guard.chat.scratch_path.clone(),
                 guard.session.as_ref().map(|s| s.id().to_string()),
             )
         };
@@ -510,7 +511,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             },
         );
         let project_path = self.deps.projects_get_path(&project_id);
-        let cwd = worktree_path.or(project_path);
+        let cwd = crate::chat_cwd::chat_cwd(
+            worktree_path.as_deref(),
+            scratch_path.as_deref(),
+            project_path,
+        );
         if let Some(cwd) = cwd {
             let session_file_path = compute_session_file_path(&cwd, session_id);
             self.deps.chats_update(

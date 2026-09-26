@@ -22,6 +22,8 @@ function tabForkAvailability(
   return forkAvailability({
     capabilityFork: adapter?.capabilities.fork ?? false,
     adapterName: adapter?.name ?? custom.adapterId,
+    temporary: custom.temporary,
+    noProject: custom.noProject,
     claudeSessionId: custom.claudeSessionId,
     transcriptMissing: custom.transcriptMissing,
     directoryMissing: custom.directoryMissing ?? false,

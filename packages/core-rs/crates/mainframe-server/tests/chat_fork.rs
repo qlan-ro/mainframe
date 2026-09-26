@@ -79,7 +79,13 @@ async fn harness(fork_capable: bool, update: ChatUpdate) -> Harness {
     let chat = db
         .call_blocking({
             let project_id = project.id.clone();
-            move |d| d.chats.create(&project_id, "mock-cli", None, None, None)
+            move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id,
+                    adapter_id: "mock-cli".to_string(),
+                    ..Default::default()
+                })
+            }
         })
         .unwrap();
     db.call_blocking({

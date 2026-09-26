@@ -55,6 +55,7 @@ impl Adapter for CatalogAdapter {
         AdapterCapabilities {
             plan_mode: false,
             auto_mode: false,
+            no_persistence: false,
             fork: false,
         }
     }
@@ -169,11 +170,11 @@ async fn stale_saved_default_is_dropped_from_a_new_chat() {
     let chat = h
         .manager
         .create_chat_with_defaults(
-            &h.project_id,
-            "catalog-adapter",
-            None,
-            None,
-            None,
+            mainframe_types::chat::NewChat {
+                project_id: h.project_id.clone(),
+                adapter_id: "catalog-adapter".to_string(),
+                ..Default::default()
+            },
             None,
             None,
         )
@@ -203,11 +204,11 @@ async fn saved_default_present_in_the_catalog_survives() {
     let chat = h
         .manager
         .create_chat_with_defaults(
-            &h.project_id,
-            "catalog-adapter",
-            None,
-            None,
-            None,
+            mainframe_types::chat::NewChat {
+                project_id: h.project_id.clone(),
+                adapter_id: "catalog-adapter".to_string(),
+                ..Default::default()
+            },
             None,
             None,
         )
@@ -226,11 +227,11 @@ async fn an_adapter_without_a_snapshot_keeps_the_saved_default() {
     let chat = h
         .manager
         .create_chat_with_defaults(
-            &h.project_id,
-            "unregistered-adapter",
-            None,
-            None,
-            None,
+            mainframe_types::chat::NewChat {
+                project_id: h.project_id.clone(),
+                adapter_id: "unregistered-adapter".to_string(),
+                ..Default::default()
+            },
             None,
             None,
         )

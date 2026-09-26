@@ -58,6 +58,18 @@ pub(crate) struct StoreDeps {
     /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
     /// can inject a recorder (or leave `None` for the unresolved-handler path).
     plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
+    /// What `adapter_supports_no_persistence` answers (todo #346, G2b).
+    no_persistence_capability: Mutex<bool>,
+    /// Every `ensure_dir` path, in order.
+    ensure_dir_calls: Mutex<Vec<String>>,
+    /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
+    mark_context_lost_calls: Mutex<Vec<(String, String)>>,
+    /// Every `remove_scratch_dir` path, in order (todo #346).
+    remove_scratch_dir_calls: Mutex<Vec<String>>,
+    /// When `Some`, `remove_scratch_dir` fails with this message instead of
+    /// recording success. Cleared by the test between a failing call and a
+    /// retry, so `discard_chat` can be proven retryable (todo #346).
+    fail_remove_scratch_dir: Mutex<Option<String>>,
     /// `adapter_fork_info(adapter_id).fork` — todo #343's fork_chat tests flip
     /// this on; every other test leaves the trait default (`false`).
     fork_capable: Mutex<bool>,
@@ -148,15 +160,27 @@ impl ChatManagerDeps for StoreDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         self.store.lock().unwrap().get(id).cloned()
     }
-    fn chats_create(
-        &self,
-        _project_id: &str,
-        _adapter_id: &str,
-        _model: Option<&str>,
-        _permission_mode: Option<&str>,
-        _automation_run_id: Option<&str>,
-    ) -> Chat {
+    fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
         test_chat("new")
+    }
+    fn chats_delete(&self, chat_id: &str) {
+        self.store.lock().unwrap().remove(chat_id);
+    }
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        self.remove_scratch_dir_calls
+            .lock()
+            .unwrap()
+            .push(scratch_path.to_string());
+        let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
+        Box::pin(async move {
+            match fail {
+                Some(msg) => Err(msg),
+                None => Ok(()),
+            }
+        })
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
         self.updates
@@ -173,6 +197,9 @@ impl ChatManagerDeps for StoreDeps {
             if let Some(title) = patch.title.clone() {
                 c.title = Some(title);
             }
+            if let Some(vse) = patch.vendor_session_ephemeral {
+                c.vendor_session_ephemeral = vse;
+            }
         }
     }
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
@@ -187,6 +214,7 @@ impl ChatManagerDeps for StoreDeps {
         _tags_all: Option<&[String]>,
         _has_worktree: bool,
         _include_archived: bool,
+        _include_temporary: bool,
     ) -> Vec<Chat> {
         self.store.lock().unwrap().values().cloned().collect()
     }
@@ -422,6 +450,25 @@ impl ChatManagerDeps for StoreDeps {
             c.branch_name = None;
         }
     }
+    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
+        *self.no_persistence_capability.lock().unwrap()
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
+        Box::pin(async {})
+    }
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        self.mark_context_lost_calls
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), context_lost_at.to_string()));
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            c.context_lost_at = Some(context_lost_at.to_string());
+            c.claude_session_id = None;
+            c.session_file_path = None;
+            c.vendor_session_ephemeral = false;
+        }
+    }
     fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
         AdapterForkInfo {
             name: adapter_id.to_string(),
@@ -492,6 +539,11 @@ impl ChatManagerDeps for StoreDeps {
             detected_prs: None,
             tags: None,
             automation_run_id: None,
+            temporary: false,
+            no_project: false,
+            context_lost_at: None,
+            vendor_session_ephemeral: false,
+            scratch_path: None,
             parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
         };
         self.store.lock().unwrap().insert(id.clone(), chat.clone());
@@ -1540,6 +1592,73 @@ async fn remove_project_propagates_a_row_delete_failure() {
     assert_eq!(
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
+    );
+}
+
+// ── discard_chat (todo #346, rule 5) ─────────────────────────────────────────
+
+#[tokio::test]
+async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_dir() {
+    let mut c1 = test_chat("c1");
+    c1.temporary = true;
+    c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", false, true);
+    seed_active(&mgr, "c1", c1, session.clone());
+
+    assert!(mgr.discard_chat("c1").await.is_ok());
+
+    assert_eq!(
+        session.kills.load(Ordering::SeqCst),
+        1,
+        "the process must be stopped"
+    );
+    assert!(
+        mgr.get_active("c1").is_none(),
+        "the active-chat entry must be dropped"
+    );
+    assert_eq!(
+        deps.remove_scratch_dir_calls.lock().unwrap().as_slice(),
+        &["/tmp/mf-scratch/c1".to_string()]
+    );
+    assert!(
+        deps.chats_get("c1").is_none(),
+        "the row must be deleted (a subsequent GET 404s)"
+    );
+}
+
+#[tokio::test]
+async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardable() {
+    let mut c1 = test_chat("c1");
+    c1.temporary = true;
+    c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    *deps.fail_remove_scratch_dir.lock().unwrap() = Some("permission denied".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let result = mgr.discard_chat("c1").await;
+    assert_eq!(result, Err("permission denied".to_string()));
+    assert!(
+        deps.chats_get("c1").is_some(),
+        "a failed removal must leave the row (and a retry) intact"
+    );
+
+    // Retry, this time the removal succeeds.
+    *deps.fail_remove_scratch_dir.lock().unwrap() = None;
+    assert!(mgr.discard_chat("c1").await.is_ok());
+    assert!(deps.chats_get("c1").is_none());
+}
+
+#[tokio::test]
+async fn discard_chat_404s_for_an_unknown_chat() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps);
+    assert_eq!(
+        mgr.discard_chat("missing").await,
+        Err("Chat not found".to_string())
     );
 }
 

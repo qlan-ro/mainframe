@@ -15,6 +15,10 @@ export interface ForkAvailabilityInput {
   capabilityFork: boolean;
   /** `AdapterInfo.name` — the disabled reason names the adapter, never its id. */
   adapterName: string;
+  /** A temporary chat has no vendor transcript to branch from (todo #346). */
+  temporary: boolean;
+  /** A no-project chat has no project checkout for the fork to run in (todo #346). */
+  noProject: boolean;
   /** The chat's own provider session id (`SessionCustom.claudeSessionId`). Absent means nothing has run yet. */
   claudeSessionId?: string;
   transcriptMissing: boolean;
@@ -33,6 +37,12 @@ export interface ForkAvailabilityInput {
 export function forkAvailability(input: ForkAvailabilityInput): ForkAvailability {
   if (!input.capabilityFork) {
     return { enabled: false, reason: `Forking isn't available for ${input.adapterName} chats yet` };
+  }
+  if (input.temporary) {
+    return { enabled: false, reason: "Temporary chats can't be forked" };
+  }
+  if (input.noProject) {
+    return { enabled: false, reason: "Chats with no project can't be forked" };
   }
   if (input.claudeSessionId == null) {
     return { enabled: false, reason: 'Nothing to fork yet' };

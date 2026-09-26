@@ -36,6 +36,9 @@ pub struct ChatUpdate {
     pub title: Option<String>,
     pub status: Option<mainframe_types::chat::ChatStatus>,
     pub transcript_missing: Option<bool>,
+    /// Rule 7's flag write: whether the just-started (or just-loaded) session
+    /// was spawned with no vendor persistence.
+    pub vendor_session_ephemeral: Option<bool>,
 }
 
 impl From<&EventChatUpdate> for ChatUpdate {
@@ -65,6 +68,7 @@ impl From<&LifecycleChatUpdate> for ChatUpdate {
             plan_mode: l.plan_mode,
             title: l.title.clone(),
             status: l.status,
+            vendor_session_ephemeral: l.vendor_session_ephemeral,
             ..Default::default()
         }
     }

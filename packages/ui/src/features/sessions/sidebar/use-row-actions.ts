@@ -21,7 +21,11 @@ export interface RowActions {
 export function useRowActions(item: SessionItem): RowActions {
   const port = useDaemonPort();
   const aui = useAui();
-  const onArchive = useArchiveSession(item.remoteId ?? item.id, item.custom.worktreePath != null);
+  const onArchive = useArchiveSession(
+    item.remoteId ?? item.id,
+    item.custom.worktreePath != null,
+    item.custom.temporary,
+  );
   const fork = useForkChat();
   const adapter = useAdaptersStore((s) => s.byId[item.custom.adapterId]);
 
@@ -44,6 +48,8 @@ export function useRowActions(item: SessionItem): RowActions {
     forkAvailability: forkAvailability({
       capabilityFork: adapter?.capabilities.fork ?? false,
       adapterName: adapter?.name ?? item.custom.adapterId,
+      temporary: item.custom.temporary,
+      noProject: item.custom.noProject,
       claudeSessionId: item.custom.claudeSessionId,
       transcriptMissing: item.custom.transcriptMissing,
       directoryMissing: item.custom.directoryMissing ?? false,

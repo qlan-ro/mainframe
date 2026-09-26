@@ -22,6 +22,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,8 @@ function makeChat(overrides?: Partial<Chat>): Chat {
     totalTokensInput: 0,
     totalTokensOutput: 0,
     lastContextTokensInput: 0,
+    temporary: false,
+    noProject: false,
     ...overrides,
   };
 }
@@ -575,5 +578,96 @@ describe('WorktreePopover — draft panel reflects the stashed choice', () => {
     fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
 
     expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. No-project chat/draft (todo #346) — worktrees disabled, no daemon call
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — no-project chat', () => {
+  it('disables the trigger and explains why, without fetching branch data', () => {
+    renderPopover(makeChat({ noProject: true }));
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-label', 'Worktrees unavailable — no project');
+
+    // Radix disables opening for a disabled trigger — no fetch fires.
+    fireEvent.click(trigger);
+    expect(getGitBranchesMock).not.toHaveBeenCalled();
+    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
+  });
+
+  it('disables the trigger for a no-project draft the same way', () => {
+    setDraftConfig(DRAFT_ID, { projectId: null, adapterId: 'claude' });
+    renderPopover(makeDraftChat({ noProject: true }));
+
+    expect(screen.getByTestId('composer-worktree-trigger')).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Temporary chat/draft (todo #346) — worktrees disabled, no
+// daemon call, and a temporary REAL chat never offers to enable one either.
+// ---------------------------------------------------------------------------
+
+describe('WorktreePopover — temporary chat/draft', () => {
+  // aria-disabled + a click guard, NOT the native `disabled` attribute: native `disabled` would also kill the Hint tooltip explaining
+  // why, via the shared `disabled:pointer-events-none` rule.
+  it('marks the trigger aria-disabled and explains why, without fetching branch data', () => {
+    renderPopover(makeChat({ temporary: true }));
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).not.toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).toHaveAttribute('aria-label', 'Worktrees unavailable — temporary chat');
+
+    fireEvent.click(trigger);
+    expect(getGitBranchesMock).not.toHaveBeenCalled();
+    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
+    // Not just "no fetch" — the popover itself must never open.
+    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
+  });
+
+  it('never opens the popover via a click, even after the click guard runs', async () => {
+    renderPopover(makeChat({ temporary: true }));
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    fireEvent.click(trigger);
+    await Promise.resolve();
+
+    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
+  });
+
+  it('never opens the popover via keyboard Enter on the focused trigger', async () => {
+    renderPopover(makeChat({ temporary: true }));
+    const user = userEvent.setup();
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
+  });
+
+  it('never opens the popover via keyboard Space on the focused trigger', async () => {
+    renderPopover(makeChat({ temporary: true }));
+    const user = userEvent.setup();
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    trigger.focus();
+    await user.keyboard(' ');
+
+    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
+  });
+
+  it('marks the trigger aria-disabled for a temporary draft the same way', () => {
+    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude', temporary: true });
+    renderPopover(makeDraftChat({ temporary: true }));
+
+    const trigger = screen.getByTestId('composer-worktree-trigger');
+    expect(trigger).not.toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
   });
 });

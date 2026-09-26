@@ -17,14 +17,15 @@ pub trait ChatManagerDeps: Send + Sync {
     fn strip_command_tags(&self, text: &str) -> String;
 
     fn chats_get(&self, id: &str) -> Option<Chat>;
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat;
+    fn chats_create(&self, new_chat: &NewChat) -> Chat;
+    /// Hard-delete a chat row (discard step 4). `chat_tags` cascade via the
+    /// schema's `ON DELETE CASCADE`.
+    fn chats_delete(&self, chat_id: &str);
+    /// `remove_dir_all(scratch_path)` (discard step 3). `NotFound` counts as
+    /// success; any other error is surfaced so the row is not deleted and a
+    /// retry stays possible.
+    fn remove_scratch_dir<'a>(&'a self, scratch_path: &'a str)
+    -> BoxFuture<'a, Result<(), String>>;
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate);
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn chats_list_all(&self) -> Vec<Chat>;
@@ -36,6 +37,7 @@ pub trait ChatManagerDeps: Send + Sync {
         tags_all: Option<&[String]>,
         has_worktree: bool,
         include_archived: bool,
+        include_temporary: bool,
     ) -> Vec<Chat>;
     fn chats_reset_working_to_idle(&self) -> i64;
     /// `db.chats.addMention(chatId, mention)` — the boolean "changed" result the DB
@@ -185,6 +187,19 @@ pub trait ChatManagerDeps: Send + Sync {
         adapter_id: &str,
     ) -> Vec<mainframe_types::adapter::AdapterModel>;
 
+    /// Rule 7's per-spawn capability read: `adapters.get(adapterId)?.capabilities()
+    /// .noPersistence`. Never derived from the adapter id itself (AC 2) — an
+    /// unregistered adapter answers `false`, same as one that never opted in.
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool;
+    /// `fs.mkdir(path, { recursive: true })` for a non-project chat's scratch
+    /// cwd. Run before every spawn (rule 6): the first call creates it, and a
+    /// later one recreates a deleted directory at the same path.
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
+    /// `db.chats.markContextLost(chatId, contextLostAt)` (rule 7): the one DB
+    /// path that atomically stamps the loss time and clears `claude_session_id`
+    /// / `session_file_path` / `vendor_session_ephemeral` — `chats_update`'s
+    /// generic patch cannot write an explicit NULL for the first two columns.
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
     // ── fork-a-chat (todo #343) ───────────────────────────────────────────────
     /// The parent's adapter display name + fork capability, for `fork_chat`'s
     /// capability check and its 422 message. Defaulted to "cannot fork" so every

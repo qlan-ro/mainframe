@@ -128,6 +128,12 @@ describe('resolveDraftDefaults', () => {
     ).toMatchObject({ effort: 'xhigh', ultracode: true });
   });
 
+  it('passes a null projectId through for a "No project" draft', () => {
+    const adapter = makeAdapter([opus]);
+
+    expect(resolveDraftDefaults(null, adapter).projectId).toBeNull();
+  });
+
   it('throws when the adapter catalog is empty', () => {
     expect(() => resolveDraftDefaults('p1', makeAdapter([]))).toThrow('Cannot initialize draft: adapter has no models');
   });

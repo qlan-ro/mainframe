@@ -42,13 +42,14 @@ impl PluginHostDb for DaemonPluginHostDb {
         model: Option<&str>,
         permission_mode: Option<&str>,
     ) -> Chat {
-        let (pid, aid) = (project_id.to_string(), adapter_id.to_string());
-        let model = model.map(str::to_string);
-        let mode = permission_mode.map(str::to_string);
-        match self.db.call_blocking(move |d| {
-            d.chats
-                .create(&pid, &aid, model.as_deref(), mode.as_deref(), None)
-        }) {
+        let new_chat = mainframe_types::chat::NewChat {
+            project_id: project_id.to_string(),
+            adapter_id: adapter_id.to_string(),
+            model: model.map(str::to_string),
+            permission_mode: permission_mode.map(str::to_string),
+            ..Default::default()
+        };
+        match self.db.call_blocking(move |d| d.chats.create(&new_chat)) {
             Ok(chat) => chat,
             Err(err) => {
                 // The trait is infallible (mirrors better-sqlite3's synchronous
@@ -153,6 +154,11 @@ fn fallback_chat(project_id: &str, adapter_id: &str, permission_mode: Option<&st
         detected_prs: None,
         tags: None,
         automation_run_id: None,
+        temporary: false,
+        no_project: false,
+        context_lost_at: None,
+        vendor_session_ephemeral: false,
+        scratch_path: None,
         parent_chat_id: None,
     })
 }

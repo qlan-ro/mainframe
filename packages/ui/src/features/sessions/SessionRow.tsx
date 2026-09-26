@@ -106,6 +106,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const row = (
     <SessionContextMenu
       pinned={custom.pinned}
+      temporary={custom.temporary}
       onOpenChange={handleMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
@@ -168,6 +169,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                       hovered ? (
                         <RowHoverActions
                           pinned={custom.pinned}
+                          temporary={custom.temporary}
                           onPin={actions.onPin}
                           onUnpin={actions.onUnpin}
                           onTags={actions.onTags}
@@ -196,6 +198,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                 title={title}
                 projectId={custom.projectId}
                 projectName={projectName}
+                noProject={custom.noProject}
                 worktreePath={custom.worktreePath}
                 branchName={custom.branchName}
                 worktreeMissing={custom.worktreeMissing}

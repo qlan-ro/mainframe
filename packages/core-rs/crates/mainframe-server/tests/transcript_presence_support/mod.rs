@@ -66,6 +66,7 @@ impl Adapter for StubAdapter {
         AdapterCapabilities {
             plan_mode: false,
             auto_mode: false,
+            no_persistence: false,
             fork: false,
         }
     }
@@ -155,8 +156,11 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     let adapter_id_for_chat = adapter_id.clone();
     let chat = db
         .call_blocking(move |d| {
-            d.chats
-                .create(&project_id_for_chat, &adapter_id_for_chat, None, None, None)
+            d.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project_id_for_chat,
+                adapter_id: adapter_id_for_chat,
+                ..Default::default()
+            })
         })
         .unwrap();
 

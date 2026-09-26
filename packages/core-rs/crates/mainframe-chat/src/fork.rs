@@ -73,6 +73,10 @@ pub enum ForkChatError {
     NotFound(String),
     #[error("Forking isn't available for {0} chats yet")]
     Unsupported(String),
+    #[error("Temporary chats can't be forked")]
+    Temporary,
+    #[error("Chats with no project can't be forked")]
+    NoProject,
     #[error("Nothing to fork yet")]
     NothingToForkYet,
     #[error("This chat's transcript is missing")]
@@ -93,7 +97,9 @@ impl ForkChatError {
         match self {
             ForkChatError::NotFound(_) => 404,
             ForkChatError::Unsupported(_) => 422,
-            ForkChatError::NothingToForkYet
+            ForkChatError::Temporary
+            | ForkChatError::NoProject
+            | ForkChatError::NothingToForkYet
             | ForkChatError::TranscriptMissing
             | ForkChatError::DirectoryMissing
             | ForkChatError::TurnInFlight => 409,

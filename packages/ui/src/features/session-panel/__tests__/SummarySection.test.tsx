@@ -30,7 +30,11 @@ import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 // ── mocks ────────────────────────────────────────────────────────────────────
-let mockIdentity = { projectId: 'proj-1' as string | undefined, chatId: 'chat-9' as string | undefined };
+let mockIdentity = {
+  projectId: 'proj-1' as string | undefined,
+  chatId: 'chat-9' as string | undefined,
+  noProject: false,
+};
 let mockIsWorktree = false;
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({
@@ -44,8 +48,12 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
 let mockBranch: string | undefined = 'feat/session-panel';
 let mockIsDraftWorktree = false;
 const refetch = vi.fn();
+const useDisplayBranchSpy = vi.fn();
 vi.mock('@/features/sessions/use-display-branch', () => ({
-  useDisplayBranch: () => ({ branch: mockBranch, isDraftWorktree: mockIsDraftWorktree, refetch }),
+  useDisplayBranch: (opts: unknown) => {
+    useDisplayBranchSpy(opts);
+    return { branch: mockBranch, isDraftWorktree: mockIsDraftWorktree, refetch };
+  },
 }));
 
 // The trigger carries NO onClick of its own (the real DropdownMenuTrigger owns
@@ -83,9 +91,13 @@ let mockChanges = {
   loading: false,
   error: false,
 };
+const useWorkingChangesSpy = vi.fn();
 vi.mock('@/features/review/use-working-changes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/review/use-working-changes')>()),
-  useWorkingChanges: () => mockChanges,
+  useWorkingChanges: (opts: unknown) => {
+    useWorkingChangesSpy(opts);
+    return mockChanges;
+  },
 }));
 
 let mockPrs: DetectedPr[] = [];
@@ -118,7 +130,7 @@ const pr = (number: number, source: DetectedPr['source']): DetectedPr => ({
 });
 
 beforeEach(() => {
-  mockIdentity = { projectId: 'proj-1', chatId: 'chat-9' };
+  mockIdentity = { projectId: 'proj-1', chatId: 'chat-9', noProject: false };
   mockIsWorktree = false;
   mockBranch = 'feat/session-panel';
   mockIsDraftWorktree = false;
@@ -133,6 +145,8 @@ beforeEach(() => {
   };
   mockPrs = [];
   emitSurfaceIntent.mockReset();
+  useDisplayBranchSpy.mockReset();
+  useWorkingChangesSpy.mockReset();
 });
 
 describe('SummarySection — branch', () => {
@@ -237,7 +251,7 @@ describe('SummarySection — changes', () => {
 
 describe('SummarySection — nothing to report', () => {
   it('shows one muted placeholder instead of an empty card', () => {
-    mockIdentity = { projectId: undefined, chatId: undefined };
+    mockIdentity = { projectId: undefined, chatId: undefined, noProject: false };
     mockBranch = undefined;
     mockPercent = null;
     mockChanges = { files: [], totalAdditions: undefined!, totalDeletions: undefined!, loading: false, error: false };
@@ -268,9 +282,18 @@ describe('SummarySection — the branch row manages the branch', () => {
   });
 
   it('stays a static row for a session with no project', () => {
-    mockIdentity = { projectId: undefined, chatId: 'chat-9' };
+    mockIdentity = { projectId: undefined, chatId: 'chat-9', noProject: false };
     render(<SummarySection port={31415} />);
     expect(screen.getByTestId('session-panel-summary-branch').tagName).toBe('DIV');
     expect(screen.queryByTestId('branch-popover')).toBeNull();
+  });
+});
+
+describe('SummarySection — noProject (todo #346)', () => {
+  it('passes noProject through to useDisplayBranch and useWorkingChanges', () => {
+    mockIdentity = { projectId: undefined, chatId: 'chat-9', noProject: true };
+    render(<SummarySection port={31415} />);
+    expect(useDisplayBranchSpy).toHaveBeenCalledWith(expect.objectContaining({ noProject: true }));
+    expect(useWorkingChangesSpy).toHaveBeenCalledWith(expect.objectContaining({ noProject: true }));
   });
 });

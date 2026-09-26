@@ -33,6 +33,19 @@ export interface SessionCustom {
   transcriptMissing: boolean;
   /** Worktree branch — read by the shell MainToolbar identity (additive). */
   branchName?: string;
+  /**
+   * Fixed at creation. Excluded from default listings; never pinned, tagged
+   * or archived. The sidebar's temporary glyph and any "include temporary"
+   * view key off this — never an adapter id (todo #346).
+   */
+  temporary: boolean;
+  /**
+   * True when the chat has no real project (the daemon's hidden scratch
+   * project). Consumers render `NoProjectLabel` instead of a project name or
+   * `ProjectAvatar`, and grouping lifts these chats into a trailing "No
+   * project" section rather than a per-project or ghost section (todo #346).
+   */
+  noProject: boolean;
   updatedAt: number;
   /** The chat this one was forked from, or absent/null for a chat with no parent (todo #343). */
   parentChatId?: string | null;
@@ -83,6 +96,8 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     worktreeMissing: chat.worktreeMissing ?? false,
     transcriptMissing: chat.transcriptMissing ?? false,
     branchName: chat.branchName,
+    temporary: chat.temporary,
+    noProject: chat.noProject,
     updatedAt: new Date(chat.updatedAt).getTime(),
     parentChatId: chat.parentChatId,
     directoryMissing: chat.directoryMissing ?? false,

@@ -159,14 +159,21 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
 
 export function SummarySection({ port }: { port: number }) {
   const host = useHost();
-  const { projectId, chatId, branchName, isWorktree } = useActiveIdentity();
+  const { projectId, chatId, branchName, isWorktree, noProject } = useActiveIdentity();
   // `refetch` is the popover-write path: a BranchPopover write broadcasts no
   // `chat.updated`, so nothing else invalidates the displayed branch.
-  const { branch, isDraftWorktree, refetch } = useDisplayBranch({ port, projectId, chatId, branchName, isWorktree });
+  const { branch, isDraftWorktree, refetch } = useDisplayBranch({
+    port,
+    projectId,
+    chatId,
+    branchName,
+    isWorktree,
+    noProject,
+  });
   const percent = useContextPercent();
   const usage = useChatExtras()?.state.contextUsage;
   const prs = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems))?.detectedPrs ?? [];
-  const changes = useWorkingChanges({ port, projectId, chatId });
+  const changes = useWorkingChanges({ port, projectId, chatId, noProject });
 
   const rows = deriveSummaryRows({
     branch: { name: branch ?? null, isWorktree },

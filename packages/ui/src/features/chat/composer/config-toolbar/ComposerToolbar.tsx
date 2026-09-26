@@ -6,7 +6,7 @@
  * Calls useAdapters + useComposerTuning ONCE and fans out resolved props to
  * all config controls so no child runs its own hooks.
  *
- * Left→right order: Agent+Model · Permission · Plan · Worktree. Effort and
+ * Left→right order: Agent+Model · Permission · Plan · Temporary · Worktree. Effort and
  * features are no longer their own chips — they live in each model row's
  * flyout inside the model menu (the Cursor pattern).
  * Renders nothing when every control is hidden (e.g. before chat/model loads).
@@ -18,6 +18,7 @@ import { useAdapters, useComposerTuning } from './use-composer-tuning';
 import { ProviderModelSelect } from './ProviderModelSelect';
 import { PermissionSelect } from './PermissionSelect';
 import { PlanModeToggle } from './PlanModeToggle';
+import { TemporaryToggle } from './TemporaryToggle';
 import { WorktreePopover } from './WorktreePopover';
 import { TuningWarningDialog } from './TuningWarningDialog';
 
@@ -33,6 +34,8 @@ export function ComposerToolbar() {
     setAdapter,
     setPermissionMode,
     setPlanMode,
+    setTemporary,
+    draftMode,
     setEffort,
     setFeature,
     disabled,
@@ -69,6 +72,7 @@ export function ComposerToolbar() {
         providerDefaults={providerDefaults}
       />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
+      <TemporaryToggle chat={chat} draftMode={draftMode} setTemporary={setTemporary} />
       <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
       <TuningWarningDialog
         pending={tuningWarning.pending}

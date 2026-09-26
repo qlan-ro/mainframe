@@ -10,7 +10,7 @@
  * leave. v2 rows are single-line, so that moved to the row's hint.
  */
 import type { MouseEvent } from 'react';
-import { XIcon } from 'lucide-react';
+import { SquareDashedBottom, XIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,8 @@ import { ProjectAvatar } from './ProjectAvatar';
 const ROW_INDENT = 'pl-2';
 
 interface DraftSessionRowProps {
-  projectId: string;
+  /** null for a draft explicitly set to "No project" (todo #346). */
+  projectId: string | null;
   projectName: string;
   selected: boolean;
   /** True in "All" view, where the row has to say which project it belongs to. */
@@ -74,7 +75,12 @@ export function DraftSessionRow({
             New Session
           </span>
           <span className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover/menu-item:opacity-0">
-            {showProject && <ProjectAvatar name={projectName} color={projectColor(projectId)} size={14} />}
+            {showProject &&
+              (projectId != null ? (
+                <ProjectAvatar name={projectName} color={projectColor(projectId)} size={14} />
+              ) : (
+                <SquareDashedBottom size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+              ))}
             <span className="tabular-nums">now</span>
           </span>
         </SidebarMenuButton>

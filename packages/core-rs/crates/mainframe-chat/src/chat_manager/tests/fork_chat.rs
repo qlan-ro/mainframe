@@ -36,6 +36,31 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
 }
 
 #[tokio::test]
+async fn a_temporary_chat_is_refused_409() {
+    let mut chat = chat_with("c1", "claude", Some("sess-1"));
+    chat.temporary = true;
+    let deps = StoreDeps::with_chats(vec![chat]);
+    deps.set_fork_capable(true);
+    let mgr = ChatManager::new(deps);
+    let err = mgr.fork_chat("c1").await.unwrap_err();
+    assert_eq!(err, ForkChatError::Temporary);
+    assert_eq!(err.status_code(), 409);
+}
+
+#[tokio::test]
+async fn a_no_project_chat_is_refused_409() {
+    let mut chat = chat_with("c1", "claude", Some("sess-1"));
+    chat.project_id = mainframe_types::chat::NO_PROJECT_ID.to_string();
+    chat.no_project = true;
+    let deps = StoreDeps::with_chats(vec![chat]);
+    deps.set_fork_capable(true);
+    let mgr = ChatManager::new(deps);
+    let err = mgr.fork_chat("c1").await.unwrap_err();
+    assert_eq!(err, ForkChatError::NoProject);
+    assert_eq!(err.status_code(), 409);
+}
+
+#[tokio::test]
 async fn no_provider_session_is_nothing_to_fork_yet_409() {
     let chat = chat_with("c1", "claude", None);
     let deps = StoreDeps::with_chats(vec![chat]);

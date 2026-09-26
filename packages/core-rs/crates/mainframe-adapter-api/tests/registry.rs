@@ -202,6 +202,7 @@ impl Adapter for FakeAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            no_persistence: false,
             fork: false,
         }
     }

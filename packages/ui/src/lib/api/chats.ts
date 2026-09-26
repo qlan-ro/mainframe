@@ -87,7 +87,12 @@ export async function getToolResultContent(port: number, chatId: string, toolUse
 // ── Sessions sidebar additions ─────────────────────────────────────────────
 
 export interface CreateChatBody {
-  projectId: string;
+  /**
+   * Exactly one of `projectId` or `noProject: true` — the daemon rejects a
+   * body carrying both or neither (todo #346).
+   */
+  projectId?: string;
+  noProject?: boolean;
   adapterId: string;
   model?: string;
   /**
@@ -98,6 +103,8 @@ export interface CreateChatBody {
   permissionMode?: PermissionMode;
   worktreePath?: string;
   branchName?: string;
+  /** Excluded from default listings, refuses pin/tag/archive/unarchive; removed via `discardChat` (todo #346). */
+  temporary?: boolean;
 }
 
 /**
@@ -107,12 +114,13 @@ export interface CreateChatBody {
  */
 export function listChats(
   port: number,
-  q?: { project?: string; tags?: string[]; synthetic?: string[] },
+  q?: { project?: string; tags?: string[]; synthetic?: string[]; includeTemporary?: boolean },
 ): Promise<Chat[]> {
   const url = new URL(`${apiBase(port)}/api/chats`);
   if (q?.project !== undefined) url.searchParams.set('project', q.project);
   if (q?.tags?.length) url.searchParams.set('tags', q.tags.join(','));
   if (q?.synthetic?.length) url.searchParams.set('synthetic', q.synthetic.join(','));
+  if (q?.includeTemporary) url.searchParams.set('includeTemporary', 'true');
   return request<Chat[]>('GET', url.toString());
 }
 
@@ -141,6 +149,14 @@ export function archiveChat(port: number, chatId: string, deleteWorktree: boolea
 /** Unarchive a chat (POST /api/chats/:id/unarchive). */
 export const unarchiveChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/unarchive`);
+
+/**
+ * Delete a temporary chat and its scratch working directory. 409s for a
+ * non-temporary chat — always route by the chat's `temporary` flag before
+ * calling this instead of `archiveChat` (todo #346).
+ */
+export const discardChat = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/discard`);
 
 /**
  * Branch a chat's conversation into a new chat (todo #343). No body — the

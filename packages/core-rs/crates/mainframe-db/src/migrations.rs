@@ -1,6 +1,7 @@
 //! Ported from `packages/core/src/db/migrations.ts`.
 
 use mainframe_runtime::time::now_iso8601;
+use mainframe_types::chat::NO_PROJECT_ID;
 use rusqlite::Connection;
 
 use crate::DbError;
@@ -478,11 +479,50 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
+        // Temporary and non-project sessions (#346): the temporary flag, the
+        // no-persistence bookkeeping pair, and the non-project scratch cwd.
+        // Also seeds the hidden scratch project row every non-project chat's
+        // project_id points at.
+        Migration {
+            version: 29,
+            up: |db| {
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "temporary",
+                    "ALTER TABLE chats ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "vendor_session_ephemeral",
+                    "ALTER TABLE chats ADD COLUMN vendor_session_ephemeral INTEGER NOT NULL DEFAULT 0",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "context_lost_at",
+                    "ALTER TABLE chats ADD COLUMN context_lost_at TEXT",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "scratch_path",
+                    "ALTER TABLE chats ADD COLUMN scratch_path TEXT",
+                )?;
+                db.execute(
+                    "INSERT OR IGNORE INTO projects (id, name, path, created_at, last_opened_at) \
+                     VALUES (?, 'No project', 'mainframe:no-project', ?, ?)",
+                    rusqlite::params![NO_PROJECT_ID, now_iso8601(), now_iso8601()],
+                )?;
+                Ok(())
+            },
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 28;
+pub const LATEST_VERSION: i64 = 29;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

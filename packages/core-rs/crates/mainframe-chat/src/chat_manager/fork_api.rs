@@ -15,8 +15,8 @@ fn turn_in_flight(chat: &Chat) -> bool {
 
 impl ChatManager {
     /// Fork `chat_id` at its current point into a new chat that inherits its
-    /// conversation. Checks run in the spec's order (not found, capability, no
-    /// session, transcript missing, directory missing, turn in flight), then pins
+    /// conversation. Checks run in the spec's order (not found, capability,
+    /// temporary, no project, no session, transcript missing, directory missing, turn in flight), then pins
     /// the fork point and inserts the new row. A failure after the eligibility
     /// checks removes any snapshot directory it created and leaves no chat row.
     pub async fn fork_chat(&self, chat_id: &str) -> Result<Chat, ForkChatError> {
@@ -27,6 +27,14 @@ impl ChatManager {
         let adapter = self.deps.adapter_fork_info(&parent.adapter_id);
         if !adapter.fork {
             return Err(ForkChatError::Unsupported(adapter.name));
+        }
+        // A temporary chat never wrote a vendor transcript to branch from, and a
+        // no-project chat has no checkout for the fork to run in (todo #346).
+        if parent.temporary {
+            return Err(ForkChatError::Temporary);
+        }
+        if parent.no_project {
+            return Err(ForkChatError::NoProject);
         }
         let Some(source_session_id) = parent.claude_session_id.clone() else {
             return Err(ForkChatError::NothingToForkYet);

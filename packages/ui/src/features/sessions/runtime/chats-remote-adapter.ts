@@ -25,9 +25,9 @@
  */
 import type { AssistantStreamChunk } from 'assistant-stream';
 import type { RemoteThreadListAdapter } from '@assistant-ui/react';
-import { listChats, getChat, renameChat, archiveChat, unarchiveChat } from '../../../lib/api/chats';
+import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
-import { takeArchiveChoice } from './archive-confirm-bridge';
+import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from './archive-confirm-bridge';
 import { useSessionListLoadState } from './list-load-state';
 import { createForLocal } from './new-thread-coordinator';
 import { chatControllerRegistry } from './chat-controller-registry';
@@ -50,6 +50,16 @@ function toMetadata(chat: Parameters<typeof chatToThreadCustom>[0]): RemoteThrea
 }
 
 async function archiveWithStagedChoice(port: number, remoteId: string): Promise<void> {
+  // The ghost-chat prune (todo #346): the daemon copy is already
+  // gone (discarded outside any row/aui interaction), so this delete is
+  // local-state-only — never call the daemon again.
+  if (takeLocalOnlyRemoval(remoteId)) return;
+  // A temporary chat 409s on archive (todo #346) — the row stages a discard
+  // instead of a worktree choice, and this is where that routes.
+  if (takeDiscard(remoteId)) {
+    await discardChat(port, remoteId);
+    return;
+  }
   // Absent for an archive raised outside the sidebar row (which never has a
   // worktree question to stage): keep the worktree, the safe default.
   const choice = takeArchiveChoice(remoteId);
@@ -59,7 +69,9 @@ async function archiveWithStagedChoice(port: number, remoteId: string): Promise<
 export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
   return {
     async list(): Promise<RemoteThreadListResponse> {
-      const chats = await listChats(port);
+      // includeTemporary: the sidebar shows temporary chats (Timer glyph,
+      // no pin/tag/archive) rather than hiding them (todo #346).
+      const chats = await listChats(port, { includeTemporary: true });
       // The one place that can tell a loaded list from a failed one (#312).
       useSessionListLoadState.getState().markLoaded();
       return { threads: chats.map(toMetadata) };

@@ -89,9 +89,11 @@ export function RowBody({
         </span>
         <SessionRowMetaLine
           projectName={projectName}
+          noProject={custom.noProject}
           worktreePath={custom.worktreePath}
           branchName={custom.branchName}
           worktreeMissing={custom.worktreeMissing}
+          temporary={custom.temporary}
           detectedPrs={custom.detectedPrs}
           tags={custom.tags}
           colorOf={colorOf}

@@ -29,6 +29,8 @@ function chat(overrides: Partial<Chat> = {}): Chat {
     id: 'parent-1',
     adapterId: 'claude',
     projectId: 'proj-1',
+    temporary: false,
+    noProject: false,
     status: 'active',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

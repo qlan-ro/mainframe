@@ -46,7 +46,13 @@ async fn create_chat(server: &TestServer, project_id: &str) -> String {
     server
         .ctx
         .db
-        .call(move |db| db.chats.create(&pid, "claude", None, None, None))
+        .call(move |db| {
+            db.chats.create(&mainframe_types::chat::NewChat {
+                project_id: pid,
+                adapter_id: "claude".to_string(),
+                ..Default::default()
+            })
+        })
         .await
         .unwrap()
         .id

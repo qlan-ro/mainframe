@@ -36,9 +36,10 @@ use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
 use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
+use crate::thread_request::build_thread_request;
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
-use crate::types::{ThreadResumeResult, ThreadStartResult, TurnStartResult};
+use crate::types::{ThreadStartResult, TurnStartResult};
 
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 
@@ -97,6 +98,11 @@ struct PendingConfig {
     plan_mode: bool,
     tuning: Option<ResolvedTuning>,
     codex_provider_tuning: CodexProviderTuning,
+    /// Set only for a temporary chat whose adapter reports the no-persistence
+    /// capability (todo #346). `ensure_thread` reads it to force a fresh
+    /// `thread/start { ephemeral: true }` and to skip `thread/resume` even when
+    /// `resume_thread_id` is set.
+    no_persistence: bool,
 }
 
 impl Default for PendingConfig {
@@ -108,6 +114,7 @@ impl Default for PendingConfig {
             plan_mode: false,
             tuning: None,
             codex_provider_tuning: CodexProviderTuning::default(),
+            no_persistence: false,
         }
     }
 }
@@ -230,6 +237,7 @@ impl CodexSession {
         client: &Arc<JsonRpcClient>,
         model: Option<&str>,
         permission_mode: ExecutionMode,
+        no_persistence: bool,
     ) -> Result<(), AdapterError> {
         if self
             .state
@@ -241,26 +249,25 @@ impl CodexSession {
             return Ok(());
         }
 
-        let (new_thread_id, reported_model) = if let Some(resume) = &self.resume_thread_id {
-            let mut p = self.thread_params_base(model);
-            p.insert("threadId".into(), json!(resume));
-            let res: ThreadResumeResult = de(client
-                .request("thread/resume", Some(Value::Object(p)))
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?)?;
-            (res.thread.id, res.model)
-        } else {
-            let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
-            let mut p = self.thread_params_base(model);
-            p.insert("approvalPolicy".into(), json!(approval_policy));
-            p.insert("sandbox".into(), json!(sandbox));
-            p.insert("experimentalRawEvents".into(), json!(true));
-            let res: ThreadStartResult = de(client
-                .request("thread/start", Some(Value::Object(p)))
-                .await
-                .map_err(|e| AdapterError::Message(e.0))?)?;
-            (res.thread.id, res.model)
-        };
+        let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
+        let base = self.thread_params_base(model);
+        let request = build_thread_request(
+            self.resume_thread_id.as_deref(),
+            no_persistence,
+            base,
+            &approval_policy,
+            json!(sandbox),
+        );
+        // `thread/start` and `thread/resume` answer with the same
+        // `{ thread: { id }, model }` shape, so one call + one deserialize
+        // covers both (todo #346 review fix).
+        let method = request.method();
+        let params = request.into_params();
+        let res: ThreadStartResult = de(client
+            .request(method, Some(Value::Object(params)))
+            .await
+            .map_err(|e| AdapterError::Message(e.0))?)?;
+        let (new_thread_id, reported_model) = (res.thread.id, res.model);
 
         {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -455,6 +462,7 @@ impl AdapterSession for CodexSession {
                 tuning: None,
                 small_fast_model: None,
                 default_model: None,
+                no_persistence: None,
             });
             let sink = sink.unwrap_or_else(null_sink);
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
@@ -465,6 +473,7 @@ impl AdapterSession for CodexSession {
                 cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
                 cfg.plan_mode = options.plan_mode.unwrap_or(false);
                 cfg.tuning = options.tuning.clone();
+                cfg.no_persistence = options.no_persistence.unwrap_or(false);
             }
 
             if std::fs::metadata(&self.project_path).is_err() {
@@ -563,7 +572,15 @@ impl AdapterSession for CodexSession {
             let input =
                 serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
 
-            let (model, default_model, permission_mode, plan_mode, tuning, codex_tuning) = {
+            let (
+                model,
+                default_model,
+                permission_mode,
+                plan_mode,
+                tuning,
+                codex_tuning,
+                no_persistence,
+            ) = {
                 let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
                 (
                     cfg.model.clone(),
@@ -572,10 +589,11 @@ impl AdapterSession for CodexSession {
                     cfg.plan_mode,
                     cfg.tuning.clone(),
                     cfg.codex_provider_tuning.clone(),
+                    cfg.no_persistence,
                 )
             };
 
-            self.ensure_thread(&client, model.as_deref(), permission_mode)
+            self.ensure_thread(&client, model.as_deref(), permission_mode, no_persistence)
                 .await?;
 
             let (thread_id, resolved_model) = {

@@ -61,6 +61,13 @@ export interface SessionSpawnOptions {
   executablePath?: string;
   systemPrompt?: string;
   tuning?: import('./chat.js').ResolvedTuning;
+  /**
+   * Set only for a temporary chat whose adapter reports
+   * `AdapterCapabilities.noPersistence`. Never set for a non-temporary chat or
+   * for an adapter without the capability. A no-persistence spawn never
+   * carries a resume target (todo #346).
+   */
+  noPersistence?: boolean;
 }
 
 export interface AdapterProcess {
@@ -270,6 +277,17 @@ export interface AdapterInfo {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /**
+     * The adapter's CLI has a native mechanism to run a session without writing
+     * a vendor transcript (Claude `--no-session-persistence`, Codex
+     * `thread/start.ephemeral`), verified interactively (todo #346 spike). The
+     * chat layer and the UI must key off this flag, never an adapter id.
+     * Always present on the wire (the daemon never omits it); optional here,
+     * like `autoMode`, only so existing fixtures that build a bare
+     * `capabilities` object don't all need updating in this change — absent
+     * means false.
+     */
+    noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
   };
@@ -393,6 +411,8 @@ export interface Adapter {
     planMode: boolean;
     /** Supports the CLI's native `auto` permission mode. Absent means unsupported (mobile-additive). */
     autoMode?: boolean;
+    /** See `AdapterInfo.capabilities.noPersistence` (todo #346). */
+    noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
   };

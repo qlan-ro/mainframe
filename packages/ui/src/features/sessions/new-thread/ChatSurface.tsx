@@ -111,7 +111,11 @@ export function ChatSurface() {
   const isNewLocal =
     mainThreadId != null && mainThreadId.startsWith('__LOCALID_') && itemStatus === 'new' && messageCount === 0;
 
-  if (isNewLocal && !loading && projects.length === 0) {
+  // A draft explicitly set to "No project" (the firstrun hero's secondary CTA)
+  // must fall through to the normal welcome + live composer below, even with
+  // zero real projects — the hero is only for a draft that hasn't been
+  // pointed at "No project" (undecided, or resolved to a real project id).
+  if (isNewLocal && !loading && projects.length === 0 && draftCfg?.projectId !== null) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <ChatCardHeader />

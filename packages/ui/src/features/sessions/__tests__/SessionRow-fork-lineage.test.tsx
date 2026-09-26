@@ -64,6 +64,8 @@ function makeItem(id: string, title: string, parentChatId?: string): SessionItem
       adapterId: 'claude',
       tags: [],
       pinned: false,
+      temporary: false,
+      noProject: false,
       status: 'active',
       displayStatus: 'idle',
       hasPending: false,

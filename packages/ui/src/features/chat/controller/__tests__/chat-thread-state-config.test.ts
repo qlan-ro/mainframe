@@ -118,6 +118,28 @@ describe('reduceChatThreadState — chat.config.updated', () => {
     expect(afterPathChange.chatConfig?.missingDirectoryPath).toBe('/gone/elsewhere');
   });
 
+  it('adopts a chat that differs only in contextLostAt (todo #346)', () => {
+    const lost = { ...chat, contextLostAt: '2026-09-24T00:00:00.000Z' } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat });
+    const afterLoss = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: lost });
+
+    expect(afterLoss.chatConfig).toBe(lost);
+    expect(afterLoss.chatConfig?.contextLostAt).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('adopts a chat that differs only in noProject (todo #346)', () => {
+    const noProjectChat = { ...chat, noProject: true } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat });
+    const afterNoProject = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: noProjectChat });
+
+    expect(afterNoProject.chatConfig).toBe(noProjectChat);
+    expect(afterNoProject.chatConfig?.noProject).toBe(true);
+  });
+
   it('still ignores identity-irrelevant churn (same config object fields)', () => {
     const churn = { ...chat, totalCost: 42 } as unknown as Chat;
 

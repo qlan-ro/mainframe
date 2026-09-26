@@ -26,9 +26,11 @@ use mainframe_chat::chat_manager::ChatFieldsPartial;
 use mainframe_chat::event_handler::compute_session_file_path;
 use mainframe_db::chats::ChatListFilters;
 use mainframe_types::adapter::EffortLevel;
+use mainframe_types::chat::Chat;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
+use crate::routes::chat_discard::refuse_if_temporary;
 use crate::routes::projects::parse_body;
 
 const TAG_ALLOWED: fn(char) -> bool = |c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
@@ -51,6 +53,8 @@ struct ListQuery {
     project: Option<String>,
     tags: Option<String>,
     synthetic: Option<String>,
+    #[serde(rename = "includeTemporary")]
+    include_temporary: Option<bool>,
 }
 
 async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
@@ -67,6 +71,7 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
     };
     let synth: Vec<String> = q.synthetic.as_deref().map(split_csv).unwrap_or_default();
     let has_worktree = synth.iter().any(|s| s == "has-worktree");
+    let include_temporary = q.include_temporary.unwrap_or(false);
     // The facade enriches (displayStatus/isRunning/worktreeMissing); the db path is
     // the Phase-3 harness fallback (chat_manager unwired) and returns raw rows.
     if let Some(cm) = ctx.chat_manager.as_ref() {
@@ -75,6 +80,7 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
             tags_all.as_deref(),
             has_worktree,
             true,
+            include_temporary,
         ));
     }
     let filters = ChatListFilters {
@@ -82,6 +88,7 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
         tags_all,
         has_worktree,
         include_archived: true,
+        include_temporary,
     };
     match ctx
         .db
@@ -93,20 +100,43 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
     }
 }
 
+#[derive(Deserialize)]
+struct ListForProjectQuery {
+    #[serde(rename = "includeTemporary")]
+    include_temporary: Option<bool>,
+}
+
+/// `ChatsRepository::list` (backing both the facade and db paths here) is the
+/// SAME unfiltered read `remove_project` uses internally (rule 3), so it must
+/// keep returning temporary chats; this route filters the result itself
+/// instead of adding a filter to that shared read.
+fn filter_temporary(chats: Vec<Chat>, include_temporary: bool) -> Vec<Chat> {
+    if include_temporary {
+        chats
+    } else {
+        chats.into_iter().filter(|c| !c.temporary).collect()
+    }
+}
+
 async fn list_for_project(
     State(ctx): State<Arc<AppCtx>>,
     Path(project_id): Path<String>,
+    Query(q): Query<ListForProjectQuery>,
 ) -> Response {
+    let include_temporary = q.include_temporary.unwrap_or(false);
     if let Some(cm) = ctx.chat_manager.as_ref() {
-        return ok(cm.list_chats(&project_id));
+        return ok(filter_temporary(
+            cm.list_chats(&project_id),
+            include_temporary,
+        ));
     }
     match ctx.db.call(move |db| db.chats.list(&project_id)).await {
-        Ok(chats) => ok(chats),
+        Ok(chats) => ok(filter_temporary(chats, include_temporary)),
         Err(err) => crate::async_err::internal_error("list project chats", &err),
     }
 }
 
-async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+pub(crate) async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     if let Some(cm) = ctx.chat_manager.as_ref() {
         return match cm.get_chat(&id) {
             Some(chat) => ok(chat),
@@ -136,6 +166,11 @@ async fn archive(
         tracing::warn!(chat_id = %id, "archive chat is a Phase-4 seam (ChatManager unavailable)");
         return fail(StatusCode::NOT_FOUND, "Operation failed");
     };
+    if let Some(chat) = cm.get_chat(&id)
+        && let Some(resp) = refuse_if_temporary(&chat, "archive")
+    {
+        return resp;
+    }
     cm.archive_chat(&id, delete_worktree).await;
     crate::respond::ok_empty()
 }
@@ -228,6 +263,15 @@ async fn set_pinned(
     let Some(pinned) = parse_body::<PinnedBody>(&body).and_then(|b| b.pinned) else {
         return fail(StatusCode::BAD_REQUEST, "pinned (boolean) is required");
     };
+    let lookup = id.clone();
+    let existing = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+        Ok(Some(chat)) => chat,
+        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    };
+    if let Some(resp) = refuse_if_temporary(&existing, "pin") {
+        return resp;
+    }
     let cid = id.clone();
     if let Err(err) = ctx
         .db
@@ -392,6 +436,11 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
         tracing::warn!(chat_id = %id, "unarchive chat is a Phase-4 seam (ChatManager unavailable)");
         return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
     };
+    if let Some(chat) = cm.get_chat(&id)
+        && let Some(resp) = refuse_if_temporary(&chat, "unarchive")
+    {
+        return resp;
+    }
     match cm.unarchive_chat(&id) {
         Some(chat) => ok(chat),
         None => fail(StatusCode::NOT_FOUND, "Chat not found"),
@@ -541,7 +590,11 @@ mod tests {
                               worktree: Option<&str>,
                               archived: bool|
                  -> Result<(), mainframe_db::DbError> {
-                    let chat = db.chats.create(project, "claude", None, None, None)?;
+                    let chat = db.chats.create(&mainframe_types::chat::NewChat {
+                        project_id: project.to_string(),
+                        adapter_id: "claude".to_string(),
+                        ..Default::default()
+                    })?;
                     let update = ChatUpdate {
                         worktree_path: Some(worktree.map(str::to_string)),
                         status: archived.then_some(ChatStatus::Archived),
@@ -573,6 +626,7 @@ mod tests {
             project: project.map(str::to_string),
             tags: tags.map(str::to_string),
             synthetic: synthetic.map(str::to_string),
+            include_temporary: None,
         })
     }
 
@@ -694,6 +748,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_pinned_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx();
+        let (_, _, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let resp = set_pinned(
+            State(ctx.clone()),
+            Path(temp_id),
+            axum::body::Bytes::from(r#"{"pinned":true}"#),
+        )
+        .await;
+        let (status, body) = read(resp).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot pin a temporary chat");
+    }
+
+    #[tokio::test]
     async fn set_effort_rejects_bad_level_400() {
         let ctx = AppCtx::test_ctx();
         let resp = set_effort(
@@ -740,6 +810,144 @@ mod tests {
         assert_eq!(body["error"], "Chat not found");
     }
 
+    // ── includeTemporary (todo #346, AC 26) ───────────────────────────────────
+
+    async fn seed_one_temporary_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
+        ctx.db
+            .call(|db| {
+                let project = db.projects.create("/tmp/temp-list", None)?;
+                let normal = db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })?;
+                let temp = db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id.clone(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                })?;
+                Ok((project.id, normal.id, temp.id))
+            })
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn list_excludes_temporary_by_default_and_includes_it_when_asked() {
+        let ctx = AppCtx::test_ctx();
+        let (_, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let excluded = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
+        assert!(excluded.contains(&normal_id));
+        assert!(!excluded.contains(&temp_id));
+
+        let included = ids_of(
+            list(
+                State(ctx.clone()),
+                Query(ListQuery {
+                    project: None,
+                    tags: None,
+                    synthetic: None,
+                    include_temporary: Some(true),
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(included.contains(&normal_id));
+        assert!(included.contains(&temp_id));
+    }
+
+    #[tokio::test]
+    async fn list_for_project_excludes_temporary_by_default_and_includes_it_when_asked() {
+        let ctx = AppCtx::test_ctx();
+        let (project_id, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
+
+        let excluded = ids_of(
+            list_for_project(
+                State(ctx.clone()),
+                Path(project_id.clone()),
+                Query(ListForProjectQuery {
+                    include_temporary: None,
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(excluded.contains(&normal_id));
+        assert!(!excluded.contains(&temp_id));
+
+        let included = ids_of(
+            list_for_project(
+                State(ctx.clone()),
+                Path(project_id),
+                Query(ListForProjectQuery {
+                    include_temporary: Some(true),
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert!(included.contains(&normal_id));
+        assert!(included.contains(&temp_id));
+    }
+
+    // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
+    // real ChatManager) ───────────────────────────────────────────────────────
+
+    async fn create_temporary_chat(ctx: &Arc<AppCtx>) -> String {
+        ctx.chat_manager
+            .as_ref()
+            .unwrap()
+            .create_chat_with_defaults(
+                mainframe_types::chat::NewChat {
+                    project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
+                    adapter_id: "claude".to_string(),
+                    temporary: true,
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
+            .await
+            .id
+    }
+
+    #[tokio::test]
+    async fn archive_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let id = create_temporary_chat(&ctx).await;
+
+        let (status, body) = read(
+            archive(
+                State(ctx.clone()),
+                Path(id),
+                Query(ArchiveQuery {
+                    delete_worktree: None,
+                }),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot archive a temporary chat");
+    }
+
+    #[tokio::test]
+    async fn unarchive_refuses_a_temporary_chat_409() {
+        let ctx = AppCtx::test_ctx_with_chat_manager();
+        ctx.adapter_registry
+            .register(crate::chat_test_support::StubAdapter::new("claude", false));
+        let id = create_temporary_chat(&ctx).await;
+
+        let (status, body) = read(unarchive(State(ctx.clone()), Path(id)).await).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["error"], "cannot unarchive a temporary chat");
+    }
+
     #[tokio::test]
     async fn excludes_automation_created_chats_from_the_default_list() {
         let ctx = AppCtx::test_ctx();
@@ -756,7 +964,12 @@ mod tests {
                     .id;
                 Ok(db
                     .chats
-                    .create(&p1, "claude", None, None, Some("run-1"))?
+                    .create(&mainframe_types::chat::NewChat {
+                        project_id: p1,
+                        adapter_id: "claude".to_string(),
+                        automation_run_id: Some("run-1".to_string()),
+                        ..Default::default()
+                    })?
                     .id)
             })
             .await

@@ -20,6 +20,8 @@ function item(id: string, projectId: string, hasPending = false): SessionItem {
       hasPending,
       detectedPrs: [],
       worktreeMissing: false,
+      temporary: false,
+      noProject: false,
       transcriptMissing: false,
       updatedAt: 1748779200000,
     },

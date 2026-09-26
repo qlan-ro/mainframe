@@ -9,9 +9,16 @@ use mainframe_db::{
     ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork, ProjectsRepository,
 };
 use mainframe_types::adapter::{EffortLevel, ForkSource};
-use mainframe_types::chat::ChatStatus;
+use mainframe_types::chat::{ChatStatus, NewChat};
 use mainframe_types::settings::ExecutionMode;
 
+fn new_chat(project_id: &str) -> NewChat {
+    NewChat {
+        project_id: project_id.to_string(),
+        adapter_id: "claude".to_string(),
+        ..Default::default()
+    }
+}
 fn setup() -> (ChatsRepository, ProjectsRepository) {
     let conn = Connection::open_in_memory().unwrap();
     initialize_schema(&conn).unwrap();
@@ -38,7 +45,10 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     let (chats, projects) = setup();
     let p = projects.create("/project/fork", None).unwrap();
     let parent = chats
-        .create(&p.id, "claude", Some("claude-opus"), None, None)
+        .create(&NewChat {
+            model: Some("claude-opus".to_string()),
+            ..new_chat(&p.id)
+        })
         .unwrap();
 
     let pf = pending_fork("parent-session-1");
@@ -93,7 +103,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
 fn parent_chat_id_survives_archive_and_unarchive() {
     let (chats, projects) = setup();
     let p = projects.create("/project/fork-archive", None).unwrap();
-    let parent = chats.create(&p.id, "claude", None, None, None).unwrap();
+    let parent = chats.create(&new_chat(&p.id)).unwrap();
     let fork = chats
         .create_fork(&ForkInsert {
             parent_chat_id: &parent.id,
@@ -144,7 +154,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
 fn list_filtered_and_get_return_parent_chat_id() {
     let (chats, projects) = setup();
     let p = projects.create("/project/fork-list", None).unwrap();
-    let parent = chats.create(&p.id, "claude", None, None, None).unwrap();
+    let parent = chats.create(&new_chat(&p.id)).unwrap();
     let fork = chats
         .create_fork(&ForkInsert {
             parent_chat_id: &parent.id,
@@ -176,7 +186,7 @@ fn list_filtered_and_get_return_parent_chat_id() {
 fn pending_fork_get_and_clear() {
     let (chats, projects) = setup();
     let p = projects.create("/project/pending-fork", None).unwrap();
-    let parent = chats.create(&p.id, "claude", None, None, None).unwrap();
+    let parent = chats.create(&new_chat(&p.id)).unwrap();
     let pf = pending_fork("parent-session-4");
     let fork = chats
         .create_fork(&ForkInsert {

@@ -32,6 +32,18 @@ vi.mock('@/lib/api/chats', () => ({
   archiveChat: vi.fn().mockResolvedValue(undefined),
 }));
 
+const deleteItemSpy = vi.fn().mockResolvedValue(undefined);
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ threadListItem: { delete: deleteItemSpy } }),
+}));
+
+const stageDiscardSpy = vi.fn();
+const takeDiscardSpy = vi.fn();
+vi.mock('@/features/sessions/runtime/archive-confirm-bridge', () => ({
+  stageDiscard: (...args: unknown[]) => stageDiscardSpy(...args),
+  takeDiscard: (...args: unknown[]) => takeDiscardSpy(...args),
+}));
+
 import { continueChatHere, recreateChatWorktree, continueChatInProjectRoot, archiveChat } from '@/lib/api/chats';
 import { DegradedChatCard } from '../DegradedChatCard';
 
@@ -42,6 +54,9 @@ function chat(overrides: Partial<Chat>): Partial<Chat> {
 beforeEach(() => {
   vi.clearAllMocks();
   __chatConfig = null;
+  deleteItemSpy.mockClear().mockResolvedValue(undefined);
+  stageDiscardSpy.mockClear();
+  takeDiscardSpy.mockClear();
 });
 
 describe('DegradedChatCard — visibility', () => {
@@ -82,6 +97,16 @@ describe('DegradedChatCard — transcript missing only', () => {
     render(<DegradedChatCard />);
     fireEvent.click(screen.getByTestId('chat-degraded-delete'));
     await waitFor(() => expect(archiveChat).toHaveBeenCalledWith(31415, 'chat-9', true));
+  });
+
+  it('Delete chat stages a discard and routes through aui delete() for a temporary chat (todo #346)', async () => {
+    __chatConfig = chat({ transcriptMissing: true, temporary: true });
+    render(<DegradedChatCard />);
+    fireEvent.click(screen.getByTestId('chat-degraded-delete'));
+    await waitFor(() => expect(deleteItemSpy).toHaveBeenCalledTimes(1));
+    expect(stageDiscardSpy).toHaveBeenCalledExactlyOnceWith('chat-9');
+    expect(takeDiscardSpy).toHaveBeenCalledExactlyOnceWith('chat-9'); // cleanup, no-op once the adapter consumed it
+    expect(archiveChat).not.toHaveBeenCalled();
   });
 });
 

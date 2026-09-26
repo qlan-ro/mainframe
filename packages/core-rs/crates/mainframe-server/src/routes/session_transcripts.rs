@@ -155,6 +155,7 @@ mod tests {
             AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                no_persistence: false,
                 fork: false,
             }
         }
@@ -202,6 +203,7 @@ mod tests {
             AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                no_persistence: false,
                 fork: false,
             }
         }
@@ -232,7 +234,13 @@ mod tests {
         let adapter_id = adapter_id.to_string();
         let chat = ctx
             .db
-            .call(move |db| db.chats.create(&project.id, &adapter_id, None, None, None))
+            .call(move |db| {
+                db.chats.create(&mainframe_types::chat::NewChat {
+                    project_id: project.id,
+                    adapter_id,
+                    ..Default::default()
+                })
+            })
             .await
             .unwrap();
         if with_session {

@@ -14,9 +14,8 @@ import { Eye, LoaderCircle, Play, Rocket, Square, Terminal } from 'lucide-react'
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
-import { NO_CONFIGS_LABEL } from '@/features/run/derive-launch-control';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
-import { deriveLaunchRows, type LaunchRow } from './launch-view';
+import { deriveLaunchRows, launchEmptyStateLabel, type LaunchRow } from './launch-view';
 import { PanelCard } from './PanelCard';
 
 const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
@@ -71,7 +70,7 @@ function LaunchConfigRow({
 }
 
 export function LaunchCard({ port, onClose }: { port: number; onClose: () => void }) {
-  const { projectId, chatId } = useActiveIdentity();
+  const { projectId, chatId, noProject } = useActiveIdentity();
   const { configs, scopeStatuses, selectedConfigName, handleLaunch, handleStop } = useLaunchActions(
     port,
     projectId,
@@ -92,7 +91,7 @@ export function LaunchCard({ port, onClose }: { port: number; onClose: () => voi
       <div className="flex flex-col gap-0.5 p-2">
         {rows.length === 0 ? (
           <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
-            {NO_CONFIGS_LABEL}
+            {launchEmptyStateLabel(noProject)}
           </div>
         ) : (
           rows.map((row) => (

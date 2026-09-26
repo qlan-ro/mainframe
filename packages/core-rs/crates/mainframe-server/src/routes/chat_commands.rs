@@ -22,67 +22,25 @@ use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::projects::parse_body;
 
+/// serde only invokes this when the key is present, so a plain `Option<T>`
+/// would collapse an explicit JSON `null` into the same `None` as an absent
+/// key. Wrapping in `Some` here keeps absent → outer `None` and present
+/// (including `null`) → outer `Some`, which is what rule 4's `projectId`
+/// presence check needs.
+fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    serde::Deserialize::deserialize(de).map(Some)
+}
+
 async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
     let lookup = id.to_string();
     match ctx.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(chat) => Ok(chat.is_some()),
         Err(err) => Err(crate::async_err::internal_error("get chat", &err)),
     }
-}
-
-#[derive(Deserialize)]
-struct CreateChatBody {
-    #[serde(rename = "projectId")]
-    project_id: Option<String>,
-    #[serde(rename = "adapterId")]
-    adapter_id: Option<String>,
-    model: Option<String>,
-    #[serde(rename = "permissionMode")]
-    permission_mode: Option<String>,
-    #[serde(rename = "worktreePath")]
-    worktree_path: Option<String>,
-    #[serde(rename = "branchName")]
-    branch_name: Option<String>,
-}
-
-async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
-    let Some(b) = parse_body::<CreateChatBody>(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
-    };
-    let (Some(project_id), Some(adapter_id)) = (
-        b.project_id.filter(|s| !s.is_empty()),
-        b.adapter_id.filter(|s| !s.is_empty()),
-    ) else {
-        return fail(
-            StatusCode::BAD_REQUEST,
-            "projectId and adapterId are required",
-        );
-    };
-    if b.worktree_path.is_none() != b.branch_name.is_none() {
-        return fail(
-            StatusCode::BAD_REQUEST,
-            "worktreePath and branchName must be provided together",
-        );
-    }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(%project_id, %adapter_id, "createChat is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "createChatWithDefaults unavailable",
-        );
-    };
-    let chat = cm
-        .create_chat_with_defaults(
-            &project_id,
-            &adapter_id,
-            b.model.as_deref(),
-            b.permission_mode.as_deref(),
-            b.worktree_path.as_deref(),
-            b.branch_name.as_deref(),
-            None,
-        )
-        .await;
-    ok(chat)
 }
 
 /// `UpdateChatConfigBody` (ws-schemas): every field optional; `permissionMode`
@@ -96,6 +54,11 @@ struct UpdateChatConfigBody {
     permission_mode: Option<ExecutionMode>,
     #[serde(rename = "planMode")]
     plan_mode: Option<bool>,
+    /// Rule 4: a chat's project is fixed at creation. Detected as an explicit
+    /// field (present at all, any value including `null`) rather than
+    /// `deny_unknown_fields`, because other clients may send extra keys today.
+    #[serde(rename = "projectId", default, deserialize_with = "double_option")]
+    project_id: Option<Option<serde_json::Value>>,
 }
 
 async fn update_config(
@@ -108,6 +71,9 @@ async fn update_config(
     let Some(cfg) = parse_body::<UpdateChatConfigBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
+    if cfg.project_id.is_some() {
+        return fail(StatusCode::BAD_REQUEST, "projectId cannot be changed");
+    }
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
         Ok(true) => {}
@@ -294,7 +260,6 @@ async fn queue_cancel(
 
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
-        .route("/api/chats", post(create))
         .route("/api/chats/{id}/config", patch(update_config))
         .route("/api/chats/{id}/interrupt", post(interrupt))
         .route("/api/chats/{id}/resume", post(resume))
@@ -321,32 +286,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_rejects_missing_fields_400() {
+    async fn update_config_rejects_a_project_id_field_400() {
         let ctx = AppCtx::test_ctx();
-        let resp = create(
+        let resp = update_config(
             State(ctx.clone()),
-            axum::body::Bytes::from(r#"{"projectId":"p"}"#),
-        )
-        .await;
-        assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn create_rejects_worktree_without_branch_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = create(
-            State(ctx.clone()),
-            axum::body::Bytes::from(
-                r#"{"projectId":"p","adapterId":"claude","worktreePath":"/wt"}"#,
-            ),
+            Path("nope".into()),
+            axum::body::Bytes::from(r#"{"projectId":"other-project"}"#),
         )
         .await;
         let (status, body) = read(resp).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(
-            body["error"],
-            "worktreePath and branchName must be provided together"
-        );
+        assert_eq!(body["error"], "projectId cannot be changed");
+    }
+
+    #[tokio::test]
+    async fn update_config_rejects_a_null_project_id_field_400() {
+        // The refusal is keyed on the field's PRESENCE (rule 4), not its value —
+        // an explicit `null` still counts.
+        let ctx = AppCtx::test_ctx();
+        let resp = update_config(
+            State(ctx.clone()),
+            Path("nope".into()),
+            axum::body::Bytes::from(r#"{"projectId":null}"#),
+        )
+        .await;
+        assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
     }
 
     #[test]
