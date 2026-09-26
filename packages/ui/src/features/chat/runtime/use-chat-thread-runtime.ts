@@ -28,6 +28,7 @@ import { projectChatThreadRepository } from '../controller/project-messages';
 import { buildChatExtras, isRunningFromState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
+import { captureIfMarked, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
 // Controller state → useSyncExternalStore
@@ -77,9 +78,20 @@ async function restoreAttachments(
 export function useChatThreadRuntime(
   controller: AcpChatController,
   port: number,
-  opts?: { active?: boolean },
+  opts?: { active?: boolean; chatId?: string },
 ): AssistantRuntime {
   const state = useControllerState(controller); // uses controller.subscribeState (always)
+
+  // The draft-stash key: the caller's thread-list-item id when known (the
+  // same id `OffloadRelease.markForStash` and `chatControllerRegistry.getOrCreate`
+  // use), falling back to the controller's own constructor id for callers that
+  // don't pass one (tests, and any non-aliased single-item thread, where the
+  // two ids coincide anyway). An adopted draft's controller has TWO live
+  // thread-item ids (`__LOCALID_*` and the daemon chatId) sharing ONE
+  // controller whose `getThreadId()` always returns the constructor id — using
+  // that here for both subtrees would collide the two items onto one stash
+  // key (#178 AC14).
+  const stashKey = opts?.chatId ?? controller.getThreadId();
 
   // Seed from REST once on mount (deduped by loadPromise inside controller).
   // A __LOCALID_* thread is a no-op here — controller.load() early-returns until
@@ -152,6 +164,38 @@ export function useChatThreadRuntime(
     },
   });
   runtimeRef.current = runtime;
+
+  // Draft continuity across an offload release (#178): a stash left by
+  // OffloadRelease for this SAME thread id (no id-flip on reopen — see the
+  // controller registry header) is restored into the composer once, mirroring
+  // the load-once effect above.
+  useEffect(() => {
+    const draft = takeStash(stashKey);
+    if (draft == null) return;
+    const composer = runtimeRef.current?.thread?.composer;
+    if (composer == null) return;
+    composer.setText(draft.text);
+    for (const file of draft.attachments) {
+      void composer.addAttachment(file).catch((error: unknown) => {
+        console.warn('[chat-runtime] could not restore a stashed attachment', error);
+      });
+    }
+  }, [stashKey]);
+
+  // Capture the composer draft on unmount, but only when OffloadRelease marked
+  // this thread first (markForStash) — an unmount from delete/archive never
+  // remounts, so stashing there would leak forever with nothing to restore.
+  useEffect(() => {
+    return () => {
+      const composer = runtimeRef.current?.thread?.composer;
+      if (composer == null) return;
+      const composerState = composer.getState();
+      const attachments = composerState.attachments
+        .map((attachment) => attachment.file)
+        .filter((file): file is File => file != null);
+      captureIfMarked(stashKey, { text: composerState.text, attachments });
+    };
+  }, [stashKey]);
 
   return runtime;
 }

@@ -18,6 +18,7 @@ fn codex_context_uses_agents_for_live_and_inactive_sessions() {
         project_path: path.into(),
         chat_id: None,
         mainframe_chat_id: "test".into(),
+        session_file_path: None,
         fork_source: None,
     });
     assert_eq!(session.get_context_files().project, files.project);

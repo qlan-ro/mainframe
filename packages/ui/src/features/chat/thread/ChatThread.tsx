@@ -25,7 +25,7 @@
  */
 import { useRef, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
-import { AlertTriangleIcon, ArrowDownIcon } from 'lucide-react';
+import { AlertTriangleIcon, ArrowDownIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { boundedMessageComponents } from '../messages/bounded-messages';
@@ -68,6 +68,30 @@ function LoadErrorBanner() {
           Retry
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Cold-reload spinner (#178, AC13): a reopened offloaded chat has no messages
+ * until the daemon re-parses its transcript. Centered over the transcript
+ * column, not a skeleton (spec decision). Never shows on a `__LOCALID_*`
+ * draft — a new chat's empty thread is its welcome state, not a reload.
+ */
+function ChatThreadLoadingSpinner() {
+  const extras = useChatExtras();
+  const threadId = useAuiState((s) => s.threadListItem?.id ?? null);
+  const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
+  const isDraft = threadId?.startsWith('__LOCALID_') === true;
+  if (extras?.state.loadState.type !== 'loading' || messageCount > 0 || isDraft) return null;
+  return (
+    <div
+      data-testid="chat-thread-loading"
+      role="status"
+      aria-label="Loading chat history"
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <Loader2Icon className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
     </div>
   );
 }
@@ -194,6 +218,7 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
             tabIndex={-1}
             className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
           >
+            <ChatThreadLoadingSpinner />
             {/* Width cap: 48rem, minus the rail block (58px) MIRRORED on both
                 sides — in a narrow zone the transcript clears the floating
                 rail instead of running under it, with a symmetric left inset. */}

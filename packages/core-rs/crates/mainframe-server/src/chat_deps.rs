@@ -252,6 +252,7 @@ impl DaemonChatDeps {
                 project_path: effective_path,
                 chat_id: own_id,
                 mainframe_chat_id: chat_id.to_string(),
+                session_file_path: chat.session_file_path.clone(),
                 fork_source,
             },
         )

@@ -1,7 +1,7 @@
 //! Ported from `packages/core/src/chat/lifecycle-manager.ts`.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use dashmap::DashMap;
@@ -15,6 +15,7 @@ use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
 use crate::chat_cwd::chat_cwd;
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::no_persistence;
@@ -184,6 +185,20 @@ struct Guards {
     loading: HashMap<String, Arc<Notify>>,
     starting: HashMap<String, Arc<Notify>>,
     interrupting: HashMap<String, Arc<Notify>>,
+    /// In-flight idle offload per chat (todo #178, `flight_claims.rs`). An
+    /// offload claims this slot only when every other map below is empty for
+    /// the chat and no send is registered; `load_chat`/`start_chat`/
+    /// `get_messages`/`send_message` all wait it out before touching the
+    /// registry or cache.
+    offloading: HashMap<String, Arc<Notify>>,
+    /// In-flight `send_message` calls per chat (todo #178, `flight_claims.rs`).
+    /// A count, not a flag: nothing in this codebase serializes concurrent
+    /// sends to the same chat today, so offload must treat any of them as busy.
+    sending: HashMap<String, usize>,
+    /// In-flight on-disk transcript read behind `get_messages` per chat (todo
+    /// #178, `flight_claims.rs`) — single-flights the read the Established
+    /// facts call out as racy (two concurrent misses both hit disk).
+    history: HashMap<String, Arc<Notify>>,
 }
 
 /// Join an in-flight single-flight `Notify` without a lost wakeup. `notify_waiters`
@@ -216,6 +231,11 @@ pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     guards: Arc<Mutex<Guards>>,
+    /// Set post-construction via [`Self::set_chat_surface`] — mirrors
+    /// `EventHandler`'s identical `OnceLock` pattern so a manager built with
+    /// no surface attached (most unit tests) is a no-op, not a compile-time
+    /// obligation on every `LifecycleManagerDeps` fake.
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
@@ -231,7 +251,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             messages,
             permissions,
             guards: Arc::new(Mutex::new(Guards::default())),
+            chat_surface: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// First caller wins, matching `EventHandler::set_chat_surface` — a
+    /// second call (e.g. a stray double-attach) is a harmless no-op.
+    pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
+        let _ = self.chat_surface.set(surface);
     }
 
     fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
@@ -384,7 +411,16 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
     }
 
-    pub async fn load_chat(&self, chat_id: &str) {
+    /// Returns whether this call actually reloaded the message cache from
+    /// history (`do_load_chat`'s doc) — `false` for both the single-flight
+    /// `Skip` (already active — untouched) and `Await` (another in-flight
+    /// call owns the reload and, if it happened, that caller is the one
+    /// responsible for notifying) branches.
+    pub async fn load_chat(&self, chat_id: &str) -> bool {
+        // Wait out an in-flight offload FIRST: it may be about to remove this
+        // chat's registry cell, and this call must see the post-offload state
+        // (empty registry → fresh load) rather than a half-torn-down cell.
+        self.await_offload(chat_id).await;
         // Single-flight: await an in-flight load, else claim the slot (guard is
         // dropped before any `.await` — std MutexGuard is not Send).
         let action = {
@@ -402,18 +438,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let notify = match action {
             Flight::Await(existing) => {
                 join_flight(&self.guards, existing, |g| g.loading.get(chat_id)).await;
-                return;
+                return false;
             }
-            Flight::Skip => return,
+            Flight::Skip => return false,
             Flight::Claimed(n) => n,
         };
-        self.do_load_chat(chat_id).await;
+        let reloaded = self.do_load_chat(chat_id).await;
         self.guards
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .loading
             .remove(chat_id);
         notify.notify_waiters();
+        reloaded
     }
 
     /// Await any in-flight load (chat_manager's `getMessages` inflight check).
@@ -448,6 +485,9 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
     }
 
     pub async fn start_chat(&self, chat_id: &str) {
+        // See `load_chat`'s matching wait: a start racing an offload must not
+        // read the registry mid-teardown.
+        self.await_offload(chat_id).await;
         if let Some(cell) = self.get_active(chat_id) {
             let (spawned, process) = {
                 let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
@@ -858,10 +898,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         });
     }
 
-    async fn do_load_chat(&self, chat_id: &str) {
+    /// Returns whether this call actually (re)populated the message cache —
+    /// `ChatManager::load_chat` uses it to decide whether an attached facade
+    /// session needs a `Resync` (todo #178: a chat left on screen through an
+    /// idle offload keeps its facade session, which offload deliberately
+    /// leaves un-notified — see `idle_offload.rs`'s step 4 — so the NEXT
+    /// `load_chat` is what rebuilds the cache under the transcript's own ids
+    /// and must tell that attached session to re-replay rather than diff
+    /// against the ids it cached live).
+    async fn do_load_chat(&self, chat_id: &str) -> bool {
         let Some(mut chat) = self.deps.chats_get(chat_id) else {
             warn!(chat_id, "doLoadChat: chat not found");
-            return;
+            return false;
         };
         self.active_chats.insert(
             chat_id.to_string(),
@@ -883,7 +931,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             chat.scratch_path.as_deref(),
             project_path.clone(),
         ) else {
-            return;
+            return false;
         };
         // Before the early returns below: a chat with no session still needs a
         // baseline, and it must be re-seeded on every activation after a restart.
@@ -898,7 +946,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let Some(wt) = &chat.worktree_path
             && !self.deps.path_exists(wt)
         {
-            return;
+            return false;
         }
 
         // A fork's own session id may not exist yet (its first turn never ran)
@@ -912,7 +960,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .get_pending_fork(chat_id)
             .map(|pending| pending.fork_source);
         if own_id.is_none() && fork_source.is_none() {
-            return;
+            return false;
         }
 
         let Some(session) = self.deps.create_session(
@@ -921,15 +969,17 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 project_path: effective_path,
                 chat_id: own_id,
                 mainframe_chat_id: chat_id.to_string(),
+                session_file_path: chat.session_file_path.clone(),
                 fork_source,
             },
         ) else {
-            return;
+            return false;
         };
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock().unwrap_or_else(|e| e.into_inner()).session = Some(session.clone());
         }
 
+        let mut cache_reloaded = false;
         if let Ok(history) = session.load_history().await {
             let remapped: Vec<_> = history
                 .into_iter()
@@ -947,6 +997,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .restore_pending_permission(chat_id, &remapped);
+                cache_reloaded = true;
             }
         }
 
@@ -959,6 +1010,21 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // the adapter-claude history scanner is wired.
         let _ = &session;
         self.deps.scan_loaded_history(chat_id).await;
+        if cache_reloaded {
+            // Notify here, not just from the public `load_chat` wrapper: a
+            // resumed SEND also reaches this via `do_start_chat`'s own
+            // `self.load_chat(chat_id)` call, a path `ChatManager::load_chat`
+            // never sees (todo #178 review finding — an on-screen chat that
+            // sends after an idle offload must resync through this branch
+            // too, not just an explicit reopen).
+            chat_surface::notify(
+                self.chat_surface.get(),
+                ChatSurfaceEvent::Resync {
+                    chat_id: chat_id.to_string(),
+                },
+            );
+        }
+        cache_reloaded
     }
 
     /// The provider/catalog default model for a spawn's `default_model` hint — the
@@ -1034,6 +1100,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     project_path: plan.cwd,
                     chat_id: chat.claude_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
+                    session_file_path: chat.session_file_path.clone(),
                     fork_source,
                 },
             )
@@ -1090,6 +1157,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         Ok(())
     }
 }
+
+/// Offload/send/history single-flight claims sharing the `Guards` above
+/// (todo #178). A child module so it can see the private `Guards`/`Flight`/
+/// `join_flight` without widening their visibility.
+mod flight_claims;
 
 #[cfg(test)]
 mod title_logging_tests;

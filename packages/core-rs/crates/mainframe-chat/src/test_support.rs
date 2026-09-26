@@ -5,13 +5,15 @@
 //! shared `FakeSession` lives here to avoid re-stubbing ~20 trait methods per test.
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
     StopBackgroundTaskResult,
 };
-use mainframe_types::adapter::{AdapterProcess, ControlResponse, SessionSpawnOptions};
+use mainframe_types::adapter::{
+    AdapterProcess, AdapterProcessStatus, ControlResponse, SessionSpawnOptions,
+};
 use mainframe_types::chat::{Chat, ChatMessage, ChatStatus};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
@@ -24,6 +26,10 @@ use std::sync::Arc;
 pub struct FakeSession {
     pub spawned: bool,
     pub activity: Option<i64>,
+    /// Overrides `activity` once set — lets a test bump "last activity" after
+    /// construction (AC4's activity-injected-after-selection race), which a
+    /// plain `Option<i64>` field can't do without interior mutability.
+    pub(crate) activity_override: Mutex<Option<i64>>,
     pub kill_count: AtomicUsize,
     pub set_model_calls: Mutex<Vec<String>>,
     pub set_permission_mode_calls: Mutex<Vec<ExecutionMode>>,
@@ -41,6 +47,12 @@ pub struct FakeSession {
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
     pub on_respond_to_permission: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// When `true`, `spawn` succeeds (and `is_spawned` flips true after it) —
+    /// otherwise `spawn` errors with `"unused"`, today's default for every
+    /// caller that never actually spawns. Lets a resume test observe a real
+    /// post-spawn `send_message` instead of failing at `require_live_session`.
+    pub spawn_ok: bool,
+    pub(crate) spawned_after_spawn: AtomicBool,
 }
 
 impl FakeSession {
@@ -65,6 +77,11 @@ impl FakeSession {
     pub fn kills(&self) -> usize {
         self.kill_count.load(Ordering::SeqCst)
     }
+
+    /// Bump "last activity" to `ts` — see `activity_override`.
+    pub fn bump_activity(&self, ts: i64) {
+        *self.activity_override.lock().unwrap() = Some(ts);
+    }
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -87,10 +104,10 @@ impl AdapterSession for FakeSession {
         "/tmp"
     }
     fn is_spawned(&self) -> bool {
-        self.spawned
+        self.spawned || self.spawned_after_spawn.load(Ordering::SeqCst)
     }
     fn last_activity_at(&self) -> Option<i64> {
-        self.activity
+        self.activity_override.lock().unwrap().or(self.activity)
     }
 
     fn spawn(
@@ -98,7 +115,21 @@ impl AdapterSession for FakeSession {
         _options: Option<SessionSpawnOptions>,
         _sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
-        err("unused")
+        if !self.spawn_ok {
+            return err("unused");
+        }
+        self.spawned_after_spawn.store(true, Ordering::SeqCst);
+        Box::pin(async {
+            Ok(AdapterProcess {
+                id: "sess".to_string(),
+                adapter_id: "claude".to_string(),
+                chat_id: "c1".to_string(),
+                pid: 1,
+                status: AdapterProcessStatus::Running,
+                project_path: "/tmp".to_string(),
+                model: None,
+            })
+        })
     }
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         self.kill_count.fetch_add(1, Ordering::SeqCst);

@@ -75,18 +75,25 @@ impl ChatManager {
     }
 
     /// Both dispatch shapes store and emit the user's text, so they share this.
+    ///
+    /// `vendor_id`, when given, becomes the stored message's own id in place
+    /// of a minted nanoid — the same uuid handed to `send_message` below, so
+    /// the CLI records this turn's transcript entry under the id the daemon
+    /// already committed to live (`docs/specs/2026-09-25-todo-178-idle-whole-
+    /// chat-offload.md` decision 10: live and cold-reloaded ids must match).
     fn store_user_message(
         &self,
         chat_id: &str,
         message_content: Vec<MessageContent>,
         transient_metadata: HashMap<String, serde_json::Value>,
         attachment_ids: Option<&[String]>,
+        vendor_id: Option<String>,
     ) -> ChatMessage {
         let message = self
             .messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .create_transient_message(
+            .create_transient_message_with_vendor_id(
                 chat_id,
                 ChatMessageType::User,
                 message_content,
@@ -95,6 +102,7 @@ impl ChatManager {
                 } else {
                     Some(transient_metadata)
                 },
+                vendor_id,
             );
         self.messages
             .lock()
@@ -175,6 +183,7 @@ impl ChatManager {
             })],
             HashMap::new(),
             None,
+            None,
         );
         self.assign_initial_title(post, chat_id, content);
 
@@ -223,7 +232,7 @@ impl ChatManager {
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
 
-        let (transient_metadata, message_uuid) =
+        let (transient_metadata, message_uuid, is_queued) =
             self.queued_message_metadata(post, session, &outgoing.attachment_previews);
 
         let message = self.store_user_message(
@@ -231,6 +240,7 @@ impl ChatManager {
             outgoing.message_content,
             transient_metadata,
             attachment_ids,
+            Some(message_uuid.clone()),
         );
 
         if self.deps.extract_mentions_from_text(chat_id, content) {
@@ -248,11 +258,11 @@ impl ChatManager {
         self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
 
         session
-            .send_message(outgoing.text, outgoing.images, message_uuid.clone())
+            .send_message(outgoing.text, outgoing.images, Some(message_uuid.clone()))
             .await?;
 
-        if let Some(uuid) = message_uuid {
-            self.record_queued_ref(chat_id, &message, uuid, content, attachment_ids);
+        if is_queued {
+            self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
             // Queued: `TurnStarted` waits for the CLI to dequeue it
             // (event_handler.rs's `on_queued_processed`).
         } else {

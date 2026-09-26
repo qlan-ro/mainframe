@@ -47,7 +47,15 @@ use crate::ws_schemas::parse_client_event;
 /// subscription (unread-dot / attention-badge for backgrounded chats). A gate
 /// on a backgrounded chat reaches the sessions list through `chat.updated`
 /// (chatId-less on the wire, so global) carrying `displayStatus: waiting`.
-const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 2] = ["chat.notification", "automation.notification"];
+// `chat.offloaded` carries a `chatId` (so a naive fan-out would restrict it to
+// that chat's subscribers), but the renderer must drop the chat's controller
+// even when no client has that chat's thread open — so it is connection-global
+// like the other two (todo #178).
+const CONNECTION_GLOBAL_EVENT_TYPES: [&str; 3] = [
+    "chat.notification",
+    "automation.notification",
+    "chat.offloaded",
+];
 
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).
@@ -680,6 +688,29 @@ mod tests {
             value["quota"]["session"]["usedPercent"],
             serde_json::json!(55.0)
         );
+    }
+
+    // AC10: `chat.offloaded` carries a `chatId` but must still reach a client
+    // that never subscribed to that chat — the renderer needs to drop the
+    // controller for a chat it isn't currently displaying.
+    #[test]
+    fn delivers_chat_offloaded_to_a_client_subscribed_to_no_chat() {
+        let clients: WsClients = Arc::new(DashMap::new());
+        let mut rx = register_client(&clients, "client-1", &[]);
+
+        fanout(
+            &clients,
+            &DaemonEvent::ChatOffloaded {
+                chat_id: "chat_1".to_string(),
+            },
+        );
+
+        let payload = rx
+            .try_recv()
+            .expect("no-subscription client received chat.offloaded");
+        let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["type"], serde_json::json!("chat.offloaded"));
+        assert_eq!(value["chatId"], serde_json::json!("chat_1"));
     }
 
     /// R2.7: the old WS first-hop rule trusted a FORGED leftmost

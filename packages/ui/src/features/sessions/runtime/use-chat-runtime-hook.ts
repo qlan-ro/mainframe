@@ -33,5 +33,5 @@ export function useChatRuntimeHook(): AssistantRuntime {
 
   const controller = chatControllerRegistry.getOrCreate(chatId, port);
 
-  return useChatThreadRuntime(controller, port, { active: isActive });
+  return useChatThreadRuntime(controller, port, { active: isActive, chatId });
 }

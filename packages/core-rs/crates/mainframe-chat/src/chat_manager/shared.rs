@@ -149,6 +149,7 @@ pub(super) fn build_history_session(
             project_path: cwd,
             chat_id: own_id,
             mainframe_chat_id: chat_id.to_string(),
+            session_file_path: chat.session_file_path.clone(),
             fork_source,
         },
     )

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use mainframe_runtime::time::now_iso8601;
+use mainframe_types::adapter::MessageUsage;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use serde_json::Value;
@@ -54,10 +55,23 @@ fn timestamp_or_now_nullish(entry: &Value) -> String {
         .unwrap_or_else(now_iso8601)
 }
 
+/// Reconstructed messages start from an empty meta map: nothing in core-rs or
+/// the UI reads a "reconstructed vs live" marker, so stamping one here would
+/// be a pure, silent divergence from the live pipeline (which never sets it).
+/// Callers add fields on top (`model`, `usage`, `internal`) exactly as the
+/// live pipeline does, and wrap the result in `Some` only when non-empty so a
+/// message that gained no fields matches live's `None` (see
+/// `meta_or_none`).
 fn history_meta() -> HashMap<String, Value> {
-    let mut m = HashMap::new();
-    m.insert("source".to_string(), Value::String("history".to_string()));
-    m
+    HashMap::new()
+}
+
+/// Live construction (`message_cache::create_transient_message`,
+/// `event_handler.rs`'s `on_tool_result`) passes `None` when there is nothing
+/// to attach — `Some(HashMap::new())` would encode as an empty object and
+/// diverge from that. Mirrors that rule for history reconstruction.
+fn meta_or_none(meta: HashMap<String, Value>) -> Option<HashMap<String, Value>> {
+    if meta.is_empty() { None } else { Some(meta) }
 }
 
 // ── synthesizers ────────────────────────────────────────────────────────────
@@ -321,7 +335,7 @@ fn convert_user_entry(entry: &Value, message: &Value, chat_id: &str) -> Option<C
         },
         content: content_blocks,
         timestamp: timestamp_or_now(entry),
-        metadata: Some(history_meta()),
+        metadata: meta_or_none(history_meta()),
     })
 }
 
@@ -378,21 +392,60 @@ fn convert_assistant_entry(
         }
     }
 
+    // `has_representable_content` in assistant_event.rs: whether this entry
+    // carries real text/tool_use/non-empty-thinking, tracked BEFORE the
+    // signature-only fallback below repopulates `content_blocks` — it gates
+    // the vendor-id claim, not what gets displayed.
+    let has_representable_content = !content_blocks.is_empty();
+
     if content_blocks.is_empty() {
-        return None;
+        // A signature-only thinking entry (hidden-thinking models: one or
+        // more `thinking` blocks, every one empty prose) is its own JSONL
+        // entry live, and `assistant_event.rs`'s `has_representable_content`
+        // gate withholds the API-message-id claim from it but still hands it
+        // to `on_message` — so live creates a raw item for it, keyed by its
+        // own transcript uuid, ahead of the real tool_use/text entry that
+        // shares its `message.id`. Dropping it here instead (returning
+        // `None`) starves grouping of that raw item, so the grouped display
+        // turn picks a different base id than live (message doc, T21/R2.8).
+        // Mirror live: keep the (empty) thinking blocks rather than
+        // discarding the entry, as long as thinking is ALL this entry has.
+        let raw_blocks = message
+            .get("content")
+            .and_then(Value::as_array)
+            .filter(|arr| !arr.is_empty())
+            .filter(|arr| {
+                arr.iter()
+                    .all(|b| b.get("type").and_then(Value::as_str) == Some("thinking"))
+            })?;
+        for block in raw_blocks {
+            let thinking = block
+                .get("thinking")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            content_blocks.push(MessageContent::Leaf(LeafContent::Thinking {
+                thinking,
+                parent_tool_use_id: None,
+            }));
+        }
     }
 
     // Mirror of assistant_event.rs's vendor-id rule. Claimed only by entries
-    // that produce a message (after the empty check): a signature-only
-    // thinking entry is skipped here but grouped into the same turn live, so
-    // claiming on the surviving first entry is what keeps the grouped display
-    // message's base id identical across live and reconstruction.
+    // with representable content: a signature-only thinking entry never
+    // claims the shared `message.id`, so the NEXT, content-bearing entry of
+    // the same API message is what claims `mid` there — live applies the
+    // identical rule (`assistant_event.rs`'s `has_representable_content`
+    // gate), keeping the grouped display message's base id identical across
+    // live and reconstruction.
     let id = match message
         .get("id")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
     {
-        Some(mid) if seen_api_message_ids.insert(mid.to_string()) => mid.to_string(),
+        Some(mid) if has_representable_content && seen_api_message_ids.insert(mid.to_string()) => {
+            mid.to_string()
+        }
         _ => id_or_nanoid(entry),
     };
 
@@ -402,10 +455,19 @@ fn convert_assistant_entry(
     {
         meta.insert("model".to_string(), model.clone());
     }
+    // Round-trip through `MessageUsage`, the same whitelist the live pipeline
+    // applies (`assistant_event.rs`'s `handle_assistant_event`,
+    // `event_handler.rs`'s `on_message`): the raw usage object carries
+    // provider-internal fields (`cache_creation`, `inference_geo`,
+    // `iterations`, ...) that live drops on its typed round-trip. Passing the
+    // raw value straight through here would keep those fields on reload only
+    // — a real live-vs-reload divergence the G3 golden test would catch.
     if js_truthy(message.get("usage"))
         && let Some(usage) = message.get("usage")
+        && let Ok(usage) = serde_json::from_value::<MessageUsage>(usage.clone())
+        && let Ok(v) = serde_json::to_value(usage)
     {
-        meta.insert("usage".to_string(), usage.clone());
+        meta.insert("usage".to_string(), v);
     }
 
     Some(ChatMessage {
@@ -414,7 +476,7 @@ fn convert_assistant_entry(
         r#type: ChatMessageType::Assistant,
         content: content_blocks,
         timestamp: timestamp_or_now(entry),
-        metadata: Some(meta),
+        metadata: meta_or_none(meta),
     })
 }
 
@@ -470,7 +532,7 @@ fn convert_queued_command_entry(entry: &Value, chat_id: &str) -> Option<ChatMess
         r#type: ChatMessageType::User,
         content: content_blocks,
         timestamp,
-        metadata: Some(history_meta()),
+        metadata: meta_or_none(history_meta()),
     })
 }
 
@@ -519,7 +581,7 @@ pub fn convert_history_entry(
                 parent_tool_use_id: None,
             })],
             timestamp: timestamp_or_now(entry),
-            metadata: Some(history_meta()),
+            metadata: meta_or_none(history_meta()),
         });
     }
 
@@ -588,7 +650,10 @@ mod tests {
         );
         assert_eq!(msg.id, "e1");
         assert_eq!(msg.timestamp, "2026-07-04T00:00:01Z");
-        assert_eq!(msg.metadata, Some(history_meta()));
+        assert_eq!(
+            msg.metadata, None,
+            "a queued-command reconstruction with no model/usage attaches no meta, matching live's None"
+        );
     }
 
     #[test]

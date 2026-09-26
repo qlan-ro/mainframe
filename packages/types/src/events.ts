@@ -12,6 +12,10 @@ export type DaemonEvent =
   | { type: 'chat.created'; chat: Chat; source?: 'import' }
   | { type: 'chat.updated'; chat: Chat; reason?: 'completed' | 'error' | 'interrupted' }
   | { type: 'chat.ended'; chatId: string }
+  // Idle whole-chat offload (#178): the daemon killed the CLI proc, dropped its
+  // cached history, and removed the chat from the live registry. The chat row
+  // stays visible; reopening cold-reloads the transcript from the JSONL.
+  | { type: 'chat.offloaded'; chatId: string }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
   | { type: 'process.ready'; processId: string; claudeSessionId: string }
   | { type: 'process.stopped'; processId: string }

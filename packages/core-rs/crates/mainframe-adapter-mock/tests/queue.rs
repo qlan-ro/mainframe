@@ -85,6 +85,7 @@ async fn spawned_session(sink: Arc<RecordingSink>) -> ReplaySession {
             project_path: "/tmp/project".to_string(),
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
+            session_file_path: None,
             fork_source: None,
         },
         two_turn_fixture(),

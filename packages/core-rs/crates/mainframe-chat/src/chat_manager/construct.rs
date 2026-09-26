@@ -86,7 +86,17 @@ impl ChatManager {
             &self_ref,
         );
 
-        let mut idle_scanner = crate::idle_scanner::IdleSessionScanner::new(active_chats.clone());
+        let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
+            Arc::new(crate::idle_offload::ChatOffload::new(
+                active_chats.clone(),
+                messages.clone(),
+                permissions.clone(),
+                queued_refs.clone(),
+                collab.lifecycle.clone(),
+                collab.event_handler.clone(),
+            ));
+        let mut idle_scanner =
+            crate::idle_scanner::IdleSessionScanner::new(active_chats.clone(), offloader);
         idle_scanner.start();
 
         Self {
@@ -122,7 +132,8 @@ impl ChatManager {
     /// the normal permission-answer path, which `EventHandler` never sees.
     pub fn with_chat_surface(self, surface: Arc<dyn crate::chat_surface::ChatSurface>) -> Self {
         self.event_handler.set_chat_surface(surface.clone());
-        self.permission_handler.set_chat_surface(surface);
+        self.permission_handler.set_chat_surface(surface.clone());
+        self.lifecycle.set_chat_surface(surface);
         self
     }
 
@@ -174,7 +185,16 @@ impl ChatManager {
     /// reads the shared registry, so a transient scanner over the same registry is
     /// equivalent to the stored one (avoids holding the scanner Mutex across await).
     pub async fn scan_idle_sessions(&self) {
-        crate::idle_scanner::IdleSessionScanner::new(self.active_chats.clone())
+        let offloader: Arc<dyn crate::idle_scanner::IdleOffloader> =
+            Arc::new(crate::idle_offload::ChatOffload::new(
+                self.active_chats.clone(),
+                self.messages.clone(),
+                self.permissions.clone(),
+                self.queued_refs.clone(),
+                self.lifecycle.clone(),
+                self.event_handler.clone(),
+            ));
+        crate::idle_scanner::IdleSessionScanner::new(self.active_chats.clone(), offloader)
             .scan()
             .await;
     }

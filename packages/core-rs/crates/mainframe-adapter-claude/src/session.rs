@@ -366,6 +366,12 @@ pub struct ClaudeSession {
     pub id: String,
     pub project_path: String,
     resume_session_id: Option<String>,
+    /// The chat's stored transcript path, when known. Threaded from
+    /// `SessionOptions::session_file_path` into every history read
+    /// (`load_history`/`extract_plan_files`/`extract_skill_files`) so a
+    /// relocated transcript (e.g. a worktree move) still resolves — see
+    /// `locate_claude_transcript`.
+    session_file_path: Option<String>,
     /// Set only for a fork's spawn (todo #343). Never resumed directly — only
     /// `resume_target`'s `Fork` arm (via `fork_source.resume_path`) reaches
     /// `--resume`, and always alongside `--fork-session`.
@@ -397,6 +403,7 @@ impl ClaudeSession {
             id,
             project_path: options.project_path.clone(),
             resume_session_id: options.chat_id,
+            session_file_path: options.session_file_path,
             fork_source: options.fork_source,
             on_exit: Mutex::new(on_exit),
             control,
@@ -1137,7 +1144,12 @@ impl ClaudeSession {
     async fn resume_target(&self) -> crate::fork::ResumeTarget {
         let own_transcript_present = match (&self.resume_session_id, &self.fork_source) {
             (Some(id), Some(_)) => {
-                crate::transcript::is_claude_transcript_present(id, &self.project_path, None).await
+                crate::transcript::is_claude_transcript_present(
+                    id,
+                    &self.project_path,
+                    self.session_file_path.as_deref(),
+                )
+                .await
             }
             _ => false,
         };
@@ -1150,9 +1162,12 @@ impl ClaudeSession {
 
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => {
-                Ok(crate::history::load_history(&id, &self.project_path).await)
-            }
+            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::load_history(
+                &id,
+                &self.project_path,
+                self.session_file_path.as_deref(),
+            )
+            .await),
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
                 Ok(crate::history::load_history_in_dir(&session_id, &dir).await)
@@ -1163,9 +1178,12 @@ impl ClaudeSession {
 
     pub async fn extract_plan_files(&self) -> Result<Vec<String>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => {
-                Ok(crate::history::extract_plan_file_paths(&id, &self.project_path).await)
-            }
+            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::extract_plan_file_paths(
+                &id,
+                &self.project_path,
+                self.session_file_path.as_deref(),
+            )
+            .await),
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
                 Ok(crate::history::extract_plan_file_paths_in_dir(&session_id, &dir).await)
@@ -1176,9 +1194,12 @@ impl ClaudeSession {
 
     pub async fn extract_skill_files(&self) -> Result<Vec<SkillFileEntry>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => {
-                Ok(crate::history::extract_skill_file_paths(&id, &self.project_path).await)
-            }
+            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::extract_skill_file_paths(
+                &id,
+                &self.project_path,
+                self.session_file_path.as_deref(),
+            )
+            .await),
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
                 Ok(crate::history::extract_skill_file_paths_in_dir(
@@ -1407,6 +1428,7 @@ mod tests {
                 project_path: "/tmp".to_string(),
                 chat_id: None,
                 mainframe_chat_id: "test-chat-id".to_string(),
+                session_file_path: None,
                 fork_source: None,
             },
             None,

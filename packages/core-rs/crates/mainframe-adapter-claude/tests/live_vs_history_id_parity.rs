@@ -71,6 +71,7 @@ fn session() -> Arc<ClaudeSession> {
             project_path: "/tmp".to_string(),
             chat_id: None,
             mainframe_chat_id: "test-chat-id".to_string(),
+            session_file_path: None,
             fork_source: None,
         },
         None,
@@ -166,12 +167,17 @@ fn per_api_message_first_entry_ids_match_between_live_and_history() {
     assert_eq!(live_ids, history_ids);
 }
 
-/// T21, R2.8: hidden-thinking models emit a signature-only thinking entry
-/// (empty prose) before the message's real content. History drops that
-/// entry outright (`content_blocks` stays empty) without claiming the API
-/// message's id, so the SECOND, content-bearing entry is what claims it
-/// there — live must agree, not let the signature-only entry steal the
-/// claim for itself.
+/// T21, R2.8 (revised for #178, AC9 decision 10): hidden-thinking models
+/// emit a signature-only thinking entry (empty prose) before the message's
+/// real content. Live gives that entry its own raw item (keyed by its own
+/// transcript uuid) without claiming the API message's id — history now
+/// mirrors that exactly (`convert_assistant_entry`, keeping the empty
+/// `thinking` block instead of dropping the entry) so BOTH the entry's own
+/// id and the following content-bearing entry's claimed id agree on both
+/// paths. Previously history dropped the signature-only entry outright,
+/// which agreed on the second entry's id but produced no raw item at all
+/// for the first — a real live-vs-reload divergence the #178 golden test
+/// (`live_vs_cold_reload_golden.rs`) exposed once it stopped excepting it.
 #[test]
 fn a_signature_only_thinking_block_claims_the_same_id_live_and_in_history() {
     let entries: Vec<Value> = vec![
@@ -194,8 +200,9 @@ fn a_signature_only_thinking_block_claims_the_same_id_live_and_in_history() {
         .collect();
     assert_eq!(
         history_ids,
-        vec![None, Some("msg_T".to_string())],
-        "the signature-only entry must produce no history message at all"
+        vec![Some("entry-1".to_string()), Some("msg_T".to_string())],
+        "the signature-only entry now produces its own raw item, keyed by \
+         its own uuid, instead of being dropped"
     );
 
     let session = session();
@@ -208,7 +215,8 @@ fn a_signature_only_thinking_block_claims_the_same_id_live_and_in_history() {
     }
 
     assert_eq!(
-        live_ids[1], history_ids[1],
-        "the second, content-bearing entry must claim msg_T on both paths"
+        live_ids, history_ids,
+        "both the signature-only entry's own id and the content-bearing \
+         entry's claimed id must agree on both paths"
     );
 }

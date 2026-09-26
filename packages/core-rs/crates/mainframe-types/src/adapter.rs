@@ -83,6 +83,12 @@ pub struct SessionOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chat_id: Option<String>,
     pub mainframe_chat_id: String,
+    /// The chat's stored transcript path (`Chat::session_file_path`), when known.
+    /// Claude's history load resolves this first, falling back to the path
+    /// derived from `project_path` — see `locate_claude_transcript`. Omitted from
+    /// the wire shape when absent so it never changes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_file_path: Option<String>,
     /// Set only for a fork's spawn (own session id absent, or present but its
     /// transcript missing). `mainframe-chat`'s `build_history_session` /
     /// `do_load_chat` / `do_start_chat` populate it from `chats.pending_fork`.
@@ -694,6 +700,7 @@ mod tests {
             project_path: "/tmp".to_string(),
             chat_id: None,
             mainframe_chat_id: "mf_1".to_string(),
+            session_file_path: None,
             fork_source: None,
         };
         let s = serde_json::to_string(&opts).unwrap();

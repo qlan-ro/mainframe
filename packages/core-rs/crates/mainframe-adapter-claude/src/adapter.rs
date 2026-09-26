@@ -351,6 +351,7 @@ mod tests {
             project_path: "/tmp".to_string(),
             chat_id: Some(chat_id.to_string()),
             mainframe_chat_id: "mf".to_string(),
+            session_file_path: None,
             fork_source: None,
         }
     }

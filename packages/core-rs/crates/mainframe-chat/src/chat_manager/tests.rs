@@ -18,6 +18,7 @@ mod fork_chat;
 mod fork_history;
 mod fork_sweep;
 mod fork_title;
+mod offload;
 mod plan_mode;
 mod resume_snapshot;
 
@@ -37,6 +38,13 @@ pub(crate) struct StoreDeps {
     history: Mutex<Option<Vec<ChatMessage>>>,
     /// Counts `load_history` across every session this fake hands out.
     history_loads: Arc<AtomicUsize>,
+    /// Every `SessionOptions` `create_session` was called with, in order — lets
+    /// a test assert the resume anchor (`chat_id`) and `session_file_path`
+    /// actually threaded into a post-offload respawn (AC7).
+    created_sessions: Mutex<Vec<mainframe_types::adapter::SessionOptions>>,
+    /// What every `FakeSession` this hands out sets `spawn_ok` to (AC7 needs a
+    /// real spawn success to observe the post-resume send).
+    spawn_ok: Mutex<bool>,
     /// Records every path `trust_workspace` persisted, for assertion.
     trusted_paths: Mutex<Vec<String>>,
     /// When `Some`, `write_workspace_trust` fails with this message instead of
@@ -110,6 +118,12 @@ impl StoreDeps {
     }
     pub(crate) fn events(&self) -> Vec<DaemonEvent> {
         self.events.lock().unwrap().clone()
+    }
+    pub(crate) fn created_sessions(&self) -> Vec<mainframe_types::adapter::SessionOptions> {
+        self.created_sessions.lock().unwrap().clone()
+    }
+    pub(crate) fn set_spawn_ok(&self, ok: bool) {
+        *self.spawn_ok.lock().unwrap() = ok;
     }
     pub(crate) fn set_fork_capable(&self, fork: bool) {
         *self.fork_capable.lock().unwrap() = fork;
@@ -283,12 +297,14 @@ impl ChatManagerDeps for StoreDeps {
     fn create_session(
         &self,
         _adapter_id: &str,
-        _options: mainframe_types::adapter::SessionOptions,
+        options: mainframe_types::adapter::SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>> {
+        self.created_sessions.lock().unwrap().push(options);
         self.history.lock().unwrap().clone().map(|history| {
             Arc::new(crate::test_support::FakeSession {
                 history,
                 history_loads: Some(Arc::clone(&self.history_loads)),
+                spawn_ok: *self.spawn_ok.lock().unwrap(),
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
         })
