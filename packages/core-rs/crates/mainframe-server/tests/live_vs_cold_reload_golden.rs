@@ -5,42 +5,34 @@
 //! The fixture (`fixtures/golden-session-with-tool-calls.jsonl`) is a
 //! trimmed, verbatim excerpt of an actual recorded Claude Code session on
 //! this machine (session `9d21c142-41f1-4474-a69e-926bea77010d`): one
-//! human-typed prompt, two `Bash` tool-call turns, and a closing text turn.
-//! Every surviving entry's fields are untouched; the surrounding entries
-//! (queue bookkeeping, unrelated attachments, the trailing stop-hook summary,
-//! AND this model's signature-only `thinking` blocks) were dropped to keep
-//! the fixture self-contained.
+//! human-typed prompt, three signature-only `thinking` entries, two `Bash`
+//! tool-call turns, and a closing text turn. Every surviving entry's fields
+//! are untouched; only queue bookkeeping and unrelated attachment entries
+//! (which convert to nothing on either side) were dropped to keep the
+//! fixture self-contained.
 //!
-//! The `thinking` blocks are the one deliberate content omission, and it is
-//! called out here rather than silently: this session's model emits an
-//! empty-text, signature-only `thinking` entry before each real
-//! `tool_use`/`text` entry of the same API message. Live appends that
-//! signature-only entry to the raw cache as its own item (keyed by its own
-//! transcript uuid, since `has_representable_content` correctly withholds the
-//! API-message-id claim from it — `assistant_event.rs`), but
-//! `convert_assistant_entry` drops it outright rather than reconstructing it,
-//! so cold reload never creates a raw entry for it at all. Grouping then
-//! picks each side's *first* raw entry as the display item's base id, which
-//! is the signature-only entry's own uuid live and the surviving
-//! `tool_use`/`text` entry's `message.id` on reload — a real divergence, but
-//! in the base-id/grouping logic those blocks exercise, not in anything
-//! #178 touches. Leaving it in this fixture would fail this test on a
-//! pre-existing, unrelated bug; it is reported separately rather than fixed
-//! or hidden by a broader normalize() exception here.
+//! This session's model emits an empty-text, signature-only `thinking` entry
+//! before each real `tool_use`/`text` entry of the same API message. Live
+//! appends that signature-only entry to the raw cache as its own item (keyed
+//! by its own transcript uuid, since `has_representable_content` correctly
+//! withholds the API-message-id claim from it — `assistant_event.rs`), and
+//! `history_converters::convert_assistant_entry` now reconstructs the same
+//! raw item on reload (keeping the empty `thinking` block instead of dropping
+//! the entry, and withholding the same claim) so grouping in
+//! `prepare_messages_for_client` picks the same *first* raw entry as the
+//! display item's base id on both sides — closing what was previously a
+//! real base-id divergence (AC9, decision 10).
 //!
 //! **Live** replays the transcript the way the daemon actually builds one:
 //! - The human-typed prompt goes through
-//!   `mainframe_chat::message_cache::MessageCache::create_transient_message`
-//!   with no vendor id — the exact call `chat_manager::send::store_user_message`
-//!   makes for a plain, non-queued send. This mints a fresh nanoid, not the
-//!   transcript's own uuid: a live send commits to an id before the CLI has
-//!   even chosen the uuid it will later record for that turn, so the two can
-//!   never coincide for an unqueued human message (`queued_message_metadata`
-//!   only threads a caller-chosen uuid to the CLI, and gets replay parity
-//!   back, when a message is actually queued). This is a permanent,
-//!   causality-driven boundary, not a #178 regression — see `normalize`'s
-//!   `ItemRole::User` handling below and the module-level note in
-//!   `chat_manager/send.rs`.
+//!   `mainframe_chat::message_cache::MessageCache::create_transient_message_with_vendor_id`,
+//!   forced to the transcript's own uuid — the same uuid
+//!   `chat_manager::send_queue::queued_message_metadata` now mints for EVERY
+//!   send (not just a queued one) and hands the CLI on stdin
+//!   (`build_user_payload`'s `uuid` field), which the CLI persists verbatim
+//!   as the entry's own `uuid`. This closes what was previously a permanent
+//!   live-vs-reload id gap for an unqueued human message (AC9, decision 10) —
+//!   see the module-level note in `chat_manager/send_queue.rs`.
 //! - Every other transcript line (assistant turns AND the CLI's own
 //!   tool_result echoes, both "user" and "assistant"-typed stream-json
 //!   events) goes through `mainframe_adapter_claude::events::handle_stdout`
@@ -57,18 +49,15 @@
 //!
 //! **Both** then run through `prepare_messages_for_client` → `encode`, and
 //! the ordered item lists are compared after normalizing only the one
-//! pre-existing, unconditional marker AC9 excludes: the display timestamp
+//! pre-existing, unconditional field AC9 excludes: the display timestamp
 //! (minted by the daemon on live receipt, never reproducible from a disk
-//! read) — see `normalize` below. The one other adjustment, `ItemRole::User`
-//! id elision, is not a content exception: it is the same causal boundary
-//! documented above, applied only to the item class it structurally can
-//! never resolve. Every other field, including tool calls, thinking-block
-//! grouping, and text content, is compared as-is.
+//! read) — see `normalize` below. No exception list: every id, role, kind,
+//! content, tool call, and grouping decision is compared as-is.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};
 
-use mainframe_acp::encoder::{EncodedItem, ItemRole, encode};
+use mainframe_acp::encoder::{EncodedItem, encode};
 use mainframe_adapter_claude::events::handle_stdout;
 use mainframe_adapter_claude::history::load_history;
 use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
@@ -187,10 +176,16 @@ fn claude_session() -> Arc<ClaudeSession> {
     session
 }
 
-/// Runs the live pipeline: the human prompt via the exact, unforced
-/// `create_transient_message` call `store_user_message` makes for a plain
-/// send (module doc above); every other line via `handle_stdout` into a real
-/// `EventHandler` sink, matching a spawned CLI process's stdout.
+/// Runs the live pipeline: the human prompt via
+/// `create_transient_message_with_vendor_id`, forcing the exact uuid
+/// `chat_manager::send_queue::queued_message_metadata` now mints for EVERY
+/// send (not just a queued one) and hands to the CLI on stdin
+/// (`build_user_payload`'s `uuid` field) — the CLI persists that same uuid as
+/// the transcript entry's own `uuid`, which is what this fixture's human
+/// prompt entry carries. Forcing it here is what makes a real send and a
+/// cold reload agree on this item's id (module doc above, decision 10); every
+/// other line goes through `handle_stdout` into a real `EventHandler` sink,
+/// matching a spawned CLI process's stdout.
 fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
     let cache = Arc::new(Mutex::new(MessageCache::new()));
     let permissions = Arc::new(Mutex::new(PermissionManager::new()));
@@ -207,17 +202,26 @@ fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
                 .and_then(Value::as_str)
                 .expect("human prompt entry must carry string content")
                 .to_string();
-            let message = cache.lock().unwrap().create_transient_message(
-                CHAT_ID,
-                ChatMessageType::User,
-                vec![mainframe_types::chat::MessageContent::Leaf(
-                    mainframe_types::content::LeafContent::Text {
-                        text,
-                        parent_tool_use_id: None,
-                    },
-                )],
-                None,
-            );
+            let forced_uuid = entry
+                .get("uuid")
+                .and_then(Value::as_str)
+                .expect("human prompt entry must carry its own uuid")
+                .to_string();
+            let message = cache
+                .lock()
+                .unwrap()
+                .create_transient_message_with_vendor_id(
+                    CHAT_ID,
+                    ChatMessageType::User,
+                    vec![mainframe_types::chat::MessageContent::Leaf(
+                        mainframe_types::content::LeafContent::Text {
+                            text,
+                            parent_tool_use_id: None,
+                        },
+                    )],
+                    None,
+                    Some(forced_uuid),
+                );
             cache.lock().unwrap().append(CHAT_ID, message);
             continue;
         }
@@ -249,27 +253,20 @@ async fn run_cold_reload(transcript_path: &str) -> Vec<mainframe_types::chat::Ch
 /// Strips the display timestamp — AC9's only excluded field, per plan
 /// decision 10 (`docs/specs/2026-09-25-todo-178-idle-whole-chat-offload.md`):
 /// the daemon mints it on live receipt, so a disk read can never reproduce
-/// it. `ItemRole::User` ids are elided too, but that is not a second content
-/// exception on top of decision 10 — every `ItemRole::User` item here IS the
-/// human-typed prompt (module doc above), and its id is causally impossible
-/// to recover on reload: the daemon commits to a nanoid before the CLI has
-/// chosen the uuid it will eventually persist. Nothing else — role, kind,
-/// content, tool calls, or any other message's id — is touched.
+/// it. No other field, id included, is touched: `run_live_pipeline` forces
+/// the human prompt's id to the transcript's own uuid (the same uuid
+/// `chat_manager::send_queue::queued_message_metadata` now hands the CLI on
+/// every send), and `history_converters::convert_assistant_entry` reconstructs
+/// the signature-only `thinking` entries that precede each tool_use/text
+/// entry so grouping picks the same base id on both sides — closing the two
+/// divergences decision 10 required fixed here rather than excepted.
 fn normalize(item: EncodedItem) -> EncodedItem {
-    const ELIDED: &str = "<human-prompt-id-elided>";
-    fn strip_timestamp(meta: Option<Value>, elide_container_id: bool) -> Option<Value> {
+    fn strip_timestamp(meta: Option<Value>) -> Option<Value> {
         let mut meta = meta?;
         let ns = meta
             .get_mut(mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE)?
             .as_object_mut()?;
         ns.remove("timestamp");
-        // `containerId` mirrors the item's own `id` (both are the raw
-        // ChatMessage id) — the same causally-unrecoverable value for a
-        // human-typed prompt, elided for the same reason as the top-level id
-        // above.
-        if elide_container_id {
-            ns.insert("containerId".to_string(), Value::String(ELIDED.to_string()));
-        }
         Some(meta)
     }
     match item {
@@ -278,19 +275,16 @@ fn normalize(item: EncodedItem) -> EncodedItem {
             role,
             content,
             meta,
-        } => {
-            let is_human = role == ItemRole::User;
-            EncodedItem::Message {
-                id: if is_human { ELIDED.to_string() } else { id },
-                role,
-                content,
-                meta: strip_timestamp(meta, is_human),
-            }
-        }
+        } => EncodedItem::Message {
+            id,
+            role,
+            content,
+            meta: strip_timestamp(meta),
+        },
         EncodedItem::Thought { id, content, meta } => EncodedItem::Thought {
             id,
             content,
-            meta: strip_timestamp(meta, false),
+            meta: strip_timestamp(meta),
         },
         EncodedItem::ToolCall {
             id,
@@ -307,7 +301,7 @@ fn normalize(item: EncodedItem) -> EncodedItem {
             status,
             raw_input,
             content,
-            meta: strip_timestamp(meta, false),
+            meta: strip_timestamp(meta),
         },
     }
 }
@@ -328,16 +322,9 @@ async fn cold_reload_renders_the_same_graph_as_the_live_stream() {
     let live_raw = run_live_pipeline();
     let cold_raw = run_cold_reload(transcript_path.to_str().unwrap()).await;
 
-    // Sanity: the fixture has exactly one human-typed prompt (its id is
-    // causally unrecoverable on reload, module doc above) — the raw
-    // ChatMessage lists are otherwise NOT compared directly: a signature-only
-    // `thinking` entry (T21/R2.8) claims no API-message id live, so it lands
-    // in the raw cache as its own standalone entry keyed by its own uuid,
-    // while history drops it outright (`convert_assistant_entry` returns
-    // `None` for it). Grouping in `prepare_messages_for_client` reconciles
-    // that gap before display — the encoded-item comparison below is the
-    // real, and sufficient, parity check (AC9's "ordered facade item
-    // sequence").
+    // Sanity: the fixture has exactly one human-typed prompt, whose uuid
+    // `run_live_pipeline` forces onto the live item so it agrees with cold
+    // reload's `id_or_nanoid(entry)` (module doc above).
     let human_prompt_ids: Vec<String> = fixture_entries()
         .iter()
         .filter(|e| is_human_prompt_entry(e))

@@ -9,12 +9,36 @@
 //! test — there is no reason to inject time.
 
 use super::*;
+use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use crate::idle_offload::ChatOffload;
 use crate::idle_scanner::{IDLE_THRESHOLD_MS, IdleOffloader, select_idle_candidates};
 use crate::test_support::FakeSession;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType};
 use mainframe_types::content::LeafContent;
+
+/// Records every `ChatSurfaceEvent` an attached facade session would see —
+/// used to prove a reload after offload tells an on-screen chat's session to
+/// `Resync` (todo #178, the "chat on screen when offloaded" edge case).
+#[derive(Default)]
+struct RecordingSurface {
+    events: Mutex<Vec<ChatSurfaceEvent>>,
+}
+
+impl RecordingSurface {
+    fn arc() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+    fn events(&self) -> Vec<ChatSurfaceEvent> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+impl ChatSurface for RecordingSurface {
+    fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+}
 
 /// Builds a `ChatOffload` from `mgr`'s own shared collaborators — exactly how
 /// `ChatManager::scan_idle_sessions` builds one for the scanner (todo #178
@@ -429,5 +453,50 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
         deps.history_loads.load(std::sync::atomic::Ordering::SeqCst),
         1,
         "one resume, one transcript load"
+    );
+}
+
+/// "Chat on screen when offloaded" edge case: offload leaves an attached
+/// facade session untouched (no `ChatEnded`), so it still holds the
+/// pre-offload items under their OLD ids. Sending from that same screen
+/// respawns and reloads the transcript (AC7), rebuilding the cache — the
+/// reload must tell the attached session to `Resync` so it re-replays
+/// against the reloaded graph instead of diffing old ids against new ones,
+/// which would clear every earlier item by id and push it to the end,
+/// scrambling the on-screen order (todo #178 review finding).
+#[tokio::test]
+async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scrambling_order() {
+    let (deps, mgr) =
+        seed_offloadable_chat_with_transcript(vec![history_message("m1"), history_message("m2")]);
+    let surface = RecordingSurface::arc();
+    let mgr = mgr.with_chat_surface(surface.clone());
+    deps.set_spawn_ok(true);
+
+    mgr.scan_idle_sessions().await;
+    assert!(
+        mgr.messages.lock().unwrap().get("c1").is_none(),
+        "offloaded: no cached messages"
+    );
+    assert!(
+        !surface
+            .events()
+            .iter()
+            .any(|e| matches!(e, ChatSurfaceEvent::ChatEnded { .. })),
+        "offload must not tell an attached session the chat ended"
+    );
+
+    // The same "on-screen" facade session is still attached; sending now
+    // resumes and reloads the transcript under it (AC7's resume path).
+    mgr.send_message("c1", "hello again", None, None)
+        .await
+        .expect("the resumed session now spawns successfully");
+
+    assert!(
+        surface
+            .events()
+            .iter()
+            .any(|e| matches!(e, ChatSurfaceEvent::Resync { chat_id } if chat_id == "c1")),
+        "reloading a chat with an attached session must resync it, \
+         not leave it diffing stale live ids against the reloaded graph"
     );
 }

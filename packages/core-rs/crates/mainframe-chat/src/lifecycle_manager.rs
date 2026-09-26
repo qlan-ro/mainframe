@@ -1,7 +1,7 @@
 //! Ported from `packages/core/src/chat/lifecycle-manager.ts`.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use dashmap::DashMap;
@@ -13,6 +13,7 @@ use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
+use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
 use crate::title_generator::resolve_title_binary;
@@ -211,6 +212,11 @@ pub struct ChatLifecycleManager<D: LifecycleManagerDeps + 'static> {
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     guards: Arc<Mutex<Guards>>,
+    /// Set post-construction via [`Self::set_chat_surface`] — mirrors
+    /// `EventHandler`'s identical `OnceLock` pattern so a manager built with
+    /// no surface attached (most unit tests) is a no-op, not a compile-time
+    /// obligation on every `LifecycleManagerDeps` fake.
+    chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
 impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
@@ -226,7 +232,14 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             messages,
             permissions,
             guards: Arc::new(Mutex::new(Guards::default())),
+            chat_surface: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// First caller wins, matching `EventHandler::set_chat_surface` — a
+    /// second call (e.g. a stray double-attach) is a harmless no-op.
+    pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
+        let _ = self.chat_surface.set(surface);
     }
 
     fn get_active(&self, chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
@@ -401,7 +414,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         }
     }
 
-    pub async fn load_chat(&self, chat_id: &str) {
+    /// Returns whether this call actually reloaded the message cache from
+    /// history (`do_load_chat`'s doc) — `false` for both the single-flight
+    /// `Skip` (already active — untouched) and `Await` (another in-flight
+    /// call owns the reload and, if it happened, that caller is the one
+    /// responsible for notifying) branches.
+    pub async fn load_chat(&self, chat_id: &str) -> bool {
         // Wait out an in-flight offload FIRST: it may be about to remove this
         // chat's registry cell, and this call must see the post-offload state
         // (empty registry → fresh load) rather than a half-torn-down cell.
@@ -423,18 +441,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let notify = match action {
             Flight::Await(existing) => {
                 join_flight(&self.guards, existing, |g| g.loading.get(chat_id)).await;
-                return;
+                return false;
             }
-            Flight::Skip => return,
+            Flight::Skip => return false,
             Flight::Claimed(n) => n,
         };
-        self.do_load_chat(chat_id).await;
+        let reloaded = self.do_load_chat(chat_id).await;
         self.guards
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .loading
             .remove(chat_id);
         notify.notify_waiters();
+        reloaded
     }
 
     /// Await any in-flight load (chat_manager's `getMessages` inflight check).
@@ -856,10 +875,18 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
     }
 
-    async fn do_load_chat(&self, chat_id: &str) {
+    /// Returns whether this call actually (re)populated the message cache —
+    /// `ChatManager::load_chat` uses it to decide whether an attached facade
+    /// session needs a `Resync` (todo #178: a chat left on screen through an
+    /// idle offload keeps its facade session, which offload deliberately
+    /// leaves un-notified — see `idle_offload.rs`'s step 4 — so the NEXT
+    /// `load_chat` is what rebuilds the cache under the transcript's own ids
+    /// and must tell that attached session to re-replay rather than diff
+    /// against the ids it cached live).
+    async fn do_load_chat(&self, chat_id: &str) -> bool {
         let Some(chat) = self.deps.chats_get(chat_id) else {
             warn!(chat_id, "doLoadChat: chat not found");
-            return;
+            return false;
         };
         self.active_chats.insert(
             chat_id.to_string(),
@@ -871,7 +898,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         );
 
         let Some(project_path) = self.deps.projects_get_path(&chat.project_id) else {
-            return;
+            return false;
         };
         // Before the early returns below: a chat with no session still needs a
         // baseline, and it must be re-seeded on every activation after a restart.
@@ -883,11 +910,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         if let Some(wt) = &chat.worktree_path
             && !self.deps.path_exists(wt)
         {
-            return;
+            return false;
         }
 
         let Some(claude_session_id) = &chat.claude_session_id else {
-            return;
+            return false;
         };
 
         let Some(session) = self.deps.create_session(
@@ -899,12 +926,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 session_file_path: chat.session_file_path.clone(),
             },
         ) else {
-            return;
+            return false;
         };
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock().unwrap_or_else(|e| e.into_inner()).session = Some(session.clone());
         }
 
+        let mut cache_reloaded = false;
         if let Ok(history) = session.load_history().await {
             let remapped: Vec<_> = history
                 .into_iter()
@@ -922,6 +950,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .restore_pending_permission(chat_id, &remapped);
+                cache_reloaded = true;
             }
         }
 
@@ -934,6 +963,21 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // the adapter-claude history scanner is wired.
         let _ = &session;
         self.deps.scan_loaded_history(chat_id).await;
+        if cache_reloaded {
+            // Notify here, not just from the public `load_chat` wrapper: a
+            // resumed SEND also reaches this via `do_start_chat`'s own
+            // `self.load_chat(chat_id)` call, a path `ChatManager::load_chat`
+            // never sees (todo #178 review finding — an on-screen chat that
+            // sends after an idle offload must resync through this branch
+            // too, not just an explicit reopen).
+            chat_surface::notify(
+                self.chat_surface.get(),
+                ChatSurfaceEvent::Resync {
+                    chat_id: chat_id.to_string(),
+                },
+            );
+        }
+        cache_reloaded
     }
 
     /// The provider/catalog default model for a spawn's `default_model` hint — the

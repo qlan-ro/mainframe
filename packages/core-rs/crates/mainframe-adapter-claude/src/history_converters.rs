@@ -392,21 +392,60 @@ fn convert_assistant_entry(
         }
     }
 
+    // `has_representable_content` in assistant_event.rs: whether this entry
+    // carries real text/tool_use/non-empty-thinking, tracked BEFORE the
+    // signature-only fallback below repopulates `content_blocks` — it gates
+    // the vendor-id claim, not what gets displayed.
+    let has_representable_content = !content_blocks.is_empty();
+
     if content_blocks.is_empty() {
-        return None;
+        // A signature-only thinking entry (hidden-thinking models: one or
+        // more `thinking` blocks, every one empty prose) is its own JSONL
+        // entry live, and `assistant_event.rs`'s `has_representable_content`
+        // gate withholds the API-message-id claim from it but still hands it
+        // to `on_message` — so live creates a raw item for it, keyed by its
+        // own transcript uuid, ahead of the real tool_use/text entry that
+        // shares its `message.id`. Dropping it here instead (returning
+        // `None`) starves grouping of that raw item, so the grouped display
+        // turn picks a different base id than live (message doc, T21/R2.8).
+        // Mirror live: keep the (empty) thinking blocks rather than
+        // discarding the entry, as long as thinking is ALL this entry has.
+        let raw_blocks = message
+            .get("content")
+            .and_then(Value::as_array)
+            .filter(|arr| !arr.is_empty())
+            .filter(|arr| {
+                arr.iter()
+                    .all(|b| b.get("type").and_then(Value::as_str) == Some("thinking"))
+            })?;
+        for block in raw_blocks {
+            let thinking = block
+                .get("thinking")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            content_blocks.push(MessageContent::Leaf(LeafContent::Thinking {
+                thinking,
+                parent_tool_use_id: None,
+            }));
+        }
     }
 
     // Mirror of assistant_event.rs's vendor-id rule. Claimed only by entries
-    // that produce a message (after the empty check): a signature-only
-    // thinking entry is skipped here but grouped into the same turn live, so
-    // claiming on the surviving first entry is what keeps the grouped display
-    // message's base id identical across live and reconstruction.
+    // with representable content: a signature-only thinking entry never
+    // claims the shared `message.id`, so the NEXT, content-bearing entry of
+    // the same API message is what claims `mid` there — live applies the
+    // identical rule (`assistant_event.rs`'s `has_representable_content`
+    // gate), keeping the grouped display message's base id identical across
+    // live and reconstruction.
     let id = match message
         .get("id")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
     {
-        Some(mid) if seen_api_message_ids.insert(mid.to_string()) => mid.to_string(),
+        Some(mid) if has_representable_content && seen_api_message_ids.insert(mid.to_string()) => {
+            mid.to_string()
+        }
         _ => id_or_nanoid(entry),
     };
 

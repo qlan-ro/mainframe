@@ -132,7 +132,8 @@ impl ChatManager {
     /// the normal permission-answer path, which `EventHandler` never sees.
     pub fn with_chat_surface(self, surface: Arc<dyn crate::chat_surface::ChatSurface>) -> Self {
         self.event_handler.set_chat_surface(surface.clone());
-        self.permission_handler.set_chat_surface(surface);
+        self.permission_handler.set_chat_surface(surface.clone());
+        self.lifecycle.set_chat_surface(surface);
         self
     }
 

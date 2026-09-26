@@ -71,6 +71,14 @@ impl ChatManager {
             .map_err(TrustWorkspaceError::Write)
     }
 
+    /// A chat left on screen through an idle offload keeps its facade session
+    /// (`idle_offload.rs` deliberately emits no `ChatEnded`), so a reload
+    /// here — or via `start_chat`'s own internal `load_chat` call on a
+    /// resumed send — rebuilds the cache under the transcript's own ids,
+    /// different from the ids that session cached live for the same items
+    /// (todo #178, AC6/AC9). `ChatLifecycleManager::do_load_chat` notifies
+    /// `Resync` itself when it actually reloads, so BOTH paths cover it —
+    /// see the module note there.
     pub async fn load_chat(&self, chat_id: &str) {
         self.lifecycle.load_chat(chat_id).await;
     }
