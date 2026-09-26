@@ -29,6 +29,17 @@ pub(super) fn result_content(
             meta: truncation_meta(r),
         },
     }];
+    // One image content entry per tool-result image (todo #363), after the
+    // text entry and before the diff entry. Never subject to the text
+    // truncation threshold — images ride the result untruncated.
+    out.extend(r.images.iter().map(|img| ToolCallContent::Content {
+        content: ContentBlock::Image {
+            data: img.data.clone(),
+            mime_type: img.media_type.clone(),
+            uri: None,
+            meta: None,
+        },
+    }));
     out.extend(diff_content(name, input, r));
     out
 }

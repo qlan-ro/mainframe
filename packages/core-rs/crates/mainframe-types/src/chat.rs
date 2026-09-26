@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::adapter::{ControlRequest, DetectedPr, EffortLevel};
 use crate::background_task::BackgroundActivity;
-use crate::content::LeafContent;
+use crate::content::{LeafContent, ToolResultImage};
 use crate::context::SessionMention;
 use crate::settings::ExecutionMode;
 
@@ -313,6 +313,10 @@ pub enum MessageContentNode {
         original_file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         modified_file: Option<String>,
+        /// Base64 image blocks carried on the `tool_result` (todo #363), source
+        /// order. Never serialized as text; omitted when empty.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        images: Vec<ToolResultImage>,
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
@@ -441,6 +445,27 @@ mod tests {
             "name": "Bash",
             "input": { "command": "echo 4" }
         }));
+        // Node arm: tool_result with images (todo #363) — omitted when empty,
+        // present in source order when populated.
+        roundtrip::<MessageContent>(json!({
+            "type": "tool_result",
+            "toolUseId": "toolu_02B",
+            "content": "",
+            "isError": false,
+            "images": [{ "mediaType": "image/png", "data": "AAAA" }]
+        }));
+        let no_images: MessageContent = serde_json::from_value(json!({
+            "type": "tool_result",
+            "toolUseId": "toolu_03C",
+            "content": "ok",
+            "isError": false
+        }))
+        .unwrap();
+        assert!(
+            !serde_json::to_string(&no_images)
+                .unwrap()
+                .contains("images")
+        );
     }
 
     #[test]

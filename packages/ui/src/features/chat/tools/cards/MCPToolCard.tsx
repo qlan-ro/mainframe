@@ -23,7 +23,8 @@ import {
   useMarkerOpen,
   type MarkerState,
 } from './marker-pill';
-import { isErrorResult, extractResultContent } from '../shared/result';
+import { isErrorResult, extractResultContent, resultImages } from '../shared/result';
+import { ToolResultImageThumbs } from '../shared/ToolResultImageThumbs';
 
 // ── Parse MCP tool name ───────────────────────────────────────────────────────
 
@@ -38,9 +39,15 @@ function parseMcpToolName(toolName: string): { server: string; tool: string } {
 
 // ── Result text extraction ────────────────────────────────────────────────────
 
+/**
+ * Falls back to JSON.stringify for non-string, non-image results — but an
+ * image-carrying result (todo #363) must never hit that branch, since it
+ * would serialize the base64 `images` payload into the marker body.
+ */
 function extractResultText(result: unknown): string {
   const content = extractResultContent(result);
   if (content !== '') return content;
+  if (resultImages(result).length > 0) return content;
   if (result !== undefined && result !== null && typeof result !== 'string') {
     return JSON.stringify(result, null, 2);
   }
@@ -49,7 +56,7 @@ function extractResultText(result: unknown): string {
 
 // ── MCPToolCard ───────────────────────────────────────────────────────────────
 
-export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, result, isError }) => {
+export const MCPToolCard: ToolCallMessagePartComponent = ({ toolCallId, toolName, args, result, isError }) => {
   const { server, tool } = parseMcpToolName(toolName);
   const { open, toggle } = useMarkerOpen(false);
 
@@ -63,6 +70,7 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
 
   const argsText = JSON.stringify(args, null, 2);
   const resultText = extractResultText(result);
+  const images = resultImages(result);
 
   const pillContent = (
     <>
@@ -104,6 +112,12 @@ export const MCPToolCard: ToolCallMessagePartComponent = ({ toolName, args, resu
               <div>
                 <MarkerCapsLabel>Result</MarkerCapsLabel>
                 <MarkerPre>{resultText}</MarkerPre>
+              </div>
+            )}
+            {images.length > 0 && (
+              <div>
+                <MarkerCapsLabel>Images</MarkerCapsLabel>
+                <ToolResultImageThumbs toolCallId={toolCallId} images={images} />
               </div>
             )}
           </div>

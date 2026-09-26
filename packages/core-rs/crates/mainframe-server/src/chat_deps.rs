@@ -1265,6 +1265,7 @@ mod scan_loaded_history_tests {
                 structured_patch: None,
                 original_file: None,
                 modified_file: None,
+                images: Vec::new(),
                 parent_tool_use_id: None,
             })],
             timestamp: "2026-01-01T00:00:02.000Z".to_string(),

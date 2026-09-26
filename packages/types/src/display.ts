@@ -1,4 +1,4 @@
-import type { DiffHunk } from './chat.js';
+import type { DiffHunk, ToolResultImage } from './chat.js';
 import type { ControlRequest } from './adapter.js';
 import type { ClaudeWorkflowRun } from './claude-workflow.js';
 import type { LeafContent } from './content.js';
@@ -19,6 +19,7 @@ export interface ToolCallResult {
   truncated?: boolean;
   fullBytes?: number;
   askUserQuestion?: AskUserQuestionAnswer[];
+  images?: ToolResultImage[];
 }
 
 export interface ToolCategories {

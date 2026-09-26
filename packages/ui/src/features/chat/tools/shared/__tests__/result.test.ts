@@ -8,7 +8,7 @@
  * No logic from the implementation is re-derived here.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveResultText, isErrorResult, extractResultContent } from '../result';
+import { resolveResultText, isErrorResult, extractResultContent, resultImages } from '../result';
 
 // ---------------------------------------------------------------------------
 // isErrorResult
@@ -141,6 +141,45 @@ describe('resolveResultText — ToolCallResult (structured)', () => {
       isError: true,
     };
     expect(resolveResultText(structured)).toEqual({ text: 'write failed', truncated: false, fullBytes: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resultImages / resolveResultText — image-carrying result (todo #363)
+// ---------------------------------------------------------------------------
+
+describe('resultImages', () => {
+  it('returns the images array from an object result', () => {
+    const result = { content: 'tmp/p1.png', images: [{ mediaType: 'image/png', data: 'b64' }] };
+    expect(resultImages(result)).toEqual([{ mediaType: 'image/png', data: 'b64' }]);
+  });
+
+  it('returns [] when the result has no images field', () => {
+    expect(resultImages({ content: 'ok' })).toEqual([]);
+  });
+
+  it('returns [] for a plain string, undefined, or null', () => {
+    expect(resultImages('hello')).toEqual([]);
+    expect(resultImages(undefined)).toEqual([]);
+    expect(resultImages(null)).toEqual([]);
+  });
+});
+
+describe('resolveResultText — image-carrying result', () => {
+  it('returns .content as text with no JSON and no base64 leak', () => {
+    const result = { content: 'tmp/p1.png', images: [{ mediaType: 'image/png', data: 'b64-secret' }] };
+    expect(resolveResultText(result)).toEqual({ text: 'tmp/p1.png', truncated: false, fullBytes: 0 });
+  });
+
+  it('strips <error> tags from an image-carrying result content', () => {
+    const result = { content: '<error>read failed</error>', images: [{ mediaType: 'image/png', data: 'b64' }] };
+    expect(resolveResultText(result)).toEqual({ text: 'read failed', truncated: false, fullBytes: 0 });
+  });
+
+  it('an empty images array falls through to the JSON.stringify branch, not the image branch', () => {
+    const result = { files: ['a.ts'], images: [] };
+    const resolved = resolveResultText(result);
+    expect(resolved.text).toContain('"files"');
   });
 });
 

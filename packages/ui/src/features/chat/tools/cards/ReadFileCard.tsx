@@ -10,7 +10,15 @@
  */
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { FileTextIcon } from 'lucide-react';
-import { ClickableFilePath, StatusDot, CollapsibleCardShell, ErrorBody, resolveResultText } from '../shared';
+import {
+  ClickableFilePath,
+  StatusDot,
+  CollapsibleCardShell,
+  ErrorBody,
+  resolveResultText,
+  resultImages,
+  ToolResultImageThumbs,
+} from '../shared';
 import { ToolResultExpand } from '../ToolResultExpand';
 import { useChatId } from '../chat-tool-context';
 
@@ -47,9 +55,12 @@ export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, r
   const filePath = typeof args['file_path'] === 'string' ? args['file_path'] : '';
 
   const { text: resultText, truncated, fullBytes } = resolveResultText(result);
+  const images = resultImages(result);
 
   const lineCount = resultText ? resultText.split('\n').length : 0;
-  const metaLabel = lineCount > 0 ? `· ${lineCount} line${lineCount !== 1 ? 's' : ''}` : undefined;
+  // No '· N lines' meta for an image result (todo #363) — the thumbnail replaces it.
+  const metaLabel =
+    images.length === 0 && lineCount > 0 ? `· ${lineCount} line${lineCount !== 1 ? 's' : ''}` : undefined;
   const hasBody = Boolean(resultText);
 
   const trailing = (
@@ -90,6 +101,9 @@ export const ReadFileCard: ToolCallMessagePartComponent = ({ toolCallId, args, r
       verb="Read"
       target={filePath ? <ClickableFilePath filePath={filePath} /> : undefined}
       trailing={trailing}
+      headerAccessory={
+        images.length > 0 ? <ToolResultImageThumbs toolCallId={toolCallId} images={images} /> : undefined
+      }
     >
       {body}
     </CollapsibleCardShell>
