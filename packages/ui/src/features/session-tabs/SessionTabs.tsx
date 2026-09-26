@@ -19,12 +19,14 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
+import { useAdaptersStore } from '@/store/adapters';
 import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import { useProjects } from '@/features/sessions/use-projects';
-import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { useForkChat } from '@/features/sessions/use-fork-chat';
 import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
-import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
+import { SessionTabPill } from './SessionTabPill';
+import { toTabEntry } from './tab-entry';
 import { useSessionTabsStore } from './store';
 import {
   canonicalTabId,
@@ -37,26 +39,6 @@ import {
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsSync } from './use-session-tabs-sync';
-
-function toTabEntry(
-  id: string,
-  items: readonly ThreadListEntry[],
-  projectNames: ReadonlyMap<string, string>,
-  activeId: string | null,
-  preview: boolean,
-): SessionTabEntry {
-  const entry = items.find((t) => t.id === id);
-  const isDraft = entry == null || entry.status === 'new';
-  const projectId = (entry?.custom as { projectId?: string } | undefined)?.projectId;
-  return {
-    id,
-    title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
-    projectId,
-    projectName: projectId != null ? projectNames.get(projectId) : undefined,
-    active: id === activeId,
-    preview,
-  };
-}
 
 export function SessionTabs() {
   useSessionTabsSync();
@@ -71,6 +53,8 @@ export function SessionTabs() {
   const newSession = useStartNewSession();
   const { projects } = useProjects();
   const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
+  const adaptersById = useAdaptersStore((s) => s.byId);
+  const fork = useForkChat();
 
   // Between the chat.created reload and the router's handover the active
   // thread is still the draft's local id while its tab is already canonical;
@@ -95,7 +79,9 @@ export function SessionTabs() {
   // pair — but the split isn't what you're looking at, so its underline is dark.
   const splitOnScreen = splitVisible(zones, mainThreadId);
   const ordered = displayedTabIds(tabsState, zones, activeTabId);
-  const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId));
+  const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId, adaptersById));
+
+  const handleFork = (id: string) => void fork(id);
 
   // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
   // the stored pin order.
@@ -181,6 +167,7 @@ export function SessionTabs() {
                   canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
                   onOpenInSplit={handleOpenInSplit}
                   onCloseSplit={handleCloseSplit}
+                  onFork={handleFork}
                 />
               ))}
             {/* The split pair reads as ONE unit: one underline spanning both,
@@ -209,6 +196,7 @@ export function SessionTabs() {
                     canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
                     onOpenInSplit={handleOpenInSplit}
                     onCloseSplit={handleCloseSplit}
+                    onFork={handleFork}
                   />
                 ))}
             </div>
@@ -226,6 +214,7 @@ export function SessionTabs() {
                   canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
                   onOpenInSplit={handleOpenInSplit}
                   onCloseSplit={handleCloseSplit}
+                  onFork={handleFork}
                 />
               ))}
           </>
@@ -241,6 +230,7 @@ export function SessionTabs() {
               canOpenInSplit={canOpenInSplit(zones, activeTabId, tab.id)}
               onOpenInSplit={handleOpenInSplit}
               onCloseSplit={handleCloseSplit}
+              onFork={handleFork}
             />
           ))
         )}

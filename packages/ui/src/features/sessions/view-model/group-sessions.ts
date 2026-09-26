@@ -18,6 +18,7 @@
  * daemon's hidden scratch project id, not a real (removed) project.
  */
 import type { SessionItem } from './chat-to-thread-custom';
+import { nestForks } from './fork-lineage';
 
 export type SortMode = 'recent' | 'name' | 'status' | 'project';
 
@@ -37,6 +38,22 @@ const SESSION_STATUS_RANK: Record<string, number> = {
 export interface SessionGroupResult {
   label: string;
   items: SessionItem[];
+  /** Nesting depth (1 or 2) per item id, from `nestForks`. Absent = not nested (depth 0). */
+  depths: Record<string, 1 | 2>;
+}
+
+/**
+ * Builds one group: `nestForks` reorders `sortedItems` into contiguous
+ * parent-then-descendants blocks (a no-op when no item in this group forks
+ * another item already in it) and yields the per-id indent depth.
+ */
+function toGroup(label: string, sortedItems: SessionItem[]): SessionGroupResult {
+  const rows = nestForks(sortedItems);
+  const depths: Record<string, 1 | 2> = {};
+  for (const row of rows) {
+    if (row.depth === 1 || row.depth === 2) depths[row.item.id] = row.depth;
+  }
+  return { label, items: rows.map((row) => row.item), depths };
 }
 
 /** Local calendar-day key (YYYY-MM-DD via getFullYear/getMonth/getDate). */
@@ -72,7 +89,7 @@ function splitNoProject(items: SessionItem[]): { noProject: SessionItem[]; rest:
 const NO_PROJECT_LABEL = 'No project';
 
 function noProjectSection(items: SessionItem[]): SessionGroupResult[] {
-  return items.length > 0 ? [{ label: NO_PROJECT_LABEL, items: [...items].sort(byRecency) }] : [];
+  return items.length > 0 ? [toGroup(NO_PROJECT_LABEL, [...items].sort(byRecency))] : [];
 }
 
 function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number): SessionGroupResult[] {
@@ -91,18 +108,18 @@ function arrangeRecent(pinned: SessionItem[], rest: SessionItem[], now: number):
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
-  if (today.length > 0) out.push({ label: 'Today', items: today.sort(byRecency) });
-  if (yesterday.length > 0) out.push({ label: 'Yesterday', items: yesterday.sort(byRecency) });
-  if (earlier.length > 0) out.push({ label: 'Earlier', items: earlier.sort(byRecency) });
+  if (pinned.length > 0) out.push(toGroup('Pinned', [...pinned].sort(byRecency)));
+  if (today.length > 0) out.push(toGroup('Today', today.sort(byRecency)));
+  if (yesterday.length > 0) out.push(toGroup('Yesterday', yesterday.sort(byRecency)));
+  if (earlier.length > 0) out.push(toGroup('Earlier', earlier.sort(byRecency)));
   out.push(...noProjectSection(noProject));
   return out;
 }
 
 function arrangeFlat(pinned: SessionItem[], rest: SessionItem[], label: string): SessionGroupResult[] {
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
-  out.push({ label, items: rest });
+  if (pinned.length > 0) out.push(toGroup('Pinned', [...pinned].sort(byRecency)));
+  out.push(toGroup(label, rest));
   return out;
 }
 
@@ -113,7 +130,7 @@ export interface ProjectRef {
 
 /** Sections for projectIds absent from the project list: newest bucket first, then by projectId. */
 function ghostSections(buckets: Map<string, SessionItem[]>): SessionGroupResult[] {
-  const sections = [...buckets].map(([projectId, items]) => ({ label: projectId, items: items.sort(byRecency) }));
+  const sections = [...buckets].map(([projectId, items]) => toGroup(projectId, items.sort(byRecency)));
   return sections.sort(
     (a, b) =>
       (b.items[0]?.custom.updatedAt ?? 0) - (a.items[0]?.custom.updatedAt ?? 0) || compareStrings(a.label, b.label),
@@ -136,12 +153,12 @@ function arrangeByProject(pinned: SessionItem[], rest: SessionItem[], projects: 
   }
 
   const out: SessionGroupResult[] = [];
-  if (pinned.length > 0) out.push({ label: 'Pinned', items: [...pinned].sort(byRecency) });
+  if (pinned.length > 0) out.push(toGroup('Pinned', [...pinned].sort(byRecency)));
 
   for (const project of projects) {
     const bucket = byProject.get(project.id);
     if (bucket) {
-      out.push({ label: project.name, items: bucket.sort(byRecency) });
+      out.push(toGroup(project.name, bucket.sort(byRecency)));
       byProject.delete(project.id);
     }
   }

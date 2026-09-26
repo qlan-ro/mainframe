@@ -63,6 +63,7 @@ impl Adapter for BarrierAdapter {
             plan_mode: false,
             auto_mode: false,
             no_persistence: false,
+            fork: false,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

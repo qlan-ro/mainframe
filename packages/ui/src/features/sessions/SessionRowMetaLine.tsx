@@ -13,12 +13,19 @@
  * works, its checkout is just gone; true `destructive` is reserved for the
  * irreversible actions in the menus.
  */
-import { FolderGit2, GitBranch, GitPullRequest, Timer } from 'lucide-react';
+import { FolderGit2, GitBranch, GitFork, GitPullRequest, Timer } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Hint } from '@/components/ui/hint';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { TAG_DOT_STYLE } from '@/features/sessions/tags/tag-colors';
 import { cn } from '@/lib/utils';
+
+/** The fallback fork glyph's content — a non-nested fork whose parent isn't adjacent in this group. */
+export interface ForkFallback {
+  hint: string;
+  /** Absent when the parent is archived or deleted — the glyph is then inert. */
+  onActivate?: () => void;
+}
 
 const MAX_ROW_TAG_DOTS = 3;
 
@@ -43,6 +50,30 @@ interface SessionRowMetaLineProps {
   detectedPrs: DetectedPr[];
   tags: string[];
   colorOf?: (name: string) => TagColor;
+  /** Set only for a non-nested fork (its parent isn't adjacent in this group) — todo #343. */
+  forkFallback?: ForkFallback;
+}
+
+/** The fallback glyph for a fork whose parent isn't nestable here — a Hint-wrapped GitFork. */
+function ForkFallbackGlyph({ forkFallback }: { forkFallback: ForkFallback }) {
+  return (
+    <Hint label={forkFallback.hint}>
+      <span
+        data-testid="sessions-row-parent-link"
+        className={cn('flex shrink-0 items-center', forkFallback.onActivate != null && 'cursor-pointer')}
+        onClick={
+          forkFallback.onActivate == null
+            ? undefined
+            : (e) => {
+                e.stopPropagation();
+                forkFallback.onActivate?.();
+              }
+        }
+      >
+        <GitFork aria-hidden className={cn(GLYPH_SIZE, 'shrink-0')} />
+      </span>
+    </Hint>
+  );
 }
 
 /** Worktree wins over branch: it names the checkout the session actually runs in. */
@@ -73,6 +104,7 @@ export function SessionRowMetaLine({
   detectedPrs,
   tags,
   colorOf,
+  forkFallback,
 }: SessionRowMetaLineProps) {
   const visibleTags = colorOf != null ? tags.slice(0, MAX_ROW_TAG_DOTS) : [];
 
@@ -83,7 +115,8 @@ export function SessionRowMetaLine({
     branchName != null ||
     detectedPrs.length > 0 ||
     visibleTags.length > 0 ||
-    temporary;
+    temporary ||
+    forkFallback != null;
   if (!hasContent) return null;
 
   return (
@@ -124,6 +157,7 @@ export function SessionRowMetaLine({
             <Timer aria-hidden data-testid="sessions-row-temporary-glyph" className={cn(GLYPH_SIZE, 'shrink-0')} />
           </Hint>
         )}
+        {forkFallback != null && <ForkFallbackGlyph forkFallback={forkFallback} />}
       </span>
     </span>
   );

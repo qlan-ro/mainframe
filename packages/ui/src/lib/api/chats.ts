@@ -157,3 +157,12 @@ export const unarchiveChat = (port: number, chatId: string): Promise<Chat> =>
  */
 export const discardChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/discard`);
+
+/**
+ * Branch a chat's conversation into a new chat (todo #343). No body — the
+ * daemon's `deny_unknown_fields` empty struct accepts either no body or `{}`.
+ * On failure the daemon's `fail` message (adapter name, or the reason from
+ * the Behavior list) surfaces via `ApiRequestError.message`.
+ */
+export const forkChat = (port: number, chatId: string): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`);

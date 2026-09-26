@@ -47,6 +47,20 @@ export interface SessionCustom {
    */
   noProject: boolean;
   updatedAt: number;
+  /** The chat this one was forked from, or absent/null for a chat with no parent (todo #343). */
+  parentChatId?: string | null;
+  /**
+   * True when the chat's effective working directory (worktree or project
+   * path) is gone from disk. Optional so existing fixtures built outside
+   * `chatToThreadCustom` keep compiling; `chatToThreadCustom` always sets it,
+   * defaulting to `false`. Read via `?? false`.
+   */
+  directoryMissing?: boolean;
+  /**
+   * The main turn only — NOT `displayStatus === 'working'`, which live
+   * background tasks also set. Same optionality note as `directoryMissing`.
+   */
+  isRunning?: boolean;
 }
 
 export interface SessionItem {
@@ -85,6 +99,9 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     temporary: chat.temporary,
     noProject: chat.noProject,
     updatedAt: new Date(chat.updatedAt).getTime(),
+    parentChatId: chat.parentChatId,
+    directoryMissing: chat.directoryMissing ?? false,
+    isRunning: chat.isRunning ?? false,
   };
   return {
     status: chat.status === 'archived' ? 'archived' : 'regular',

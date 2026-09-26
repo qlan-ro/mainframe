@@ -7,13 +7,14 @@
  * DOMRect because no hover-card primitive was installed there; v2 has one, so
  * the manual portal and `use-row-hover-card` are dropped.
  */
-import { AlertTriangle, FolderGit2, GitBranch } from 'lucide-react';
+import { AlertTriangle, FolderGit2, GitBranch, GitFork } from 'lucide-react';
 import type { DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Badge } from '@/components/ui/badge';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
+import { parentLineageValue, type ParentLineageState } from './view-model/fork-lineage';
 import { ProjectAvatar } from './ProjectAvatar';
 
 /** Fixed-width caption naming the row's value, so the card never leans on icon semantics alone. */
@@ -98,6 +99,27 @@ function TagsRow({ tags, colorOf }: { tags: string[]; colorOf?: (name: string) =
   );
 }
 
+function ForkedFromRow({ parentState }: { parentState: ParentLineageState }) {
+  return (
+    <div data-testid="sessions-meta-card-forked-from" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Forked from</FieldLabel>
+      <GitFork aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{parentLineageValue(parentState)}</span>
+    </div>
+  );
+}
+
+function ForkCountRow({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <div data-testid="sessions-meta-card-fork-count" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Forked</FieldLabel>
+      <GitFork aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">{count}x</span>
+    </div>
+  );
+}
+
 function PrRow({ detectedPrs }: { detectedPrs: DetectedPr[] }) {
   if (detectedPrs.length === 0) return null;
   return (
@@ -136,6 +158,10 @@ interface SessionMetaCardProps {
   detectedPrs: DetectedPr[];
   tags: string[];
   colorOf?: (name: string) => TagColor;
+  /** Set only on a fork — the "Forked from" line. */
+  parentState?: ParentLineageState;
+  /** Listed, non-archived direct forks of this chat — the "Forked Nx" line (omitted at 0). */
+  forkCount?: number;
 }
 
 /**
@@ -153,6 +179,8 @@ export function SessionMetaCard({
   detectedPrs,
   tags,
   colorOf,
+  parentState,
+  forkCount = 0,
 }: SessionMetaCardProps) {
   return (
     <div data-testid="sessions-meta-card" className="flex flex-col gap-1.5">
@@ -166,6 +194,8 @@ export function SessionMetaCard({
         {title}
       </span>
       <ProjectRow projectId={projectId} projectName={projectName} noProject={noProject} />
+      {parentState != null && <ForkedFromRow parentState={parentState} />}
+      <ForkCountRow count={forkCount} />
       <WorktreeOrBranchRow worktreePath={worktreePath} branchName={branchName} />
       <PrRow detectedPrs={detectedPrs} />
       <TagsRow tags={tags} colorOf={colorOf} />

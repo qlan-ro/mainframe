@@ -130,6 +130,7 @@ pub fn to_tool_call_result(
         structured_patch,
         original_file,
         modified_file,
+        images,
         ..
     }) = block
     else {
@@ -154,6 +155,8 @@ pub fn to_tool_call_result(
         } else {
             None
         },
+        // Never truncated (todo #363) — copied verbatim from the transcript node.
+        images: images.clone(),
     })
 }
 

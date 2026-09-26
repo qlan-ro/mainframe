@@ -52,7 +52,7 @@ const VIRTUOSO_COMPONENTS = { Item: SessionsItem, Group: SessionsGroup };
 
 export interface SessionListVirtuosoProps {
   groups: SessionGroupResult[];
-  renderItem: (item: SessionItem, flags: { inPinnedGroup: boolean }) => ReactNode;
+  renderItem: (item: SessionItem, flags: { inPinnedGroup: boolean; depth: 0 | 1 | 2 }) => ReactNode;
 }
 
 export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoProps) {
@@ -106,7 +106,10 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
         const item = flatItems[index];
         const group = groups[groupIndex];
         if (item == null || group == null) return null;
-        return renderItem(item, { inPinnedGroup: group.label === PINNED_GROUP_LABEL });
+        return renderItem(item, {
+          inPinnedGroup: group.label === PINNED_GROUP_LABEL,
+          depth: group.depths[item.id] ?? 0,
+        });
       }}
     />
   );

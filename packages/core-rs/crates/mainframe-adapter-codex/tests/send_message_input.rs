@@ -63,6 +63,7 @@ async fn send_and_capture(
             project_path: dir.path().to_string_lossy().into_owned(),
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
+            fork_source: None,
         },
         None,
         ResolvedPath::from_value("/usr/bin:/bin"),

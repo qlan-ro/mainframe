@@ -455,12 +455,36 @@ pub fn migrations() -> Vec<Migration> {
                 )
             },
         },
+        // Fork lineage (todo #343): the nullable, generic parent reference plus
+        // its lookup index, and the daemon-internal pending-fork payload (never
+        // on the `Chat` wire type — read/written only through repo methods, like
+        // `dismissed_worktrees`).
+        Migration {
+            version: 28,
+            up: |db| {
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "parent_chat_id",
+                    "ALTER TABLE chats ADD COLUMN parent_chat_id TEXT",
+                )?;
+                db.execute_batch(
+                    "CREATE INDEX IF NOT EXISTS idx_chats_parent_chat_id ON chats(parent_chat_id)",
+                )?;
+                add_column_if_missing(
+                    db,
+                    "chats",
+                    "pending_fork",
+                    "ALTER TABLE chats ADD COLUMN pending_fork TEXT",
+                )
+            },
+        },
         // Temporary and non-project sessions (#346): the temporary flag, the
         // no-persistence bookkeeping pair, and the non-project scratch cwd.
         // Also seeds the hidden scratch project row every non-project chat's
         // project_id points at.
         Migration {
-            version: 28,
+            version: 29,
             up: |db| {
                 add_column_if_missing(
                     db,
@@ -498,7 +522,7 @@ pub fn migrations() -> Vec<Migration> {
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 28;
+pub const LATEST_VERSION: i64 = 29;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

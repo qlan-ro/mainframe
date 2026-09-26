@@ -422,6 +422,7 @@ mod tests {
                 plan_mode: false,
                 auto_mode: false,
                 no_persistence: false,
+                fork: false,
             }
         }
         fn is_installed(

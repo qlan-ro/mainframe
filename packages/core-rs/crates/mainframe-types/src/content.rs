@@ -44,6 +44,17 @@ pub enum LeafContent {
     },
 }
 
+/// One base64-encoded image carried on a `tool_result` (todo #363), in the
+/// order the CLI's `content` array presented it. Shared between the
+/// transcript-form `MessageContentNode::ToolResult` (`chat.rs`) and the
+/// UI-render-form `ToolCallResult` (`display.rs`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResultImage {
+    pub media_type: String,
+    pub data: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +96,13 @@ mod tests {
             "content": "# PDF"
         });
         roundtrip(v);
+    }
+
+    #[test]
+    fn tool_result_image_camel_case_roundtrip() {
+        let v = json!({ "mediaType": "image/png", "data": "AAAA" });
+        let img: ToolResultImage = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&img).unwrap(), v);
     }
 }
 

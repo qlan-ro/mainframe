@@ -186,6 +186,8 @@ impl Adapter for CodexAdapter {
             // gate and an interrupt working, with no rollout file or threads row. See
             // docs/research/adapters/codex/CONSUMED-SURFACE.md.
             no_persistence: true,
+            // Codex has no top-level fork mechanism yet (todo #368 tracks it).
+            fork: false,
         }
     }
 

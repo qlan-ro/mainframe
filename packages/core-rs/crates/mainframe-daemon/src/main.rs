@@ -309,6 +309,10 @@ async fn run_daemon() {
     // No in-memory CLI sessions survive a restart, so reset any persisted
     // processState:'working' (orphaned by the previous shutdown/crash) to 'idle'.
     chats.recover_stale_working_state();
+    // Sweep fork snapshot directories no chat's pending_fork references
+    // (todo #343): a crash between pin and insert, or a chat row a project
+    // removal deleted directly, both bypass on_result's normal retirement.
+    chats.sweep_unreferenced_fork_snapshots().await;
 
     // Automations v2 engine (T9.2): built over its own automations.db after the
     // ChatManager exists (the agent port drives chats). A build failure logs and

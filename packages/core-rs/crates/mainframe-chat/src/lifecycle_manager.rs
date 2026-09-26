@@ -15,6 +15,7 @@ use tokio::sync::Notify;
 use tracing::{debug, info, warn};
 
 use crate::chat_cwd::chat_cwd;
+use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::no_persistence;
 use crate::permission_manager::PermissionManager;
@@ -159,6 +160,15 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()>;
     /// Rule 7's context-loss write (`db.chats.markContextLost`).
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
+    /// `db.chats.getPendingFork(chatId)` (todo #343): a fork's session builders
+    /// (`do_load_chat`/`do_start_chat`) resume from this when the chat has no own
+    /// session yet, or falls back to it when its own transcript went missing.
+    /// Defaulted to `None` — the correct answer for every chat this feature
+    /// doesn't touch.
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let _ = chat_id;
+        None
+    }
 }
 
 /// Single-flight decision computed under the guard, applied after the guard drops.
@@ -891,16 +901,27 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             return;
         }
 
-        let Some(claude_session_id) = &chat.claude_session_id else {
+        // A fork's own session id may not exist yet (its first turn never ran)
+        // or may exist but crashed before the CLI wrote its transcript — either
+        // way, `fork_source` rides along so the adapter's own resolver
+        // (`resolve_resume`) can fall back to the pinned snapshot. Only a chat
+        // with neither an own id nor a pending fork has nothing to resume.
+        let own_id = chat.claude_session_id.clone();
+        let fork_source = self
+            .deps
+            .get_pending_fork(chat_id)
+            .map(|pending| pending.fork_source);
+        if own_id.is_none() && fork_source.is_none() {
             return;
-        };
+        }
 
         let Some(session) = self.deps.create_session(
             &chat.adapter_id,
             SessionOptions {
                 project_path: effective_path,
-                chat_id: Some(claude_session_id.clone()),
+                chat_id: own_id,
                 mainframe_chat_id: chat_id.to_string(),
+                fork_source,
             },
         ) else {
             return;
@@ -998,6 +1019,13 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         // directory along the way) and the no-persistence decision.
         let plan = self.resolve_spawn_plan(&chat, project_path).await?;
 
+        // See `do_load_chat`'s comment: a fork's own id and its pending-fork
+        // source can both be present (a crashed first turn already got an
+        // `on_init`), so both ride along and the adapter's own resolver decides.
+        let fork_source = self
+            .deps
+            .get_pending_fork(chat_id)
+            .map(|pending| pending.fork_source);
         let session = self
             .deps
             .create_session(
@@ -1006,6 +1034,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                     project_path: plan.cwd,
                     chat_id: chat.claude_session_id.clone(),
                     mainframe_chat_id: chat_id.to_string(),
+                    fork_source,
                 },
             )
             .ok_or_else(|| {
@@ -1203,11 +1232,19 @@ mod tests {
         pub(super) mark_context_lost_calls: Mutex<Vec<(String, String)>>,
         /// Every `vendor_session_ephemeral` value `chats_update` observed.
         pub(super) vendor_session_ephemeral_updates: Mutex<Vec<bool>>,
-        /// When `Some`, `create_session` hands out a clone of it instead of
-        /// `None` — lets a spawn-decision test reach past session creation.
-        session: Mutex<Option<Arc<dyn AdapterSession>>>,
-        /// Every `SessionOptions` passed to `create_session`, in order.
-        pub(super) create_session_calls: Mutex<Vec<mainframe_types::adapter::SessionOptions>>,
+        /// `get_pending_fork` answer (todo #343); `None` for every test outside
+        /// the fork-session-building coverage.
+        pending_fork: Mutex<Option<PendingForkState>>,
+        /// When `Some`, `create_session` returns it instead of the default
+        /// `None` every pre-existing test relies on.
+        session_to_return: Mutex<Option<Arc<dyn AdapterSession>>>,
+        /// Every `SessionOptions` a test's `create_session` call received, so a
+        /// fork test can assert `chat_id`/`fork_source` without a real adapter.
+        pub(super) create_session_calls: Mutex<Vec<SessionOptions>>,
+        /// When `true`, `build_sink` returns an inert `NoopSink` instead of
+        /// `unreachable!()` — only the fork tests that exercise `do_start_chat`
+        /// far enough to reach it opt in.
+        allow_build_sink: Mutex<bool>,
     }
 
     impl FakeDeps {
@@ -1246,8 +1283,10 @@ mod tests {
                 ensure_dir_calls: Mutex::new(Vec::new()),
                 mark_context_lost_calls: Mutex::new(Vec::new()),
                 vendor_session_ephemeral_updates: Mutex::new(Vec::new()),
-                session: Mutex::new(None),
+                pending_fork: Mutex::new(None),
+                session_to_return: Mutex::new(None),
                 create_session_calls: Mutex::new(Vec::new()),
+                allow_build_sink: Mutex::new(false),
             })
         }
 
@@ -1259,7 +1298,8 @@ mod tests {
             session: Arc<dyn AdapterSession>,
         ) -> Arc<Self> {
             let deps = Self::build(chat, Vec::new(), true, false);
-            *deps.session.lock().unwrap() = Some(session);
+            deps.set_session_to_return(session);
+            deps.allow_build_sink();
             *deps.adapter_no_persistence.lock().unwrap() = true;
             deps
         }
@@ -1275,6 +1315,18 @@ mod tests {
 
         pub(super) fn set_snapshot_models(&self, models: Vec<AdapterModel>) {
             *self.snapshot_models.lock().unwrap() = models;
+        }
+
+        pub(super) fn set_pending_fork(&self, pending: PendingForkState) {
+            *self.pending_fork.lock().unwrap() = Some(pending);
+        }
+
+        pub(super) fn set_session_to_return(&self, session: Arc<dyn AdapterSession>) {
+            *self.session_to_return.lock().unwrap() = Some(session);
+        }
+
+        pub(super) fn allow_build_sink(&self) {
+            *self.allow_build_sink.lock().unwrap() = true;
         }
     }
 
@@ -1318,10 +1370,14 @@ mod tests {
         }
         fn create_session(&self, _a: &str, o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             self.create_session_calls.lock().unwrap().push(o);
-            self.session.lock().unwrap().clone()
+            self.session_to_return.lock().unwrap().clone()
         }
         fn build_sink(&self, _chat_id: &str, _session_id: &str) -> Arc<dyn SessionSink> {
-            Arc::new(NoopSink)
+            if *self.allow_build_sink.lock().unwrap() {
+                Arc::new(NoopSink)
+            } else {
+                unreachable!("not exercised")
+            }
         }
         fn emit_event(&self, event: DaemonEvent) {
             self.events.lock().unwrap().push(event);
@@ -1414,6 +1470,9 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push((chat_id.to_string(), context_lost_at.to_string()));
+        }
+        fn get_pending_fork(&self, _chat_id: &str) -> Option<PendingForkState> {
+            self.pending_fork.lock().unwrap().clone()
         }
     }
 
@@ -1659,7 +1718,8 @@ mod tests {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.temporary = true;
         let deps = FakeDeps::new(chat, Vec::new());
-        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        deps.set_session_to_return(FakeSession::with_activity(false, None));
+        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
@@ -1696,7 +1756,8 @@ mod tests {
         let mut chat = chat_over("c1", None, ChatStatus::Active);
         chat.scratch_path = Some("/data/scratch/c1".to_string());
         let deps = FakeDeps::new(chat, Vec::new());
-        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        deps.set_session_to_return(FakeSession::with_activity(false, None));
+        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
@@ -1716,7 +1777,8 @@ mod tests {
     async fn a_project_chat_never_calls_ensure_dir() {
         let chat = chat_over("c1", None, ChatStatus::Active);
         let deps = FakeDeps::new(chat, Vec::new());
-        *deps.session.lock().unwrap() = Some(FakeSession::with_activity(false, None));
+        deps.set_session_to_return(FakeSession::with_activity(false, None));
+        deps.allow_build_sink();
         let mgr = manager(deps.clone());
 
         mgr.start_chat("c1").await;
@@ -1821,6 +1883,72 @@ mod tests {
         let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
         let mgr = manager(deps);
         assert_eq!(mgr.default_model_for("codex"), None);
+    }
+
+    // ── pending-fork session building (todo #343 Group 3, plan item 3) ───────
+    // An unsent fork has no `claude_session_id` yet, so `do_load_chat`/
+    // `do_start_chat` must not bail out on that early guard alone — they resume
+    // from `chats.pending_fork` instead. Exercised after a restart (the chat
+    // starts out of `active_chats`, matching `load_chat`'s Skip-when-active guard).
+
+    fn pending_fork() -> PendingForkState {
+        PendingForkState {
+            fork_source: mainframe_types::adapter::ForkSource {
+                source_session_id: "parent-session".to_string(),
+                resume_path: Some("/tmp/fork-snapshots/n1/parent-session.jsonl".to_string()),
+            },
+            snapshot_dir: "/tmp/fork-snapshots/n1".to_string(),
+            provisional_title: "Untitled (fork)".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn do_load_chat_resumes_an_unsent_fork_from_its_pending_fork_source() {
+        let chat = chat_over("fork-1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_pending_fork(pending_fork());
+        deps.set_session_to_return(FakeSession::with_activity(false, None));
+        let mgr = manager(deps.clone());
+
+        mgr.load_chat("fork-1").await;
+
+        let calls = deps.create_session_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].chat_id, None);
+        assert_eq!(calls[0].fork_source, Some(pending_fork().fork_source));
+    }
+
+    /// A chat with neither its own session nor a pending fork still bails out
+    /// before ever calling `create_session` — the pre-existing behavior for
+    /// every non-fork chat with no session yet.
+    #[tokio::test]
+    async fn do_load_chat_skips_session_creation_with_no_session_and_no_pending_fork() {
+        let chat = chat_over("c1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        let mgr = manager(deps.clone());
+
+        mgr.load_chat("c1").await;
+
+        assert!(deps.create_session_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn do_start_chat_passes_the_pending_fork_source_to_the_spawn_session() {
+        let chat = chat_over("fork-1", None, ChatStatus::Active);
+        let deps = FakeDeps::new(chat, Vec::new());
+        deps.set_pending_fork(pending_fork());
+        // Not spawned, so `start_chat` proceeds past `do_load_chat`'s session to
+        // build (and record the options for) a fresh spawn session.
+        deps.set_session_to_return(FakeSession::with_activity(false, None));
+        deps.allow_build_sink();
+        let mgr = manager(deps.clone());
+
+        mgr.start_chat("fork-1").await;
+
+        let calls = deps.create_session_calls.lock().unwrap();
+        let last = calls.last().expect("start_chat builds a spawn session");
+        assert_eq!(last.chat_id, None);
+        assert_eq!(last.fork_source, Some(pending_fork().fork_source));
     }
 }
 

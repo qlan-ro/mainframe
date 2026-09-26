@@ -174,7 +174,7 @@ TS `Chat` (AC 5–10, 17, 18, 25; the route-test parts of AC 26). It also owns t
 
 - `mainframe-types/src/chat.rs`: `NO_PROJECT_ID`, plus the four `Chat` fields above. Update every
   `Chat { .. }` literal, which the compiler finds, including `mainframe-chat/src/test_support.rs`.
-- `mainframe-db/src/migrations.rs` (migration 28) and `tests/migrations.rs`. Test that a pre-28 row
+- `mainframe-db/src/migrations.rs` (migration 29) and `tests/migrations.rs`. Test that a pre-29 row
   reads `temporary = false` with its project unchanged, and that the scratch row exists.
 - `mainframe-db/src/chats.rs`: select fields and row mapping (including derived `no_project`), a
   `create` that takes a `NewChat` struct (temporary, scratch root), `delete`,

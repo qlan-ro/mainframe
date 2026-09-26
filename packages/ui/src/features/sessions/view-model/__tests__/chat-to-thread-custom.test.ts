@@ -182,6 +182,33 @@ describe('chatToThreadCustom — temporary & noProject (todo #346)', () => {
   ]);
 });
 
+describe('chatToThreadCustom — fork lineage & turn-in-flight fields (todo #343)', () => {
+  runFieldRows([
+    ['custom.parentChatId is undefined when chat.parentChatId is absent', {}, (r) => r.custom.parentChatId, undefined],
+    [
+      'custom.parentChatId forwards chat.parentChatId when set',
+      { parentChatId: 'chat-parent' },
+      (r) => r.custom.parentChatId,
+      'chat-parent',
+    ],
+    ['custom.parentChatId forwards an explicit null', { parentChatId: null }, (r) => r.custom.parentChatId, null],
+    [
+      'custom.directoryMissing defaults to false when chat.directoryMissing is absent',
+      {},
+      (r) => r.custom.directoryMissing,
+      false,
+    ],
+    [
+      'custom.directoryMissing is true when chat.directoryMissing is true',
+      { directoryMissing: true },
+      (r) => r.custom.directoryMissing,
+      true,
+    ],
+    ['custom.isRunning defaults to false when chat.isRunning is absent', {}, (r) => r.custom.isRunning, false],
+    ['custom.isRunning is true when chat.isRunning is true', { isRunning: true }, (r) => r.custom.isRunning, true],
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // activeSessionCustom — freshest custom for the ACTIVE thread-list item
 // ---------------------------------------------------------------------------

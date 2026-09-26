@@ -121,6 +121,7 @@ mod tests {
             context_lost_at: None,
             vendor_session_ephemeral: false,
             scratch_path: None,
+            parent_chat_id: None,
         }
     }
 

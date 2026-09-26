@@ -128,6 +128,9 @@ impl LifecycleManagerDeps for LcDeps {
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
         self.deps.mark_context_lost(chat_id, context_lost_at);
     }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.deps.get_pending_fork(chat_id)
+    }
 }
 
 pub(super) fn build(

@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, AdapterProcess, ContextUsage, ControlRequest,
-    ControlResponse, DetectedPr, MessageMetadata, ProviderQuota, SessionOptions, SessionResult,
-    SessionSpawnOptions,
+    ControlResponse, DetectedPr, ForkSource, MessageMetadata, ProviderQuota, SessionOptions,
+    SessionResult, SessionSpawnOptions,
 };
 use mainframe_types::chat::{ChatMessage, MessageContent, ResolvedTuning, TodoItem};
 use mainframe_types::context::{ContextFile, SkillFileEntry};
@@ -213,6 +213,30 @@ pub trait AdapterSession: Send + Sync {
     }
 }
 
+/// Input to `Adapter::pin_fork_point` — everything an adapter needs to pin a
+/// fork's starting point without a live session (todo #343). `dest_dir` is a
+/// Mainframe-owned, adapter-agnostic directory the adapter may write into (the
+/// Claude adapter copies the transcript there).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForkPinRequest {
+    pub source_session_id: String,
+    pub cwd: String,
+    pub session_file_path: Option<String>,
+    pub dest_dir: String,
+}
+
+/// Failure modes for `Adapter::pin_fork_point`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForkPinError {
+    /// This adapter has no fork mechanism (its `capabilities().fork` is `false`,
+    /// or it simply never overrides the default).
+    Unsupported,
+    /// The parent's transcript could not be located on disk.
+    TranscriptMissing,
+    /// Pinning was attempted but failed (I/O error, malformed transcript, etc).
+    Failed(String),
+}
+
 /// An adapter (a CLI integration). Trait object stored as `Arc<dyn Adapter>`.
 ///
 /// The optional TS methods that gate on `typeof adapter.X === 'function'` are
@@ -315,6 +339,19 @@ pub trait Adapter: Send + Sync {
     /// no-ops rather than failing the permission response.
     fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
         None
+    }
+
+    /// Pin a fork's starting point (todo #343): locate and snapshot whatever the
+    /// adapter needs to branch `request.source_session_id`'s conversation
+    /// without disturbing it. Default `Unsupported` — adapters with no fork
+    /// mechanism (Codex, for now) need not override this; `ChatManager::fork_chat`
+    /// treats `Unsupported` the same as `capabilities().fork == false`.
+    fn pin_fork_point(
+        &self,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
+        let _ = request;
+        Box::pin(async { Err(ForkPinError::Unsupported) })
     }
 
     // TODO(port): the optional skill/agent/command/external-session CRUD methods

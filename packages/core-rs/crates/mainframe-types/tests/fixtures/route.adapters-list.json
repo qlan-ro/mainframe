@@ -33,7 +33,8 @@
       "capabilities": {
         "planMode": true,
         "autoMode": true,
-        "noPersistence": false
+        "noPersistence": false,
+        "fork": false
       }
     }
   ]

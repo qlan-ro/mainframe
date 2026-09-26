@@ -7,6 +7,7 @@ import { ProjectChip } from '@/components/ui/project-chip';
 import { NoProjectLabel } from '../../sessions/NoProjectLabel';
 import { useDraftConfigStore } from '../../sessions/runtime/draft-config';
 import { useProjects } from '../../sessions/use-projects';
+import { ChatHeaderParentLink } from './ChatHeaderParentLink';
 import { ChatModelChip } from './ChatModelChip';
 
 /**
@@ -80,6 +81,7 @@ function ChatCardHeaderReal({ zone }: { zone?: ZoneHeaderControls }) {
         <MessageSquare size={13} className="shrink-0 text-primary" />
         <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
         <ChatModelChip />
+        <ChatHeaderParentLink />
         <span className="flex-1" />
         <Hint label="Close zone">
           <Button
@@ -103,6 +105,7 @@ function ChatCardHeaderReal({ zone }: { zone?: ZoneHeaderControls }) {
       <MessageSquare size={13} className="shrink-0 text-primary" />
       <span className="min-w-0 flex-initial truncate text-sm font-semibold">{title}</span>
       <ChatModelChip />
+      <ChatHeaderParentLink />
       <span className="flex-1" />
       {splitAvailable && (
         <>

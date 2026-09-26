@@ -200,4 +200,57 @@ pub trait ChatManagerDeps: Send + Sync {
     /// / `session_file_path` / `vendor_session_ephemeral` — `chats_update`'s
     /// generic patch cannot write an explicit NULL for the first two columns.
     fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str);
+    // ── fork-a-chat (todo #343) ───────────────────────────────────────────────
+    /// The parent's adapter display name + fork capability, for `fork_chat`'s
+    /// capability check and its 422 message. Defaulted to "cannot fork" so every
+    /// pre-existing `ChatManagerDeps` implementer (test doubles included) keeps
+    /// compiling without opting in — unlike #273's cases, "not fork-capable" is
+    /// the correct default for every adapter that predates this feature.
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        AdapterForkInfo {
+            name: adapter_id.to_string(),
+            fork: false,
+        }
+    }
+    /// Pin a fork's starting point through the parent's adapter
+    /// (`Adapter::pin_fork_point`). Defaulted to `Unsupported`, matching the
+    /// `Adapter` trait's own default for adapters with no fork mechanism.
+    fn pin_fork_point<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
+        let _ = (adapter_id, request);
+        Box::pin(async { Err(ForkPinError::Unsupported) })
+    }
+    /// `db.chats.createFork` — a single INSERT that seeds the new chat from the
+    /// parent's resolved config. Defaulted to a failure so a deps impl that never
+    /// wires storage cannot silently mint unpersisted forks.
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+        let _ = insert;
+        Err("fork creation is not supported by this ChatManagerDeps".to_string())
+    }
+    /// `db.chats.getPendingFork(chatId)`. `None` (the default) is the correct
+    /// answer for every chat this feature doesn't touch — a chat with no
+    /// pending fork, or a deps impl that predates the feature entirely.
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let _ = chat_id;
+        None
+    }
+    /// `db.chats.clearPendingFork(chatId)`. No-op default, mirroring
+    /// `get_pending_fork`'s default of "this chat has none to clear".
+    fn clear_pending_fork(&self, chat_id: &str) {
+        let _ = chat_id;
+    }
+    /// The root directory fork snapshots are pinned under
+    /// (`<data_dir>/fork-snapshots`); `fork_chat` joins a fresh nanoid onto it.
+    /// Defaulted to a process-temp path so a deps impl that never overrides it
+    /// (every test double outside this feature) never has a real answer to give —
+    /// `fork_chat` only reaches this once `adapter_fork_info` has already said yes.
+    fn fork_snapshots_dir(&self) -> String {
+        std::env::temp_dir()
+            .join("mainframe-fork-snapshots")
+            .to_string_lossy()
+            .into_owned()
+    }
 }

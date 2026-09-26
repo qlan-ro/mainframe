@@ -104,6 +104,13 @@ export interface Chat {
    * Drives the "earlier context was not preserved" notice.
    */
   contextLostAt?: string | null;
+  /**
+   * The chat this one was forked from, or `null` for a chat with no parent
+   * (todo #343). Deliberately generic — never fork-specific in name or
+   * semantics, since side chats (#344) reuse it as "temporary and has a
+   * parent". Survives archive/unarchive; never cascades from the parent.
+   */
+  parentChatId?: string | null;
 }
 
 export interface Project {
@@ -135,6 +142,17 @@ export interface DiffHunk {
 }
 
 /**
+ * An image block carried inside a `tool_result` (todo #363) — a Claude tool
+ * such as `Read` returning a PNG. Mirrors the Rust
+ * `mainframe_types::content::ToolResultImage`. `data` is base64, never
+ * transformed; there is no downscaling or caching (out of scope).
+ */
+export interface ToolResultImage {
+  mediaType: string;
+  data: string;
+}
+
+/**
  * `parentToolUseId` is set on a content block to indicate it originated from a
  * subagent stream event (CLI emits with `parent_tool_use_id`). The display
  * pipeline groups these blocks under the parent's Agent/Task `tool_use` as
@@ -156,6 +174,7 @@ export type MessageContent =
       structuredPatch?: DiffHunk[];
       originalFile?: string;
       modifiedFile?: string;
+      images?: ToolResultImage[];
       parentToolUseId?: string;
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }

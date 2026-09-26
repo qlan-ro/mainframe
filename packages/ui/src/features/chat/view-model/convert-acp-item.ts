@@ -33,6 +33,7 @@ import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
 import { parseItemMeta } from './parse-item-meta';
+import { resultImageBlocks, withResultImages } from './tool-result-images';
 import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
 interface ParsedItem {
@@ -46,7 +47,8 @@ interface ParsedItem {
  * restores the `truncated`/`fullBytes` pair (spec Decision 20) and the
  * AskUserQuestion answers; a `diff` entry's fidelity payload (spec Decision
  * 15) contributes the structured hunks and before/after file text the
- * Edit/Write cards consume.
+ * Edit/Write cards consume; an `image` entry's data survives on `images` in
+ * source order, on whichever shape below is returned (todo #363).
  */
 function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): unknown {
   if (item.content.length === 0) return undefined;
@@ -65,17 +67,23 @@ function toolCallResult(item: Extract<AccumulatedItem, { kind: 'tool-call' }>): 
   })[0];
   const diff = item.content.find((entry) => entry.type === 'diff');
   const fidelity = diff ? StructuredDiffSchema.safeParse(diff._meta?.[MAINFRAME_META_NAMESPACE]) : undefined;
+  const images = resultImageBlocks(item.content);
   if (fidelity?.success) {
-    return {
-      content: text,
-      structuredPatch: fidelity.data.structuredPatch,
-      originalFile: fidelity.data.originalFile,
-      modifiedFile: fidelity.data.modifiedFile,
-      ...(truncation ? { truncated: true, fullBytes: truncation.fullBytes } : {}),
-    };
+    return withResultImages(
+      {
+        content: text,
+        structuredPatch: fidelity.data.structuredPatch,
+        originalFile: fidelity.data.originalFile,
+        modifiedFile: fidelity.data.modifiedFile,
+        ...(truncation ? { truncated: true, fullBytes: truncation.fullBytes } : {}),
+      },
+      images,
+    );
   }
-  if (truncation) return { content: text, truncated: true as const, fullBytes: truncation.fullBytes };
-  if (askUserQuestion) return { content: text, askUserQuestion };
+  if (truncation)
+    return withResultImages({ content: text, truncated: true as const, fullBytes: truncation.fullBytes }, images);
+  if (askUserQuestion) return withResultImages({ content: text, askUserQuestion }, images);
+  if (images.length > 0) return withResultImages({ content: text }, images);
   return text;
 }
 
