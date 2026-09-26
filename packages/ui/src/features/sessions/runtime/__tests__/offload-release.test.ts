@@ -30,6 +30,14 @@ function offloaded(chatId: string): DaemonEvent {
   return { type: 'chat.offloaded', chatId };
 }
 
+function processStarted(chatId: string): DaemonEvent {
+  return {
+    type: 'process.started',
+    chatId,
+    process: { id: `proc-${chatId}`, adapterId: 'claude', chatId, pid: 1, status: 'ready', projectPath: '/tmp' },
+  };
+}
+
 interface Harness {
   ws: FakeWs;
   calls: string[];
@@ -225,6 +233,38 @@ describe('OffloadRelease — AC12 on-screen defer', () => {
     expect(() => release.recheck()).not.toThrow();
     expect(h.detachItem).not.toHaveBeenCalled();
     expect(h.disposeController).not.toHaveBeenCalled();
+    release.dispose();
+  });
+
+  it('drops a deferred chat once its CLI respawns, so leaving it mid-turn does not release it', () => {
+    const h = makeHarness([{ id: 'chat-9', remoteId: undefined }]);
+    h.mainThreadId = 'chat-9';
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('chat-9'));
+    h.ws.emit(processStarted('chat-9'));
+    h.mainThreadId = 'chat-other';
+    release.recheck();
+
+    expect(h.markForStash).not.toHaveBeenCalled();
+    expect(h.detachItem).not.toHaveBeenCalled();
+    expect(h.disposeController).not.toHaveBeenCalled();
+    release.dispose();
+  });
+
+  it('defers again when a respawned chat is offloaded a second time', () => {
+    const h = makeHarness([{ id: 'chat-9', remoteId: undefined }]);
+    h.mainThreadId = 'chat-9';
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('chat-9'));
+    h.ws.emit(processStarted('chat-9'));
+    h.ws.emit(offloaded('chat-9'));
+    h.mainThreadId = 'chat-other';
+    release.recheck();
+
+    expect(h.disposeController).toHaveBeenCalledTimes(1);
+    expect(h.disposeController).toHaveBeenCalledWith('chat-9');
     release.dispose();
   });
 

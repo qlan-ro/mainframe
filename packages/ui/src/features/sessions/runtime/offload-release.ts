@@ -4,7 +4,8 @@
  * On `chat.offloaded`, releases the chat's controller and thread subtree
  * UNLESS the chat is on screen (main thread or a zones-pair member), in which
  * case the release is deferred until a later screen change makes it eligible
- * (see `recheck`). Mirrors SessionListRouter's DI'd-class shape so the class
+ * (see `recheck`), or dropped if the chat's CLI respawns first
+ * (`process.started`). Mirrors SessionListRouter's DI'd-class shape so the class
  * is testable with no React or assistant-ui runtime.
  *
  * Alias resolution (plan "Renderer" section): a chat created this app session
@@ -66,8 +67,15 @@ export class OffloadRelease {
   }
 
   private handleEvent(event: DaemonEvent): void {
-    if (this.disposed || event.type !== 'chat.offloaded') return;
-    this.considerRelease(event.chatId);
+    if (this.disposed) return;
+    if (event.type === 'chat.offloaded') {
+      this.considerRelease(event.chatId);
+    } else if (event.type === 'process.started') {
+      // A send from the still-on-screen chat respawned its CLI, so it is live
+      // again. Releasing it on a later screen change would tear down a running
+      // turn; a fresh `chat.offloaded` re-defers it if it goes idle again.
+      this.deferred.delete(event.chatId);
+    }
   }
 
   private considerRelease(chatId: string): void {
