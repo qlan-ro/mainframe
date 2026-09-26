@@ -76,6 +76,7 @@ fn tool_result(tool_use_id: &str, content: &str, is_error: bool) -> MessageConte
         structured_patch: None,
         original_file: None,
         modified_file: None,
+        images: Vec::new(),
         parent_tool_use_id: None,
     })
 }

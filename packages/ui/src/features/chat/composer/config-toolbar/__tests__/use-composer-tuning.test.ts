@@ -105,6 +105,8 @@ function makeChat(overrides?: Partial<Chat>): Chat {
     ultracode: false,
     fast: false,
     adaptiveThinking: false,
+    temporary: false,
+    noProject: false,
     ...overrides,
   };
 }
@@ -648,6 +650,58 @@ describe('useComposerTuning — post-first-send gap: chatId stale, chatConfig re
     expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(1, PORT, REAL_CHAT_ID, { adapterId: 'gemini' });
     expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(2, PORT, REAL_CHAT_ID, { planMode: true });
     expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(3, PORT, REAL_CHAT_ID, { permissionMode: 'yolo' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setTemporary + draftMode (todo #346) — create-time only, no live PATCH path.
+// ---------------------------------------------------------------------------
+
+describe('useComposerTuning — setTemporary and draftMode', () => {
+  it('draftMode is true for a __LOCALID_* thread with a resolved draft', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.draftMode).toBe(true);
+  });
+
+  it('draftMode is false for a real chat', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = undefined;
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    expect(result.current.draftMode).toBe(false);
+  });
+
+  it('draft mode: setTemporary(true) patches draftConfig with { temporary: true }', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = makeDraft();
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setTemporary(true);
+    });
+
+    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { temporary: true });
+  });
+
+  it('real chat: setTemporary is a no-op — no PATCH, no patchDraftConfig', () => {
+    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
+    draftConfigStub = undefined;
+
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => {
+      result.current.setTemporary(true);
+    });
+
+    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
+    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
   });
 });
 

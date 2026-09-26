@@ -2,9 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
-    Adapter, AdapterError, AdapterSession, BoxFuture, PlanModeActionHandler,
+    Adapter, AdapterError, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest,
+    PlanModeActionHandler,
 };
-use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, EffortLevel, SessionOptions};
+use mainframe_types::adapter::{
+    AdapterCapabilities, AdapterModel, EffortLevel, ForkSource, SessionOptions,
+};
 use mainframe_types::display::ToolCategories;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
@@ -22,6 +25,14 @@ pub struct MockCliAdapter {
     /// behaves exactly as before: transcripts, but no background-task events.
     tracker: Option<Arc<BackgroundTaskTracker>>,
     workflows: Option<Arc<ClaudeWorkflowStore>>,
+    /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
+    /// need the no-persistence chat behavior opt in via `with_no_persistence`
+    /// (todo #346 — the mock adapter must be able to report either value).
+    no_persistence: bool,
+    /// Whether `capabilities().fork` reports `true` and `pin_fork_point` echoes
+    /// the source instead of returning `Unsupported` (todo #343). Tests opt in
+    /// via `with_fork_capable(true)`; default `false` mirrors Codex today.
+    fork_capable: bool,
 }
 
 impl MockCliAdapter {
@@ -37,6 +48,19 @@ impl MockCliAdapter {
             workflows: Some(workflows),
             ..Self::default()
         }
+    }
+
+    /// Opt the mock adapter into reporting the no-persistence capability, so
+    /// integration tests can exercise both the on and off paths (todo #346).
+    pub fn with_no_persistence(mut self, value: bool) -> Self {
+        self.no_persistence = value;
+        self
+    }
+
+    /// Toggle the fork capability this adapter reports (todo #343 tests).
+    pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
+        self.fork_capable = fork_capable;
+        self
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -128,6 +152,8 @@ impl Adapter for MockCliAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            no_persistence: self.no_persistence,
+            fork: self.fork_capable,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -187,6 +213,20 @@ impl Adapter for MockCliAdapter {
             subagent: HashSet::from_iter(["Task", "Agent"].map(str::to_string)),
         })
     }
+
+    fn pin_fork_point(
+        &self,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
+        if !self.fork_capable {
+            return Box::pin(async { Err(ForkPinError::Unsupported) });
+        }
+        let source = ForkSource {
+            source_session_id: request.source_session_id,
+            resume_path: request.session_file_path,
+        };
+        Box::pin(async move { Ok(source) })
+    }
 }
 
 #[cfg(test)]
@@ -196,5 +236,25 @@ mod tests {
     #[test]
     fn adapter_trait_resolves_a_plan_mode_handler() {
         assert!(Adapter::create_plan_mode_handler(&MockCliAdapter::default()).is_some());
+    }
+
+    #[test]
+    fn no_persistence_defaults_to_false() {
+        assert!(!Adapter::capabilities(&MockCliAdapter::default()).no_persistence);
+    }
+
+    #[test]
+    fn with_no_persistence_reports_the_requested_value() {
+        let adapter = MockCliAdapter::default().with_no_persistence(true);
+        assert!(Adapter::capabilities(&adapter).no_persistence);
+    }
+
+    #[test]
+    fn fork_capability_and_pin_follow_the_constructor_flag() {
+        let uncapable = MockCliAdapter::default();
+        assert!(!Adapter::capabilities(&uncapable).fork);
+
+        let capable = MockCliAdapter::default().with_fork_capable(true);
+        assert!(Adapter::capabilities(&capable).fork);
     }
 }

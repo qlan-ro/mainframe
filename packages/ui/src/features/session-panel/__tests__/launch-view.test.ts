@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
-import { deriveLaunchRows } from '../launch-view';
+import { NO_CONFIGS_LABEL } from '@/features/run/derive-launch-control';
+import { deriveLaunchRows, launchEmptyStateLabel } from '../launch-view';
 
 const config = (name: string, over: Partial<LaunchConfiguration> = {}): LaunchConfiguration => ({
   name,
@@ -53,5 +54,15 @@ describe('deriveLaunchRows', () => {
   it('preserves the configuration order', () => {
     const rows = deriveLaunchRows([web, api], { API: 'running' }, 'API');
     expect(rows.map((r) => r.name)).toEqual(['Web', 'API']);
+  });
+});
+
+describe('launchEmptyStateLabel (todo #346)', () => {
+  it('says the project has no configs when the chat has a project', () => {
+    expect(launchEmptyStateLabel(false)).toBe(NO_CONFIGS_LABEL);
+  });
+
+  it('says launch is unavailable for a chat with no project', () => {
+    expect(launchEmptyStateLabel(true)).toBe('Launch isn’t available for a chat with no project.');
   });
 });

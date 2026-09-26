@@ -30,6 +30,7 @@ fn options(thread_id: Option<&str>) -> SessionOptions {
         chat_id: thread_id.map(str::to_string),
         mainframe_chat_id: "chat-mf339".to_string(),
         session_file_path: None,
+        fork_source: None,
     }
 }
 

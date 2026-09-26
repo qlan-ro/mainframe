@@ -33,6 +33,7 @@ import { renderHook, act } from '@testing-library/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '../../../../store/layout';
 import { useZonesStore } from '../../../chat/zones/zones-store';
+import { useDraftReturnTarget } from '../../new-thread/use-draft-return-target';
 
 // ---------------------------------------------------------------------------
 // Spy declarations — module-scope lets reset in beforeEach
@@ -43,6 +44,7 @@ let clearUnreadSpy: ReturnType<typeof vi.fn>;
 let clearProjectFilterSpy: ReturnType<typeof vi.fn>;
 let switchSpy: ReturnType<typeof vi.fn<(id: string) => void>>;
 let reloadSpy: ReturnType<typeof vi.fn<() => void>>;
+let itemDeleteSpy: ReturnType<typeof vi.fn<(id: string) => unknown>>;
 
 // Values that tests can mutate before re-render to control hook behaviour
 let filterProjectIdsValue: Set<string>;
@@ -58,6 +60,10 @@ let fakeThreadItems: Array<{
 }>;
 
 let notifySpy: ReturnType<typeof vi.fn<(title: string, body?: string) => Promise<void>>>;
+
+// Local ids the boot-select effect must treat as "a create is still open for
+// this draft" (todo #346 — see the mock below).
+let inFlightLocalIds: Set<string>;
 
 // Captured from the createSessionListRouter factory mock
 let capturedDeps: {
@@ -121,6 +127,10 @@ vi.mock('../../../../store/last-session', () => ({
   }),
 }));
 
+vi.mock('../../runtime/new-thread-coordinator', () => ({
+  isCreateInFlight: (localId: string) => inFlightLocalIds.has(localId),
+}));
+
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
   // One stable `threads` SCOPE across renders — the real scope survives a main-
@@ -131,6 +141,7 @@ vi.mock('@assistant-ui/react', async () => {
   const threads = {
     reload: () => reloadSpy(),
     switchToThread: (id: string) => switchSpy(id),
+    item: (query: { id: string }) => ({ delete: () => itemDeleteSpy(query.id) }),
   };
   const auiClient = { threads };
   return {
@@ -158,11 +169,13 @@ beforeEach(() => {
   clearProjectFilterSpy = vi.fn();
   switchSpy = vi.fn();
   reloadSpy = vi.fn();
+  itemDeleteSpy = vi.fn().mockResolvedValue(undefined);
   disposeSpy = vi.fn();
   notifySpy = vi.fn().mockResolvedValue(undefined);
 
   filterProjectIdsValue = new Set();
   mainThreadIdValue = null;
+  inFlightLocalIds = new Set();
   lastSessionIdValue = null;
   setLastSessionIdSpy = vi.fn();
   setLastForProjectSpy = vi.fn();
@@ -172,6 +185,7 @@ beforeEach(() => {
   // Real stores (not mocked in this file) — reset to a clean slate each test.
   useLayoutStore.setState({ sessions: new Map(), activeSessionId: null });
   useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  useDraftReturnTarget.setState({ returnThreadId: null });
 });
 
 it('calls createSessionListRouter exactly once and captures function-typed deps', () => {
@@ -464,6 +478,30 @@ describe('useSessionListRouter — archiving the active session redirects off th
     expect(switchSpy).toHaveBeenCalledWith('chat-B');
   });
 
+  it('switches to a fallback when the left session has vanished entirely — a discard, not just an archive (todo #346)', () => {
+    // A discard routes through aui's delete(), which removes the entry from
+    // threadData outright rather than flagging it 'archived' — the departed-
+    // thread check must catch "gone from the list", not only "status: archived".
+    mainThreadIdValue = 'chat-A';
+    fakeThreadItems = [
+      { id: 'chat-A', remoteId: 'chat-A', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    // chat-A discarded: aui bumps to a fresh draft, and chat-A no longer
+    // appears in threadItems at all (not even as 'archived').
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-B');
+  });
+
   it('does NOT redirect when the user deliberately opens a New thread (left session still regular)', () => {
     mainThreadIdValue = 'chat-A';
     fakeThreadItems = [
@@ -482,6 +520,139 @@ describe('useSessionListRouter — archiving the active session redirects off th
     rerender();
 
     expect(switchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A deliberate New (todo #346) must not let a LATER,
+// unrelated archive/discard of the thread it came from yank the user off the
+// draft they opened and started typing into on purpose.
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — a deliberate New stops watching the thread it came from', () => {
+  it('does NOT redirect when the thread a deliberate New came from is later discarded', () => {
+    // 1) Active on chat-T — establishes it as the last real thread.
+    mainThreadIdValue = 'chat-T';
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    // 2) Deliberate New away from chat-T: useStartNewSession stamps chat-T as
+    // the draft's return target before switching (real behavior, reproduced
+    // here rather than mocked, since the store isn't mocked in this file).
+    useDraftReturnTarget.getState().setReturnTarget('chat-T');
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+    expect(switchSpy).not.toHaveBeenCalled(); // still just a deliberate New — unaffected
+
+    // 3) chat-T is discarded from the sidebar while the user is on the draft —
+    // vanishes from the list entirely. Without that guard this matches the old
+    // prevRealActiveId and redirects the user off their draft.
+    fakeThreadItems = [
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).not.toHaveBeenCalled();
+  });
+
+  it('still redirects when the active session is archived/discarded WITHOUT a deliberate New', () => {
+    // No draft return target is ever set here — aui bumps to a fresh draft on
+    // its own when the active thread itself is archived/discarded.
+    mainThreadIdValue = 'chat-T';
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    mainThreadIdValue = '__LOCALID_new';
+    fakeThreadItems = [
+      { id: 'chat-B', remoteId: 'chat-B', status: 'regular', custom: { projectId: 'p1', updatedAt: 2000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-B');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression (todo #346): a committed draft must retire its return
+// target — otherwise a LATER, unrelated archive/discard of the thread the
+// draft came from is misread as "still just a deliberate New" and swallowed,
+// stranding the user on an empty new-thread picker instead of the fallback.
+//
+// The clear itself is `new-thread-coordinator.createForLocal`'s job (see its
+// own test file) — both the onNew and the aui-native-initialize commit paths
+// converge there, so it is the one race-free "this draft just committed"
+// signal (a clear placed in this router's own first-send-handoff branch can
+// lose that race — aui's native seam can move mainThreadId onto the remote id
+// before this branch's own `items`-reload check ever turns true). This test
+// covers the router's OWN half of the contract: once the return target is
+// gone, a later archive of the thread it used to name must fall back
+// normally rather than getting swallowed as "still a deliberate New".
+// ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — falls back normally once a committed draft has retired its return target (regression)', () => {
+  it('falls back to chat-N when chat-T is archived after its return target was cleared (as createForLocal does on commit)', () => {
+    // 1) Active on chat-T.
+    mainThreadIdValue = 'chat-T';
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-N', remoteId: 'chat-N', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    const { rerender } = renderHook(() => useSessionListRouter());
+    switchSpy.mockClear();
+
+    // 2) Deliberate New away from chat-T: stamps chat-T as the draft's return target.
+    useDraftReturnTarget.getState().setReturnTarget('chat-T');
+    mainThreadIdValue = '__LOCALID_new';
+    rerender();
+
+    // 3) First send commits the draft (createForLocal clears the return
+    // target synchronously as part of that commit, well before the reload
+    // this router reacts to ever lands) and the reloaded list carries the
+    // remote chat — the router hands off onto it.
+    useDraftReturnTarget.getState().clear();
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'regular', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: '__LOCALID_new', remoteId: 'chat-N', status: 'regular' },
+      { id: 'chat-N', remoteId: 'chat-N', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+    expect(switchSpy).toHaveBeenCalledWith('chat-N');
+    switchSpy.mockClear();
+
+    // 4) The handoff switch lands — the user is now really on chat-N — then
+    // clicks back to chat-T.
+    mainThreadIdValue = 'chat-N';
+    rerender();
+    mainThreadIdValue = 'chat-T';
+    rerender();
+    switchSpy.mockClear();
+
+    // 5) chat-T is archived while active — aui bumps to a fresh draft. With a
+    // STALE return target this would match chat-T (the just-departed thread)
+    // and refuse to redirect, stranding the user on the empty draft instead
+    // of falling back to chat-N — but the target was already retired in (3).
+    mainThreadIdValue = '__LOCALID_after_archive';
+    fakeThreadItems = [
+      { id: 'chat-T', remoteId: 'chat-T', status: 'archived', custom: { projectId: 'p1', updatedAt: 3000 } },
+      { id: 'chat-N', remoteId: 'chat-N', status: 'regular', custom: { projectId: 'p1', updatedAt: 4000 } },
+    ];
+    rerender();
+
+    expect(switchSpy).toHaveBeenCalledTimes(1);
+    expect(switchSpy).toHaveBeenCalledWith('chat-N');
   });
 });
 
@@ -582,6 +753,46 @@ it('calls switchSpy once with "chat-newest" (most-recent non-archived) when main
 
   expect(switchSpy).toHaveBeenCalledTimes(1);
   expect(switchSpy).toHaveBeenCalledWith('chat-newest');
+});
+
+it('does NOT call switchSpy for the boot effect while a create is in flight for the draft (todo #346)', () => {
+  // The real ordering: a fresh app's first non-empty list load is reliably the
+  // reload the new chat's OWN chat.created event triggers, arriving while
+  // new-thread-coordinator's create workflow (tuning/worktree PATCHes) is
+  // still open for this exact local id — `onNew` never dispatches the
+  // optimistic pending message until that workflow fully settles, so a
+  // message-count check can never observe this window (the first fix attempt
+  // read count 0 here too, and was a no-op). isCreateInFlight observes the
+  // coordinator directly instead.
+  mainThreadIdValue = '__LOCALID_sending';
+  inFlightLocalIds = new Set(['__LOCALID_sending']);
+  fakeThreadItems = [bootItem('chat-just-created', 1000)];
+
+  renderHook(() => useSessionListRouter());
+
+  expect(switchSpy).not.toHaveBeenCalled();
+});
+
+it('consumes the boot one-shot the moment a create is seen in flight — it never fires later, even once the create settles', () => {
+  mainThreadIdValue = '__LOCALID_sending';
+  inFlightLocalIds = new Set(['__LOCALID_sending']);
+  fakeThreadItems = [bootItem('chat-just-created', 1000)];
+
+  const { rerender } = renderHook(() => useSessionListRouter());
+  expect(switchSpy).not.toHaveBeenCalled();
+
+  // The create settles (success or abandon) — the coordinator no longer
+  // reports it in flight, and something else about the list changed too (a
+  // second chat arrived). The one-shot was already consumed the instant the
+  // create was seen in flight, so boot-select must not switch AWAY from the
+  // chat the user just created — that would race the other effect's own
+  // handoff switchToThread(remoteId), which hasn't yet seen mainThreadId move
+  // off the draft in this same render.
+  inFlightLocalIds = new Set();
+  fakeThreadItems = [bootItem('chat-just-created', 1000), bootItem('chat-second', 2000)];
+  rerender();
+
+  expect(switchSpy).not.toHaveBeenCalled();
 });
 
 it('calls switchSpy once with "chat-b" when mainThreadId is null and sessions load', () => {

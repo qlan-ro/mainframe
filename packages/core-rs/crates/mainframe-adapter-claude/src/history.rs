@@ -43,6 +43,16 @@ pub struct DiscoveredFiles {
     pub subagent_files: HashSet<String>,
 }
 
+impl DiscoveredFiles {
+    fn missing(primary_path: String) -> Self {
+        Self {
+            primary_path,
+            all_files: Vec::new(),
+            subagent_files: HashSet::new(),
+        }
+    }
+}
+
 /// Discovers a session's primary transcript plus its sidechain/subagent files.
 ///
 /// The primary file resolves through `locate_claude_transcript`: the stored
@@ -64,31 +74,52 @@ pub async fn discover_session_jsonl_files(
     let jsonl_path =
         match locate_claude_transcript(session_id, project_path, session_file_path).await {
             Some(TranscriptLocation::Present(path)) => path,
-            _ => {
-                return DiscoveredFiles {
-                    primary_path: derived_jsonl_path,
-                    all_files: Vec::new(),
-                    subagent_files: HashSet::new(),
-                };
-            }
+            _ => return DiscoveredFiles::missing(derived_jsonl_path),
         };
     let project_dir = Path::new(&jsonl_path)
         .parent()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or(derived_project_dir);
+    discover_alongside(session_id, jsonl_path, &project_dir).await
+}
 
+/// `discover_session_jsonl_files`, generalized to take the project directory
+/// directly (todo #343 Group 2): a fork's history reads from its snapshot
+/// directory instead, which is not a `project_path` to re-derive — it already
+/// IS the directory.
+pub async fn discover_session_jsonl_files_in_dir(
+    session_id: &str,
+    project_dir: &str,
+) -> DiscoveredFiles {
+    let jsonl_path = Path::new(project_dir)
+        .join(format!("{session_id}.jsonl"))
+        .to_string_lossy()
+        .to_string();
+    if tokio::fs::metadata(&jsonl_path).await.is_err() {
+        return DiscoveredFiles::missing(jsonl_path);
+    }
+    discover_alongside(session_id, jsonl_path, project_dir).await
+}
+
+/// Collects an existing primary transcript plus the sidechain and subagent
+/// files that sit next to it in `project_dir`.
+async fn discover_alongside(
+    session_id: &str,
+    jsonl_path: String,
+    project_dir: &str,
+) -> DiscoveredFiles {
     let mut jsonl_files = vec![jsonl_path.clone()];
     let mut subagent_files: HashSet<String> = HashSet::new();
 
     // Scan sibling .jsonl files (sidechains) with matching sessionId.
     let self_name = format!("{session_id}.jsonl");
-    if let Ok(mut entries) = tokio::fs::read_dir(&project_dir).await {
+    if let Ok(mut entries) = tokio::fs::read_dir(project_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let name = entry.file_name().to_string_lossy().to_string();
             if !name.ends_with(".jsonl") || name == self_name {
                 continue;
             }
-            let file_path = Path::new(&project_dir)
+            let file_path = Path::new(project_dir)
                 .join(&name)
                 .to_string_lossy()
                 .to_string();
@@ -109,7 +140,7 @@ pub async fn discover_session_jsonl_files(
     }
 
     // Scan subagent JSONL files.
-    let subagent_dir = Path::new(&project_dir).join(session_id).join("subagents");
+    let subagent_dir = Path::new(project_dir).join(session_id).join("subagents");
     if let Ok(mut sub_entries) = tokio::fs::read_dir(&subagent_dir).await {
         while let Ok(Some(entry)) = sub_entries.next_entry().await {
             let name = entry.file_name().to_string_lossy().to_string();
@@ -136,6 +167,19 @@ pub async fn load_history(
 ) -> Vec<ChatMessage> {
     let discovered =
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
+    load_discovered_history(session_id, &discovered).await
+}
+
+/// `load_history` over a fork's pinned snapshot directory (todo #343).
+pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
+    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
+    load_discovered_history(session_id, &discovered).await
+}
+
+async fn load_discovered_history(
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+) -> Vec<ChatMessage> {
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
@@ -267,10 +311,23 @@ pub async fn extract_plan_file_paths(
 ) -> Vec<String> {
     let discovered =
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
+    let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
+    plan_file_paths_from(&discovered, &project_dir).await
+}
+
+/// `extract_plan_file_paths`, generalized to take the project directory
+/// directly (same rationale as `discover_session_jsonl_files_in_dir`): a
+/// fork's plan files resolve relative to its pinned snapshot directory, not a
+/// `project_path` to re-derive.
+pub async fn extract_plan_file_paths_in_dir(session_id: &str, project_dir: &str) -> Vec<String> {
+    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
+    plan_file_paths_from(&discovered, project_dir).await
+}
+
+async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -> Vec<String> {
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
-    let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
     let mut plan_files: Vec<String> = Vec::new();
 
     for file in &discovered.all_files {
@@ -295,7 +352,7 @@ pub async fn extract_plan_file_paths(
                 .unwrap_or(false);
             let file_path = tur.and_then(|t| t.get("filePath")).and_then(Value::as_str);
             if plan_is_string && let Some(fp) = file_path {
-                plan_files.push(path_resolve(&project_dir, fp));
+                plan_files.push(path_resolve(project_dir, fp));
             }
         }
     }
@@ -310,6 +367,26 @@ pub async fn extract_skill_file_paths(
 ) -> Vec<SkillFileEntry> {
     let discovered =
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
+    skill_file_paths_from(&discovered, project_path).await
+}
+
+/// `extract_skill_file_paths`, generalized to take the discovery directory
+/// directly. `project_path` (the real cwd) still resolves each skill's path —
+/// that lookup is unrelated to where the JSONL transcripts live, and a fork
+/// always shares its parent's cwd, so it never changes.
+pub async fn extract_skill_file_paths_in_dir(
+    session_id: &str,
+    project_dir: &str,
+    project_path: &str,
+) -> Vec<SkillFileEntry> {
+    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
+    skill_file_paths_from(&discovered, project_path).await
+}
+
+async fn skill_file_paths_from(
+    discovered: &DiscoveredFiles,
+    project_path: &str,
+) -> Vec<SkillFileEntry> {
     if discovered.all_files.is_empty() {
         return Vec::new();
     }
@@ -571,6 +648,49 @@ mod tests {
         let texts: HashSet<&str> = history.iter().map(assistant_text).collect();
         assert!(texts.contains("primary message"));
         assert!(texts.contains("sidechain message"));
+    }
+
+    /// A fork's pinned snapshot directory is not under `~/.claude/projects/..`,
+    /// so it must load through `_in_dir` rather than re-deriving a project dir
+    /// from a `project_path` — and it must reproduce exactly what the same
+    /// transcript content loads as through the canonical path (todo #343
+    /// Group 2, plan step 3).
+    #[tokio::test]
+    async fn snapshot_dir_loads_the_same_messages_as_the_canonical_path() {
+        let line = serde_json::json!({
+            "type": "assistant",
+            "uuid": "a1",
+            "timestamp": "2026-07-04T00:00:01Z",
+            "message": { "content": [ { "type": "text", "text": "hi from history" } ] }
+        })
+        .to_string();
+
+        // Canonical: a real ~/.claude/projects/<encoded>/<id>.jsonl, cleaned up on drop.
+        let project_path = format!("mainframe-test-fork-history-{}", std::process::id());
+        let canonical = get_session_jsonl_path("session-fork-1", &project_path);
+        tokio::fs::create_dir_all(&canonical.project_dir)
+            .await
+            .unwrap();
+        tokio::fs::write(&canonical.jsonl_path, format!("{line}\n"))
+            .await
+            .unwrap();
+        let _cleanup = RemoveDirOnDrop(canonical.project_dir.clone());
+
+        // Snapshot: an arbitrary tempdir standing in for a fork-snapshots dir.
+        let snapshot_dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(
+            snapshot_dir.path().join("session-fork-1.jsonl"),
+            format!("{line}\n"),
+        )
+        .await
+        .unwrap();
+
+        let canonical_messages = load_history("session-fork-1", &project_path, None).await;
+        let snapshot_messages =
+            load_history_in_dir("session-fork-1", &snapshot_dir.path().to_string_lossy()).await;
+
+        assert!(!canonical_messages.is_empty());
+        assert_eq!(canonical_messages, snapshot_messages);
     }
 }
 

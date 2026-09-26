@@ -19,6 +19,8 @@ export interface UseDisplayBranchOptions {
   /** The session's persisted branch — present for worktree sessions only. */
   branchName?: string;
   isWorktree?: boolean;
+  /** A non-project chat has no git repo to read a branch from (todo #346). */
+  noProject?: boolean;
 }
 
 export interface DisplayBranch {
@@ -34,12 +36,13 @@ export function useDisplayBranch({
   chatId,
   branchName,
   isWorktree = false,
+  noProject = false,
 }: UseDisplayBranchOptions): DisplayBranch {
   const [liveBranch, setLiveBranch] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     setLiveBranch(undefined);
-    if (!projectId) return;
+    if (!projectId || noProject) return;
     let cancelled = false;
     getGitBranch(port, projectId, chatId)
       .then(({ branch }) => {
@@ -51,16 +54,16 @@ export function useDisplayBranch({
     return () => {
       cancelled = true;
     };
-  }, [port, projectId, chatId, branchName]);
+  }, [port, projectId, chatId, branchName, noProject]);
 
   const refetch = useCallback(() => {
-    if (!projectId) return;
+    if (!projectId || noProject) return;
     getGitBranch(port, projectId, chatId)
       .then(({ branch }) => setLiveBranch(branch ?? undefined))
       .catch((err: unknown) => {
         console.warn('[use-display-branch] failed to refresh branch after a write', err);
       });
-  }, [port, projectId, chatId]);
+  }, [port, projectId, chatId, noProject]);
 
   // A worktree DRAFT (chat created on first send) can't resolve its branch live:
   // without a chatId the fetch reads the project root. Trust the draft's own

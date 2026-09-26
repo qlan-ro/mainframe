@@ -31,6 +31,8 @@ function item(id: string, overrides: Partial<SessionCustom> & { title?: string }
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
+      temporary: false,
+      noProject: false,
       transcriptMissing: false,
       updatedAt: TODAY_1100,
       ...custom,
@@ -103,6 +105,39 @@ describe("arrangeSessions mode 'recent'", () => {
 
   it('returns an empty array for no items', () => {
     expect(arrangeSessions([], 'recent', NOW)).toEqual([]);
+  });
+
+  it('lifts a non-project chat into a trailing "No project" section, after Earlier (todo #346)', () => {
+    const items = [
+      item('today1', { updatedAt: TODAY_1100 }),
+      item('old1', { updatedAt: EARLIER_MON }),
+      item('np1', { noProject: true, projectId: 'mainframe-no-project', updatedAt: YESTERDAY_1000 }),
+    ];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).toEqual(['Today', 'Earlier', 'No project']);
+    expect(idsOf(groups, 'No project')).toEqual(['np1']);
+  });
+
+  it('orders the "No project" section by updatedAt, newest first', () => {
+    const items = [
+      item('np-old', { noProject: true, updatedAt: EARLIER_MON }),
+      item('np-new', { noProject: true, updatedAt: TODAY_1100 }),
+    ];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(idsOf(groups, 'No project')).toEqual(['np-new', 'np-old']);
+  });
+
+  it('keeps a pinned non-project chat in Pinned, not in "No project"', () => {
+    const items = [item('np-pin', { noProject: true, pinned: true, updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).toEqual(['Pinned']);
+    expect(idsOf(groups, 'Pinned')).toEqual(['np-pin']);
+  });
+
+  it('omits the "No project" group when no session is project-less', () => {
+    const items = [item('today1', { updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(labels(groups)).not.toContain('No project');
   });
 });
 
@@ -236,6 +271,31 @@ describe("arrangeSessions mode 'project'", () => {
     ];
     const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
     expect(labels(groups)).toEqual(['proj-ghost-y', 'proj-ghost-z']);
+  });
+
+  it('lifts a non-project chat into a trailing "No project" section, after every ghost section (todo #346)', () => {
+    const items = [
+      item('a1', { projectId: 'proj-a', updatedAt: TODAY_1100 }),
+      item('gh1', { projectId: 'proj-ghost', updatedAt: TODAY_0900 }),
+      item('np1', { noProject: true, projectId: 'mainframe-no-project', updatedAt: YESTERDAY_1000 }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Alpha', 'proj-ghost', 'No project']);
+    expect(idsOf(groups, 'No project')).toEqual(['np1']);
+  });
+
+  it('never buckets a non-project chat into a ghost section keyed by its scratch project id', () => {
+    const items = [item('np1', { noProject: true, projectId: 'mainframe-no-project', updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['No project']);
+    expect(labels(groups)).not.toContain('mainframe-no-project');
+  });
+
+  it('keeps a pinned non-project chat in Pinned in project mode', () => {
+    const items = [item('np-pin', { noProject: true, pinned: true, projectId: 'proj-a', updatedAt: TODAY_1100 })];
+    const groups = arrangeSessions(items, 'project', NOW, PROJECTS);
+    expect(labels(groups)).toEqual(['Pinned']);
+    expect(idsOf(groups, 'Pinned')).toEqual(['np-pin']);
   });
 
   it('lifts a pinned session out of its project section and still orders the remainder by recency', () => {

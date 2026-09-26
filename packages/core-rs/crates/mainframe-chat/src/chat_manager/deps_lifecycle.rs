@@ -23,21 +23,8 @@ impl LifecycleManagerDeps for LcDeps {
                 .await;
         }))
     }
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-        automation_run_id: Option<&str>,
-    ) -> Chat {
-        self.deps.chats_create(
-            project_id,
-            adapter_id,
-            model,
-            permission_mode,
-            automation_run_id,
-        )
+    fn chats_create(&self, new_chat: &NewChat) -> Chat {
+        self.deps.chats_create(new_chat)
     }
     fn chats_update(&self, chat_id: &str, patch: &LifecycleChatUpdate) {
         self.deps.chats_update(chat_id, &ChatUpdate::from(patch));
@@ -131,6 +118,18 @@ impl LifecycleManagerDeps for LcDeps {
     }
     fn path_exists(&self, path: &str) -> bool {
         self.deps.path_exists(path)
+    }
+    fn adapter_supports_no_persistence(&self, adapter_id: &str) -> bool {
+        self.deps.adapter_supports_no_persistence(adapter_id)
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.deps.ensure_dir(path)
+    }
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        self.deps.mark_context_lost(chat_id, context_lost_at);
+    }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.deps.get_pending_fork(chat_id)
     }
 }
 

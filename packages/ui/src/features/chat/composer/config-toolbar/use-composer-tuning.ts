@@ -77,6 +77,13 @@ export interface ComposerTuningHook {
   setAdapter: (adapterId: string) => void;
   setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
+  /**
+   * Draft-only, create-time setter — a no-op once the daemon chat exists
+   * (temporary is fixed at creation, todo #346).
+   */
+  setTemporary: (on: boolean) => void;
+  /** True while bound to a `__LOCALID_*` draft with no daemon chat yet. */
+  draftMode: boolean;
   disabled: boolean;
   /** True once the thread has any message — the trigger for the mid-session warning. */
   hasMessages: boolean;
@@ -263,6 +270,13 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     },
     [draftMode, chatId, patchConfig],
   );
+  // Create-time only — no live path once the chat exists (todo #346).
+  const setTemporary = useCallback(
+    (on: boolean) => {
+      if (draftMode && chatId) patchDraftConfig(chatId, { temporary: on });
+    },
+    [draftMode, chatId],
+  );
 
   return {
     chat,
@@ -276,6 +290,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setAdapter,
     setPlanMode,
     setPermissionMode,
+    setTemporary,
+    draftMode,
     disabled: isRunning,
     hasMessages,
     contextTokens,

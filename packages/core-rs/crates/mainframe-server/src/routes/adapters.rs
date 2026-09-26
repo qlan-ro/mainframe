@@ -89,6 +89,24 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body, serde_json::json!({ "success": true, "data": [] }));
     }
+
+    /// AC 2/1: `noPersistence` is part of the wire capabilities of every
+    /// adapter, not gated behind an adapter id check (todo #346).
+    #[tokio::test]
+    async fn every_adapter_reports_no_persistence_capability() {
+        let ctx = test_ctx();
+        ctx.adapter_registry
+            .register(Arc::new(mainframe_adapter_mock::MockCliAdapter::default()));
+        ctx.adapter_registry.seed_static_snapshots();
+
+        let resp = list(State(ctx)).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let adapters = body["data"].as_array().unwrap();
+        assert_eq!(adapters.len(), 1);
+        assert_eq!(adapters[0]["capabilities"]["noPersistence"], false);
+    }
 }
 
 // PORT STATUS: src/server/routes/adapters.ts (1 endpoint, 13 lines)

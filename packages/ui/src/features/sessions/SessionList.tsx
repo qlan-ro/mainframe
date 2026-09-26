@@ -30,11 +30,12 @@ export function SessionList({ groups, projectNames, colorOf, hasFilters = false 
   return (
     <SessionListVirtuoso
       groups={groups}
-      renderItem={(item, { inPinnedGroup }) => (
+      renderItem={(item, { inPinnedGroup, depth }) => (
         <SessionRow
           item={item}
           colorOf={colorOf}
           inPinnedGroup={inPinnedGroup}
+          depth={depth}
           projectName={item.custom.projectId ? projectNames?.[item.custom.projectId] : undefined}
         />
       )}

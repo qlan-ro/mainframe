@@ -58,6 +58,8 @@
         "source": "created"
       }
     ],
-    "tags": ["bug", "flaky-test"]
+    "tags": ["bug", "flaky-test"],
+    "temporary": false,
+    "noProject": false
   }
 }

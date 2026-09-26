@@ -199,6 +199,11 @@ fn handle_subagent_user_event(
     message: &Value,
     sink: &dyn SessionSink,
 ) {
+    // A synthetic user message (the CLI's own coordinate note, todo #363) never
+    // becomes subagent child text — same suppression as the parent-level path.
+    // Skill checks still run first: they detect model-initiated skill loads
+    // regardless of the meta flag.
+    let is_synthetic = event_bool(event, &["isMeta", "is_meta", "isSynthetic", "is_synthetic"]);
     let mut collected: Vec<Value> = Vec::new();
     let content = message.get("content");
 
@@ -220,12 +225,12 @@ fn handle_subagent_user_event(
                     "content": body,
                     "parentToolUseId": parent_tool_use_id,
                 }));
-            } else {
+            } else if !is_synthetic {
                 collected.push(
                     json!({ "type": "text", "text": text, "parentToolUseId": parent_tool_use_id }),
                 );
             }
-        } else {
+        } else if !is_synthetic {
             collected.push(
                 json!({ "type": "text", "text": text, "parentToolUseId": parent_tool_use_id }),
             );
@@ -265,7 +270,9 @@ fn handle_subagent_user_event(
                         collected.push(skill_block.to_value());
                         continue;
                     }
-                    collected.push(json!({ "type": "text", "text": text, "parentToolUseId": parent_tool_use_id }));
+                    if !is_synthetic {
+                        collected.push(json!({ "type": "text", "text": text, "parentToolUseId": parent_tool_use_id }));
+                    }
                 }
                 // Image blocks intentionally skipped — same as the parent-level path.
             }
@@ -350,7 +357,10 @@ pub fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &dyn Sess
         }
     }
 
-    let is_meta = event_bool(event, &["isMeta", "is_meta"]);
+    // `isSynthetic` (stream-json's meta marker for CLI-synthesized notes, e.g.
+    // the tool-result coordinate note, todo #363) is treated the same as
+    // `isMeta`/`is_meta`: it never surfaces as a CLI-feedback System marker.
+    let is_meta = event_bool(event, &["isMeta", "is_meta", "isSynthetic", "is_synthetic"]);
     let Some(message) = event.get("message") else {
         return;
     };

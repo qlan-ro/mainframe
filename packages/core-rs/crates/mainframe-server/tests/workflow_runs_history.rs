@@ -98,7 +98,13 @@ async fn harness(session_id: &str) -> Harness {
     let chat = db
         .call_blocking({
             let project_id = project.id.clone();
-            move |d| d.chats.create(&project_id, "claude", None, None, None)
+            move |d| {
+                d.chats.create(&mainframe_types::chat::NewChat {
+                    project_id,
+                    adapter_id: "claude".to_string(),
+                    ..Default::default()
+                })
+            }
         })
         .unwrap();
     db.call_blocking({
@@ -130,6 +136,7 @@ async fn harness(session_id: &str) -> Harness {
         Arc::clone(&store),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     let ctx = Arc::new(AppCtx {

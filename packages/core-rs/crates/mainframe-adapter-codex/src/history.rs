@@ -159,6 +159,7 @@ pub(crate) fn tool_result_block(
         structured_patch,
         original_file: None,
         modified_file: None,
+        images: Vec::new(),
         parent_tool_use_id: None,
     })
 }
@@ -226,6 +227,7 @@ pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
             structured_patch,
             original_file,
             modified_file,
+            images,
             ..
         }) => MessageContent::Node(N::ToolResult {
             tool_use_id,
@@ -234,6 +236,7 @@ pub(crate) fn with_parent(block: MessageContent, pid: &str) -> MessageContent {
             structured_patch,
             original_file,
             modified_file,
+            images,
             parent_tool_use_id: pid,
         }),
         MessageContent::Node(N::PermissionRequest { request, .. }) => {

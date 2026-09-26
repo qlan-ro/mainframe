@@ -34,6 +34,8 @@ function item(id: string, projectId: string, updatedAt: number): SessionItem {
       hasPending: false,
       detectedPrs: [],
       worktreeMissing: false,
+      temporary: false,
+      noProject: false,
       transcriptMissing: false,
       updatedAt,
     },

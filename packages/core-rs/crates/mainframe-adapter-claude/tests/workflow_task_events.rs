@@ -160,6 +160,7 @@ fn session_with_options(
             chat_id,
             mainframe_chat_id: CHAT.to_string(),
             session_file_path: None,
+            fork_source: None,
         },
         None,
         tracker,

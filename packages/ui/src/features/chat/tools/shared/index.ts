@@ -13,6 +13,7 @@ export {
   resolveResultText,
   isErrorResult,
   extractResultContent,
+  resultImages,
 } from './result';
 
 // ── Diff math + rendering ────────────────────────────────────────────────────
@@ -25,3 +26,7 @@ export { StatusDot, ErrorDot, cardStyle, shortFilename, ClickableFilePath } from
 // ── Card shell ───────────────────────────────────────────────────────────────
 export type { CollapsibleCardShellProps, ErrorBodyProps } from './card-shell';
 export { CollapsibleCardShell, ErrorBody } from './card-shell';
+
+// ── Tool-result image thumbnails ────────────────────────────────────────────
+export type { ToolResultImageThumbsProps } from './ToolResultImageThumbs';
+export { ToolResultImageThumbs } from './ToolResultImageThumbs';

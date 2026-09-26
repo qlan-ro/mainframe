@@ -24,7 +24,7 @@ pub mod tags;
 pub mod validate_tag_name;
 
 pub use chat_tags::ChatTagsRepository;
-pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository};
+pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork};
 pub use devices::DevicesRepository;
 pub use projects::ProjectsRepository;
 pub use settings::SettingsRepository;

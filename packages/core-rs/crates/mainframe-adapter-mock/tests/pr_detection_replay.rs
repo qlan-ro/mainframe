@@ -60,6 +60,7 @@ fn options(project_path: String) -> SessionOptions {
         chat_id: None,
         mainframe_chat_id: "chat-1".to_string(),
         session_file_path: None,
+        fork_source: None,
     }
 }
 

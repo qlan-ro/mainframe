@@ -16,8 +16,14 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[])
 const { useSpotlightResults } = await import('../use-spotlight-results');
 
 const sessions = [
-  { id: 's1', remoteId: 's1', title: 'Build the palette' },
-  { id: 's2', remoteId: 's2', title: 'Fix the editor' },
+  { id: 's1', remoteId: 's1', title: 'Build the palette', custom: { projectId: 'proj-a', noProject: false } },
+  { id: 's2', remoteId: 's2', title: 'Fix the editor', custom: { projectId: 'proj-b', noProject: false } },
+  {
+    id: 's3',
+    remoteId: 's3',
+    title: 'Build the scratch chat',
+    custom: { projectId: 'mainframe-no-project', noProject: true },
+  },
 ] as unknown as SessionItem[];
 
 beforeEach(() => {
@@ -106,6 +112,23 @@ describe('useSpotlightResults', () => {
     result.current.rows.find((r) => r.type === 'symbol')!.run();
     expect(mockEmit).toHaveBeenCalledWith({ type: 'open-file', path: 'src/Foo.ts', line: 4, character: 0 });
     mockSymbols.mockReturnValue({ symbols: [], loading: false });
+  });
+
+  it('session row sub: "No project" for a non-project chat, the resolved name otherwise (todo #346)', async () => {
+    const { result } = renderHook(() =>
+      useSpotlightResults({
+        parsed: parseQuery(''),
+        port: 1,
+        projectId: 'p',
+        sessions,
+        projectNames: new Map([['proj-a', 'Alpha']]),
+        switchToThread: vi.fn(),
+      }),
+    );
+    const byId = new Map(result.current.rows.filter((r) => r.type === 'session').map((r) => [r.id, r]));
+    expect(byId.get('s1')?.sub).toBe('Alpha');
+    expect(byId.get('s2')?.sub).toBeUndefined();
+    expect(byId.get('s3')?.sub).toBe('No project');
   });
 
   it('change row run() emits open-diff intent', async () => {

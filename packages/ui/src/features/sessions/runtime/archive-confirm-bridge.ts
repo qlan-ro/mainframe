@@ -21,6 +21,12 @@
  *
  * Only worktree-backed sessions are ever asked (the question IS the worktree),
  * so `pending` carries no hasWorktree flag — its presence means "has one".
+ *
+ * A third staging slot, `stageDiscard`/`takeDiscard`, carries a different
+ * per-chat choice through the same seam: a temporary chat 409s on archive
+ * (todo #346), so the row stages "this archive is really a discard" instead of
+ * a worktree choice, and the adapter's `archiveWithStagedChoice` routes to
+ * `discardChat` when it finds one staged.
  */
 import { create } from 'zustand';
 
@@ -77,4 +83,36 @@ export function takeArchiveChoice(remoteId: string): { deleteWorktree: boolean }
   const choice = staged.get(remoteId);
   staged.delete(remoteId);
   return choice;
+}
+
+const discardStaged = new Set<string>();
+
+/** Mark the archive about to run for `remoteId` as a temporary-chat discard, not a worktree archive (todo #346). */
+export function stageDiscard(remoteId: string): void {
+  discardStaged.add(remoteId);
+}
+
+/** Consume the staged discard flag. False for the normal (non-temporary) archive path. */
+export function takeDiscard(remoteId: string): boolean {
+  return discardStaged.delete(remoteId);
+}
+
+const localOnlyRemovalStaged = new Set<string>();
+
+/**
+ * Mark the delete about to run for `remoteId` as already handled server-side —
+ * the ghost-chat prune (todo #346) reaches this when a discard ran
+ * OUTSIDE any row/aui interaction (new-thread-coordinator's abandon cleanup),
+ * so the daemon copy is already gone by the time aui's local stale entry is
+ * cleaned up. The adapter must skip the network call entirely (a repeat
+ * discard/archive of an already-gone chat would 404 and, since aui reverts an
+ * optimistic delete on rejection, leave the ghost row in place forever).
+ */
+export function stageLocalOnlyRemoval(remoteId: string): void {
+  localOnlyRemovalStaged.add(remoteId);
+}
+
+/** Consume the staged local-only flag. False for every normal archive/delete path. */
+export function takeLocalOnlyRemoval(remoteId: string): boolean {
+  return localOnlyRemovalStaged.delete(remoteId);
 }

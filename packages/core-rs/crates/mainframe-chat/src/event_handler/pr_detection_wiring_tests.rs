@@ -125,6 +125,7 @@ fn pr_url_tool_result() -> MessageContent {
         structured_patch: None,
         original_file: None,
         modified_file: None,
+        images: Vec::new(),
         parent_tool_use_id: None,
     })
 }

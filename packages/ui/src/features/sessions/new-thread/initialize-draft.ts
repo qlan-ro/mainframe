@@ -7,24 +7,34 @@ import { resolveDraftDefaults } from './resolve-draft-defaults';
 
 export interface InitializeDraftArgs {
   localId: string;
-  projectId: string;
+  /** null means "No project" (todo #346). */
+  projectId: string | null;
   port: number;
   defaultAdapterId: string | null;
   adapters: AdapterInfo[];
   adapterId?: string;
+  /**
+   * Carried straight into the snapshot this call writes, iff this call's own
+   * attempt wins the race (todo #346). Passing it in — rather than
+   * patching it on afterward — means a SUPERSEDED call never patches at all:
+   * it returns before `setDraftConfig` runs, so it can't leak its captured
+   * `temporary` onto whichever later draft actually won the slot.
+   */
+  temporary?: boolean;
 }
 
 export async function initializeDraft(args: InitializeDraftArgs): Promise<DraftCfg> {
   const retry = () => initializeDraft(args);
   const store = useNewThreadReady.getState();
-  const attempt = store.beginInitialization(args.localId, retry);
+  const attempt = store.beginInitialization(args.localId, retry, args.projectId);
 
   try {
     const providers = await getProviderSettings(args.port);
     const adapterId = args.adapterId ?? resolveDefaultAdapterId(args.defaultAdapterId, args.adapters);
     const adapter = args.adapters.find((candidate) => candidate.id === adapterId);
     if (!adapter) throw new Error(`Cannot initialize draft: adapter ${adapterId} is unavailable`);
-    const snapshot = resolveDraftDefaults(args.projectId, adapter, providers[adapterId]);
+    const resolved = resolveDraftDefaults(args.projectId, adapter, providers[adapterId]);
+    const snapshot: DraftCfg = args.temporary !== undefined ? { ...resolved, temporary: args.temporary } : resolved;
     const initialization = useNewThreadReady.getState().getInitialization(args.localId);
     if (initialization.attempt !== attempt) return getDraftConfig(args.localId) ?? snapshot;
     setDraftConfig(args.localId, snapshot);
@@ -57,6 +67,8 @@ export async function reinitializeDraftAdapter(args: InitializeDraftArgs & { ada
       ...(current.worktreePath !== undefined ? { worktreePath: current.worktreePath } : {}),
       ...(current.branchName !== undefined ? { branchName: current.branchName } : {}),
       ...(current.pendingWorktree !== undefined ? { pendingWorktree: current.pendingWorktree } : {}),
+      // Switching adapters must not silently drop the user's temporary choice (todo #346).
+      ...(current.temporary !== undefined ? { temporary: current.temporary } : {}),
     };
     setDraftConfig(args.localId, snapshot);
     useNewThreadReady.getState().completeInitialization(args.localId, attempt);

@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import { ProjectAvatar } from '@/features/sessions/ProjectAvatar';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
+import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { SessionTabContextMenu } from './SessionTabContextMenu';
 
@@ -42,6 +43,7 @@ export interface SessionTabEntry {
   active: boolean;
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
+  forkAvailability: ForkAvailability;
 }
 
 interface SessionTabPillProps {
@@ -58,6 +60,7 @@ interface SessionTabPillProps {
   canOpenInSplit: boolean;
   onOpenInSplit: (id: string) => void;
   onCloseSplit: (id: string) => void;
+  onFork: (id: string) => void;
 }
 
 export function SessionTabPill({
@@ -70,6 +73,7 @@ export function SessionTabPill({
   canOpenInSplit,
   onOpenInSplit,
   onCloseSplit,
+  onFork,
 }: SessionTabPillProps) {
   // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
   // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
@@ -113,6 +117,8 @@ export function SessionTabPill({
       onCloseSplit={() => onCloseSplit(tab.id)}
       onKeepOpen={() => onPin(tab.id)}
       onClose={() => onClose(tab.id)}
+      forkAvailability={tab.forkAvailability}
+      onFork={() => onFork(tab.id)}
     >
       <div
         data-testid={`session-tab-${tab.id}`}

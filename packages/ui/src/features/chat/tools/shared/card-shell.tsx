@@ -71,6 +71,12 @@ export interface CollapsibleCardShellProps {
   className?: string;
   /** Sub-header rendered between the trigger and the body (outside Collapsible). */
   subHeader?: React.ReactNode;
+  /**
+   * Header content rendered as a sibling of CollapsibleTrigger, not inside its
+   * button — used for tool-result image thumbnails (todo #363), whose own
+   * click/keydown must never toggle the card.
+   */
+  headerAccessory?: React.ReactNode;
 }
 
 export function CollapsibleCardShell({
@@ -87,6 +93,7 @@ export function CollapsibleCardShell({
   children,
   className,
   subHeader,
+  headerAccessory,
 }: CollapsibleCardShellProps) {
   const hasBody = Boolean(children);
 
@@ -96,21 +103,24 @@ export function CollapsibleCardShell({
       defaultOpen={defaultOpen}
       className={cn(cardStyle(result, isError), 'w-full', className)}
     >
-      <CollapsibleTrigger
-        data-testid={triggerId}
-        disabled={disableTrigger || !hasBody}
-        className={cn(
-          'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted',
-          "[&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
-          (disableTrigger || !hasBody) && 'cursor-default',
-        )}
-      >
-        {icon}
-        <span className="shrink-0 font-medium text-foreground">{verb}</span>
-        {target && <span className="min-w-0 truncate">{target}</span>}
-        <span className="min-w-2 flex-1" />
-        {trailing && <span className="flex shrink-0 items-center gap-1.5">{trailing}</span>}
-      </CollapsibleTrigger>
+      <div className="flex w-full items-center">
+        <CollapsibleTrigger
+          data-testid={triggerId}
+          disabled={disableTrigger || !hasBody}
+          className={cn(
+            'flex flex-1 items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted',
+            "[&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
+            (disableTrigger || !hasBody) && 'cursor-default',
+          )}
+        >
+          {icon}
+          <span className="shrink-0 font-medium text-foreground">{verb}</span>
+          {target && <span className="min-w-0 truncate">{target}</span>}
+          <span className="min-w-2 flex-1" />
+          {trailing && <span className="flex shrink-0 items-center gap-1.5">{trailing}</span>}
+        </CollapsibleTrigger>
+        {headerAccessory && <span className="flex shrink-0 items-center gap-1.5 pr-3">{headerAccessory}</span>}
+      </div>
 
       {subHeader}
 

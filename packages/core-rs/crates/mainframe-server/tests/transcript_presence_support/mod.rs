@@ -66,6 +66,8 @@ impl Adapter for StubAdapter {
         AdapterCapabilities {
             plan_mode: false,
             auto_mode: false,
+            no_persistence: false,
+            fork: false,
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -154,8 +156,11 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     let adapter_id_for_chat = adapter_id.clone();
     let chat = db
         .call_blocking(move |d| {
-            d.chats
-                .create(&project_id_for_chat, &adapter_id_for_chat, None, None, None)
+            d.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project_id_for_chat,
+                adapter_id: adapter_id_for_chat,
+                ..Default::default()
+            })
         })
         .unwrap();
 
@@ -186,6 +191,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         None,
+        data_dir.path().to_path_buf(),
     );
 
     Harness {

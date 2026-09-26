@@ -17,6 +17,7 @@
 
 pub mod attachment_processor;
 pub mod attention_request;
+pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
 pub mod config_manager;
@@ -24,11 +25,13 @@ pub mod context_tracker;
 pub mod degraded_recovery;
 pub mod event_handler;
 pub mod external_session_service;
+pub mod fork;
 pub mod idle_offload;
 pub mod idle_scanner;
 pub mod lifecycle_manager;
 pub mod message_cache;
 pub mod message_markers;
+pub mod no_persistence;
 pub mod permission_handler;
 pub mod permission_manager;
 pub mod plan_mode_actions;

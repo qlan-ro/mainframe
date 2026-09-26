@@ -50,6 +50,7 @@ pub mod skills;
 pub(crate) mod thread_item_render;
 pub(crate) mod thread_item_variants;
 pub mod thread_registry;
+mod thread_request;
 pub mod title_generator;
 pub mod transcript;
 pub mod turn_config;

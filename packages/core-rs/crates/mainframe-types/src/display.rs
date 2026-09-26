@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::adapter::ControlRequest;
 use crate::chat::DiffHunk;
 use crate::claude_workflow::ClaudeWorkflowRun;
-use crate::content::LeafContent;
+use crate::content::{LeafContent, ToolResultImage};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +37,10 @@ pub struct ToolCallResult {
     pub full_bytes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ask_user_question: Option<Vec<AskUserQuestionAnswer>>,
+    /// Base64 image blocks carried on the tool result (todo #363), source
+    /// order. Not subject to text truncation; omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ToolResultImage>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -205,6 +209,36 @@ mod tests {
                 "fullBytes": 512
             }
         }));
+    }
+
+    #[test]
+    fn tool_call_result_images_roundtrip_and_omit_when_empty() {
+        roundtrip::<DisplayContent>(json!({
+            "type": "tool_call",
+            "id": "toolu_03C",
+            "name": "Read",
+            "input": { "file_path": "img.png" },
+            "category": "explore",
+            "result": {
+                "content": "",
+                "isError": false,
+                "images": [{ "mediaType": "image/png", "data": "AAAA" }]
+            }
+        }));
+        let no_images: DisplayContent = serde_json::from_value(json!({
+            "type": "tool_call",
+            "id": "toolu_04D",
+            "name": "Read",
+            "input": {},
+            "category": "explore",
+            "result": { "content": "ok", "isError": false }
+        }))
+        .unwrap();
+        assert!(
+            !serde_json::to_string(&no_images)
+                .unwrap()
+                .contains("images")
+        );
     }
 
     #[test]

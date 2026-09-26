@@ -7,6 +7,7 @@
 //! history-converters / history-subagents siblings.
 
 use mainframe_types::chat::{DiffHunk, MessageContent, MessageContentNode};
+use mainframe_types::content::ToolResultImage;
 use serde_json::Value;
 
 // ── shared JS-semantics helpers ─────────────────────────────────────────────
@@ -64,12 +65,48 @@ pub fn extract_tool_result_content(content: Option<&Value>) -> String {
             if !texts.is_empty() {
                 return texts.join("\n");
             }
+            // An image-only array (no text blocks) never stringifies to JSON —
+            // the images travel separately via `extract_tool_result_images`
+            // (todo #363); base64 must never land in the text content.
+            let is_image_only = !arr.is_empty()
+                && arr
+                    .iter()
+                    .all(|block| block.get("type").and_then(Value::as_str) == Some("image"));
+            if is_image_only {
+                return String::new();
+            }
             // `JSON.stringify(content)` on a non-text array.
             serde_json::to_string(value).unwrap_or_default()
         }
         Value::Null => "\"\"".to_string(),
         other => serde_json::to_string(other).unwrap_or_default(),
     }
+}
+
+/// Extract `source.type == "base64"` image blocks from a `tool_result`
+/// content array, in source order. Non-array content and non-base64 or
+/// malformed image blocks yield nothing (todo #363).
+pub fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
+    let Some(Value::Array(arr)) = content else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|block| {
+            if block.get("type").and_then(Value::as_str) != Some("image") {
+                return None;
+            }
+            let source = block.get("source")?;
+            if source.get("type").and_then(Value::as_str) != Some("base64") {
+                return None;
+            }
+            let media_type = source
+                .get("media_type")
+                .and_then(Value::as_str)?
+                .to_string();
+            let data = source.get("data").and_then(Value::as_str)?.to_string();
+            Some(ToolResultImage { media_type, data })
+        })
+        .collect()
 }
 
 pub fn build_tool_result_blocks(message: &Value, tur: Option<&Value>) -> Vec<MessageContent> {
@@ -105,6 +142,7 @@ pub fn build_tool_result_blocks(message: &Value, tur: Option<&Value>) -> Vec<Mes
             structured_patch: sp.clone(),
             original_file: original_file.map(str::to_string),
             modified_file: modified_file.clone(),
+            images: extract_tool_result_images(block.get("content")),
             parent_tool_use_id: None,
         }));
     }
@@ -185,6 +223,11 @@ mod tests {
         }
     }
 }
+
+// Tool-result image tests (todo #363) live in a sibling file to keep this one
+// under the 300-line cap; `super::*` inside it resolves against this module.
+#[cfg(test)]
+mod image_tests;
 
 // PORT STATUS: src/plugins/builtin/claude/history-tool-result.ts (58 lines)
 // confidence: high

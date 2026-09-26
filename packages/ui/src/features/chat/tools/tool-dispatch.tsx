@@ -4,21 +4,22 @@
  * Tool-call dispatch under MessagePrimitive.GroupedParts.
  *
  * - MessageToolLeaf resolves the per-family card from the single registry,
- *   passing the NATIVE part props (`<Card {...part} />`), falling back to the
- *   shadcn ToolFallback for any unregistered tool.
+ *   passing the NATIVE part props (`<Card {...part} />`), falling back to
+ *   FallbackToolCard (the shadcn ToolFallback plus tool-result image
+ *   thumbnails, todo #363) for any unregistered tool.
  * - MessageToolGroup renders the explore ToolGroup with the summary that was
  *   derived in the projection (carried in metadata) — no render-time re-read.
  */
 import type { ReactNode } from 'react';
 import type { EnrichedPartState } from '@assistant-ui/react';
-import { ToolFallback } from '@/components/ui/assistant-ui/tool-fallback';
 import { ToolGroupRoot, ToolGroupTrigger, ToolGroupContent } from '@/components/ui/assistant-ui/tool-group';
 import { resolveToolCard } from './registry';
+import { FallbackToolCard } from './cards/FallbackToolCard';
 
 type ToolCallPart = Extract<EnrichedPartState, { type: 'tool-call' }>;
 
 export function MessageToolLeaf({ part }: { part: ToolCallPart }) {
-  const Card = resolveToolCard(part.toolName) ?? ToolFallback;
+  const Card = resolveToolCard(part.toolName) ?? FallbackToolCard;
   return <Card {...part} />;
 }
 

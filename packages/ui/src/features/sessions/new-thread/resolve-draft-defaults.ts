@@ -2,7 +2,11 @@ import type { AdapterInfo, FeatureKey, ProviderConfig } from '@qlan-ro/mainframe
 import { TUNABLE_FEATURES, clampEffortToSupported } from '@qlan-ro/mainframe-types';
 import type { DraftCfg } from '../runtime/draft-config';
 
-export function resolveDraftDefaults(projectId: string, adapter: AdapterInfo, provider?: ProviderConfig): DraftCfg {
+export function resolveDraftDefaults(
+  projectId: string | null,
+  adapter: AdapterInfo,
+  provider?: ProviderConfig,
+): DraftCfg {
   const model =
     adapter.models.find((candidate) => candidate.id === provider?.defaultModel) ??
     adapter.models.find((candidate) => candidate.isDefault) ??

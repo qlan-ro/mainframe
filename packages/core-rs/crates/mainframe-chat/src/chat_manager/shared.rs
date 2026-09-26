@@ -126,22 +126,31 @@ pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
 
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
-/// restore). `None` when the chat has no Claude session / adapter / project.
+/// restore). `None` when the chat has no Claude session / pending fork / adapter
+/// / project — an unsent fork (todo #343) has no `claude_session_id` yet, so it
+/// resumes from `chats.pending_fork`'s `fork_source` instead; this is the path a
+/// freshly forked chat's pre-first-message history takes (still in
+/// `active_chats`, so `load_chat` never runs `do_load_chat` for it).
 pub(super) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,
     chat_id: &str,
 ) -> Option<Arc<dyn AdapterSession>> {
-    let session_id = chat.claude_session_id.clone()?;
+    let own_id = chat.claude_session_id.clone();
+    let fork_source = deps.get_pending_fork(chat_id).map(|p| p.fork_source);
+    if own_id.is_none() && fork_source.is_none() {
+        return None;
+    }
     let project_path = deps.projects_get_path(&chat.project_id)?;
     let cwd = chat.worktree_path.clone().unwrap_or(project_path);
     deps.create_session(
         &chat.adapter_id,
         SessionOptions {
             project_path: cwd,
-            chat_id: Some(session_id),
+            chat_id: own_id,
             mainframe_chat_id: chat_id.to_string(),
             session_file_path: chat.session_file_path.clone(),
+            fork_source,
         },
     )
 }

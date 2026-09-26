@@ -31,6 +31,8 @@ interface Args {
   projectPath?: string;
   chatId?: string;
   sessions: SessionItem[];
+  /** Project id → name, for a session row's `sub`. Absent entries (a no-project chat's scratch id) render no sub via `sessionProjectLabel`. */
+  projectNames?: ReadonlyMap<string, string>;
   switchToThread: (id: string) => void;
 }
 
@@ -107,8 +109,15 @@ function changeRows(changes: GitStatusFile[], term: string): SpotlightRow[] {
     }));
 }
 
+/** "No project" for a non-project chat, its resolved project name, or undefined (dropped from the row) for an unknown id. */
+function sessionProjectLabel(session: SessionItem, projectNames: ReadonlyMap<string, string>): string | undefined {
+  if (session.custom.noProject) return 'No project';
+  return projectNames.get(session.custom.projectId);
+}
+
 function fileModeRows(
   sessions: SessionItem[],
+  projectNames: ReadonlyMap<string, string>,
   files: ReturnType<typeof useFileSearch>['results'],
   term: string,
   switchToThread: (id: string) => void,
@@ -125,6 +134,7 @@ function fileModeRows(
         id: targetId,
         testid: `search-palette-session-row-${targetId}`,
         title: s.title ?? 'Untitled',
+        sub: sessionProjectLabel(s, projectNames),
         run: () => {
           switchToThread(targetId);
           emitSurfaceIntent({ type: 'activate-surface', surface: 'chat' });
@@ -142,7 +152,16 @@ function fileModeRows(
   return [...sessionRows, ...fileRows];
 }
 
-export function useSpotlightResults({ parsed, port, projectId, projectPath, chatId, sessions, switchToThread }: Args): {
+export function useSpotlightResults({
+  parsed,
+  port,
+  projectId,
+  projectPath,
+  chatId,
+  sessions,
+  projectNames = new Map(),
+  switchToThread,
+}: Args): {
   rows: SpotlightRow[];
   loading: boolean;
 } {
@@ -164,8 +183,8 @@ export function useSpotlightResults({ parsed, port, projectId, projectPath, chat
     if (mode === 'cmd') return commandRows(term);
     if (mode === 'sym') return symbolRows(symbolSearch.symbols);
     if (mode === 'chg') return changeRows(changes, term);
-    return fileModeRows(sessions, fileSearch.results, term, switchToThread);
-  }, [mode, term, sessions, fileSearch.results, symbolSearch.symbols, changes, switchToThread]);
+    return fileModeRows(sessions, projectNames, fileSearch.results, term, switchToThread);
+  }, [mode, term, sessions, projectNames, fileSearch.results, symbolSearch.symbols, changes, switchToThread]);
 
   const loading =
     (mode === 'file' && fileSearch.loading) ||

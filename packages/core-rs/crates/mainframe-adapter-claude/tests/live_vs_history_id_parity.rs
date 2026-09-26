@@ -72,6 +72,7 @@ fn session() -> Arc<ClaudeSession> {
             chat_id: None,
             mainframe_chat_id: "test-chat-id".to_string(),
             session_file_path: None,
+            fork_source: None,
         },
         None,
         Arc::new(BackgroundTaskTracker::new()),

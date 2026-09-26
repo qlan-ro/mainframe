@@ -4,6 +4,10 @@ import {
   requestWorktreeArchiveChoice,
   stageArchiveChoice,
   takeArchiveChoice,
+  stageDiscard,
+  takeDiscard,
+  stageLocalOnlyRemoval,
+  takeLocalOnlyRemoval,
 } from '../archive-confirm-bridge';
 
 // ---------------------------------------------------------------------------
@@ -145,5 +149,74 @@ describe('archive-confirm-bridge — staged choices are keyed per remoteId', () 
 
     expect(takeArchiveChoice('chat-2')).toEqual({ deleteWorktree: false });
     expect(takeArchiveChoice('chat-1')).toEqual({ deleteWorktree: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archive-confirm-bridge — stageDiscard / takeDiscard (todo #346)
+// ---------------------------------------------------------------------------
+
+describe('archive-confirm-bridge — takeDiscard with nothing staged', () => {
+  it('returns false when no discard was staged for that remoteId', () => {
+    expect(takeDiscard('chat-1')).toBe(false);
+  });
+});
+
+describe('archive-confirm-bridge — stageDiscard then takeDiscard hands off the flag', () => {
+  it('returns true after staging a discard for chat-1', () => {
+    stageDiscard('chat-1');
+    expect(takeDiscard('chat-1')).toBe(true);
+  });
+});
+
+describe('archive-confirm-bridge — takeDiscard consumes the staged flag', () => {
+  it('returns false on a second take for the same remoteId', () => {
+    stageDiscard('chat-1');
+    takeDiscard('chat-1');
+    expect(takeDiscard('chat-1')).toBe(false);
+  });
+});
+
+describe('archive-confirm-bridge — staged discards are keyed per remoteId', () => {
+  it('taking chat-2 does not consume chat-1s staged discard', () => {
+    stageDiscard('chat-1');
+
+    expect(takeDiscard('chat-2')).toBe(false);
+    expect(takeDiscard('chat-1')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archive-confirm-bridge — stageLocalOnlyRemoval / takeLocalOnlyRemoval
+// (todo #346 — the ghost-chat prune's "skip the daemon" flag)
+// ---------------------------------------------------------------------------
+
+describe('archive-confirm-bridge — takeLocalOnlyRemoval with nothing staged', () => {
+  it('returns false when no local-only removal was staged for that remoteId', () => {
+    expect(takeLocalOnlyRemoval('chat-1')).toBe(false);
+  });
+});
+
+describe('archive-confirm-bridge — stageLocalOnlyRemoval then takeLocalOnlyRemoval hands off the flag', () => {
+  it('returns true after staging one for chat-1', () => {
+    stageLocalOnlyRemoval('chat-1');
+    expect(takeLocalOnlyRemoval('chat-1')).toBe(true);
+  });
+});
+
+describe('archive-confirm-bridge — takeLocalOnlyRemoval consumes the staged flag', () => {
+  it('returns false on a second take for the same remoteId', () => {
+    stageLocalOnlyRemoval('chat-1');
+    takeLocalOnlyRemoval('chat-1');
+    expect(takeLocalOnlyRemoval('chat-1')).toBe(false);
+  });
+});
+
+describe('archive-confirm-bridge — staged local-only removals are keyed per remoteId', () => {
+  it('taking chat-2 does not consume chat-1s staged flag', () => {
+    stageLocalOnlyRemoval('chat-1');
+
+    expect(takeLocalOnlyRemoval('chat-2')).toBe(false);
+    expect(takeLocalOnlyRemoval('chat-1')).toBe(true);
   });
 });

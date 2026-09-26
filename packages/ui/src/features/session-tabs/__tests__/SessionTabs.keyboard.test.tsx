@@ -46,6 +46,10 @@ vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
   useStartNewSession: () => newSession,
 }));
 
+// Fork's own daemon call + useDaemonPort/useAui plumbing has its own suite
+// (use-fork-chat.test.tsx); irrelevant to the keyboard gestures under test here.
+vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn() }));
+
 import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
 import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
 import { SessionTabs } from '../SessionTabs';

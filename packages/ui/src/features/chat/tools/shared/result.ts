@@ -4,7 +4,7 @@
  * Pure logic — no React, no DOM, no side effects.
  * Ported from packages/app-electron/.../tools/shared.tsx; no desktop tokens here.
  */
-import type { ToolCallResult } from '@qlan-ro/mainframe-types';
+import type { ToolCallResult, ToolResultImage } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
 // TruncatedResult
@@ -88,6 +88,22 @@ export function stripErrorXml(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// resultImages — image entries on an opaque tool-call result (todo #363)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the `images` array carried by a result object, or `[]` when the
+ * result has none. Used by cards to render thumbnails, and by
+ * `resolveResultText` to keep an image-only result's text out of the
+ * `JSON.stringify` fallback below.
+ */
+export function resultImages(result: unknown): ToolResultImage[] {
+  if (typeof result !== 'object' || result === null) return [];
+  const images = (result as Record<string, unknown>)['images'];
+  return Array.isArray(images) ? (images as ToolResultImage[]) : [];
+}
+
+// ---------------------------------------------------------------------------
 // resolveResultText — centralized 3-way result ladder
 // ---------------------------------------------------------------------------
 
@@ -101,11 +117,16 @@ export interface ResolvedResult {
 }
 
 /**
- * Centralises the three-way result ladder that every tool card repeats:
+ * Centralises the result ladder that every tool card repeats:
  *   1. ToolCallResult (has .content + structuredPatch) → use .content
  *   2. TruncatedResult (has .truncated + .fullBytes)   → use .content
  *   3. plain string                                    → use as-is
- *   4. other object / undefined                        → JSON.stringify / ''
+ *   4. object carrying non-empty .images (todo #363)   → use .content
+ *   5. other object / undefined                        → JSON.stringify / ''
+ *
+ * Case 4 exists so an image-only result (`{ content, images }`, no
+ * structuredPatch/truncated) never falls into the JSON.stringify branch,
+ * which would serialize the base64 `images` payload into visible text.
  *
  * stripErrorXml is always applied to the raw text before returning.
  */
@@ -118,6 +139,10 @@ export function resolveResultText(result: unknown): ResolvedResult {
   }
   if (typeof result === 'string') {
     return { text: stripErrorXml(result), truncated: false, fullBytes: 0 };
+  }
+  if (resultImages(result).length > 0) {
+    const content = (result as Record<string, unknown>)['content'];
+    return { text: stripErrorXml(typeof content === 'string' ? content : ''), truncated: false, fullBytes: 0 };
   }
   if (result !== undefined && result !== null) {
     return { text: JSON.stringify(result, null, 2), truncated: false, fullBytes: 0 };

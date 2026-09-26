@@ -5,11 +5,12 @@
  */
 export interface DraftRowModel {
   newThreadId: string;
-  projectId: string;
+  /** null means the draft is set to "No project" — never matches a pill. */
+  projectId: string | null;
 }
 
 export function draftRowVisible(model: DraftRowModel | null, projectIds: ReadonlySet<string>): boolean {
   if (model == null) return false;
   if (projectIds.size === 0) return true;
-  return projectIds.has(model.projectId);
+  return model.projectId != null && projectIds.has(model.projectId);
 }

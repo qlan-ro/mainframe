@@ -2,50 +2,21 @@
 use super::*;
 
 impl ChatManager {
-    pub async fn create_chat(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-    ) -> Chat {
-        self.lifecycle
-            .create_chat(
-                project_id,
-                adapter_id,
-                model,
-                permission_mode,
-                None,
-                None,
-                None,
-            )
-            .await
+    pub async fn create_chat(&self, new_chat: NewChat) -> Chat {
+        self.lifecycle.create_chat(new_chat, None, None).await
     }
 
     /// `createChatWithDefaults` — like `create_chat` but fills unset model/mode/
     /// plan-mode from the adapter's persisted provider defaults. Backs
     /// `POST /api/chats`.
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_chat_with_defaults(
         &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
+        new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-        automation_run_id: Option<&str>,
     ) -> Chat {
         self.lifecycle
-            .create_chat_with_defaults(
-                project_id,
-                adapter_id,
-                model,
-                permission_mode,
-                worktree_path,
-                branch_name,
-                automation_run_id,
-            )
+            .create_chat_with_defaults(new_chat, worktree_path, branch_name)
             .await
     }
 

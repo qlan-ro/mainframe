@@ -57,6 +57,22 @@ describe('useDisplayBranch', () => {
     expect(result.current.branch).toBeUndefined();
   });
 
+  it('does not fetch for a noProject chat, even with a projectId (todo #346)', () => {
+    const { result } = renderHook(() =>
+      useDisplayBranch({ port: 31415, projectId: 'mainframe-no-project', chatId: 'c1', noProject: true }),
+    );
+    expect(getGitBranch).not.toHaveBeenCalled();
+    expect(result.current.branch).toBeUndefined();
+  });
+
+  it('refetch is a no-op for a noProject chat', () => {
+    const { result } = renderHook(() =>
+      useDisplayBranch({ port: 31415, projectId: 'mainframe-no-project', chatId: 'c1', noProject: true }),
+    );
+    result.current.refetch();
+    expect(getGitBranch).not.toHaveBeenCalled();
+  });
+
   it('refetch re-reads the branch — a popover write broadcasts nothing', async () => {
     getGitBranch.mockResolvedValueOnce({ branch: 'feat/before' }).mockResolvedValueOnce({ branch: 'feat/after' });
     const { result } = renderHook(() => useDisplayBranch({ port: 31415, projectId: 'p1', chatId: 'c1' }));

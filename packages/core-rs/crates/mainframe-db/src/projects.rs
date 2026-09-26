@@ -4,7 +4,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use mainframe_runtime::time::now_iso8601;
-use mainframe_types::chat::Project;
+use mainframe_types::chat::{NO_PROJECT_ID, Project};
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::DbError;
@@ -35,15 +35,21 @@ impl ProjectsRepository {
         Self { db }
     }
 
+    /// Excludes the hidden scratch project row (rule 1): every non-project
+    /// chat's `project_id` points at it, but it never appears in a listing.
     pub fn list(&self) -> Result<Vec<Project>, DbError> {
-        let mut stmt = self
-            .db
-            .prepare(&format!("{PROJECT_SELECT} ORDER BY last_opened_at DESC"))?;
-        let rows = stmt.query_map([], row_to_project)?;
+        let mut stmt = self.db.prepare(&format!(
+            "{PROJECT_SELECT} WHERE id != ? ORDER BY last_opened_at DESC"
+        ))?;
+        let rows = stmt.query_map([NO_PROJECT_ID], row_to_project)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
+    /// Returns `None` for the hidden scratch row (rule 1), same as an unknown id.
     pub fn get(&self, id: &str) -> Result<Option<Project>, DbError> {
+        if id == NO_PROJECT_ID {
+            return Ok(None);
+        }
         Ok(self
             .db
             .query_row(
@@ -54,15 +60,18 @@ impl ProjectsRepository {
             .optional()?)
     }
 
+    /// Returns `None` for the scratch sentinel path (rule 1), same as an
+    /// unmatched path.
     pub fn get_by_path(&self, path: &str) -> Result<Option<Project>, DbError> {
-        Ok(self
+        let project = self
             .db
             .query_row(
                 &format!("{PROJECT_SELECT} WHERE path = ?"),
                 [path],
                 row_to_project,
             )
-            .optional()?)
+            .optional()?;
+        Ok(project.filter(|p| p.id != NO_PROJECT_ID))
     }
 
     pub fn create(&self, path: &str, name: Option<&str>) -> Result<Project, DbError> {
@@ -100,7 +109,14 @@ impl ProjectsRepository {
         Ok(())
     }
 
+    /// Refuses the hidden scratch project row (rule 1): removing it would
+    /// cascade-delete every non-project chat's row.
     pub fn remove(&self, id: &str) -> Result<(), DbError> {
+        if id == NO_PROJECT_ID {
+            return Err(DbError::Message(
+                "cannot remove the hidden scratch project".to_string(),
+            ));
+        }
         let tx = self.db.unchecked_transaction()?;
         tx.execute(
             "UPDATE projects SET parent_project_id = NULL WHERE parent_project_id = ?",

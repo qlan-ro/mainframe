@@ -248,6 +248,7 @@ mod tests {
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
             session_file_path: None,
+            fork_source: None,
         };
         let session = ReplaySession::from_fixture(
             options,
@@ -276,6 +277,7 @@ mod tests {
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
             session_file_path: None,
+            fork_source: None,
         };
         let session =
             ReplaySession::from_fixture(options, fixture, Arc::new(ReplayCache::default()));

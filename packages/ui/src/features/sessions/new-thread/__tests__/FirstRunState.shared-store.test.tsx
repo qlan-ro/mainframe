@@ -35,6 +35,11 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
+// The "Start with no project" CTA's hook needs the assistant-ui runtime
+// (useAui) this suite doesn't provide — irrelevant to the cross-instance
+// project-store regression this file covers, so it's stubbed out.
+vi.mock('../use-select-draft-project', () => ({ useSelectDraftProject: () => vi.fn() }));
+
 // A sibling call site — a SEPARATE mounted instance of the same real hook,
 // standing in for SessionSidebar/ChatSurface/etc.
 function SiblingProjectCount() {

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::adapter::{ControlRequest, DetectedPr, EffortLevel};
 use crate::background_task::BackgroundActivity;
-use crate::content::LeafContent;
+use crate::content::{LeafContent, ToolResultImage};
 use crate::context::SessionMention;
 use crate::settings::ExecutionMode;
 
@@ -42,6 +42,31 @@ pub struct TodoItem {
 
 /// Back-compat alias for existing imports.
 pub type ChatEffort = EffortLevel;
+
+/// Id of the hidden scratch project row that owns every non-project chat's
+/// `project_id`. Excluded from every `ProjectsRepository` read; removal is
+/// refused at every layer that would otherwise cascade-delete non-project
+/// chats.
+pub const NO_PROJECT_ID: &str = "mainframe-no-project";
+
+/// Fields for a new chat, threaded from the create route through the lifecycle
+/// manager down to `ChatsRepository::create`. Owned strings (rather than
+/// borrows) because the request crosses several trait-object boundaries
+/// (`dyn LifecycleManagerDeps`, `dyn ChatManagerDeps`, ...).
+#[derive(Debug, Clone, Default)]
+pub struct NewChat {
+    pub project_id: String,
+    pub adapter_id: String,
+    pub model: Option<String>,
+    pub permission_mode: Option<String>,
+    pub automation_run_id: Option<String>,
+    /// Fixed at creation; see `Chat::temporary`.
+    pub temporary: bool,
+    /// `<data_dir>/scratch` — the root the repository appends the minted chat
+    /// id under. Only meaningful when `project_id == NO_PROJECT_ID`; ignored
+    /// otherwise.
+    pub scratch_root: Option<String>,
+}
 
 /// Per-chat / per-session tuning override. Tri-state per field:
 ///   absent (`None`)         → not part of this partial (PATCH); leave as-is
@@ -218,6 +243,39 @@ pub struct Chat {
     /// Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automation_run_id: Option<String>,
+    /// Fixed at creation. A temporary chat is left out of default listings,
+    /// refuses pin/tag/archive/unarchive, and is removed only by an explicit
+    /// discard or by removing its project.
+    #[serde(default)]
+    pub temporary: bool,
+    /// Derived on read as `project_id == NO_PROJECT_ID`; never a stored column.
+    #[serde(default)]
+    pub no_project: bool,
+    /// ISO time of the chat's latest vendor-context loss (its stored provider
+    /// session was started with no persistence and can no longer be resumed).
+    /// Drives the "earlier context was not preserved" notice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_lost_at: Option<String>,
+    /// Whether the stored provider session (`claude_session_id`) was started
+    /// with the adapter's no-persistence mechanism, so it is never a resume
+    /// target. Daemon-internal — deliberately absent from the wire `Chat`.
+    #[serde(skip)]
+    pub vendor_session_ephemeral: bool,
+    /// Non-project cwd `<data_dir>/scratch/<chatId>`, stored at create so every
+    /// cwd consumer can read it off the `Chat`. Daemon-internal — deliberately
+    /// absent from the wire `Chat`.
+    #[serde(skip)]
+    pub scratch_path: Option<String>,
+    /// The chat this one was forked from, or `null` for a chat with no parent
+    /// (todo #343). Deliberately generic — never fork-specific in name or
+    /// semantics, since side chats (#344) reuse it as "temporary and has a
+    /// parent". Survives archive/unarchive; never cascades from the parent.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub parent_chat_id: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -313,6 +371,10 @@ pub enum MessageContentNode {
         original_file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         modified_file: Option<String>,
+        /// Base64 image blocks carried on the `tool_result` (todo #363), source
+        /// order. Never serialized as text; omitted when empty.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        images: Vec<ToolResultImage>,
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
@@ -399,9 +461,46 @@ mod tests {
             "totalTokensInput": 0,
             "totalTokensOutput": 0,
             "lastContextTokensInput": 0,
-            "effort": null
+            "effort": null,
+            "temporary": false,
+            "noProject": false
         });
         roundtrip::<Chat>(v);
+    }
+
+    #[test]
+    fn chat_parent_chat_id_present_as_null_and_as_value() {
+        // A fork's parent is absent (skipped) on an unrelated (non-fork) chat, present
+        // as null when explicitly cleared/known-absent, and present as a value on a fork.
+        let base = json!({
+            "id": "chat_1",
+            "adapterId": "claude",
+            "projectId": "proj_1",
+            "status": "active",
+            "createdAt": "t",
+            "updatedAt": "t",
+            "totalCost": 0.0,
+            "totalTokensInput": 0,
+            "totalTokensOutput": 0,
+            "lastContextTokensInput": 0,
+            "temporary": false,
+            "noProject": false
+        });
+        let no_parent: Chat = serde_json::from_value(base.clone()).unwrap();
+        assert_eq!(no_parent.parent_chat_id, None);
+        assert!(
+            !serde_json::to_string(&no_parent)
+                .unwrap()
+                .contains("parentChatId")
+        );
+
+        let mut with_null = base.clone();
+        with_null["parentChatId"] = Value::Null;
+        roundtrip::<Chat>(with_null);
+
+        let mut with_value = base;
+        with_value["parentChatId"] = Value::String("chat_parent".to_string());
+        roundtrip::<Chat>(with_value);
     }
 
     #[test]
@@ -441,6 +540,27 @@ mod tests {
             "name": "Bash",
             "input": { "command": "echo 4" }
         }));
+        // Node arm: tool_result with images (todo #363) — omitted when empty,
+        // present in source order when populated.
+        roundtrip::<MessageContent>(json!({
+            "type": "tool_result",
+            "toolUseId": "toolu_02B",
+            "content": "",
+            "isError": false,
+            "images": [{ "mediaType": "image/png", "data": "AAAA" }]
+        }));
+        let no_images: MessageContent = serde_json::from_value(json!({
+            "type": "tool_result",
+            "toolUseId": "toolu_03C",
+            "content": "ok",
+            "isError": false
+        }))
+        .unwrap();
+        assert!(
+            !serde_json::to_string(&no_images)
+                .unwrap()
+                .contains("images")
+        );
     }
 
     #[test]

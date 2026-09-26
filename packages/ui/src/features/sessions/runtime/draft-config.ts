@@ -15,7 +15,8 @@ import { create } from 'zustand';
 import type { EffortLevel, PermissionMode } from '@qlan-ro/mainframe-types';
 
 export interface DraftCfg {
-  projectId: string;
+  /** null means "No project" — an explicit, equally-valid choice (todo #346). */
+  projectId: string | null;
   adapterId: string;
   /**
    * Initialization resolves model, permission, plan, effort, and feature values
@@ -36,6 +37,12 @@ export interface DraftCfg {
    * enable-worktree right after createChat on first send.
    */
   pendingWorktree?: { baseBranch: string; branchName: string };
+  /**
+   * Create-time only — toggled in the composer before the first send. Sent as
+   * `temporary: true` on createChat; there is no live path once the chat
+   * exists (todo #346).
+   */
+  temporary?: boolean;
 }
 
 interface DraftConfigState {

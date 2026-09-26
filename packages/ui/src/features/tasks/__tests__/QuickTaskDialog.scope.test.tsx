@@ -74,7 +74,7 @@ import * as todosApi from '@/lib/api/todos';
 const PORT = 31415;
 
 function identity(projectId: string | undefined): ReturnType<typeof useActiveIdentity> {
-  return { projectName: 'Mainframe', projectId, isWorktree: false };
+  return { projectName: 'Mainframe', projectId, isWorktree: false, noProject: false };
 }
 
 function pressQuickAddShortcut() {

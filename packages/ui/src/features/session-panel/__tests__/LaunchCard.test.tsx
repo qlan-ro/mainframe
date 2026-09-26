@@ -63,8 +63,16 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 let mockChatId: string | undefined = 'chat-9';
+let mockProjectId: string | undefined = 'proj-1';
+let mockNoProject = false;
 vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: () => ({ projectName: 'repo', projectId: 'proj-1', chatId: mockChatId, isWorktree: false }),
+  useActiveIdentity: () => ({
+    projectName: 'repo',
+    projectId: mockProjectId,
+    chatId: mockChatId,
+    isWorktree: false,
+    noProject: mockNoProject,
+  }),
 }));
 
 const { LaunchCard } = await import('../LaunchCard');
@@ -106,6 +114,8 @@ beforeEach(() => {
   mockProcessStatuses = {};
   mockSelectedByScope = {};
   mockChatId = 'chat-9';
+  mockProjectId = 'proj-1';
+  mockNoProject = false;
 });
 
 describe('LaunchCard — card chrome', () => {
@@ -232,6 +242,23 @@ describe('LaunchCard — no configurations', () => {
     render(<LaunchCard port={31415} onClose={onClose} />);
     await waitFor(() => screen.getByTestId('session-panel-launch-empty'));
     expect(screen.getByTestId('session-panel-launch-empty')).toHaveTextContent('No Launch Configurations');
+    expect(screen.queryByTestId('session-panel-launch-row-dev server')).toBeNull();
+  });
+});
+
+describe('LaunchCard — no project (todo #346)', () => {
+  it('fires no launch config request and shows the no-project explanation, not "No Launch Configurations"', async () => {
+    mockProjectId = undefined;
+    mockNoProject = true;
+    fetchLaunchConfigs.mockClear();
+    fetchLaunchStatuses.mockClear();
+    render(<LaunchCard port={31415} onClose={onClose} />);
+    await waitFor(() => screen.getByTestId('session-panel-launch-empty'));
+    expect(fetchLaunchConfigs).not.toHaveBeenCalled();
+    expect(fetchLaunchStatuses).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-panel-launch-empty')).toHaveTextContent(
+      'Launch isn’t available for a chat with no project.',
+    );
     expect(screen.queryByTestId('session-panel-launch-row-dev server')).toBeNull();
   });
 });

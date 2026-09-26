@@ -10,6 +10,7 @@
 mod marker_tests;
 mod meta_tests;
 mod result_content_tests;
+mod result_image_tests;
 mod segment_tests;
 mod tool_call_tests;
 
@@ -94,6 +95,7 @@ fn tool_call(id: &str, name: &str, category: ToolCategory, result: Option<&str>)
             truncated: None,
             full_bytes: None,
             ask_user_question: None,
+            images: Vec::new(),
         }),
         parent_tool_use_id: None,
     })

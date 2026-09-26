@@ -24,6 +24,7 @@ use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason};
+use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
@@ -121,6 +122,19 @@ pub trait EventHandlerDeps: Send + Sync {
     /// A completed, non-error tool call that may have registered a worktree.
     /// Sync fire-and-forget; the offer registry spawns its own rescan.
     fn on_worktree_trigger(&self, _chat_id: &str) {}
+
+    /// `db.chats.getPendingFork(chatId)` (todo #343) — `on_result` retires it
+    /// once the fork's first turn produces a result. Defaulted to `None`: the
+    /// correct answer for every chat this feature doesn't touch.
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let _ = chat_id;
+        None
+    }
+    /// `db.chats.clearPendingFork(chatId)`. No-op default, mirroring
+    /// `get_pending_fork`'s default of "this chat has none to clear".
+    fn clear_pending_fork(&self, chat_id: &str) {
+        let _ = chat_id;
+    }
 }
 
 /// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
@@ -479,12 +493,13 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
             return;
         };
-        let (project_id, worktree_path, session_process_id) = {
+        let (project_id, worktree_path, scratch_path, session_process_id) = {
             let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
             guard.chat.claude_session_id = Some(session_id.to_string());
             (
                 guard.chat.project_id.clone(),
                 guard.chat.worktree_path.clone(),
+                guard.chat.scratch_path.clone(),
                 guard.session.as_ref().map(|s| s.id().to_string()),
             )
         };
@@ -496,7 +511,11 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             },
         );
         let project_path = self.deps.projects_get_path(&project_id);
-        let cwd = worktree_path.or(project_path);
+        let cwd = crate::chat_cwd::chat_cwd(
+            worktree_path.as_deref(),
+            scratch_path.as_deref(),
+            project_path,
+        );
         if let Some(cwd) = cwd {
             let session_file_path = compute_session_file_path(&cwd, session_id);
             self.deps.chats_update(
@@ -793,6 +812,28 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
             return;
         };
+
+        // A fork's first turn producing a result retires its pending-fork state
+        // (todo #343): the fork now has its own transcript, so the snapshot the
+        // Fork action pinned is no longer needed. Best-effort: the column clears
+        // regardless, and a failed directory removal is logged, never surfaced.
+        if let Some(pending) = self.deps.get_pending_fork(&self.chat_id) {
+            self.deps.clear_pending_fork(&self.chat_id);
+            let chat_id = self.chat_id.clone();
+            let snapshot_dir = pending.snapshot_dir;
+            tokio::spawn(async move {
+                if let Err(err) = tokio::fs::remove_dir_all(&snapshot_dir).await
+                    && err.kind() != std::io::ErrorKind::NotFound
+                {
+                    warn!(
+                        %err,
+                        chat_id,
+                        snapshot_dir,
+                        "failed to remove a retired fork's snapshot directory"
+                    );
+                }
+            });
+        }
 
         let cost = data.total_cost_usd.unwrap_or(0.0);
         let tokens_input = data
@@ -1502,6 +1543,9 @@ mod tests {
         refs: Mutex<Vec<QueuedMessageRef>>,
         updates: Mutex<Vec<EventChatUpdate>>,
         quota: Option<Arc<QuotaManager>>,
+        /// `db.chats.pendingFork` for "c1" (todo #343); `None` for every test
+        /// outside the retire-on-result coverage.
+        pending_fork: Mutex<Option<PendingForkState>>,
     }
 
     impl FakeDeps {
@@ -1512,6 +1556,7 @@ mod tests {
                 refs: Mutex::new(refs),
                 updates: Mutex::new(Vec::new()),
                 quota: None,
+                pending_fork: Mutex::new(None),
             })
         }
         fn with_quota(cell: Arc<Mutex<ActiveChat>>, quota: Arc<QuotaManager>) -> Arc<Self> {
@@ -1521,7 +1566,11 @@ mod tests {
                 refs: Mutex::new(Vec::new()),
                 updates: Mutex::new(Vec::new()),
                 quota: Some(quota),
+                pending_fork: Mutex::new(None),
             })
+        }
+        fn set_pending_fork(&self, pending: PendingForkState) {
+            *self.pending_fork.lock().unwrap() = Some(pending);
         }
     }
 
@@ -1590,6 +1639,12 @@ mod tests {
         fn tracker_end_all_running(&self, _chat_id: &str) {}
         /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
         fn workflow_runs_stop_all(&self, _chat_id: &str) {}
+        fn get_pending_fork(&self, _chat_id: &str) -> Option<PendingForkState> {
+            self.pending_fork.lock().unwrap().clone()
+        }
+        fn clear_pending_fork(&self, _chat_id: &str) {
+            *self.pending_fork.lock().unwrap() = None;
+        }
     }
 
     fn umsg(id: &str, meta: Option<HashMap<String, serde_json::Value>>) -> ChatMessage {
@@ -1913,6 +1968,74 @@ mod tests {
             cell.lock().unwrap().chat.process_state,
             Some(Some(ProcessState::Idle))
         );
+    }
+
+    // ── retire-on-result (todo #343 Group 3, plan item 5) ────────────────────
+    fn result(subtype: &str, is_error: Option<bool>) -> SessionResult {
+        SessionResult {
+            total_cost_usd: Some(0.0),
+            usage: None,
+            context_tokens: None,
+            subtype: Some(subtype.to_string()),
+            result: None,
+            is_error,
+        }
+    }
+
+    #[tokio::test]
+    async fn on_result_retires_a_pending_fork_and_removes_its_snapshot_dir() {
+        let snapshot = tempfile::tempdir().unwrap();
+        let snapshot_dir = snapshot.path().to_string_lossy().into_owned();
+        let deps = FakeDeps::new(cell(ProcessState::Working, None), Vec::new());
+        deps.set_pending_fork(PendingForkState {
+            fork_source: mainframe_types::adapter::ForkSource {
+                source_session_id: "parent-session".to_string(),
+                resume_path: Some(format!("{snapshot_dir}/parent-session.jsonl")),
+            },
+            snapshot_dir: snapshot_dir.clone(),
+            provisional_title: "Untitled (fork)".to_string(),
+        });
+        let handler = EventHandler::new(
+            Arc::new(Mutex::new(MessageCache::new())),
+            Arc::new(Mutex::new(PermissionManager::new())),
+            deps.clone(),
+        );
+        let sink = handler.build_sink("c1", None);
+
+        sink.on_result(result("success", Some(false)));
+
+        // The DB column clears synchronously, inside `on_result` itself.
+        assert!(deps.get_pending_fork("c1").is_none());
+
+        // The directory removal is spawned fire-and-forget; poll for it rather
+        // than assume a fixed delay.
+        for _ in 0..200 {
+            if !std::path::Path::new(&snapshot_dir).exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        assert!(
+            !std::path::Path::new(&snapshot_dir).exists(),
+            "snapshot directory should have been removed"
+        );
+    }
+
+    /// A chat with no pending fork is unaffected — `clear_pending_fork` is
+    /// never called, and no removal is spawned.
+    #[tokio::test]
+    async fn on_result_is_a_no_op_for_a_chat_with_no_pending_fork() {
+        let deps = FakeDeps::new(cell(ProcessState::Working, None), Vec::new());
+        let handler = EventHandler::new(
+            Arc::new(Mutex::new(MessageCache::new())),
+            Arc::new(Mutex::new(PermissionManager::new())),
+            deps.clone(),
+        );
+        let sink = handler.build_sink("c1", None);
+
+        sink.on_result(result("success", Some(false)));
+
+        assert!(deps.get_pending_fork("c1").is_none());
     }
 
     #[test]

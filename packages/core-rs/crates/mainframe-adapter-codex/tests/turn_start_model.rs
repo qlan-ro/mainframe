@@ -102,6 +102,7 @@ fn spawn_options(
         tuning: None,
         small_fast_model: None,
         default_model: None,
+        no_persistence: None,
     }
 }
 
@@ -133,6 +134,7 @@ async fn spawn_test_session(
             chat_id: None,
             mainframe_chat_id: "chat-1".to_string(),
             session_file_path: None,
+            fork_source: None,
         },
         None,
         ResolvedPath::from_value("/usr/bin:/bin"),

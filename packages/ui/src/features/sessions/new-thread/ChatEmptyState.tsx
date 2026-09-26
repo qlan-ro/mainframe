@@ -7,7 +7,7 @@
 import { WelcomeState } from './WelcomeState';
 import { FirstRunState } from './FirstRunState';
 
-export function ChatEmptyState({ variant, projectId }: { variant: 'welcome' | 'firstrun'; projectId?: string }) {
+export function ChatEmptyState({ variant, projectId }: { variant: 'welcome' | 'firstrun'; projectId?: string | null }) {
   if (variant === 'firstrun') return <FirstRunState />;
   return <WelcomeState projectId={projectId} />;
 }

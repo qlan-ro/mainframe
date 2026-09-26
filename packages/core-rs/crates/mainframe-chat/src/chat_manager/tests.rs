@@ -14,6 +14,10 @@ use mainframe_types::settings::ExecutionMode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod chat_surface_wiring;
+mod fork_chat;
+mod fork_history;
+mod fork_sweep;
+mod fork_title;
 mod offload;
 mod plan_mode;
 mod resume_snapshot;
@@ -62,6 +66,40 @@ pub(crate) struct StoreDeps {
     /// What `create_plan_mode_handler` returns, so plan-mode dispatcher tests
     /// can inject a recorder (or leave `None` for the unresolved-handler path).
     plan_handler: Mutex<Option<Arc<dyn PlanModeActionHandler>>>,
+    /// What `adapter_supports_no_persistence` answers (todo #346, G2b).
+    no_persistence_capability: Mutex<bool>,
+    /// Every `ensure_dir` path, in order.
+    ensure_dir_calls: Mutex<Vec<String>>,
+    /// Every `mark_context_lost(chat_id, context_lost_at)` call, in order.
+    mark_context_lost_calls: Mutex<Vec<(String, String)>>,
+    /// Every `remove_scratch_dir` path, in order (todo #346).
+    remove_scratch_dir_calls: Mutex<Vec<String>>,
+    /// When `Some`, `remove_scratch_dir` fails with this message instead of
+    /// recording success. Cleared by the test between a failing call and a
+    /// retry, so `discard_chat` can be proven retryable (todo #346).
+    fail_remove_scratch_dir: Mutex<Option<String>>,
+    /// `adapter_fork_info(adapter_id).fork` — todo #343's fork_chat tests flip
+    /// this on; every other test leaves the trait default (`false`).
+    fork_capable: Mutex<bool>,
+    /// When `Some`, `pin_fork_point` fails with this instead of echoing the
+    /// source session id back as the snapshot path.
+    pin_failure: Mutex<Option<PinFailure>>,
+    /// When `Some`, `create_fork` fails with this message instead of inserting.
+    create_fork_failure: Mutex<Option<String>>,
+    /// `db.chats.pendingFork` per chat id, for the lifecycle/history/title tests
+    /// that resume an unsent fork.
+    pending_forks: Mutex<HashMap<String, PendingForkState>>,
+    /// `fork_snapshots_dir()` override, for the startup-sweep tests (a real
+    /// tempdir the sweep can list and remove from).
+    fork_snapshots_dir: Mutex<Option<String>>,
+}
+
+/// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
+#[derive(Clone)]
+pub(crate) enum PinFailure {
+    Unsupported,
+    TranscriptMissing,
+    Failed(String),
 }
 
 impl StoreDeps {
@@ -78,7 +116,7 @@ impl StoreDeps {
         }
         Arc::new(d)
     }
-    fn events(&self) -> Vec<DaemonEvent> {
+    pub(crate) fn events(&self) -> Vec<DaemonEvent> {
         self.events.lock().unwrap().clone()
     }
     pub(crate) fn created_sessions(&self) -> Vec<mainframe_types::adapter::SessionOptions> {
@@ -86,6 +124,33 @@ impl StoreDeps {
     }
     pub(crate) fn set_spawn_ok(&self, ok: bool) {
         *self.spawn_ok.lock().unwrap() = ok;
+    }
+    pub(crate) fn set_fork_capable(&self, fork: bool) {
+        *self.fork_capable.lock().unwrap() = fork;
+    }
+    pub(crate) fn fail_pin(&self, message: &str) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::Failed(message.to_string()));
+    }
+    pub(crate) fn fail_pin_transcript_missing(&self) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::TranscriptMissing);
+    }
+    pub(crate) fn fail_pin_unsupported(&self) {
+        *self.pin_failure.lock().unwrap() = Some(PinFailure::Unsupported);
+    }
+    pub(crate) fn fail_create_fork(&self, message: &str) {
+        *self.create_fork_failure.lock().unwrap() = Some(message.to_string());
+    }
+    pub(crate) fn set_pending_fork(&self, chat_id: &str, pending: PendingForkState) {
+        self.pending_forks
+            .lock()
+            .unwrap()
+            .insert(chat_id.to_string(), pending);
+    }
+    pub(crate) fn chat_count(&self) -> usize {
+        self.store.lock().unwrap().len()
+    }
+    pub(crate) fn set_fork_snapshots_dir(&self, dir: &str) {
+        *self.fork_snapshots_dir.lock().unwrap() = Some(dir.to_string());
     }
 }
 
@@ -109,15 +174,27 @@ impl ChatManagerDeps for StoreDeps {
     fn chats_get(&self, id: &str) -> Option<Chat> {
         self.store.lock().unwrap().get(id).cloned()
     }
-    fn chats_create(
-        &self,
-        _project_id: &str,
-        _adapter_id: &str,
-        _model: Option<&str>,
-        _permission_mode: Option<&str>,
-        _automation_run_id: Option<&str>,
-    ) -> Chat {
+    fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
         test_chat("new")
+    }
+    fn chats_delete(&self, chat_id: &str) {
+        self.store.lock().unwrap().remove(chat_id);
+    }
+    fn remove_scratch_dir<'a>(
+        &'a self,
+        scratch_path: &'a str,
+    ) -> BoxFuture<'a, Result<(), String>> {
+        self.remove_scratch_dir_calls
+            .lock()
+            .unwrap()
+            .push(scratch_path.to_string());
+        let fail = self.fail_remove_scratch_dir.lock().unwrap().clone();
+        Box::pin(async move {
+            match fail {
+                Some(msg) => Err(msg),
+                None => Ok(()),
+            }
+        })
     }
     fn chats_update(&self, chat_id: &str, patch: &ChatUpdate) {
         self.updates
@@ -134,6 +211,9 @@ impl ChatManagerDeps for StoreDeps {
             if let Some(title) = patch.title.clone() {
                 c.title = Some(title);
             }
+            if let Some(vse) = patch.vendor_session_ephemeral {
+                c.vendor_session_ephemeral = vse;
+            }
         }
     }
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
@@ -148,6 +228,7 @@ impl ChatManagerDeps for StoreDeps {
         _tags_all: Option<&[String]>,
         _has_worktree: bool,
         _include_archived: bool,
+        _include_temporary: bool,
     ) -> Vec<Chat> {
         self.store.lock().unwrap().values().cloned().collect()
     }
@@ -384,6 +465,127 @@ impl ChatManagerDeps for StoreDeps {
             c.worktree_path = None;
             c.branch_name = None;
         }
+    }
+    fn adapter_supports_no_persistence(&self, _adapter_id: &str) -> bool {
+        *self.no_persistence_capability.lock().unwrap()
+    }
+    fn ensure_dir<'a>(&'a self, path: &'a str) -> BoxFuture<'a, ()> {
+        self.ensure_dir_calls.lock().unwrap().push(path.to_string());
+        Box::pin(async {})
+    }
+    fn mark_context_lost(&self, chat_id: &str, context_lost_at: &str) {
+        self.mark_context_lost_calls
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), context_lost_at.to_string()));
+        if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
+            c.context_lost_at = Some(context_lost_at.to_string());
+            c.claude_session_id = None;
+            c.session_file_path = None;
+            c.vendor_session_ephemeral = false;
+        }
+    }
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        AdapterForkInfo {
+            name: adapter_id.to_string(),
+            fork: *self.fork_capable.lock().unwrap(),
+        }
+    }
+    fn pin_fork_point<'a>(
+        &'a self,
+        _adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<ForkSource, ForkPinError>> {
+        let failure = self.pin_failure.lock().unwrap().clone();
+        Box::pin(async move {
+            match failure {
+                Some(PinFailure::Unsupported) => Err(ForkPinError::Unsupported),
+                Some(PinFailure::TranscriptMissing) => Err(ForkPinError::TranscriptMissing),
+                Some(PinFailure::Failed(message)) => Err(ForkPinError::Failed(message)),
+                None => Ok(ForkSource {
+                    source_session_id: request.source_session_id,
+                    resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
+                }),
+            }
+        })
+    }
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+        if let Some(message) = self.create_fork_failure.lock().unwrap().clone() {
+            return Err(message);
+        }
+        let id = format!("fork-{}", self.store.lock().unwrap().len());
+        let chat = Chat {
+            id: id.clone(),
+            adapter_id: insert.adapter_id.clone(),
+            project_id: insert.project_id.clone(),
+            title: insert.title.clone(),
+            claude_session_id: None,
+            session_file_path: None,
+            model: insert.model.clone(),
+            permission_mode: insert.permission_mode,
+            plan_mode: Some(insert.plan_mode),
+            status: ChatStatus::Active,
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+            total_cost: 0.0,
+            total_tokens_input: 0,
+            total_tokens_output: 0,
+            last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
+            context_files: None,
+            mentions: None,
+            modified_files: None,
+            worktree_path: insert.worktree_path.clone(),
+            branch_name: insert.branch_name.clone(),
+            process_state: None,
+            display_status: None,
+            is_running: None,
+            background_activity: None,
+            worktree_missing: None,
+            directory_missing: None,
+            missing_directory_path: None,
+            transcript_missing: None,
+            todos: None,
+            pinned: None,
+            effort: Some(insert.effort),
+            fast: Some(insert.fast),
+            ultracode: Some(insert.ultracode),
+            adaptive_thinking: Some(insert.adaptive_thinking),
+            detected_prs: None,
+            tags: None,
+            automation_run_id: None,
+            temporary: false,
+            no_project: false,
+            context_lost_at: None,
+            vendor_session_ephemeral: false,
+            scratch_path: None,
+            parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
+        };
+        self.store.lock().unwrap().insert(id.clone(), chat.clone());
+        self.pending_forks
+            .lock()
+            .unwrap()
+            .insert(id, insert.pending_fork.clone());
+        Ok(chat)
+    }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.pending_forks.lock().unwrap().get(chat_id).cloned()
+    }
+    fn clear_pending_fork(&self, chat_id: &str) {
+        self.pending_forks.lock().unwrap().remove(chat_id);
+    }
+    fn fork_snapshots_dir(&self) -> String {
+        self.fork_snapshots_dir
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("mainframe-fork-snapshots-test-default")
+                    .to_string_lossy()
+                    .into_owned()
+            })
     }
 }
 
@@ -1406,6 +1608,73 @@ async fn remove_project_propagates_a_row_delete_failure() {
     assert_eq!(
         deps.project_removed.lock().unwrap().as_slice(),
         &["p1".to_string()]
+    );
+}
+
+// ── discard_chat (todo #346, rule 5) ─────────────────────────────────────────
+
+#[tokio::test]
+async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_dir() {
+    let mut c1 = test_chat("c1");
+    c1.temporary = true;
+    c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", false, true);
+    seed_active(&mgr, "c1", c1, session.clone());
+
+    assert!(mgr.discard_chat("c1").await.is_ok());
+
+    assert_eq!(
+        session.kills.load(Ordering::SeqCst),
+        1,
+        "the process must be stopped"
+    );
+    assert!(
+        mgr.get_active("c1").is_none(),
+        "the active-chat entry must be dropped"
+    );
+    assert_eq!(
+        deps.remove_scratch_dir_calls.lock().unwrap().as_slice(),
+        &["/tmp/mf-scratch/c1".to_string()]
+    );
+    assert!(
+        deps.chats_get("c1").is_none(),
+        "the row must be deleted (a subsequent GET 404s)"
+    );
+}
+
+#[tokio::test]
+async fn discard_chat_whose_scratch_dir_removal_fails_leaves_the_chat_discardable() {
+    let mut c1 = test_chat("c1");
+    c1.temporary = true;
+    c1.scratch_path = Some("/tmp/mf-scratch/c1".to_string());
+
+    let deps = StoreDeps::with_chats(vec![c1.clone()]);
+    *deps.fail_remove_scratch_dir.lock().unwrap() = Some("permission denied".to_string());
+    let mgr = ChatManager::new(deps.clone());
+
+    let result = mgr.discard_chat("c1").await;
+    assert_eq!(result, Err("permission denied".to_string()));
+    assert!(
+        deps.chats_get("c1").is_some(),
+        "a failed removal must leave the row (and a retry) intact"
+    );
+
+    // Retry, this time the removal succeeds.
+    *deps.fail_remove_scratch_dir.lock().unwrap() = None;
+    assert!(mgr.discard_chat("c1").await.is_ok());
+    assert!(deps.chats_get("c1").is_none());
+}
+
+#[tokio::test]
+async fn discard_chat_404s_for_an_unknown_chat() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps);
+    assert_eq!(
+        mgr.discard_chat("missing").await,
+        Err("Chat not found".to_string())
     );
 }
 

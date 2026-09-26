@@ -105,9 +105,16 @@ impl ChatManager {
         tags_all: Option<&[String]>,
         has_worktree: bool,
         include_archived: bool,
+        include_temporary: bool,
     ) -> Vec<Chat> {
         self.deps
-            .chats_list_filtered(project_id, tags_all, has_worktree, include_archived)
+            .chats_list_filtered(
+                project_id,
+                tags_all,
+                has_worktree,
+                include_archived,
+                include_temporary,
+            )
             .into_iter()
             .map(|mut c| {
                 let hp = self
