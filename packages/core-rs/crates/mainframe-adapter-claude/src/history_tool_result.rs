@@ -227,7 +227,6 @@ mod tests {
 // Tool-result image tests (todo #363) live in a sibling file to keep this one
 // under the 300-line cap; `super::*` inside it resolves against this module.
 #[cfg(test)]
-#[path = "history_tool_result/image_tests.rs"]
 mod image_tests;
 
 // PORT STATUS: src/plugins/builtin/claude/history-tool-result.ts (58 lines)
