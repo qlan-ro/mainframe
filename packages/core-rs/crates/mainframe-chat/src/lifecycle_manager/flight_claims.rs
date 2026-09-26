@@ -197,6 +197,41 @@ mod tests {
         assert!(!mgr.try_claim_offload("c1"));
     }
 
+    /// AC4's "in-flight load" case: `load_chat`'s own single-flight claim
+    /// (`guards.loading`) is one of `try_claim_offload`'s busy conditions —
+    /// this asserts that condition directly, the same way the send case
+    /// above asserts `guards.sending`. (`chat_manager::tests::offload`'s
+    /// AC4 suite drives the OTHER two race conditions — permission and
+    /// activity — end to end through a live `ChatManager`; a genuine
+    /// in-flight `guards.loading`/`guards.starting` claim can't arise for a
+    /// chat that's already an active, spawned idle candidate, since
+    /// `load_chat`/`start_chat` both skip claiming for exactly that chat
+    /// state — so this is asserted at the guard level instead.)
+    #[test]
+    fn try_claim_offload_refuses_while_a_load_is_in_flight() {
+        let mgr = manager();
+        {
+            let mut g = mgr.guards.lock().unwrap();
+            g.loading
+                .insert("c1".to_string(), Arc::new(tokio::sync::Notify::new()));
+        }
+        assert!(!mgr.try_claim_offload("c1"));
+    }
+
+    /// AC4's "in-flight spawn" case — see the loading test's doc for why this
+    /// is asserted at the guard level (`guards.starting`) rather than through
+    /// a live `start_chat` call.
+    #[test]
+    fn try_claim_offload_refuses_while_a_spawn_is_in_flight() {
+        let mgr = manager();
+        {
+            let mut g = mgr.guards.lock().unwrap();
+            g.starting
+                .insert("c1".to_string(), Arc::new(tokio::sync::Notify::new()));
+        }
+        assert!(!mgr.try_claim_offload("c1"));
+    }
+
     #[test]
     fn try_claim_offload_refuses_a_second_concurrent_claim() {
         let mgr = manager();

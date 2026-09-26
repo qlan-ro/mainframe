@@ -9,11 +9,34 @@
 //! test — there is no reason to inject time.
 
 use super::*;
-use crate::idle_scanner::{IDLE_THRESHOLD_MS, select_idle_candidates};
+use crate::idle_offload::ChatOffload;
+use crate::idle_scanner::{IDLE_THRESHOLD_MS, IdleOffloader, select_idle_candidates};
 use crate::test_support::FakeSession;
 use mainframe_types::adapter::ControlRequest;
 use mainframe_types::chat::{ChatMessage, ChatMessageType};
 use mainframe_types::content::LeafContent;
+
+/// Builds a `ChatOffload` from `mgr`'s own shared collaborators — exactly how
+/// `ChatManager::scan_idle_sessions` builds one for the scanner (todo #178
+/// plan "Design"). Lets a test drive `IdleOffloader::offload` on a SPECIFIC,
+/// already-selected chat id directly, bypassing `scan_idle_sessions`'s own
+/// fresh `select_idle_candidates` pass — necessary for a race test where the
+/// state change happens strictly between selection and the offload itself:
+/// `scan_idle_sessions`'s own selection would otherwise re-filter the
+/// candidate out before `ChatOffload::recheck` ever ran (AC4).
+fn offloader_for(
+    mgr: &ChatManager,
+) -> ChatOffload<crate::chat_manager::deps_lifecycle::LcDeps, crate::chat_manager::deps_event::EhDeps>
+{
+    ChatOffload::new(
+        mgr.active_chats.clone(),
+        mgr.messages.clone(),
+        mgr.permissions.clone(),
+        mgr.queued_refs.clone(),
+        mgr.lifecycle.clone(),
+        mgr.event_handler.clone(),
+    )
+}
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -171,8 +194,17 @@ async fn ac3_ineligible_chats_are_untouched() {
 // ── AC4: state changes between candidate selection and the offload ─────────
 // (the two scan steps are exposed separately, plan "Design", precisely for
 // this: read `select_idle_candidates` for "selection already ran", mutate
-// shared state, then let `scan_idle_sessions`'s own fresh selection pass see
-// the SAME registry so its offload re-check runs after that mutation).
+// shared state, then either let `scan_idle_sessions`'s own fresh selection
+// pass see the SAME registry so its offload re-check runs after that
+// mutation (permission, send), or — for the activity case, which selection
+// itself would re-filter — drive `ChatOffload::offload` directly on the
+// already-selected id via `offloader_for` (module doc above). The remaining
+// two AC4 conditions, an in-flight spawn/load, can't arise for a chat that's
+// already an active, spawned idle candidate (`start_chat`/`load_chat` both
+// skip claiming for exactly that state) — those are asserted directly at the
+// guard level in `lifecycle_manager::flight_claims::tests`
+// (`try_claim_offload_refuses_while_a_spawn_is_in_flight`/
+// `..._a_load_is_in_flight`).
 
 #[tokio::test]
 async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live() {
@@ -194,6 +226,38 @@ async fn ac4_a_pending_permission_injected_after_selection_keeps_the_chat_live()
 
     assert_eq!(session.kills(), 0, "the chat stays live");
     assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+/// The activity case can't be exercised through `scan_idle_sessions()` like
+/// the permission/send cases above: `select_idle_candidates` itself filters
+/// on activity, so a bump landing before `scan_idle_sessions`'s OWN fresh
+/// selection pass would just silently drop the candidate before `offload()`
+/// is even called — never reaching `ChatOffload::recheck`'s activity check at
+/// all. Driving `IdleOffloader::offload` directly on the pre-selected id
+/// (`offloader_for`, module doc above) is what actually exercises `recheck`.
+#[tokio::test]
+async fn ac4_activity_injected_after_selection_keeps_the_chat_live() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = seed_idle_chat(&mgr, Some(long_idle()));
+
+    let candidates = select_idle_candidates(&mgr.active_chats, now_ms(), IDLE_THRESHOLD_MS);
+    assert_eq!(
+        candidates,
+        vec!["c1".to_string()],
+        "selected before the race"
+    );
+
+    // The race: fresh activity lands after selection, before the offload's re-check.
+    session.bump_activity(now_ms());
+
+    let offloader = offloader_for(&mgr);
+    offloader.offload("c1").await;
+
+    assert_eq!(session.kills(), 0, "the chat stays live");
+    assert!(mgr.messages.lock().unwrap().get("c1").is_some());
+    assert!(mgr.active_chats.get("c1").is_some());
     assert!(offloaded_events(&deps).is_empty());
 }
 
@@ -290,6 +354,12 @@ async fn ac7_get_messages_after_offload_does_not_touch_the_registry() {
 async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
     let (deps, mgr) =
         seed_offloadable_chat_with_transcript(vec![history_message("m1"), history_message("m2")]);
+    // A real post-spawn send: without this, `require_live_session` fails
+    // after `start_chat` and the send never reaches `store_user_message`,
+    // which is exactly the assertion this test exists to make (AC7's "spawns
+    // one... sending... starts with every pre-offload message, followed by
+    // the new user message").
+    deps.set_spawn_ok(true);
 
     mgr.scan_idle_sessions().await;
     assert!(
@@ -301,17 +371,29 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
         "offloaded: no cached messages"
     );
 
-    // send -> start_chat -> do_start_chat -> load_chat -> do_load_chat reloads
-    // the transcript with the STORED `claude_session_id` before dispatch is
-    // attempted (the fake session never reports itself spawned after
-    // `.spawn()`, so the send itself errors here — a pre-existing limitation
-    // shared by every other spawn-path test in this suite, unrelated to offload).
-    let _ = mgr.send_message("c1", "hello again", None, None).await;
+    // send -> start_chat -> do_start_chat (spawns with the resume anchor,
+    // asserted below) -> load_chat -> do_load_chat reloads the transcript ->
+    // dispatch stores the new user message on top.
+    mgr.send_message("c1", "hello again", None, None)
+        .await
+        .expect("the resumed session now spawns successfully");
 
     assert!(
         mgr.active_chats.get("c1").is_some(),
         "the resume path re-registered the chat"
     );
+
+    let resume_session = deps
+        .created_sessions()
+        .into_iter()
+        .find(|o| o.mainframe_chat_id == "c1")
+        .expect("do_start_chat must have created a session for c1");
+    assert_eq!(
+        resume_session.chat_id,
+        Some("sess-1".to_string()),
+        "spawns with the stored CLI session id (the resume path)"
+    );
+
     let reloaded = mgr
         .messages
         .lock()
@@ -319,12 +401,30 @@ async fn ac7_send_after_offload_reloads_prior_history_via_the_resume_path() {
         .get("c1")
         .cloned()
         .unwrap_or_default();
-    let ids: Vec<String> = reloaded.iter().map(|m| m.id.clone()).collect();
     assert_eq!(
-        ids,
-        vec!["m1".to_string(), "m2".to_string()],
-        "every pre-offload message reloaded with its original id"
+        reloaded.len(),
+        3,
+        "every pre-offload message, followed by the new user message"
     );
+    let ids: Vec<&str> = reloaded.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(
+        &ids[..2],
+        ["m1", "m2"],
+        "history starts with every pre-offload message"
+    );
+    assert_eq!(
+        reloaded[2].r#type,
+        ChatMessageType::User,
+        "followed by the new user message"
+    );
+    assert!(
+        reloaded[2]
+            .content
+            .iter()
+            .any(|c| matches!(c, MessageContent::Leaf(LeafContent::Text { text, .. }) if text == "hello again")),
+        "the new user message carries the text just sent"
+    );
+
     assert_eq!(
         deps.history_loads.load(std::sync::atomic::Ordering::SeqCst),
         1,
