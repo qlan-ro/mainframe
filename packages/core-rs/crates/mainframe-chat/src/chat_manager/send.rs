@@ -16,20 +16,34 @@ struct Outgoing {
 
 impl ChatManager {
     /// First-message titling: the deterministic fallback, then LLM summarization.
-    /// No-op once the chat has a title.
+    /// No-op once the chat has a title — EXCEPT a fork's provisional title
+    /// (todo #343), which still triggers generation on the first send even
+    /// though it is non-empty: without this, a fork's `<title> (fork)` title
+    /// would never be replaced. A user rename before that first message (the
+    /// title no longer equals the stored provisional title) still wins, and so
+    /// does disabled generation (`do_generate_title`'s own no-op).
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
-        let title_empty = cell
+        let current_title = cell
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .chat
             .title
-            .as_deref()
-            .unwrap_or_default()
-            .is_empty();
+            .clone()
+            .unwrap_or_default();
+        let title_empty = current_title.is_empty();
+        let is_untouched_fork_title = self
+            .deps
+            .get_pending_fork(chat_id)
+            .is_some_and(|pending| pending.provisional_title == current_title);
+        if !title_empty && !is_untouched_fork_title {
+            return;
+        }
+
+        // Both title paths must see the reader's text, not the markers the
+        // composer wraps around it (message_markers.rs).
+        let visible_content = visible_message_text(content);
+
         if title_empty {
-            // Both title paths must see the reader's text, not the markers the
-            // composer wraps around it (message_markers.rs).
-            let visible_content = visible_message_text(content);
             let title = derive_title_from_message(&visible_content);
             {
                 let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
@@ -44,19 +58,20 @@ impl ChatManager {
             );
             let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
-            // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
-            // generation shells out to the CLI, so awaiting it here would both stall
-            // the send and shift its `chat.updated` ahead of the turn's result/
-            // contextUsage events. Spawn it so the emission lands after the turn,
-            // matching Node's stream ordering.
-            let lifecycle = self.lifecycle.clone();
-            let chat_id_owned = chat_id.to_string();
-            tokio::spawn(async move {
-                lifecycle
-                    .do_generate_title(&chat_id_owned, &visible_content)
-                    .await;
-            });
         }
+        // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
+        // generation shells out to the CLI, so awaiting it here would both stall
+        // the send and shift its `chat.updated` ahead of the turn's result/
+        // contextUsage events. Spawn it so the emission lands after the turn,
+        // matching Node's stream ordering. A fork's provisional title is left
+        // exactly as `create_fork` stored it until generation produces one.
+        let lifecycle = self.lifecycle.clone();
+        let chat_id_owned = chat_id.to_string();
+        tokio::spawn(async move {
+            lifecycle
+                .do_generate_title(&chat_id_owned, &visible_content)
+                .await;
+        });
     }
 
     /// Both dispatch shapes store and emit the user's text, so they share this.

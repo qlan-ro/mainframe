@@ -24,6 +24,7 @@ pub mod external_session_cache;
 pub mod external_session_enrich;
 pub mod external_session_paths;
 pub mod external_sessions;
+pub mod fork;
 pub mod frontmatter;
 pub mod history;
 pub mod history_converters;

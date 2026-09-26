@@ -116,6 +116,7 @@ mod tests {
             detected_prs: None,
             tags: None,
             automation_run_id: None,
+            parent_chat_id: None,
         }
     }
 

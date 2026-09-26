@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { listChats, createChat, renameChat, pinChat, archiveChat, unarchiveChat } from '../chats';
+import { listChats, createChat, renameChat, pinChat, archiveChat, unarchiveChat, forkChat } from '../chats';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
 const LOCAL_DAEMON = {
@@ -243,5 +243,24 @@ describe('unarchiveChat', () => {
     expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/unarchive', {
       method: 'POST',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// forkChat
+// ---------------------------------------------------------------------------
+
+describe('forkChat', () => {
+  it('calls POST /api/chats/:id/fork with no body and returns the new chat', async () => {
+    const fork: Chat = { ...CHAT_FIXTURE, id: 'chat-fork-1', parentChatId: chatId };
+    mockFetchOk(fork);
+
+    const result = await forkChat(port, chatId);
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:31415/api/chats/chat-abc123/fork', {
+      method: 'POST',
+    });
+    expect(result).toEqual(fork);
   });
 });

@@ -90,6 +90,13 @@ export interface Chat {
   tags?: string[];
   /** Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list. */
   automationRunId?: string | null;
+  /**
+   * The chat this one was forked from, or `null` for a chat with no parent
+   * (todo #343). Deliberately generic — never fork-specific in name or
+   * semantics, since side chats (#344) reuse it as "temporary and has a
+   * parent". Survives archive/unarchive; never cascades from the parent.
+   */
+  parentChatId?: string | null;
 }
 
 export interface Project {

@@ -114,6 +114,7 @@ pub async fn spawn_facade_server_with(
         Arc::new(ClaudeWorkflowStore::new()),
         mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
         Some(facade_hub.as_chat_surface()),
+        data_dir.path().to_path_buf(),
     );
 
     let path = data_dir.path().to_string_lossy().into_owned();

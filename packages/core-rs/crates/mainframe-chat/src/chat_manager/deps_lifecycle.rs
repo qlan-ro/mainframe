@@ -132,6 +132,9 @@ impl LifecycleManagerDeps for LcDeps {
     fn path_exists(&self, path: &str) -> bool {
         self.deps.path_exists(path)
     }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.deps.get_pending_fork(chat_id)
+    }
 }
 
 pub(super) fn build(

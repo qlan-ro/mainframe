@@ -181,6 +181,8 @@ impl Adapter for CodexAdapter {
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
+            // Codex has no top-level fork mechanism yet (todo #368 tracks it).
+            fork: false,
         }
     }
 

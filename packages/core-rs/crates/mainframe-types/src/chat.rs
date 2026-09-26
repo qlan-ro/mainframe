@@ -218,6 +218,16 @@ pub struct Chat {
     /// Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automation_run_id: Option<String>,
+    /// The chat this one was forked from, or `null` for a chat with no parent
+    /// (todo #343). Deliberately generic — never fork-specific in name or
+    /// semantics, since side chats (#344) reuse it as "temporary and has a
+    /// parent". Survives archive/unarchive; never cascades from the parent.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub parent_chat_id: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -406,6 +416,39 @@ mod tests {
             "effort": null
         });
         roundtrip::<Chat>(v);
+    }
+
+    #[test]
+    fn chat_parent_chat_id_present_as_null_and_as_value() {
+        // A fork's parent is absent (skipped) on an unrelated (non-fork) chat, present
+        // as null when explicitly cleared/known-absent, and present as a value on a fork.
+        let base = json!({
+            "id": "chat_1",
+            "adapterId": "claude",
+            "projectId": "proj_1",
+            "status": "active",
+            "createdAt": "t",
+            "updatedAt": "t",
+            "totalCost": 0.0,
+            "totalTokensInput": 0,
+            "totalTokensOutput": 0,
+            "lastContextTokensInput": 0
+        });
+        let no_parent: Chat = serde_json::from_value(base.clone()).unwrap();
+        assert_eq!(no_parent.parent_chat_id, None);
+        assert!(
+            !serde_json::to_string(&no_parent)
+                .unwrap()
+                .contains("parentChatId")
+        );
+
+        let mut with_null = base.clone();
+        with_null["parentChatId"] = Value::Null;
+        roundtrip::<Chat>(with_null);
+
+        let mut with_value = base;
+        with_value["parentChatId"] = Value::String("chat_parent".to_string());
+        roundtrip::<Chat>(with_value);
     }
 
     #[test]

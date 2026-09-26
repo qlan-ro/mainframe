@@ -170,6 +170,47 @@ async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Respo
     ok_empty()
 }
 
+/// The fork command's body is always empty — `deny_unknown_fields` on a
+/// zero-field struct accepts "no body" (`parse_body` treats a whitespace-only
+/// body as `{}`) and rejects any unexpected field (400).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForkChatBody {}
+
+/// `POST /api/chats/{id}/fork` (todo #343): branch `id`'s conversation into a
+/// new chat. `ChatManager::fork_chat` runs every eligibility check from the
+/// spec's Behavior list and maps its own failures to the Daemon contract
+/// table's statuses; this handler only owns request validation (empty id,
+/// malformed/unexpected body) and the wire message for "unknown chat id",
+/// which the spec gives as the generic "Not found" rather than fork_chat's
+/// own (more specific) internal message.
+async fn fork(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
+    if id.trim().is_empty() {
+        return fail(StatusCode::BAD_REQUEST, "id is required");
+    }
+    if parse_body::<ForkChatBody>(&body).is_none() {
+        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+    }
+    let Some(cm) = ctx.chat_manager.as_ref() else {
+        tracing::warn!(chat_id = %id, "fork is a Phase-4 seam (ChatManager unavailable)");
+        return fail(StatusCode::INTERNAL_SERVER_ERROR, "fork unavailable");
+    };
+    match cm.fork_chat(&id).await {
+        Ok(chat) => ok(chat),
+        Err(mainframe_chat::chat_manager::ForkChatError::NotFound(_)) => {
+            fail(StatusCode::NOT_FOUND, "Not found")
+        }
+        Err(err) => {
+            let status = StatusCode::from_u16(err.status_code())
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            if status == StatusCode::INTERNAL_SERVER_ERROR {
+                tracing::error!(chat_id = %id, %err, "fork failed");
+            }
+            fail(status, err.to_string())
+        }
+    }
+}
+
 async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
         Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
@@ -257,6 +298,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}/config", patch(update_config))
         .route("/api/chats/{id}/interrupt", post(interrupt))
         .route("/api/chats/{id}/resume", post(resume))
+        .route("/api/chats/{id}/fork", post(fork))
         .route("/api/chats/{id}/trust-workspace", post(trust_workspace))
         .route(
             "/api/chats/{id}/queue/{messageId}",

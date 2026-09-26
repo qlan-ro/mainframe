@@ -21,7 +21,8 @@ use std::sync::{Arc, OnceLock, Weak};
 
 use mainframe_adapter_api::pr_detection::scan_history_for_prs;
 use mainframe_adapter_api::{
-    AdapterError, AdapterRegistry, AdapterSession, BoxFuture, PlanModeActionHandler,
+    AdapterError, AdapterRegistry, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest,
+    PlanModeActionHandler,
 };
 use mainframe_adapter_claude::external_session_cache::{
     ExternalSessionCache, new_external_session_cache,
@@ -35,7 +36,8 @@ use mainframe_background_tasks::kill::{
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::attachment_processor;
 use mainframe_chat::chat_manager::{
-    ChatManager, ChatManagerDeps, ChatUpdate, ProcessedAttachments,
+    AdapterForkInfo, ChatManager, ChatManagerDeps, ChatUpdate, ForkCreateInput,
+    ProcessedAttachments,
 };
 use mainframe_chat::context_tracker::{
     AttachmentLister, ContextDb, extract_mentions_from_text, get_session_context,
@@ -44,6 +46,7 @@ use mainframe_chat::event_handler::PushOut;
 use mainframe_chat::external_session_service::{
     ExternalChatUpdate, ExternalSessionDeps, ExternalSessionService,
 };
+use mainframe_chat::fork::PendingForkState;
 use mainframe_chat::resolve_tuning_for_chat::{ResolveTuningDeps, resolve_tuning_for_chat};
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_runtime::ResolvedPath;
@@ -138,6 +141,51 @@ fn to_external_chat_update(patch: &ExternalChatUpdate) -> mainframe_db::chats::C
     }
 }
 
+/// `mainframe_chat::fork::PendingForkState` → the DB repository's `PendingFork`
+/// (todo #343). Field-for-field; the two exist separately only because
+/// `mainframe-chat` does not depend on `mainframe-db`.
+fn to_db_pending_fork(pending: &PendingForkState) -> mainframe_db::chats::PendingFork {
+    mainframe_db::chats::PendingFork {
+        fork_source: pending.fork_source.clone(),
+        snapshot_dir: pending.snapshot_dir.clone(),
+        provisional_title: pending.provisional_title.clone(),
+    }
+}
+
+/// The DB repository's `PendingFork` → `mainframe_chat::fork::PendingForkState`.
+fn from_db_pending_fork(pending: mainframe_db::chats::PendingFork) -> PendingForkState {
+    PendingForkState {
+        fork_source: pending.fork_source,
+        snapshot_dir: pending.snapshot_dir,
+        provisional_title: pending.provisional_title,
+    }
+}
+
+/// `ChatManager::fork_chat`'s `ForkCreateInput` → the DB repository's
+/// `ForkInsert<'a>` (todo #343). A free function rather than a method so it can
+/// borrow from `input` and `pending_fork` with independent lifetimes.
+fn to_db_fork_insert<'a>(
+    input: &'a ForkCreateInput,
+    pending_fork: &'a mainframe_db::chats::PendingFork,
+) -> mainframe_db::chats::ForkInsert<'a> {
+    mainframe_db::chats::ForkInsert {
+        parent_chat_id: &input.parent_chat_id,
+        project_id: &input.project_id,
+        adapter_id: &input.adapter_id,
+        model: input.model.as_deref(),
+        permission_mode: input.permission_mode,
+        plan_mode: input.plan_mode,
+        effort: input.effort,
+        fast: input.fast,
+        ultracode: input.ultracode,
+        adaptive_thinking: input.adaptive_thinking,
+        worktree_path: input.worktree_path.as_deref(),
+        branch_name: input.branch_name.as_deref(),
+        title: input.title.as_deref(),
+        pending_fork,
+    }
+}
+
 /// The daemon-side `ChatManagerDeps`. Cheap to clone-share (every field is an
 /// `Arc`/handle), constructed once at boot in [`build_chat_manager`].
 pub struct DaemonChatDeps {
@@ -161,6 +209,11 @@ pub struct DaemonChatDeps {
     /// Shared with `AppCtx` and the `ClaudeAdapter` — the daemon's single
     /// per-chat workflow-run store (D5's CLI-exit sweep target).
     claude_workflows: Arc<ClaudeWorkflowStore>,
+    /// The daemon's data directory (`AppCtx::data_dir`) — `fork_snapshots_dir`
+    /// joins `"fork-snapshots"` onto it (todo #343). Threaded in rather than
+    /// read via `mainframe_runtime::config::get_data_dir()` at request time: that
+    /// helper does synchronous I/O, which a request-path deps method must not do.
+    data_dir: std::path::PathBuf,
 }
 
 impl DaemonChatDeps {
@@ -176,15 +229,23 @@ impl DaemonChatDeps {
     /// must never feed the mention scan) outweighs the extra I/O here.
     fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.chats_get(chat_id)?;
-        let claude_session_id = chat.claude_session_id.clone()?;
+        // An unsent fork (todo #343) has no `claude_session_id` yet; it scans
+        // its pending fork's snapshot instead, same as every other session
+        // builder (`build_history_session`/`do_load_chat`/`do_start_chat`).
+        let own_id = chat.claude_session_id.clone();
+        let fork_source = ChatManagerDeps::get_pending_fork(self, chat_id).map(|p| p.fork_source);
+        if own_id.is_none() && fork_source.is_none() {
+            return None;
+        }
         let project_path = self.projects_get_path(&chat.project_id)?;
         let effective_path = chat.worktree_path.clone().unwrap_or(project_path);
         self.create_session(
             &chat.adapter_id,
             SessionOptions {
                 project_path: effective_path,
-                chat_id: Some(claude_session_id),
+                chat_id: own_id,
                 mainframe_chat_id: chat_id.to_string(),
+                fork_source,
             },
         )
     }
@@ -797,6 +858,70 @@ impl ChatManagerDeps for DaemonChatDeps {
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.claude_workflows.stop_all_running(chat_id);
     }
+
+    fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
+        match self.adapters.get(adapter_id) {
+            Some(adapter) => AdapterForkInfo {
+                name: adapter.name().to_string(),
+                fork: adapter.capabilities().fork,
+            },
+            None => AdapterForkInfo {
+                name: adapter_id.to_string(),
+                fork: false,
+            },
+        }
+    }
+
+    fn pin_fork_point<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'a, Result<mainframe_types::adapter::ForkSource, ForkPinError>> {
+        let adapter = self.adapters.get(adapter_id);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                return Err(ForkPinError::Unsupported);
+            };
+            adapter.pin_fork_point(request).await
+        })
+    }
+
+    fn create_fork(&self, insert: &ForkCreateInput) -> Result<Chat, String> {
+        let input = insert.clone();
+        let db_pending = to_db_pending_fork(&input.pending_fork);
+        self.db
+            .call_blocking(move |d| {
+                let fork_insert = to_db_fork_insert(&input, &db_pending);
+                d.chats.create_fork(&fork_insert)
+            })
+            .map_err(|err| err.to_string())
+    }
+
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.chats.get_pending_fork(&id))
+            .ok()
+            .flatten()
+            .map(from_db_pending_fork)
+    }
+
+    fn clear_pending_fork(&self, chat_id: &str) {
+        let id = chat_id.to_string();
+        if let Err(err) = self
+            .db
+            .call_blocking(move |d| d.chats.clear_pending_fork(&id))
+        {
+            tracing::warn!(%err, chat_id, "chats.clear_pending_fork failed");
+        }
+    }
+
+    fn fork_snapshots_dir(&self) -> String {
+        self.data_dir
+            .join("fork-snapshots")
+            .to_string_lossy()
+            .into_owned()
+    }
 }
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
@@ -962,6 +1087,8 @@ pub fn build_chat_manager(
     // The chat-surface observer (todo #350): the ACP facade hub in the daemon
     // boot; `None` in harnesses that exercise the legacy surface only.
     chat_surface: Option<Arc<dyn mainframe_chat::chat_surface::ChatSurface>>,
+    // `fork_snapshots_dir` joins `"fork-snapshots"` onto this (todo #343).
+    data_dir: std::path::PathBuf,
 ) -> Arc<ChatManager> {
     let deps = Arc::new(DaemonChatDeps {
         db,
@@ -977,6 +1104,7 @@ pub fn build_chat_manager(
         claude_external_session_cache: new_external_session_cache(),
         chat_manager: OnceLock::new(),
         claude_workflows,
+        data_dir,
     });
     let external_sessions = Arc::new(ExternalSessionService::new(deps.clone()));
     let mut manager = ChatManager::new(deps.clone()).with_external_sessions(external_sessions);
@@ -1193,6 +1321,7 @@ pub(crate) fn fallback_chat(
         detected_prs: None,
         tags: None,
         automation_run_id: None,
+        parent_chat_id: None,
     }
 }
 
@@ -1374,6 +1503,7 @@ mod scan_loaded_history_tests {
             claude_external_session_cache: new_external_session_cache(),
             chat_manager: OnceLock::new(),
             claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+            data_dir: std::env::temp_dir().join("mf-chat-deps-test-data"),
         }
     }
 
@@ -1937,6 +2067,7 @@ mod scan_loaded_history_tests {
             mainframe_types::adapter::AdapterCapabilities {
                 plan_mode: false,
                 auto_mode: false,
+                fork: false,
             }
         }
         fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

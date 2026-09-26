@@ -22,14 +22,16 @@ use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{
-    AdapterError, AdapterSession, BoxFuture, ImageInput, PlanModeActionHandler, SessionSink,
+    AdapterError, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest, ImageInput,
+    PlanModeActionHandler, SessionSink,
 };
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::commands::{find_mainframe_command, wrap_mainframe_command};
 use mainframe_services::workspace::is_worktree_present;
 use mainframe_services::workspace::worktree::is_directory_present;
 use mainframe_types::adapter::{
-    ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ProviderQuota, SessionOptions,
+    ControlResponse, DetectedPr, EffortLevel, ExternalSessionPage, ForkSource, ProviderQuota,
+    SessionOptions,
 };
 use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
@@ -50,6 +52,7 @@ use crate::config_manager::{ChatConfigManager, ChatFieldUpdate, ConfigError, Con
 use crate::degraded_recovery::{DegradedRecoveryDeps, DegradedRecoveryError, RecoverySync};
 use crate::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
+use crate::fork::{PendingForkState, fork_title};
 use crate::lifecycle_manager::{
     ChatLifecycleManager, LifecycleChatUpdate, LifecycleError, LifecycleManagerDeps,
 };
@@ -76,6 +79,7 @@ mod deps_permission;
 mod deps_recovery;
 mod errors;
 mod external_facade;
+mod fork_api;
 mod history;
 mod lifecycle_api;
 mod reads;
@@ -89,6 +93,10 @@ pub use deps::ChatManagerDeps;
 pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
 pub use update::{ChatUpdate, ProcessedAttachments};
+
+// `ForkChatError` (todo #343's fork-a-chat action, `fork_api.rs`) is distinct
+// from `ForkError` above (the pre-existing `forkToWorktree` action).
+pub use crate::fork::{AdapterForkInfo, ForkChatError, ForkCreateInput};
 
 use deps_config::CmDeps;
 use deps_event::EhDeps;

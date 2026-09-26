@@ -85,6 +85,12 @@ impl EventHandlerDeps for EhDeps {
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.deps.workflow_runs_stop_all(chat_id);
     }
+    fn get_pending_fork(&self, chat_id: &str) -> Option<PendingForkState> {
+        self.deps.get_pending_fork(chat_id)
+    }
+    fn clear_pending_fork(&self, chat_id: &str) {
+        self.deps.clear_pending_fork(chat_id);
+    }
 }
 
 pub(super) fn build(
