@@ -104,7 +104,7 @@ describe('use-chat-runtime-hook — active:true when main thread and remoteId is
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: true });
+    expect(thirdArg).toEqual({ active: true, chatId: 'chat-9' });
   });
 });
 
@@ -122,7 +122,7 @@ describe('use-chat-runtime-hook — active:false when mainThreadId differs', () 
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false });
+    expect(thirdArg).toEqual({ active: false, chatId: 'chat-9' });
   });
 });
 
@@ -140,6 +140,6 @@ describe('use-chat-runtime-hook — active:false when remoteId is absent (new lo
     renderHook(() => useChatRuntimeHook());
 
     const thirdArg = mockUseChatThreadRuntime.mock.calls[0]?.[2];
-    expect(thirdArg).toEqual({ active: false });
+    expect(thirdArg).toEqual({ active: false, chatId: '__LOCALID_x' });
   });
 });
