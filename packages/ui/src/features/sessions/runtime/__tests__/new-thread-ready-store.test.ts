@@ -18,6 +18,9 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useNewThreadReady, IDLE_INITIALIZATION } from '../new-thread-ready-store';
+import type { DraftCfg } from '../draft-config';
+
+const noopRetry = (async () => ({}) as DraftCfg) as () => Promise<DraftCfg>;
 
 beforeEach(() => {
   // Reset the shared store between tests.
@@ -63,5 +66,22 @@ describe('new-thread-ready-store', () => {
     const second = useNewThreadReady.getState().getInitialization('unknown-id');
 
     expect(second).toBe(first);
+  });
+
+  it('beginInitialization records the target projectId, and complete/fail keep it', () => {
+    const attempt = useNewThreadReady.getState().beginInitialization('__LOCALID_a', noopRetry, 'proj-a');
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_a').projectId).toBe('proj-a');
+
+    useNewThreadReady.getState().completeInitialization('__LOCALID_a', attempt);
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_a').projectId).toBe('proj-a');
+
+    const failAttempt = useNewThreadReady.getState().beginInitialization('__LOCALID_a', noopRetry, 'proj-b');
+    useNewThreadReady.getState().failInitialization('__LOCALID_a', failAttempt, new Error('boom'));
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_a').projectId).toBe('proj-b');
+  });
+
+  it('beginInitialization without a projectId leaves it undefined', () => {
+    useNewThreadReady.getState().beginInitialization('__LOCALID_a', noopRetry);
+    expect(useNewThreadReady.getState().getInitialization('__LOCALID_a').projectId).toBeUndefined();
   });
 });

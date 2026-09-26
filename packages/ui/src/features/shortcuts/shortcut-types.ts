@@ -41,6 +41,10 @@ export interface ShortcutDescriptor {
   dev?: boolean;
   /** Stands down when the keystroke came from inside the code editor. */
   editorYielding?: boolean;
+  /** Auto-repeat keydowns (`event.repeat`) are default-prevented but fire no
+   *  action — a chord held past the OS key-repeat delay is one trigger, not
+   *  many (todo #365). Other entries repeat as they do today. */
+  ignoreRepeat?: boolean;
 }
 
 /** `chordIndex` is the position of the matched chord in a multi-chord entry (D3). */

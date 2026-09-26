@@ -41,6 +41,10 @@ export function useShortcutDispatcher(): void {
         const action = shortcutAction(entry.id);
         if (action == null) continue;
         event.preventDefault();
+        // An auto-repeat keydown on an `ignoreRepeat` entry (todo #365) still
+        // claims the keystroke from the browser default, but fires no action —
+        // holding the chord past the OS key-repeat delay is one trigger.
+        if (entry.ignoreRepeat && event.repeat) return;
         action(index);
         return;
       }

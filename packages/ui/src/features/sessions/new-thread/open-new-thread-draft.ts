@@ -72,7 +72,14 @@ export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: Ope
     clearProjectFilter();
   }
 
-  setReturnTarget(runtimeThreads.getState().mainThreadId ?? null);
+  const preSwitch = runtimeThreads.getState();
+  // Skip when the active thread already IS the new-thread slot (a second
+  // trigger on the draft being initialized, todo #365) — keep the return
+  // target recorded when the draft was first opened rather than overwriting
+  // it with the draft itself, which would strand a discard on the draft.
+  if (preSwitch.newThreadId == null || preSwitch.newThreadId !== preSwitch.mainThreadId) {
+    setReturnTarget(preSwitch.mainThreadId ?? null);
+  }
 
   resetNewThreadDraft(runtimeThreads.getState().newThreadId);
   await runtimeThreads.switchToNewThread();
