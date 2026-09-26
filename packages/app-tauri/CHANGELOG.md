@@ -1,5 +1,16 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.1.0
+
+### Minor Changes
+
+- [#718](https://github.com/qlan-ro/mainframe/pull/718) [`43f6d74`](https://github.com/qlan-ro/mainframe/commit/43f6d740d68927362728b8054fa5802e60f37dc5) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Chats can now be created without a project (a hidden scratch project owns their per-chat scratch cwd under the data dir) or marked temporary at creation (excluded from default listings, refuses pin/tag/archive/unarchive, and removed only by an explicit discard or by removing its project). `Chat` gains `temporary`, `noProject` and `contextLostAt`; `POST /api/chats` accepts `noProject` and `temporary`, and a new `POST /api/chats/{id}/discard` removes a temporary chat and its scratch directory. Forking a temporary or no-project chat is refused (409), and the Fork action is disabled for them with the reason shown.
+
+### Patch Changes
+
+- Updated dependencies [[`30f931e`](https://github.com/qlan-ro/mainframe/commit/30f931ecf0e0d2cfad03417c3bf79444448bfab6), [`af46807`](https://github.com/qlan-ro/mainframe/commit/af4680785904e846caf96340af0ab2c22d5d669b), [`d26d714`](https://github.com/qlan-ro/mainframe/commit/d26d71418066fbdec7e0bc68bdf9a5340036e1dd), [`21b5fd8`](https://github.com/qlan-ro/mainframe/commit/21b5fd88eac0ab541527d23dd8747d3c7d7e725e), [`962e505`](https://github.com/qlan-ro/mainframe/commit/962e505bcc7c23b922cc61fd0c5f0fa279d02614), [`d0e8fbd`](https://github.com/qlan-ro/mainframe/commit/d0e8fbd17fe6889782c9f11de89efbd58f826756), [`ac60006`](https://github.com/qlan-ro/mainframe/commit/ac6000670e3f797bb3aa27bfbdd91783d07a4640), [`fbae001`](https://github.com/qlan-ro/mainframe/commit/fbae0010f9747cc96eb215779117898e31afcd9d), [`43f6d74`](https://github.com/qlan-ro/mainframe/commit/43f6d740d68927362728b8054fa5802e60f37dc5), [`43f6d74`](https://github.com/qlan-ro/mainframe/commit/43f6d740d68927362728b8054fa5802e60f37dc5), [`e97842e`](https://github.com/qlan-ro/mainframe/commit/e97842e818cae36dbca0ccca79f622a8c67cf6d9)]:
+  - @qlan-ro/mainframe-ui@2.4.0
+
 ## 2.0.6
 
 ### Patch Changes
