@@ -289,6 +289,36 @@ describe('closing', () => {
   });
 });
 
+describe('waiting (todo #344)', () => {
+  it('shows the waiting indicator when the tab itself has a pending gate', () => {
+    itemsValue = [{ id: 'chat-a', status: 'regular', custom: { projectId: 'proj-1', hasPending: true } }];
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+
+    render();
+
+    expect(screen.getByTestId('session-tab-waiting-chat-a')).toBeDefined();
+  });
+
+  it("shows the waiting indicator on the parent's tab when its side chat is waiting", () => {
+    itemsValue = [{ id: 'chat-a', status: 'regular', custom: { projectId: 'proj-1', sideChatWaiting: true } }];
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+
+    render();
+
+    expect(screen.getByTestId('session-tab-waiting-chat-a')).toBeDefined();
+  });
+
+  it('renders no waiting indicator when nothing is pending', () => {
+    seed('chat-a');
+
+    render();
+
+    expect(screen.queryByTestId('session-tab-waiting-chat-a')).toBeNull();
+  });
+});
+
 describe('titles', () => {
   it('labels a tab with no thread-list entry as a new session', () => {
     itemsValue = SESSIONS;
