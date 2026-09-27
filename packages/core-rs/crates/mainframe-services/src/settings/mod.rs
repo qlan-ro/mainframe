@@ -11,4 +11,3 @@ pub use provider_config::{SettingsReader, get_provider_config};
 // todos: 0
 // notes: SettingsReader is the shared trait for the `db.settings.get` interface
 // (provider-config.ts's inline `SettingsReader`); reused by notifications.
-// model-default.ts adds normalizeSavedDefaultModel (drop invalid saved defaults).

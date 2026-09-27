@@ -137,3 +137,11 @@ Live probe (`packages/core/scripts/queue-probe.mjs` in the app-tauri worktree; f
 - **Forgetting nested object casing**: Top-level key might exist but inner fields may differ (e.g. `tool_use_result.oldString` vs `toolUseResult.oldString`).
 - **Trusting docs over binary**: Protocol docs may be incomplete or outdated. When in doubt, verify against the binary source (see [`cli-binary-internals.md`](cli-binary-internals.md)).
 - **Minified names are version-specific**: Search by behavior patterns (string literals, field names) not by minified function names.
+
+## Configured model resolution (CLI 2.1.266, 2.1.277, 2.1.280)
+
+`get_settings` works before a user turn, without an `initialize` request. Its success response carries the effective model in `response.response.applied.model`. Probes with a process-local Fable setting returned `claude-fable-5-1` on all three versions.
+
+The catalog entry named `default` is not the user's configured selection. On 2.1.280, omitting `--model` preserved the Fable setting; passing `--model default` selected the recommended Opus instead. Resolve in the target project directory using the configured executable. Query the live session for its current model; do not infer it from the catalog.
+
+For `--resume`, omission behaves differently: a disposable transcript last used on Opus resumed on Opus even with a process-local Fable setting. Passing the resolved `--model claude-fable-5-1` resumed on Fable. This was verified without a user turn on all three versions. Resolve configuration afresh and pass it explicitly for inherited resumes; keep the Mainframe inheritance marker separate from that launch argument.

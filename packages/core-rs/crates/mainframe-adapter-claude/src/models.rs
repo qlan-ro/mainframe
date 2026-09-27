@@ -47,8 +47,8 @@ struct ModelSpec {
 const CURRENT_MODELS: &[ModelSpec] = &[
     ModelSpec {
         id: "default",
-        label: "Default - Opus 5",
-        description: Some("Opus 5 with 1M context"),
+        label: "Use CLI setting",
+        description: Some("Let Claude Code choose the model."),
         context_window: EXTENDED_CONTEXT_WINDOW,
         efforts: EFFORTS_TO_XHIGH,
         fast: true,

@@ -22,6 +22,7 @@ pub(crate) mod collab_resolve;
 pub(crate) mod compaction;
 pub mod context_files;
 pub(crate) mod context_window;
+mod effective_model;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;

@@ -348,6 +348,21 @@ impl Adapter for CodexAdapter {
         })
     }
 
+    fn configured_model(
+        &self,
+        project_path: String,
+        executable_path: Option<String>,
+    ) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            crate::effective_model::probe(
+                executable_path.as_deref().unwrap_or("codex"),
+                self.resolved_path.as_str(),
+                &project_path,
+            )
+            .await
+        })
+    }
+
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         let session = Arc::new(CodexSession::new(
             options,

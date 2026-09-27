@@ -36,6 +36,8 @@ pub struct FakeSession {
     pub set_plan_mode_calls: Mutex<Vec<bool>>,
     /// When `false`, the corresponding setter resolves to `Err` (CLI rejected).
     pub set_model_ok: bool,
+    pub model_requires_restart: bool,
+    pub model_gate: Option<Arc<(tokio::sync::Notify, tokio::sync::Notify)>>,
     pub set_permission_mode_ok: bool,
     pub set_plan_mode_ok: bool,
     /// Configurable history returned by `load_history` (empty by default).
@@ -106,6 +108,9 @@ impl AdapterSession for FakeSession {
     fn is_spawned(&self) -> bool {
         self.spawned || self.spawned_after_spawn.load(Ordering::SeqCst)
     }
+    fn model_requires_restart(&self, _model: &str) -> bool {
+        self.model_requires_restart
+    }
     fn last_activity_at(&self) -> Option<i64> {
         self.activity_override.lock().unwrap().or(self.activity)
     }
@@ -159,7 +164,15 @@ impl AdapterSession for FakeSession {
         ok()
     }
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
+        let gated = model == "default";
         self.set_model_calls.lock().unwrap().push(model);
+        if gated && let Some(gate) = &self.model_gate {
+            return Box::pin(async move {
+                gate.0.notify_one();
+                gate.1.notified().await;
+                Ok(())
+            });
+        }
         if self.set_model_ok {
             ok()
         } else {

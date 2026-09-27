@@ -177,16 +177,6 @@ pub trait ChatManagerDeps: Send + Sync {
         project_path: &'a str,
         session_file_path: Option<&'a str>,
     ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>>;
-    /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
-    /// the lifecycle default-model normalization. Required, not defaulted: an
-    /// implementation that silently inherited the empty default made
-    /// `normalize_saved_default_model`'s probe-failure short-circuit fire on every
-    /// chat creation, so a retired saved default leaked into new chats (#290).
-    fn adapter_snapshot_models(
-        &self,
-        adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel>;
-
     /// Rule 7's per-spawn capability read: `adapters.get(adapterId)?.capabilities()
     /// .noPersistence`. Never derived from the adapter id itself (AC 2) — an
     /// unregistered adapter answers `false`, same as one that never opted in.

@@ -1,3 +1,4 @@
+vi.mock('@/lib/api/adapters', () => ({ getEffectiveModel: vi.fn().mockResolvedValue(null) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdapterInfo, ProviderConfig } from '@qlan-ro/mainframe-types';
 import { getDraftConfig, useDraftConfigStore, type DraftCfg } from '../../runtime/draft-config';
@@ -30,7 +31,7 @@ const adapters: AdapterInfo[] = [
 const expectedCompleteSnapshot: DraftCfg = {
   projectId: 'p1',
   adapterId: 'claude',
-  model: 'sonnet',
+  model: 'default',
   permissionMode: 'acceptEdits',
   planMode: true,
   effort: 'low',
@@ -362,7 +363,7 @@ describe('reinitializeDraftAdapter', () => {
     expect(getDraftConfig('__LOCALID_1')).toEqual({
       projectId: 'p1',
       adapterId: 'codex',
-      model: 'gpt-5',
+      model: 'default',
       permissionMode: 'yolo',
       planMode: false,
       effort: 'high',

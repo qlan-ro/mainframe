@@ -342,7 +342,7 @@ fn build_args(
         }
         crate::fork::ResumeTarget::Fresh => {}
     }
-    if let Some(m) = &options.model {
+    if let Some(m) = options.model.as_ref().filter(|m| m.as_str() != "default") {
         args.push("--model".to_string());
         args.push(m.clone());
     }
@@ -379,6 +379,7 @@ pub struct ClaudeSession {
     on_exit: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     pub control: Arc<ControlRequestChannel>,
     base_permission_mode: Mutex<String>,
+    executable: Mutex<String>,
     shared: Arc<SharedSurface>,
     pub(crate) state: Arc<Mutex<ClaudeSessionState>>,
     stdin_tx: Mutex<Option<StdinTx>>,
@@ -408,6 +409,7 @@ impl ClaudeSession {
             on_exit: Mutex::new(on_exit),
             control,
             base_permission_mode: Mutex::new("default".to_string()),
+            executable: Mutex::new("claude".to_string()),
             shared: Arc::new(SharedSurface {
                 pid: AtomicU32::new(0),
                 status: AtomicU8::new(status_to_u8(AdapterProcessStatus::Starting)),
@@ -563,12 +565,29 @@ impl ClaudeSession {
             .clone()
             .unwrap_or_else(|| "claude".to_string());
 
+        *self.executable.lock().unwrap_or_else(|e| e.into_inner()) = executable.clone();
         let include_partial = crate::partial_stream::supports_partial_messages(
             &executable,
             self.resolved_path.as_str(),
         )
         .await;
         let resume_target = self.resume_target().await;
+        if options.no_persistence != Some(true)
+            && !matches!(resume_target, crate::fork::ResumeTarget::Fresh)
+            && options
+                .model
+                .as_deref()
+                .is_none_or(|model| model == "default")
+        {
+            options.model = Some(
+                crate::effective_model::required_probe(
+                    &executable,
+                    self.resolved_path.as_str(),
+                    &self.project_path,
+                )
+                .await?,
+            );
+        }
         let (args, base_mode) = build_args(&options, &resume_target, include_partial);
         *self
             .base_permission_mode
@@ -886,9 +905,21 @@ impl ClaudeSession {
                 self.id
             )));
         }
-        // Same strip as spawn: the endpoint namespace is Mainframe's bookkeeping and
-        // means nothing to the CLI. Crossing endpoints never reaches here — that is a
-        // respawn, since the endpoint lives in the child's environment.
+        let model = if model == "default" {
+            let executable = self
+                .executable
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            crate::effective_model::required_probe(
+                &executable,
+                self.resolved_path.as_str(),
+                &self.project_path,
+            )
+            .await?
+        } else {
+            model
+        };
         let (_, bare) = cliproxy::split_endpoint(&model);
         self.require_success(
             json!({ "subtype": "set_model", "model": bare }),
@@ -1293,6 +1324,28 @@ impl AdapterSession for ClaudeSession {
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(ClaudeSession::interrupt(self))
     }
+    fn model_requires_restart(&self, model: &str) -> bool {
+        self.is_endpoint_session() != cliproxy::split_endpoint(model).0.is_some()
+    }
+
+    fn effective_model(&self) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            if !self.is_spawned() {
+                return None;
+            }
+            let response = self
+                .await_terminal(json!({"subtype": "get_settings"}), "get_settings")
+                .await?;
+            crate::effective_model::applied_model(&response).map(|model| {
+                if self.is_endpoint_session() {
+                    format!("{}/{model}", cliproxy::ENDPOINT_ID)
+                } else {
+                    model
+                }
+            })
+        })
+    }
+
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(ClaudeSession::set_model(self, model))
     }
@@ -1338,6 +1391,10 @@ impl AdapterSession for ClaudeSession {
         Box::pin(ClaudeSession::apply_tuning(self, tuning))
     }
 }
+
+#[cfg(test)]
+#[path = "session_model_tests.rs"]
+mod model_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1460,6 +1517,18 @@ mod tests {
     }
 
     // --- session-spawn-args.test.ts ---
+    #[test]
+    fn inherited_model_omits_cli_override() {
+        let mut options = spawn_opts(None);
+        options.model = Some("default".into());
+        let (args, _) = build_args(&options, &crate::fork::ResumeTarget::Fresh, false);
+        assert!(!args.iter().any(|arg| arg == "--model"));
+        options.model = Some("claude-opus-5".into());
+        let (args, _) = build_args(&options, &crate::fork::ResumeTarget::Fresh, false);
+        let index = args.iter().position(|arg| arg == "--model").unwrap();
+        assert_eq!(args[index + 1], "claude-opus-5");
+    }
+
     #[test]
     fn default_mode_passes_permission_mode_default() {
         let (args, _) = build_args(

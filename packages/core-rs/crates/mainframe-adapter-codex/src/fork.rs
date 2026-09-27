@@ -7,7 +7,8 @@
 
 use mainframe_types::adapter::ForkSource;
 
-use crate::transcript::is_codex_transcript_present;
+use crate::transcript::locate_codex_transcript;
+use mainframe_types::transcript::TranscriptLocation;
 
 /// The first Codex CLI release with `ThreadForkParams.last_turn_id` (Established
 /// facts: rust-v0.143.0 has it, rust-v0.142.0 doesn't). `thread/fork` itself
@@ -64,7 +65,7 @@ pub(crate) fn resolve_thread_target(
 /// that already-oversized file to call sites only, per the plan).
 /// `transcript_present_override` is a test seam only (`CodexSession::
 /// set_transcript_present_override`) — the real probe reads
-/// `~/.codex/state_5.sqlite` via `is_codex_transcript_present`, which
+/// `~/.codex/state_5.sqlite` via `locate_codex_transcript`, which
 /// integration tests cannot seed safely; `None` in production always defers to
 /// the real probe.
 pub(crate) async fn resolve_target(
@@ -79,7 +80,10 @@ pub(crate) async fn resolve_target(
     let own_transcript_present = match (own_id, fork_source) {
         (Some(id), Some(_)) => match transcript_present_override {
             Some(present) => present,
-            None => is_codex_transcript_present(id, None).await.unwrap_or(false),
+            None => matches!(
+                locate_codex_transcript(id, None).await,
+                Some(TranscriptLocation::Present(_))
+            ),
         },
         _ => false,
     };

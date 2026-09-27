@@ -78,6 +78,7 @@ vi.mock('@/lib/api/git', () => ({
 
 vi.mock('@/lib/api/adapters', () => ({
   getAdapters: vi.fn().mockResolvedValue([]),
+  getEffectiveModel: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({

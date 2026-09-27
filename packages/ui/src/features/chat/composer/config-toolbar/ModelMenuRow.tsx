@@ -54,7 +54,7 @@ export interface ModelMenuRowProps {
 }
 
 function rowDescription(option: AdapterModel): string | undefined {
-  if (!option.isDefault) return option.description;
+  if (!option.isDefault || option.id === 'default') return option.description;
   return option.description ? `${option.description} · default` : 'default';
 }
 
