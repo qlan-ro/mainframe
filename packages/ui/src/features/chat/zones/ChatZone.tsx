@@ -28,6 +28,7 @@ import { buildChatExtras } from '../runtime/chat-extras';
 import { projectChatThreadMessages } from '../controller/project-messages';
 import { ChatCardHeader } from '../thread/ChatCardHeader';
 import { ChatThread } from '../thread/ChatThread';
+import { SideChatHost } from '@/features/side-chat/SideChatHost';
 
 export function ChatZone({
   chatId,
@@ -118,6 +119,7 @@ export function ChatZone({
         <div ref={panelState.hostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ChatThread />
+            <SideChatHost parentChatId={chatId} />
           </div>
           <SessionPanel state={panelState} />
         </div>

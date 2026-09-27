@@ -43,6 +43,7 @@ import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { ZoneDropLayer } from '@/features/chat/zones/ZoneDropLayer';
 import { ChatCardHeader } from '../../chat/thread/ChatCardHeader';
 import { ChatThread } from '../../chat/thread/ChatThread';
+import { SideChatHost } from '@/features/side-chat/SideChatHost';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useNewThreadAutoConfig } from './use-new-thread-auto-config';
 import { useProjects } from '../use-projects';
@@ -196,6 +197,7 @@ export function ChatSurface() {
             height — otherwise the sticky composer footer collapses/clips. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ChatThread emptyState={welcome} />
+          <SideChatHost parentChatId={mainThreadId} />
         </div>
         <SessionPanel state={panelState} />
         <ZoneDropLayer canSplit={splitFits} />

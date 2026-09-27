@@ -25,6 +25,7 @@
  */
 import { useRef, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
+import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { AlertTriangleIcon, ArrowDownIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,8 @@ import { useFindInChatStore } from '../find/find-in-chat-store';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 // Side-effect: populates the tool-card registry (kept out of registry.ts to break the import cycle).
 import '../tools/register-cards';
+
+export type ChatThreadVariant = 'main' | 'side';
 
 /** Surfaces a failed history load (loadState reduced to error) with a retry —
  *  otherwise a failed load renders as a silent empty chat. Same recipe as
@@ -80,7 +83,7 @@ function LoadErrorBanner() {
  */
 function ChatThreadLoadingSpinner() {
   const extras = useChatExtras();
-  const threadId = useAuiState((s) => s.threadListItem?.id ?? null);
+  const threadId = useSideAwareThreadId();
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   const isDraft = threadId?.startsWith('__LOCALID_') === true;
   if (extras?.state.loadState.type !== 'loading' || messageCount > 0 || isDraft) return null;
@@ -160,30 +163,31 @@ function CompactingIndicator() {
   return <CompactingPill />;
 }
 
-function ThreadFooterInput() {
+function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
   // A projectless draft has nowhere to create the chat: the welcome screen's
   // picker resolves the project first, and the composer appears with it.
-  // Read the ITEM id, not mainThreadId — under a split zone this thread is not
-  // the main one, and the rebound threadListItem is the identity that matches.
-  const itemId = useAuiState((s) => s.threadListItem?.id ?? null);
+  // The side-aware item id (side-chat-scope.tsx) covers both the split-zone
+  // rebound item and the side-chat panel's scope id.
+  const itemId = useSideAwareThreadId();
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const hasDraftCfg = useDraftConfigStore((s) => (itemId ? s.drafts.has(itemId) : false));
   const projectlessDraft = itemId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
   return (
     <>
       <DegradedChatCard />
-      {!directoryMissing && !projectlessDraft && <Composer />}
+      {!directoryMissing && !projectlessDraft && <Composer variant={variant} />}
     </>
   );
 }
 
-export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
+export function ChatThread({
+  emptyState,
+  variant = 'main',
+}: { emptyState?: ReactNode; variant?: ChatThreadVariant } = {}) {
   useShortcutAction('chat.find', () => useFindInChatStore.getState().open());
-  // The ITEM id, not mainThreadId: a split zone renders a thread that is not the
-  // main one, and its rebound item is the identity whose change means "different
-  // session in this viewport".
-  const threadId = useAuiState((s) => s.threadListItem?.id ?? null);
+  // The side-aware item id, not mainThreadId — see useSideAwareThreadId.
+  const threadId = useSideAwareThreadId();
   const { viewportRef, contentRef } = useThreadBottomPin(threadId);
   const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
   // Split view mounts one ChatThread per zone; this scopes selection ownership
@@ -224,7 +228,8 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                 rail instead of running under it, with a symmetric left inset. */}
             <div ref={contentRef} className="mx-auto w-full max-w-[min(48rem,100%-116px)] flex-1 px-5 py-4">
               <LoadErrorBanner />
-              <ContextNotPreservedNotice />
+              {/* The side variant's own compact notice lives in the panel header (AC 15). */}
+              {variant !== 'side' && <ContextNotPreservedNotice />}
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <ThreadPrimitive.Messages components={boundedMessageComponents} />
               {/* Inline "thinking/working" indicator — sits after the last message,
@@ -275,8 +280,11 @@ export function ChatThread({ emptyState }: { emptyState?: ReactNode } = {}) {
                     the slot can't absorb alone paints the composer past the
                     pane (#336). */}
                 <div className="flex min-h-0 flex-col">
-                  <WorktreeSwitchBanner />
-                  <ThreadFooterInput />
+                  {/* No worktree controls in the side variant (spec: the composer
+                      offers no worktree controls) — a detected-switch offer never
+                      applies to a side chat either. */}
+                  {variant !== 'side' && <WorktreeSwitchBanner />}
+                  <ThreadFooterInput variant={variant} />
                 </div>
               </div>
             </ThreadPrimitive.ViewportFooter>

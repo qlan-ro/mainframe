@@ -243,6 +243,26 @@ describe('ChatCardHeader — draft variant', () => {
   });
 });
 
+describe('ChatCardHeader — side-chat toggle (todo #344, AC 19)', () => {
+  it('renders the side-chat toggle for a real (regular) chat', () => {
+    fakeState = { threadListItem: { id: 'chat-123', status: 'regular', title: 'Fix bug', custom: {} } };
+
+    renderHeader();
+
+    expect(screen.getByTestId('side-chat-toggle-chat-123')).toBeInTheDocument();
+  });
+
+  it('renders no side-chat toggle for a draft', () => {
+    fakeState = { threadListItem: { id: '__LOCALID_1', status: 'new' } };
+    fakeDrafts = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
+    fakeProjects = [{ id: 'proj-a', name: 'Mainframe' }];
+
+    renderHeader();
+
+    expect(screen.queryByTestId('side-chat-toggle-__LOCALID_1')).toBeNull();
+  });
+});
+
 describe('ChatCardHeader — fork parent link (todo #343, AC 16)', () => {
   it('renders no parent link for a non-fork', () => {
     fakeState = { threadListItem: { title: 'Fix bug', custom: { detectedPrs: [] } } };

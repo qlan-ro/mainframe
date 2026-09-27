@@ -141,7 +141,7 @@ function ComposerInputField({
   );
 }
 
-export function Composer() {
+export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
   const { editing, cancelEdit } = useComposerEdit();
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const threadId = useActiveThreadId();
@@ -228,7 +228,7 @@ export function Composer() {
               <ComposerAddMention textareaRef={textareaRef} />
               {/* Hairline separating the attachment actions from the config chips. */}
               <Separator orientation="vertical" className="mx-1 h-3 data-vertical:self-center" />
-              <ComposerToolbar />
+              <ComposerToolbar variant={variant} />
             </div>
             <SendOrCancelButton />
           </div>
