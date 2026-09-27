@@ -56,6 +56,13 @@ pub struct InitializeResult {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ThreadRef {
     pub id: String,
+    /// Present only on a `thread/fork` response — "Source thread id when this
+    /// thread was created by forking another thread" (todo #368, established
+    /// fact: `ThreadForkResponse.json`, `definitions.Thread.forkedFromId`).
+    /// `#[serde(default)]` so `thread/start`/`thread/resume` (which never send
+    /// this key) still deserialize.
+    #[serde(default, rename = "forkedFromId")]
+    pub forked_from_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

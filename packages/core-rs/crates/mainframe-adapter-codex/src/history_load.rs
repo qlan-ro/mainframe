@@ -14,12 +14,41 @@ use crate::jsonrpc::JsonRpcClient;
 use crate::rollout_reader::read_rollout_items;
 use crate::session::de;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
-use crate::types::{ThreadItem, ThreadReadResult};
+use crate::types::{ThreadItem, ThreadReadResult, ThreadReadTurn};
+
+/// An unsent fork's `load_history` reads the *source* thread through its
+/// pinned `last_turn_id`, inclusive — everything after stays invisible until
+/// the fork's own first turn actually inherits it via `thread/fork` (todo
+/// #368). A cap id absent from the source (fork point retired, or a stale pin)
+/// keeps every turn rather than silently emptying the transcript. Pure and
+/// unit-testable, split out of `load_history_inner`'s live-client call.
+pub(crate) fn truncate_at_turn_cap(
+    mut turns: Vec<ThreadReadTurn>,
+    turn_cap: Option<&str>,
+    thread_id: &str,
+) -> Vec<ThreadReadTurn> {
+    let Some(cap_id) = turn_cap else {
+        return turns;
+    };
+    match turns.iter().position(|t| t.id == cap_id) {
+        Some(idx) => turns.truncate(idx + 1),
+        None => {
+            tracing::warn!(
+                module = "codex:history",
+                cap_id,
+                thread_id,
+                "fork turn cap id not found in the source thread; keeping all turns"
+            );
+        }
+    }
+    turns
+}
 
 pub(crate) async fn load_history_inner(
     temp: &Arc<JsonRpcClient>,
     resume_thread_id: &str,
     project_path: &str,
+    turn_cap: Option<&str>,
 ) -> Result<Vec<ChatMessage>, AdapterError> {
     let _ = project_path;
     let read: ThreadReadResult = de(temp
@@ -30,13 +59,13 @@ pub(crate) async fn load_history_inner(
         .await
         .map_err(|e| AdapterError::Message(e.0))?)?;
 
-    let all_items: Vec<ThreadItem> = read
-        .thread
-        .turns
-        .unwrap_or_default()
-        .into_iter()
-        .flat_map(|t| t.items)
-        .collect();
+    let turns = truncate_at_turn_cap(
+        read.thread.turns.unwrap_or_default(),
+        turn_cap,
+        resume_thread_id,
+    );
+
+    let all_items: Vec<ThreadItem> = turns.into_iter().flat_map(|t| t.items).collect();
 
     let child_thread_ids = collect_child_thread_ids(&all_items);
 
@@ -120,11 +149,54 @@ fn collect_child_thread_ids(all_items: &[ThreadItem]) -> Vec<String> {
 mod tests {
     use serde_json::json;
 
-    use super::collect_child_thread_ids;
-    use crate::types::ThreadItem;
+    use super::{collect_child_thread_ids, truncate_at_turn_cap};
+    use crate::types::{ThreadItem, ThreadReadTurn};
 
     fn items(v: serde_json::Value) -> Vec<ThreadItem> {
         serde_json::from_value(v).expect("items parse")
+    }
+
+    fn turn(id: &str) -> ThreadReadTurn {
+        ThreadReadTurn {
+            id: id.to_string(),
+            status: "completed".to_string(),
+            items: Vec::new(),
+        }
+    }
+
+    // ---- truncate_at_turn_cap (todo #368) ----
+
+    #[test]
+    fn no_cap_keeps_every_turn() {
+        let turns = vec![turn("t1"), turn("t2")];
+        assert_eq!(truncate_at_turn_cap(turns.clone(), None, "thread-1"), turns);
+    }
+
+    #[test]
+    fn cap_at_the_first_turn_drops_everything_after_it() {
+        let turns = vec![turn("t1"), turn("t2"), turn("t3")];
+        let capped = truncate_at_turn_cap(turns, Some("t1"), "thread-1");
+        assert_eq!(
+            capped.into_iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec!["t1".to_string()]
+        );
+    }
+
+    #[test]
+    fn cap_at_the_last_turn_keeps_everything() {
+        let turns = vec![turn("t1"), turn("t2")];
+        let capped = truncate_at_turn_cap(turns, Some("t2"), "thread-1");
+        assert_eq!(
+            capped.into_iter().map(|t| t.id).collect::<Vec<_>>(),
+            vec!["t1".to_string(), "t2".to_string()]
+        );
+    }
+
+    #[test]
+    fn an_unknown_cap_id_keeps_every_turn() {
+        let turns = vec![turn("t1"), turn("t2")];
+        let capped = truncate_at_turn_cap(turns.clone(), Some("does-not-exist"), "thread-1");
+        assert_eq!(capped, turns);
     }
 
     #[test]

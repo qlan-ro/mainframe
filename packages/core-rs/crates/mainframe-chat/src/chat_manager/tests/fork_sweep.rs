@@ -10,6 +10,7 @@ fn pending_for(snapshot_dir: &str) -> PendingForkState {
         fork_source: ForkSource {
             source_session_id: "parent-session".to_string(),
             resume_path: Some(format!("{snapshot_dir}/parent-session.jsonl")),
+            last_turn_id: None,
         },
         snapshot_dir: snapshot_dir.to_string(),
         provisional_title: "Untitled (fork)".to_string(),

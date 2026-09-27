@@ -513,6 +513,7 @@ impl ChatManagerDeps for StoreDeps {
                 None => Ok(ForkSource {
                     source_session_id: request.source_session_id,
                     resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
+                    last_turn_id: None,
                 }),
             }
         })

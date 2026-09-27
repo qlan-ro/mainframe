@@ -74,6 +74,13 @@ pub struct ForkSource {
     pub source_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_path: Option<String>,
+    /// The parent's last turn id at the moment of pinning (todo #368) — Codex's
+    /// `thread/fork` forks "through, inclusive" this turn, so the fork point
+    /// stays fixed at the click even if the parent gains turns afterward.
+    /// `None` when the parent had no turns yet, or the adapter has no turn-level
+    /// fork granularity (Claude pins a transcript snapshot instead).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -726,6 +733,27 @@ mod tests {
             "sourceSessionId": "sess_1",
             "resumePath": "/tmp/fork-snapshots/n1/sess_1.jsonl"
         }));
+    }
+
+    /// Todo #368: `lastTurnId` round-trips camelCase, is omitted when absent,
+    /// and an older payload with no such key still deserializes (`serde(default)`).
+    #[test]
+    fn fork_source_last_turn_id_roundtrips_and_is_optional() {
+        roundtrip::<ForkSource>(json!({
+            "sourceSessionId": "sess_1",
+            "lastTurnId": "turn_9"
+        }));
+        let older_payload: ForkSource =
+            serde_json::from_value(json!({ "sourceSessionId": "sess_1" })).unwrap();
+        assert_eq!(older_payload.last_turn_id, None);
+
+        let s = serde_json::to_string(&ForkSource {
+            source_session_id: "sess_1".to_string(),
+            resume_path: None,
+            last_turn_id: None,
+        })
+        .unwrap();
+        assert!(!s.contains("lastTurnId"));
     }
 
     #[test]

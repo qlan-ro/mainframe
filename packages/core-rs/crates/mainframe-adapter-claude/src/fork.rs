@@ -134,6 +134,7 @@ pub async fn pin_fork_point(request: ForkPinRequest) -> Result<ForkSource, ForkP
     Ok(ForkSource {
         source_session_id: request.source_session_id,
         resume_path: Some(dest_path.to_string_lossy().to_string()),
+        last_turn_id: None,
     })
 }
 
@@ -146,6 +147,7 @@ mod tests {
         ForkSource {
             source_session_id: "parent-session".to_string(),
             resume_path: Some(path.to_string()),
+            last_turn_id: None,
         }
     }
 

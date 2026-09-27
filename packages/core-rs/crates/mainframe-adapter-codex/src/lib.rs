@@ -25,6 +25,8 @@ pub(crate) mod context_window;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
+pub(crate) mod fork;
+pub(crate) mod fork_pin;
 pub mod history;
 pub(crate) mod history_collab;
 pub(crate) mod history_collab_resolve;
