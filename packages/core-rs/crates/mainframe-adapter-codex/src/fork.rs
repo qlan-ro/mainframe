@@ -6,9 +6,9 @@
 //! parent's thread id and (optionally) its last turn id at pin time.
 
 use mainframe_types::adapter::ForkSource;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::transcript::locate_codex_transcript;
-use mainframe_types::transcript::TranscriptLocation;
 
 /// The first Codex CLI release with `ThreadForkParams.last_turn_id` (Established
 /// facts: rust-v0.143.0 has it, rust-v0.142.0 doesn't). `thread/fork` itself
