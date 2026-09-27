@@ -15,6 +15,9 @@ use tracing::warn;
 use crate::event_handler::compute_session_file_path;
 use crate::types::ActiveChat;
 
+#[path = "config_locks.rs"]
+mod config_locks;
+
 /// Errors surfaced by config changes. The message strings cross the wire
 /// (routes surface them), so they are copied verbatim from the TS `throw`s.
 #[derive(Debug, thiserror::Error)]
@@ -105,11 +108,15 @@ struct RespawnChanges {
 
 pub struct ChatConfigManager<D: ConfigManagerDeps> {
     deps: D,
+    changes: config_locks::ConfigLocks,
 }
 
 impl<D: ConfigManagerDeps> ChatConfigManager<D> {
     pub fn new(deps: D) -> Self {
-        Self { deps }
+        Self {
+            deps,
+            changes: config_locks::ConfigLocks::default(),
+        }
     }
 
     fn require_active_chat(&self, chat_id: &str) -> Result<Arc<Mutex<ActiveChat>>, ConfigError> {
@@ -134,22 +141,20 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         Ok(())
     }
 
-    /// Each setting is applied and persisted INDEPENDENTLY: a rejected/timed-out setModel()
-    /// (which now awaits and throws — see session.ts) must not skip setPermissionMode or
-    /// setPlanMode, and must not 500 the whole request. Only settings the CLI actually
-    /// accepted get written to the DB.
+    // Persist accepted fields independently, but surface a rejected model to the picker.
     async fn apply_live_session_settings(
         &self,
         chat_id: &str,
         cell: &Arc<Mutex<ActiveChat>>,
         session: &Arc<dyn AdapterSession>,
         changes: LiveChanges,
-    ) {
+    ) -> Result<(), ConfigError> {
         // TS `applyLiveSetting<K>` is generic over an async setter closure; Rust
         // async-closure-in-generic is unergonomic, so the three settings are
         // unrolled with identical control flow (try setter → stage into
         // updates/active.chat on Ok, warn on Err).
         let mut updates = ChatFieldUpdate::default();
+        let mut model_error = None;
 
         if let Some(model) = changes.model {
             match session.set_model(model.clone()).await {
@@ -157,7 +162,10 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
                     updates.model = Some(model.clone());
                     cell.lock().unwrap_or_else(|e| e.into_inner()).chat.model = Some(model);
                 }
-                Err(err) => warn!(?err, chat_id, "setModel rejected; not persisting model"),
+                Err(err) => {
+                    warn!(?err, chat_id, "setModel rejected; not persisting model");
+                    model_error = Some(ConfigError::Adapter(err));
+                }
             }
         }
         if let Some(mode) = changes.permission_mode {
@@ -194,7 +202,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         }
 
         if updates == ChatFieldUpdate::default() {
-            return;
+            return model_error.map_or(Ok(()), Err);
         }
         self.deps.chats_update(chat_id, &updates);
         // Model switch can invalidate the live tuning (e.g. xhigh/ultracode on a model that
@@ -205,6 +213,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
         self.deps
             .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        model_error.map_or(Ok(()), Err)
     }
 
     /// Config change that needs a respawn: an adapter switch, or any setting change while no live
@@ -308,6 +317,7 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         permission_mode: Option<ExecutionMode>,
         plan_mode: Option<bool>,
     ) -> Result<(), ConfigError> {
+        let _change = self.changes.acquire(chat_id).await;
         let cell = self.require_active_chat(chat_id)?;
 
         let (cur_adapter, cur_model, cur_mode, cur_plan, has_claude_session, session) = {
@@ -352,24 +362,30 @@ impl<D: ConfigManagerDeps> ChatConfigManager<D> {
         // spawn, so crossing endpoints needs a respawn even though the adapter is
         // unchanged — `set_model` alone would leave the CLI pointed at the old one.
         let endpoint_changed = model_changed
-            && model.as_deref().and_then(model_endpoint)
-                != cur_model.as_deref().and_then(model_endpoint);
+            && (model.as_deref().and_then(model_endpoint)
+                != cur_model.as_deref().and_then(model_endpoint)
+                || session.as_ref().is_some_and(|session| {
+                    model
+                        .as_deref()
+                        .is_some_and(|model| session.model_requires_restart(model))
+                }));
 
         let session_spawned = session.as_ref().is_some_and(|s| s.is_spawned());
         if session_spawned && !adapter_changed && !endpoint_changed {
             // `session_spawned` implies `Some`; the `if let` avoids an Option unwrap.
             if let Some(session) = session {
-                self.apply_live_session_settings(
-                    chat_id,
-                    &cell,
-                    &session,
-                    LiveChanges {
-                        model: if model_changed { model } else { None },
-                        permission_mode: if mode_changed { permission_mode } else { None },
-                        plan_mode: if plan_mode_changed { plan_mode } else { None },
-                    },
-                )
-                .await;
+                return self
+                    .apply_live_session_settings(
+                        chat_id,
+                        &cell,
+                        &session,
+                        LiveChanges {
+                            model: if model_changed { model } else { None },
+                            permission_mode: if mode_changed { permission_mode } else { None },
+                            plan_mode: if plan_mode_changed { plan_mode } else { None },
+                        },
+                    )
+                    .await;
             }
             return Ok(());
         }
@@ -760,7 +776,7 @@ mod tests {
                 None,
             )
             .await
-            .unwrap();
+            .unwrap_err();
 
         assert_eq!(
             session.set_model_calls.lock().unwrap().as_slice(),
@@ -840,6 +856,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn inherited_runtime_endpoint_requires_restart_when_selecting_native_model() {
+        let session = Arc::new(FakeSession {
+            model_requires_restart: true,
+            ..FakeSession::spawned()
+        });
+        let cell = cell_with(session.clone());
+        cell.lock().unwrap().chat.model = None;
+        let manager = ChatConfigManager::new(FakeDeps::new(cell.clone()));
+
+        manager
+            .update_chat_config("c1", None, Some("claude-opus-5-5".into()), None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(session.kills(), 1);
+        assert_eq!(manager.deps.start_chat_calls.load(Ordering::SeqCst), 1);
+        assert!(session.set_model_calls.lock().unwrap().is_empty());
+        assert_eq!(
+            cell.lock().unwrap().chat.model.as_deref(),
+            Some("claude-opus-5-5")
+        );
+        assert_eq!(
+            manager.deps.updates.lock().unwrap().as_slice(),
+            &[ChatFieldUpdate {
+                model: Some("claude-opus-5-5".into()),
+                ..Default::default()
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn later_explicit_selection_wins_over_a_slow_inheritance_resolution() {
+        let gate = Arc::new((tokio::sync::Notify::new(), tokio::sync::Notify::new()));
+        let session = Arc::new(FakeSession {
+            model_gate: Some(gate.clone()),
+            ..FakeSession::spawned()
+        });
+        let cell = cell_with(session);
+        let manager = Arc::new(ChatConfigManager::new(FakeDeps::new(cell.clone())));
+        let first_manager = manager.clone();
+        let first = tokio::spawn(async move {
+            first_manager
+                .update_chat_config("c1", None, Some("default".into()), None, None)
+                .await
+        });
+        gate.0.notified().await;
+        let mut later = Box::pin(manager.update_chat_config(
+            "c1",
+            None,
+            Some("claude-opus-5-5".into()),
+            None,
+            None,
+        ));
+        let polled = std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(std::future::Future::poll(later.as_mut(), cx))
+        })
+        .await;
+        gate.1.notify_one();
+        first.await.unwrap().unwrap();
+        match polled {
+            std::task::Poll::Ready(result) => result,
+            std::task::Poll::Pending => later.await,
+        }
+        .unwrap();
+
+        assert_eq!(
+            cell.lock().unwrap().chat.model.as_deref(),
+            Some("claude-opus-5-5")
+        );
+        let updates = manager.deps.updates.lock().unwrap();
+        assert_eq!(
+            updates.last().unwrap().model.as_deref(),
+            Some("claude-opus-5-5")
+        );
+    }
+
+    #[tokio::test]
     async fn does_not_persist_or_emit_when_every_setting_rejects() {
         let session = Arc::new(FakeSession {
             set_model_ok: false,
@@ -852,7 +945,7 @@ mod tests {
         manager
             .update_chat_config("c1", None, Some("new-model".to_string()), None, None)
             .await
-            .unwrap();
+            .unwrap_err();
 
         assert!(manager.deps.updates.lock().unwrap().is_empty());
         assert!(manager.deps.events.lock().unwrap().is_empty());

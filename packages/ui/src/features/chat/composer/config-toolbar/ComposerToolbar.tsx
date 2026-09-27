@@ -28,6 +28,7 @@ export function ComposerToolbar() {
     chat,
     adapter,
     model,
+    runningModel,
     providerDefaults,
     setModel,
     setModelTuning,
@@ -56,6 +57,8 @@ export function ComposerToolbar() {
         adapters={adapters}
         adapter={adapter}
         model={model}
+        runningModel={runningModel}
+        showCurrentModel={chat.processState != null || disabled}
         locked={hasMessages}
         disabled={disabled}
         providerDefaults={providerDefaults}

@@ -1,8 +1,10 @@
+vi.mock('@/lib/use-cli-model', () => ({ useCliModel: () => null }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProviderConfigForm } from '../ProviderConfigForm';
 import { useSettingsStore } from '../../../../../store/settings';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { resolveDraftDefaults } from '@/features/sessions/new-thread/resolve-draft-defaults';
 
 const updateProviderSettings = vi.fn().mockResolvedValue(undefined);
 const getConfigConflicts = vi.fn().mockResolvedValue([]);
@@ -28,6 +30,29 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('ProviderConfigForm', () => {
+  it('separates CLI inheritance from an explicit Opus selection through draft creation', () => {
+    const catalog = {
+      ...adapter,
+      models: [
+        { id: 'default', label: 'Use CLI setting', isDefault: true },
+        { id: 'claude-opus-5-5', label: 'Opus 5.5' },
+      ],
+    };
+    render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={catalog} />);
+    const open = () =>
+      fireEvent.pointerDown(screen.getByTestId('settings-claude-model-dropdown-trigger'), { button: 0 });
+    open();
+    expect(screen.getAllByTestId('settings-claude-model-option-default')).toHaveLength(1);
+    fireEvent.click(screen.getByTestId('settings-claude-model-option-claude-opus-5-5'));
+    expect(updateProviderSettings).toHaveBeenLastCalledWith(31415, 'claude', { defaultModel: 'claude-opus-5-5' });
+    expect(resolveDraftDefaults('p1', catalog, useSettingsStore.getState().providers.claude).model).toBe(
+      'claude-opus-5-5',
+    );
+    open();
+    fireEvent.click(screen.getByTestId('settings-claude-model-option-default'));
+    expect(updateProviderSettings).toHaveBeenLastCalledWith(31415, 'claude', { defaultModel: '' });
+    expect(screen.getByTestId('settings-claude-model-dropdown-trigger')).toHaveTextContent('Use CLI setting');
+  });
   it('the executable path input uses the v2 compact input height (h-8)', () => {
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     const input = screen.getByTestId('settings-claude-executable-path-input');
@@ -88,6 +113,7 @@ describe('ProviderConfigForm', () => {
     expect(updateProviderSettings).toHaveBeenCalledWith(31415, 'claude', { defaultPlanMode: 'true' });
   });
   it('selecting a default effort PUTs defaultEffort (select primitive)', () => {
+    useSettingsStore.setState({ providers: { claude: { defaultModel: 'opus' } } });
     render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={adapter} />);
     fireEvent.click(screen.getByTestId('settings-claude-default-effort'));
     fireEvent.click(screen.getByTestId('settings-claude-default-effort-option-high'));
@@ -104,6 +130,7 @@ describe('ProviderConfigForm', () => {
   });
 
   it("the default-effort select offers a labelled 'Ultra' option when the default model advertises it (red today: empty label)", async () => {
+    useSettingsStore.setState({ providers: { claude: { defaultModel: 'opus' } } });
     const adapterWithUltra = {
       ...adapter,
       models: [

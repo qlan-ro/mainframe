@@ -50,28 +50,28 @@ describe('resolveDraftDefaults', () => {
     });
   });
 
-  it('falls back from a stale configured model to the catalog default', () => {
+  it('preserves a configured model absent from the catalog', () => {
     const adapter = makeAdapter([
       { ...opus, isDefault: true },
       { id: 'sonnet', label: 'Sonnet' },
     ]);
 
-    expect(resolveDraftDefaults('p1', adapter, { defaultModel: 'stale' }).model).toBe('opus');
+    expect(resolveDraftDefaults('p1', adapter, { defaultModel: 'stale' }).model).toBe('stale');
   });
 
-  it('uses the catalog default when no model is configured', () => {
+  it('inherits CLI configuration when no model is configured', () => {
     const adapter = makeAdapter([
       { id: 'sonnet', label: 'Sonnet' },
       { ...opus, isDefault: true },
     ]);
 
-    expect(resolveDraftDefaults('p1', adapter).model).toBe('opus');
+    expect(resolveDraftDefaults('p1', adapter).model).toBe('default');
   });
 
-  it('uses the first model when there is no configured or catalog default', () => {
+  it('inherits CLI configuration when no catalog default exists', () => {
     const adapter = makeAdapter([{ id: 'sonnet', label: 'Sonnet' }, opus]);
 
-    expect(resolveDraftDefaults('p1', adapter).model).toBe('sonnet');
+    expect(resolveDraftDefaults('p1', adapter).model).toBe('default');
   });
 
   it('returns explicit defaults when provider settings are absent', () => {
@@ -80,10 +80,10 @@ describe('resolveDraftDefaults', () => {
     expect(resolveDraftDefaults('p1', adapter)).toEqual({
       projectId: 'p1',
       adapterId: 'claude',
-      model: 'opus',
+      model: 'default',
       permissionMode: 'default',
       planMode: false,
-      effort: 'low',
+      effort: null,
       fast: false,
       ultracode: false,
       adaptiveThinking: false,
@@ -114,7 +114,7 @@ describe('resolveDraftDefaults', () => {
   it('clamps configured effort to the selected model', () => {
     const adapter = makeAdapter([opus]);
 
-    expect(resolveDraftDefaults('p1', adapter, { defaultEffort: 'max' }).effort).toBe('low');
+    expect(resolveDraftDefaults('p1', adapter, { defaultModel: 'opus', defaultEffort: 'max' }).effort).toBe('low');
   });
 
   it('forces effort to xhigh when supported ultracode is enabled', () => {
@@ -122,6 +122,7 @@ describe('resolveDraftDefaults', () => {
 
     expect(
       resolveDraftDefaults('p1', adapter, {
+        defaultModel: 'opus',
         defaultEffort: 'low',
         defaultUltracode: 'true',
       }),
@@ -134,7 +135,7 @@ describe('resolveDraftDefaults', () => {
     expect(resolveDraftDefaults(null, adapter).projectId).toBeNull();
   });
 
-  it('throws when the adapter catalog is empty', () => {
-    expect(() => resolveDraftDefaults('p1', makeAdapter([]))).toThrow('Cannot initialize draft: adapter has no models');
+  it('preserves inheritance when the CLI catalog is empty', () => {
+    expect(resolveDraftDefaults('p1', makeAdapter([])).model).toBe('default');
   });
 });

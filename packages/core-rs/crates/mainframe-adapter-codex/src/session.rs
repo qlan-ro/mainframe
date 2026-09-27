@@ -43,6 +43,9 @@ use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadStartResult, TurnStartResult};
 
+#[path = "session_model.rs"]
+mod model;
+
 const HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 
 /// A `SessionSink` that ignores every callback (the TS `nullSink`).
@@ -92,10 +95,6 @@ type OnExitCallback = Box<dyn FnOnce() + Send>;
 
 struct PendingConfig {
     model: Option<String>,
-    /// Provider/catalog default model, computed once per spawn by the chat lifecycle —
-    /// the last turn-start fallback tier when the chat has no model and the app-server
-    /// reported none.
-    default_model: Option<String>,
     permission_mode: ExecutionMode,
     plan_mode: bool,
     tuning: Option<ResolvedTuning>,
@@ -111,7 +110,6 @@ impl Default for PendingConfig {
     fn default() -> Self {
         Self {
             model: None,
-            default_model: None,
             permission_mode: ExecutionMode::Default,
             plan_mode: false,
             tuning: None,
@@ -157,11 +155,7 @@ pub struct CodexSession {
     /// probe, which in production reads `~/.codex/state_5.sqlite`/
     /// `~/.codex/sessions` and cannot be safely seeded from an integration test.
     transcript_present_override: Arc<Mutex<Option<bool>>>,
-    /// `load_history`'s temp-app-server executable. `"codex"` in production —
-    /// bare-name PATH resolution for `spawn_temp_app_server` is unreliable to
-    /// override from a test (unlike `spawn()`'s explicit
-    /// `SessionSpawnOptions.executable_path`), so tests set this to a fake
-    /// script's full path instead (todo #368).
+    /// The configured binary also owns history and model probes.
     history_executable: Arc<Mutex<String>>,
 }
 
@@ -534,8 +528,7 @@ impl AdapterSession for CodexSession {
             *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
             {
                 let mut cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
-                cfg.model = options.model.clone();
-                cfg.default_model = options.default_model.clone();
+                cfg.model = model::explicit_model(options.model.as_deref());
                 cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
                 cfg.plan_mode = options.plan_mode.unwrap_or(false);
                 cfg.tuning = options.tuning.clone();
@@ -553,6 +546,10 @@ impl AdapterSession for CodexSession {
                 .executable_path
                 .clone()
                 .unwrap_or_else(|| "codex".to_string());
+            *self
+                .history_executable
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = executable.clone();
             let mut cmd = build_app_server_command(
                 &executable,
                 Some(Path::new(&self.project_path)),
@@ -638,19 +635,10 @@ impl AdapterSession for CodexSession {
             let input =
                 serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
 
-            let (
-                model,
-                default_model,
-                permission_mode,
-                plan_mode,
-                tuning,
-                codex_tuning,
-                no_persistence,
-            ) = {
+            let (model, permission_mode, plan_mode, tuning, codex_tuning, no_persistence) = {
                 let cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
                 (
                     cfg.model.clone(),
-                    cfg.default_model.clone(),
                     cfg.permission_mode,
                     cfg.plan_mode,
                     cfg.tuning.clone(),
@@ -659,24 +647,22 @@ impl AdapterSession for CodexSession {
                 )
             };
 
+            let model = self.model_for_turn(model).await?;
             self.ensure_thread(&client, model.as_deref(), permission_mode, no_persistence)
                 .await?;
 
             let (thread_id, resolved_model) = {
                 let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-                let resolved_model = resolve_turn_model(
-                    model.as_deref(),
-                    state.reported_model.as_deref(),
-                    default_model.as_deref(),
-                )
-                .inspect_err(|err| {
-                    tracing::error!(
-                        module = "codex:session",
-                        session_id = %self.id,
-                        err = %err,
-                        "codex: cannot start turn without a model"
-                    );
-                })?;
+                let resolved_model =
+                    resolve_turn_model(model.as_deref(), state.reported_model.as_deref())
+                        .inspect_err(|err| {
+                            tracing::error!(
+                                module = "codex:session",
+                                session_id = %self.id,
+                                err = %err,
+                                "codex: cannot start turn without a model"
+                            );
+                        })?;
                 state.resolved_turn_model = Some(resolved_model.clone());
                 (state.thread_id.clone().unwrap_or_default(), resolved_model)
             };
@@ -813,8 +799,16 @@ impl AdapterSession for CodexSession {
         })
     }
 
+    fn effective_model(&self) -> BoxFuture<'_, Option<String>> {
+        Box::pin(self.read_effective_model())
+    }
+
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
+            let model = match model::explicit_model(Some(&model)) {
+                Some(model) => model,
+                None => self.configured_cli_model().await?,
+            };
             self.config.lock().unwrap_or_else(|e| e.into_inner()).model = Some(model);
             Ok(())
         })

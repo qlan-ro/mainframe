@@ -187,14 +187,11 @@ pub(crate) mod tests;
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
 // notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
 // notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, locate_transcript
-// notes: and adapter_snapshot_models are all required, not defaulted (#273 for the
+// notes: are all required, not defaulted (#273 for the
 // notes: tracker methods — a silent default caused backgroundActivity to stay empty,
 // notes: then let orphaned tasks stay Running forever, in production; #289 for
 // notes: the presence lookup — a silent default left transcript-presence
-// notes: reconciliation permanently inert in production; #290 for
-// notes: adapter_snapshot_models — a silent default made
-// notes: normalize_saved_default_model's probe-failure short-circuit fire on every
-// notes: chat creation, leaking a retired saved default into new chats);
+// notes: reconciliation permanently inert in production);
 // notes: generate_title gained an adapter_id arg (adapter-aware).
 // notes: Ported: chat-manager-background-activity (5, via direct enrich_chat); the
 // notes: production wiring is covered by mainframe-server's chat_background_activity

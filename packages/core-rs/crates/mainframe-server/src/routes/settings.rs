@@ -20,7 +20,7 @@ use mainframe_adapter_api::resolve_executable::{
 };
 use mainframe_db::DbError;
 use mainframe_services::settings::normalize_saved_default_model;
-use mainframe_types::adapter::{AdapterInfo, AdapterModel, EffortLevel};
+use mainframe_types::adapter::EffortLevel;
 use mainframe_types::settings::{
     ExecutionMode, GeneralConfig, NotificationChatConfig, NotificationConfig,
     NotificationOtherConfig, NotificationPermissionConfig,
@@ -320,29 +320,17 @@ async fn put_general(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 
 // ── provider settings ───────────────────────────────────────────────────────────
 
-/// Drop each provider's saved `defaultModel` when it is no longer offered by the
-/// live probed catalog. Mirrors `normalizeProviderDefaultModels`: an empty catalog
-/// (a probe failure) never judges validity, and an empty-string id is skipped.
-fn normalize_provider_default_models(
-    providers: &mut Map<String, Value>,
-    snapshots: &[AdapterInfo],
-) {
-    let empty: Vec<AdapterModel> = Vec::new();
-    for (adapter_id, provider) in providers.iter_mut() {
+fn normalize_provider_default_models(providers: &mut Map<String, Value>) {
+    for provider in providers.values_mut() {
         let Some(obj) = provider.as_object_mut() else {
             continue;
         };
-        let configured = obj
-            .get("defaultModel")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty());
-        if let Some(configured) = configured {
-            let models = snapshots
-                .iter()
-                .find(|s| s.id == *adapter_id)
-                .map(|s| &s.models)
-                .unwrap_or(&empty);
-            if normalize_saved_default_model(Some(configured), models).is_none() {
+        let configured = obj.get("defaultModel").and_then(Value::as_str);
+        match normalize_saved_default_model(configured) {
+            Some(model) => {
+                obj.insert("defaultModel".into(), json!(model));
+            }
+            None => {
                 obj.remove("defaultModel");
             }
         }
@@ -382,7 +370,7 @@ async fn get_providers(State(ctx): State<Arc<AppCtx>>) -> Response {
         }
         obj.remove("skipPermissions");
     }
-    normalize_provider_default_models(&mut providers, &ctx.adapter_registry.get_snapshots());
+    normalize_provider_default_models(&mut providers);
     // Union the stored-provider ids with every registered adapter id, then attach
     // a `resolvedExecutable` per id (TS: `ctx.adapters.getAll()` ids +
     // `resolveAdapterExecutableCached`). resolveAdapterExecutable reads only the
@@ -641,62 +629,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn snapshot(id: &str, model_ids: &[&str]) -> AdapterInfo {
-        let models: Vec<serde_json::Value> = model_ids
-            .iter()
-            .map(|m| json!({ "id": m, "label": m }))
-            .collect();
-        serde_json::from_value(json!({
-            "id": id,
-            "name": id,
-            "description": "",
-            "installed": true,
-            "models": models,
-            "capabilities": { "planMode": true, "autoMode": false },
-        }))
-        .unwrap()
-    }
-
-    // settings.test.ts: "omits a saved default model absent from a non-empty catalog".
-    #[test]
-    fn drops_a_default_model_absent_from_a_non_empty_catalog() {
-        let mut providers = Map::new();
-        providers.insert("claude".to_string(), json!({ "defaultModel": "opus" }));
-        let snapshots = vec![snapshot("claude", &["default", "sonnet"])];
-        normalize_provider_default_models(&mut providers, &snapshots);
-        assert!(
-            providers["claude"]
-                .as_object()
-                .unwrap()
-                .get("defaultModel")
-                .is_none()
-        );
-    }
-
-    // An empty catalog (probe failure) can't judge validity → the id is kept.
-    #[test]
-    fn keeps_a_default_model_when_the_catalog_is_empty() {
-        let mut providers = Map::new();
-        providers.insert("claude".to_string(), json!({ "defaultModel": "opus" }));
-        normalize_provider_default_models(&mut providers, &[]);
-        assert_eq!(providers["claude"]["defaultModel"], json!("opus"));
-    }
-
-    // A still-offered id survives.
-    #[test]
-    fn keeps_a_default_model_present_in_the_catalog() {
-        let mut providers = Map::new();
-        providers.insert("claude".to_string(), json!({ "defaultModel": "sonnet" }));
-        let snapshots = vec![snapshot("claude", &["default", "sonnet"])];
-        normalize_provider_default_models(&mut providers, &snapshots);
-        assert_eq!(providers["claude"]["defaultModel"], json!("sonnet"));
-    }
-}
-
 // PORT STATUS: src/server/routes/settings.ts (5 endpoints, 235 lines)
 // confidence: medium
 // todos: 0
@@ -711,9 +643,6 @@ mod tests {
 // PERF(port): the 5s resolve memo (resolveAdapterExecutableCached) is dropped —
 // each request resolves live. config-conflicts reads ~/.claude/settings.json via
 // async tokio::fs (no sync I/O) and matches JS truthiness for allow/deny. Main
-// catch-up (#441): GET providers now runs normalize_provider_default_models —
-// a saved defaultModel absent from a non-empty probed catalog is dropped
-// (normalize_saved_default_model); an empty catalog / empty id is left untouched.
 // catch-up (#236): general GET/PUT carries `defaultAdapterId: string | null`
 // (which adapter seeds a new chat). GET always emits the key (explicit `null`
 // default, not omitted). PUT distinguishes an absent key (no change) from an

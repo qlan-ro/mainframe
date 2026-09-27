@@ -4,6 +4,7 @@
 //! The 12 route modules below are EMPTY stubs in Task 3.1; the route agents fill
 //! their handlers. `http.rs` mounts them (see the mount table there).
 
+mod adapter_model;
 pub mod adapters;
 pub mod agents;
 pub mod attachments;

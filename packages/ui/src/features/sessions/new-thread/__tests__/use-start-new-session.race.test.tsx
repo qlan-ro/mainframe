@@ -1,17 +1,6 @@
 /**
- * useStartNewSession — the stalled-fetch double-trigger race (todo #365).
- *
- * Reproduces the reported bug: a second New-session trigger arriving while
- * the first draft is still initializing (the provider-settings fetch has not
- * resolved, so the draft reports no project) must not land the draft on the
- * choose-a-project welcome. Runs the REAL useStartNewSession, openNewThreadDraft,
- * initializeDraft, resetNewThreadDraft and stores — only the daemon call
- * (getProviderSettings) and the aui `threads` scope are faked, plus a thin
- * hand-wired stand-in for useOpenNewThreadDraft that calls the real
- * openNewThreadDraft with test-controlled deps (rather than pulling the
- * production hook's daemon-port/settings/adapters stores). This is why the
- * mocks differ from the wiring-only use-start-new-session.test.tsx and the
- * suite lives in its own file.
+ * Exercises double New triggers through the real draft initialization and stores.
+ * Daemon settings/model reads and the assistant-ui threads scope are controlled.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
@@ -80,6 +69,8 @@ vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
 }));
 
+const getEffectiveModel = vi.fn();
+vi.mock('@/lib/api/adapters', () => ({ getEffectiveModel: (...args: unknown[]) => getEffectiveModel(...args) }));
 const getProviderSettings = vi.fn();
 vi.mock('@/lib/api/settings', () => ({ getProviderSettings: (...args: unknown[]) => getProviderSettings(...args) }));
 
@@ -179,6 +170,7 @@ beforeEach(() => {
   sourceProjectId = SOURCE_PROJECT_ID;
   currentDouble = createThreadsDouble('boot');
   getProviderSettings.mockReset();
+  getEffectiveModel.mockReset().mockResolvedValue(null);
   abandonCreateForLocal.mockReset();
   setText.mockReset();
   mfToastError.mockReset();
@@ -214,11 +206,7 @@ describe.each([
     expect(isInitializingLikeChatSurface()).toBe(true);
 
     request.resolve({ claude: { defaultMode: 'acceptEdits' } });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await act(async () => vi.waitFor(() => expect(useNewThreadReady.getState().isReady(DRAFT_ID)).toBe(true)));
     expect(getDraftConfig(DRAFT_ID)?.projectId).toBe(SOURCE_PROJECT_ID);
     expect(useNewThreadReady.getState().isReady(DRAFT_ID)).toBe(true);
     expect(realUseDraftReturnTarget.getState().returnThreadId).toBe(SOURCE_THREAD_ID);
@@ -238,14 +226,37 @@ describe.each([
     rerender();
 
     request.resolve({ claude: { defaultMode: 'acceptEdits' } });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await act(async () => vi.waitFor(() => expect(useNewThreadReady.getState().isReady(DRAFT_ID)).toBe(true)));
 
     expect(getDraftConfig(DRAFT_ID)?.projectId).toBe('proj-pill');
     expect(useNewThreadReady.getState().isReady(DRAFT_ID)).toBe(true);
+  });
+
+  it('preserves the originating project through a second trigger while model resolution is pending', async () => {
+    const model = deferred<string>();
+    getProviderSettings.mockResolvedValue({ claude: { defaultMode: 'acceptEdits' } });
+    getEffectiveModel.mockReturnValue(model.promise);
+    const { result, rerender } = renderHook(() => useStartNewSession());
+
+    act(() => result.current());
+    await act(async () => vi.waitFor(() => expect(getEffectiveModel).toHaveBeenCalledOnce()));
+    expect(getEffectiveModel).toHaveBeenCalledWith(31415, 'claude', SOURCE_PROJECT_ID);
+    expect(getDraftConfig(DRAFT_ID)).toBeUndefined();
+    expect(isInitializingLikeChatSurface()).toBe(true);
+    rerender();
+    act(() => result.current());
+    expect(isInitializingLikeChatSurface()).toBe(true);
+    expect(getProviderSettings).toHaveBeenCalledOnce();
+    expect(getEffectiveModel).toHaveBeenCalledOnce();
+
+    model.resolve('claude-fable-5-1');
+    await act(async () => vi.waitFor(() => expect(useNewThreadReady.getState().isReady(DRAFT_ID)).toBe(true)));
+    expect(getDraftConfig(DRAFT_ID)).toMatchObject({
+      projectId: SOURCE_PROJECT_ID,
+      model: 'default',
+      cliModel: 'claude-fable-5-1',
+    });
+    expect(realUseDraftReturnTarget.getState().returnThreadId).toBe(SOURCE_THREAD_ID);
   });
 
   it('with no pill and no active project, ends unscoped with no initialization (unchanged)', async () => {
@@ -263,6 +274,7 @@ describe.each([
     });
 
     expect(getProviderSettings).not.toHaveBeenCalled();
+    expect(getEffectiveModel).not.toHaveBeenCalled();
     expect(getDraftConfig(DRAFT_ID)).toBeUndefined();
     expect(useNewThreadReady.getState().getInitialization(DRAFT_ID).status).toBe('idle');
     expect(realUseDraftReturnTarget.getState().returnThreadId).toBe(SOURCE_THREAD_ID);

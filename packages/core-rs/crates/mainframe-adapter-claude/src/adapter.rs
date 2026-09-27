@@ -213,6 +213,21 @@ impl Adapter for ClaudeAdapter {
         })
     }
 
+    fn configured_model(
+        &self,
+        project_path: String,
+        executable_path: Option<String>,
+    ) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            crate::effective_model::probe(
+                executable_path.as_deref().unwrap_or("claude"),
+                self.resolved_path.as_str(),
+                &project_path,
+            )
+            .await
+        })
+    }
+
     fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
         Some(claude_models())
     }

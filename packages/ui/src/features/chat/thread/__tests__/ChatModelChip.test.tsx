@@ -44,6 +44,9 @@ vi.mock('../../composer/config-toolbar/ProviderModelSelect', () => ({
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
+vi.mock('../../composer/config-toolbar/use-provider-defaults', () => ({ useProviderDefaults: () => undefined }));
+vi.mock('@/lib/use-cli-model', () => ({ useCliModel: vi.fn().mockReturnValue(null) }));
+import { useCliModel } from '@/lib/use-cli-model';
 import { ChatModelChip } from '../ChatModelChip';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { useAdapters } from '../../composer/config-toolbar/use-composer-tuning';
@@ -95,6 +98,7 @@ function makeExtras(state: ChatThreadState) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useCliModel).mockReturnValue(null);
   vi.mocked(useAdapters).mockReturnValue([ADAPTER_CLAUDE]);
   vi.mocked(useChatExtras).mockReturnValue(makeExtras(stateWithChat(makeChat())) as ReturnType<typeof useChatExtras>);
 });
@@ -148,14 +152,14 @@ describe('ChatModelChip', () => {
     expect(screen.queryByText('Claude')).toBeNull();
   });
 
-  it("falls back to the adapter's isDefault model label when chat.model is undefined (session inherits the adapter default)", () => {
+  it('shows unresolved inheritance without claiming the catalog recommendation', () => {
     vi.mocked(useChatExtras).mockReturnValue(
       makeExtras(stateWithChat(makeChat({ model: undefined }))) as ReturnType<typeof useChatExtras>,
     );
 
     render(<ChatModelChip />);
 
-    expect(screen.getByTestId('chat-header-model').textContent).toBe('Sonnet 4.6');
+    expect(screen.getByTestId('chat-header-model').textContent).toBe('Use CLI setting');
   });
 
   it('does not render a "·" separator', () => {
@@ -163,4 +167,18 @@ describe('ChatModelChip', () => {
 
     expect(screen.queryByText('·')).toBeNull();
   });
+});
+
+it('shows the current CLI model for an explicit selection', () => {
+  vi.mocked(useCliModel).mockReturnValue('claude-fable-5-1');
+  render(<ChatModelChip />);
+  expect(screen.getByTestId('chat-header-model')).toHaveTextContent('claude-fable-5-1');
+});
+
+it('preserves an unknown saved model when the process is stopped', () => {
+  vi.mocked(useChatExtras).mockReturnValue(
+    makeExtras(stateWithChat(makeChat({ model: 'private-model' }))) as ReturnType<typeof useChatExtras>,
+  );
+  render(<ChatModelChip />);
+  expect(screen.getByTestId('chat-header-model')).toHaveTextContent('private-model');
 });

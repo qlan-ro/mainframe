@@ -1,16 +1,16 @@
 import type { AdapterInfo, FeatureKey, ProviderConfig } from '@qlan-ro/mainframe-types';
 import { TUNABLE_FEATURES, clampEffortToSupported } from '@qlan-ro/mainframe-types';
+import { selectedModel, withCliModel } from '@/lib/cli-model';
 import type { DraftCfg } from '../runtime/draft-config';
 
 export function resolveDraftDefaults(
   projectId: string | null,
   adapter: AdapterInfo,
   provider?: ProviderConfig,
+  cliModel?: string | null,
 ): DraftCfg {
-  const model =
-    adapter.models.find((candidate) => candidate.id === provider?.defaultModel) ??
-    adapter.models.find((candidate) => candidate.isDefault) ??
-    adapter.models[0];
+  const catalog = withCliModel(adapter, cliModel);
+  const model = selectedModel(catalog, provider?.defaultModel);
   if (!model) throw new Error('Cannot initialize draft: adapter has no models');
 
   const features: Record<FeatureKey, boolean> = {
@@ -25,7 +25,9 @@ export function resolveDraftDefaults(
   const requestedEffort = provider?.defaultEffort ?? model.defaultEffort ?? 'medium';
   const effort = features.ultracode
     ? 'xhigh'
-    : clampEffortToSupported(requestedEffort, model.supportedEfforts ?? [], model.defaultEffort);
+    : model.supportedEfforts
+      ? clampEffortToSupported(requestedEffort, model.supportedEfforts, model.defaultEffort)
+      : (provider?.defaultEffort ?? null);
 
   return {
     projectId,

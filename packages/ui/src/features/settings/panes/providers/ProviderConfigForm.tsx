@@ -1,3 +1,5 @@
+import { useCliModel } from '@/lib/use-cli-model';
+import { selectedModel, withCliModel } from '@/lib/cli-model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AdapterInfo, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
@@ -41,17 +43,21 @@ function applyUpdate(port: number, adapterId: string, partial: ProviderConfigUpd
 
 function buildModelOptions(adapter: AdapterInfo) {
   return [
-    { id: 'default', label: 'Default (CLI picks)' },
-    ...adapter.models.map((m) => ({
-      id: m.id,
-      label: m.label,
-      description: m.description,
-    })),
+    { id: 'default', label: adapter.models.find((m) => m.id === 'default')?.label ?? 'Use CLI setting' },
+    ...adapter.models
+      .filter((m) => m.id !== 'default')
+      .map((m) => ({
+        id: m.id,
+        label: m.label,
+        description: m.description,
+      })),
   ];
 }
 
-export function ProviderConfigForm({ port, adapterId, label, adapter }: ProviderConfigFormProps) {
+export function ProviderConfigForm({ port, adapterId, label, adapter: catalog }: ProviderConfigFormProps) {
   const config = useSettingsStore((s) => s.providers[adapterId] ?? EMPTY_CONFIG);
+  const cliModel = useCliModel(port, adapterId, undefined, undefined, config.executablePath ?? '');
+  const adapter = withCliModel(catalog, cliModel);
   const [conflicts, setConflicts] = useState<string[]>([]);
   // Local state for the exec path input — commits on blur only (not per-keystroke).
   const [execPath, setExecPath] = useState(config.executablePath ?? '');
@@ -89,12 +95,11 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
     }
   }
 
-  const defaultModel =
-    adapter.models.find((m) => m.id === (config.defaultModel ?? '')) ??
-    adapter.models.find((m) => m.isDefault) ??
-    adapter.models[0];
-
+  const defaultModel = selectedModel(adapter, config.defaultModel);
   const modelOptions = buildModelOptions(adapter);
+  if (config.defaultModel && !modelOptions.some((model) => model.id === config.defaultModel)) {
+    modelOptions.push({ id: config.defaultModel, label: config.defaultModel });
+  }
 
   return (
     <div data-testid={`settings-pane-provider-${adapterId}`} className="flex flex-col gap-4">
@@ -133,7 +138,12 @@ export function ProviderConfigForm({ port, adapterId, label, adapter }: Provider
         <ProviderTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
       )}
       {adapterId === 'codex' && (
-        <CodexTuningDefaults adapterId={adapterId} model={defaultModel} config={config} onChange={update} />
+        <CodexTuningDefaults
+          adapterId={adapterId}
+          model={defaultModel ?? undefined}
+          config={config}
+          onChange={update}
+        />
       )}
 
       <SessionModeRadio adapterId={adapterId} adapter={adapter} config={config} onChange={update} />

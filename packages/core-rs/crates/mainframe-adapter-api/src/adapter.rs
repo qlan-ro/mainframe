@@ -177,6 +177,13 @@ pub trait AdapterSession: Send + Sync {
         response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>>;
+    fn model_requires_restart(&self, _model: &str) -> bool {
+        false
+    }
+
+    fn effective_model(&self) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async { None })
+    }
     fn set_model(&self, model: String) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn set_permission_mode(&self, mode: ExecutionMode) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn set_plan_mode(&self, on: bool) -> BoxFuture<'_, Result<(), AdapterError>>;
@@ -270,6 +277,14 @@ pub trait Adapter: Send + Sync {
     /// (`getFallbackModels?`). Default `None`.
     fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
         None
+    }
+
+    fn configured_model(
+        &self,
+        _project_path: String,
+        _executable_path: Option<String>,
+    ) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async { None })
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession>;

@@ -1,31 +1,5 @@
 'use client';
 
-/**
- * ProviderModelSelect — one trigger → the composer's provider + model menu.
- *
- * A floating list of choices is a native DropdownMenu (ledger rule, 2026-08-05).
- * The PROVIDER segmented row rides at the top as non-item chrome, the way the
- * branch menu carries its search field: it holds focusable buttons, so it stops
- * keydown propagation or Radix's typeahead would eat the keystrokes.
- *
- * Each model row is a `ModelMenuRow` — click to choose, hover for that model's
- * effort/options flyout (the Cursor pattern). That flyout replaces the toolbar's
- * former standalone EffortPicker chip and FeaturesPopover gear.
- *
- * Uninstalled adapters (`installed === false`) render locked + muted; once the
- * chat has messages the WHOLE provider row locks (switching agents mid-thread
- * would orphan the CLI session — mirrors the desktop invariant).
- *
- * `locked` and `disabled` are different rules: `locked` freezes the provider row
- * for the session, `disabled` makes the whole picker inert while a turn runs, so
- * no model change can reach a CLI mid-answer.
- *
- * No assistant-ui ModelContext: that targets the AI-SDK transport, which is inert
- * under our external-store runtime. Selection writes through our setAdapter/setModel
- * → PATCH /config; config is server-authoritative (the daemon's chat.updated
- * broadcast updates the toolbar — no optimistic edits here).
- */
-
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import type {
@@ -48,6 +22,7 @@ import {
 import { Hint } from '@/components/ui/hint';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
+import { modelSelectionHint } from '@/lib/cli-model';
 import { cn } from '@/lib/utils';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { RunningHint } from './RunningHint';
@@ -60,6 +35,8 @@ export interface ProviderModelSelectProps {
   /** The resolved active adapter (chat's adapter, else default). */
   adapter: AdapterInfo | null;
   model: AdapterModel | null;
+  runningModel?: AdapterModel | null;
+  showCurrentModel?: boolean;
   /** True once the chat has messages — locks the provider (agent) for the session. */
   locked: boolean;
   /** True while a turn is running — the whole picker goes inert, as the other controls do. */
@@ -169,6 +146,8 @@ export function ProviderModelSelect({
   adapters,
   adapter,
   model,
+  runningModel = null,
+  showCurrentModel = false,
   locked,
   disabled,
   providerDefaults,
@@ -185,13 +164,15 @@ export function ProviderModelSelect({
   const currentModelId = model?.id ?? chat.model ?? '';
   const rows = modelRows(active, chat.model);
   const { current, older, groups } = partitionModels(rows);
-  const modelLabel = rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
+  const displayedModel = runningModel ?? model;
+  const modelLabel =
+    runningModel?.label ?? rows.find((m) => m.id === currentModelId)?.label ?? currentModelId ?? active?.name ?? '';
   // The trigger carries the resolved effort too ("Fable 5 · Medium") so the
   // dominant tuning field is readable without opening the menu. Models with no
   // effort axis show the bare name.
   const effortLabel =
-    model != null && effortOptions(model).length > 0
-      ? EFFORT_META[displayEffort(chat, model, providerDefaults).value].label
+    displayedModel != null && effortOptions(displayedModel).length > 0
+      ? EFFORT_META[displayEffort(chat, displayedModel, providerDefaults).value].label
       : null;
   const triggerLabel = effortLabel != null ? `${modelLabel} · ${effortLabel}` : modelLabel;
   const activeId = chat.adapterId ?? active?.id ?? '';
@@ -221,7 +202,7 @@ export function ProviderModelSelect({
   return (
     <RunningHint active={disabled}>
       <DropdownMenu open={open} onOpenChange={setOpen}>
-        <Hint label="Provider &amp; model" side="top">
+        <Hint label={modelSelectionHint(model, runningModel, showCurrentModel)} side="top">
           {/* Radix gates opening on the TRIGGER's own `disabled`; a disabled
               child button alone still lets pointerdown open the menu. */}
           <DropdownMenuTrigger asChild disabled={disabled}>
@@ -268,6 +249,13 @@ export function ProviderModelSelect({
           </div>
 
           <DropdownMenuSeparator />
+          {(showCurrentModel || runningModel) && runningModel?.id !== model?.id && (
+            <DropdownMenuLabel data-testid="composer-model-current" className="text-xs text-muted-foreground">
+              Current: {runningModel?.label ?? 'unavailable'}
+              <br />
+              Selected: {model?.label ?? 'Use CLI setting'}
+            </DropdownMenuLabel>
+          )}
 
           {/* Fixed-height scroll region: every provider's catalog renders in
               the same panel size, so switching tabs or expanding a section

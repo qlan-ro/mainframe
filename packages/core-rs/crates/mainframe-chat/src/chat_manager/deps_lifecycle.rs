@@ -107,12 +107,7 @@ impl LifecycleManagerDeps for LcDeps {
     ) -> BoxFuture<'a, Option<String>> {
         self.deps.generate_title(adapter_id, content, binary)
     }
-    fn adapter_snapshot_models(
-        &self,
-        adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel> {
-        self.deps.adapter_snapshot_models(adapter_id)
-    }
+
     fn is_working_tree_dirty<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, bool> {
         self.deps.is_working_tree_dirty(project_path)
     }
