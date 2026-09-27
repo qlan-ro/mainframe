@@ -11,7 +11,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapter::{AdapterCapabilities, AdapterModel, AdapterProcess, DetectedPr, ProviderQuota};
+use crate::adapter::{
+    AdapterCapabilities, AdapterModel, AdapterProcess, DetectedPr, ProviderQuota,
+};
 use crate::automation::{
     AutomationCompletedStatus, AutomationInteractionSummary, AutomationNotificationLinks,
     AutomationRunSummary,

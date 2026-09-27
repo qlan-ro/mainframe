@@ -755,7 +755,10 @@ mod tests {
                 fork_unavailable_reason,
                 ..
             } => {
-                assert_eq!(fork_unavailable_reason.as_deref(), Some("Codex CLI too old"));
+                assert_eq!(
+                    fork_unavailable_reason.as_deref(),
+                    Some("Codex CLI too old")
+                );
             }
             other => panic!("unexpected event: {other:?}"),
         }

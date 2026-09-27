@@ -178,8 +178,7 @@ mod tests {
         );
         assert_eq!(
             ForkChatError::UnavailableWithReason(
-                "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
-                    .into()
+                "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)".into()
             )
             .to_string(),
             "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"

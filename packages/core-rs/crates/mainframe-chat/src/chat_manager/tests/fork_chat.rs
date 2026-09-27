@@ -50,8 +50,7 @@ async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
     assert_eq!(
         err,
         ForkChatError::UnavailableWithReason(
-            "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
-                .to_string()
+            "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)".to_string()
         )
     );
     assert_eq!(err.status_code(), 422);
