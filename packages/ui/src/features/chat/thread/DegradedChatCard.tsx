@@ -18,7 +18,15 @@ import { Hint } from '@/components/ui/hint';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stageDiscard, takeDiscard } from '@/features/sessions/runtime/archive-confirm-bridge';
-import { archiveChat, continueChatHere, continueChatInProjectRoot, recreateChatWorktree } from '@/lib/api/chats';
+import {
+  archiveChat,
+  continueChatHere,
+  continueChatInProjectRoot,
+  discardChat,
+  recreateChatWorktree,
+} from '@/lib/api/chats';
+import { unregisterSideChat } from '@/features/side-chat/side-chat-ids';
+import { useSideChatScope } from '@/features/side-chat/side-chat-scope';
 
 function MissingPath({ path }: { path: string }) {
   // `break-all`, not `wrap-break-word`: an absolute path is one unbreakable
@@ -48,6 +56,7 @@ export function DegradedChatCard() {
   // mounting this card, so the same unscoped read resolves to the right item
   // there too — no SessionRowItemScope needed in either case.
   const aui = useAui();
+  const sideChatScope = useSideChatScope();
   const [busy, setBusy] = useState(false);
   const [recreateError, setRecreateError] = useState<string | null>(null);
 
@@ -161,8 +170,20 @@ export function DegradedChatCard() {
           // through aui's delete(): calling discardChat directly would leave a
           // stale local entry behind (a ghost row). Archive self-heals on the
           // next reload, since an archived chat stays listed.
+          //
+          // Inside a SideChatScope, `aui.threadListItem` is unbound (see
+          // side-chat-scope.tsx) and still resolves to the PARENT's item from
+          // the extended root, so aui's delete() would archive the parent
+          // instead of this side chat. Route through `discardChat` directly —
+          // the same route the panel header's own close button uses — and
+          // unregister the id (todo #344).
           onClick={() =>
             run(async () => {
+              if (sideChatScope != null) {
+                await discardChat(port, chatId);
+                unregisterSideChat(chatId);
+                return;
+              }
               if (!chat.temporary) {
                 await archiveChat(port, chatId, true);
                 return;

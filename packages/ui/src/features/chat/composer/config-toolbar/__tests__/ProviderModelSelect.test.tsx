@@ -115,6 +115,7 @@ interface RenderProps {
   setModelTuning?: ProviderModelSelectProps['setModelTuning'];
   setEffort?: (effort: EffortLevel) => void;
   setFeature?: (key: FeatureKey, on: boolean) => void;
+  hideProviderSwitch?: boolean;
 }
 
 function renderSelect(props: RenderProps = {}) {
@@ -146,6 +147,7 @@ function renderSelect(props: RenderProps = {}) {
         setModelTuning={setModelTuning}
         setEffort={setEffort}
         setFeature={setFeature}
+        hideProviderSwitch={props.hideProviderSwitch}
       />
     </TooltipProvider>,
   );
@@ -977,6 +979,10 @@ describe('ProviderModelSelect — trigger effort suffix', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 12. Current CLI model label
+// ---------------------------------------------------------------------------
+
 it('shows the current CLI model while preserving the selected override', async () => {
   const { setModel } = renderSelect({ model: SONNET, runningModel: HAIKU });
   expect(screen.getByTestId('composer-model-select')).toHaveTextContent('Claude Haiku 4');
@@ -992,4 +998,30 @@ it('labels the saved choice when the current model cannot be reported', async ()
   await userEvent.click(screen.getByTestId('composer-model-select'));
   expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Current: unavailable');
   expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Selected: Claude Sonnet 4');
+});
+
+// ---------------------------------------------------------------------------
+// 13. hideProviderSwitch (todo #344 side-chat panel)
+// ---------------------------------------------------------------------------
+
+describe('ProviderModelSelect — hideProviderSwitch (todo #344)', () => {
+  it('hides the provider-switching row but keeps the model catalog', async () => {
+    const user = userEvent.setup();
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], hideProviderSwitch: true });
+
+    await user.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.queryByTestId('composer-adapter-select-option-claude')).toBeNull();
+    expect(screen.queryByTestId('composer-adapter-select-option-gemini')).toBeNull();
+    expect(screen.getByTestId('composer-model-select-option-sonnet')).toBeInTheDocument();
+  });
+
+  it('shows the provider-switching row by default', async () => {
+    const user = userEvent.setup();
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI] });
+
+    await user.click(screen.getByTestId('composer-model-select'));
+
+    expect(screen.getByTestId('composer-adapter-select-option-claude')).toBeInTheDocument();
+  });
 });

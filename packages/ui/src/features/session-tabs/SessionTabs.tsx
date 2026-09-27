@@ -23,6 +23,7 @@ import { useAdaptersStore } from '@/store/adapters';
 import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useForkChat } from '@/features/sessions/use-fork-chat';
+import { useOpenSideChat } from '@/features/side-chat/use-open-side-chat';
 import { canOpenInSplit, openInSplit } from '@/features/chat/zones/open-in-split';
 import { splitVisible, useZonesStore } from '@/features/chat/zones/zones-store';
 import { SessionTabPill } from './SessionTabPill';
@@ -55,6 +56,7 @@ export function SessionTabs() {
   const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
   const adaptersById = useAdaptersStore((s) => s.byId);
   const fork = useForkChat();
+  const openSideChat = useOpenSideChat();
 
   // Between the chat.created reload and the router's handover the active
   // thread is still the draft's local id while its tab is already canonical;
@@ -82,6 +84,7 @@ export function SessionTabs() {
   const tabs = ordered.map((id) => toTabEntry(id, items, projectNames, activeTabId, id === previewId, adaptersById));
 
   const handleFork = (id: string) => void fork(id);
+  const handleOpenSideChat = (id: string) => void openSideChat(id);
 
   // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
   // the stored pin order.
@@ -168,6 +171,7 @@ export function SessionTabs() {
                   onOpenInSplit={handleOpenInSplit}
                   onCloseSplit={handleCloseSplit}
                   onFork={handleFork}
+                  onOpenSideChat={handleOpenSideChat}
                 />
               ))}
             {/* The split pair reads as ONE unit: one underline spanning both,
@@ -197,6 +201,7 @@ export function SessionTabs() {
                     onOpenInSplit={handleOpenInSplit}
                     onCloseSplit={handleCloseSplit}
                     onFork={handleFork}
+                    onOpenSideChat={handleOpenSideChat}
                   />
                 ))}
             </div>
@@ -215,6 +220,7 @@ export function SessionTabs() {
                   onOpenInSplit={handleOpenInSplit}
                   onCloseSplit={handleCloseSplit}
                   onFork={handleFork}
+                  onOpenSideChat={handleOpenSideChat}
                 />
               ))}
           </>
@@ -231,6 +237,7 @@ export function SessionTabs() {
               onOpenInSplit={handleOpenInSplit}
               onCloseSplit={handleCloseSplit}
               onFork={handleFork}
+              onOpenSideChat={handleOpenSideChat}
             />
           ))
         )}

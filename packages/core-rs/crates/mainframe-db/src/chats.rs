@@ -15,7 +15,8 @@ use serde_json::Value;
 use crate::chat_tags::ChatTagsRepository;
 use crate::{DbError, enum_to_db_string};
 
-const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as projectId, \
+// pub(crate): reused by `side_chats.rs` for the side chat's own SELECT.
+pub(crate) const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as projectId, \
   title, claude_session_id as claudeSessionId, model, \
   permission_mode as permissionMode, status, \
   created_at as createdAt, updated_at as updatedAt, \
@@ -32,7 +33,8 @@ const CHAT_SELECT_FIELDS: &str = "id, adapter_id as adapterId, project_id as pro
   automation_run_id as automationRunId, \
   temporary, vendor_session_ephemeral as vendorSessionEphemeral, \
   context_lost_at as contextLostAt, scratch_path as scratchPath, \
-  parent_chat_id as parentChatId";
+  parent_chat_id as parentChatId, \
+  (SELECT s.id FROM chats s WHERE s.parent_chat_id = chats.id AND s.temporary = 1) AS sideChatId";
 
 /// The still-pending fork state stored in `chats.pending_fork` (JSON), read and
 /// written only through `get_pending_fork` / `clear_pending_fork` (todo #343) —
@@ -173,7 +175,8 @@ fn nullable_bool_value(v: &Option<bool>) -> SqlValue {
 }
 
 pub struct ChatsRepository {
-    db: Rc<Connection>,
+    // pub(crate): reused by `side_chats.rs`'s find-then-insert.
+    pub(crate) db: Rc<Connection>,
     chat_tags: Option<ChatTagsRepository>,
 }
 
@@ -212,6 +215,9 @@ impl ChatsRepository {
         if !filters.include_temporary {
             where_clauses.push("temporary = 0".to_string());
         }
+        // Side chats are never a listing result, even when the caller opted back
+        // into temporary chats — they are reachable only through their parent.
+        where_clauses.push("NOT (temporary = 1 AND parent_chat_id IS NOT NULL)".to_string());
         if let Some(project_id) = &filters.project_id {
             where_clauses.push("project_id = ?".to_string());
             params.push(SqlValue::Text(project_id.clone()));
@@ -353,6 +359,8 @@ impl ChatsRepository {
             vendor_session_ephemeral: false,
             scratch_path,
             parent_chat_id: None,
+            side_chat_id: None,
+            side_chat_waiting: None,
         })
     }
 
@@ -449,6 +457,8 @@ impl ChatsRepository {
             vendor_session_ephemeral: false,
             scratch_path: None,
             parent_chat_id: Some(Some(insert.parent_chat_id.to_string())),
+            side_chat_id: None,
+            side_chat_waiting: None,
         })
     }
 
@@ -852,7 +862,12 @@ impl ChatsRepository {
         }
     }
 
-    fn query_chats<P: rusqlite::Params>(&self, sql: &str, params: P) -> Result<Vec<Chat>, DbError> {
+    // pub(crate): reused by `side_chats.rs`'s own SELECT.
+    pub(crate) fn query_chats<P: rusqlite::Params>(
+        &self,
+        sql: &str,
+        params: P,
+    ) -> Result<Vec<Chat>, DbError> {
         let mut stmt = self.db.prepare(sql)?;
         let mut rows = stmt.query(params)?;
         let mut chats = Vec::new();
@@ -965,6 +980,9 @@ fn map_row(row: &rusqlite::Row<'_>) -> Result<Chat, DbError> {
             .is_some_and(|n| n != 0),
         scratch_path: row.get("scratchPath")?,
         parent_chat_id: Some(row.get::<_, Option<String>>("parentChatId")?),
+        side_chat_id: row.get("sideChatId")?,
+        // Waiting state is enrichment-only (chat_manager), never derived here.
+        side_chat_waiting: None,
     })
 }
 

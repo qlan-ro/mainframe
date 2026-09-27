@@ -45,6 +45,8 @@ vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
 // Fork's own daemon call + useDaemonPort/useAui plumbing has its own suite
 // (use-fork-chat.test.tsx); irrelevant to the split gesture under test here.
 vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn() }));
+// Same reasoning for useOpenSideChat (todo #344) — its own suite covers the call.
+vi.mock('@/features/side-chat/use-open-side-chat', () => ({ useOpenSideChat: () => vi.fn() }));
 
 import { SessionTabs } from '../SessionTabs';
 

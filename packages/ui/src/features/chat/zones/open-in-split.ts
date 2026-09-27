@@ -13,6 +13,7 @@
  * chat, a draft, already a member of the visible split (a focus click), or
  * the active chat is a draft that cannot anchor a split.
  */
+import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
 import { splitVisible, useZonesStore } from './zones-store';
 
 /**
@@ -27,6 +28,7 @@ export function canOpenInSplit(
   id: string,
 ): boolean {
   if (activeId == null || id === activeId || id.startsWith('__LOCALID_')) return false;
+  if (isRegisteredSideChatId(id)) return false;
   if (!splitVisible(zones, activeId)) return !activeId.startsWith('__LOCALID_');
   return zones != null && !zones.includes(id);
 }

@@ -338,6 +338,27 @@ fn migration_29_seeds_the_hidden_scratch_project_row() {
 }
 
 #[test]
+fn migration_30_adds_the_one_side_chat_per_parent_unique_index() {
+    let db = Connection::open_in_memory().unwrap();
+    run_migrations(&db, 29).unwrap();
+    assert_eq!(user_version(&db), 29);
+
+    run_migrations(&db, LATEST_VERSION).unwrap();
+    assert_eq!(user_version(&db), LATEST_VERSION);
+
+    let has_index: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_chats_one_side_chat'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(has_index, 1);
+    // idempotent re-run doesn't fail.
+    run_migrations(&db, LATEST_VERSION).unwrap();
+}
+
+#[test]
 fn produces_byte_identical_final_schema_fresh_vs_migrated() {
     let fresh = Connection::open_in_memory().unwrap();
     initialize_schema(&fresh).unwrap();

@@ -27,6 +27,7 @@ import type { AssistantStreamChunk } from 'assistant-stream';
 import type { RemoteThreadListAdapter } from '@assistant-ui/react';
 import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
+import { isSideChat, recordSideChatsFromList } from '../../side-chat/side-chat-ids';
 import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from './archive-confirm-bridge';
 import { useSessionListLoadState } from './list-load-state';
 import { createForLocal } from './new-thread-coordinator';
@@ -74,10 +75,18 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
       const chats = await listChats(port, { includeTemporary: true });
       // The one place that can tell a loaded list from a failed one (#312).
       useSessionListLoadState.getState().markLoaded();
+      // The server never lists a side chat, but a parent carries its
+      // `sideChatId` — record the mapping on every reload so the identity
+      // guards (tab store, zones, this adapter's own fetch below) recognize
+      // it before anything tries to open it as a session (todo #344).
+      recordSideChatsFromList(chats);
       return { threads: chats.map(toMetadata) };
     },
     async fetch(threadId: string): Promise<RemoteThreadMetadata> {
       const chat = await getChat(port, threadId);
+      // A side chat is never a session — refuse the adoption `switchToThread`
+      // would otherwise perform via this exact fetch path (todo #344, UI rule 2).
+      if (isSideChat(chat)) throw new Error(`Chat ${threadId} is a side chat and cannot be opened as a session`);
       return toMetadata(chat);
     },
     async rename(remoteId: string, newTitle: string): Promise<void> {

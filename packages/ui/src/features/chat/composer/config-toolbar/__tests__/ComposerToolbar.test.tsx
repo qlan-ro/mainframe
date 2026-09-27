@@ -184,3 +184,50 @@ describe('ComposerToolbar — adapter capabilities reach the permission picker',
     expect(await screen.findByTestId('composer-permission-mode-select-option-auto')).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 3. variant="side" (todo #344) hides the adapter switch, worktree controls
+//    and Temporary toggle, but keeps model + permission controls
+// ---------------------------------------------------------------------------
+
+describe('ComposerToolbar — variant="side" (todo #344)', () => {
+  async function renderWithDraftAdapter(variant: 'main' | 'side') {
+    const composerTuningMod = await import('../use-composer-tuning');
+    const base = vi.mocked(composerTuningMod.useComposerTuning).getMockImplementation();
+    const adapter = {
+      id: 'claude',
+      name: 'Claude',
+      description: '',
+      installed: true,
+      models: [],
+      capabilities: { planMode: false },
+    };
+    vi.mocked(composerTuningMod.useAdapters).mockReturnValue([adapter]);
+    vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({
+      ...base!([]),
+      adapter,
+      draftMode: true, // TemporaryToggle only renders in draft mode or when already temporary
+    });
+    return render(
+      <TooltipProvider>
+        <ComposerToolbar variant={variant} />
+      </TooltipProvider>,
+    );
+  }
+
+  it('keeps the Temporary toggle and worktree trigger for the main variant', async () => {
+    await renderWithDraftAdapter('main');
+
+    expect(screen.getByTestId('composer-temporary-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
+  });
+
+  it('hides the Temporary toggle and worktree trigger for the side variant', async () => {
+    await renderWithDraftAdapter('side');
+
+    expect(screen.queryByTestId('composer-temporary-toggle')).toBeNull();
+    expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
+    // Model + permission controls stay.
+    expect(screen.getByTestId('composer-permission-mode-select')).toBeInTheDocument();
+  });
+});

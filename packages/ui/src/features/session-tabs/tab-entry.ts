@@ -5,6 +5,7 @@
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import type { SessionCustom, ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { forkAvailability, type ForkAvailability } from '@/features/sessions/view-model/fork-availability';
+import { isSideChat } from '@/features/side-chat/side-chat-ids';
 import type { SessionTabEntry } from './SessionTabPill';
 
 /**
@@ -33,6 +34,16 @@ function tabForkAvailability(
   });
 }
 
+/**
+ * A draft has no chat id yet to attach a side chat to; a side chat itself
+ * can't get another (no nesting); an archived tab (reachable only via a
+ * lingering pin) can't either — the daemon 409s all three (todo #344).
+ */
+function tabCanOpenSideChat(custom: SessionCustom | undefined): boolean {
+  if (custom == null || custom.status === 'archived') return false;
+  return !isSideChat(custom);
+}
+
 export function toTabEntry(
   id: string,
   items: readonly ThreadListEntry[],
@@ -53,5 +64,10 @@ export function toTabEntry(
     active: id === activeId,
     preview,
     forkAvailability: tabForkAvailability(custom, adaptersById),
+    // The chat's own pending gate OR its side chat's (todo #344) — NOT the
+    // `hasPending` fed to tabForkAvailability above, which stays the chat's
+    // own value so a waiting side chat never blocks forking the parent.
+    hasPending: (custom?.hasPending ?? false) || (custom?.sideChatWaiting ?? false),
+    canOpenSideChat: tabCanOpenSideChat(custom),
   };
 }

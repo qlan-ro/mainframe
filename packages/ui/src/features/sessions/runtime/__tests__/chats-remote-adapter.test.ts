@@ -204,6 +204,46 @@ describe('chats-remote-adapter — fetch maps one chat', () => {
 });
 
 // ---------------------------------------------------------------------------
+// chats-remote-adapter — fetch rejects a side chat (todo #344, UI rule 2)
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — fetch refuses a side chat', () => {
+  it('rejects rather than adopting a temporary chat with a parent', async () => {
+    mockGetChat.mockResolvedValueOnce({ ...FIXTURE, temporary: true, parentChatId: 'chat-parent' });
+    const adapter = makeChatsRemoteAdapter(31415);
+    await expect(adapter.fetch('chat-side-1')).rejects.toThrow(/side chat/i);
+  });
+
+  it('still resolves for a plain temporary chat with no parent (todo #346)', async () => {
+    mockGetChat.mockResolvedValueOnce({ ...FIXTURE, temporary: true, parentChatId: null });
+    const adapter = makeChatsRemoteAdapter(31415);
+    await expect(adapter.fetch('chat-1')).resolves.toMatchObject({ remoteId: 'chat-1' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chats-remote-adapter — list records every parent's sideChatId into the
+// registry (todo #344), so the identity guards recognize it before the next
+// event.
+// ---------------------------------------------------------------------------
+
+describe('chats-remote-adapter — list records side-chat mappings from sideChatId', () => {
+  it('registers the parent for a chat that carries sideChatId', async () => {
+    const { isRegisteredSideChatId, parentOfSideChat, __resetSideChatRegistryForTests } =
+      await import('../../../side-chat/side-chat-ids');
+    __resetSideChatRegistryForTests();
+    mockListChats.mockResolvedValueOnce([{ ...FIXTURE, sideChatId: 'chat-side-1' }]);
+    const adapter = makeChatsRemoteAdapter(31415);
+
+    await adapter.list();
+
+    expect(isRegisteredSideChatId('chat-side-1')).toBe(true);
+    expect(parentOfSideChat('chat-side-1')).toBe('chat-1');
+    __resetSideChatRegistryForTests();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // chats-remote-adapter — rename
 // ---------------------------------------------------------------------------
 

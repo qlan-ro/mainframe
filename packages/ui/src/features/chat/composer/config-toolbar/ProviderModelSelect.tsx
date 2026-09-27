@@ -47,6 +47,10 @@ export interface ProviderModelSelectProps {
   setModelTuning: (model: string, tuning: SessionTuning) => void;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
+  /** Hides the provider-switching row (todo #344 side-chat panel: the side
+   *  chat's adapter is a one-time copy of the parent's and never switches).
+   *  The model catalog for the fixed adapter still renders. */
+  hideProviderSwitch?: boolean;
 }
 
 /** A small dot color per known provider; neutral fallback for anything else.
@@ -156,6 +160,7 @@ export function ProviderModelSelect({
   setModelTuning,
   setEffort,
   setFeature,
+  hideProviderSwitch = false,
 }: ProviderModelSelectProps) {
   const [open, setOpen] = useState(false);
   if (adapters.length === 0) return null;
@@ -238,17 +243,21 @@ export function ProviderModelSelect({
           className="w-72"
         >
           {/* Non-item chrome holding real buttons — keystrokes stay here rather
-              than driving the menu's typeahead. Escape still closes. */}
-          <div
-            className="p-1 pb-1.5"
-            onKeyDown={(e) => {
-              if (e.key !== 'Escape') e.stopPropagation();
-            }}
-          >
-            <ProviderTabs adapters={adapters} activeId={activeId} locked={locked} onSelect={onPickProvider} />
-          </div>
-
-          <DropdownMenuSeparator />
+              than driving the menu's typeahead. Escape still closes. Hidden
+              entirely for a side chat (todo #344): its adapter is fixed. */}
+          {!hideProviderSwitch && (
+            <>
+              <div
+                className="p-1 pb-1.5"
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') e.stopPropagation();
+                }}
+              >
+                <ProviderTabs adapters={adapters} activeId={activeId} locked={locked} onSelect={onPickProvider} />
+              </div>
+              <DropdownMenuSeparator />
+            </>
+          )}
           {(showCurrentModel || runningModel) && runningModel?.id !== model?.id && (
             <DropdownMenuLabel data-testid="composer-model-current" className="text-xs text-muted-foreground">
               Current: {runningModel?.label ?? 'unavailable'}

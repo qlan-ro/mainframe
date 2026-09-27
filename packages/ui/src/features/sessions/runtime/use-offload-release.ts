@@ -13,6 +13,7 @@ import { daemonWs } from '../../../lib/daemon/ws-client';
 import { useZonesStore } from '../../chat/zones/zones-store';
 import { chatControllerRegistry } from './chat-controller-registry';
 import { markForStash } from '../../chat/runtime/draft-stash';
+import { parentOfSideChat } from '../../side-chat/side-chat-ids';
 import { createOffloadRelease, type OffloadRelease } from './offload-release';
 
 export function useOffloadRelease(): void {
@@ -31,6 +32,7 @@ export function useOffloadRelease(): void {
       detachItem: (id) => threads.item({ id }).detach(),
       disposeController: (chatId) => chatControllerRegistry.dispose(chatId),
       markForStash,
+      getParentOfSideChat: parentOfSideChat,
     });
     releaseRef.current = release;
     return () => {

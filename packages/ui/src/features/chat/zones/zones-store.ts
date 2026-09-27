@@ -12,6 +12,7 @@
  * the zone ✕ / a member tab's ✕ / ⌘\\ dissolve it.
  */
 import { create } from 'zustand';
+import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
 
 export type ZoneIndex = 0 | 1;
 
@@ -45,10 +46,15 @@ export const useZonesStore = create<ZonesState>((set) => ({
   zones: null,
   focusedIndex: 0,
   frac: 0.5,
-  openSplit: (first, second) => set({ zones: [first, second], focusedIndex: 0 }),
+  openSplit: (first, second) => {
+    // A side chat can never take a zone of its own — it lives inside its
+    // parent's zone (todo #344, UI rule 2).
+    if (isRegisteredSideChatId(first) || isRegisteredSideChatId(second)) return;
+    set({ zones: [first, second], focusedIndex: 0 });
+  },
   replaceZone: (index, id) =>
     set((s) => {
-      if (s.zones == null || s.zones.includes(id)) return s;
+      if (s.zones == null || s.zones.includes(id) || isRegisteredSideChatId(id)) return s;
       return { zones: index === 0 ? [id, s.zones[1]] : [s.zones[0], id] };
     }),
   setFocusedIndex: (index) => set({ focusedIndex: index }),

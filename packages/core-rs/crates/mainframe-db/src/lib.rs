@@ -19,6 +19,7 @@ pub mod migrations;
 pub mod projects;
 pub mod schema;
 pub mod settings;
+mod side_chats;
 pub mod tag_color;
 pub mod tags;
 pub mod validate_tag_name;

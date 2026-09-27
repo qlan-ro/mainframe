@@ -11,6 +11,11 @@
  * flyout inside the model menu (the Cursor pattern).
  * Renders nothing when every control is hidden (e.g. before chat/model loads).
  *
+ * `variant="side"` (todo #344): the side-chat panel's composer offers no
+ * adapter switch, no worktree controls, and no Temporary toggle — its adapter
+ * is a one-time copy of the parent's and locked, and the chat can never be
+ * temporary-toggled or given its own worktree. Model and permission stay.
+ *
  * Wired into Composer.tsx via the `data-testid="chat-composer-toolbar"` slot.
  */
 
@@ -22,7 +27,7 @@ import { TemporaryToggle } from './TemporaryToggle';
 import { WorktreePopover } from './WorktreePopover';
 import { TuningWarningDialog } from './TuningWarningDialog';
 
-export function ComposerToolbar() {
+export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
   const adapters = useAdapters();
   const {
     chat,
@@ -67,6 +72,7 @@ export function ComposerToolbar() {
         setModelTuning={setModelTuning}
         setEffort={setEffort}
         setFeature={setFeature}
+        hideProviderSwitch={variant === 'side'}
       />
       <PermissionSelect
         chat={chat}
@@ -75,8 +81,8 @@ export function ComposerToolbar() {
         providerDefaults={providerDefaults}
       />
       {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
-      <TemporaryToggle chat={chat} draftMode={draftMode} setTemporary={setTemporary} />
-      <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />
+      {variant !== 'side' && <TemporaryToggle chat={chat} draftMode={draftMode} setTemporary={setTemporary} />}
+      {variant !== 'side' && <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />}
       <TuningWarningDialog
         pending={tuningWarning.pending}
         contextTokens={contextTokens}

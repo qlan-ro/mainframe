@@ -37,6 +37,8 @@ import { useUiPrefs } from '../store/ui-prefs';
 import { MainToolbar } from '../layout/MainToolbar';
 import { SurfaceHost } from '../layout/SurfaceHost';
 import { setSessionNavigator } from '../lib/session-nav';
+import { getChat } from '../lib/api/chats';
+import { navigateToSession } from '../features/side-chat/navigate-to-session';
 import { useShortcutDispatcher } from '../features/shortcuts/use-shortcut-dispatcher';
 import { useIndexHintReveal } from '../features/shortcuts/index-hints';
 import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
@@ -61,11 +63,18 @@ function RuntimeBody({ port }: { port: number }) {
 
   // Register the session navigator so global toasts (mfToast) can deep-link to a
   // session via their "Open session →" CTA without reaching through to the runtime.
+  // navigateToSession resolves a side-chat id to its parent + expands the panel
+  // (todo #344, UI rule 2) instead of switching straight to an id aui never lists.
   const aui = useAui();
   useEffect(() => {
-    setSessionNavigator((chatId) => aui.threads.switchToThread(chatId));
+    setSessionNavigator((chatId) => {
+      void navigateToSession(chatId, {
+        switchToThread: (id) => aui.threads.switchToThread(id),
+        getChat: (id) => getChat(port, id),
+      });
+    });
     return () => setSessionNavigator(null);
-  }, [aui]);
+  }, [aui, port]);
 
   // ⌘N, ⌘K, ⌘⇧R, ⌘,, ⌘B and ⌘/ — the chords whose owner is the always-mounted
   // shell. ⌘N resolves the same target as every other "+" entry point (pill →

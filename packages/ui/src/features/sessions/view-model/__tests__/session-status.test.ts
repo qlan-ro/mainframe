@@ -59,3 +59,28 @@ describe('deriveSessionBadge — transcript-missing', () => {
     });
   });
 });
+
+describe('deriveSessionBadge — sideChatWaiting (todo #344)', () => {
+  it('sideChatWaiting outranks working — a pending gate beats a working turn', () => {
+    expect(deriveSessionBadge(base({ sideChatWaiting: true, displayStatus: 'working' }), false)).toEqual({
+      base: 'waiting',
+      unread: false,
+    });
+  });
+  it('sideChatWaiting still loses to transcript-missing and worktree-missing', () => {
+    expect(deriveSessionBadge(base({ sideChatWaiting: true, transcriptMissing: true }), false)).toEqual({
+      base: 'transcript-missing',
+      unread: false,
+    });
+    expect(deriveSessionBadge(base({ sideChatWaiting: true, worktreeMissing: true }), false)).toEqual({
+      base: 'worktree-missing',
+      unread: false,
+    });
+  });
+  it('no sideChatWaiting falls through to the chat’s own working/waiting/idle', () => {
+    expect(deriveSessionBadge(base({ sideChatWaiting: false, displayStatus: 'working' }), false)).toEqual({
+      base: 'working',
+      unread: false,
+    });
+  });
+});

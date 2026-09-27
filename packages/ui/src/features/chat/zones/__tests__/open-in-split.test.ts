@@ -7,15 +7,20 @@
  * features/session-tabs/__tests__/SessionTabs.split.test.tsx; this suite pins
  * the contract itself, which the callers only observe indirectly.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openInSplit } from '../open-in-split';
 import { useZonesStore } from '../zones-store';
+import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
 const zones = () => useZonesStore.getState().zones;
 const focusedIndex = () => useZonesStore.getState().focusedIndex;
 
 beforeEach(() => {
   useZonesStore.setState({ zones: null, focusedIndex: 0 });
+});
+
+afterEach(() => {
+  __resetSideChatRegistryForTests();
 });
 
 describe('gestures the split cannot express', () => {
@@ -44,6 +49,13 @@ describe('gestures the split cannot express', () => {
 
     expect(openInSplit('chat-a', 'chat-b')).toBe(false);
     expect(zones()).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('falls through on a registered side-chat id — it lives in its parent’s zone, not its own (todo #344)', () => {
+    registerSideChat('chat-side-1', 'chat-a');
+
+    expect(openInSplit('chat-a', 'chat-side-1')).toBe(false);
+    expect(zones()).toBeNull();
   });
 });
 

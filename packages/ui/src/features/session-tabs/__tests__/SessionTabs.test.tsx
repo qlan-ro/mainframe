@@ -38,6 +38,8 @@ vi.mock('@/features/sessions/use-projects', () => ({
 // Fork's own daemon call + useDaemonPort/useAui plumbing has its own suite
 // (use-fork-chat.test.tsx); irrelevant to this strip's rendering/switching.
 vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn() }));
+// Same reasoning for useOpenSideChat (todo #344) — its own suite covers the call.
+vi.mock('@/features/side-chat/use-open-side-chat', () => ({ useOpenSideChat: () => vi.fn() }));
 
 vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
   useStartNewSession: () => newSession,
@@ -284,6 +286,36 @@ describe('closing', () => {
 
     expect(newSession).toHaveBeenCalledTimes(1);
     expect(switchToThread).not.toHaveBeenCalled();
+  });
+});
+
+describe('waiting (todo #344)', () => {
+  it('shows the waiting indicator when the tab itself has a pending gate', () => {
+    itemsValue = [{ id: 'chat-a', status: 'regular', custom: { projectId: 'proj-1', hasPending: true } }];
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+
+    render();
+
+    expect(screen.getByTestId('session-tab-waiting-chat-a')).toBeDefined();
+  });
+
+  it("shows the waiting indicator on the parent's tab when its side chat is waiting", () => {
+    itemsValue = [{ id: 'chat-a', status: 'regular', custom: { projectId: 'proj-1', sideChatWaiting: true } }];
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+
+    render();
+
+    expect(screen.getByTestId('session-tab-waiting-chat-a')).toBeDefined();
+  });
+
+  it('renders no waiting indicator when nothing is pending', () => {
+    seed('chat-a');
+
+    render();
+
+    expect(screen.queryByTestId('session-tab-waiting-chat-a')).toBeNull();
   });
 });
 

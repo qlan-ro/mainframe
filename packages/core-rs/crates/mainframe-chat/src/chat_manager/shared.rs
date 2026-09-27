@@ -5,13 +5,32 @@ pub(super) fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }
 
+/// Rule 9 (todo #344): whether a chat's side chat has a pending permission or
+/// question. `None` when the chat has no side chat (`side_chat_id` is
+/// derived per read, so this is cheap and always current).
+pub(super) fn side_chat_waiting_for(
+    permissions: &Mutex<PermissionManager>,
+    side_chat_id: Option<&str>,
+) -> Option<bool> {
+    side_chat_id.map(|id| {
+        permissions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .has_pending(id)
+    })
+}
+
 /// `enrichChat` — set displayStatus/isRunning/backgroundActivity/directory signals.
-/// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`.
+/// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`. `side_chat_waiting`
+/// (todo #344 rule 9) is `permissions.has_pending(side_id)` when this chat has a
+/// side chat, else `None` — `display_status`/`is_running` stay this chat's own so
+/// the fork-availability gate (which reads `hasPending`) is unaffected.
 pub(super) fn enrich_chat(
     chat: &mut Chat,
     has_pending: bool,
     live_tasks: &[BackgroundTask],
     project_path: Option<&str>,
+    side_chat_waiting: Option<bool>,
 ) {
     let working = is_working(chat);
     // Live background work broadens the sidebar 'working' state, but never
@@ -39,6 +58,7 @@ pub(super) fn enrich_chat(
     };
     chat.directory_missing = Some(missing_path.is_some());
     chat.missing_directory_path = missing_path.map(str::to_string);
+    chat.side_chat_waiting = side_chat_waiting;
 }
 
 /// Enrich chat.updated/chat.created then emit through the raw `onEvent`.
@@ -53,9 +73,17 @@ pub(super) fn enrich_and_emit(
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .has_pending(&chat.id);
+            let side_chat_waiting =
+                side_chat_waiting_for(permissions, chat.side_chat_id.as_deref());
             let live = deps.tracker_list_live(&chat.id);
             let project_path = deps.projects_get_path(&chat.project_id);
-            enrich_chat(chat, has_pending, &live, project_path.as_deref());
+            enrich_chat(
+                chat,
+                has_pending,
+                &live,
+                project_path.as_deref(),
+                side_chat_waiting,
+            );
         }
         _ => {}
     }

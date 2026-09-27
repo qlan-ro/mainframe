@@ -85,6 +85,11 @@ vi.mock('@/features/session-panel/SessionPanel', () => ({
     <div data-testid="session-panel-root" data-mode={state.mode} />
   ),
 }));
+vi.mock('@/features/side-chat/SideChatHost', () => ({
+  SideChatHost: ({ parentChatId }: { parentChatId: string | null }) => (
+    <div data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''} />
+  ),
+}));
 
 // The shared setup's ResizeObserver stub is inert; this one records what was
 // observed so the host-row wiring is assertable.
@@ -167,6 +172,18 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
+  });
+
+  it('mounts the side-chat host in the single view, keyed by the main thread id (todo #344)', () => {
+    __mainThreadId = 'chat-123';
+    __itemStatus = 'regular';
+    __messageCount = 4;
+    render(<ChatSurface />);
+
+    const host = screen.getByTestId('side-chat-host-stub');
+    expect(host).toHaveAttribute('data-parent-chat-id', 'chat-123');
+    // Docked below the thread, inside the same column — not beside the session panel.
+    expect(host.parentElement).toBe(screen.getByTestId('chat-thread').parentElement);
   });
 
   it('hides ChatThread and its composer while initialization is pending', () => {

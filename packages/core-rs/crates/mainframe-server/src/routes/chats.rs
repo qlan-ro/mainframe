@@ -49,15 +49,15 @@ fn split_csv(value: &str) -> Vec<String> {
 }
 
 #[derive(Deserialize)]
-struct ListQuery {
-    project: Option<String>,
-    tags: Option<String>,
-    synthetic: Option<String>,
+pub(crate) struct ListQuery {
+    pub(crate) project: Option<String>,
+    pub(crate) tags: Option<String>,
+    pub(crate) synthetic: Option<String>,
     #[serde(rename = "includeTemporary")]
-    include_temporary: Option<bool>,
+    pub(crate) include_temporary: Option<bool>,
 }
 
-async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
+pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
     // Zod `.refine` — every parsed tag must match [a-z0-9-]+ or the whole query 400s.
     let tags_all: Option<Vec<String>> = match &q.tags {
         Some(raw) => {
@@ -101,24 +101,27 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
 }
 
 #[derive(Deserialize)]
-struct ListForProjectQuery {
+pub(crate) struct ListForProjectQuery {
     #[serde(rename = "includeTemporary")]
-    include_temporary: Option<bool>,
+    pub(crate) include_temporary: Option<bool>,
 }
 
 /// `ChatsRepository::list` (backing both the facade and db paths here) is the
 /// SAME unfiltered read `remove_project` uses internally (rule 3), so it must
 /// keep returning temporary chats; this route filters the result itself
-/// instead of adding a filter to that shared read.
+/// instead of adding a filter to that shared read. Also drops a side chat
+/// (temporary with a parent, todo #344) even with `include_temporary` set —
+/// `list`'s DB-layer filter already excludes it (mainframe-db rule 7).
 fn filter_temporary(chats: Vec<Chat>, include_temporary: bool) -> Vec<Chat> {
-    if include_temporary {
-        chats
-    } else {
-        chats.into_iter().filter(|c| !c.temporary).collect()
-    }
+    let is_side_chat =
+        |c: &Chat| c.temporary && c.parent_chat_id.as_ref().is_some_and(|p| p.is_some());
+    chats
+        .into_iter()
+        .filter(|c| !is_side_chat(c) && (include_temporary || !c.temporary))
+        .collect()
 }
 
-async fn list_for_project(
+pub(crate) async fn list_for_project(
     State(ctx): State<Arc<AppCtx>>,
     Path(project_id): Path<String>,
     Query(q): Query<ListForProjectQuery>,
@@ -893,6 +896,7 @@ mod tests {
         assert!(included.contains(&temp_id));
     }
 
+    // Side-chat listing-exclusion tests moved to routes/chat_side_chat/tests.rs.
     // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
     // real ChatManager) ───────────────────────────────────────────────────────
 

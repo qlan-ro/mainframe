@@ -44,6 +44,14 @@ export interface SessionTabEntry {
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
   forkAvailability: ForkAvailability;
+  /**
+   * The chat's own pending gate OR its side chat's (todo #344) — distinct from
+   * `forkAvailability`'s internal `hasPending` check, which stays the chat's
+   * own value so fork gating is unaffected by a side chat waiting.
+   */
+  hasPending: boolean;
+  /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
+  canOpenSideChat: boolean;
 }
 
 interface SessionTabPillProps {
@@ -61,6 +69,7 @@ interface SessionTabPillProps {
   onOpenInSplit: (id: string) => void;
   onCloseSplit: (id: string) => void;
   onFork: (id: string) => void;
+  onOpenSideChat: (id: string) => void;
 }
 
 export function SessionTabPill({
@@ -74,6 +83,7 @@ export function SessionTabPill({
   onOpenInSplit,
   onCloseSplit,
   onFork,
+  onOpenSideChat,
 }: SessionTabPillProps) {
   // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
   // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
@@ -119,6 +129,8 @@ export function SessionTabPill({
       onClose={() => onClose(tab.id)}
       forkAvailability={tab.forkAvailability}
       onFork={() => onFork(tab.id)}
+      canOpenSideChat={tab.canOpenSideChat}
+      onOpenSideChat={() => onOpenSideChat(tab.id)}
     >
       <div
         data-testid={`session-tab-${tab.id}`}
@@ -157,13 +169,27 @@ export function SessionTabPill({
       >
         {/* The badge takes the avatar's 14px slot rather than adding one, so
             holding the modifier never reflows the strip under the pointer. */}
-        {hintIndex != null ? (
-          <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
-        ) : tab.projectId != null ? (
-          <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
-        ) : (
-          <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
-        )}
+        <span className="relative inline-flex shrink-0">
+          {hintIndex != null ? (
+            <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
+          ) : tab.projectId != null ? (
+            <ProjectAvatar name={tab.projectName ?? '?'} color={projectColor(tab.projectId)} size={14} />
+          ) : (
+            <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+          )}
+          {/* The chat's own pending gate or its side chat's (todo #344) — same
+              primary/pulse treatment as the sidebar's StatusDot 'waiting' state,
+              so a side chat waiting off screen still surfaces on its parent's tab. */}
+          {tab.hasPending && (
+            <Hint label="Your turn">
+              <span
+                data-testid={`session-tab-waiting-${tab.id}`}
+                aria-label="waiting"
+                className="absolute -top-0.5 -right-0.5 size-1.5 animate-pulse rounded-full bg-primary"
+              />
+            </Hint>
+          )}
+        </span>
         <span className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}>{tab.title}</span>
         {tab.preview && (
           <Hint label="Keep open">

@@ -47,10 +47,11 @@ interface Harness {
   detachItem: ReturnType<typeof vi.fn>;
   disposeController: ReturnType<typeof vi.fn>;
   markForStash: ReturnType<typeof vi.fn>;
+  parentBySideChatId: Map<string, string>;
   deps: OffloadReleaseDeps;
 }
 
-function makeHarness(items: ThreadItemRef[] = []): Harness {
+function makeHarness(items: ThreadItemRef[] = [], parentBySideChatId = new Map<string, string>()): Harness {
   const ws = fakeWs();
   const calls: string[] = [];
   const state = { items, mainThreadId: null as string | null, zones: null as readonly [string, string] | null };
@@ -81,6 +82,7 @@ function makeHarness(items: ThreadItemRef[] = []): Harness {
     detachItem,
     disposeController,
     markForStash,
+    parentBySideChatId,
     deps: {
       getThreadItems: () => state.items,
       getMainThreadId: () => state.mainThreadId,
@@ -88,6 +90,7 @@ function makeHarness(items: ThreadItemRef[] = []): Harness {
       detachItem,
       disposeController,
       markForStash,
+      getParentOfSideChat: (id) => parentBySideChatId.get(id),
     },
   };
 }
@@ -277,6 +280,49 @@ describe('OffloadRelease — AC12 on-screen defer', () => {
 
     release.recheck();
     expect(h.disposeController).toHaveBeenCalledTimes(1);
+    release.dispose();
+  });
+});
+
+describe('OffloadRelease — side chats (todo #344)', () => {
+  it('defers, does not dispose, a side chat whose parent is on screen', () => {
+    // A side chat is never in the thread list (AC 5) — its own on-screen
+    // check always resolves false. Without the parent lookup this would
+    // dispose the docked panel's live controller out from under it.
+    const h = makeHarness([{ id: 'parent-1', remoteId: undefined }], new Map([['side-1', 'parent-1']]));
+    h.mainThreadId = 'parent-1';
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('side-1'));
+
+    expect(h.disposeController).not.toHaveBeenCalled();
+    expect(h.detachItem).not.toHaveBeenCalled();
+    release.dispose();
+  });
+
+  it('releases a side chat once its parent leaves the screen, via recheck()', () => {
+    const h = makeHarness([{ id: 'parent-1', remoteId: undefined }], new Map([['side-1', 'parent-1']]));
+    h.mainThreadId = 'parent-1';
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('side-1'));
+    expect(h.disposeController).not.toHaveBeenCalled();
+
+    h.mainThreadId = 'other-chat';
+    release.recheck();
+
+    expect(h.disposeController).toHaveBeenCalledWith('side-1');
+    release.dispose();
+  });
+
+  it('releases a side chat immediately when its parent is not on screen', () => {
+    const h = makeHarness([{ id: 'other-chat', remoteId: undefined }], new Map([['side-1', 'parent-1']]));
+    h.mainThreadId = 'other-chat';
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('side-1'));
+
+    expect(h.disposeController).toHaveBeenCalledWith('side-1');
     release.dispose();
   });
 });

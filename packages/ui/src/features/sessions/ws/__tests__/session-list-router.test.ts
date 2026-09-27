@@ -17,9 +17,10 @@
  * zustand. A fake DaemonWsClient injects the event handler; deps are vi.fn()
  * mocks so assertions are trivial.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BackgroundTask, Chat, DaemonEvent, DetectedPr } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
+import { __resetSideChatRegistryForTests, registerSideChat } from '../../../side-chat/side-chat-ids';
 import { SessionListRouter } from '../session-list-router';
 
 // ---------------------------------------------------------------------------
@@ -112,6 +113,10 @@ beforeEach(() => {
   router = new SessionListRouter(fakeWs.ws as unknown as DaemonWsClient, { onReload, onMarkUnread, onOsNotify });
 });
 
+afterEach(() => {
+  __resetSideChatRegistryForTests();
+});
+
 // ---------------------------------------------------------------------------
 // chat.created → reload
 // ---------------------------------------------------------------------------
@@ -179,6 +184,60 @@ describe('session-list-router — chat.updated triggers reload', () => {
 
     expect(onReload).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A side chat's own events never raise the unread badge (todo #344) — it is
+// never a session, so there is no row to mark unread.
+// ---------------------------------------------------------------------------
+
+describe('session-list-router — a side chat’s own chat.updated never marks unread', () => {
+  it('still reloads (the parent’s sideChatId projection stays current), but skips markUnread', () => {
+    dispatch({
+      type: 'chat.updated',
+      chat: {
+        ...MINIMAL_CHAT,
+        id: 'chat-side-1',
+        temporary: true,
+        parentChatId: 'chat-parent',
+        displayStatus: 'waiting',
+      },
+    });
+
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+
+  it('does not skip markUnread for the PARENT’s own waiting chat.updated', () => {
+    dispatch({
+      type: 'chat.updated',
+      chat: { ...MINIMAL_CHAT, id: 'chat-parent', displayStatus: 'waiting' },
+    });
+
+    expect(onMarkUnread).toHaveBeenCalledWith('chat-parent');
+  });
+});
+
+describe('session-list-router — a registered side chat’s chat.notification never marks unread', () => {
+  it('skips onMarkUnread for a chatId registered as a side chat', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+
+    dispatch({
+      type: 'chat.notification',
+      chatId: 'chat-side-1',
+      title: 'Needs input',
+      body: 'Which one?',
+      level: 'success',
+    });
+
+    expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+
+  it('still marks unread for an unregistered chatId', () => {
+    dispatch({ type: 'chat.notification', chatId: 'chat-other', title: 'Done', body: 'Finished', level: 'success' });
+
+    expect(onMarkUnread).toHaveBeenCalledWith('chat-other');
   });
 });
 

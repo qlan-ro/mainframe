@@ -964,6 +964,13 @@ impl ChatManagerDeps for DaemonChatDeps {
             .to_string_lossy()
             .into_owned()
     }
+
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
+        let parent = parent.clone();
+        self.db
+            .call_blocking(move |d| d.chats.find_or_create_side_chat(&parent))
+            .map_err(|err| err.to_string())
+    }
 }
 
 /// The daemon-side `ExternalSessionDeps` (`getExternalSessionService()`'s
@@ -1375,6 +1382,8 @@ pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
         vendor_session_ephemeral: false,
         scratch_path: None,
         parent_chat_id: None,
+        side_chat_id: None,
+        side_chat_waiting: None,
     }
 }
 

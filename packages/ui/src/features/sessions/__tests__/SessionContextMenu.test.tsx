@@ -20,12 +20,25 @@ const BASE_PROPS = {
   onArchive: vi.fn(),
   onOpenInSplit: vi.fn(),
   onFork: vi.fn(),
+  canOpenSideChat: false,
+  onOpenSideChat: vi.fn(),
 };
 
-function renderMenu(forkAvailability: ForkAvailability, onFork = vi.fn(), temporary = false) {
+function renderMenu(
+  forkAvailability: ForkAvailability,
+  onFork = vi.fn(),
+  temporary = false,
+  overrides: Partial<{ canOpenSideChat: boolean; onOpenSideChat: () => void }> = {},
+) {
   render(
     <TooltipProvider>
-      <SessionContextMenu {...BASE_PROPS} temporary={temporary} onFork={onFork} forkAvailability={forkAvailability}>
+      <SessionContextMenu
+        {...BASE_PROPS}
+        {...overrides}
+        temporary={temporary}
+        onFork={onFork}
+        forkAvailability={forkAvailability}
+      >
         <div>row</div>
       </SessionContextMenu>
     </TooltipProvider>,
@@ -108,5 +121,23 @@ describe('SessionContextMenu — temporary row (todo #346)', () => {
 
     expect(screen.getByTestId('sessions-ctx-rename')).toBeInTheDocument();
     expect(screen.getByTestId('sessions-ctx-open-split')).toBeInTheDocument();
+  });
+});
+
+describe('SessionContextMenu — Open Side Chat (todo #344)', () => {
+  it('renders for a regular chat and calls onOpenSideChat when selected', () => {
+    const onOpenSideChat = vi.fn();
+    renderMenu({ enabled: true }, vi.fn(), false, { canOpenSideChat: true, onOpenSideChat });
+
+    const item = screen.getByTestId('sessions-ctx-side-chat');
+    expect(item).toBeInTheDocument();
+    fireEvent.click(item);
+    expect(onOpenSideChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('is hidden when the row cannot open a side chat (a draft or an archived chat)', () => {
+    renderMenu({ enabled: true }, vi.fn(), false, { canOpenSideChat: false });
+
+    expect(screen.queryByTestId('sessions-ctx-side-chat')).toBeNull();
   });
 });

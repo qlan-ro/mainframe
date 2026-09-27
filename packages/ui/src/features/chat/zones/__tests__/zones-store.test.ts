@@ -4,13 +4,18 @@
  * both slots (a duplicate-zone state would mount one controller twice), and
  * opening or closing the split always parks focus on the left slot.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isVisibleZone, useZonesStore } from '../zones-store';
+import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
 const state = () => useZonesStore.getState();
 
 beforeEach(() => {
   useZonesStore.setState({ zones: null, focusedIndex: 0 });
+});
+
+afterEach(() => {
+  __resetSideChatRegistryForTests();
 });
 
 describe('openSplit', () => {
@@ -26,6 +31,18 @@ describe('openSplit', () => {
     state().openSplit('chat-a', 'chat-b');
 
     expect(state().focusedIndex).toBe(0);
+  });
+});
+
+describe('openSplit — refuses a registered side-chat id (todo #344)', () => {
+  it('never opens a split with a side chat on either side', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+
+    state().openSplit('chat-side-1', 'chat-b');
+    expect(state().zones).toBeNull();
+
+    state().openSplit('chat-a', 'chat-side-1');
+    expect(state().zones).toBeNull();
   });
 });
 
@@ -76,6 +93,15 @@ describe('replaceZone', () => {
     useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
 
     state().replaceZone(0, 'chat-a');
+
+    expect(state().zones).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('refuses a registered side-chat id (todo #344)', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+
+    state().replaceZone(1, 'chat-side-1');
 
     expect(state().zones).toEqual(['chat-a', 'chat-b']);
   });

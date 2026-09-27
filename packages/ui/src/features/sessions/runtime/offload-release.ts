@@ -39,6 +39,15 @@ export interface OffloadReleaseDeps {
   disposeController: (chatId: string) => void;
   /** Marks a thread so its runtime hook stashes the composer draft on unmount. */
   markForStash: (id: string) => void;
+  /**
+   * The registered parent of a side chat, or `undefined` for an ordinary chat
+   * (todo #344). A side chat is never in `getThreadItems()` — the server
+   * never lists it (AC 5) — so it would otherwise always resolve as off
+   * screen and get disposed while its parent, and the docked panel reading
+   * its controller, are still on screen. Optional so existing test doubles
+   * that predate side chats keep compiling; defaults to "no parent".
+   */
+  getParentOfSideChat?: (chatId: string) => string | undefined;
 }
 
 function resolveItems(items: readonly ThreadItemRef[], chatId: string): ThreadItemRef[] {
@@ -82,7 +91,8 @@ export class OffloadRelease {
     const items = resolveItems(this.deps.getThreadItems(), chatId);
     const mainThreadId = this.deps.getMainThreadId();
     const zones = this.deps.getZones();
-    const onScreen = items.some((item) => isOnScreen(item, mainThreadId, zones));
+    const onScreen =
+      items.some((item) => isOnScreen(item, mainThreadId, zones)) || this.parentOnScreen(chatId, mainThreadId, zones);
 
     if (onScreen) {
       this.deferred.add(chatId);
@@ -91,6 +101,23 @@ export class OffloadRelease {
 
     this.deferred.delete(chatId);
     this.release(chatId, items);
+  }
+
+  /**
+   * A side chat is never in `getThreadItems()`, so its own on-screen check is
+   * always false. Defer its offload while its parent is on screen instead —
+   * the docked panel and toggle read the same controller, keyed by the side
+   * chat's id, for as long as the parent is visible (todo #344).
+   */
+  private parentOnScreen(
+    chatId: string,
+    mainThreadId: string | null,
+    zones: readonly [string, string] | null,
+  ): boolean {
+    const parentChatId = this.deps.getParentOfSideChat?.(chatId);
+    if (parentChatId == null) return false;
+    const parentItems = resolveItems(this.deps.getThreadItems(), parentChatId);
+    return parentItems.some((item) => isOnScreen(item, mainThreadId, zones));
   }
 
   private release(chatId: string, items: readonly ThreadItemRef[]): void {

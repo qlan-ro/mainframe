@@ -5,7 +5,17 @@
  * including the parts the hover actions overlay.
  */
 import type { ReactNode } from 'react';
-import { ArchiveIcon, Columns2, CopyIcon, GitFork, PencilIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  Columns2,
+  CopyIcon,
+  GitFork,
+  MessageSquarePlus,
+  PencilIcon,
+  PinIcon,
+  PinOffIcon,
+  TagIcon,
+} from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,6 +40,13 @@ interface SessionContextMenuProps {
   onOpenInSplit: () => void;
   forkAvailability: ForkAvailability;
   onFork: () => void;
+  /**
+   * True for a real, non-archived, non-side-chat row (todo #344) — a draft has
+   * no chat id to attach a side chat to, an archived parent 409s the daemon
+   * open route, and a side chat can't itself get a side chat (no nesting).
+   */
+  canOpenSideChat: boolean;
+  onOpenSideChat: () => void;
   claudeSessionId?: string;
   children: ReactNode;
 }
@@ -46,6 +63,8 @@ export function SessionContextMenu({
   onOpenInSplit,
   forkAvailability,
   onFork,
+  canOpenSideChat,
+  onOpenSideChat,
   claudeSessionId,
   children,
 }: SessionContextMenuProps) {
@@ -94,6 +113,12 @@ export function SessionContextMenu({
               </ContextMenuItem>
             </span>
           </Hint>
+        )}
+        {canOpenSideChat && (
+          <ContextMenuItem data-testid="sessions-ctx-side-chat" onSelect={onOpenSideChat}>
+            <MessageSquarePlus />
+            Open Side Chat
+          </ContextMenuItem>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="sessions-ctx-archive" onSelect={onArchive}>

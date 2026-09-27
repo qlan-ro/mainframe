@@ -13,8 +13,16 @@ impl ChatManager {
         let session = cell
             .as_ref()
             .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
+        // A side chat's worktree_path mirrors its parent's (rule 2's seed), so
+        // sweeping it here would SIGTERM the parent's own background work
+        // (`## Established facts`, kill_tasks_for_chat). Pass no sweep path.
+        let worktree_sweep_path = if is_side_chat(chat) {
+            None
+        } else {
+            chat.worktree_path.clone()
+        };
         self.deps
-            .kill_tasks_for_chat(&chat.id, chat.worktree_path.clone(), session.clone())
+            .kill_tasks_for_chat(&chat.id, worktree_sweep_path, session.clone())
             .await;
         if let Some(session) = &session
             && let Err(err) = session.kill().await
@@ -45,14 +53,26 @@ impl ChatManager {
     /// Rule 5: discard a temporary chat. The route owns the 404 (unknown chat)
     /// and `fail` (non-temporary chat) responses; this assumes the caller
     /// already resolved and validated the chat.
+    ///
+    /// A side chat (temporary with a parent) skips `remove_scratch_dir` — the
+    /// directory belongs to the parent, not the side chat (rule 2 copies
+    /// `scratch_path` rather than minting a fresh one) — and re-syncs the
+    /// parent's `side_chat_id` to `None` after the row is gone (rule 4). Any
+    /// other temporary chat discards its own side chat first (AC 7), so a side
+    /// chat never outlives the chat it belongs to.
     pub async fn discard_chat(&self, chat_id: &str) -> Result<(), String> {
         let Some(chat) = self.deps.chats_get(chat_id) else {
             return Err("Chat not found".to_string());
         };
+        let side_chat = is_side_chat(&chat);
+
+        if !side_chat && let Some(side_chat_id) = chat.side_chat_id.clone() {
+            Box::pin(self.discard_chat(&side_chat_id)).await?;
+        }
 
         self.teardown_live_chat(&chat).await;
         self.deps.attachment_delete_chat(chat_id).await;
-        if let Some(scratch_path) = &chat.scratch_path {
+        if !side_chat && let Some(scratch_path) = &chat.scratch_path {
             // NotFound counts as success (already gone); any other error stops
             // here so the row is not deleted and a retry stays possible.
             self.deps.remove_scratch_dir(scratch_path).await?;
@@ -61,6 +81,10 @@ impl ChatManager {
         self.deps.emit_event(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });
+
+        if side_chat && let Some(parent_id) = chat.parent_chat_id.clone().flatten() {
+            self.sync_parent_side_chat_id(&parent_id, None);
+        }
         Ok(())
     }
 }

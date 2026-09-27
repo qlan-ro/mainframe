@@ -244,4 +244,13 @@ pub trait ChatManagerDeps: Send + Sync {
             .to_string_lossy()
             .into_owned()
     }
+
+    // ── side chats (todo #344) ───────────────────────────────────────────────
+    /// `db.chats.findOrCreateSideChat(parent)` — a SELECT-then-INSERT that
+    /// returns the parent's existing side chat (`created = false`) or seeds and
+    /// inserts a new one from the parent's resolved config (`created = true`).
+    /// Required (not defaulted): the two implementers (`DaemonChatDeps`,
+    /// `StoreDeps`) both back a real store, so a silent no-op default would mint
+    /// side chats that vanish on the next read (same class as #273/#289/#290).
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String>;
 }
