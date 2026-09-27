@@ -50,6 +50,7 @@ vi.mock('@/lib/api/chats', () => ({
 
 vi.mock('@/lib/api/adapters', () => ({
   getAdapters: vi.fn().mockResolvedValue([]),
+  getEffectiveModel: vi.fn().mockResolvedValue(null),
 }));
 
 // Draft-config mock — patchDraftConfig spy + useDraftConfig stub.
@@ -182,8 +183,7 @@ describe('useComposerTuning — chat from extras.state.chatConfig', () => {
 
     const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
-    // Default model from the fixture adapter is 'claude-3-sonnet'.
-    expect(result.current.model?.id).toBe('claude-3-sonnet');
+    expect(result.current.model?.id).toBe('default');
   });
 
   it('resolves the explicit chat model when chat.model is set', () => {
@@ -831,7 +831,7 @@ describe('useComposerTuning — model resolution honors providerDefaults.default
     await waitFor(() => expect(result.current.model?.id).toBe('claude-3-opus'));
   });
 
-  it('falls back to the catalog isDefault model when providerDefaults has no defaultModel', async () => {
+  it('inherits CLI configuration when providerDefaults has no defaultModel', async () => {
     vi.mocked(useChatExtras).mockReturnValue(
       makeFakeExtras(makeChat({ model: undefined, adapterId: 'claude' })) as unknown as ReturnType<
         typeof useChatExtras
@@ -842,7 +842,7 @@ describe('useComposerTuning — model resolution honors providerDefaults.default
     const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
     await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
-    expect(result.current.model?.id).toBe('claude-3-sonnet');
+    expect(result.current.model?.id).toBe('default');
   });
 
   it('prefers the explicit chat.model over providerDefaults.defaultModel', async () => {
@@ -859,7 +859,7 @@ describe('useComposerTuning — model resolution honors providerDefaults.default
     expect(result.current.model?.id).toBe('claude-3-haiku');
   });
 
-  it('ignores a providerDefaults.defaultModel id that does not exist in the catalog', async () => {
+  it('preserves a providerDefaults.defaultModel id outside the catalog', async () => {
     vi.mocked(useChatExtras).mockReturnValue(
       makeFakeExtras(makeChat({ model: undefined, adapterId: 'claude' })) as unknown as ReturnType<
         typeof useChatExtras
@@ -870,6 +870,6 @@ describe('useComposerTuning — model resolution honors providerDefaults.default
     const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE]));
 
     await waitFor(() => expect(vi.mocked(getProviderSettings)).toHaveBeenCalled());
-    expect(result.current.model?.id).toBe('claude-3-sonnet');
+    expect(result.current.model?.id).toBe('claude-does-not-exist');
   });
 });

@@ -19,6 +19,7 @@ pub mod assistant_event;
 pub mod cliproxy;
 pub mod constants;
 pub mod context_files;
+mod effective_model;
 pub mod events;
 pub mod external_session_cache;
 pub mod external_session_enrich;

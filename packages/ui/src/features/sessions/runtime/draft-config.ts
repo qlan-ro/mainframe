@@ -23,6 +23,7 @@ export interface DraftCfg {
    * explicitly. They remain optional for partial patches and legacy/retry state.
    */
   model?: string;
+  cliModel?: string;
   permissionMode?: PermissionMode;
   planMode?: boolean;
   effort?: EffortLevel | null;

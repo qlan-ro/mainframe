@@ -8,7 +8,7 @@ use mainframe_types::transcript::TranscriptLocation;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 
 /// Registry lookup — injectable for tests; defaults to Codex's state DB.
-/// `Send + Sync` so the `Adapter::is_transcript_present` override yields a `Send`
+/// `Send + Sync` so the `Adapter::locate_transcript` override yields a `Send`
 /// future (the trait boxes futures as `Send`).
 pub type LookupFn<'a> = dyn Fn(&[String]) -> HashMap<String, AgentMetadata> + Send + Sync + 'a;
 
@@ -66,20 +66,6 @@ pub async fn locate_codex_transcript(
     ))
 }
 
-/// Whether the Codex rollout transcript for `thread_id` still exists on disk —
-/// re-expressed as a single `locate_codex_transcript` probe so presence and
-/// location never drift out of sync.
-pub async fn is_codex_transcript_present(
-    thread_id: &str,
-    deps: Option<&CodexTranscriptDeps<'_>>,
-) -> Option<bool> {
-    match locate_codex_transcript(thread_id, deps).await {
-        None => None,
-        Some(TranscriptLocation::Missing) => Some(false),
-        Some(TranscriptLocation::Present(_)) => Some(true),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,82 +101,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_true_when_the_registry_rollout_exists_inside_root() {
-        let (root, rollout) = make_root();
-        let lookup = lookup_with(Some(rollout.to_string_lossy().into_owned()));
-        let deps = CodexTranscriptDeps {
-            lookup: Some(&lookup),
-            sessions_root: Some(root.path().to_path_buf()),
-        };
-        assert_eq!(
-            is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
-            Some(true)
-        );
-    }
-
-    #[tokio::test]
-    async fn returns_false_when_the_rollout_was_deleted() {
-        let (root, _rollout) = make_root();
-        let gone = root
-            .path()
-            .join("2026")
-            .join("07")
-            .join("08")
-            .join(format!("rollout-gone-{THREAD_ID}.jsonl"));
-        let lookup = lookup_with(Some(gone.to_string_lossy().into_owned()));
-        let deps = CodexTranscriptDeps {
-            lookup: Some(&lookup),
-            sessions_root: Some(root.path().to_path_buf()),
-        };
-        assert_eq!(
-            is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
-            Some(false)
-        );
-    }
-
-    #[tokio::test]
-    async fn returns_null_when_registry_has_no_row() {
-        let (root, _rollout) = make_root();
-        let lookup = |_ids: &[String]| HashMap::new();
-        let deps = CodexTranscriptDeps {
-            lookup: Some(&lookup),
-            sessions_root: Some(root.path().to_path_buf()),
-        };
-        assert_eq!(
-            is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
-            None
-        );
-    }
-
-    #[tokio::test]
-    async fn returns_null_when_registry_row_has_no_rollout_path() {
+    async fn locate_returns_none_when_registry_row_has_no_rollout_path() {
         let (root, _rollout) = make_root();
         let lookup = lookup_with(None);
         let deps = CodexTranscriptDeps {
             lookup: Some(&lookup),
             sessions_root: Some(root.path().to_path_buf()),
         };
-        assert_eq!(
-            is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
-            None
-        );
-    }
-
-    #[tokio::test]
-    async fn returns_null_when_rollout_resolves_outside_root() {
-        let (root, _rollout) = make_root();
-        let outside = tempdir().unwrap();
-        let outside_file = outside.path().join("rollout-x.jsonl");
-        fs::write(&outside_file, "x\n").unwrap();
-        let lookup = lookup_with(Some(outside_file.to_string_lossy().into_owned()));
-        let deps = CodexTranscriptDeps {
-            lookup: Some(&lookup),
-            sessions_root: Some(root.path().to_path_buf()),
-        };
-        assert_eq!(
-            is_codex_transcript_present(THREAD_ID, Some(&deps)).await,
-            None
-        );
+        assert_eq!(locate_codex_transcript(THREAD_ID, Some(&deps)).await, None);
     }
 
     #[tokio::test]
@@ -262,8 +180,8 @@ mod tests {
 // notes: NEW (#424). realpath → tokio::fs::canonicalize; containment via
 // notes: resolved.starts_with(canonicalized root) (the TS `resolved.startsWith(root +
 // notes: sep)` — rollout files are always strictly nested, so component-based
-// notes: starts_with agrees; the outside case lives in a different tempdir). Return
-// notes: maps: null→None, false→Some(false), true→Some(true). lookup is an injectable
+// notes: starts_with agrees; the outside case lives in a different tempdir). The TS
+// notes: boolean presence probe is gone: `Present`/`Missing`/`None` carry it. lookup is an injectable
 // notes: closure (defaults to thread_registry::lookup_agent_metadata, a sync one-shot
 // notes: read of Codex's external state DB, same as the TS). Ports transcript.test.ts
-// notes: assertion-for-assertion (5 cases).
+// notes: assertion-for-assertion (5 cases), as locate_* assertions.

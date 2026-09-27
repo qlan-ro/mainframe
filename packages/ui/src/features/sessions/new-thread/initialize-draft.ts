@@ -1,4 +1,6 @@
-import type { AdapterInfo } from '@qlan-ro/mainframe-types';
+import { getEffectiveModel } from '@/lib/api/adapters';
+import { supportsCliModel } from '@/lib/cli-model';
+import type { AdapterInfo, ProviderConfig } from '@qlan-ro/mainframe-types';
 import { getProviderSettings } from '@/lib/api/settings';
 import { getDraftConfig, setDraftConfig, type DraftCfg } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
@@ -33,7 +35,7 @@ export async function initializeDraft(args: InitializeDraftArgs): Promise<DraftC
     const adapterId = args.adapterId ?? resolveDefaultAdapterId(args.defaultAdapterId, args.adapters);
     const adapter = args.adapters.find((candidate) => candidate.id === adapterId);
     if (!adapter) throw new Error(`Cannot initialize draft: adapter ${adapterId} is unavailable`);
-    const resolved = resolveDraftDefaults(args.projectId, adapter, providers[adapterId]);
+    const resolved = await resolveSnapshot(args, adapter, providers[adapterId]);
     const snapshot: DraftCfg = args.temporary !== undefined ? { ...resolved, temporary: args.temporary } : resolved;
     const initialization = useNewThreadReady.getState().getInitialization(args.localId);
     if (initialization.attempt !== attempt) return getDraftConfig(args.localId) ?? snapshot;
@@ -58,7 +60,7 @@ export async function reinitializeDraftAdapter(args: InitializeDraftArgs & { ada
     const providers = await getProviderSettings(args.port);
     const adapter = args.adapters.find((candidate) => candidate.id === args.adapterId);
     if (!adapter) throw new Error(`Cannot initialize draft: adapter ${args.adapterId} is unavailable`);
-    const resolved = resolveDraftDefaults(args.projectId, adapter, providers[args.adapterId]);
+    const resolved = await resolveSnapshot(args, adapter, providers[args.adapterId]);
     const initialization = useNewThreadReady.getState().getInitialization(args.localId);
     const current = getDraftConfig(args.localId);
     if (initialization.attempt !== attempt || !current) return current ?? resolved;
@@ -77,4 +79,23 @@ export async function reinitializeDraftAdapter(args: InitializeDraftArgs & { ada
     useNewThreadReady.getState().completeInitialization(args.localId, attempt);
     throw error;
   }
+}
+
+async function resolveSnapshot(
+  args: InitializeDraftArgs,
+  adapter: AdapterInfo,
+  provider?: ProviderConfig,
+): Promise<DraftCfg> {
+  const inherited = !provider?.defaultModel || provider.defaultModel === 'default';
+  const cliModel =
+    supportsCliModel(adapter.id) && inherited
+      ? await getEffectiveModel(args.port, adapter.id, args.projectId ?? undefined).catch((error: unknown) => {
+          console.warn('[new-thread/initializeDraft] model resolution failed', error);
+          return null;
+        })
+      : null;
+  return {
+    ...resolveDraftDefaults(args.projectId, adapter, provider, cliModel),
+    ...(cliModel ? { cliModel } : {}),
+  };
 }

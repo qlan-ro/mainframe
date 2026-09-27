@@ -128,6 +128,7 @@ describe('ComposerToolbar — no render when chat is null', () => {
       chat: null,
       adapter: null,
       model: null,
+      runningModel: null,
       setModel: vi.fn(),
       setModelTuning: vi.fn(),
       setAdapter: vi.fn(),

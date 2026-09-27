@@ -46,7 +46,7 @@
  * an empty string (see composer-advanced.spec.ts's identical walker).
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
@@ -103,6 +103,16 @@ async function openDraftInheritingProject(page: Page, project: TauriProject): Pr
   await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
     timeout: 10_000,
   });
+}
+
+/**
+ * The last assistant message's rendered markdown (`.aui-md`) — the reply text
+ * alone. The whole message row also carries its timestamp, so a
+ * `toContainText('4')` on the row passes on e.g. "08:24 PM" before any reply
+ * has rendered.
+ */
+function lastReplyMarkdown(page: Page): Locator {
+  return page.getByTestId('chat-assistant-message').last().locator('.aui-md');
 }
 
 /**
@@ -183,6 +193,10 @@ test.describe('§new-session-prefill', () => {
     await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
     committedChatId = await waitForCreatedChat(project.projectId, chatsBeforeDraft);
     expect(committedChatId).not.toBe(seededChatId);
+    // Wait on the reply itself, not just waitForIdle: waitForIdle returns at once
+    // when the running indicator has not mounted yet, which let the test body run
+    // against a still-streaming turn on CI.
+    await expect(lastReplyMarkdown(page)).toHaveText('4', { timeout: 60_000 });
     await waitForIdle(page, 60_000);
   });
 
@@ -193,8 +207,7 @@ test.describe('§new-session-prefill', () => {
 
   test('"New session" on selected reply text opens a draft in the source project, prefilled, with no error toast', async () => {
     const { page } = app;
-    const lastAssistant = page.getByTestId('chat-assistant-message').last();
-    await expect(lastAssistant).toContainText('4', { timeout: 10_000 });
+    await expect(lastReplyMarkdown(page)).toHaveText('4', { timeout: 10_000 });
 
     const selected = await selectTextInLastAssistantMessage(page, '4');
     expect(selected).toBe('4');

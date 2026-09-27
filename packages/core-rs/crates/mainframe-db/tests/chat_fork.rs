@@ -34,6 +34,7 @@ fn pending_fork(source_session_id: &str) -> PendingFork {
         fork_source: ForkSource {
             source_session_id: source_session_id.to_string(),
             resume_path: Some(format!("/tmp/fork-snapshots/n1/{source_session_id}.jsonl")),
+            last_turn_id: None,
         },
         snapshot_dir: "/tmp/fork-snapshots/n1".to_string(),
         provisional_title: "Untitled (fork)".to_string(),

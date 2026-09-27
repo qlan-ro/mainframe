@@ -74,6 +74,13 @@ pub struct ForkSource {
     pub source_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_path: Option<String>,
+    /// The parent's last turn id at the moment of pinning (todo #368) — Codex's
+    /// `thread/fork` forks "through, inclusive" this turn, so the fork point
+    /// stays fixed at the click even if the parent gains turns afterward.
+    /// `None` when the parent had no turns yet, or the adapter has no turn-level
+    /// fork granularity (Claude pins a transcript snapshot instead).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -115,9 +122,7 @@ pub struct SessionSpawnOptions {
     /// runs against CLIProxyAPI, whose catalog has no Haiku to fall back on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub small_fast_model: Option<String>,
-    /// Provider/catalog default model, resolved once per spawn by the chat lifecycle.
-    /// Codex uses it as the last turn-start fallback when the chat has no model and the
-    /// app-server reported none; other adapters ignore it.
+    /// Legacy hint retained for compatibility; configured overrides are passed through `model`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
     /// Set only for a temporary chat whose adapter reports
@@ -384,6 +389,13 @@ pub struct AdapterInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_source: Option<CatalogSource>,
     pub capabilities: AdapterCapabilities,
+    /// Why `capabilities.fork` is currently `false` (todo #368), e.g. a CLI
+    /// below the version that introduced the fork RPC. `None` when fork is
+    /// available or the adapter has no version-gated fork story. Absent on the
+    /// wire (older daemon, or an adapter/state with no reason) deserializes to
+    /// `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_unavailable_reason: Option<String>,
 }
 
 /// Full union across both CLIs. Codex ReasoningEffort = none..xhigh, plus
@@ -642,6 +654,33 @@ mod tests {
     }
 
     #[test]
+    fn adapter_info_fork_unavailable_reason_roundtrips_and_omits_when_absent() {
+        let v = json!({
+            "id": "codex",
+            "name": "Codex",
+            "description": "Codex adapter",
+            "installed": true,
+            "models": [],
+            "capabilities": { "planMode": false, "autoMode": false, "noPersistence": false, "fork": false },
+            "forkUnavailableReason": "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
+        });
+        roundtrip::<AdapterInfo>(v);
+
+        let no_reason: AdapterInfo = serde_json::from_value(json!({
+            "id": "claude",
+            "name": "Claude",
+            "description": "Claude adapter",
+            "installed": true,
+            "models": [],
+            "capabilities": { "planMode": false, "autoMode": false, "fork": true }
+        }))
+        .unwrap();
+        assert_eq!(no_reason.fork_unavailable_reason, None);
+        let s = serde_json::to_string(&no_reason).unwrap();
+        assert!(!s.contains("forkUnavailableReason"));
+    }
+
+    #[test]
     fn adapter_capabilities_missing_no_persistence_defaults_false() {
         let parsed: AdapterCapabilities = serde_json::from_value(json!({
             "planMode": true,
@@ -692,6 +731,27 @@ mod tests {
             "sourceSessionId": "sess_1",
             "resumePath": "/tmp/fork-snapshots/n1/sess_1.jsonl"
         }));
+    }
+
+    /// Todo #368: `lastTurnId` round-trips camelCase, is omitted when absent,
+    /// and an older payload with no such key still deserializes (`serde(default)`).
+    #[test]
+    fn fork_source_last_turn_id_roundtrips_and_is_optional() {
+        roundtrip::<ForkSource>(json!({
+            "sourceSessionId": "sess_1",
+            "lastTurnId": "turn_9"
+        }));
+        let older_payload: ForkSource =
+            serde_json::from_value(json!({ "sourceSessionId": "sess_1" })).unwrap();
+        assert_eq!(older_payload.last_turn_id, None);
+
+        let s = serde_json::to_string(&ForkSource {
+            source_session_id: "sess_1".to_string(),
+            resume_path: None,
+            last_turn_id: None,
+        })
+        .unwrap();
+        assert!(!s.contains("lastTurnId"));
     }
 
     #[test]

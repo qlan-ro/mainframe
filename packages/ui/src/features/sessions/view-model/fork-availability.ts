@@ -15,6 +15,13 @@ export interface ForkAvailabilityInput {
   capabilityFork: boolean;
   /** `AdapterInfo.name` — the disabled reason names the adapter, never its id. */
   adapterName: string;
+  /**
+   * `AdapterInfo.forkUnavailableReason` (todo #368) — a version-specific reason
+   * (e.g. "needs Codex CLI 0.143.0 or newer") shown instead of the generic
+   * no-capability copy when `capabilityFork` is false and this is present.
+   * Ignored when `capabilityFork` is true.
+   */
+  capabilityReason?: string;
   /** A temporary chat has no vendor transcript to branch from (todo #346). */
   temporary: boolean;
   /** A no-project chat has no project checkout for the fork to run in (todo #346). */
@@ -36,7 +43,10 @@ export interface ForkAvailabilityInput {
 /** The spec's exact Behavior-list copy, in the spec's exact order. */
 export function forkAvailability(input: ForkAvailabilityInput): ForkAvailability {
   if (!input.capabilityFork) {
-    return { enabled: false, reason: `Forking isn't available for ${input.adapterName} chats yet` };
+    return {
+      enabled: false,
+      reason: input.capabilityReason ?? `Forking isn't available for ${input.adapterName} chats yet`,
+    };
   }
   if (input.temporary) {
     return { enabled: false, reason: "Temporary chats can't be forked" };

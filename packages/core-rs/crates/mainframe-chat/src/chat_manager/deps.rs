@@ -165,28 +165,18 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `db.chats.clearWorktree(chatId)` — NULL worktree_path/branch_name.
     /// Required (not a no-op default): `continue-in-project-root` relies on it persisting.
     fn chats_clear_worktree(&self, chat_id: &str);
-    /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
-    /// `None` = presence cannot be determined (missing predicate / null / error).
+    /// `adapters.get(adapterId)?.locateTranscript(sessionId, projectPath, sessionFilePath)`.
+    /// `None` = the location cannot be determined (no adapter / no layout / error).
     /// Required, not defaulted: an implementation that silently inherited a `None`
     /// default left transcript-presence reconciliation permanently inert in
     /// production — same class as #273 (#289).
-    fn is_transcript_present<'a>(
+    fn locate_transcript<'a>(
         &'a self,
         adapter_id: &'a str,
         session_id: &'a str,
         project_path: &'a str,
         session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>>;
-    /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
-    /// the lifecycle default-model normalization. Required, not defaulted: an
-    /// implementation that silently inherited the empty default made
-    /// `normalize_saved_default_model`'s probe-failure short-circuit fire on every
-    /// chat creation, so a retired saved default leaked into new chats (#290).
-    fn adapter_snapshot_models(
-        &self,
-        adapter_id: &str,
-    ) -> Vec<mainframe_types::adapter::AdapterModel>;
-
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>>;
     /// Rule 7's per-spawn capability read: `adapters.get(adapterId)?.capabilities()
     /// .noPersistence`. Never derived from the adapter id itself (AC 2) — an
     /// unregistered adapter answers `false`, same as one that never opted in.
@@ -210,6 +200,7 @@ pub trait ChatManagerDeps: Send + Sync {
         AdapterForkInfo {
             name: adapter_id.to_string(),
             fork: false,
+            unavailable_reason: None,
         }
     }
     /// Pin a fork's starting point through the parent's adapter

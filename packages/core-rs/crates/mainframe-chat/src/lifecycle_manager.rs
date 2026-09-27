@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use mainframe_adapter_api::{AdapterError, AdapterSession, BoxFuture, SessionSink};
 use mainframe_runtime::time::now_iso8601;
 use mainframe_services::settings::normalize_saved_default_model;
-use mainframe_types::adapter::{AdapterModel, SessionOptions, SessionSpawnOptions};
+use mainframe_types::adapter::{SessionOptions, SessionSpawnOptions};
 use mainframe_types::chat::{Chat, ChatStatus, NewChat, ProcessState, ResolvedTuning};
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::Notify;
@@ -77,13 +77,6 @@ pub trait LifecycleManagerDeps: Send + Sync {
     fn chats_list(&self, project_id: &str) -> Vec<Chat>;
     fn projects_get_path(&self, project_id: &str) -> Option<String>;
     fn settings_get(&self, ns: &str, key: &str) -> Option<String>;
-    /// `adapters.getSnapshots().find((s) => s.id === adapterId)?.models ?? []` —
-    /// the live probed catalog used to normalize a saved default-model id.
-    /// Required, not defaulted: an implementation that silently inherited the
-    /// empty default made `normalize_saved_default_model`'s probe-failure
-    /// short-circuit fire on every chat creation, so a retired saved default
-    /// leaked into new chats (#290).
-    fn adapter_snapshot_models(&self, adapter_id: &str) -> Vec<AdapterModel>;
     /// Record the worktrees that already existed when the chat activated, so a
     /// switch offer only ever names one registered since.
     fn seed_worktree_baseline<'a>(
@@ -337,15 +330,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             if new_chat.model.is_none()
                 && let Some(m) = default_model
             {
-                let models = self.deps.adapter_snapshot_models(&adapter_id);
-                new_chat.model = normalize_saved_default_model(Some(&m), &models);
-                if new_chat.model.is_none() {
-                    warn!(
-                        adapter_id,
-                        configured_model = %m,
-                        "saved default model is not in the adapter catalog; new chat falls back to the adapter default"
-                    );
-                }
+                new_chat.model = normalize_saved_default_model(Some(&m));
             }
             if new_chat.permission_mode.is_none()
                 && let Some(m) = default_mode
@@ -1027,21 +1012,11 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         cache_reloaded
     }
 
-    /// The provider/catalog default model for a spawn's `default_model` hint — the
-    /// same two-step tier the tuning resolver and `create_chat_with_defaults` already
-    /// use: the saved default normalized against the live catalog, then the catalog
-    /// entry flagged as the adapter's default.
     fn default_model_for(&self, adapter_id: &str) -> Option<String> {
-        let models = self.deps.adapter_snapshot_models(adapter_id);
         let saved = self
             .deps
             .settings_get("provider", &format!("{adapter_id}.defaultModel"));
-        normalize_saved_default_model(saved.as_deref(), &models).or_else(|| {
-            models
-                .iter()
-                .find(|m| m.is_default == Some(true))
-                .map(|m| m.id.clone())
-        })
+        normalize_saved_default_model(saved.as_deref()).filter(|model| model != "default")
     }
 
     async fn do_start_chat(&self, chat_id: &str) -> Result<(), LifecycleError> {
@@ -1136,7 +1111,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         let process = session
             .spawn(
                 Some(SessionSpawnOptions {
-                    model: chat.model.clone(),
+                    model: chat.model.clone().or_else(|| default_model.clone()),
                     permission_mode: chat.permission_mode,
                     plan_mode: Some(chat.plan_mode.unwrap_or(false)),
                     executable_path,
@@ -1294,8 +1269,6 @@ mod tests {
         /// `settings_get("provider", "<adapter>.defaultModel")` answer, for
         /// `default_model_for` coverage.
         saved_default_model: Mutex<Option<String>>,
-        /// `adapter_snapshot_models` answer, for `default_model_for` coverage.
-        snapshot_models: Mutex<Vec<AdapterModel>>,
         /// `adapter_supports_no_persistence` answer (todo #346, G2b).
         adapter_no_persistence: Mutex<bool>,
         /// Every `ensure_dir` path, in order.
@@ -1350,7 +1323,6 @@ mod tests {
                 title_updates: Mutex::new(Vec::new()),
                 disabled,
                 saved_default_model: Mutex::new(None),
-                snapshot_models: Mutex::new(Vec::new()),
                 adapter_no_persistence: Mutex::new(false),
                 ensure_dir_calls: Mutex::new(Vec::new()),
                 mark_context_lost_calls: Mutex::new(Vec::new()),
@@ -1383,10 +1355,6 @@ mod tests {
 
         pub(super) fn set_saved_default_model(&self, model: Option<&str>) {
             *self.saved_default_model.lock().unwrap() = model.map(str::to_string);
-        }
-
-        pub(super) fn set_snapshot_models(&self, models: Vec<AdapterModel>) {
-            *self.snapshot_models.lock().unwrap() = models;
         }
 
         pub(super) fn set_pending_fork(&self, pending: PendingForkState) {
@@ -1437,9 +1405,7 @@ mod tests {
                 None
             }
         }
-        fn adapter_snapshot_models(&self, _adapter_id: &str) -> Vec<AdapterModel> {
-            self.snapshot_models.lock().unwrap().clone()
-        }
+
         fn create_session(&self, _a: &str, o: SessionOptions) -> Option<Arc<dyn AdapterSession>> {
             self.create_session_calls.lock().unwrap().push(o);
             self.session_to_return.lock().unwrap().clone()
@@ -1906,55 +1872,19 @@ mod tests {
             .unwrap();
     }
 
-    // ── default_model_for (todo #303, spawn-time Codex fallback hint) ────────
-    fn adapter_model(id: &str, is_default: bool) -> AdapterModel {
-        AdapterModel {
-            id: id.to_string(),
-            label: id.to_string(),
-            description: None,
-            resolved_model: None,
-            context_window: None,
-            is_default: is_default.then_some(true),
-            is_older: None,
-            group: None,
-            supported_efforts: None,
-            default_effort: None,
-            supports_fast: None,
-            supports_ultracode: None,
-            supports_adaptive_thinking: None,
-            supports_personality: None,
+    #[test]
+    fn default_model_for_uses_only_explicit_provider_settings() {
+        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
+        let mgr = manager(deps);
+        for (saved, expected) in [
+            (Some("custom-model"), Some("custom-model")),
+            (Some("default"), None),
+            (Some(""), None),
+            (None, None),
+        ] {
+            mgr.deps.set_saved_default_model(saved);
+            assert_eq!(mgr.default_model_for("codex").as_deref(), expected);
         }
-    }
-
-    #[test]
-    fn default_model_for_prefers_the_saved_default_present_in_the_catalog() {
-        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
-        deps.set_snapshot_models(vec![
-            adapter_model("gpt-5.5", false),
-            adapter_model("gpt-4", true),
-        ]);
-        deps.set_saved_default_model(Some("gpt-5.5"));
-        let mgr = manager(deps);
-        assert_eq!(mgr.default_model_for("codex"), Some("gpt-5.5".to_string()));
-    }
-
-    #[test]
-    fn default_model_for_falls_through_to_the_is_default_entry_when_the_saved_id_is_stale() {
-        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
-        deps.set_snapshot_models(vec![
-            adapter_model("gpt-4", true),
-            adapter_model("gpt-5.5", false),
-        ]);
-        deps.set_saved_default_model(Some("retired-model"));
-        let mgr = manager(deps);
-        assert_eq!(mgr.default_model_for("codex"), Some("gpt-4".to_string()));
-    }
-
-    #[test]
-    fn default_model_for_is_none_with_no_saved_default_and_no_catalog() {
-        let deps = FakeDeps::new(chat_over("c1", None, ChatStatus::Active), Vec::new());
-        let mgr = manager(deps);
-        assert_eq!(mgr.default_model_for("codex"), None);
     }
 
     // ── pending-fork session building (todo #343 Group 3, plan item 3) ───────
@@ -1968,6 +1898,7 @@ mod tests {
             fork_source: mainframe_types::adapter::ForkSource {
                 source_session_id: "parent-session".to_string(),
                 resume_path: Some("/tmp/fork-snapshots/n1/parent-session.jsonl".to_string()),
+                last_turn_id: None,
             },
             snapshot_dir: "/tmp/fork-snapshots/n1".to_string(),
             provisional_title: "Untitled (fork)".to_string(),
@@ -2042,9 +1973,7 @@ mod tests {
 // notes: scan seam; the enableWorktree fork callback is wired by chat_manager (holds
 // notes: config_manager). Ported: isLastActiveChatForScope (5), archive kills-tasks
 // notes: (1), archive releases-scope (3) test cases.
-// notes: Main catch-up (#441/#430): a saved default model is normalized against the
-// notes: live snapshot (`adapter_snapshot_models` deps + `normalize_saved_default_model`)
-// notes: before use; title gen is adapter-aware — `generate_title` gained an `adapter_id`
+// notes: Title gen is adapter-aware — `generate_title` gained an `adapter_id`
 // notes: arg so the deps seam resolves `adapters.get(adapterId).generateTitle` (deterministic
 // notes: title stands when the adapter has none).
 // todos: 1

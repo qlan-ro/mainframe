@@ -224,6 +224,7 @@ impl Adapter for MockCliAdapter {
         let source = ForkSource {
             source_session_id: request.source_session_id,
             resume_path: request.session_file_path,
+            last_turn_id: None,
         };
         Box::pin(async move { Ok(source) })
     }

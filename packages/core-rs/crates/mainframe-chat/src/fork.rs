@@ -22,11 +22,14 @@ pub struct PendingForkState {
 }
 
 /// What `fork_chat`'s capability check needs from the parent's adapter: its
-/// display name (for the 422 message) and whether it can fork at all.
+/// display name (for the 422 message), whether it can fork at all, and — when
+/// it can't — a version-specific reason (todo #368, e.g. an old Codex CLI)
+/// preferred over the generic "isn't available" message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AdapterForkInfo {
     pub name: String,
     pub fork: bool,
+    pub unavailable_reason: Option<String>,
 }
 
 /// Inputs to the DB's `create_fork`, gathered from the enriched parent chat by
@@ -73,6 +76,12 @@ pub enum ForkChatError {
     NotFound(String),
     #[error("Forking isn't available for {0} chats yet")]
     Unsupported(String),
+    /// `adapter_fork_info` reported a version-specific reason (todo #368,
+    /// e.g. "Forking Codex chats needs Codex CLI 0.143.0 or newer") instead
+    /// of a bare capability flag. Preferred over `Unsupported` whenever a
+    /// reason exists, so the 422 body names the fix instead of just the gap.
+    #[error("{0}")]
+    UnavailableWithReason(String),
     #[error("Temporary chats can't be forked")]
     Temporary,
     #[error("Chats with no project can't be forked")]
@@ -96,7 +105,7 @@ impl ForkChatError {
     pub fn status_code(&self) -> u16 {
         match self {
             ForkChatError::NotFound(_) => 404,
-            ForkChatError::Unsupported(_) => 422,
+            ForkChatError::Unsupported(_) | ForkChatError::UnavailableWithReason(_) => 422,
             ForkChatError::Temporary
             | ForkChatError::NoProject
             | ForkChatError::NothingToForkYet
@@ -142,6 +151,10 @@ mod tests {
             ForkChatError::Unsupported("Codex".into()).status_code(),
             422
         );
+        assert_eq!(
+            ForkChatError::UnavailableWithReason("needs a newer CLI".into()).status_code(),
+            422
+        );
         assert_eq!(ForkChatError::NothingToForkYet.status_code(), 409);
         assert_eq!(ForkChatError::TranscriptMissing.status_code(), 409);
         assert_eq!(ForkChatError::DirectoryMissing.status_code(), 409);
@@ -162,6 +175,13 @@ mod tests {
         assert_eq!(
             ForkChatError::NothingToForkYet.to_string(),
             "Nothing to fork yet"
+        );
+        assert_eq!(
+            ForkChatError::UnavailableWithReason(
+                "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)".into()
+            )
+            .to_string(),
+            "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
         );
     }
 }

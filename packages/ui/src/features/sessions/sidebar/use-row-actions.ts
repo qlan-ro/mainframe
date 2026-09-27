@@ -47,6 +47,7 @@ export function useRowActions(item: SessionItem): RowActions {
     onFork: () => void fork(item.remoteId ?? item.id),
     forkAvailability: forkAvailability({
       capabilityFork: adapter?.capabilities.fork ?? false,
+      capabilityReason: adapter?.forkUnavailableReason,
       adapterName: adapter?.name ?? item.custom.adapterId,
       temporary: item.custom.temporary,
       noProject: item.custom.noProject,

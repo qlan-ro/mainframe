@@ -114,6 +114,63 @@ describe('ui adapters store', () => {
     expect(useAdaptersStore.getState().byId.codex!.installed).toBe(true);
   });
 
+  // A version-gated capability (Codex fork, todo #368) can flip after the seed's 2s
+  // refresh cap is lost — the WS event is the only correction, so it must apply
+  // regardless of whether the models revision guard accepts this update's models.
+  it('applies capabilities and forkUnavailableReason from a WS event even when the models revision is stale', () => {
+    seedAdapters([info('codex', 5, [{ id: 'a', label: 'A' }])]);
+    const unsub = installAdapterModelsSubscriber();
+    handlers.forEach((h) =>
+      h({
+        type: 'adapter.models.updated',
+        adapterId: 'codex',
+        models: [{ id: 'x', label: 'X' }],
+        modelsRevision: 1, // stale — models must stay
+        capabilities: { planMode: true, autoMode: false, fork: true },
+        forkUnavailableReason: undefined,
+      }),
+    );
+    const codex = useAdaptersStore.getState().byId.codex!;
+    expect(codex.models[0]!.id).toBe('a'); // stale models rejected
+    expect(codex.capabilities.fork).toBe(true); // capabilities still applied
+    unsub();
+  });
+
+  it('applies a forkUnavailableReason from a WS event', () => {
+    seedAdapters([info('codex', 1, [])]);
+    const unsub = installAdapterModelsSubscriber();
+    handlers.forEach((h) =>
+      h({
+        type: 'adapter.models.updated',
+        adapterId: 'codex',
+        models: [{ id: 'a', label: 'A' }],
+        modelsRevision: 2,
+        capabilities: { planMode: true, autoMode: false, fork: false },
+        forkUnavailableReason: 'Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)',
+      }),
+    );
+    const codex = useAdaptersStore.getState().byId.codex!;
+    expect(codex.forkUnavailableReason).toBe(
+      'Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)',
+    );
+    unsub();
+  });
+
+  it('leaves capabilities and forkUnavailableReason alone when the event omits both (older daemon)', () => {
+    seedAdapters([info('codex', 1, [{ id: 'a', label: 'A' }])]);
+    useAdaptersStore.setState((s) => ({
+      byId: { ...s.byId, codex: { ...s.byId.codex!, forkUnavailableReason: 'kept' } },
+    }));
+    const unsub = installAdapterModelsSubscriber();
+    handlers.forEach((h) =>
+      h({ type: 'adapter.models.updated', adapterId: 'codex', models: [{ id: 'b', label: 'B' }], modelsRevision: 2 }),
+    );
+    const codex = useAdaptersStore.getState().byId.codex!;
+    expect(codex.forkUnavailableReason).toBe('kept');
+    expect(codex.capabilities.planMode).toBe(true); // unchanged from the seed
+    unsub();
+  });
+
   it('reset clears the store', () => {
     seedAdapters([info('claude', 1, [])]);
     resetAdapters();

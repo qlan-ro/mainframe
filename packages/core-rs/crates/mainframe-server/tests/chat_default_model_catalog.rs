@@ -1,9 +1,4 @@
-//! Wiring-level regression coverage for #290: the daemon's production
-//! `ChatManagerDeps` (`DaemonChatDeps`, assembled by `build_chat_manager`) must
-//! feed the lifecycle's default-model normalization the adapter registry's real
-//! catalog, not an always-empty stub. A regression to the empty
-//! `adapter_snapshot_models` default makes the first case here fail: a stale
-//! saved provider default would leak, unchecked, into every new chat.
+//! Provider model selections survive incomplete adapter catalogs.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::Path;
@@ -160,11 +155,8 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
     }
 }
 
-/// The case that must fail before the production fix lands: the saved default
-/// is not in the registered adapter's catalog, so it must be dropped and the
-/// created chat must not carry it.
 #[tokio::test]
-async fn stale_saved_default_is_dropped_from_a_new_chat() {
+async fn saved_default_outside_the_catalog_is_preserved() {
     let h = harness(Some("model-retired"), "catalog-adapter");
 
     let chat = h
@@ -180,19 +172,9 @@ async fn stale_saved_default_is_dropped_from_a_new_chat() {
         )
         .await;
 
-    assert!(
-        chat.model.is_none(),
-        "a stale saved default must not survive onto a new chat, got {:?}",
-        chat.model
-    );
-    assert_ne!(chat.model.as_deref(), Some("model-retired"));
-
+    assert_eq!(chat.model.as_deref(), Some("model-retired"));
     let reread = h.manager.get_chat(&chat.id).expect("chat must exist");
-    assert!(
-        reread.model.is_none(),
-        "the stale default must not have been persisted either, got {:?}",
-        reread.model
-    );
+    assert_eq!(reread.model.as_deref(), Some("model-retired"));
 }
 
 /// A saved default that the adapter's catalog still offers must survive
@@ -217,9 +199,6 @@ async fn saved_default_present_in_the_catalog_survives() {
     assert_eq!(chat.model.as_deref(), Some("model-live"));
 }
 
-/// An adapter id with no registered snapshot must yield an empty catalog, which
-/// is the "cannot judge" signal `normalize_saved_default_model` uses to preserve
-/// the saved default (the probe-failure escape hatch stays intact).
 #[tokio::test]
 async fn an_adapter_without_a_snapshot_keeps_the_saved_default() {
     let h = harness(Some("model-retired"), "unregistered-adapter");

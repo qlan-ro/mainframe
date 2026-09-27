@@ -1,28 +1,7 @@
 'use client';
 
-/**
- * Composer tuning hooks — data layer for ComposerToolbar and the per-model
- * effort/options flyout in ModelMenuRow.
- *
- * Three independent concerns:
- *   useAdapters         — re-exported from @/store/adapters: the shared revision-guarded
- *                         catalog store, seeded/kept fresh at the app root (adapters-seed).
- *   useProviderDefaults — re-exported from ./use-provider-defaults: the adapter's
- *                         saved ProviderConfig, live from the shared settings store.
- *   useComposerTuning   — fetches the current chat, resolves the model, and
- *                         exposes setEffort/setFeature with optimistic updates.
- *
- * useComposerTuning holds plain React state (not aui external-store selectors) to avoid
- * the getSnapshot-loop trap. useAdapters/useProviderDefaults are zustand store selectors,
- * which is safe here — they select a stable reference, not a fresh snapshot per render.
- *
- * `disabled` reads the LIVE thread run-state from `useAuiState` (not the stale
- * REST snapshot) so the toolbar is correctly disabled mid-run. The daemon port
- * is threaded from `useChatExtras()` — no extra `getDaemonPort()` call here.
- *
- * setEffort/setFeature/setModel route their live path through the mid-session
- * warning gate (see ./use-tuning-warning), so no control can bypass it.
- */
+import { mfToast } from '@/lib/toast';
+import { useSessionModel } from './use-session-model';
 
 import { useCallback, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -63,6 +42,7 @@ export interface ComposerTuningHook {
   chat: Chat | null;
   adapter: AdapterInfo | null;
   model: AdapterModel | null;
+  runningModel: AdapterModel | null;
   providerDefaults: ProviderConfig | undefined;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
@@ -128,26 +108,17 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
   const hasMessages = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length > 0);
 
-  const adapter: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
+  const catalog: AdapterInfo | null = chat != null ? (adapters.find((a) => a.id === chat.adapterId) ?? null) : null;
 
-  const providerDefaults = useProviderDefaults(adapter?.id ?? null);
-
-  // Resolve the AdapterModel: the chat's explicit model, else the user's
-  // configured provider default, else the catalog default (chat.model is null
-  // when the session inherits the adapter default).
-  const model: AdapterModel | null = (() => {
-    if (adapter == null) return null;
-    const adapterModels = adapter.models;
-    return (
-      (chat?.model != null ? adapterModels.find((m) => m.id === chat.model) : undefined) ??
-      (providerDefaults?.defaultModel != null
-        ? adapterModels.find((m) => m.id === providerDefaults.defaultModel)
-        : undefined) ??
-      adapterModels.find((m) => m.isDefault) ??
-      adapterModels[0] ??
-      null
-    );
-  })();
+  const providerDefaults = useProviderDefaults(catalog?.id ?? null);
+  const { adapter, model, runningModel } = useSessionModel(
+    port,
+    catalog,
+    chat,
+    extras?.state,
+    providerDefaults,
+    draftMode ? draft : undefined,
+  );
 
   const contextTokens = extras?.state.contextUsage?.totalTokens ?? null;
   const tuningWarning = useTuningWarning({ chat, model, providerDefaults, hasMessages, contextTokens });
@@ -192,9 +163,12 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const patchConfig = useCallback(
     (patch: ChatConfigPatch, label: string) => {
       if (port == null || !patchChatId) return;
-      setChatConfig(port, patchChatId, patch).catch((err: unknown) =>
-        console.warn(`[composer/useComposerTuning] ${label} failed`, { err }),
-      );
+      setChatConfig(port, patchChatId, patch).catch((err: unknown) => {
+        console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
+        if (patch.model !== undefined) {
+          mfToast.error('Could not switch model', { description: err instanceof Error ? err.message : String(err) });
+        }
+      });
     },
     [patchChatId, port],
   );
@@ -282,6 +256,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     chat,
     adapter,
     model,
+    runningModel,
     providerDefaults,
     setEffort,
     setFeature,

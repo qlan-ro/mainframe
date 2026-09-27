@@ -106,6 +106,8 @@ interface RenderProps {
   adapters?: AdapterInfo[];
   adapter?: AdapterInfo | null;
   model?: AdapterModel | null;
+  runningModel?: AdapterModel | null;
+  showCurrentModel?: boolean;
   locked?: boolean;
   disabled?: boolean;
   setAdapter?: (id: string) => void;
@@ -136,6 +138,8 @@ function renderSelect(props: RenderProps = {}) {
         adapters={adapters}
         adapter={adapter}
         model={model}
+        runningModel={props.runningModel}
+        showCurrentModel={props.showCurrentModel}
         locked={locked}
         disabled={disabled}
         setAdapter={setAdapter}
@@ -976,7 +980,28 @@ describe('ProviderModelSelect — trigger effort suffix', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. hideProviderSwitch (todo #344 side-chat panel)
+// 12. Current CLI model label
+// ---------------------------------------------------------------------------
+
+it('shows the current CLI model while preserving the selected override', async () => {
+  const { setModel } = renderSelect({ model: SONNET, runningModel: HAIKU });
+  expect(screen.getByTestId('composer-model-select')).toHaveTextContent('Claude Haiku 4');
+  await userEvent.click(screen.getByTestId('composer-model-select'));
+  expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Current: Claude Haiku 4');
+  expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Selected: Claude Sonnet 4');
+  await userEvent.click(screen.getByTestId('composer-model-select-option-sonnet'));
+  expect(setModel).not.toHaveBeenCalled();
+});
+
+it('labels the saved choice when the current model cannot be reported', async () => {
+  renderSelect({ model: SONNET, runningModel: null, showCurrentModel: true });
+  await userEvent.click(screen.getByTestId('composer-model-select'));
+  expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Current: unavailable');
+  expect(screen.getByTestId('composer-model-current')).toHaveTextContent('Selected: Claude Sonnet 4');
+});
+
+// ---------------------------------------------------------------------------
+// 13. hideProviderSwitch (todo #344 side-chat panel)
 // ---------------------------------------------------------------------------
 
 describe('ProviderModelSelect — hideProviderSwitch (todo #344)', () => {

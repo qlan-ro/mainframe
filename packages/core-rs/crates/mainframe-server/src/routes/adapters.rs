@@ -20,7 +20,10 @@ async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
-    Router::new().route("/api/adapters", get(list))
+    Router::new().route("/api/adapters", get(list)).route(
+        "/api/adapters/{adapter_id}/effective-model",
+        get(super::adapter_model::resolve),
+    )
 }
 
 #[cfg(test)]

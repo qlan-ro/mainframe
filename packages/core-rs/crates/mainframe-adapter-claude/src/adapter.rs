@@ -21,7 +21,7 @@ use crate::models::{claude_models, enrich_with_context_window, merge_older_model
 use crate::plan_mode_handler::ClaudePlanModeHandler;
 use crate::session::ClaudeSession;
 use crate::title_generator::generate_claude_title;
-use crate::transcript::{is_claude_transcript_present, locate_claude_transcript};
+use crate::transcript::locate_claude_transcript;
 
 /// The manifest `name` (the TS adapter imports `manifest.json`; the Rust port has
 /// no manifest asset, so the string is inlined).
@@ -213,6 +213,21 @@ impl Adapter for ClaudeAdapter {
         })
     }
 
+    fn configured_model(
+        &self,
+        project_path: String,
+        executable_path: Option<String>,
+    ) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            crate::effective_model::probe(
+                executable_path.as_deref().unwrap_or("claude"),
+                self.resolved_path.as_str(),
+                &project_path,
+            )
+            .await
+        })
+    }
+
     fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
         Some(claude_models())
     }
@@ -269,24 +284,6 @@ impl Adapter for ClaudeAdapter {
     ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         let path = self.resolved_path.clone();
         Box::pin(async move { generate_claude_title(&content, &binary, path.as_str()).await })
-    }
-
-    fn is_transcript_present(
-        &self,
-        session_id: String,
-        project_path: String,
-        session_file_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
-        Box::pin(async move {
-            Ok(Some(
-                is_claude_transcript_present(
-                    &session_id,
-                    &project_path,
-                    session_file_path.as_deref(),
-                )
-                .await,
-            ))
-        })
     }
 
     fn locate_transcript(
@@ -420,8 +417,8 @@ mod tests {
 // notes: (default_resolved_model kept for legacy default-only payloads); added the
 // notes: claude-sonnet-5 catalog entry (extended window, live-verified 967k). Wired
 // notes: two Adapter overrides: generate_title → generate_claude_title(content, binary,
-// notes: resolved PATH); is_transcript_present → is_claude_transcript_present (returns
-// notes: Ok(Some(bool)), never null). adapter-enrich.test.ts new cases translated.
+// notes: resolved PATH); locate_transcript → locate_claude_transcript (never null).
+// notes: adapter-enrich.test.ts new cases translated.
 // notes: FULL port. Pure catalog surface (claude_models, enrich_with_context_window,
 // notes: window constants) + the ClaudeAdapter Adapter-trait impl: is_installed /
 // notes: get_version (execFile `claude --version` → tokio Command; version regex
