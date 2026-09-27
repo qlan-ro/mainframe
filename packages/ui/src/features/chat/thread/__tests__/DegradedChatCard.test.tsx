@@ -30,6 +30,16 @@ vi.mock('@/lib/api/chats', () => ({
   recreateChatWorktree: vi.fn().mockResolvedValue(undefined),
   continueChatInProjectRoot: vi.fn().mockResolvedValue(undefined),
   archiveChat: vi.fn().mockResolvedValue(undefined),
+  discardChat: vi.fn().mockResolvedValue(undefined),
+}));
+
+let __sideChatScope: { parentChatId: string; sideChatId: string } | null = null;
+const unregisterSideChatSpy = vi.fn();
+vi.mock('@/features/side-chat/side-chat-scope', () => ({
+  useSideChatScope: () => __sideChatScope,
+}));
+vi.mock('@/features/side-chat/side-chat-ids', () => ({
+  unregisterSideChat: (...args: unknown[]) => unregisterSideChatSpy(...args),
 }));
 
 const deleteItemSpy = vi.fn().mockResolvedValue(undefined);
@@ -44,7 +54,13 @@ vi.mock('@/features/sessions/runtime/archive-confirm-bridge', () => ({
   takeDiscard: (...args: unknown[]) => takeDiscardSpy(...args),
 }));
 
-import { continueChatHere, recreateChatWorktree, continueChatInProjectRoot, archiveChat } from '@/lib/api/chats';
+import {
+  continueChatHere,
+  recreateChatWorktree,
+  continueChatInProjectRoot,
+  archiveChat,
+  discardChat,
+} from '@/lib/api/chats';
 import { DegradedChatCard } from '../DegradedChatCard';
 
 function chat(overrides: Partial<Chat>): Partial<Chat> {
@@ -54,9 +70,11 @@ function chat(overrides: Partial<Chat>): Partial<Chat> {
 beforeEach(() => {
   vi.clearAllMocks();
   __chatConfig = null;
+  __sideChatScope = null;
   deleteItemSpy.mockClear().mockResolvedValue(undefined);
   stageDiscardSpy.mockClear();
   takeDiscardSpy.mockClear();
+  unregisterSideChatSpy.mockClear();
 });
 
 describe('DegradedChatCard — visibility', () => {
@@ -107,6 +125,23 @@ describe('DegradedChatCard — transcript missing only', () => {
     expect(stageDiscardSpy).toHaveBeenCalledExactlyOnceWith('chat-9');
     expect(takeDiscardSpy).toHaveBeenCalledExactlyOnceWith('chat-9'); // cleanup, no-op once the adapter consumed it
     expect(archiveChat).not.toHaveBeenCalled();
+  });
+
+  it('Delete chat routes through discardChat for the side chat itself when rendered in a SideChatScope, not aui.threadListItem.delete() (todo #344)', async () => {
+    // A side chat's `aui.threadListItem` is unbound and still resolves to the
+    // PARENT's item from the extended root — calling delete() there would
+    // archive/discard the parent instead of this side chat.
+    __chatConfig = chat({ transcriptMissing: true, temporary: true, id: 'side-9' });
+    __sideChatScope = { parentChatId: 'chat-9', sideChatId: 'side-9' };
+
+    render(<DegradedChatCard />);
+    fireEvent.click(screen.getByTestId('chat-degraded-delete'));
+
+    await waitFor(() => expect(discardChat).toHaveBeenCalledWith(31415, 'side-9'));
+    expect(unregisterSideChatSpy).toHaveBeenCalledExactlyOnceWith('side-9');
+    expect(deleteItemSpy).not.toHaveBeenCalled();
+    expect(archiveChat).not.toHaveBeenCalled();
+    expect(stageDiscardSpy).not.toHaveBeenCalled();
   });
 });
 

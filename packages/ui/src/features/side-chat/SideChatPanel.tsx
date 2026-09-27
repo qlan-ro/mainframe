@@ -14,7 +14,11 @@
  *
  * The controller itself is kept loaded/live-subscribed by `SideChatHost`
  * regardless of collapse (rule 8); this component only reads its state to
- * render, via the SAME registry-shared instance.
+ * render. `SideChatHost` owns the single `getOrCreate` call and passes the
+ * instance down as a prop — a second `getOrCreate` here would race a
+ * dispose-then-recreate (idle offload, a remote discard) and end up with a
+ * second, unloaded, non-subscribed controller while the host keeps the stale
+ * one (todo #344, single-owner fix).
  */
 import { useCallback, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
@@ -23,14 +27,21 @@ import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '@/features/chat/run
 import { buildChatExtras } from '@/features/chat/runtime/chat-extras';
 import { projectChatThreadMessages } from '@/features/chat/controller/project-messages';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
-import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
+import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import { SideChatScopeProvider } from './side-chat-scope';
 import { SideChatPanelHeader } from './SideChatPanelHeader';
 
-export function SideChatPanel({ parentChatId, sideChatId }: { parentChatId: string; sideChatId: string }) {
+export function SideChatPanel({
+  parentChatId,
+  sideChatId,
+  controller,
+}: {
+  parentChatId: string;
+  sideChatId: string;
+  controller: AcpChatController;
+}) {
   const aui = useAui();
   const port = useDaemonPort();
-  const controller = chatControllerRegistry.getOrCreate(sideChatId, port);
   const state = useControllerState(controller);
 
   const messages = useMemo(() => projectChatThreadMessages(state), [state]);

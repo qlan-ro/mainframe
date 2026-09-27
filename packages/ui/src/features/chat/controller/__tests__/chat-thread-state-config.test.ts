@@ -140,6 +140,29 @@ describe('reduceChatThreadState — chat.config.updated', () => {
     expect(afterNoProject.chatConfig?.noProject).toBe(true);
   });
 
+  it('adopts a chat that differs only in sideChatId (todo #344 open)', () => {
+    const withSideChat = { ...chat, sideChatId: 'side-1' } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat });
+    const afterOpen = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: withSideChat });
+
+    expect(afterOpen.chatConfig).toBe(withSideChat);
+    expect(afterOpen.chatConfig?.sideChatId).toBe('side-1');
+  });
+
+  it('adopts a chat that differs only in sideChatId clearing (todo #344 close)', () => {
+    const withSideChat = { ...chat, sideChatId: 'side-1' } as unknown as Chat;
+    const cleared = { ...chat, sideChatId: undefined } as unknown as Chat;
+
+    const base = createChatThreadState('c1');
+    const withFirst = reduceChatThreadState(base, { type: 'chat.config.updated', chat: withSideChat });
+    const afterClose = reduceChatThreadState(withFirst, { type: 'chat.config.updated', chat: cleared });
+
+    expect(afterClose.chatConfig).toBe(cleared);
+    expect(afterClose.chatConfig?.sideChatId).toBeUndefined();
+  });
+
   it('still ignores identity-irrelevant churn (same config object fields)', () => {
     const churn = { ...chat, totalCost: 42 } as unknown as Chat;
 

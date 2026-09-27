@@ -46,8 +46,13 @@ export function SideChatHost({ parentChatId }: { parentChatId: string | null }) 
     if (parentChatId != null && gatePending) expand(parentChatId);
   }, [parentChatId, gatePending, expand]);
 
-  if (parentChatId == null || sideChatId == null) return null;
+  if (parentChatId == null || sideChatId == null || controller == null) return null;
   if (collapsed) return null;
 
-  return <SideChatPanel parentChatId={parentChatId} sideChatId={sideChatId} />;
+  // Pass the SAME instance this host loads/subscribes below — the panel must
+  // not call `getOrCreate` again on its own, or a dispose-then-recreate race
+  // (idle offload, a remote discard racing a re-render) would hand it a
+  // second, unloaded, non-subscribed controller while this host keeps the
+  // stale one (todo #344, single-owner fix).
+  return <SideChatPanel parentChatId={parentChatId} sideChatId={sideChatId} controller={controller} />;
 }

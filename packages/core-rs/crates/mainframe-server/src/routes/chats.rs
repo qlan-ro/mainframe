@@ -49,15 +49,15 @@ fn split_csv(value: &str) -> Vec<String> {
 }
 
 #[derive(Deserialize)]
-struct ListQuery {
-    project: Option<String>,
-    tags: Option<String>,
-    synthetic: Option<String>,
+pub(crate) struct ListQuery {
+    pub(crate) project: Option<String>,
+    pub(crate) tags: Option<String>,
+    pub(crate) synthetic: Option<String>,
     #[serde(rename = "includeTemporary")]
-    include_temporary: Option<bool>,
+    pub(crate) include_temporary: Option<bool>,
 }
 
-async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
+pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
     // Zod `.refine` — every parsed tag must match [a-z0-9-]+ or the whole query 400s.
     let tags_all: Option<Vec<String>> = match &q.tags {
         Some(raw) => {
@@ -101,34 +101,27 @@ async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Res
 }
 
 #[derive(Deserialize)]
-struct ListForProjectQuery {
+pub(crate) struct ListForProjectQuery {
     #[serde(rename = "includeTemporary")]
-    include_temporary: Option<bool>,
+    pub(crate) include_temporary: Option<bool>,
 }
 
 /// `ChatsRepository::list` (backing both the facade and db paths here) is the
 /// SAME unfiltered read `remove_project` uses internally (rule 3), so it must
 /// keep returning temporary chats; this route filters the result itself
-/// instead of adding a filter to that shared read.
-///
-/// A side chat (temporary with a parent, todo #344) is always dropped, even
-/// when `include_temporary` is set — it is reachable only through its parent,
-/// never through a listing. `list`'s own DB-layer `list_filtered` already
-/// excludes side chats unconditionally (mainframe-db rule 7); this is the one
-/// remaining path (`list_for_project`, backed by the unfiltered `list`/
-/// `list_chats`) that needs the same exclusion applied here instead.
+/// instead of adding a filter to that shared read. Also drops a side chat
+/// (temporary with a parent, todo #344) even with `include_temporary` set —
+/// `list`'s DB-layer filter already excludes it (mainframe-db rule 7).
 fn filter_temporary(chats: Vec<Chat>, include_temporary: bool) -> Vec<Chat> {
+    let is_side_chat =
+        |c: &Chat| c.temporary && c.parent_chat_id.as_ref().is_some_and(|p| p.is_some());
     chats
         .into_iter()
-        .filter(|c| {
-            let is_side_chat =
-                c.temporary && c.parent_chat_id.as_ref().is_some_and(|p| p.is_some());
-            !is_side_chat && (include_temporary || !c.temporary)
-        })
+        .filter(|c| !is_side_chat(c) && (include_temporary || !c.temporary))
         .collect()
 }
 
-async fn list_for_project(
+pub(crate) async fn list_for_project(
     State(ctx): State<Arc<AppCtx>>,
     Path(project_id): Path<String>,
     Query(q): Query<ListForProjectQuery>,
@@ -903,92 +896,7 @@ mod tests {
         assert!(included.contains(&temp_id));
     }
 
-    // ── side chats are never listed, even with includeTemporary (todo #344,
-    // rule 7) ──────────────────────────────────────────────────────────────────
-
-    async fn seed_a_side_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
-        ctx.db
-            .call(|db| {
-                let project = db.projects.create("/tmp/side-chat-list", None)?;
-                let parent = db.chats.create(&mainframe_types::chat::NewChat {
-                    project_id: project.id.clone(),
-                    adapter_id: "claude".to_string(),
-                    ..Default::default()
-                })?;
-                let (side, _created) = db.chats.find_or_create_side_chat(&parent)?;
-                Ok((project.id, parent.id, side.id))
-            })
-            .await
-            .unwrap()
-    }
-
-    #[tokio::test]
-    async fn list_never_returns_a_side_chat_with_or_without_include_temporary() {
-        let ctx = AppCtx::test_ctx();
-        let (_, parent_id, side_id) = seed_a_side_chat(&ctx).await;
-
-        let excluded = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
-        assert!(excluded.contains(&parent_id));
-        assert!(!excluded.contains(&side_id));
-
-        let included = ids_of(
-            list(
-                State(ctx.clone()),
-                Query(ListQuery {
-                    project: None,
-                    tags: None,
-                    synthetic: None,
-                    include_temporary: Some(true),
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(!included.contains(&side_id));
-    }
-
-    #[tokio::test]
-    async fn list_for_project_never_returns_a_side_chat_with_or_without_include_temporary() {
-        let ctx = AppCtx::test_ctx();
-        let (project_id, parent_id, side_id) = seed_a_side_chat(&ctx).await;
-
-        let excluded = ids_of(
-            list_for_project(
-                State(ctx.clone()),
-                Path(project_id.clone()),
-                Query(ListForProjectQuery {
-                    include_temporary: None,
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(excluded.contains(&parent_id));
-        assert!(!excluded.contains(&side_id));
-
-        let included = ids_of(
-            list_for_project(
-                State(ctx.clone()),
-                Path(project_id),
-                Query(ListForProjectQuery {
-                    include_temporary: Some(true),
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(!included.contains(&side_id));
-    }
-
-    #[tokio::test]
-    async fn get_one_still_returns_a_side_chat_directly() {
-        let ctx = AppCtx::test_ctx();
-        let (_, _parent_id, side_id) = seed_a_side_chat(&ctx).await;
-        let (status, body) = read(get_one(State(ctx.clone()), Path(side_id.clone())).await).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["data"]["id"], side_id);
-    }
-
+    // Side-chat listing-exclusion tests moved to routes/chat_side_chat/tests.rs.
     // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
     // real ChatManager) ───────────────────────────────────────────────────────
 
