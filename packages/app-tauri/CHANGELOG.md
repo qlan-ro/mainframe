@@ -1,5 +1,18 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.2.0
+
+### Minor Changes
+
+- [#723](https://github.com/qlan-ro/mainframe/pull/723) [`42247b2`](https://github.com/qlan-ro/mainframe/commit/42247b286a41e12d8c0cbc988d0ed19e48fe1c0c) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Codex chats can now fork through the same Fork menu item, REST route and `parentChatId` lineage [#343](https://github.com/qlan-ro/mainframe/issues/343) built for Claude ([#368](https://github.com/qlan-ro/mainframe/issues/368)). Forking calls the app-server's `thread/fork` RPC with the parent's thread id and its last completed turn, so the new chat inherits the parent's history up to the fork point while the parent's own thread and turns stay untouched; the new thread's `forkedFromId` records the lineage. The capability is version-gated on Codex CLI 0.143.0 or newer (the first release with `thread/fork`'s turn-level pinning) — on an older CLI the Fork menu item and the REST route's 422 both show a version-specific reason instead of the generic "isn't available" copy, and the adapter registry now recomputes capabilities after every refresh so the UI never gets stuck on a stale pre-refresh snapshot.
+
+- [#726](https://github.com/qlan-ro/mainframe/pull/726) [`3b3f733`](https://github.com/qlan-ro/mainframe/commit/3b3f733836c9092148a7b095041c97d5d1839be4) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Adds daemon support for side chats ([#344](https://github.com/qlan-ro/mainframe/issues/344)): a temporary, parented chat opened from any chat's own project, adapter and working directory, always empty and never listed as a session. `POST /api/chats/{id}/side-chat` opens or reveals a parent's one side chat; discarding it, archiving its parent, or removing its parent's project all tear it down. When the parent's adapter reports the no-persistence capability, the side chat's spawn carries that option through the existing temporary-chat spawn seam ([#346](https://github.com/qlan-ro/mainframe/issues/346)) with no new adapter code — after a daemon restart its row and parent relationship survive but its conversation does not, and the next message starts a fresh vendor session.
+
+### Patch Changes
+
+- Updated dependencies [[`42247b2`](https://github.com/qlan-ro/mainframe/commit/42247b286a41e12d8c0cbc988d0ed19e48fe1c0c), [`ca40380`](https://github.com/qlan-ro/mainframe/commit/ca40380a1ce06958d2ded441c0a6c3ece16b42e7), [`3b3f733`](https://github.com/qlan-ro/mainframe/commit/3b3f733836c9092148a7b095041c97d5d1839be4), [`e81b98b`](https://github.com/qlan-ro/mainframe/commit/e81b98be207c5b713d1d0b7e7ee9e7b14852100f), [`e81b98b`](https://github.com/qlan-ro/mainframe/commit/e81b98be207c5b713d1d0b7e7ee9e7b14852100f)]:
+  - @qlan-ro/mainframe-ui@2.5.0
+
 ## 2.1.0
 
 ### Minor Changes
