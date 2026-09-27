@@ -167,7 +167,7 @@ export function ProviderModelSelect({
 
   const active = adapter ?? adapters.find((a) => a.installed) ?? adapters[0] ?? null;
   const currentModelId = model?.id ?? chat.model ?? '';
-  const rows = modelRows(active, chat.model);
+  const rows = modelRows(active, currentModelId);
   const { current, older, groups } = partitionModels(rows);
   const displayedModel = runningModel ?? model;
   const modelLabel =

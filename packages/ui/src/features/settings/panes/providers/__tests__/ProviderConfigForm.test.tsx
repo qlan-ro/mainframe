@@ -151,3 +151,16 @@ describe('ProviderConfigForm', () => {
     expect(option).toHaveTextContent('Ultra');
   });
 });
+
+it('shows one readable context choice while preserving the saved provider alias', () => {
+  const large = { id: 'opus[1m]', label: 'Opus 5.5', resolvedModel: 'claude-opus-5-5[1m]', contextWindow: 1_000_000 };
+  const catalog = { ...adapter, models: [large, { ...large, id: 'opus', resolvedModel: 'claude-opus-5-5' }] };
+  useSettingsStore.setState({ providers: { claude: { defaultModel: 'opus[1m]' } } });
+  render(<ProviderConfigForm port={31415} adapterId="claude" label="Claude" adapter={catalog} />);
+  const trigger = screen.getByTestId('settings-claude-model-dropdown-trigger');
+  expect(trigger).toHaveTextContent('Opus 5.5 · 1M');
+  fireEvent.pointerDown(trigger, { button: 0 });
+  expect(screen.getByTestId('settings-claude-model-option-opus[1m]')).toHaveTextContent('Opus 5.5 · 1M');
+  expect(screen.queryByTestId('settings-claude-model-option-opus')).not.toBeInTheDocument();
+  expect(useSettingsStore.getState().providers.claude?.defaultModel).toBe('opus[1m]');
+});

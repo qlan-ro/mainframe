@@ -132,10 +132,10 @@ describe('ChatModelChip — renders nothing when config is absent', () => {
 // ---------------------------------------------------------------------------
 
 describe('ChatModelChip', () => {
-  it('shows the model label "Sonnet 4.6" from the adapters registry', () => {
+  it('shows the model label and reported context from the adapters registry', () => {
     render(<ChatModelChip />);
 
-    expect(screen.getByTestId('chat-header-model').textContent).toBe('Sonnet 4.6');
+    expect(screen.getByTestId('chat-header-model').textContent).toBe('Sonnet 4.6 · 200K');
   });
 
   it('falls back to chat.model when the model is not found in the adapter registry', () => {
@@ -181,4 +181,18 @@ it('preserves an unknown saved model when the process is stopped', () => {
   );
   render(<ChatModelChip />);
   expect(screen.getByTestId('chat-header-model')).toHaveTextContent('private-model');
+});
+
+it('resolves a saved alias to the same named context shown in the picker', () => {
+  vi.mocked(useAdapters).mockReturnValue([
+    {
+      ...ADAPTER_CLAUDE,
+      models: [{ id: 'opus', label: 'Opus 5.5', resolvedModel: 'claude-opus-5-5', contextWindow: 1_000_000 }],
+    },
+  ]);
+  vi.mocked(useChatExtras).mockReturnValue(
+    makeExtras(stateWithChat(makeChat({ model: 'opus' }))) as ReturnType<typeof useChatExtras>,
+  );
+  render(<ChatModelChip />);
+  expect(screen.getByTestId('chat-header-model')).toHaveTextContent('Opus 5.5 · 1M');
 });

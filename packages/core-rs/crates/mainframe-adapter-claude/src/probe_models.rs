@@ -133,35 +133,41 @@ pub struct ProbeResult {
     pub resolved_model: Option<String>,
 }
 
-fn separate_default_selection(models: Vec<AdapterModel>) -> Vec<AdapterModel> {
-    let default = models.iter().find(|m| m.id == "default");
-    let pinned = default.and_then(|model| {
-        let resolved = model
-            .resolved_model
-            .as_deref()
-            .filter(|id| !id.is_empty() && *id != "default")?;
-        let mut pinned = model.clone();
-        pinned.id = resolved.to_string();
-        pinned.label = extract_identity(model.description.as_deref())
-            .map(|identity| strip_with_tail(&identity))
-            .unwrap_or_else(|| resolved.to_string());
-        pinned.is_default = None;
-        Some(pinned)
-    });
-    let mut result = Vec::new();
-    for model in models {
-        if model.id == "default" {
-            result.push(model);
-            if let Some(pinned) = &pinned {
-                result.push(pinned.clone());
-            }
-        } else if !pinned.as_ref().is_some_and(|p| {
-            model.id == p.id || model.resolved_model.as_deref() == Some(p.id.as_str())
-        }) {
-            result.push(model);
+fn separate_default_selection(mut models: Vec<AdapterModel>) -> Vec<AdapterModel> {
+    let Some(default_index) = models.iter().position(|m| m.id == "default") else {
+        return models;
+    };
+    let mut pinned = models[default_index].clone();
+    let Some(resolved) = pinned
+        .resolved_model
+        .as_deref()
+        .filter(|id| !id.is_empty() && *id != "default")
+        .map(str::to_owned)
+    else {
+        return models;
+    };
+    pinned.id = resolved.clone();
+    pinned.label = extract_identity(pinned.description.as_deref())
+        .map(|identity| strip_with_tail(&identity))
+        .unwrap_or_else(|| resolved.clone());
+    pinned.is_default = None;
+    let mut has_explicit = false;
+    for model in &mut models {
+        if model.id != "default"
+            && (model.id == resolved || model.resolved_model.as_deref() == Some(&resolved))
+        {
+            has_explicit = true;
+            model.label = if model.label.is_empty() {
+                pinned.label.clone()
+            } else {
+                strip_with_tail(&model.label)
+            };
         }
     }
-    result
+    if !has_explicit {
+        models.insert(default_index + 1, pinned);
+    }
+    models
 }
 
 /// Parse the (possibly double-wrapped) `initialize` control_response.

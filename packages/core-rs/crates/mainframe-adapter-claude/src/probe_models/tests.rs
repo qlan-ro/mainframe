@@ -152,7 +152,7 @@ fn carries_each_entry_own_resolved_model_onto_the_mapped_model() {
 }
 
 #[test]
-fn keeps_inheritance_and_pins_the_resolved_default_model() {
+fn keeps_inheritance_and_the_explicit_cli_alias() {
     let event = json!({
         "type": "control_response",
         "response": { "response": { "models": [
@@ -174,7 +174,7 @@ fn keeps_inheritance_and_pins_the_resolved_default_model() {
     let out = extract_probe_payload(&event).unwrap();
     assert_eq!(
         out.models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
-        vec!["default", "claude-opus-4-8[1m]", "sonnet"]
+        vec!["default", "opus[1m]", "sonnet"]
     );
     assert_eq!(out.models[0].label, "Use CLI setting");
     assert_eq!(out.models[0].is_default, Some(true));

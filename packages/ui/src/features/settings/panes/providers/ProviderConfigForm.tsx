@@ -1,5 +1,5 @@
 import { useCliModel } from '@/lib/use-cli-model';
-import { selectedModel, withCliModel } from '@/lib/cli-model';
+import { modelChoices, selectedModel, withCliModel } from '@/lib/cli-model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AdapterInfo, ProviderConfig, ProviderConfigUpdate } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
@@ -41,10 +41,10 @@ function applyUpdate(port: number, adapterId: string, partial: ProviderConfigUpd
   );
 }
 
-function buildModelOptions(adapter: AdapterInfo) {
+function buildModelOptions(adapter: AdapterInfo, selectedId?: string) {
   return [
     { id: 'default', label: adapter.models.find((m) => m.id === 'default')?.label ?? 'Use CLI setting' },
-    ...adapter.models
+    ...modelChoices(adapter, selectedId)
       .filter((m) => m.id !== 'default')
       .map((m) => ({
         id: m.id,
@@ -96,10 +96,7 @@ export function ProviderConfigForm({ port, adapterId, label, adapter: catalog }:
   }
 
   const defaultModel = selectedModel(adapter, config.defaultModel);
-  const modelOptions = buildModelOptions(adapter);
-  if (config.defaultModel && !modelOptions.some((model) => model.id === config.defaultModel)) {
-    modelOptions.push({ id: config.defaultModel, label: config.defaultModel });
-  }
+  const modelOptions = buildModelOptions(adapter, config.defaultModel);
 
   return (
     <div data-testid={`settings-pane-provider-${adapterId}`} className="flex flex-col gap-4">
