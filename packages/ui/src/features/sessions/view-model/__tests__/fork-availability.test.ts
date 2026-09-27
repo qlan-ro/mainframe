@@ -87,4 +87,29 @@ describe('forkAvailability', () => {
       reason: "Forking isn't available for Codex chats yet",
     });
   });
+
+  it('a version-specific capability reason overrides the generic no-capability copy (todo #368)', () => {
+    expect(
+      forkAvailability({
+        ...BASE,
+        capabilityFork: false,
+        claudeSessionId: undefined,
+        capabilityReason: 'Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)',
+      }),
+    ).toEqual({
+      enabled: false,
+      reason: 'Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)',
+    });
+  });
+
+  it('falls back to the generic no-capability copy when no reason is given', () => {
+    expect(forkAvailability({ ...BASE, capabilityFork: false, claudeSessionId: undefined })).toEqual({
+      enabled: false,
+      reason: "Forking isn't available for Codex chats yet",
+    });
+  });
+
+  it('ignores a capability reason when fork is actually available', () => {
+    expect(forkAvailability({ ...BASE, capabilityReason: 'stale reason' })).toEqual({ enabled: true });
+  });
 });

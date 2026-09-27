@@ -41,6 +41,13 @@ export interface SessionResult {
 export interface ForkSource {
   sourceSessionId: string;
   resumePath?: string;
+  /**
+   * The parent turn a Codex fork is pinned through (inclusive); mirrors the
+   * Rust `ForkSource.last_turn_id` (todo #368). Absent for an adapter with no
+   * turn-granular pin (Claude's snapshot-copy fork) or when the pin covers
+   * every turn the parent had at click time.
+   */
+  lastTurnId?: string;
 }
 
 export interface SessionOptions {
@@ -291,6 +298,13 @@ export interface AdapterInfo {
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
   };
+  /**
+   * Why `capabilities.fork` is currently false (todo #368), e.g. a CLI below
+   * the version that introduced the fork RPC. Mirrors the Rust
+   * `AdapterInfo.fork_unavailable_reason`. Absent when fork is available or
+   * the adapter has no version-gated fork story.
+   */
+  forkUnavailableReason?: string;
 }
 
 /**
