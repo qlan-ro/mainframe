@@ -111,6 +111,18 @@ export interface Chat {
    * parent". Survives archive/unarchive; never cascades from the parent.
    */
   parentChatId?: string | null;
+  /**
+   * The id of this chat's side chat (todo #344), derived on every DB read by a
+   * correlated subquery — never stored. Absent when the chat has none.
+   */
+  sideChatId?: string | null;
+  /**
+   * True when this chat's side chat has a pending permission or question. Set
+   * only when `sideChatId` is present. `displayStatus`/`isRunning` stay this
+   * chat's own — this field alone carries the side chat's waiting state onto
+   * the parent's badge (todo #344).
+   */
+  sideChatWaiting?: boolean;
 }
 
 export interface Project {

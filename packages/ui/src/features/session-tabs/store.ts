@@ -10,6 +10,7 @@
  * that translation (restore on hydrate, persist on change) via `tabs-model`.
  */
 import { create } from 'zustand';
+import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
 import type { TabSlot, TabsState } from './tabs-model';
 
 interface SessionTabsStore extends TabsState {
@@ -60,6 +61,9 @@ export const useSessionTabsStore = create<SessionTabsStore>((set) => ({
     })),
   ensureTab: (id, slot = 'preview') =>
     set((s) => {
+      // A side chat is never a session: no tab strip, no pinned/preview/draft
+      // slot (todo #344, UI rule 2). The panel is reached through its parent.
+      if (isRegisteredSideChatId(id)) return s;
       if (s.tabIds.includes(id) || s.previewId === id || s.draftId === id) return s;
       if (slot === 'pinned') return { tabIds: [...s.tabIds, id] };
       if (slot === 'draft') return { draftId: id };
@@ -67,6 +71,7 @@ export const useSessionTabsStore = create<SessionTabsStore>((set) => ({
     }),
   pinTab: (id) =>
     set((s) => {
+      if (isRegisteredSideChatId(id)) return s;
       if (s.tabIds.includes(id)) return s;
       if (s.previewId === id) return { tabIds: [...s.tabIds, id], previewId: null };
       if (s.draftId === id) return { tabIds: [...s.tabIds, id], draftId: null };

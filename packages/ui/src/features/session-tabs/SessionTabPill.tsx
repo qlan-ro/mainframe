@@ -44,6 +44,14 @@ export interface SessionTabEntry {
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
   forkAvailability: ForkAvailability;
+  /**
+   * The chat's own pending gate OR its side chat's (todo #344) — distinct from
+   * `forkAvailability`'s internal `hasPending` check, which stays the chat's
+   * own value so fork gating is unaffected by a side chat waiting.
+   */
+  hasPending: boolean;
+  /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
+  canOpenSideChat: boolean;
 }
 
 interface SessionTabPillProps {
@@ -61,6 +69,7 @@ interface SessionTabPillProps {
   onOpenInSplit: (id: string) => void;
   onCloseSplit: (id: string) => void;
   onFork: (id: string) => void;
+  onOpenSideChat: (id: string) => void;
 }
 
 export function SessionTabPill({
@@ -74,6 +83,7 @@ export function SessionTabPill({
   onOpenInSplit,
   onCloseSplit,
   onFork,
+  onOpenSideChat,
 }: SessionTabPillProps) {
   // Drag-to-split: a press that travels DRAG_THRESHOLD becomes a tab drag
   // (tab-drag-store; ZoneDropLayer renders the targets and handles the drop).
@@ -119,6 +129,8 @@ export function SessionTabPill({
       onClose={() => onClose(tab.id)}
       forkAvailability={tab.forkAvailability}
       onFork={() => onFork(tab.id)}
+      canOpenSideChat={tab.canOpenSideChat}
+      onOpenSideChat={() => onOpenSideChat(tab.id)}
     >
       <div
         data-testid={`session-tab-${tab.id}`}

@@ -209,6 +209,31 @@ describe('chatToThreadCustom — fork lineage & turn-in-flight fields (todo #343
   ]);
 });
 
+describe('chatToThreadCustom — side chat fields (todo #344)', () => {
+  runFieldRows([
+    ['custom.sideChatId is undefined when chat.sideChatId is absent', {}, (r) => r.custom.sideChatId, undefined],
+    [
+      'custom.sideChatId forwards chat.sideChatId when set',
+      { sideChatId: 'chat-side-1' },
+      (r) => r.custom.sideChatId,
+      'chat-side-1',
+    ],
+    ['custom.sideChatId forwards an explicit null', { sideChatId: null }, (r) => r.custom.sideChatId, null],
+    [
+      'custom.sideChatWaiting defaults to false when chat.sideChatWaiting is absent',
+      {},
+      (r) => r.custom.sideChatWaiting,
+      false,
+    ],
+    [
+      'custom.sideChatWaiting is true when chat.sideChatWaiting is true',
+      { sideChatWaiting: true },
+      (r) => r.custom.sideChatWaiting,
+      true,
+    ],
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // activeSessionCustom — freshest custom for the ACTIVE thread-list item
 // ---------------------------------------------------------------------------

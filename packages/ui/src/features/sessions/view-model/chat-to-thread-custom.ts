@@ -61,6 +61,19 @@ export interface SessionCustom {
    * background tasks also set. Same optionality note as `directoryMissing`.
    */
   isRunning?: boolean;
+  /**
+   * The id of this chat's side chat (todo #344), or absent/null for none.
+   * Never a session in its own right — the UI learns which side chat a parent
+   * has from this field, projected straight off the REST list/fetch.
+   */
+  sideChatId?: string | null;
+  /**
+   * True when this chat's side chat has a pending permission or question.
+   * `hasPending` above stays this chat's OWN value (fork-availability reads
+   * it), so the badge derivation ORs this in separately (see
+   * `deriveSessionBadge`).
+   */
+  sideChatWaiting?: boolean;
 }
 
 export interface SessionItem {
@@ -102,6 +115,8 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     parentChatId: chat.parentChatId,
     directoryMissing: chat.directoryMissing ?? false,
     isRunning: chat.isRunning ?? false,
+    sideChatId: chat.sideChatId,
+    sideChatWaiting: chat.sideChatWaiting ?? false,
   };
   return {
     status: chat.status === 'archived' ? 'archived' : 'regular',

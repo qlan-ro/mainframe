@@ -39,6 +39,8 @@ vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
 }));
 
 vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => forkFn }));
+// Side chat's own daemon call has its own suite; irrelevant to fork gating here.
+vi.mock('@/features/side-chat/use-open-side-chat', () => ({ useOpenSideChat: () => vi.fn() }));
 
 import { SessionTabs } from '../SessionTabs';
 

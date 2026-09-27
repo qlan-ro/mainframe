@@ -31,6 +31,7 @@
  */
 import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
+import { isRegisteredSideChatId, isSideChat } from '../../side-chat/side-chat-ids';
 
 export interface SessionListRouterDeps {
   onReload: () => void;
@@ -85,12 +86,17 @@ export class SessionListRouter {
         } else {
           this.deps.onReload();
         }
-        if (chatUpdatedNeedsAttention(event)) this.deps.onMarkUnread(event.chat.id);
+        // A side chat is never a session — it has no unread badge to raise
+        // (todo #344). It still reloads above, so the parent's own
+        // `sideChatId`/`sideChatWaiting` projection stays current.
+        if (!isSideChat(event.chat) && chatUpdatedNeedsAttention(event)) this.deps.onMarkUnread(event.chat.id);
         return;
 
       case 'chat.notification':
         if (event.kind === 'attention_request') this.deps.onOsNotify?.(event.title, event.body);
-        this.deps.onMarkUnread(event.chatId);
+        // Same exclusion as chat.updated above; this event carries only the
+        // id, so the registry (not the Chat's own fields) is what's checked.
+        if (!isRegisteredSideChatId(event.chatId)) this.deps.onMarkUnread(event.chatId);
         return;
 
       case 'background_task.started':

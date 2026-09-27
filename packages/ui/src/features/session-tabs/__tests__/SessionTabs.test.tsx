@@ -38,6 +38,8 @@ vi.mock('@/features/sessions/use-projects', () => ({
 // Fork's own daemon call + useDaemonPort/useAui plumbing has its own suite
 // (use-fork-chat.test.tsx); irrelevant to this strip's rendering/switching.
 vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn() }));
+// Same reasoning for useOpenSideChat (todo #344) — its own suite covers the call.
+vi.mock('@/features/side-chat/use-open-side-chat', () => ({ useOpenSideChat: () => vi.fn() }));
 
 vi.mock('@/features/sessions/new-thread/use-start-new-session', () => ({
   useStartNewSession: () => newSession,

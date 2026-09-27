@@ -166,3 +166,14 @@ export const discardChat = (port: number, chatId: string): Promise<void> =>
  */
 export const forkChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/fork`);
+
+/**
+ * Open (or reveal) a chat's side chat (todo #344). Idempotent — a parent with
+ * an existing side chat returns that one rather than creating a second. No
+ * body; the daemon's `deny_unknown_fields` empty struct accepts either no
+ * body or `{}`. On failure (404 unknown parent, 409 archived/side-chat
+ * parent/missing directory) the daemon's `fail` message surfaces via
+ * `ApiRequestError.message`.
+ */
+export const openSideChat = (port: number, parentChatId: string): Promise<Chat> =>
+  request<Chat>('POST', `${apiBase(port)}/api/chats/${parentChatId}/side-chat`);

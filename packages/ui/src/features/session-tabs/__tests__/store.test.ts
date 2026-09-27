@@ -7,14 +7,19 @@
  * being restored. The third slot (the protected draft) lives in
  * store.draft.test.ts.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useSessionTabsStore } from '../store';
+import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
 const pinned = () => useSessionTabsStore.getState().tabIds;
 const preview = () => useSessionTabsStore.getState().previewId;
 
 beforeEach(() => {
   useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
+});
+
+afterEach(() => {
+  __resetSideChatRegistryForTests();
 });
 
 describe('ensureTab', () => {
@@ -79,6 +84,25 @@ describe('ensureTab', () => {
   });
 });
 
+describe('ensureTab — refuses a registered side-chat id (todo #344)', () => {
+  it('never opens a side chat into the preview slot', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+
+    useSessionTabsStore.getState().ensureTab('chat-side-1');
+
+    expect(pinned()).toEqual([]);
+    expect(preview()).toBeNull();
+  });
+
+  it('never opens a side chat into the pinned set', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+
+    useSessionTabsStore.getState().ensureTab('chat-side-1', 'pinned');
+
+    expect(pinned()).toEqual([]);
+  });
+});
+
 describe('pinTab', () => {
   it('moves the previewed session into the pinned set and empties the slot', () => {
     useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'p' });
@@ -107,6 +131,16 @@ describe('pinTab', () => {
 
     expect(pinned()).toEqual(['a']);
     expect(preview()).toBe('p');
+  });
+
+  it('refuses to pin a registered side-chat id, even if somehow previewed (todo #344)', () => {
+    registerSideChat('chat-side-1', 'chat-parent');
+    useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'chat-side-1' });
+
+    useSessionTabsStore.getState().pinTab('chat-side-1');
+
+    expect(pinned()).toEqual(['a']);
+    expect(preview()).toBe('chat-side-1');
   });
 });
 

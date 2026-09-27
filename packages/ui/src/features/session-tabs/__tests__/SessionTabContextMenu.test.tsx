@@ -10,7 +10,13 @@ import { SessionTabContextMenu } from '../SessionTabContextMenu';
 import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
 
 function renderMenu(
-  overrides: Partial<{ inSplit: boolean; canOpenInSplit: boolean; preview: boolean }> = {},
+  overrides: Partial<{
+    inSplit: boolean;
+    canOpenInSplit: boolean;
+    preview: boolean;
+    canOpenSideChat: boolean;
+    onOpenSideChat: () => void;
+  }> = {},
   forkAvailability: ForkAvailability = { enabled: true },
   onFork = vi.fn(),
 ) {
@@ -26,6 +32,8 @@ function renderMenu(
         onClose={vi.fn()}
         forkAvailability={forkAvailability}
         onFork={onFork}
+        canOpenSideChat={overrides.canOpenSideChat ?? false}
+        onOpenSideChat={overrides.onOpenSideChat ?? vi.fn()}
       >
         <div>tab</div>
       </SessionTabContextMenu>
@@ -89,5 +97,23 @@ describe('SessionTabContextMenu — Fork disabled', () => {
 
     fireEvent.click(fork);
     expect(onFork).not.toHaveBeenCalled();
+  });
+});
+
+describe('SessionTabContextMenu — Open Side Chat (todo #344)', () => {
+  it('renders for a regular tab and calls onOpenSideChat when selected', () => {
+    const onOpenSideChat = vi.fn();
+    renderMenu({ canOpenSideChat: true, onOpenSideChat });
+
+    const item = screen.getByTestId('session-tab-ctx-side-chat');
+    expect(item).toBeInTheDocument();
+    fireEvent.click(item);
+    expect(onOpenSideChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('is hidden for a draft tab (canOpenSideChat false)', () => {
+    renderMenu({ canOpenSideChat: false });
+
+    expect(screen.queryByTestId('session-tab-ctx-side-chat')).toBeNull();
   });
 });

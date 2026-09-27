@@ -13,7 +13,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import { Columns2, GitFork, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
+import { Columns2, GitFork, MessageSquarePlus, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -37,6 +37,9 @@ interface SessionTabContextMenuProps {
   onClose: () => void;
   forkAvailability: ForkAvailability;
   onFork: () => void;
+  /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
+  canOpenSideChat: boolean;
+  onOpenSideChat: () => void;
   children: ReactNode;
 }
 
@@ -50,6 +53,8 @@ export function SessionTabContextMenu({
   onClose,
   forkAvailability,
   onFork,
+  canOpenSideChat,
+  onOpenSideChat,
   children,
 }: SessionTabContextMenuProps) {
   return (
@@ -89,6 +94,12 @@ export function SessionTabContextMenu({
               </ContextMenuItem>
             </span>
           </Hint>
+        )}
+        {canOpenSideChat && (
+          <ContextMenuItem data-testid="session-tab-ctx-side-chat" onSelect={onOpenSideChat}>
+            <MessageSquarePlus />
+            Open Side Chat
+          </ContextMenuItem>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem data-testid="session-tab-ctx-close" onSelect={onClose}>

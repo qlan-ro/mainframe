@@ -21,6 +21,8 @@ import { deriveSessionBadge } from '@/features/sessions/view-model/session-statu
 import { isSessionUnread } from '@/features/sessions/view-model/session-unread';
 import { useUnreadStore } from '@/store/unread-store';
 import { SessionRowItemScope } from '@/features/sessions/SessionRowItemScope';
+import { isSideChat } from '@/features/side-chat/side-chat-ids';
+import { useOpenSideChat } from '@/features/side-chat/use-open-side-chat';
 import { RowHoverActions } from './SessionRowHoverActions';
 import { SessionContextMenu } from './SessionContextMenu';
 import { SessionMetaCard } from './SessionMetaCard';
@@ -70,6 +72,10 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const [hovered, setHovered] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
   const actions = useRowActions(item);
+  const openSideChat = useOpenSideChat();
+  // A draft has no chat id, an archived row 409s the daemon open route, and a
+  // side chat can't get a side chat of its own (todo #344).
+  const canOpenSideChat = item.status === 'regular' && !isSideChat(custom);
   // Captured on right-click so the menu's Tags action anchors the popover at the
   // cursor rather than at the host's default (0,0).
   const menuPoint = useRef<{ x: number; y: number } | null>(null);
@@ -118,6 +124,8 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       }}
       forkAvailability={actions.forkAvailability}
       onFork={actions.onFork}
+      canOpenSideChat={canOpenSideChat}
+      onOpenSideChat={() => void openSideChat(item.id)}
       claudeSessionId={custom.claudeSessionId}
     >
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
