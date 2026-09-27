@@ -1,6 +1,6 @@
 //! Wiring-level regression coverage for #289: the daemon's production
 //! `ChatManagerDeps` (`DaemonChatDeps`, assembled by `build_chat_manager`) must
-//! delegate `is_transcript_present` to the registry-resolved adapter, and the
+//! delegate `locate_transcript` to the registry-resolved adapter, and the
 //! external-session sweep's `reconcile_transcript` callback must reach
 //! `ChatManager::reconcile_transcript`. Unlike `mainframe-chat`'s
 //! `transcript_presence` unit tests — which call the reconciliation function
@@ -16,7 +16,10 @@ mod transcript_presence_support;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use transcript_presence_support::{PredicateOutcome, StubAdapter, harness, persisted_missing};
+use transcript_presence_support::{
+    PRESENT_AT, PredicateOutcome, StubAdapter, harness, persisted_missing,
+    persisted_session_file_path,
+};
 
 #[tokio::test]
 async fn absent_transcript_flips_the_persisted_flag_and_broadcasts() {
@@ -50,6 +53,18 @@ async fn present_transcript_clears_a_stale_flag() {
         .await
         .expect("chat.updated within 5s");
     assert_eq!(chat.transcript_missing, Some(false));
+}
+
+/// The CLI moves the transcript when the session changes directory; the path
+/// the adapter found must reach the chat row, which the tool-result route reads.
+#[tokio::test]
+async fn a_found_transcript_path_is_persisted_to_the_chat_row() {
+    let adapter = StubAdapter::new("stub-adapter", PredicateOutcome::Present);
+    let h = harness(Some(adapter), Some(false));
+
+    h.manager.get_display_messages(&h.chat_id).await;
+
+    assert_eq!(persisted_session_file_path(&h).as_deref(), Some(PRESENT_AT));
 }
 
 #[tokio::test]

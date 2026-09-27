@@ -165,18 +165,18 @@ pub trait ChatManagerDeps: Send + Sync {
     /// `db.chats.clearWorktree(chatId)` — NULL worktree_path/branch_name.
     /// Required (not a no-op default): `continue-in-project-root` relies on it persisting.
     fn chats_clear_worktree(&self, chat_id: &str);
-    /// `adapters.get(adapterId)?.isTranscriptPresent(sessionId, projectPath, sessionFilePath)`.
-    /// `None` = presence cannot be determined (missing predicate / null / error).
+    /// `adapters.get(adapterId)?.locateTranscript(sessionId, projectPath, sessionFilePath)`.
+    /// `None` = the location cannot be determined (no adapter / no layout / error).
     /// Required, not defaulted: an implementation that silently inherited a `None`
     /// default left transcript-presence reconciliation permanently inert in
     /// production — same class as #273 (#289).
-    fn is_transcript_present<'a>(
+    fn locate_transcript<'a>(
         &'a self,
         adapter_id: &'a str,
         session_id: &'a str,
         project_path: &'a str,
         session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>>;
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>>;
     /// `adapters.getSnapshots().find(id)?.models ?? []` — the adapter's catalog for
     /// the lifecycle default-model normalization. Required, not defaulted: an
     /// implementation that silently inherited the empty default made

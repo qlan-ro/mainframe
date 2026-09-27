@@ -30,8 +30,8 @@ impl WorktreeOfferRegistry {
         chat.pending.clear();
     }
 
-    /// Sync and cheap — the sink calls it on every confirmed worktree-ish tool
-    /// result. A burst collapses into the running scan plus one trailing rescan.
+    /// Sync and cheap — the sink calls it on every confirmed worktree-creating
+    /// tool result. A burst collapses into the running scan plus one trailing rescan.
     pub fn on_trigger(self: &Arc<Self>, chat_id: &str) {
         {
             let mut state = self.lock();

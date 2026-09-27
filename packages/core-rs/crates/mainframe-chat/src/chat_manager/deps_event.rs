@@ -79,6 +79,20 @@ impl EventHandlerDeps for EhDeps {
     fn on_worktree_trigger(&self, chat_id: &str) {
         self.worktree_offers.on_trigger(chat_id);
     }
+    fn on_transcript_moved(&self, chat_id: &str) {
+        let Some(cell) = self.get_active_chat(chat_id) else {
+            return;
+        };
+        let mut chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let presence = PresenceDeps {
+            deps: self.deps.clone(),
+            active_chats: self.active_chats.clone(),
+            permissions: self.permissions.clone(),
+        };
+        tokio::spawn(async move {
+            crate::transcript_presence::refresh_transcript_location(&presence, &mut chat).await;
+        });
+    }
     fn tracker_end_all_running(&self, chat_id: &str) {
         self.deps.tracker_end_all_running(chat_id);
     }

@@ -68,7 +68,6 @@ pub use external_sessions::{clear_codex_external_session_cache, list_external_se
 pub use plan_mode_handler::CodexPlanModeHandler;
 pub use quota_identity::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
 pub use session::{CodexScanDeps, CodexSession};
-pub use transcript::is_codex_transcript_present;
 
 // PORT STATUS: src/plugins/builtin/codex/index.ts (8 lines)
 // confidence: high

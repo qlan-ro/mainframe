@@ -443,15 +443,29 @@ impl ChatManagerDeps for StoreDeps {
     fn tracker_end_all_running(&self, _chat_id: &str) {}
     /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    fn is_transcript_present<'a>(
+    /// `transcript_present` = `Some(true)` reports the transcript where the chat
+    /// row says it is, so presence tests never also re-point the path.
+    fn locate_transcript<'a>(
         &'a self,
         _adapter_id: &'a str,
-        _session_id: &'a str,
+        session_id: &'a str,
         _project_path: &'a str,
-        _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
+        use mainframe_types::transcript::TranscriptLocation;
         let present = *self.transcript_present.lock().unwrap();
-        Box::pin(async move { present })
+        let path = session_file_path
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
+        Box::pin(async move {
+            present.map(|present| {
+                if present {
+                    TranscriptLocation::Present(path)
+                } else {
+                    TranscriptLocation::Missing
+                }
+            })
+        })
     }
     fn chats_clear_session(&self, chat_id: &str) {
         if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
