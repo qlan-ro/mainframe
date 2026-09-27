@@ -13,6 +13,17 @@
  * A pending gate expands the panel while the parent is on screen (rule 8) —
  * this host is what "the parent is on screen" means.
  *
+ * Also marks the controller `active` for as long as this host is mounted
+ * (todo #344 QA fix, AC 11): the facade plane's transcript subscription is
+ * gated on `setActive`, same as the main chat runtime (D2 dormancy,
+ * `chat-activation.ts`) — a side chat that never activates never attaches,
+ * so `session/update`s land nowhere and the transcript stays empty even
+ * while messages are live-streaming. Switching to a different session
+ * unmounts this host (its `parentChatId`/`sideChatId` no longer resolve) and
+ * `setActive(false)` detaches without losing the accumulator; switching back
+ * remounts and `setActive(true)` reactivates from the last settled item — a
+ * cursor resume, not a full replay, so no new CLI process spawns.
+ *
  * The parent's own `sideChatId` (read via `useChatExtras`, bound to whichever
  * thread context this host is mounted under — the main thread, or a zone's
  * rebound one) is the sole source of truth: it disappears reactively on the
@@ -36,9 +47,13 @@ export function SideChatHost({ parentChatId }: { parentChatId: string | null }) 
 
   useEffect(() => {
     if (!controller) return;
+    controller.setActive(true);
     void controller.load();
     const stop = controller.subscribeLive();
-    return stop;
+    return () => {
+      stop();
+      controller.setActive(false);
+    };
   }, [controller]);
 
   // A gate raised while the parent is on screen expands the panel (rule 8).

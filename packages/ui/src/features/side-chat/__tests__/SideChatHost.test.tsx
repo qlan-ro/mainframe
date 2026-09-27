@@ -8,7 +8,11 @@
  *    regardless (rule 8) — collapsing never tears down the subscription;
  *  - a side chat removed from another client (sideChatId clears) makes the
  *    panel disappear with no error;
- *  - a pending gate expands the panel while the parent is on screen.
+ *  - a pending gate expands the panel while the parent is on screen;
+ *  - the controller is marked active while this host is mounted, and
+ *    inactive again once it unmounts (todo #344 QA fix, AC 11) — the facade
+ *    plane only attaches/reactivates while active, so without this the
+ *    transcript never populates, live or on a switch-back.
  */
 import { render, screen, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -21,6 +25,7 @@ vi.mock('@/features/chat/runtime/chat-extras', () => ({
 const load = vi.fn(async () => undefined);
 const unsubscribeLive = vi.fn();
 const subscribeLive = vi.fn(() => unsubscribeLive);
+const setActive = vi.fn();
 let __permissions: Record<string, unknown> = {};
 function makeController() {
   // A stable snapshot reference, frozen at creation time (matches the real
@@ -31,6 +36,7 @@ function makeController() {
     getState: () => state,
     subscribeState: () => () => undefined,
     subscribeLive,
+    setActive,
     load,
   };
 }
@@ -61,6 +67,7 @@ beforeEach(() => {
   load.mockClear();
   subscribeLive.mockClear();
   unsubscribeLive.mockClear();
+  setActive.mockClear();
   window.localStorage.clear();
   useSideChatCollapseStore.setState({ collapsedByParent: {} });
 });
@@ -82,13 +89,37 @@ describe('SideChatHost — no side chat', () => {
 });
 
 describe('SideChatHost — with a side chat', () => {
-  it('mounts the panel and keeps the controller loaded + live-subscribed', () => {
+  it('mounts the panel and keeps the controller loaded + live-subscribed + active', () => {
     __chatConfig = { sideChatId: 'side-1' };
     render(<SideChatHost parentChatId="parent-1" />);
 
     expect(screen.getByTestId('side-chat-panel-parent-1')).toBeInTheDocument();
     expect(load).toHaveBeenCalledTimes(1);
     expect(subscribeLive).toHaveBeenCalledTimes(1);
+    expect(setActive).toHaveBeenCalledWith(true);
+    expect(setActive).not.toHaveBeenCalledWith(false);
+  });
+
+  it('deactivates the controller when the host unmounts, and reactivates on remount (todo #344, AC 11)', () => {
+    __chatConfig = { sideChatId: 'side-1' };
+    const { unmount, rerender } = render(<SideChatHost parentChatId="parent-1" />);
+    expect(setActive).toHaveBeenLastCalledWith(true);
+
+    // Switching away: the parent no longer resolves this side chat (a
+    // different session is on screen) — the controller effect tears down.
+    __chatConfig = { sideChatId: null };
+    rerender(<SideChatHost parentChatId="parent-1" />);
+    expect(setActive).toHaveBeenLastCalledWith(false);
+
+    // Switching back: the same side chat resolves again — reactivate, not a
+    // fresh attach from scratch (the plane itself decides full-replay vs.
+    // cursor-resume; this host just needs to flip active back on).
+    __chatConfig = { sideChatId: 'side-1' };
+    rerender(<SideChatHost parentChatId="parent-1" />);
+    expect(setActive).toHaveBeenLastCalledWith(true);
+
+    unmount();
+    expect(setActive).toHaveBeenLastCalledWith(false);
   });
 
   it('collapse hides the panel but the controller stays subscribed (rule 8)', () => {
@@ -100,6 +131,8 @@ describe('SideChatHost — with a side chat', () => {
     expect(load).toHaveBeenCalledTimes(1);
     expect(subscribeLive).toHaveBeenCalledTimes(1);
     expect(unsubscribeLive).not.toHaveBeenCalled();
+    expect(setActive).toHaveBeenCalledWith(true);
+    expect(setActive).not.toHaveBeenCalledWith(false);
   });
 
   it('a side chat removed from another client makes the panel disappear with no error', () => {
