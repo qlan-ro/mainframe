@@ -26,7 +26,10 @@ impl ChatManager {
 
         let adapter = self.deps.adapter_fork_info(&parent.adapter_id);
         if !adapter.fork {
-            return Err(ForkChatError::Unsupported(adapter.name));
+            return Err(match adapter.unavailable_reason {
+                Some(reason) => ForkChatError::UnavailableWithReason(reason),
+                None => ForkChatError::Unsupported(adapter.name),
+            });
         }
         // A temporary chat never wrote a vendor transcript to branch from, and a
         // no-project chat has no checkout for the fork to run in (todo #346).

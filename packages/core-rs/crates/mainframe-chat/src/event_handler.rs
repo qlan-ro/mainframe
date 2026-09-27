@@ -2005,6 +2005,7 @@ mod tests {
             fork_source: mainframe_types::adapter::ForkSource {
                 source_session_id: "parent-session".to_string(),
                 resume_path: Some(format!("{snapshot_dir}/parent-session.jsonl")),
+                last_turn_id: None,
             },
             snapshot_dir: snapshot_dir.clone(),
             provisional_title: "Untitled (fork)".to_string(),

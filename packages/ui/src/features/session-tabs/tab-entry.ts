@@ -21,6 +21,7 @@ function tabForkAvailability(
   const adapter = adaptersById[custom.adapterId];
   return forkAvailability({
     capabilityFork: adapter?.capabilities.fork ?? false,
+    capabilityReason: adapter?.forkUnavailableReason,
     adapterName: adapter?.name ?? custom.adapterId,
     temporary: custom.temporary,
     noProject: custom.noProject,

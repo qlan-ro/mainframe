@@ -35,6 +35,31 @@ async fn adapter_without_fork_capability_is_unsupported_422() {
     assert_eq!(err.status_code(), 422);
 }
 
+// Todo #368: a version-gated adapter (Codex below the fork-RPC floor) reports
+// a specific reason through `adapter_fork_info`; `fork_chat`'s 422 body must
+// carry that reason verbatim instead of the generic "isn't available" message.
+#[tokio::test]
+async fn adapter_with_a_version_specific_reason_surfaces_it_422() {
+    let chat = chat_with("c1", "codex", Some("sess-1"));
+    let deps = StoreDeps::with_chats(vec![chat]);
+    deps.set_fork_unavailable_reason(
+        "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)",
+    );
+    let mgr = ChatManager::new(deps);
+    let err = mgr.fork_chat("c1").await.unwrap_err();
+    assert_eq!(
+        err,
+        ForkChatError::UnavailableWithReason(
+            "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)".to_string()
+        )
+    );
+    assert_eq!(err.status_code(), 422);
+    assert_eq!(
+        err.to_string(),
+        "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
+    );
+}
+
 #[tokio::test]
 async fn a_temporary_chat_is_refused_409() {
     let mut chat = chat_with("c1", "claude", Some("sess-1"));

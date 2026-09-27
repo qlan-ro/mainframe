@@ -69,6 +69,16 @@ export type DaemonEvent =
       modelsRevision: number;
       /** The probe's install verdict. Optional only for daemons older than the field. */
       installed?: boolean;
+      /**
+       * The adapter's current capabilities (todo #368), attached whenever this
+       * event fires — including a fire triggered only by a capability or
+       * `forkUnavailableReason` change, with no catalog change at all. Apply
+       * outside the `modelsRevision` guard, like `installed`. Absent only for
+       * daemons older than this field.
+       */
+      capabilities?: import('./adapter.js').AdapterInfo['capabilities'];
+      /** Mirrors `AdapterInfo.forkUnavailableReason`, attached under the same rule as `capabilities`. */
+      forkUnavailableReason?: string;
     }
   | {
       type: 'provider.quota.updated';

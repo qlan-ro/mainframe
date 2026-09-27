@@ -913,10 +913,12 @@ impl ChatManagerDeps for DaemonChatDeps {
             Some(adapter) => AdapterForkInfo {
                 name: adapter.name().to_string(),
                 fork: adapter.capabilities().fork,
+                unavailable_reason: adapter.fork_unavailable_reason(),
             },
             None => AdapterForkInfo {
                 name: adapter_id.to_string(),
                 fork: false,
+                unavailable_reason: None,
             },
         }
     }

@@ -192,6 +192,7 @@ impl AdapterRegistry {
                     models_revision: Some(1),
                     catalog_source: Some(CatalogSource::Fallback),
                     capabilities: adapter.capabilities(),
+                    fork_unavailable_reason: adapter.fork_unavailable_reason(),
                 },
             );
         }
@@ -304,6 +305,12 @@ impl AdapterRegistry {
                 version = adapter.get_version().await?;
             }
         }
+        // Report the version once, however it was determined (primary `--version`
+        // spawn or the fallback path above), before either `apply_refresh` call
+        // site below recomputes `capabilities()` — a version-gated capability
+        // (Codex's `fork`, todo #368) reads this synchronously from `capabilities()`
+        // and must see it before the snapshot is rebuilt.
+        adapter.observe_cli_version(version.as_deref());
         // Skip live discovery for an uninstalled adapter — no point spawning a probe.
         if !installed {
             self.apply_refresh(
@@ -370,6 +377,7 @@ impl AdapterRegistry {
         let Some(prev) = self.snapshots.get(adapter_id).map(|e| e.value().clone()) else {
             return;
         };
+        let adapter = self.adapters.get(adapter_id).map(|e| e.value().clone());
         let installed = patch.installed;
         let models_changed = patch.models.is_some();
         let models_revision = if models_changed {
@@ -377,6 +385,18 @@ impl AdapterRegistry {
         } else {
             prev.models_revision
         };
+        // Recomputed from the adapter every refresh (todo #368): a
+        // version-gated capability (Codex's `fork`) can flip after
+        // `observe_cli_version` ran, with no catalog change at all. Missing
+        // adapter (shouldn't happen — `prev` came from this same registry)
+        // keeps whatever the snapshot already had.
+        let capabilities = adapter
+            .as_ref()
+            .map(|a| a.capabilities())
+            .unwrap_or(prev.capabilities);
+        let fork_unavailable_reason = adapter.as_ref().and_then(|a| a.fork_unavailable_reason());
+        let capabilities_changed = capabilities != prev.capabilities;
+        let reason_changed = fork_unavailable_reason != prev.fork_unavailable_reason;
         let next = AdapterInfo {
             id: prev.id.clone(),
             name: prev.name.clone(),
@@ -390,12 +410,13 @@ impl AdapterRegistry {
             } else {
                 prev.catalog_source
             },
-            capabilities: prev.capabilities,
+            capabilities,
+            fork_unavailable_reason,
         };
         // Mutate the cache BEFORE emitting (rule 7) so a blocked subscriber cannot
         // leave the snapshot un-updated.
-        self.snapshots.insert(adapter_id.to_string(), next);
-        if let (Some(models), Some(rev)) = (patch.models, models_revision) {
+        self.snapshots.insert(adapter_id.to_string(), next.clone());
+        if let (Some(models), Some(rev)) = (&patch.models, models_revision) {
             tracing::info!(
                 module = "adapter-registry",
                 adapter_id,
@@ -403,11 +424,18 @@ impl AdapterRegistry {
                 count = models.len(),
                 "adapter catalog updated"
             );
+        }
+        // Emit whenever anything a client might act on changed — not just the
+        // catalog — so a capability/reason flip with no model change (Codex's
+        // fork gate, todo #368) still reaches an open websocket.
+        if models_changed || capabilities_changed || reason_changed {
             deps.emit_event(DaemonEvent::AdapterModelsUpdated {
                 adapter_id: adapter_id.to_string(),
-                models,
-                models_revision: rev,
+                models: next.models,
+                models_revision: next.models_revision.unwrap_or(1),
                 installed: Some(installed),
+                capabilities: Some(next.capabilities),
+                fork_unavailable_reason: next.fork_unavailable_reason,
             });
         }
     }

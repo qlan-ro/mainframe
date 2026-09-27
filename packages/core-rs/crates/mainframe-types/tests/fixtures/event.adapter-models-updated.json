@@ -34,6 +34,13 @@
       }
     ],
     "modelsRevision": 2,
-    "installed": true
+    "installed": true,
+    "capabilities": {
+      "planMode": true,
+      "autoMode": false,
+      "noPersistence": false,
+      "fork": true
+    },
+    "forkUnavailableReason": "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
   }
 }

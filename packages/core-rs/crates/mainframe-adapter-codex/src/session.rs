@@ -20,7 +20,8 @@ use mainframe_adapter_api::{
     StopBackgroundTaskResult,
 };
 use mainframe_types::adapter::{
-    AdapterProcess, AdapterProcessStatus, ControlResponse, SessionOptions, SessionSpawnOptions,
+    AdapterProcess, AdapterProcessStatus, ControlResponse, ForkSource, SessionOptions,
+    SessionSpawnOptions,
 };
 use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
@@ -31,12 +32,13 @@ use serde_json::{Map, Value, json};
 
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
+use crate::fork::ThreadTarget;
 use crate::history_convert::convert_thread_items;
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
 use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
-use crate::thread_request::build_thread_request;
+use crate::thread_request::thread_request_for;
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadStartResult, TurnStartResult};
@@ -132,6 +134,10 @@ pub struct CodexSession {
     id: String,
     project_path: String,
     resume_thread_id: Option<String>,
+    /// Set only for a fork's spawn (todo #368) — `SessionOptions.fork_source`,
+    /// carried while `chats.pending_fork` exists. `ensure_thread`/`load_history`
+    /// consult it through `fork::resolve_thread_target`.
+    fork_source: Option<ForkSource>,
     on_exit_callback: Arc<Mutex<Option<OnExitCallback>>>,
     client: Arc<Mutex<Option<Arc<JsonRpcClient>>>>,
     approval_handler: Arc<Mutex<Option<Arc<ApprovalHandler>>>>,
@@ -147,6 +153,16 @@ pub struct CodexSession {
     /// Test seam only — `None` in production, which routes `load_scan_records`
     /// through the real `~/.codex/state_5.sqlite` and `~/.codex/sessions`.
     scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
+    /// Test seam only (todo #368) — overrides `resolve_target`'s own-transcript
+    /// probe, which in production reads `~/.codex/state_5.sqlite`/
+    /// `~/.codex/sessions` and cannot be safely seeded from an integration test.
+    transcript_present_override: Arc<Mutex<Option<bool>>>,
+    /// `load_history`'s temp-app-server executable. `"codex"` in production —
+    /// bare-name PATH resolution for `spawn_temp_app_server` is unreliable to
+    /// override from a test (unlike `spawn()`'s explicit
+    /// `SessionSpawnOptions.executable_path`), so tests set this to a fake
+    /// script's full path instead (todo #368).
+    history_executable: Arc<Mutex<String>>,
 }
 
 impl CodexSession {
@@ -165,6 +181,7 @@ impl CodexSession {
             id: nanoid!(),
             project_path: options.project_path,
             resume_thread_id: options.chat_id,
+            fork_source: options.fork_source,
             on_exit_callback: Arc::new(Mutex::new(on_exit)),
             client: Arc::new(Mutex::new(None)),
             approval_handler: Arc::new(Mutex::new(None)),
@@ -175,6 +192,8 @@ impl CodexSession {
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
             resolved_path,
             scan_deps: Arc::new(Mutex::new(None)),
+            transcript_present_override: Arc::new(Mutex::new(None)),
+            history_executable: Arc::new(Mutex::new("codex".to_string())),
         }
     }
 
@@ -182,6 +201,24 @@ impl CodexSession {
     /// containment root.
     pub fn set_scan_deps(&self, deps: CodexScanDeps) {
         *self.scan_deps.lock().unwrap_or_else(|e| e.into_inner()) = Some(deps);
+    }
+
+    /// Test-only override for `resolve_target`'s own-transcript-present probe
+    /// (todo #368) — see the field doc comment.
+    pub fn set_transcript_present_override(&self, present: bool) {
+        *self
+            .transcript_present_override
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(present);
+    }
+
+    /// Test-only override for `load_history`'s temp-app-server executable (todo
+    /// #368) — see the field doc comment.
+    pub fn set_history_executable(&self, executable: &str) {
+        *self
+            .history_executable
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
     }
 
     /// Set the one-shot on-exit callback (used by `CodexAdapter::create_session` to
@@ -228,10 +265,27 @@ impl CodexSession {
         p
     }
 
-    /// Starts or resumes the thread on the first message of a session, capturing the
-    /// app-server's reported model into `state.reported_model` — the turn-start
-    /// fallback tier for a chat with no configured model. No-ops once a thread id is
-    /// already recorded.
+    /// Resolves which thread this session targets on its first message: its own
+    /// id (`thread/resume`), a pending fork source (`thread/fork`), or neither
+    /// (`thread/start`) — see `fork::resolve_target` (todo #368).
+    async fn resolve_target(&self, no_persistence: bool) -> ThreadTarget {
+        let override_present = *self
+            .transcript_present_override
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        crate::fork::resolve_target(
+            self.resume_thread_id.as_deref(),
+            self.fork_source.as_ref(),
+            no_persistence,
+            override_present,
+        )
+        .await
+    }
+
+    /// Starts, resumes or forks the thread on the first message of a session,
+    /// capturing the app-server's reported model into `state.reported_model` —
+    /// the turn-start fallback tier for a chat with no configured model. No-ops
+    /// once a thread id is already recorded.
     async fn ensure_thread(
         &self,
         client: &Arc<JsonRpcClient>,
@@ -251,22 +305,34 @@ impl CodexSession {
 
         let (approval_policy, sandbox) = self.map_permission_mode(permission_mode);
         let base = self.thread_params_base(model);
-        let request = build_thread_request(
-            self.resume_thread_id.as_deref(),
+        let target = self.resolve_target(no_persistence).await;
+        let (request, expected_fork_source) = thread_request_for(
+            target,
             no_persistence,
             base,
             &approval_policy,
             json!(sandbox),
         );
-        // `thread/start` and `thread/resume` answer with the same
+        // `thread/start`, `thread/resume` and `thread/fork` answer with the same
         // `{ thread: { id }, model }` shape, so one call + one deserialize
-        // covers both (todo #346 review fix).
+        // covers all three (todo #346 review fix, extended for todo #368).
         let method = request.method();
         let params = request.into_params();
         let res: ThreadStartResult = de(client
             .request(method, Some(Value::Object(params)))
             .await
             .map_err(|e| AdapterError::Message(e.0))?)?;
+        if let Some(expected) = &expected_fork_source
+            && res.thread.forked_from_id.as_deref() != Some(expected.as_str())
+        {
+            tracing::warn!(
+                module = "codex:session",
+                session_id = %self.id,
+                expected,
+                actual = ?res.thread.forked_from_id,
+                "codex: forked thread's forkedFromId does not match the fork source"
+            );
+        }
         let (new_thread_id, reported_model) = (res.thread.id, res.model);
 
         {
@@ -798,12 +864,24 @@ impl AdapterSession for CodexSession {
 
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async move {
-            let Some(resume_thread_id) = self.resume_thread_id.clone() else {
-                return Ok(Vec::new());
+            // A no-persistence chat never resumes or forks; its history is always
+            // empty (unchanged from pre-#368 behavior).
+            let (read_thread_id, turn_cap) = match self.resolve_target(false).await {
+                ThreadTarget::Resume(id) => (id, None),
+                ThreadTarget::Fork {
+                    source_id,
+                    last_turn_id,
+                } => (source_id, last_turn_id),
+                ThreadTarget::Start => return Ok(Vec::new()),
             };
 
+            let executable = self
+                .history_executable
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
             let temp = match spawn_temp_app_server(
-                "codex",
+                &executable,
                 Some(Path::new(&self.project_path)),
                 true,
                 self.resolved_path.as_str(),
@@ -812,17 +890,23 @@ impl AdapterSession for CodexSession {
             {
                 Ok(c) => c,
                 Err(err) => {
-                    tracing::warn!(module = "codex:session", err = %err, thread_id = %resume_thread_id, "codex: failed to load history");
+                    tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
                     return Ok(Vec::new());
                 }
             };
 
-            let result = load_history_inner(&temp, &resume_thread_id, &self.project_path).await;
+            let result = load_history_inner(
+                &temp,
+                &read_thread_id,
+                &self.project_path,
+                turn_cap.as_deref(),
+            )
+            .await;
             temp.close();
             match result {
                 Ok(msgs) => Ok(msgs),
                 Err(err) => {
-                    tracing::warn!(module = "codex:session", err = %err, thread_id = %resume_thread_id, "codex: failed to load history");
+                    tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
                     Ok(Vec::new())
                 }
             }

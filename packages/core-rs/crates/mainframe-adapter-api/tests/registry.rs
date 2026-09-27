@@ -152,6 +152,11 @@ struct FakeAdapter {
     list_models_calls: AtomicUsize,
     probe_calls: AtomicUsize,
     probe_args: Mutex<Vec<Option<String>>>,
+    /// Todo #368: when `true`, `capabilities().fork` and
+    /// `fork_unavailable_reason()` depend on whatever `observe_cli_version` last
+    /// reported, instead of the fixed `fork: false` every other test relies on.
+    fork_version_gated: bool,
+    observed_version: Mutex<Option<String>>,
 }
 
 impl FakeAdapter {
@@ -172,6 +177,8 @@ impl FakeAdapter {
             list_models_calls: AtomicUsize::new(0),
             probe_calls: AtomicUsize::new(0),
             probe_args: Mutex::new(Vec::new()),
+            fork_version_gated: false,
+            observed_version: Mutex::new(None),
         }
     }
     fn is_installed_count(&self) -> usize {
@@ -203,7 +210,19 @@ impl Adapter for FakeAdapter {
             plan_mode: true,
             auto_mode: false,
             no_persistence: false,
-            fork: false,
+            fork: self.fork_version_gated && self.observed_version.lock().unwrap().is_some(),
+        }
+    }
+    fn observe_cli_version(&self, version: Option<&str>) {
+        *self.observed_version.lock().unwrap() = version.map(str::to_string);
+    }
+    fn fork_unavailable_reason(&self) -> Option<String> {
+        if !self.fork_version_gated {
+            return None;
+        }
+        match &*self.observed_version.lock().unwrap() {
+            Some(_) => None,
+            None => Some("fork needs a known adapter version".to_string()),
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -347,6 +366,11 @@ async fn bumps_revision_flips_catalog_source_and_emits_after_allow_refresh() {
                 models_revision: 2,
                 // The client's only correction when the boot snapshot said false.
                 installed: Some(true),
+                // FakeAdapter's capabilities/reason never depend on version in
+                // this test, but the event still carries the current values
+                // whenever it fires (todo #368), same as `installed` above.
+                capabilities: Some(a.capabilities()),
+                fork_unavailable_reason: a.fork_unavailable_reason(),
             })
     );
     assert_eq!(a.probe_args(), vec![Some("/abs/claude".to_string())]);
@@ -423,4 +447,73 @@ async fn default_generate_title_returns_no_title_for_an_adapter_without_a_title_
         .generate_title("hello".to_string(), "claude".to_string())
         .await;
     assert_eq!(result.unwrap(), None);
+}
+
+// Todo #368: a version-gated adapter's capability flips after `run_refresh`
+// calls `observe_cli_version`, and the snapshot + emitted event carry the new
+// capabilities and reason even when the catalog itself never changes (no live
+// model list this refresh) — the registry must not gate the event on
+// `models.is_some()` alone.
+#[tokio::test]
+async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_change() {
+    let mut fa = FakeAdapter::new();
+    fa.id = "codex".into();
+    fa.name = "Codex".into();
+    fa.fork_version_gated = true;
+    fa.has_probe = false;
+    fa.list_models_seq = Mutex::new(VecDeque::from([vec![]]));
+    fa.list_models_default = vec![];
+    fa.fallback_models = vec![];
+    let a = Arc::new(fa);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let reg = AdapterRegistry::new();
+    reg.register(a.clone());
+    reg.seed_static_snapshots();
+
+    let seeded = reg.get_snapshots()[0].clone();
+    assert!(!seeded.capabilities.fork);
+    assert_eq!(
+        seeded.fork_unavailable_reason.as_deref(),
+        Some("fork needs a known adapter version")
+    );
+
+    reg.configure_refresh(Arc::new(FakeDeps {
+        resolve_path: Some("/abs/codex".into()),
+        run_result: ok_run("codex 0.155.1"),
+        events: events.clone(),
+    }));
+    reg.allow_refresh();
+    reg.refresh_all().await;
+
+    let info = reg.get_snapshots()[0].clone();
+    assert!(info.capabilities.fork);
+    assert_eq!(info.fork_unavailable_reason, None);
+    // No live catalog succeeded this refresh, so the catalog stays on the
+    // fallback seed — proving the event below fired for the capability change
+    // alone, not a models change.
+    assert_eq!(info.catalog_source, Some(CatalogSource::Fallback));
+
+    let recorded = events.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    match &recorded[0] {
+        DaemonEvent::AdapterModelsUpdated {
+            adapter_id,
+            capabilities,
+            fork_unavailable_reason,
+            ..
+        } => {
+            assert_eq!(adapter_id, "codex");
+            assert_eq!(
+                capabilities,
+                &Some(AdapterCapabilities {
+                    plan_mode: true,
+                    auto_mode: false,
+                    no_persistence: false,
+                    fork: true,
+                })
+            );
+            assert_eq!(fork_unavailable_reason, &None);
+        }
+        other => panic!("unexpected event: {other:?}"),
+    }
 }

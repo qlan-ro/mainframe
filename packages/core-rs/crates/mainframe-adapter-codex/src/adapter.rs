@@ -3,17 +3,21 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{Adapter, AdapterError, AdapterSession, BoxFuture};
+use mainframe_adapter_api::{
+    Adapter, AdapterError, AdapterSession, BoxFuture, ForkPinError, ForkPinRequest,
+};
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::adapter::{
-    AdapterCapabilities, AdapterModel, ExternalSessionPage, SessionOptions,
+    AdapterCapabilities, AdapterModel, ExternalSessionPage, ForkSource, SessionOptions,
 };
 use mainframe_types::display::ToolCategories;
 use mainframe_types::transcript::TranscriptLocation;
 
 use crate::context_window::catalog_context_window;
 use crate::external_sessions::list_external_sessions;
+use crate::fork::{fork_supported, fork_unavailable_reason_for};
+use crate::fork_pin::pin_fork_point;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
 use crate::title_generator::generate_codex_title;
@@ -77,6 +81,17 @@ pub struct CodexAdapter {
     /// activity row lands in the same chat-scoped live set a Claude sub-agent's
     /// does.
     background_tasks: Arc<BackgroundTaskTracker>,
+    /// The CLI version the registry's last successful refresh observed (todo
+    /// #368) — `AdapterRegistry::run_refresh` reports it via
+    /// `observe_cli_version` before calling the now-synchronous `capabilities()`.
+    /// `None` before the first refresh, or when the version could not be
+    /// determined; `capabilities().fork` is `false` in both cases.
+    observed_version: Arc<Mutex<Option<String>>>,
+    /// Test seam only (todo #368) — `pin_fork_point`'s temp-app-server
+    /// executable. `"codex"` in production; see `CodexSession::
+    /// history_executable`'s doc comment for why bare-name PATH resolution
+    /// can't be overridden from a test.
+    pin_executable: Arc<Mutex<String>>,
 }
 
 impl Default for CodexAdapter {
@@ -95,7 +110,18 @@ impl CodexAdapter {
             cached_models: Arc::new(Mutex::new(None)),
             resolved_path,
             background_tasks,
+            observed_version: Arc::new(Mutex::new(None)),
+            pin_executable: Arc::new(Mutex::new("codex".to_string())),
         }
+    }
+
+    /// Test-only override for `pin_fork_point`'s temp-app-server executable
+    /// (todo #368) — see the field doc comment.
+    pub fn set_pin_executable(&self, executable: &str) {
+        *self
+            .pin_executable
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
     }
 
     pub fn create_plan_mode_handler(&self) -> CodexPlanModeHandler {
@@ -178,6 +204,11 @@ impl Adapter for CodexAdapter {
         "Codex"
     }
     fn capabilities(&self) -> AdapterCapabilities {
+        let version = self
+            .observed_version
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         AdapterCapabilities {
             plan_mode: true,
             auto_mode: false,
@@ -186,9 +217,45 @@ impl Adapter for CodexAdapter {
             // gate and an interrupt working, with no rollout file or threads row. See
             // docs/research/adapters/codex/CONSUMED-SURFACE.md.
             no_persistence: true,
-            // Codex has no top-level fork mechanism yet (todo #368 tracks it).
-            fork: false,
+            // True only on a CLI with the `thread/fork` `lastTurnId` surface (todo
+            // #368) — `None` (never refreshed, or version undetermined) is `false`.
+            fork: version.as_deref().is_some_and(fork_supported),
         }
+    }
+
+    /// Todo #368: the registry calls this once per refresh (before
+    /// `apply_refresh`), on both the primary and fallback version-detection
+    /// path, so `capabilities().fork`'s version gate stays synchronous.
+    fn observe_cli_version(&self, version: Option<&str>) {
+        *self
+            .observed_version
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = version.map(str::to_string);
+    }
+
+    fn fork_unavailable_reason(&self) -> Option<String> {
+        let version = self
+            .observed_version
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        fork_unavailable_reason_for(version.as_deref())
+    }
+
+    /// Pin a fork's starting point (todo #368): read the parent thread through a
+    /// temporary app-server and pin its last turn id. Writes nothing to
+    /// `request.dest_dir` — Codex's `thread/fork` needs no on-disk snapshot.
+    fn pin_fork_point(
+        &self,
+        request: ForkPinRequest,
+    ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
+        let path = self.resolved_path.clone();
+        let executable = self
+            .pin_executable
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        Box::pin(async move { pin_fork_point(request, &executable, path.as_str()).await })
     }
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
