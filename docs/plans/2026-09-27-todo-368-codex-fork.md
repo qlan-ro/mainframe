@@ -113,7 +113,7 @@ Verification intent:
 
 ### Group codex-fork (core)
 
-Depends on capability-refresh, which adds the trait hooks and the `mainframe-types/src/adapter.rs` edits.
+Depends on capability-refresh, which adds the trait hooks and the `mainframe-types/src/adapter.rs` edits. Also depends on ui-fork-reason. Task 5's live acceptance needs the UI to apply the refreshed `capabilities.fork` from `adapter.models.updated`, because `/api/adapters` serves the seed whenever the refresh loses the 2 s race, and Codex's refresh waits behind Claude's. Task 6's changeset also covers ui-fork-reason's packages. Without this edge, both groups would run in the same wave, and live acceptance would test a UI that is missing the fix or is being edited mid-run.
 
 Files:
 - `mainframe-types/src/adapter.rs` (`ForkSource.last_turn_id`: optional, serde default, skipped when `None`, round-trip test)
