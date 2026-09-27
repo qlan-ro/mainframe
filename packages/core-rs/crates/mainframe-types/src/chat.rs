@@ -276,6 +276,17 @@ pub struct Chat {
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_chat_id: Option<Option<String>>,
+    /// Id of this chat's side chat (todo #344), derived on every read by a
+    /// correlated subquery — never a stored column. `None` when this chat has
+    /// no side chat, or when this chat is itself a side chat (side chats never
+    /// have side chats).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_chat_id: Option<String>,
+    /// Whether this chat's side chat has a pending permission or question.
+    /// Derived alongside `side_chat_id`; set only when `side_chat_id` is
+    /// `Some`. Never a stored column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side_chat_waiting: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -501,6 +512,35 @@ mod tests {
         let mut with_value = base;
         with_value["parentChatId"] = Value::String("chat_parent".to_string());
         roundtrip::<Chat>(with_value);
+    }
+
+    #[test]
+    fn chat_side_chat_id_and_waiting_are_absent_by_default_and_present_when_set() {
+        let base = json!({
+            "id": "chat_1",
+            "adapterId": "claude",
+            "projectId": "proj_1",
+            "status": "active",
+            "createdAt": "t",
+            "updatedAt": "t",
+            "totalCost": 0.0,
+            "totalTokensInput": 0,
+            "totalTokensOutput": 0,
+            "lastContextTokensInput": 0,
+            "temporary": false,
+            "noProject": false
+        });
+        let no_side_chat: Chat = serde_json::from_value(base.clone()).unwrap();
+        assert_eq!(no_side_chat.side_chat_id, None);
+        assert_eq!(no_side_chat.side_chat_waiting, None);
+        let serialized = serde_json::to_string(&no_side_chat).unwrap();
+        assert!(!serialized.contains("sideChatId"));
+        assert!(!serialized.contains("sideChatWaiting"));
+
+        let mut with_side_chat = base;
+        with_side_chat["sideChatId"] = Value::String("chat_side".to_string());
+        with_side_chat["sideChatWaiting"] = Value::Bool(true);
+        roundtrip::<Chat>(with_side_chat);
     }
 
     #[test]

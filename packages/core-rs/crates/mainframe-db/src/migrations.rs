@@ -518,11 +518,23 @@ pub fn migrations() -> Vec<Migration> {
                 Ok(())
             },
         },
+        // Side chats (#344): a parent chat has at most one side chat at a time.
+        // The partial unique index enforces the invariant atomically alongside
+        // the DB worker's one-closure-at-a-time serialization (find_or_create).
+        Migration {
+            version: 30,
+            up: |db| {
+                Ok(db.execute_batch(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_one_side_chat \
+                     ON chats(parent_chat_id) WHERE temporary = 1",
+                )?)
+            },
+        },
     ]
 }
 
 /// Highest migration version — the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 29;
+pub const LATEST_VERSION: i64 = 30;
 
 fn user_version(db: &Connection) -> Result<i64, DbError> {
     Ok(db.pragma_query_value(None, "user_version", |row| row.get(0))?)

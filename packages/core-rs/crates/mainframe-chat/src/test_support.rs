@@ -273,6 +273,8 @@ pub fn test_chat(id: &str) -> Chat {
         vendor_session_ephemeral: false,
         scratch_path: None,
         parent_chat_id: None,
+        side_chat_id: None,
+        side_chat_waiting: None,
     }
 }
 

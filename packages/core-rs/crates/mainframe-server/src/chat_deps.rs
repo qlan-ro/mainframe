@@ -1382,6 +1382,8 @@ pub(crate) fn fallback_chat(new_chat: &NewChat) -> Chat {
         vendor_session_ephemeral: false,
         scratch_path: None,
         parent_chat_id: None,
+        side_chat_id: None,
+        side_chat_waiting: None,
     }
 }
 

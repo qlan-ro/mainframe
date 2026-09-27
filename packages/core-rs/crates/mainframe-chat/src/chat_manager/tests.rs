@@ -561,6 +561,8 @@ impl ChatManagerDeps for StoreDeps {
             vendor_session_ephemeral: false,
             scratch_path: None,
             parent_chat_id: Some(Some(insert.parent_chat_id.clone())),
+            side_chat_id: None,
+            side_chat_waiting: None,
         };
         self.store.lock().unwrap().insert(id.clone(), chat.clone());
         self.pending_forks
