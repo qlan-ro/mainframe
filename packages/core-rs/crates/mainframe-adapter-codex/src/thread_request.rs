@@ -5,6 +5,8 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::fork::ThreadTarget;
+
 /// The JSON-RPC method + params `ensure_thread` should send, decided purely
 /// from whether a resume target exists and whether the spawn is no-persistence
 /// (todo #346, AC 3). A no-persistence spawn always starts fresh with
@@ -13,26 +15,82 @@ use serde_json::{Map, Value, json};
 pub(crate) enum ThreadRequest {
     Resume(Map<String, Value>),
     Start(Map<String, Value>),
+    /// `thread/fork` (todo #368) — the fork's first spawn when the resolver
+    /// picks `ThreadTarget::Fork`. Answers with the same `{ thread: { id },
+    /// model }` shape plus an optional `thread.forkedFromId`.
+    Fork(Map<String, Value>),
 }
 
 impl ThreadRequest {
     /// The JSON-RPC method this request sends. `ensure_thread` uses this plus
     /// [`Self::into_params`] to make a single `client.request(..)` call
     /// instead of matching per variant (todo #346 review fix) —
-    /// `thread/start` and `thread/resume` both answer with the same
-    /// `{ thread: { id }, model }` shape (`ThreadStartResult`).
+    /// `thread/start`, `thread/resume` and `thread/fork` all answer with the
+    /// same `{ thread: { id }, model }` shape (`ThreadStartResult`).
     pub(crate) fn method(&self) -> &'static str {
         match self {
             ThreadRequest::Resume(_) => "thread/resume",
             ThreadRequest::Start(_) => "thread/start",
+            ThreadRequest::Fork(_) => "thread/fork",
         }
     }
 
     /// The request params, regardless of variant.
     pub(crate) fn into_params(self) -> Map<String, Value> {
         match self {
-            ThreadRequest::Resume(p) | ThreadRequest::Start(p) => p,
+            ThreadRequest::Resume(p) | ThreadRequest::Start(p) | ThreadRequest::Fork(p) => p,
         }
+    }
+}
+
+/// `thread/fork` params (todo #368, Established facts + Gate 0): only
+/// `threadId` is required; `lastTurnId` forks "through, inclusive" when
+/// present. Every override field (`cwd`, `model`, `sandbox`,
+/// `approvalPolicy`…) is deliberately omitted so the fork inherits the
+/// parent's — Gate 0 confirmed omission reads as inherit, not reset, and
+/// `turn/start` re-supplies policy and model on every turn anyway
+/// (CONSUMED-SURFACE CODEX-RPC-03). No `ephemeral`, no `excludeTurns`.
+pub(crate) fn build_fork_request(
+    source_thread_id: &str,
+    last_turn_id: Option<&str>,
+) -> ThreadRequest {
+    let mut p = Map::new();
+    p.insert("threadId".into(), json!(source_thread_id));
+    if let Some(id) = last_turn_id {
+        p.insert("lastTurnId".into(), json!(id));
+    }
+    p.insert("persistExtendedHistory".into(), json!(true));
+    p.insert("persistFullHistory".into(), json!(true));
+    ThreadRequest::Fork(p)
+}
+
+/// Builds `ensure_thread`'s request for a resolved `ThreadTarget`, plus the
+/// fork source id to verify the response's `forkedFromId` against (`None` for
+/// a non-fork target) — todo #368. Keeps `session.rs`'s `ensure_thread` to a
+/// single call site instead of matching on `ThreadTarget` inline.
+pub(crate) fn thread_request_for(
+    target: ThreadTarget,
+    no_persistence: bool,
+    base: Map<String, Value>,
+    approval_policy: &str,
+    sandbox: Value,
+) -> (ThreadRequest, Option<String>) {
+    match target {
+        ThreadTarget::Fork {
+            source_id,
+            last_turn_id,
+        } => {
+            let request = build_fork_request(&source_id, last_turn_id.as_deref());
+            (request, Some(source_id))
+        }
+        ThreadTarget::Resume(id) => (
+            build_thread_request(Some(&id), no_persistence, base, approval_policy, sandbox),
+            None,
+        ),
+        ThreadTarget::Start => (
+            build_thread_request(None, no_persistence, base, approval_policy, sandbox),
+            None,
+        ),
     }
 }
 
@@ -77,8 +135,7 @@ mod tests {
 
     fn params_of(req: ThreadRequest) -> Map<String, Value> {
         match req {
-            ThreadRequest::Resume(p) => p,
-            ThreadRequest::Start(p) => p,
+            ThreadRequest::Resume(p) | ThreadRequest::Start(p) | ThreadRequest::Fork(p) => p,
         }
     }
 
@@ -154,6 +211,41 @@ mod tests {
         let p = params_of(req);
         assert_eq!(p["persistExtendedHistory"], json!(true));
         assert_eq!(p["persistFullHistory"], json!(true));
+    }
+
+    // ---- build_fork_request (todo #368) ----
+
+    #[test]
+    fn fork_request_sends_the_source_thread_id_and_persist_flags_with_no_last_turn_id() {
+        let req = build_fork_request("parent-thread", None);
+        assert_eq!(req.method(), "thread/fork");
+        let p = params_of(req);
+        assert_eq!(p["threadId"], json!("parent-thread"));
+        assert!(!p.contains_key("lastTurnId"));
+        assert_eq!(p["persistExtendedHistory"], json!(true));
+        assert_eq!(p["persistFullHistory"], json!(true));
+    }
+
+    #[test]
+    fn fork_request_includes_last_turn_id_when_present() {
+        let req = build_fork_request("parent-thread", Some("turn-9"));
+        let p = params_of(req);
+        assert_eq!(p["lastTurnId"], json!("turn-9"));
+    }
+
+    #[test]
+    fn fork_request_omits_every_override_field() {
+        let p = params_of(build_fork_request("parent-thread", None));
+        for key in [
+            "cwd",
+            "model",
+            "sandbox",
+            "approvalPolicy",
+            "ephemeral",
+            "excludeTurns",
+        ] {
+            assert!(!p.contains_key(key), "fork request must omit {key}");
+        }
     }
 }
 

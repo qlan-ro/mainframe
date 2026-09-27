@@ -50,22 +50,32 @@ export function seedAdapters(list: AdapterInfo[]): void {
 
 /** `installed` is the probe's verdict, applied OUTSIDE the revision guard — that guard gates the
  *  model list only. The boot snapshot reads `installed:false` whenever the probe outruns the
- *  daemon's 2s list cap, and this event is the only correction before a reconnect. */
+ *  daemon's 2s list cap, and this event is the only correction before a reconnect.
+ *
+ *  `capabilities`/`forkUnavailableReason` (todo #368) follow the same rule: a version-gated
+ *  capability can flip after the seed's refresh loses that race, so both apply outside the
+ *  models-revision guard too. Absent (older daemon, or no change this fire) leaves the
+ *  adapter's current values alone. */
 export function applyAdapterModels(
   adapterId: string,
   models: AdapterModel[],
   modelsRevision: number,
   installed?: boolean,
+  capabilities?: AdapterInfo['capabilities'],
+  forkUnavailableReason?: string,
 ): void {
   useAdaptersStore.setState((s) => {
     const cur = s.byId[adapterId];
     if (cur) {
-      const withInstall = installed === undefined || installed === cur.installed ? cur : { ...cur, installed };
+      let next = cur;
+      if (installed !== undefined && installed !== next.installed) next = { ...next, installed };
+      if (capabilities !== undefined) next = { ...next, capabilities };
+      if (forkUnavailableReason !== undefined) next = { ...next, forkUnavailableReason };
       if (!isNewer(cur.modelsRevision, modelsRevision)) {
-        return withInstall === cur ? s : { byId: { ...s.byId, [adapterId]: withInstall } };
+        return next === cur ? s : { byId: { ...s.byId, [adapterId]: next } };
       }
       return {
-        byId: { ...s.byId, [adapterId]: { ...withInstall, models, modelsRevision, catalogSource: 'probed' } },
+        byId: { ...s.byId, [adapterId]: { ...next, models, modelsRevision, catalogSource: 'probed' } },
       };
     }
     // Placeholder identity that under-reports on purpose (every capability false,
@@ -82,7 +92,8 @@ export function applyAdapterModels(
       models,
       modelsRevision,
       catalogSource: 'probed',
-      capabilities: { planMode: false, autoMode: false },
+      capabilities: capabilities ?? { planMode: false, autoMode: false },
+      forkUnavailableReason,
     };
     return { byId: { ...s.byId, [adapterId]: partial } };
   });
@@ -107,6 +118,13 @@ export function resetAdapters(): void {
 export function installAdapterModelsSubscriber(): () => void {
   return daemonWs.onEvent((event) => {
     if (event.type !== 'adapter.models.updated') return;
-    applyAdapterModels(event.adapterId, event.models, event.modelsRevision, event.installed);
+    applyAdapterModels(
+      event.adapterId,
+      event.models,
+      event.modelsRevision,
+      event.installed,
+      event.capabilities,
+      event.forkUnavailableReason,
+    );
   });
 }

@@ -29,9 +29,11 @@ use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
 use partial_overlay::{PartialOverlay, PartialOverlays};
+use worktree_tool::{creates_worktree, moves_transcript};
 
 mod partial_overlay;
 pub(crate) mod resync;
+mod worktree_tool;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
 
@@ -119,9 +121,14 @@ pub trait EventHandlerDeps: Send + Sync {
     /// ChatManager built without a QuotaManager simply drops it.
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 
-    /// A completed, non-error tool call that may have registered a worktree.
+    /// A completed, non-error tool call that created a worktree (`EnterWorktree`
+    /// or `git worktree add` — see `worktree_tool::creates_worktree`).
     /// Sync fire-and-forget; the offer registry spawns its own rescan.
     fn on_worktree_trigger(&self, _chat_id: &str) {}
+
+    /// A completed, non-error `EnterWorktree`/`ExitWorktree` call: the CLI has
+    /// just moved the transcript into the new working directory's project dir.
+    fn on_transcript_moved(&self, _chat_id: &str) {}
 
     /// `db.chats.getPendingFork(chatId)` (todo #343) — `on_result` retires it
     /// once the fork's first turn produces a result. Defaulted to `None`: the
@@ -258,6 +265,7 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
+            pending_transcript_moves: Mutex::new(HashSet::new()),
             attention_dedupe: self.attention_dedupe.clone(),
             chat_surface: self.chat_surface.clone(),
         });
@@ -327,19 +335,6 @@ fn emit_display_for<D: EventHandlerDeps>(
     );
 }
 
-/// A `git worktree` shell call, or Claude's own worktree tool. Neither result is
-/// parsed — the registry rescans git and decides for itself what changed.
-fn is_worktree_tool(name: &str, input: &HashMap<String, serde_json::Value>) -> bool {
-    if name == "EnterWorktree" {
-        return true;
-    }
-    matches!(name, "Bash" | "BashTool")
-        && input
-            .get("command")
-            .and_then(|value| value.as_str())
-            .is_some_and(|command| command.to_ascii_lowercase().contains("worktree"))
-}
-
 struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     chat_id: String,
     built_for_session_id: Option<String>,
@@ -350,6 +345,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
+    pending_transcript_moves: Mutex<HashSet<String>>,
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
@@ -602,8 +598,14 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                         .unwrap_or_else(|e| e.into_inner())
                         .insert(id.clone());
                 }
-                if is_worktree_tool(name, input) {
+                if creates_worktree(name, input) {
                     self.pending_worktree_triggers
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(id.clone());
+                }
+                if moves_transcript(name) {
+                    self.pending_transcript_moves
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .insert(id.clone());
@@ -686,6 +688,7 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
         let mut edited_paths: Vec<String> = Vec::new();
         let mut subagent_completed = false;
         let mut worktree_trigger = false;
+        let mut transcript_moved = false;
         for block in &content {
             if let MessageContent::Node(MessageContentNode::ToolResult {
                 tool_use_id,
@@ -720,11 +723,22 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 {
                     worktree_trigger = true;
                 }
+                if self
+                    .pending_transcript_moves
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(tool_use_id)
+                {
+                    transcript_moved = true;
+                }
             }
         }
         // Once per batch: two `git worktree add`s in one turn need one rescan.
         if worktree_trigger {
             self.deps.on_worktree_trigger(&self.chat_id);
+        }
+        if transcript_moved {
+            self.deps.on_transcript_moved(&self.chat_id);
         }
 
         let message = self.transient_with_id(ChatMessageType::ToolResult, content, None, vendor_id);
@@ -1991,6 +2005,7 @@ mod tests {
             fork_source: mainframe_types::adapter::ForkSource {
                 source_session_id: "parent-session".to_string(),
                 resume_path: Some(format!("{snapshot_dir}/parent-session.jsonl")),
+                last_turn_id: None,
             },
             snapshot_dir: snapshot_dir.clone(),
             provisional_title: "Untitled (fork)".to_string(),

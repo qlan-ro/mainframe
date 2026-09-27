@@ -1657,6 +1657,7 @@ mod tests {
         let source = mainframe_types::adapter::ForkSource {
             source_session_id: "parent-id".to_string(),
             resume_path: Some("/snap/n1/parent-id.jsonl".to_string()),
+            last_turn_id: None,
         };
         let target = crate::fork::resolve_resume(Some("own-id"), false, Some(&source));
         assert_eq!(

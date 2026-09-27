@@ -1968,6 +1968,7 @@ mod tests {
             fork_source: mainframe_types::adapter::ForkSource {
                 source_session_id: "parent-session".to_string(),
                 resume_path: Some("/tmp/fork-snapshots/n1/parent-session.jsonl".to_string()),
+                last_turn_id: None,
             },
             snapshot_dir: "/tmp/fork-snapshots/n1".to_string(),
             provisional_title: "Untitled (fork)".to_string(),

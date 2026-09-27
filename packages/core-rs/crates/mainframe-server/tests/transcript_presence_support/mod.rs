@@ -25,10 +25,14 @@ use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsSto
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::transcript::TranscriptLocation;
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-/// What the stub adapter's `is_transcript_present` predicate should report.
+/// Where the stub adapter reports a present transcript.
+pub const PRESENT_AT: &str = "/stub/projects/-repo--claude-worktrees-wt/sess-1.jsonl";
+
+/// What the stub adapter's `locate_transcript` lookup should report.
 #[derive(Clone, Copy)]
 pub enum PredicateOutcome {
     Present,
@@ -36,8 +40,8 @@ pub enum PredicateOutcome {
     Error,
 }
 
-/// A minimal adapter whose only interesting behaviour is the transcript-presence
-/// predicate; every other method mirrors the unreachable-shaped stub in
+/// A minimal adapter whose only interesting behaviour is the transcript lookup;
+/// every other method mirrors the unreachable-shaped stub in
 /// `routes/session_transcripts.rs`.
 pub struct StubAdapter {
     adapter_id: String,
@@ -84,18 +88,20 @@ impl Adapter for StubAdapter {
     }
     fn kill_all(&self) {}
 
-    fn is_transcript_present(
+    fn locate_transcript(
         &self,
         _session_id: String,
         _project_path: String,
         _session_file_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let outcome = self.outcome;
         Box::pin(async move {
             match outcome {
-                PredicateOutcome::Present => Ok(Some(true)),
-                PredicateOutcome::Absent => Ok(Some(false)),
+                PredicateOutcome::Present => {
+                    Ok(Some(TranscriptLocation::Present(PRESENT_AT.to_string())))
+                }
+                PredicateOutcome::Absent => Ok(Some(TranscriptLocation::Missing)),
                 PredicateOutcome::Error => {
                     Err(AdapterError::Message("stub predicate failed".to_string()))
                 }
@@ -211,6 +217,14 @@ pub fn persisted_missing(h: &Harness) -> Option<bool> {
     h.db.call_blocking(move |d| d.chats.get(&chat_id))
         .unwrap()
         .and_then(|chat| chat.transcript_missing)
+}
+
+/// Reads the persisted `session_file_path` back from the DB.
+pub fn persisted_session_file_path(h: &Harness) -> Option<String> {
+    let chat_id = h.chat_id.clone();
+    h.db.call_blocking(move |d| d.chats.get(&chat_id))
+        .unwrap()
+        .and_then(|chat| chat.session_file_path)
 }
 
 /// Drains `rx` for the next `chat.updated` broadcast, or `None` once `timeout`

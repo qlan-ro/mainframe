@@ -11,7 +11,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapter::{AdapterModel, AdapterProcess, DetectedPr, ProviderQuota};
+use crate::adapter::{
+    AdapterCapabilities, AdapterModel, AdapterProcess, DetectedPr, ProviderQuota,
+};
 use crate::automation::{
     AutomationCompletedStatus, AutomationInteractionSummary, AutomationNotificationLinks,
     AutomationRunSummary,
@@ -247,6 +249,18 @@ pub enum DaemonEvent {
         /// than the field, and then keeps the flag it already has.
         #[serde(skip_serializing_if = "Option::is_none")]
         installed: Option<bool>,
+        /// The adapter's current capabilities (todo #368), attached whenever this
+        /// event fires — including a fire triggered only by a capability or
+        /// `fork_unavailable_reason` change, with no catalog change at all — so a
+        /// client sees the freshest known values without waiting for its next
+        /// `/api/adapters` poll or reconnect. `None` only when talking to a daemon
+        /// older than this field.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        capabilities: Option<AdapterCapabilities>,
+        /// Mirrors `AdapterInfo.fork_unavailable_reason` (todo #368), attached
+        /// under the same "whenever this event fires" rule as `capabilities`.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fork_unavailable_reason: Option<String>,
     },
     #[serde(rename = "provider.quota.updated")]
     ProviderQuotaUpdated {

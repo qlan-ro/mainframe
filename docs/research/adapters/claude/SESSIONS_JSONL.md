@@ -117,6 +117,18 @@ does exactly this). A reader that cannot find `<sessionId>.jsonl` under the
 derived dir must fall back to scanning sibling project dirs, or follow a
 `relocated` entry when it has already opened the file.
 
+**2.1.280: the move follows every working-directory change, in both
+directions.** Verified live on 2026-09-27: `EnterWorktree` moved the transcript
+into `<repo>--claude-worktrees-<name>/`, and a later `ExitWorktree` (after
+`--resume` from the original repo directory, which still found the moved
+file) moved it back into the original project dir, leaving nothing behind in
+the worktree's dir. The CLI routes `/cd` and the `set_cwd` control request
+through the same "directory move" code (`relocateSessionTranscript`), so treat
+any cwd change as a possible move. Mainframe searches every project dir for
+`<sessionId>.jsonl` when both the stored and derived paths miss
+(`locate_claude_transcript`), persists the path it finds, and re-locates right
+after an `EnterWorktree`/`ExitWorktree` result.
+
 `worktree-state` entries still record the worktree session object; they are
 independent of `relocated` and do not move anything.
 

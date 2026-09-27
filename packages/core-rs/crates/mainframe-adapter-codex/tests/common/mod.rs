@@ -60,6 +60,11 @@ impl Recorder {
     pub fn results(&self) -> Vec<SessionResult> {
         self.0.lock().unwrap().results.clone()
     }
+    /// Every `on_init(session_id)` call, in order (todo #368: a fork's first
+    /// spawn reports the *new* thread id here, not the parent's).
+    pub fn inits(&self) -> Vec<String> {
+        self.0.lock().unwrap().inits.clone()
+    }
     pub fn clear_messages(&self) {
         self.0.lock().unwrap().messages.clear();
     }

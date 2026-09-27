@@ -82,6 +82,10 @@ pub(crate) struct StoreDeps {
     /// `adapter_fork_info(adapter_id).fork` — todo #343's fork_chat tests flip
     /// this on; every other test leaves the trait default (`false`).
     fork_capable: Mutex<bool>,
+    /// `adapter_fork_info(adapter_id).unavailable_reason` — todo #368's
+    /// version-gate tests set this to prove the reason wins over the generic
+    /// `Unsupported` message; every other test leaves it `None`.
+    fork_unavailable_reason: Mutex<Option<String>>,
     /// When `Some`, `pin_fork_point` fails with this instead of echoing the
     /// source session id back as the snapshot path.
     pin_failure: Mutex<Option<PinFailure>>,
@@ -131,6 +135,9 @@ impl StoreDeps {
     }
     pub(crate) fn set_fork_capable(&self, fork: bool) {
         *self.fork_capable.lock().unwrap() = fork;
+    }
+    pub(crate) fn set_fork_unavailable_reason(&self, reason: &str) {
+        *self.fork_unavailable_reason.lock().unwrap() = Some(reason.to_string());
     }
     pub(crate) fn fail_pin(&self, message: &str) {
         *self.pin_failure.lock().unwrap() = Some(PinFailure::Failed(message.to_string()));
@@ -472,15 +479,29 @@ impl ChatManagerDeps for StoreDeps {
     fn tracker_end_all_running(&self, _chat_id: &str) {}
     /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-    fn is_transcript_present<'a>(
+    /// `transcript_present` = `Some(true)` reports the transcript where the chat
+    /// row says it is, so presence tests never also re-point the path.
+    fn locate_transcript<'a>(
         &'a self,
         _adapter_id: &'a str,
-        _session_id: &'a str,
+        session_id: &'a str,
         _project_path: &'a str,
-        _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
+        session_file_path: Option<&'a str>,
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
+        use mainframe_types::transcript::TranscriptLocation;
         let present = *self.transcript_present.lock().unwrap();
-        Box::pin(async move { present })
+        let path = session_file_path
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("/transcripts/{session_id}.jsonl"));
+        Box::pin(async move {
+            present.map(|present| {
+                if present {
+                    TranscriptLocation::Present(path)
+                } else {
+                    TranscriptLocation::Missing
+                }
+            })
+        })
     }
     fn chats_clear_session(&self, chat_id: &str) {
         if let Some(c) = self.store.lock().unwrap().get_mut(chat_id) {
@@ -518,6 +539,7 @@ impl ChatManagerDeps for StoreDeps {
         AdapterForkInfo {
             name: adapter_id.to_string(),
             fork: *self.fork_capable.lock().unwrap(),
+            unavailable_reason: self.fork_unavailable_reason.lock().unwrap().clone(),
         }
     }
     fn pin_fork_point<'a>(
@@ -534,6 +556,7 @@ impl ChatManagerDeps for StoreDeps {
                 None => Ok(ForkSource {
                     source_session_id: request.source_session_id,
                     resume_path: Some(format!("{}/snapshot.jsonl", request.dest_dir)),
+                    last_turn_id: None,
                 }),
             }
         })

@@ -105,6 +105,7 @@ use deps_config::CmDeps;
 use deps_event::EhDeps;
 use deps_lifecycle::LcDeps;
 use deps_permission::PhDeps;
+use deps_recovery::PresenceDeps;
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (reads.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
@@ -189,11 +190,11 @@ pub(crate) mod tests;
 // notes: implements both deps traits over the shared internals (chat lock is a leaf,
 // notes: emit-after-drop); sendMessage auto-`continueHere` when transcriptMissing && not
 // notes: spawned. No defaulted ChatManagerDeps method is left silently unoverridden in
-// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, is_transcript_present
+// notes: chat_deps.rs: tracker_list_live, tracker_end_all_running, locate_transcript
 // notes: and adapter_snapshot_models are all required, not defaulted (#273 for the
 // notes: tracker methods — a silent default caused backgroundActivity to stay empty,
 // notes: then let orphaned tasks stay Running forever, in production; #289 for
-// notes: is_transcript_present — a silent default left transcript-presence
+// notes: the presence lookup — a silent default left transcript-presence
 // notes: reconciliation permanently inert in production; #290 for
 // notes: adapter_snapshot_models — a silent default made
 // notes: normalize_saved_default_model's probe-failure short-circuit fire on every

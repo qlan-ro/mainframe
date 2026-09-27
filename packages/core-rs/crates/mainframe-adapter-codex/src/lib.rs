@@ -25,6 +25,8 @@ pub(crate) mod context_window;
 pub mod event_mapper;
 pub mod external_session_parse;
 pub mod external_sessions;
+pub(crate) mod fork;
+pub(crate) mod fork_pin;
 pub mod history;
 pub(crate) mod history_collab;
 pub(crate) mod history_collab_resolve;
@@ -68,7 +70,6 @@ pub use external_sessions::{clear_codex_external_session_cache, list_external_se
 pub use plan_mode_handler::CodexPlanModeHandler;
 pub use quota_identity::{CODEX_IDENTITY_TRANSIENT, read_codex_account_identity_from_disk};
 pub use session::{CodexScanDeps, CodexSession};
-pub use transcript::is_codex_transcript_present;
 
 // PORT STATUS: src/plugins/builtin/codex/index.ts (8 lines)
 // confidence: high

@@ -603,16 +603,25 @@ fn build_connect_replay_events(
     use mainframe_types::adapter::CatalogSource;
     snapshots
         .iter()
-        .filter_map(|s| match (s.catalog_source, s.models_revision) {
-            (Some(CatalogSource::Probed), Some(models_revision)) => {
-                Some(DaemonEvent::AdapterModelsUpdated {
-                    adapter_id: s.id.clone(),
-                    models: s.models.clone(),
-                    models_revision,
-                    installed: Some(s.installed),
-                })
+        .filter_map(|s| {
+            // Todo #368: a version-gated capability (Codex's `fork`) or its
+            // unavailable-reason can be worth replaying even for an adapter whose
+            // catalog never made it past the fallback seed — not only the
+            // previously-sole "catalog was probed" case.
+            let probed = matches!(s.catalog_source, Some(CatalogSource::Probed));
+            let has_fork_signal = s.capabilities.fork || s.fork_unavailable_reason.is_some();
+            if !probed && !has_fork_signal {
+                return None;
             }
-            _ => None,
+            let models_revision = s.models_revision?;
+            Some(DaemonEvent::AdapterModelsUpdated {
+                adapter_id: s.id.clone(),
+                models: s.models.clone(),
+                models_revision,
+                installed: Some(s.installed),
+                capabilities: Some(s.capabilities),
+                fork_unavailable_reason: s.fork_unavailable_reason.clone(),
+            })
         })
         .collect()
 }
@@ -634,8 +643,24 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 mod tests {
     use super::*;
     use mainframe_types::adapter::{
-        ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind,
+        AdapterCapabilities, AdapterInfo, CatalogSource, ProviderQuota, ProviderQuotaStatus,
+        QuotaWindow, QuotaWindowKind,
     };
+
+    fn fallback_snapshot(id: &str, capabilities: AdapterCapabilities) -> AdapterInfo {
+        AdapterInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: format!("{id} adapter"),
+            installed: true,
+            version: None,
+            models: vec![],
+            models_revision: Some(1),
+            catalog_source: Some(CatalogSource::Fallback),
+            capabilities,
+            fork_unavailable_reason: None,
+        }
+    }
 
     fn register_client(
         clients: &WsClients,
@@ -666,6 +691,76 @@ mod tests {
                 weekly: None,
                 account_identity: Some("uuid-1".into()),
             },
+        }
+    }
+
+    // Todo #368: an adapter whose catalog never left the fallback seed (so the
+    // old `catalog_source == Probed` gate would have skipped it) still needs
+    // its capabilities replayed to a reconnecting client once `fork` is true.
+    #[test]
+    fn replays_fork_capability_for_a_fallback_catalog_adapter() {
+        let caps = AdapterCapabilities {
+            plan_mode: false,
+            auto_mode: false,
+            no_persistence: false,
+            fork: true,
+        };
+        let snapshots = vec![fallback_snapshot("codex", caps)];
+        let events = build_connect_replay_events(&snapshots);
+        assert_eq!(
+            events,
+            vec![DaemonEvent::AdapterModelsUpdated {
+                adapter_id: "codex".into(),
+                models: vec![],
+                models_revision: 1,
+                installed: Some(true),
+                capabilities: Some(caps),
+                fork_unavailable_reason: None,
+            }]
+        );
+    }
+
+    // A fallback-catalog adapter with no fork signal (the common case for every
+    // adapter untouched by todo #368) still produces no replay, matching the
+    // pre-#368 behavior.
+    #[test]
+    fn skips_replay_for_a_fallback_catalog_adapter_with_no_fork_signal() {
+        let caps = AdapterCapabilities {
+            plan_mode: true,
+            auto_mode: false,
+            no_persistence: false,
+            fork: false,
+        };
+        let snapshots = vec![fallback_snapshot("claude", caps)];
+        assert!(build_connect_replay_events(&snapshots).is_empty());
+    }
+
+    // A fallback-catalog adapter with a known fork-unavailable reason (e.g. an
+    // old Codex CLI, todo #368) also replays, so the UI's disabled-Fork reason
+    // survives a reconnect even before the catalog probe ever succeeds.
+    #[test]
+    fn replays_fork_unavailable_reason_for_a_fallback_catalog_adapter() {
+        let caps = AdapterCapabilities {
+            plan_mode: false,
+            auto_mode: false,
+            no_persistence: false,
+            fork: false,
+        };
+        let mut snapshot = fallback_snapshot("codex", caps);
+        snapshot.fork_unavailable_reason = Some("Codex CLI too old".into());
+        let events = build_connect_replay_events(&[snapshot]);
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            DaemonEvent::AdapterModelsUpdated {
+                fork_unavailable_reason,
+                ..
+            } => {
+                assert_eq!(
+                    fork_unavailable_reason.as_deref(),
+                    Some("Codex CLI too old")
+                );
+            }
+            other => panic!("unexpected event: {other:?}"),
         }
     }
 
