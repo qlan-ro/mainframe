@@ -1393,7 +1393,6 @@ impl AdapterSession for ClaudeSession {
 }
 
 #[cfg(test)]
-#[path = "session_model_tests.rs"]
 mod model_tests;
 
 #[cfg(test)]
