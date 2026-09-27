@@ -12,9 +12,17 @@ impl ChatManager {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .has_pending(chat_id);
+        let side_chat_waiting =
+            side_chat_waiting_for(&self.permissions, chat.side_chat_id.as_deref());
         let live = self.deps.tracker_list_live(chat_id);
         let project_path = self.deps.projects_get_path(&chat.project_id);
-        enrich_chat(&mut chat, has_pending, &live, project_path.as_deref());
+        enrich_chat(
+            &mut chat,
+            has_pending,
+            &live,
+            project_path.as_deref(),
+            side_chat_waiting,
+        );
         Some(chat)
     }
 
@@ -28,9 +36,17 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
+                let side_chat_waiting =
+                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
                 let live = self.deps.tracker_list_live(&c.id);
                 let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(&mut c, hp, &live, project_path.as_deref());
+                enrich_chat(
+                    &mut c,
+                    hp,
+                    &live,
+                    project_path.as_deref(),
+                    side_chat_waiting,
+                );
                 c
             })
             .collect()
@@ -46,9 +62,17 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
+                let side_chat_waiting =
+                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
                 let live = self.deps.tracker_list_live(&c.id);
                 let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(&mut c, hp, &live, project_path.as_deref());
+                enrich_chat(
+                    &mut c,
+                    hp,
+                    &live,
+                    project_path.as_deref(),
+                    side_chat_waiting,
+                );
                 c
             })
             .collect()
@@ -122,9 +146,17 @@ impl ChatManager {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .has_pending(&c.id);
+                let side_chat_waiting =
+                    side_chat_waiting_for(&self.permissions, c.side_chat_id.as_deref());
                 let live = self.deps.tracker_list_live(&c.id);
                 let project_path = self.deps.projects_get_path(&c.project_id);
-                enrich_chat(&mut c, hp, &live, project_path.as_deref());
+                enrich_chat(
+                    &mut c,
+                    hp,
+                    &live,
+                    project_path.as_deref(),
+                    side_chat_waiting,
+                );
                 c
             })
             .collect()

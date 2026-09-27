@@ -52,9 +52,9 @@ impl ChatsRepository {
             ],
         )?;
 
-        let chat = self.get(&id)?.ok_or_else(|| {
-            DbError::Message("side chat insert did not round-trip".to_string())
-        })?;
+        let chat = self
+            .get(&id)?
+            .ok_or_else(|| DbError::Message("side chat insert did not round-trip".to_string()))?;
         Ok((chat, true))
     }
 

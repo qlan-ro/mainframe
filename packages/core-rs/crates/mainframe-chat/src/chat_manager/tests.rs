@@ -21,6 +21,7 @@ mod fork_title;
 mod offload;
 mod plan_mode;
 mod resume_snapshot;
+mod side_chat;
 
 // ── fake ChatManagerDeps ─────────────────────────────────────────────────────
 
@@ -119,6 +120,9 @@ impl StoreDeps {
     pub(crate) fn events(&self) -> Vec<DaemonEvent> {
         self.events.lock().unwrap().clone()
     }
+    pub(crate) fn order(&self) -> Vec<String> {
+        self.order.lock().unwrap().clone()
+    }
     pub(crate) fn created_sessions(&self) -> Vec<mainframe_types::adapter::SessionOptions> {
         self.created_sessions.lock().unwrap().clone()
     }
@@ -152,6 +156,28 @@ impl StoreDeps {
     pub(crate) fn set_fork_snapshots_dir(&self, dir: &str) {
         *self.fork_snapshots_dir.lock().unwrap() = Some(dir.to_string());
     }
+    /// A snapshot of every stored chat, `sideChatId` NOT yet derived (raw DB
+    /// row shape). Callers apply `derive_side_chat_id`/`with_derived_side_chat_ids`.
+    fn raw_chats(&self) -> Vec<Chat> {
+        self.store.lock().unwrap().values().cloned().collect()
+    }
+    /// Mirrors the DB's correlated `sideChatId` subquery (todo #344) for this
+    /// in-memory double: the id of the (at most one) temporary chat in `all`
+    /// whose `parent_chat_id` is `chat_id`.
+    fn derive_side_chat_id(chat_id: &str, all: &[Chat]) -> Option<String> {
+        all.iter()
+            .find(|c| {
+                c.temporary && c.parent_chat_id.as_ref().and_then(|p| p.as_deref()) == Some(chat_id)
+            })
+            .map(|c| c.id.clone())
+    }
+    fn with_derived_side_chat_ids(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
+        let snapshot = chats.clone();
+        for c in &mut chats {
+            c.side_chat_id = Self::derive_side_chat_id(&c.id, &snapshot);
+        }
+        chats
+    }
 }
 
 impl ChatManagerDeps for StoreDeps {
@@ -172,7 +198,10 @@ impl ChatManagerDeps for StoreDeps {
         text.to_string()
     }
     fn chats_get(&self, id: &str) -> Option<Chat> {
-        self.store.lock().unwrap().get(id).cloned()
+        let all = self.raw_chats();
+        let mut chat = all.iter().find(|c| c.id == id)?.clone();
+        chat.side_chat_id = Self::derive_side_chat_id(id, &all);
+        Some(chat)
     }
     fn chats_create(&self, _new_chat: &mainframe_types::chat::NewChat) -> Chat {
         test_chat("new")
@@ -217,10 +246,10 @@ impl ChatManagerDeps for StoreDeps {
         }
     }
     fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        self.store.lock().unwrap().values().cloned().collect()
+        self.with_derived_side_chat_ids(self.raw_chats())
     }
     fn chats_list_all(&self) -> Vec<Chat> {
-        self.store.lock().unwrap().values().cloned().collect()
+        self.with_derived_side_chat_ids(self.raw_chats())
     }
     fn chats_list_filtered(
         &self,
@@ -230,7 +259,7 @@ impl ChatManagerDeps for StoreDeps {
         _include_archived: bool,
         _include_temporary: bool,
     ) -> Vec<Chat> {
-        self.store.lock().unwrap().values().cloned().collect()
+        self.with_derived_side_chat_ids(self.raw_chats())
     }
     fn chats_add_mention(&self, chat_id: &str, mention: &mainframe_types::context::SessionMention) {
         self.mentions
@@ -588,6 +617,68 @@ impl ChatManagerDeps for StoreDeps {
                     .to_string_lossy()
                     .into_owned()
             })
+    }
+    fn chats_find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), String> {
+        let all = self.raw_chats();
+        if let Some(existing_id) = Self::derive_side_chat_id(&parent.id, &all)
+            && let Some(existing) = all.iter().find(|c| c.id == existing_id)
+        {
+            return Ok((existing.clone(), false));
+        }
+        let id = format!("side-{}", nanoid::nanoid!());
+        let now = "2026-01-01T00:00:00.000Z".to_string();
+        let side_chat = Chat {
+            id: id.clone(),
+            adapter_id: parent.adapter_id.clone(),
+            project_id: parent.project_id.clone(),
+            title: None,
+            claude_session_id: None,
+            session_file_path: None,
+            model: parent.model.clone(),
+            permission_mode: parent.permission_mode,
+            plan_mode: parent.plan_mode,
+            status: ChatStatus::Active,
+            created_at: now.clone(),
+            updated_at: now,
+            total_cost: 0.0,
+            total_tokens_input: 0,
+            total_tokens_output: 0,
+            last_context_tokens_input: 0,
+            last_context_total_tokens: None,
+            last_context_max_tokens: None,
+            context_files: None,
+            mentions: None,
+            modified_files: None,
+            worktree_path: parent.worktree_path.clone(),
+            branch_name: parent.branch_name.clone(),
+            process_state: None,
+            display_status: None,
+            is_running: None,
+            background_activity: None,
+            worktree_missing: None,
+            directory_missing: None,
+            missing_directory_path: None,
+            transcript_missing: None,
+            todos: None,
+            pinned: None,
+            effort: None,
+            fast: None,
+            ultracode: None,
+            adaptive_thinking: None,
+            detected_prs: None,
+            tags: None,
+            automation_run_id: None,
+            temporary: true,
+            no_project: parent.no_project,
+            context_lost_at: None,
+            vendor_session_ephemeral: false,
+            scratch_path: parent.scratch_path.clone(),
+            parent_chat_id: Some(Some(parent.id.clone())),
+            side_chat_id: None,
+            side_chat_waiting: None,
+        };
+        self.store.lock().unwrap().insert(id, side_chat.clone());
+        Ok((side_chat, true))
     }
 }
 
@@ -1834,7 +1925,7 @@ mod background_activity {
     #[test]
     fn main_only_working_no_background() {
         let mut chat = working_chat("c-working", None, true);
-        enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(chat.background_activity, None);
@@ -1847,7 +1938,7 @@ mod background_activity {
             bg_task("a-1", BackgroundWorkKind::Agent, "reviewer"),
             bg_task("b-1", BackgroundWorkKind::Bash, "dev server"),
         ];
-        enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(false));
         let by_kind = HashMap::from([
@@ -1871,7 +1962,7 @@ mod background_activity {
     fn both_main_turn_and_background() {
         let mut chat = working_chat("c-working", None, true);
         let tasks = vec![bg_task("w-1", BackgroundWorkKind::Workflow, "deploy")];
-        enrich_chat(&mut chat, false, &tasks, None);
+        enrich_chat(&mut chat, false, &tasks, None, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Working));
         assert_eq!(chat.is_running, Some(true));
         assert_eq!(
@@ -1888,7 +1979,7 @@ mod background_activity {
     fn terminal_tasks_do_not_count() {
         // Ended tasks never appear in listLive → an empty slice here.
         let mut chat = working_chat("c-idle", None, false);
-        enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Idle));
         assert_eq!(chat.background_activity, None);
     }
@@ -1897,7 +1988,7 @@ mod background_activity {
     fn pending_permission_wins_over_background_activity() {
         let mut chat = working_chat("c-idle", None, false);
         let tasks = vec![bg_task("a-3", BackgroundWorkKind::Agent, "work")];
-        enrich_chat(&mut chat, true, &tasks, None);
+        enrich_chat(&mut chat, true, &tasks, None, None);
         assert_eq!(chat.display_status, Some(DisplayStatus::Waiting));
         assert_eq!(chat.is_running, Some(false));
         // The chip still shows the live background work while the gate is up.
@@ -1911,7 +2002,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-live", None, false);
         chat.worktree_path = Some(dir.path().to_string_lossy().into_owned());
 
-        enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None, None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1926,7 +2017,7 @@ mod background_activity {
         let mut chat = working_chat("c-wt-gone", None, false);
         chat.worktree_path = Some(path.clone());
 
-        enrich_chat(&mut chat, false, &[], Some("/project"));
+        enrich_chat(&mut chat, false, &[], Some("/project"), None);
 
         assert_eq!(chat.worktree_missing, Some(true));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1940,7 +2031,7 @@ mod background_activity {
         let path = path.to_str().unwrap().to_string();
         let mut chat = working_chat("c-project-gone", None, false);
 
-        enrich_chat(&mut chat, false, &[], Some(&path));
+        enrich_chat(&mut chat, false, &[], Some(&path), None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(true));
@@ -1952,7 +2043,7 @@ mod background_activity {
         let dir = tempfile::TempDir::new().unwrap();
         let mut chat = working_chat("c-project-live", None, false);
 
-        enrich_chat(&mut chat, false, &[], dir.path().to_str());
+        enrich_chat(&mut chat, false, &[], dir.path().to_str(), None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));
@@ -1963,7 +2054,7 @@ mod background_activity {
     fn missing_project_row_is_not_a_missing_directory() {
         let mut chat = working_chat("c-project-row-gone", None, false);
 
-        enrich_chat(&mut chat, false, &[], None);
+        enrich_chat(&mut chat, false, &[], None, None);
 
         assert_eq!(chat.worktree_missing, Some(false));
         assert_eq!(chat.directory_missing, Some(false));

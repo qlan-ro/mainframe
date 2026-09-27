@@ -93,7 +93,9 @@ fn find_or_create_side_chat_seeds_the_parent_fields_and_nothing_else() {
 #[test]
 fn side_chat_id_appears_on_the_parent_through_get_list_and_list_filtered() {
     let (chats, projects, _conn) = setup();
-    let p = projects.create("/project/side-chats-visibility", None).unwrap();
+    let p = projects
+        .create("/project/side-chats-visibility", None)
+        .unwrap();
     let parent = chats.create(&new_chat(&p.id)).unwrap();
     assert_eq!(parent.side_chat_id, None);
 
@@ -126,7 +128,9 @@ fn side_chat_id_appears_on_the_parent_through_get_list_and_list_filtered() {
 #[test]
 fn list_filtered_excludes_side_chats_with_and_without_include_temporary() {
     let (chats, projects, _conn) = setup();
-    let p = projects.create("/project/side-chats-listing", None).unwrap();
+    let p = projects
+        .create("/project/side-chats-listing", None)
+        .unwrap();
     let parent = chats.create(&new_chat(&p.id)).unwrap();
     let (side, _created) = chats.find_or_create_side_chat(&parent).unwrap();
 

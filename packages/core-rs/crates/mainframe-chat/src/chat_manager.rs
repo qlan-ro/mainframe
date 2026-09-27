@@ -37,8 +37,8 @@ use mainframe_types::background_task::{
     BackgroundTask, derive_background_activity, to_activity_task,
 };
 use mainframe_types::chat::{
-    Chat, ChatMessage, ChatMessageType, DisplayStatus, MessageContent, NewChat, ProcessState,
-    Project, QueuedMessageRef, TodoItem,
+    Chat, ChatMessage, ChatMessageType, ChatStatus, DisplayStatus, MessageContent, NewChat,
+    ProcessState, Project, QueuedMessageRef, TodoItem,
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{SessionContext, SessionMention, SkillFileEntry};
@@ -88,11 +88,13 @@ mod send;
 mod send_entry;
 mod send_queue;
 mod shared;
+mod side_chat;
 mod update;
 
 pub use deps::ChatManagerDeps;
 pub use errors::{ChatFieldsPartial, CommandMeta, ForkError, SendError, TrustWorkspaceError};
 pub use external_facade::ExternalSessionFacade;
+pub use side_chat::OpenSideChatError;
 pub use update::{ChatUpdate, ProcessedAttachments};
 
 // `ForkChatError` (todo #343's fork-a-chat action, `fork_api.rs`) is distinct
@@ -109,7 +111,9 @@ use deps_permission::PhDeps;
 use shared::{
     apply_tuning_impl, build_history_session, clear_all_queued_for_chat, enrich_and_emit,
     enrich_chat, handle_queued_processed, is_working, now_ms, queued_for_chat, remap_history,
+    side_chat_waiting_for,
 };
+use side_chat::is_side_chat;
 
 type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
 /// Insertion-ordered (FIFO): `queue_state` snapshots render in the order we

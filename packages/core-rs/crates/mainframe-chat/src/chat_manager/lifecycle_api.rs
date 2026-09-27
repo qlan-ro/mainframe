@@ -62,7 +62,17 @@ impl ChatManager {
         self.lifecycle.interrupt_chat(chat_id).await;
     }
 
+    /// Rule 6: a chat's side chat (if any) is discarded before the lifecycle
+    /// archive runs — the worktree removal `delete_worktree` may trigger
+    /// happens there, and discarding first keeps the side chat from
+    /// referencing a worktree the archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
+        if let Some(chat) = self.deps.chats_get(chat_id)
+            && let Some(side_chat_id) = chat.side_chat_id.clone()
+            && let Err(err) = self.discard_chat(&side_chat_id).await
+        {
+            tracing::warn!(chat_id, side_chat_id, %err, "failed to discard side chat before archiving its parent");
+        }
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
         self.deps.tracker_remove_chat(chat_id);
         self.event_handler.clear_display_state(chat_id);
