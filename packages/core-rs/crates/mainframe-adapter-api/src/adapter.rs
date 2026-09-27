@@ -344,14 +344,36 @@ pub trait Adapter: Send + Sync {
     /// Pin a fork's starting point (todo #343): locate and snapshot whatever the
     /// adapter needs to branch `request.source_session_id`'s conversation
     /// without disturbing it. Default `Unsupported` — adapters with no fork
-    /// mechanism (Codex, for now) need not override this; `ChatManager::fork_chat`
-    /// treats `Unsupported` the same as `capabilities().fork == false`.
+    /// mechanism need not override this; `ChatManager::fork_chat` treats
+    /// `Unsupported` the same as `capabilities().fork == false`.
     fn pin_fork_point(
         &self,
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
         let _ = request;
         Box::pin(async { Err(ForkPinError::Unsupported) })
+    }
+
+    /// Report the CLI version the registry's refresh observed (todo #368), so a
+    /// capability that depends on the installed version (Codex's `fork`, gated
+    /// on a minimum CLI release) can be computed synchronously from
+    /// `capabilities()` without that method itself spawning a process.
+    /// `AdapterRegistry::run_refresh` calls this once per refresh, before
+    /// `apply_refresh`, on both the primary and the fallback version-detection
+    /// path; `None` means the version could not be determined (uninstalled, or
+    /// the CLI's `--version` output didn't parse). Default no-op: adapters whose
+    /// capabilities never depend on version need not override it.
+    fn observe_cli_version(&self, version: Option<&str>) {
+        let _ = version;
+    }
+
+    /// A human-readable reason `capabilities().fork` is currently `false`
+    /// (todo #368), or `None` when fork is available or the adapter has no
+    /// version-gated fork story at all. Surfaced verbatim by the Fork menu item
+    /// and the REST route's 422 body — adapter-agnostic on the caller side, so
+    /// this is the only place the wording lives. Default `None`.
+    fn fork_unavailable_reason(&self) -> Option<String> {
+        None
     }
 
     // TODO(port): the optional skill/agent/command/external-session CRUD methods

@@ -210,6 +210,7 @@ pub trait ChatManagerDeps: Send + Sync {
         AdapterForkInfo {
             name: adapter_id.to_string(),
             fork: false,
+            unavailable_reason: None,
         }
     }
     /// Pin a fork's starting point through the parent's adapter

@@ -384,6 +384,13 @@ pub struct AdapterInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_source: Option<CatalogSource>,
     pub capabilities: AdapterCapabilities,
+    /// Why `capabilities.fork` is currently `false` (todo #368), e.g. a CLI
+    /// below the version that introduced the fork RPC. `None` when fork is
+    /// available or the adapter has no version-gated fork story. Absent on the
+    /// wire (older daemon, or an adapter/state with no reason) deserializes to
+    /// `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_unavailable_reason: Option<String>,
 }
 
 /// Full union across both CLIs. Codex ReasoningEffort = none..xhigh, plus
@@ -639,6 +646,33 @@ mod tests {
             "noPersistence": false,
             "fork": true
         }));
+    }
+
+    #[test]
+    fn adapter_info_fork_unavailable_reason_roundtrips_and_omits_when_absent() {
+        let v = json!({
+            "id": "codex",
+            "name": "Codex",
+            "description": "Codex adapter",
+            "installed": true,
+            "models": [],
+            "capabilities": { "planMode": false, "autoMode": false, "noPersistence": false, "fork": false },
+            "forkUnavailableReason": "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
+        });
+        roundtrip::<AdapterInfo>(v);
+
+        let no_reason: AdapterInfo = serde_json::from_value(json!({
+            "id": "claude",
+            "name": "Claude",
+            "description": "Claude adapter",
+            "installed": true,
+            "models": [],
+            "capabilities": { "planMode": false, "autoMode": false, "fork": true }
+        }))
+        .unwrap();
+        assert_eq!(no_reason.fork_unavailable_reason, None);
+        let s = serde_json::to_string(&no_reason).unwrap();
+        assert!(!s.contains("forkUnavailableReason"));
     }
 
     #[test]
