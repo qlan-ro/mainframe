@@ -1,5 +1,8 @@
 //! `on_worktree_trigger` fires exactly once per tool-result batch when a
-//! completed, non-error tool call may have registered a git worktree.
+//! completed, non-error tool call created a git worktree (which calls count is
+//! `worktree_tool`'s table), and
+//! `on_transcript_moved` fires when one of Claude's worktree tools moved the
+//! session (and with it the transcript) to another directory.
 
 use super::*;
 use crate::test_support::test_chat;
@@ -9,6 +12,7 @@ struct TriggerDeps {
     cell: Arc<Mutex<ActiveChat>>,
     trigger_count: AtomicUsize,
     triggered_chat_ids: Mutex<Vec<String>>,
+    moved_count: AtomicUsize,
 }
 
 impl TriggerDeps {
@@ -17,6 +21,7 @@ impl TriggerDeps {
             cell: cell(),
             trigger_count: AtomicUsize::new(0),
             triggered_chat_ids: Mutex::new(Vec::new()),
+            moved_count: AtomicUsize::new(0),
         })
     }
 }
@@ -76,6 +81,9 @@ impl EventHandlerDeps for TriggerDeps {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .push(chat_id.to_string());
+    }
+    fn on_transcript_moved(&self, _chat_id: &str) {
+        self.moved_count.fetch_add(1, Ordering::SeqCst);
     }
     /// Empty on purpose: this suite exercises worktree triggers, not on_exit.
     fn tracker_end_all_running(&self, _chat_id: &str) {}
@@ -154,39 +162,16 @@ fn a_bash_worktree_add_command_triggers_one_rescan_after_a_successful_result() {
 }
 
 #[test]
-fn a_mixed_case_worktree_command_matches_case_insensitively() {
+fn a_read_only_worktree_command_never_triggers_a_rescan() {
     let deps = TriggerDeps::new();
     let sink = sink(deps.clone());
 
+    // Read-only worktree commands must not rescan: that would offer this chat
+    // the worktrees other sessions created since its last scan.
     sink.on_message(
-        vec![tool_use("tu-1", "Bash", Some("GIT WORKTREE LIST"))],
+        vec![tool_use("tu-1", "Bash", Some("git worktree list"))],
         None,
     );
-    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
-
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn the_bash_tool_alias_is_recognised_too() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
-
-    sink.on_message(
-        vec![tool_use("tu-1", "BashTool", Some("git worktree list"))],
-        None,
-    );
-    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
-
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn an_unrelated_bash_command_never_triggers_a_rescan() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
-
-    sink.on_message(vec![tool_use("tu-1", "Bash", Some("ls -la"))], None);
     sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 0);
@@ -235,4 +220,37 @@ fn two_worktree_tool_uses_resolved_in_one_batch_trigger_only_one_rescan() {
     );
 
     assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn entering_and_leaving_a_worktree_each_report_a_transcript_move() {
+    let deps = TriggerDeps::new();
+    let sink = sink(deps.clone());
+
+    sink.on_message(vec![tool_use("tu-1", "EnterWorktree", None)], None);
+    sink.on_tool_result(vec![tool_result("tu-1", false)], None);
+    sink.on_message(vec![tool_use("tu-2", "ExitWorktree", None)], None);
+    sink.on_tool_result(vec![tool_result("tu-2", false)], None);
+
+    assert_eq!(deps.moved_count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn a_git_worktree_shell_command_or_a_failed_worktree_tool_moves_nothing() {
+    let deps = TriggerDeps::new();
+    let sink = sink(deps.clone());
+
+    sink.on_message(
+        vec![
+            tool_use("tu-1", "Bash", Some("git worktree add ../wt")),
+            tool_use("tu-2", "EnterWorktree", None),
+        ],
+        None,
+    );
+    sink.on_tool_result(
+        vec![tool_result("tu-1", false), tool_result("tu-2", true)],
+        None,
+    );
+
+    assert_eq!(deps.moved_count.load(Ordering::SeqCst), 0);
 }

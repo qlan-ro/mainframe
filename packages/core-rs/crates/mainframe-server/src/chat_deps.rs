@@ -763,13 +763,13 @@ impl ChatManagerDeps for DaemonChatDeps {
         })
     }
 
-    fn is_transcript_present<'a>(
+    fn locate_transcript<'a>(
         &'a self,
         adapter_id: &'a str,
         session_id: &'a str,
         project_path: &'a str,
         session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
+    ) -> BoxFuture<'a, Option<mainframe_types::transcript::TranscriptLocation>> {
         let adapter = self.adapters.get(adapter_id);
         let (session_id, project_path) = (session_id.to_string(), project_path.to_string());
         let session_file_path = session_file_path.map(str::to_string);
@@ -779,12 +779,12 @@ impl ChatManagerDeps for DaemonChatDeps {
                 return None;
             };
             match adapter
-                .is_transcript_present(session_id, project_path, session_file_path)
+                .locate_transcript(session_id, project_path, session_file_path)
                 .await
             {
-                Ok(present) => present,
+                Ok(location) => location,
                 Err(err) => {
-                    tracing::warn!(%err, adapter_id, "transcript presence check failed");
+                    tracing::warn!(%err, adapter_id, "transcript lookup failed");
                     None
                 }
             }

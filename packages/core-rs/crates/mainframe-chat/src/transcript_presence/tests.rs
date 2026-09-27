@@ -1,21 +1,40 @@
 use super::*;
 use std::sync::Mutex;
 
+/// Where `FakeDeps::new(Some(true))` reports the transcript.
+const FOUND_AT: &str = "/home/.claude/projects/-project-p1/sess-1.jsonl";
+
 struct FakeDeps {
-    present: Option<bool>,
+    location: Option<TranscriptLocation>,
     has_project: bool,
     events: Mutex<Vec<DaemonEvent>>,
     synced: Mutex<Vec<(String, bool)>>,
     updated: Mutex<Vec<(String, bool)>>,
+    paths_updated: Mutex<Vec<(String, String)>>,
+    paths_synced: Mutex<Vec<(String, String)>>,
 }
 impl FakeDeps {
+    /// `Some(true)` = present at [`FOUND_AT`], `Some(false)` = missing,
+    /// `None` = the adapter cannot tell.
     fn new(present: Option<bool>) -> Self {
+        Self::at(present.map(|present| {
+            if present {
+                TranscriptLocation::Present(FOUND_AT.to_string())
+            } else {
+                TranscriptLocation::Missing
+            }
+        }))
+    }
+
+    fn at(location: Option<TranscriptLocation>) -> Self {
         Self {
-            present,
+            location,
             has_project: true,
             events: Mutex::new(Vec::new()),
             synced: Mutex::new(Vec::new()),
             updated: Mutex::new(Vec::new()),
+            paths_updated: Mutex::new(Vec::new()),
+            paths_synced: Mutex::new(Vec::new()),
         }
     }
 
@@ -33,24 +52,36 @@ impl TranscriptPresenceDeps for FakeDeps {
             .unwrap()
             .push((chat_id.to_string(), missing));
     }
+    fn chats_update_session_file_path(&self, chat_id: &str, path: &str) {
+        self.paths_updated
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), path.to_string()));
+    }
     fn projects_get_path(&self, _project_id: &str) -> Option<String> {
         self.has_project.then(|| "/project/p1".to_string())
     }
-    fn is_transcript_present<'a>(
+    fn locate_transcript<'a>(
         &'a self,
         _adapter_id: &'a str,
         _session_id: &'a str,
         _project_path: &'a str,
         _session_file_path: Option<&'a str>,
-    ) -> BoxFuture<'a, Option<bool>> {
-        let present = self.present;
-        Box::pin(async move { present })
+    ) -> BoxFuture<'a, Option<TranscriptLocation>> {
+        let location = self.location.clone();
+        Box::pin(async move { location })
     }
     fn sync_chat_fields_transcript_missing(&self, chat_id: &str, missing: bool) {
         self.synced
             .lock()
             .unwrap()
             .push((chat_id.to_string(), missing));
+    }
+    fn sync_chat_fields_session_file_path(&self, chat_id: &str, path: &str) {
+        self.paths_synced
+            .lock()
+            .unwrap()
+            .push((chat_id.to_string(), path.to_string()));
     }
     fn emit_event(&self, event: DaemonEvent) {
         self.events.lock().unwrap().push(event);
@@ -181,4 +212,66 @@ async fn falls_back_to_the_scratch_path_when_the_project_cannot_be_resolved() {
 
     assert!(result);
     assert_eq!(chat.transcript_missing, Some(true));
+}
+
+// ── the CLI relocates the transcript when the session changes directory ──
+const MOVED_TO: &str = "/home/.claude/projects/-project-p1--claude-worktrees-wt/sess-1.jsonl";
+
+fn chat_stored_at(path: &str, transcript_missing: Option<bool>) -> Chat {
+    let mut chat = chat_with(Some("sess-1"), transcript_missing);
+    chat.session_file_path = Some(path.to_string());
+    chat
+}
+
+#[tokio::test]
+async fn reconcile_persists_the_path_of_a_relocated_transcript() {
+    let deps = FakeDeps::at(Some(TranscriptLocation::Present(MOVED_TO.to_string())));
+    let mut chat = chat_stored_at(FOUND_AT, Some(false));
+    let result = reconcile_transcript_presence(&deps, &mut chat).await;
+
+    assert!(!result);
+    assert_eq!(chat.session_file_path.as_deref(), Some(MOVED_TO));
+    let expected = [("chat-1".to_string(), MOVED_TO.to_string())];
+    assert_eq!(deps.paths_updated.lock().unwrap().as_slice(), expected);
+    assert_eq!(deps.paths_synced.lock().unwrap().as_slice(), expected);
+    assert_eq!(deps.events.lock().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn reconcile_leaves_an_unmoved_path_alone() {
+    let deps = FakeDeps::new(Some(true));
+    let mut chat = chat_stored_at(FOUND_AT, Some(false));
+    reconcile_transcript_presence(&deps, &mut chat).await;
+
+    assert_eq!(deps.paths_updated.lock().unwrap().len(), 0);
+    assert_eq!(deps.paths_synced.lock().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn refresh_follows_a_move_mid_turn_and_clears_a_stale_missing_flag() {
+    let deps = FakeDeps::at(Some(TranscriptLocation::Present(MOVED_TO.to_string())));
+    let mut chat = chat_stored_at(FOUND_AT, Some(true));
+    chat.process_state = Some(Some(ProcessState::Working));
+    refresh_transcript_location(&deps, &mut chat).await;
+
+    assert_eq!(chat.session_file_path.as_deref(), Some(MOVED_TO));
+    assert_eq!(chat.transcript_missing, Some(false));
+    assert_eq!(
+        deps.updated.lock().unwrap().as_slice(),
+        [("chat-1".to_string(), false)]
+    );
+    assert_eq!(deps.events.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn refresh_never_flags_a_transcript_it_cannot_find() {
+    let deps = FakeDeps::new(Some(false));
+    let mut chat = chat_stored_at(FOUND_AT, Some(false));
+    refresh_transcript_location(&deps, &mut chat).await;
+
+    assert_eq!(chat.transcript_missing, Some(false));
+    assert_eq!(chat.session_file_path.as_deref(), Some(FOUND_AT));
+    assert_eq!(deps.updated.lock().unwrap().len(), 0);
+    assert_eq!(deps.paths_updated.lock().unwrap().len(), 0);
+    assert_eq!(deps.events.lock().unwrap().len(), 0);
 }

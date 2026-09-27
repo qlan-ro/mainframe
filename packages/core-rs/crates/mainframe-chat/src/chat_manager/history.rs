@@ -103,8 +103,8 @@ impl ChatManager {
     /// Reconcile the persisted `transcriptMissing` flag against the transcript file
     /// on disk.
     pub async fn reconcile_transcript(&self, chat: &mut Chat) -> bool {
-        let wrapper = self.recovery_wrapper();
-        crate::transcript_presence::reconcile_transcript_presence(&wrapper, chat).await
+        let presence = self.presence_deps();
+        crate::transcript_presence::reconcile_transcript_presence(&presence, chat).await
     }
 
     /// Forget the dead CLI session so the next send spawns fresh in the same chat row.

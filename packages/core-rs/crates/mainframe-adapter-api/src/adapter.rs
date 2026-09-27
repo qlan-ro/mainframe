@@ -307,23 +307,10 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
-    /// `isTranscriptPresent?(sessionId, projectPath, sessionFilePath?)` — whether
-    /// the CLI's transcript for `session_id` still exists on disk. `Ok(None)` means
-    /// presence cannot be determined; callers MUST treat it as "don't flag". Owned
-    /// args for the same async-trait-convention reason as `generate_title`.
-    fn is_transcript_present(
-        &self,
-        session_id: String,
-        project_path: String,
-        session_file_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
-        let _ = (session_id, project_path, session_file_path);
-        Box::pin(async { Ok(None) })
-    }
-
     /// Absolute on-disk location of the CLI transcript for `session_id`.
     /// `Ok(None)` = the adapter cannot determine the layout — callers MUST treat
-    /// it as "unknown" and hide the session, never as "missing".
+    /// it as "unknown" (hide the session, don't flag it), never as "missing".
+    /// Owned args for the same async-trait-convention reason as `generate_title`.
     fn locate_transcript(
         &self,
         session_id: String,
@@ -374,3 +361,5 @@ pub trait Adapter: Send + Sync {
 // "unsupported / cannot determine — don't flag".
 // notes: todo #240 adds a third optional method, locate_transcript, alongside
 // is_transcript_present — same default-Ok(None) shape, same owned-String args.
+// notes: is_transcript_present was later folded into locate_transcript (presence
+// is `Present`), so reconciliation can also follow a relocated transcript.

@@ -17,7 +17,7 @@ use crate::external_sessions::list_external_sessions;
 use crate::plan_mode_handler::CodexPlanModeHandler;
 use crate::session::{CodexSession, spawn_temp_app_server};
 use crate::title_generator::generate_codex_title;
-use crate::transcript::{is_codex_transcript_present, locate_codex_transcript};
+use crate::transcript::locate_codex_transcript;
 use crate::types::{ModelInfo, ModelListResult};
 
 pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
@@ -259,19 +259,8 @@ impl Adapter for CodexAdapter {
         Box::pin(async move { generate_codex_title(&content, &binary, path.as_str()).await })
     }
 
-    /// `isTranscriptPresent(sessionId)` — Codex resolves presence from its state DB
+    /// `locateTranscript(sessionId)` — Codex resolves the rollout from its state DB
     /// via the thread registry, so `project_path`/`session_file_path` are unused.
-    fn is_transcript_present(
-        &self,
-        session_id: String,
-        _project_path: String,
-        _session_file_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<bool>, AdapterError>> {
-        Box::pin(async move { Ok(is_codex_transcript_present(&session_id, None).await) })
-    }
-
-    /// `locateTranscript(sessionId)` — same state-DB resolution as `is_transcript_present`,
-    /// re-expressed as a location instead of a bool.
     fn locate_transcript(
         &self,
         session_id: String,
@@ -467,7 +456,7 @@ mod tests {
 // notes: thread/list RPC + ThreadListResult removed). loadModels(executable) extracted;
 // notes: listModels → load_models("codex"), probeModels(exe) → load_models(exe??"codex").
 // notes: spawn_temp_app_server now takes the executable (probe uses the configured path).
-// notes: has_probe_models()=true + probe_models/is_transcript_present are Adapter-trait
+// notes: has_probe_models()=true + probe_models/locate_transcript are Adapter-trait
 // notes: overrides (so the registry dispatch in adapter-api probes Codex with the
 // notes: configured binary, mirroring `typeof adapter.probeModels === 'function'`).
 // notes: list_external_sessions/create_plan_mode_handler stay inherent (the trait defers
