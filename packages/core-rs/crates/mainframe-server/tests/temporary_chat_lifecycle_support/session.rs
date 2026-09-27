@@ -35,6 +35,10 @@ pub struct TestAdapter {
     no_persistence: bool,
     pub spawn_ids: Arc<Mutex<Vec<String>>>,
     pub project_paths: Arc<Mutex<Vec<String>>>,
+    /// Every `SessionSpawnOptions.no_persistence` a `TestSession::spawn` call
+    /// actually received, in order (todo #344 Task 4: proves the spawn seam
+    /// carries the flag exactly when the capability is on).
+    pub spawn_no_persistence: Arc<Mutex<Vec<Option<bool>>>>,
 }
 
 impl TestAdapter {
@@ -43,6 +47,7 @@ impl TestAdapter {
             no_persistence,
             spawn_ids: Arc::new(Mutex::new(Vec::new())),
             project_paths: Arc::new(Mutex::new(Vec::new())),
+            spawn_no_persistence: Arc::new(Mutex::new(Vec::new())),
         })
     }
 }
@@ -85,6 +90,7 @@ impl Adapter for TestAdapter {
             id,
             project_path: options.project_path,
             spawned: std::sync::atomic::AtomicBool::new(false),
+            spawn_no_persistence: self.spawn_no_persistence.clone(),
         })
     }
     fn kill_all(&self) {}
@@ -100,6 +106,8 @@ struct TestSession {
     /// SAME manager (AC 12's "next send after a CLI exit" path) needs a session
     /// that actually reports spawned once `spawn()` has run.
     spawned: std::sync::atomic::AtomicBool,
+    /// Shared with the owning `TestAdapter` — `spawn` records into it.
+    spawn_no_persistence: Arc<Mutex<Vec<Option<bool>>>>,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -121,9 +129,13 @@ impl AdapterSession for TestSession {
     }
     fn spawn(
         &self,
-        _options: Option<SessionSpawnOptions>,
+        options: Option<SessionSpawnOptions>,
         sink: Option<Arc<dyn SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
+        self.spawn_no_persistence
+            .lock()
+            .unwrap()
+            .push(options.and_then(|o| o.no_persistence));
         Box::pin(async move {
             self.spawned.store(true, Ordering::SeqCst);
             if let Some(sink) = sink {

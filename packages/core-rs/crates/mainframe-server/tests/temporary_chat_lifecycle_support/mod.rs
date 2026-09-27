@@ -133,3 +133,13 @@ pub fn get_chat(h: &Harness, chat_id: &str) -> Chat {
         .unwrap()
         .expect("chat row must still exist")
 }
+
+/// Opens (or reveals) `parent_id`'s side chat through the real `ChatManager`
+/// (todo #344), the same path the daemon route calls. `#[allow(dead_code)]`:
+/// only `side_chat_lifecycle.rs` calls this among this module's consumers.
+#[allow(dead_code)]
+pub async fn create_side_chat(mgr: &ChatManager, parent_id: &str) -> Chat {
+    mgr.open_side_chat(parent_id)
+        .await
+        .expect("open_side_chat should succeed")
+}
