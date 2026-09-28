@@ -5,15 +5,7 @@
  * each row carries its own tuning flyout.
  */
 import type { AdapterModel } from '@qlan-ro/mainframe-types';
-
-/** Model rows, injecting a synthetic entry when the stored id isn't in the catalog. */
-export function modelRows(adapter: { models?: AdapterModel[] } | null, storedId: string | null | undefined) {
-  const catalog = adapter?.models ?? [];
-  if (storedId && storedId !== '' && !catalog.some((m) => m.id === storedId)) {
-    return [{ id: storedId, label: storedId }, ...catalog];
-  }
-  return catalog;
-}
+export { modelChoices as modelRows } from '@/lib/cli-model';
 
 /** Labelled sections below the adapter's own models, in first-seen order. */
 export function modelGroups(rows: AdapterModel[]): [string, AdapterModel[]][] {

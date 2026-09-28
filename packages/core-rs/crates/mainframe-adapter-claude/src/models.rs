@@ -8,6 +8,9 @@ use std::collections::{HashMap, HashSet};
 
 use mainframe_types::adapter::{AdapterModel, EffortLevel};
 
+mod context_description;
+mod context_variants;
+
 pub const DEFAULT_CONTEXT_WINDOW: i64 = 200_000;
 pub const EXTENDED_CONTEXT_WINDOW: i64 = 1_000_000;
 
@@ -36,19 +39,27 @@ struct ModelSpec {
     description: Option<&'static str>,
     context_window: i64,
     efforts: &'static [EffortLevel],
-    /// `/fast` — Opus 5, 4.8 and 4.7 only.
+    /// Verified `/fast` capability from the CLI registry.
     fast: bool,
     /// Adaptive thinking — Claude 4.6 and later.
     adaptive: bool,
 }
 
-/// What the CLI itself offers. `default` is an alias the CLI resolves to the
-/// user's tier default at spawn time; a successful probe replaces this whole list.
+/// Fallback entries; `default` inherits the configured CLI model.
 const CURRENT_MODELS: &[ModelSpec] = &[
     ModelSpec {
         id: "default",
         label: "Use CLI setting",
         description: Some("Let Claude Code choose the model."),
+        context_window: EXTENDED_CONTEXT_WINDOW,
+        efforts: EFFORTS_TO_XHIGH,
+        fast: true,
+        adaptive: true,
+    },
+    ModelSpec {
+        id: "claude-opus-5-5",
+        label: "Opus 5.5",
+        description: None,
         context_window: EXTENDED_CONTEXT_WINDOW,
         efforts: EFFORTS_TO_XHIGH,
         fast: true,
@@ -230,50 +241,23 @@ fn has_extended_window_suffix(id: &str) -> bool {
     id.to_lowercase().ends_with("[1m]")
 }
 
-/// `/\b1m\b|1m context/i` on a description.
-fn description_hints_extended(description: &str) -> bool {
-    let lower = description.to_lowercase();
-    if lower.contains("1m context") {
-        return true;
-    }
-    // `\b1m\b` — "1m" bounded by non-word chars.
-    let chars: Vec<char> = lower.chars().collect();
-    let n = chars.len();
-    let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    let mut i = 0;
-    while i + 2 <= n {
-        if chars[i] == '1' && chars[i + 1] == 'm' {
-            let before_ok = i == 0 || !is_word(chars[i - 1]);
-            let after_ok = i + 2 >= n || !is_word(chars[i + 2]);
-            if before_ok && after_ok {
-                return true;
-            }
-        }
-        i += 1;
-    }
-    false
-}
-
-/// Reconcile probed entries with the static catalog so known IDs retain their
-/// authoritative window, unknown IDs ending in "[1m]" (on the entry id OR its own
-/// `resolvedModel` — the CLI puts the suffix on either side, e.g.
-/// `claude-fable-5[1m]` resolves to a bare `claude-fable-5`) get the extended
-/// window, and everything else falls back to a description sniff before the 200k
-/// default. `default_resolved_model` is kept for callers probing legacy payloads
-/// where only the "default" entry carried a resolution.
+/// Preserve reported sizes, then infer from suffixes, descriptions or known metadata.
+/// `default_resolved_model` supports legacy responses without per-entry resolutions.
 pub fn enrich_with_context_window(
     probed: Vec<AdapterModel>,
     default_resolved_model: Option<&str>,
 ) -> Vec<AdapterModel> {
     let static_windows: HashMap<String, i64> = claude_models()
         .into_iter()
+        .filter(|model| model.id != "default")
         .filter_map(|model| model.context_window.map(|w| (model.id, w)))
         .collect();
 
-    probed
+    let enriched = probed
         .into_iter()
         .map(|model| enrich_one(model, &static_windows, default_resolved_model))
-        .collect()
+        .collect();
+    context_variants::with_known_base_variants(enriched)
 }
 
 fn enrich_one(
@@ -281,11 +265,9 @@ fn enrich_one(
     static_windows: &HashMap<String, i64>,
     default_resolved_model: Option<&str>,
 ) -> AdapterModel {
-    // TS `if (model.contextWindow) return model;` — truthy (present & nonzero).
     if model.context_window.filter(|&w| w != 0).is_some() {
         return model;
     }
-    // model.resolvedModel ?? (id === 'default' ? defaultResolvedModel : undefined)
     let resolved: Option<String> = model.resolved_model.clone().or_else(|| {
         if model.id == "default" {
             default_resolved_model.map(str::to_string)
@@ -302,27 +284,12 @@ fn enrich_one(
         model.context_window = Some(EXTENDED_CONTEXT_WINDOW);
         return model;
     }
-    // staticById.get(id)?.contextWindow ?? (resolved && staticById.get(resolved)?.contextWindow)
-    let from_static = static_windows
-        .get(&model.id)
-        .copied()
+    model.context_window = model
+        .description
+        .as_deref()
+        .and_then(context_description::context_window)
+        .or_else(|| static_windows.get(&model.id).copied())
         .or_else(|| resolved_ref.and_then(|r| static_windows.get(r).copied()));
-    if let Some(w) = from_static {
-        model.context_window = Some(w);
-        return model;
-    }
-    model.context_window = Some(
-        if model
-            .description
-            .as_deref()
-            .map(description_hints_extended)
-            .unwrap_or(false)
-        {
-            EXTENDED_CONTEXT_WINDOW
-        } else {
-            DEFAULT_CONTEXT_WINDOW
-        },
-    );
     model
 }
 
@@ -376,14 +343,14 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_description_sniff_for_unknown_ids() {
+    fn unknown_windows_require_a_description_hint() {
         let mut big = probed("claude-future-1m");
         big.description = Some("Future model with 1M context".to_string());
         let mut small = probed("claude-future-small");
         small.description = Some("Faster everyday model".to_string());
         let out = enrich_with_context_window(vec![big, small], None);
         assert_eq!(window_of(&out, "claude-future-1m"), Some(1_000_000));
-        assert_eq!(window_of(&out, "claude-future-small"), Some(200_000));
+        assert_eq!(window_of(&out, "claude-future-small"), None);
     }
 
     #[test]

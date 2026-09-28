@@ -1,17 +1,15 @@
 import type { AdapterInfo, AdapterModel } from '@qlan-ro/mainframe-types';
+import { contextVariantModel, distinctModelRows, matchCatalogModel, modelDisplayLabel } from './model-catalog';
 
 export function supportsCliModel(adapterId: string | undefined): boolean {
   return adapterId === 'claude' || adapterId === 'codex';
 }
 
-export function resolveModel(adapter: AdapterInfo | null, modelId: string): AdapterModel {
-  const base = (id: string) => id.replace(/\[1m\]$/i, '');
-  return (
-    adapter?.models.find((model) => model.id === modelId) ??
-    adapter?.models.find(
-      (model) => model.id !== 'default' && base(model.resolvedModel ?? model.id) === base(modelId),
-    ) ?? { id: modelId, label: modelId }
-  );
+export function resolveModel(adapter: Pick<AdapterInfo, 'models'> | null, modelId: string): AdapterModel {
+  const match = matchCatalogModel(adapter?.models ?? [], modelId);
+  if (!match) return { id: modelId, label: modelId };
+  const model = match.contextVariant ? contextVariantModel(match.model, modelId) : match.model;
+  return { ...model, label: modelDisplayLabel(model) };
 }
 
 export function withCliModel(adapter: AdapterInfo, modelId: string | null | undefined): AdapterInfo {
@@ -29,7 +27,9 @@ export function withCliModel(adapter: AdapterInfo, modelId: string | null | unde
     ...adapter,
     models: [
       inherited,
-      ...adapter.models.filter((model) => model.id !== 'default').map((model) => ({ ...model, isDefault: false })),
+      ...adapter.models
+        .filter((model) => model.id !== 'default')
+        .map((model) => ({ ...model, label: modelDisplayLabel(model), isDefault: false })),
     ],
   };
 }
@@ -47,4 +47,19 @@ export function modelSelectionHint(
   return current
     ? `Current: ${current.label}. Selected: ${selected?.label ?? 'Use CLI setting'}.`
     : `Selected: ${selected?.label ?? 'Use CLI setting'}.${runtimeExpected ? ' Current model unavailable.' : ''}`;
+}
+
+export function modelChoices(adapter: Pick<AdapterInfo, 'models'> | null, storedId?: string | null): AdapterModel[] {
+  const catalog = adapter?.models ?? [];
+  const match = storedId ? matchCatalogModel(catalog, storedId) : null;
+  const rows = distinctModelRows(
+    catalog.map((model) => ({ ...model, label: modelDisplayLabel(model) })),
+    match && !match.contextVariant ? match.model.id : storedId,
+  );
+  if (!storedId || catalog.some((model) => model.id === storedId)) return rows;
+  const selected = { ...resolveModel({ models: catalog }, storedId), id: storedId };
+  if (match && !match.contextVariant) {
+    return rows.map((model) => (model.id === match.model.id ? selected : model));
+  }
+  return [selected, ...rows];
 }

@@ -145,3 +145,9 @@ Live probe (`packages/core/scripts/queue-probe.mjs` in the app-tauri worktree; f
 The catalog entry named `default` is not the user's configured selection. On 2.1.280, omitting `--model` preserved the Fable setting; passing `--model default` selected the recommended Opus instead. Resolve in the target project directory using the configured executable. Query the live session for its current model; do not infer it from the catalog.
 
 For `--resume`, omission behaves differently: a disposable transcript last used on Opus resumed on Opus even with a process-local Fable setting. Passing the resolved `--model claude-fable-5-1` resumed on Fable. This was verified without a user turn on all three versions. Resolve configuration afresh and pass it explicitly for inherited resumes; keep the Mainframe inheritance marker separate from that launch argument.
+
+## Model aliases and context variants (CLI 2.1.280)
+
+The live `initialize` catalog exposes `opus[1m]` alongside `default`; both entries resolve to `claude-opus-5-5[1m]`. Keep the explicit alias entry when separating CLI inheritance from the recommended model. Replacing it with a synthetic concrete ID loses the alias metadata needed to display a saved `opus` choice.
+
+No-generation `get_settings` probes resolve `opus` to `claude-opus-5-5` and `opus[1m]` to `claude-opus-5-5[1m]`. The bundled model registry marks Opus 5.5 with `context.window: 1e6` and `native_1m: true`. An absent `[1m]` suffix does not establish a smaller window; use known model metadata, preserve explicit context variants when their sizes differ, and leave unknown sizes unresolved.
