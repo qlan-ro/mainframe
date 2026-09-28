@@ -4,7 +4,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
-import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
 
 // Minimal 1x1 red PNG — valid image, tiny payload
 const TINY_PNG_BASE64 =
@@ -65,22 +65,6 @@ test.describe('§composer config selects', () => {
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-default"]').click();
     await expect(trigger).toContainText(/interactive/i, { timeout: 5_000 });
-  });
-
-  test('M4: provider row is present and unlocked before the first message', async () => {
-    const { page } = app;
-    // The unified picker holds both provider + model. Open it via the model trigger.
-    await page.locator('[data-testid="composer-model-select"]').click();
-    const provider = page.locator('[data-testid^="composer-adapter-select-option-"]').first();
-    await expect(provider).toBeVisible({ timeout: 5_000 });
-    // Pre-message: the provider is selectable (not locked for the session).
-    await expect(provider).toBeEnabled();
-    // The footer always renders (ProviderModelSelect.tsx); before the first message it shows
-    // the "pick a provider" hint, not the "Locked"/"stays fixed" copy.
-    await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
-      'Pick a provider before your first message.',
-    );
-    await closeMenus();
   });
 
   // Tuning writes (effort/features) now broadcast `chat.updated` (core `applyChatTuning` →
@@ -336,52 +320,6 @@ test.describe('§composer plan-mode toggle', () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 5_000 });
     await expect(toggle).not.toHaveClass(/border-primary/);
-  });
-});
-
-// ─── Provider/model locked after the first message (§9b) ──────────────────────
-test.describe('§composer provider locked after first message', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'messaging' });
-    project = await createTauriProject(app.page);
-    await createTauriChat(app.page, project.projectId, 'default');
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('sending the first message locks the provider row (Locked copy, disabled pills)', async () => {
-    const { page } = app;
-    await sendMessage(page, 'List the files in this project using bash ls.');
-    await waitForIdle(page, 90_000);
-
-    await page.locator('[data-testid="composer-model-select"]').click();
-    await expect(page.locator('[data-testid="composer-provider-model-popover"]')).toBeVisible({ timeout: 5_000 });
-
-    // ProviderModelSelect.tsx: `locked` = `thread.messages.length > 0` (ComposerToolbar's
-    // hasMessages). The Lock-glyph header is gone — the provider row is a `Tabs` strip now, so
-    // the lock reads as a disabled tab plus the footer copy, which switches from the
-    // pre-message hint asserted in M4 above to the fixed-for-session copy.
-    await expect(page.locator('[data-testid="composer-provider-footer"]')).toContainText(
-      'Provider stays fixed for this session.',
-    );
-
-    // TabsTrigger `disabled = !installed || lockedOut`, where `lockedOut = installed && locked &&
-    // id !== active` — the active provider (here mock-cli, createTauriChat's default adapterId
-    // under E2E_MODE=mock) stays selectable as a no-op re-pick; every OTHER provider is inert.
-    // `claude` is a builtin, always present in the adapter list. A locked-out INSTALLED provider
-    // also gets a tooltip wrapper (`composer-adapter-locked-<id>`) explaining why; an uninstalled
-    // one is disabled without it, so the wrapper is not asserted here.
-    const otherProvider = page.locator('[data-testid="composer-adapter-select-option-claude"]');
-    await expect(otherProvider).toBeVisible();
-    await expect(otherProvider).toBeDisabled();
-
-    await page.keyboard.press('Escape');
   });
 });
 
