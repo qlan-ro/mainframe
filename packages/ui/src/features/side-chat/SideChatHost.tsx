@@ -1,10 +1,15 @@
 'use client';
 
 /**
- * SideChatHost — mounted inside the parent's chat column (the single-view
- * `ChatSurface` and each split `ChatZone`), right after `ChatThread` (todo
- * #344). Docks `SideChatPanel` at the bottom while the parent has a side chat
- * and the panel isn't collapsed.
+ * SideChatHost — wraps the parent's `ChatThread` in its chat column (the
+ * single-view `ChatSurface` and each split `ChatZone`, todo #344). While the
+ * parent has a side chat and the panel isn't collapsed, `SideChatPanel` sits
+ * beside the thread behind a draggable divider, or docks below it when the
+ * column is too narrow for both (see `sideChatPlacement`). The thread keeps
+ * its tree position in both layouts, so switching never remounts it. Like a
+ * split zone, each side carries its own session rail: the parent's panel is
+ * passed in as a child and floats over the thread column (`threadRef`), and
+ * the side chat's panel mounts its own.
  *
  * Owns the "keep alive regardless of collapse" half of UI rule 8: the
  * controller is loaded and live-subscribed here, independent of the panel's
@@ -31,20 +36,20 @@
  * cascade or a remote close makes the panel vanish with no error (an edge
  * case in the spec).
  */
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { SplitDivider } from '@/features/shared/SplitDivider';
+import { useMeasuredWidth } from '@/features/shared/use-measured-width';
+import { cn } from '@/lib/utils';
+import { useUiPrefs } from '@/store/ui-prefs';
+import { MIN_PARENT_BESIDE_WIDTH, MIN_SIDE_CHAT_WIDTH, sideChatPlacement } from './side-chat-placement';
 import { useSideChatCollapseStore } from './side-chat-collapse-store';
 import { hasPendingGate, useOptionalControllerState, useSideChatController } from './use-side-chat-controller';
 import { SideChatPanel } from './SideChatPanel';
 
-export function SideChatHost({ parentChatId }: { parentChatId: string | null }) {
-  const sideChatId = useChatExtras()?.state.chatConfig?.sideChatId ?? null;
-  const collapsed = useSideChatCollapseStore((s) => (parentChatId != null ? s.isCollapsed(parentChatId) : true));
-  const expand = useSideChatCollapseStore((s) => s.expand);
-  const controller = useSideChatController(sideChatId);
-  const state = useOptionalControllerState(controller);
-  const gatePending = state != null && hasPendingGate(state);
+type SideChatController = ReturnType<typeof useSideChatController>;
 
+function useKeepLive(controller: SideChatController) {
   useEffect(() => {
     if (!controller) return;
     controller.setActive(true);
@@ -55,19 +60,75 @@ export function SideChatHost({ parentChatId }: { parentChatId: string | null }) 
       controller.setActive(false);
     };
   }, [controller]);
+}
 
-  // A gate raised while the parent is on screen expands the panel (rule 8).
+/** A gate raised while the parent is on screen expands the panel (rule 8). */
+function useExpandOnGate(parentChatId: string | null, controller: SideChatController) {
+  const expand = useSideChatCollapseStore((s) => s.expand);
+  const state = useOptionalControllerState(controller);
+  const gatePending = state != null && hasPendingGate(state);
   useEffect(() => {
     if (parentChatId != null && gatePending) expand(parentChatId);
   }, [parentChatId, gatePending, expand]);
+}
 
-  if (parentChatId == null || sideChatId == null || controller == null) return null;
-  if (collapsed) return null;
+export function SideChatHost({
+  parentChatId,
+  threadRef,
+  children,
+}: {
+  parentChatId: string | null;
+  /** The parent's session panel host: its thread column, so its rail stops at the divider. */
+  threadRef: (el: HTMLElement | null) => void;
+  children: ReactNode;
+}) {
+  const sideChatId = useChatExtras()?.state.chatConfig?.sideChatId ?? null;
+  const collapsed = useSideChatCollapseStore((s) => (parentChatId != null ? s.isCollapsed(parentChatId) : true));
+  const controller = useSideChatController(sideChatId);
+  useKeepLive(controller);
+  useExpandOnGate(parentChatId, controller);
+  const [columnWidth, measureColumn] = useMeasuredWidth();
+  const frac = useUiPrefs((s) => s.sideChatFrac);
+  const setFrac = useUiPrefs((s) => s.setSideChatFrac);
 
-  // Pass the SAME instance this host loads/subscribes below — the panel must
-  // not call `getOrCreate` again on its own, or a dispose-then-recreate race
-  // (idle offload, a remote discard racing a re-render) would hand it a
-  // second, unloaded, non-subscribed controller while this host keeps the
-  // stale one (todo #344, single-owner fix).
-  return <SideChatPanel parentChatId={parentChatId} sideChatId={sideChatId} controller={controller} />;
+  const open = parentChatId != null && sideChatId != null && controller != null && !collapsed;
+  const placement = sideChatPlacement(columnWidth);
+  const beside = open && placement === 'beside';
+
+  return (
+    <div
+      ref={measureColumn}
+      data-side-chat-placement={open ? placement : undefined}
+      className={cn('flex min-h-0 min-w-0 flex-1 overflow-hidden', beside ? 'flex-row' : 'flex-col')}
+    >
+      {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
+          height — otherwise the sticky composer footer collapses/clips. */}
+      <div
+        ref={threadRef}
+        className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        style={beside ? { flexGrow: 1 - frac, minWidth: MIN_PARENT_BESIDE_WIDTH } : undefined}
+      >
+        {children}
+      </div>
+      {beside && (
+        <SplitDivider
+          testId={`side-chat-divider-${parentChatId}`}
+          minLeft={MIN_PARENT_BESIDE_WIDTH}
+          minRight={MIN_SIDE_CHAT_WIDTH}
+          onFrac={(leftFrac) => setFrac(1 - leftFrac)}
+        />
+      )}
+      {/* The SAME instance useKeepLive holds — a second getOrCreate in the
+          panel could race a dispose-then-recreate (todo #344, single-owner fix). */}
+      {open && (
+        <SideChatPanel
+          parentChatId={parentChatId}
+          sideChatId={sideChatId}
+          controller={controller}
+          placement={placement}
+          frac={frac}
+        />
+      )}
+    </div>
+  );
 }

@@ -86,8 +86,18 @@ vi.mock('@/features/session-panel/SessionPanel', () => ({
   ),
 }));
 vi.mock('@/features/side-chat/SideChatHost', () => ({
-  SideChatHost: ({ parentChatId }: { parentChatId: string | null }) => (
-    <div data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''} />
+  SideChatHost: ({
+    parentChatId,
+    threadRef,
+    children,
+  }: {
+    parentChatId: string | null;
+    threadRef: (el: HTMLElement | null) => void;
+    children: React.ReactNode;
+  }) => (
+    <div ref={threadRef} data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''}>
+      {children}
+    </div>
   ),
 }));
 
@@ -182,8 +192,10 @@ describe('ChatSurface', () => {
 
     const host = screen.getByTestId('side-chat-host-stub');
     expect(host).toHaveAttribute('data-parent-chat-id', 'chat-123');
-    // Docked below the thread, inside the same column — not beside the session panel.
-    expect(host.parentElement).toBe(screen.getByTestId('chat-thread').parentElement);
+    // Wraps the parent's thread AND its session panel, so the rail floats over
+    // the parent's column and a side chat beside it can carry its own.
+    expect(host.contains(screen.getByTestId('chat-thread'))).toBe(true);
+    expect(host.contains(screen.getByTestId('session-panel-root'))).toBe(true);
   });
 
   it('hides ChatThread and its composer while initialization is pending', () => {
@@ -248,21 +260,17 @@ describe('ChatSurface', () => {
     expect(panel).toHaveAttribute('data-mode', 'hidden');
   });
 
-  it('observes the row holding the thread, so a split surface measures what shrinks', () => {
+  it("observes the parent's thread column, so a split or a side chat beside it shrinks what the panel measures", () => {
     render(<ChatSurface />);
 
     // Two observers: the surface root (split-fits width gate) and the panel's
-    // host row. The row is the one that excludes the header.
+    // host — the parent's thread column, which SideChatHost owns (its
+    // `relative` containing block and flex sizing are tested there).
     expect(observed).toHaveLength(2);
-    const row = observed.find((el) => !el.contains(screen.getByTestId('chat-header'))) as HTMLElement;
-    expect(row.contains(screen.getByTestId('chat-thread'))).toBe(true);
-    expect(row.contains(screen.getByTestId('session-panel-root'))).toBe(true);
-    expect(row.contains(screen.getByTestId('chat-header'))).toBe(false);
-    // The measured row is the panel's containing block AND its full width: the
-    // thread column keeps all of it, and the panel floats in the gutter the
-    // centred transcript leaves inside it.
-    expect(row).toHaveClass('relative');
-    expect(row.querySelector('[data-testid="chat-thread"]')?.parentElement).toHaveClass('flex-1');
+    const column = observed.find((el) => !el.contains(screen.getByTestId('chat-header'))) as HTMLElement;
+    expect(column).toBe(screen.getByTestId('side-chat-host-stub'));
+    expect(column.contains(screen.getByTestId('chat-thread'))).toBe(true);
+    expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
   });
 
   it('does not mount the session panel in the first-run branch', () => {

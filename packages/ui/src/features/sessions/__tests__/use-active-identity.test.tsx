@@ -15,6 +15,7 @@
  *     way `projectId` is nulled to `undefined` so no consumer sees the daemon's
  *     hidden scratch project id.
  */
+import type { ReactNode } from 'react';
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Chat, Project } from '@qlan-ro/mainframe-types';
@@ -62,6 +63,7 @@ vi.mock('../use-projects', () => ({
   useProjects: () => ({ projects: PROJECTS, loading: false }),
 }));
 
+import { SideChatScopeProvider } from '@/features/side-chat/side-chat-scope';
 import { useActiveIdentity } from '../use-active-identity';
 
 const LIVE_CUSTOM = {
@@ -274,5 +276,24 @@ describe('useActiveIdentity — noProject (todo #346)', () => {
 
     expect(result.current.noProject).toBe(false);
     expect(result.current.projectId).toBe('proj-a');
+  });
+});
+
+describe('useActiveIdentity — inside a side chat (todo #344)', () => {
+  it("keys on the side chat's id while keeping the parent's project scope", () => {
+    const item: FakeItem = { id: 'chat-9', remoteId: 'chat-9', status: 'regular' };
+    fakeAuiState = {
+      threadListItem: item,
+      threads: { threadItems: [{ ...item, custom: LIVE_CUSTOM }] },
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <SideChatScopeProvider value={{ parentChatId: 'chat-9', sideChatId: 'side-3' }}>{children}</SideChatScopeProvider>
+    );
+
+    const { result } = renderHook(() => useActiveIdentity(), { wrapper });
+
+    expect(result.current.chatId).toBe('side-3');
+    expect(result.current.projectId).toBe('proj-a');
+    expect(result.current.branchName).toBe('main');
   });
 });

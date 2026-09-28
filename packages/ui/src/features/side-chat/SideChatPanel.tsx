@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * SideChatPanel — the side chat's own transcript + composer, docked at the
- * bottom of its parent's chat column (todo #344). Mounted by `SideChatHost`
- * once the parent has a side chat and the panel is not collapsed.
+ * SideChatPanel — the side chat's own transcript + composer, beside or below
+ * its parent's thread (todo #344). Mounted by `SideChatHost` once the parent
+ * has a side chat and the panel is not collapsed; the host picks `placement`.
  *
  * Binds a nested `AuiProvider` to the side chat's own controller, mirroring
  * `ChatZone`'s `thread` construction — but, unlike `ChatZone`, deliberately
@@ -27,23 +27,19 @@ import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '@/features/chat/run
 import { buildChatExtras } from '@/features/chat/runtime/chat-extras';
 import { projectChatThreadMessages } from '@/features/chat/controller/project-messages';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
+import { cn } from '@/lib/utils';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
+import { SessionPanel } from '@/features/session-panel/SessionPanel';
+import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { SideChatScopeProvider } from './side-chat-scope';
 import { SideChatPanelHeader } from './SideChatPanelHeader';
+import { MIN_SIDE_CHAT_WIDTH, type SideChatPlacement } from './side-chat-placement';
 
-export function SideChatPanel({
-  parentChatId,
-  sideChatId,
-  controller,
-}: {
-  parentChatId: string;
-  sideChatId: string;
-  controller: AcpChatController;
-}) {
-  const aui = useAui();
+/** The side chat's own thread, driven by its controller. No `threadListItem`
+ *  override — see side-chat-scope.tsx. */
+function useSideChatThreadConfig(controller: AcpChatController) {
   const port = useDaemonPort();
   const state = useControllerState(controller);
-
   const messages = useMemo(() => projectChatThreadMessages(state), [state]);
   const isRunning = state.runState.type === 'running' || state.runState.type === 'cancelling';
   const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
@@ -55,8 +51,7 @@ export function SideChatPanel({
     [controller],
   );
 
-  // No `threadListItem` override — see side-chat-scope.tsx.
-  const config = useMemo(
+  return useMemo(
     () =>
       AuiConfig({
         thread: ExternalThread({
@@ -73,6 +68,25 @@ export function SideChatPanel({
       }),
     [messages, isRunning, state.loadState.type, extras, onNew, controller],
   );
+}
+
+export function SideChatPanel({
+  parentChatId,
+  sideChatId,
+  controller,
+  placement,
+  frac,
+}: {
+  parentChatId: string;
+  sideChatId: string;
+  controller: AcpChatController;
+  placement: SideChatPlacement;
+  /** The panel's share of the row while beside the parent. */
+  frac: number;
+}) {
+  const aui = useAui();
+  const config = useSideChatThreadConfig(controller);
+  const panelState = useSessionPanelState();
 
   const scope = useMemo(() => ({ parentChatId, sideChatId }), [parentChatId, sideChatId]);
 
@@ -81,11 +95,19 @@ export function SideChatPanel({
       <SideChatScopeProvider value={scope}>
         <div
           data-testid={`side-chat-panel-${parentChatId}`}
-          className="flex h-[40%] min-h-[220px] shrink-0 flex-col overflow-hidden border-t border-border bg-background"
+          data-placement={placement}
+          // Beside: the divider draws the separating hairline. Below: a top border.
+          className={cn(
+            'flex flex-col overflow-hidden bg-background',
+            placement === 'beside' ? 'min-h-0 min-w-0 flex-1' : 'h-[40%] min-h-[220px] shrink-0 border-t border-border',
+          )}
+          style={placement === 'beside' ? { flexGrow: frac, minWidth: MIN_SIDE_CHAT_WIDTH } : undefined}
         >
           <SideChatPanelHeader parentChatId={parentChatId} sideChatId={sideChatId} controller={controller} />
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Its own session rail, floating over its own column — as a split zone's does. */}
+          <div ref={panelState.hostRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
             <ChatThread variant="side" />
+            <SessionPanel state={panelState} />
           </div>
         </div>
       </SideChatScopeProvider>
