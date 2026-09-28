@@ -7,13 +7,15 @@
  * - drives the workspace auto-park on VISIBILITY transitions: entering the
  *   visible split parks a top-row workspace in the bottom strip, leaving it
  *   (parking the split or dissolving it) restores the workspace unless the
- *   user repositioned things in between.
+ *   user repositioned things in between, and
+ * - opens a queued `pendingPair` once its second chat is in the thread list.
  *
  * Mounted once, by ChatSurface.
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { registerChatSplitVisibleProbe, useLayoutStore } from '@/store/layout';
+import { openBeside } from './open-in-split';
 import { splitVisible, useZonesStore, type ZoneIndex } from './zones-store';
 
 // The layout store's workspace placement is split-aware through this probe
@@ -34,6 +36,16 @@ export function useZonesReconciler(): void {
     if (!visible && wasVisible.current) useLayoutStore.getState().restoreWorkspaceAfterChatSplit();
     wasVisible.current = visible;
   }, [visible]);
+
+  const pendingPair = useZonesStore((s) => s.pendingPair);
+  const pendingListed = useAuiState(
+    (s) => pendingPair != null && s.threads.threadItems.some((t) => t.id === pendingPair[1]),
+  );
+  useEffect(() => {
+    if (pendingPair == null || !pendingListed) return;
+    useZonesStore.setState({ pendingPair: null });
+    openBeside(pendingPair[0], pendingPair[1]);
+  }, [pendingPair, pendingListed]);
 
   useEffect(() => {
     if (zones == null || mainThreadId == null) return;

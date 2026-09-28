@@ -34,6 +34,11 @@ interface ZonesState {
   focusedIndex: ZoneIndex;
   /** The left zone's share of the row (divider-dragged); 0.5 = even. */
   frac: number;
+  /** A pair waiting for its second chat to reach the thread list (a new
+   *  fork): a zone resolves its row by id, so it can't render before then.
+   *  `useZonesReconciler` opens it once listed. */
+  pendingPair: [string, string] | null;
+  queuePair: (anchorId: string, id: string) => void;
   /** Opens the split with the current chat left and `second` right; focus stays left. */
   openSplit: (first: string, second: string) => void;
   replaceZone: (index: ZoneIndex, id: string) => void;
@@ -46,6 +51,8 @@ export const useZonesStore = create<ZonesState>((set) => ({
   zones: null,
   focusedIndex: 0,
   frac: 0.5,
+  pendingPair: null,
+  queuePair: (anchorId, id) => set({ pendingPair: [anchorId, id] }),
   openSplit: (first, second) => {
     // A side chat can never take a zone of its own — it lives inside its
     // parent's zone (todo #344, UI rule 2).

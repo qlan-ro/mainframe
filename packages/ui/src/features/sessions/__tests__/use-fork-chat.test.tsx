@@ -1,8 +1,10 @@
 /**
- * useForkChat — forks via the daemon, opens the result, and reports failure.
+ * useForkChat — forks via the daemon, opens the result in a split beside its
+ * parent, and reports failure.
  * `useAui` and the daemon port are module-mocked; `switchToThread` is asserted
  * to fire without waiting on `reload()` first (the self-heal via
- * `adapter.fetch` documented on the hook).
+ * `adapter.fetch` documented on the hook). The split beside the parent is
+ * only queued here — `useZonesReconciler` opens it once the fork is listed.
  */
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +21,7 @@ vi.mock('@/lib/api/chats', () => ({ forkChat: (...args: unknown[]) => forkChatMo
 vi.mock('@/lib/toast', () => ({ mfToast: { error: (...args: unknown[]) => toastError(...args) } }));
 vi.mock('../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useForkChat } from '../use-fork-chat';
 
 beforeEach(() => {
@@ -26,6 +29,7 @@ beforeEach(() => {
   reload.mockReset().mockResolvedValue(undefined);
   forkChatMock.mockReset();
   toastError.mockReset();
+  useZonesStore.setState({ zones: null, focusedIndex: 0, pendingPair: null });
 });
 
 describe('useForkChat', () => {
@@ -41,6 +45,15 @@ describe('useForkChat', () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it('queues a split pairing the fork beside its parent, parent on the left', async () => {
+    forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
+    const { result } = renderHook(() => useForkChat());
+
+    await act(() => result.current('chat-parent'));
+
+    expect(useZonesStore.getState().pendingPair).toEqual(['chat-parent', 'chat-fork-1']);
+  });
+
   it('shows the daemon failure message as a toast and switches nothing on failure', async () => {
     forkChatMock.mockRejectedValue(new Error('Nothing to fork yet'));
     const { result } = renderHook(() => useForkChat());
@@ -50,6 +63,7 @@ describe('useForkChat', () => {
     expect(toastError).toHaveBeenCalledWith('Nothing to fork yet');
     expect(switchToThread).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
+    expect(useZonesStore.getState().pendingPair).toBeNull();
   });
 
   it('falls back to a generic message for a non-Error rejection', async () => {

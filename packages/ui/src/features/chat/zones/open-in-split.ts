@@ -43,3 +43,18 @@ export function openInSplit(activeId: string | null | undefined, id: string): bo
   store.replaceZone(store.focusedIndex === 0 ? 1 : 0, id);
   return true;
 }
+
+/**
+ * Show `id` beside `anchorId`, whatever is on screen now. A pair that already
+ * holds the anchor keeps it and swaps its other slot to `id`; otherwise a
+ * fresh pair opens with the anchor left. The caller decides focus.
+ */
+export function openBeside(anchorId: string, id: string): void {
+  const store = useZonesStore.getState();
+  const { zones } = store;
+  if (zones != null && zones.includes(anchorId)) {
+    if (!zones.includes(id)) store.replaceZone(zones[0] === anchorId ? 1 : 0, id);
+    return;
+  }
+  store.openSplit(anchorId, id);
+}
