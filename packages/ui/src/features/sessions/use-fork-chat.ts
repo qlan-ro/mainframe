@@ -8,9 +8,10 @@
  * poll or await first. `threads.reload()` still runs, best-effort, so the
  * sidebar's own list picks up the new row promptly.
  *
- * The fork also opens in a split beside its parent (the ⌘-click pair, parent
- * left), but only once the fork is in the thread list — a zone resolves its
- * row by id — so the pair is queued and `useZonesReconciler` opens it.
+ * The fork also opens in a split (the ⌘-click pair) beside its parent when
+ * the parent is on screen, else beside the chat in view (`forkAnchor`) — but
+ * only once the fork is in the thread list, since a zone resolves its row by
+ * id, so the pair is queued and `useZonesReconciler` opens it.
  *
  * On failure the daemon's own message is shown verbatim (spec: "an error
  * toast shows the daemon's failure message") and nothing else happens.
@@ -22,6 +23,7 @@ import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
 import { forkChat } from '@/lib/api/chats';
 import { mfToast } from '@/lib/toast';
+import { forkAnchor } from '@/features/chat/zones/open-in-split';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useDaemonPort } from './runtime/daemon-port-context';
 
@@ -35,7 +37,9 @@ export function useForkChat(): ForkChatFn {
     async (chatId: string) => {
       try {
         const chat = await forkChat(port, chatId);
-        useZonesStore.getState().queuePair(chatId, chat.id);
+        const zones = useZonesStore.getState();
+        const anchor = forkAnchor(chatId, aui.threads.getState().mainThreadId, zones.zones);
+        if (anchor != null) zones.queuePair(anchor, chat.id);
         aui.threads.switchToThread(chat.id);
         void aui.threads.reload();
       } catch (err) {

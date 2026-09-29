@@ -58,3 +58,20 @@ export function openBeside(anchorId: string, id: string): void {
   }
   store.openSplit(anchorId, id);
 }
+
+/**
+ * The chat a new fork should open beside: its parent when the parent is on
+ * screen (focused, or in the visible split), otherwise the chat the user is
+ * looking at — pairing with an off-screen parent would show a pane that never
+ * hydrated. Null (open the fork alone) when nothing real is focused.
+ */
+export function forkAnchor(
+  parentId: string,
+  mainThreadId: string | null | undefined,
+  zones: [string, string] | null,
+): string | null {
+  if (mainThreadId == null || mainThreadId.startsWith('__LOCALID_')) return null;
+  if (mainThreadId === parentId) return parentId;
+  if (zones != null && splitVisible(zones, mainThreadId) && zones.includes(parentId)) return parentId;
+  return mainThreadId;
+}

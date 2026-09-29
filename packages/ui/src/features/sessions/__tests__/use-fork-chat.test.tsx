@@ -10,12 +10,13 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const switchToThread = vi.fn();
+let mainThreadId: string | null = 'chat-parent';
 const reload = vi.fn().mockResolvedValue(undefined);
 const forkChatMock = vi.fn();
 const toastError = vi.fn();
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ threads: { switchToThread, reload } }),
+  useAui: () => ({ threads: { switchToThread, reload, getState: () => ({ mainThreadId }) } }),
 }));
 vi.mock('@/lib/api/chats', () => ({ forkChat: (...args: unknown[]) => forkChatMock(...(args as [number, string])) }));
 vi.mock('@/lib/toast', () => ({ mfToast: { error: (...args: unknown[]) => toastError(...args) } }));
@@ -30,6 +31,7 @@ beforeEach(() => {
   forkChatMock.mockReset();
   toastError.mockReset();
   useZonesStore.setState({ zones: null, focusedIndex: 0, pendingPair: null });
+  mainThreadId = 'chat-parent';
 });
 
 describe('useForkChat', () => {
@@ -45,13 +47,35 @@ describe('useForkChat', () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
-  it('queues a split pairing the fork beside its parent, parent on the left', async () => {
+  it('queues a split pairing the fork beside its on-screen parent, parent on the left', async () => {
     forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
     const { result } = renderHook(() => useForkChat());
 
     await act(() => result.current('chat-parent'));
 
     expect(useZonesStore.getState().pendingPair).toEqual(['chat-parent', 'chat-fork-1']);
+  });
+
+  it('pairs the fork with the chat in view when the parent is off screen', async () => {
+    mainThreadId = 'chat-current';
+    forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
+    const { result } = renderHook(() => useForkChat());
+
+    await act(() => result.current('chat-parent'));
+
+    expect(useZonesStore.getState().pendingPair).toEqual(['chat-current', 'chat-fork-1']);
+    expect(switchToThread).toHaveBeenCalledWith('chat-fork-1');
+  });
+
+  it('opens the fork alone when only an unsent draft is in view', async () => {
+    mainThreadId = '__LOCALID_1';
+    forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
+    const { result } = renderHook(() => useForkChat());
+
+    await act(() => result.current('chat-parent'));
+
+    expect(useZonesStore.getState().pendingPair).toBeNull();
+    expect(switchToThread).toHaveBeenCalledWith('chat-fork-1');
   });
 
   it('shows the daemon failure message as a toast and switches nothing on failure', async () => {
