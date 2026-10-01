@@ -14,6 +14,7 @@
  *    plane only attaches/reactivates while active, so without this the
  *    transcript never populates, live or on a switch-back.
  */
+import { useEffect } from 'react';
 import { render, screen, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -52,10 +53,32 @@ vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
 vi.mock('../SideChatPanel', () => ({
-  SideChatPanel: ({ parentChatId, sideChatId }: { parentChatId: string; sideChatId: string }) => (
-    <div data-testid={`side-chat-panel-${parentChatId}`} data-side-chat-id={sideChatId} />
+  SideChatPanel: ({
+    parentChatId,
+    sideChatId,
+    placement,
+  }: {
+    parentChatId: string;
+    sideChatId: string;
+    placement: string;
+  }) => (
+    <div data-testid={`side-chat-panel-${parentChatId}`} data-side-chat-id={sideChatId} data-placement={placement} />
   ),
 }));
+
+let __columnWidth: number | null = 1200;
+vi.mock('@/features/shared/use-measured-width', () => ({
+  useMeasuredWidth: () => [__columnWidth, () => undefined],
+}));
+
+const noopRef = () => undefined;
+let threadMounts = 0;
+function Thread() {
+  useEffect(() => {
+    threadMounts += 1;
+  }, []);
+  return <div data-testid="parent-thread" />;
+}
 
 import { SideChatHost } from '../SideChatHost';
 import { useSideChatCollapseStore } from '../side-chat-collapse-store';
@@ -68,30 +91,46 @@ beforeEach(() => {
   subscribeLive.mockClear();
   unsubscribeLive.mockClear();
   setActive.mockClear();
+  __columnWidth = 1200;
+  threadMounts = 0;
   window.localStorage.clear();
   useSideChatCollapseStore.setState({ collapsedByParent: {} });
 });
 
 describe('SideChatHost — no side chat', () => {
-  it('renders nothing and creates no controller', () => {
+  it('renders only the parent thread and creates no controller', () => {
     __chatConfig = { sideChatId: null };
-    const { container } = render(<SideChatHost parentChatId="parent-1" />);
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
 
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByTestId('parent-thread')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-chat-panel-parent-1')).toBeNull();
     expect(controllers.size).toBe(0);
   });
 
-  it('renders nothing with no parentChatId', () => {
+  it('renders no panel with no parentChatId', () => {
     __chatConfig = { sideChatId: 'side-1' };
-    const { container } = render(<SideChatHost parentChatId={null} />);
-    expect(container.firstChild).toBeNull();
+    render(
+      <SideChatHost parentChatId={null} threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
+    expect(screen.getByTestId('parent-thread')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-chat-panel-parent-1')).toBeNull();
   });
 });
 
 describe('SideChatHost — with a side chat', () => {
   it('mounts the panel and keeps the controller loaded + live-subscribed + active', () => {
     __chatConfig = { sideChatId: 'side-1' };
-    render(<SideChatHost parentChatId="parent-1" />);
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
 
     expect(screen.getByTestId('side-chat-panel-parent-1')).toBeInTheDocument();
     expect(load).toHaveBeenCalledTimes(1);
@@ -102,20 +141,32 @@ describe('SideChatHost — with a side chat', () => {
 
   it('deactivates the controller when the host unmounts, and reactivates on remount (todo #344, AC 11)', () => {
     __chatConfig = { sideChatId: 'side-1' };
-    const { unmount, rerender } = render(<SideChatHost parentChatId="parent-1" />);
+    const { unmount, rerender } = render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
     expect(setActive).toHaveBeenLastCalledWith(true);
 
     // Switching away: the parent no longer resolves this side chat (a
     // different session is on screen) — the controller effect tears down.
     __chatConfig = { sideChatId: null };
-    rerender(<SideChatHost parentChatId="parent-1" />);
+    rerender(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
     expect(setActive).toHaveBeenLastCalledWith(false);
 
     // Switching back: the same side chat resolves again — reactivate, not a
     // fresh attach from scratch (the plane itself decides full-replay vs.
     // cursor-resume; this host just needs to flip active back on).
     __chatConfig = { sideChatId: 'side-1' };
-    rerender(<SideChatHost parentChatId="parent-1" />);
+    rerender(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
     expect(setActive).toHaveBeenLastCalledWith(true);
 
     unmount();
@@ -125,7 +176,11 @@ describe('SideChatHost — with a side chat', () => {
   it('collapse hides the panel but the controller stays subscribed (rule 8)', () => {
     __chatConfig = { sideChatId: 'side-1' };
     act(() => useSideChatCollapseStore.getState().setCollapsed('parent-1', true));
-    render(<SideChatHost parentChatId="parent-1" />);
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
 
     expect(screen.queryByTestId('side-chat-panel-parent-1')).toBeNull();
     expect(load).toHaveBeenCalledTimes(1);
@@ -137,11 +192,19 @@ describe('SideChatHost — with a side chat', () => {
 
   it('a side chat removed from another client makes the panel disappear with no error', () => {
     __chatConfig = { sideChatId: 'side-1' };
-    const { rerender } = render(<SideChatHost parentChatId="parent-1" />);
+    const { rerender } = render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
     expect(screen.getByTestId('side-chat-panel-parent-1')).toBeInTheDocument();
 
     __chatConfig = { sideChatId: null };
-    rerender(<SideChatHost parentChatId="parent-1" />);
+    rerender(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
 
     expect(screen.queryByTestId('side-chat-panel-parent-1')).toBeNull();
   });
@@ -151,9 +214,74 @@ describe('SideChatHost — with a side chat', () => {
     act(() => useSideChatCollapseStore.getState().setCollapsed('parent-1', true));
     __permissions = { req1: { askedAt: 1 } };
 
-    render(<SideChatHost parentChatId="parent-1" />);
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
 
     expect(useSideChatCollapseStore.getState().isCollapsed('parent-1')).toBe(false);
     expect(screen.getByTestId('side-chat-panel-parent-1')).toBeInTheDocument();
+  });
+});
+
+describe('SideChatHost — placement', () => {
+  it('puts the panel beside the thread, behind a divider, when the column fits both', () => {
+    __chatConfig = { sideChatId: 'side-1' };
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
+
+    expect(screen.getByTestId('side-chat-panel-parent-1')).toHaveAttribute('data-placement', 'beside');
+    expect(screen.getByTestId('side-chat-divider-parent-1')).toBeInTheDocument();
+  });
+
+  it('docks the panel below the thread, with no divider, when the column is too narrow', () => {
+    __chatConfig = { sideChatId: 'side-1' };
+    __columnWidth = 700;
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>,
+    );
+
+    expect(screen.getByTestId('side-chat-panel-parent-1')).toHaveAttribute('data-placement', 'below');
+    expect(screen.queryByTestId('side-chat-divider-parent-1')).toBeNull();
+  });
+
+  it('keeps the parent thread mounted across placement changes and panel open/close', () => {
+    __chatConfig = { sideChatId: null };
+    const ui = (
+      <SideChatHost parentChatId="parent-1" threadRef={noopRef}>
+        <Thread />
+      </SideChatHost>
+    );
+    const { rerender } = render(ui);
+
+    __chatConfig = { sideChatId: 'side-1' };
+    rerender(ui);
+    __columnWidth = 700;
+    rerender(ui);
+    act(() => useSideChatCollapseStore.getState().setCollapsed('parent-1', true));
+
+    expect(threadMounts).toBe(1);
+  });
+});
+
+describe('SideChatHost — the parent keeps its own session rail', () => {
+  it("hands threadRef the parent's thread column, which excludes the side chat", () => {
+    __chatConfig = { sideChatId: 'side-1' };
+    let column: HTMLElement | null = null;
+    render(
+      <SideChatHost parentChatId="parent-1" threadRef={(el) => (column = el)}>
+        <Thread />
+      </SideChatHost>,
+    );
+
+    expect(column).not.toBeNull();
+    expect(column!.contains(screen.getByTestId('parent-thread'))).toBe(true);
+    expect(column!.contains(screen.getByTestId('side-chat-panel-parent-1'))).toBe(false);
   });
 });

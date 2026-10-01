@@ -114,14 +114,13 @@ export function ChatZone({
         }}
       >
         <ChatCardHeader zone={{ chatId, onClose }} />
-        {/* The row this zone's panel floats over — measured per zone, so each
-            side derives its own rail/overlay mode from its own width. */}
-        <div ref={panelState.hostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {/* The thread column this zone's panel floats over — measured per
+              zone, so each side derives its own rail/overlay mode from its own width. */}
+          <SideChatHost parentChatId={chatId} threadRef={panelState.hostRef}>
             <ChatThread />
-            <SideChatHost parentChatId={chatId} />
-          </div>
-          <SessionPanel state={panelState} />
+            <SessionPanel state={panelState} />
+          </SideChatHost>
         </div>
       </div>
     </AuiProvider>

@@ -21,20 +21,20 @@
  * - Everything else (a sent local thread or a pre-existing chat) shows the
  *   plain ChatThread.
  *
- * The session panel floats over that row in the last two cases; the thread
- * column keeps the full width and its own centred transcript. Its state machine
- * lives here because the row is the width the panel follows — the panel sits in
- * the gutter the centred transcript leaves, so it needs the row's TOTAL width,
- * which shrinks when the surface is split and which the panel measuring its own
- * box would never see.
+ * The session panel floats over the thread column in the last two cases; the
+ * transcript keeps the column's full width, centred. Its state machine lives
+ * here because the column is the width the panel follows — the panel sits in
+ * the gutter the centred transcript leaves, so it needs the column's TOTAL
+ * width, which shrinks when the surface is split or a side chat sits beside
+ * it, and which the panel measuring its own box would never see.
  */
-import { useCallback, useRef, useState } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
-import { SplitDivider } from '@/features/chat/zones/SplitDivider';
+import { SplitDivider } from '@/features/shared/SplitDivider';
+import { useMeasuredWidth } from '@/features/shared/use-measured-width';
 import { MIN_ZONE_WIDTH, useZonesStore } from '@/features/chat/zones/zones-store';
 import { useZonesReconciler } from '@/features/chat/zones/use-zones-reconciler';
 import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
@@ -62,27 +62,18 @@ export function ChatSurface() {
   const zones = useZonesStore((s) => s.zones);
   const closeSplit = useZonesStore((s) => s.closeSplit);
   const splitFrac = useZonesStore((s) => s.frac);
+  const setSplitFrac = useZonesStore((s) => s.setFrac);
 
   // Width gate for the split: below 2×MIN_ZONE_WIDTH each zone would be
   // unusable, so the pair stays parked behind the single view until the
   // surface widens again. Measured on the surface root — the panel hook's
   // hostRef only attaches in single mode, so it cannot feed this decision.
-  const [surfaceWidth, setSurfaceWidth] = useState<number | null>(null);
-  const widthObserverRef = useRef<ResizeObserver | null>(null);
-  const measureSurface = useCallback((el: HTMLDivElement | null) => {
-    widthObserverRef.current?.disconnect();
-    widthObserverRef.current = null;
-    if (el == null) return;
-    const observer = new ResizeObserver(() => setSurfaceWidth(el.clientWidth));
-    observer.observe(el);
-    setSurfaceWidth(el.clientWidth);
-    widthObserverRef.current = observer;
-  }, []);
+  const [surfaceWidth, measureSurface] = useMeasuredWidth();
   const splitFits = surfaceWidth == null || surfaceWidth >= MIN_ZONE_WIDTH * 2 + 1;
 
   const panelState = useSessionPanelState();
   // `hostRef` is the hook's state-backed callback ref — passed straight through,
-  // so the hook re-measures whenever THIS row (re)mounts. On a cold boot the
+  // so the hook re-measures whenever the thread column (re)mounts. On a cold boot the
   // initializing branch renders first and the row arrives on a later commit;
   // a RefObject here left the panel unmeasured (hidden) in the packaged app.
   const setHostRef = panelState.hostRef;
@@ -174,7 +165,12 @@ export function ChatSurface() {
           onFocus={() => aui.threads.switchToThread(zones[0])}
           onClose={() => closeZone(zones[0])}
         />
-        <SplitDivider />
+        <SplitDivider
+          testId="chat-split-divider"
+          minLeft={MIN_ZONE_WIDTH}
+          minRight={MIN_ZONE_WIDTH}
+          onFrac={setSplitFrac}
+        />
         <ChatZone
           chatId={zones[1]}
           grow={1 - splitFrac}
@@ -190,16 +186,13 @@ export function ChatSurface() {
   return (
     <div ref={measureSurface} className="flex min-h-0 flex-1 flex-col">
       <ChatCardHeader />
-      {/* The row the panel floats over — what its ResizeObserver measures, and
-          the containing block its absolute root resolves against. */}
-      <div ref={setHostRef} className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* min-h-0 + flex-col so ChatThread's h-full resolves against a definite
-            height — otherwise the sticky composer footer collapses/clips. */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* The parent's thread column is what the panel measures and floats
+            over, so a side chat beside it keeps its own rail (as split zones do). */}
+        <SideChatHost parentChatId={mainThreadId} threadRef={setHostRef}>
           <ChatThread emptyState={welcome} />
-          <SideChatHost parentChatId={mainThreadId} />
-        </div>
-        <SessionPanel state={panelState} />
+          <SessionPanel state={panelState} />
+        </SideChatHost>
         <ZoneDropLayer canSplit={splitFits} />
       </div>
     </div>

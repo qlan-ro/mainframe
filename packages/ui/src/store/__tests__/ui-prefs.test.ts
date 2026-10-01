@@ -189,11 +189,23 @@ describe('useUiPrefs persistence', () => {
         'dontWarnOnTuningChange',
         'sessionPanelOpen',
         'sessionPanelSections',
+        'sideChatFrac',
         'sidebarVisible',
         'sidebarWidth',
       ].sort(),
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
+  });
+});
+
+describe('useUiPrefs — side chat share', () => {
+  it('clamps the persisted side-chat share to 15–85% of the row', () => {
+    useUiPrefs.getState().setSideChatFrac(0.02);
+    expect(useUiPrefs.getState().sideChatFrac).toBe(0.15);
+    useUiPrefs.getState().setSideChatFrac(0.99);
+    expect(useUiPrefs.getState().sideChatFrac).toBe(0.85);
+    useUiPrefs.getState().setSideChatFrac(0.5);
+    expect(useUiPrefs.getState().sideChatFrac).toBe(0.5);
   });
 });

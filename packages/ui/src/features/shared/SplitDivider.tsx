@@ -1,24 +1,34 @@
 /**
- * The draggable line between the two zones. The visible hairline stays 1px;
- * an invisible ±6px child widens the grab area, and a drag writes the left
- * zone's fraction into the zones store — clamped so NEITHER side ever goes
- * under MIN_ZONE_WIDTH (the same floor that parks the split entirely).
+ * A draggable vertical line between two side-by-side panes. The visible
+ * hairline stays 1px; an invisible ±6px child widens the grab area. A drag
+ * reports the LEFT pane's share of the row, clamped so neither side goes under
+ * its pixel minimum — only the drag site knows the row's real width.
  */
 import { cn } from '@/lib/utils';
-import { MIN_ZONE_WIDTH, useZonesStore } from './zones-store';
 
-export function SplitDivider() {
+export function SplitDivider({
+  testId,
+  minLeft,
+  minRight,
+  onFrac,
+}: {
+  testId: string;
+  minLeft: number;
+  minRight: number;
+  onFrac: (leftFrac: number) => void;
+}) {
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     event.preventDefault();
     const row = event.currentTarget.parentElement;
     if (row == null) return;
     const { left, width } = row.getBoundingClientRect();
-    const minFrac = MIN_ZONE_WIDTH / width;
+    const minFrac = minLeft / width;
+    const maxFrac = 1 - minRight / width;
 
     const onMove = (e: PointerEvent) => {
       const frac = (e.clientX - left) / width;
-      useZonesStore.getState().setFrac(Math.min(1 - minFrac, Math.max(minFrac, frac)));
+      onFrac(Math.min(maxFrac, Math.max(minFrac, frac)));
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
@@ -34,7 +44,7 @@ export function SplitDivider() {
 
   return (
     <div
-      data-testid="chat-split-divider"
+      data-testid={testId}
       role="separator"
       aria-orientation="vertical"
       onPointerDown={onPointerDown}

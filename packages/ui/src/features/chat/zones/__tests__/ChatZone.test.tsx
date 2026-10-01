@@ -58,8 +58,18 @@ vi.mock('../../thread/ChatThread', () => ({
   ChatThread: () => <div data-testid="chat-thread-stub" />,
 }));
 vi.mock('@/features/side-chat/SideChatHost', () => ({
-  SideChatHost: ({ parentChatId }: { parentChatId: string | null }) => (
-    <div data-testid={`side-chat-host-stub-${parentChatId}`} />
+  SideChatHost: ({
+    parentChatId,
+    threadRef,
+    children,
+  }: {
+    parentChatId: string | null;
+    threadRef: (el: HTMLElement | null) => void;
+    children: React.ReactNode;
+  }) => (
+    <div ref={threadRef} data-testid={`side-chat-host-stub-${parentChatId}`}>
+      {children}
+    </div>
   ),
 }));
 
