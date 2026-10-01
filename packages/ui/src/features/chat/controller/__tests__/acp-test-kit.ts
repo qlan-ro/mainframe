@@ -72,6 +72,16 @@ export interface FakeAcpClient extends AcpClientHandle {
    * distinction `AcpSessionAttachment.resumeFromGap()` makes (finding 1).
    */
   emitReconnect(): void;
+  /**
+   * Bumps `connectionGeneration` WITHOUT firing the gap listeners — mirrors
+   * a DIFFERENT caller's direct `ensureConnected()` landing a new connection
+   * while THIS attachment's own `onGap` is still waiting on the dead
+   * connection's scheduled-reconnect `notifyGap()`, which can lag behind by
+   * its own backoff (finding 1's remaining path: a window opened in that
+   * gap must be caught by `openWindow` itself, not only by the
+   * `resumeFromGap` drain).
+   */
+  bumpConnectionGenerationSilently(): void;
 }
 
 /** Defaults to no capabilities (a pre-D3/D4 daemon) — every existing suite that doesn't opt in stays on the legacy path unchanged. */
@@ -186,6 +196,9 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
     emitReconnect() {
       connectionGeneration += 1;
       for (const l of gapListeners) l();
+    },
+    bumpConnectionGenerationSilently() {
+      connectionGeneration += 1;
     },
   };
 

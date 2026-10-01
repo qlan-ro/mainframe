@@ -189,6 +189,17 @@ export class ReplayWindowCoordinator {
     ids: WindowIdentity,
     opts: { bypassGuard?: boolean },
   ): Promise<void> {
+    // A reconnect can beat THIS attachment's own gap signal to the punch —
+    // another caller's direct `ensureConnected()` can land a new connection
+    // (and this request can go out and come back on it) before the dead
+    // connection's scheduled-reconnect `notifyGap()` ever reaches us (it can
+    // lag up to its own backoff ceiling). Draining here, keyed off the
+    // connection THIS request just used, catches that race even when
+    // `resumeFromGap()`'s own drain never ran — remaining path of finding 1
+    // of the independent review. `cancelStaleConnection` is idempotent, so
+    // this is a no-op on the ordinary path where `resumeFromGap()` already
+    // drained everything.
+    this.cancelStaleConnection(ids.connectionGeneration);
     const kind: ReplayWindowKind = this.isRefused(isFullReplay, itemCount, opts)
       ? 'refused'
       : isFullReplay

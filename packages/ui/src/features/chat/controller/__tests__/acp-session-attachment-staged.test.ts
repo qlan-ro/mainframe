@@ -521,7 +521,16 @@ describe('AcpSessionPlane — live traffic after a replay (D4)', () => {
     client.emitReplayComplete(CHAT_ID);
   });
 
-  it('two consecutive needs-replay-triggered replays that both close successfully still back off, not fire back-to-back (finding 6)', async () => {
+  /**
+   * Finding 6's original fix (arming the give-up backoff on a successful
+   * needs-replay run too) was itself a bug the re-review caught: seven
+   * consecutive unknown-id chunks rearmed that backoff seven times (1, 2, 4,
+   * 8, 16, 30, 30s) until `gaveUp` latched PERMANENTLY — needs-replay never
+   * resets it the way a resync does — silencing every later, genuinely
+   * missing item for the rest of a healthy session. These four tests cover
+   * the cooldown that replaces it (re-review finding 2).
+   */
+  it('one transient unknown id triggers exactly one replay and nothing more over a long, quiet cooldown', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
     const host = makeHost();
     const plane = new AcpSessionPlane(host);
@@ -542,21 +551,139 @@ describe('AcpSessionPlane — live traffic after a replay (D4)', () => {
       client.emitReplayComplete(CHAT_ID);
       await vi.advanceTimersByTimeAsync(0);
 
-      // The SAME still-unknown id patches again. Without the fix, a clean
-      // success leaves nothing armed, and this fires another full replay
-      // immediately — back-to-back, at round-trip speed.
+      // Nothing re-requests a replay — the cooldown should expire quietly.
+      // Without the fix, the old backoff would still be armed and fire a
+      // second replay at 1s regardless.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a second, unrelated missing id arriving 60s later still triggers a replay — needs-replay never permanently gives up', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    const resumesBefore = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
       client.emitUpdate(CHAT_ID, {
         sessionUpdate: 'agent_message_chunk',
         messageId: 'unknown-1',
-        content: { type: 'text', text: 'y' },
+        content: { type: 'text', text: 'x' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      client.emitReplayComplete(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Quiet for well past the (2s-30s) cooldown range — nothing re-requests.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+
+      // Without the fix, seven chunks like the one above would already have
+      // latched `gaveUp` permanently, and THIS unrelated id would be ignored
+      // forever too.
+      client.emitUpdate(CHAT_ID, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'unknown-2',
+        content: { type: 'text', text: 'z' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2);
+      client.emitReplayComplete(CHAT_ID);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('needs-replay recurring right after each completed replay grows the cooldown, capped at 30s', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    let expectedCalls = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
+      client.emitUpdate(CHAT_ID, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'unknown-1',
+        content: { type: 'text', text: 'x' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expectedCalls += 1;
+      expect(client.resumeCalls.length).toBe(expectedCalls);
+      client.emitReplayComplete(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0); // arms the first cooldown: 2s
+
+      // 2s → 4s → 8s → 16s → 30s → 30s (capped) — each one recurring right
+      // on the heels of the PREVIOUS replay's own completion.
+      for (const cooldownMs of [2_000, 4_000, 8_000, 16_000, 30_000, 30_000]) {
+        client.emitUpdate(CHAT_ID, {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'unknown-1',
+          content: { type: 'text', text: 'x' },
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(client.resumeCalls.length).toBe(expectedCalls); // coalesced, not run yet
+
+        await vi.advanceTimersByTimeAsync(cooldownMs - 1);
+        expect(client.resumeCalls.length).toBe(expectedCalls); // still not yet — exactly this cooldown's length
+
+        await vi.advanceTimersByTimeAsync(1);
+        expectedCalls += 1;
+        expect(client.resumeCalls.length).toBe(expectedCalls); // fires right at expiry
+
+        client.emitReplayComplete(CHAT_ID);
+        await vi.advanceTimersByTimeAsync(0); // arms the NEXT (doubled, capped) cooldown
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a flood of needs-replay requests inside one cooldown window collapses into exactly one follow-up run at expiry', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    const resumesBefore = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
+      client.emitUpdate(CHAT_ID, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'unknown-1',
+        content: { type: 'text', text: 'x' },
       });
       await vi.advanceTimersByTimeAsync(0);
       expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+      client.emitReplayComplete(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0); // 2s cooldown armed
 
-      await vi.advanceTimersByTimeAsync(999);
+      // Five more patches, all inside the 2s cooldown — none may run early,
+      // and at most ONE follow-up may ever run once it expires.
+      for (let i = 0; i < 5; i++) {
+        client.emitUpdate(CHAT_ID, {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'unknown-1',
+          content: { type: 'text', text: `y${i}` },
+        });
+        await vi.advanceTimersByTimeAsync(100);
+      }
       expect(client.resumeCalls.length).toBe(resumesBefore + 1);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(client.resumeCalls.length).toBe(resumesBefore + 2); // the automatically-armed retry, at 1s
+
+      // Still quiet at the 1s mark — the OLD (give-up-backoff-based) fix
+      // would have already fired its own follow-up here, one full second
+      // before this 2s cooldown is actually due.
+      await vi.advanceTimersByTimeAsync(1_000 - 500);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+
+      await vi.advanceTimersByTimeAsync(1_000); // out to the 2s mark
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2); // exactly one follow-up, not five
       client.emitReplayComplete(CHAT_ID);
     } finally {
       vi.useRealTimers();
@@ -688,6 +815,70 @@ describe('AcpSessionAttachment — a reconnect mid-replay does not wedge the win
     expect(transcripts(host)).toHaveLength(0);
     client.emitReplayComplete(CHAT_ID); // closes A — bookkeeping only, A was aborted but queued
     expect(transcripts(host)).toHaveLength(0);
+  });
+});
+
+describe("AcpSessionAttachment — a reconnect that beats this chat's own gap signal is still caught (finding 1, remaining path)", () => {
+  it('openWindow itself drains the stale window when a new resume opens on a reconnect resumeFromGap never saw', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const { host, state, discardReplay, completeReplay } = makeAttachmentHost({ hasAccumulatedItems: () => true });
+    const attachment = new AcpSessionAttachment(host);
+    const attached = attachment.attach(client as unknown as AcpSessionClientPort);
+    await tick();
+    client.emitReplayComplete(CHAT_ID); // closes attach()'s own window
+    await attached;
+    state.settledItemId = 'base-0';
+
+    // Window A opens (full) on the ORIGINAL connection — e.g. a resync.
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+
+    // The socket dies; a DIFFERENT caller's `ensureConnected()` lands a new
+    // connection directly — that path never calls `notifyGap()` (only the
+    // dead connection's OWN scheduled-reconnect timer does, and it can lag
+    // behind by its own backoff). This attachment's `resumeFromGap()` never
+    // runs, so `observedConnectionGeneration` is still stale.
+    client.bumpConnectionGenerationSilently();
+
+    // This chat's own `FullReplayRetry` timer (armed earlier, independently
+    // of the socket) fires and opens window B — standing in for that timer
+    // without needing to drive its real backoff delay.
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    const reattached = attachment.reattach({ wipe: false, trigger: 'needs-replay' });
+    await tick();
+
+    // `openWindow` itself must have drained A the moment B's resume came
+    // back — BEFORE any marker arrives at all. Without the fix, A is still
+    // queued (merely aborted) ahead of B at this point.
+    expect(discardReplay).toHaveBeenCalledWith({ full: true });
+    discardReplay.mockClear();
+
+    // The single marker that DOES arrive is now free to close B cleanly —
+    // without the fix it would have closed stale A instead, discarding B's
+    // own staging through the shared slot and leaving `reattached` hanging.
+    client.emitReplayComplete(CHAT_ID);
+    await reattached;
+    expect(completeReplay).toHaveBeenCalledWith({ full: true }); // B published on its own marker
+    expect(discardReplay).not.toHaveBeenCalled(); // B's own marker, not A's — nothing left to discard
+
+    // The late gap finally arrives (the dead connection's own scheduled
+    // reconnect catching up) — `resumeFromGap`'s drain must be a no-op here
+    // (idempotent): B already closed, nothing stale is left queued.
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    const gapResumed = attachment.resumeFromGap();
+    await tick();
+    client.emitReplayComplete(CHAT_ID); // closes window C
+    await gapResumed;
+    expect(completeReplay).toHaveBeenCalledWith({ full: true });
+
+    // resumePendingCount is back to 0 — a needs-replay request right now
+    // fires a brand-new resume instead of being swallowed as "still pending".
+    const resumesBefore = client.resumeCalls.length;
+    attachment.routeNeedsReplay();
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+    client.emitReplayComplete(CHAT_ID);
   });
 });
 
