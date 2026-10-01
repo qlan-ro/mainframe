@@ -8,21 +8,6 @@
  * UI — `createTauriChat` creates the chat over REST and never takes the
  * draft-commit path, so it can't reproduce this (see its own docstring).
  *
- * `beforeAll` reaches that first-send path through `openDraftInheritingProject`
- * (sessions-draft.spec.ts) rather than the welcome screen's project-picker
- * dropdown: it seeds a real, project-backed chat with `createTauriChat` first,
- * so the sidebar "+" inherits that chat's project directly — no
- * `welcome-project` Radix trigger, no `onSelect`/`flushSync` frame. That
- * dropdown path — `pickProjectFromWelcome`'s `welcome-project-<id>` click —
- * is what reproduced a separate, pre-existing race in `use-draft-row.ts`'s
- * discard-on-navigate-away effect (see git history on this file for the
- * live-verified repro); it archived the just-created chat ~36ms after
- * creation. `sessions-draft.spec.ts`'s "first send creates exactly one chat"
- * test takes the same inherited-project route and does not hit that race, so
- * this spec now shares it instead of the dropdown path. The race itself is
- * unrelated to #359's fix and is tracked separately (see the project's issue
- * tracker) rather than fixed here.
- *
  * Only the recording's FIRST turn is used (a plain "4" reply, no tool call) —
  * deliberately, not the richer second turn composer-advanced.spec.ts selects
  * from: that turn's Bash tool call is a SECOND `in` marker the mock replays
@@ -48,7 +33,7 @@
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
@@ -90,19 +75,33 @@ async function waitForCreatedChat(projectId: string, before: string[]): Promise<
   return created[0] as string;
 }
 
-/**
- * The one-click "+" with a project-backed session already active and no
- * filter pill: `resolveNewSessionProject` inherits that session's project, so
- * the welcome screen opens with it already picked — draft row and composer
- * live immediately, no dropdown step (mirrors sessions-draft.spec.ts's
- * identically-named helper).
- */
-async function openDraftInheritingProject(page: Page, project: TauriProject): Promise<void> {
-  await sessionsSidebar(page).newButton().click({ timeout: 10_000 });
+async function pickProjectFromWelcome(page: Page, projectId: string): Promise<void> {
   await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId('welcome-project')).toContainText(baseName(project.projectPath), {
-    timeout: 10_000,
+  await expect(page.getByTestId('welcome-project')).toContainText('Choose a project');
+  await page.getByTestId('welcome-project').click();
+  await page.getByTestId(`welcome-project-${projectId}`).click();
+  await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
+  await expect(page.getByTestId('chat-composer-input')).toBeVisible();
+}
+
+function capturePrompts(page: Page): Array<{ sessionId: string; prompt: Array<{ type: string; text?: string }> }> {
+  const prompts: Array<{ sessionId: string; prompt: Array<{ type: string; text?: string }> }> = [];
+  page.on('websocket', (socket) => {
+    if (!new URL(socket.url()).pathname.startsWith('/acp/')) return;
+    socket.on('framesent', ({ payload }) => {
+      const request = JSON.parse(payload.toString()) as { method?: string; params: (typeof prompts)[number] };
+      if (request.method === 'session/prompt') prompts.push(request.params);
+    });
   });
+  return prompts;
+}
+
+async function expectUnarchivedChat(chatId: string): Promise<void> {
+  const response = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+  expect(response.ok).toBe(true);
+  const body = (await response.json()) as { data: { id: string; status: string } };
+  expect(body.data.id).toBe(chatId);
+  expect(body.data.status).not.toBe('archived');
 }
 
 /**
@@ -152,52 +151,37 @@ async function selectTextInLastAssistantMessage(page: Page, needle: string): Pro
   }, needle);
 }
 
+async function createWelcomeChat(page: Page): Promise<{ project: TauriProject; committedChatId: string }> {
+  const prompts = capturePrompts(page);
+  const project = await createTauriProject(page);
+  const chatsBeforeDraft = await fetchProjectChatIds(project.projectId);
+  await pickProjectFromWelcome(page, project.projectId);
+  const firstPrompt = 'What is 2 + 2? Reply with just the number.';
+  await sendMessage(page, firstPrompt);
+  const committedChatId = await waitForCreatedChat(project.projectId, chatsBeforeDraft);
+  await expect(lastReplyMarkdown(page)).toHaveText('4', { timeout: 60_000 });
+  await waitForIdle(page, 60_000);
+  expect(prompts).toContainEqual(
+    expect.objectContaining({
+      sessionId: committedChatId,
+      prompt: [{ type: 'text', text: firstPrompt }],
+    }),
+  );
+  expect((await fetchProjectChatIds(project.projectId)).filter((id) => !chatsBeforeDraft.includes(id))).toEqual([
+    committedChatId,
+  ]);
+  await expectUnarchivedChat(committedChatId);
+  return { project, committedChatId };
+}
+
 test.describe('§new-session-prefill', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
-  /** The chat committed by `beforeAll`'s own first send — distinct from the
-   *  chat `createTauriChat` seeds to give "+" a project to inherit. */
   let committedChatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'messaging' });
-    project = await createTauriProject(app.page);
-
-    const { page } = app;
-    // Seed a real, project-backed chat first so the sidebar "+" inherits its
-    // project directly (openDraftInheritingProject below) instead of going
-    // through the welcome screen's project-picker dropdown — see the file
-    // docstring for why that dropdown path is avoided here.
-    const seededChatId = await createTauriChat(page, project.projectId, 'default');
-    const chatsBeforeDraft = await fetchProjectChatIds(project.projectId);
-
-    await openDraftInheritingProject(page, project);
-    // Let the draft settle (config resolved, composer mounted) before typing —
-    // sessions-draft.spec.ts's identical inherit→submit sequence waits on both
-    // of these first for the same reason.
-    await expect(page.getByTestId('sessions-draft-row')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('chat-header-project')).toContainText(baseName(project.projectPath), {
-      timeout: 10_000,
-    });
-    // Let the draft's async initializeDraft (provider-settings fetch, etc.)
-    // fully settle before typing — sending too early raced the app into
-    // archiving its own just-created chat in a couple of manual repros.
-    await page.waitForLoadState('networkidle');
-
-    // First send commits the draft — the new-thread slot then reads empty for
-    // one macrotask (#359's root cause) until it observes the settled draft.
-    // Confirm the commit itself via the daemon (a second, distinct chat now
-    // exists in the project) before waiting on the reply — sessions-draft.spec.ts's
-    // "first send creates exactly one chat" test asserts the identical thing
-    // before its own waitForIdle.
-    await sendMessage(page, 'What is 2 + 2? Reply with just the number.');
-    committedChatId = await waitForCreatedChat(project.projectId, chatsBeforeDraft);
-    expect(committedChatId).not.toBe(seededChatId);
-    // Wait on the reply itself, not just waitForIdle: waitForIdle returns at once
-    // when the running indicator has not mounted yet, which let the test body run
-    // against a still-streaming turn on CI.
-    await expect(lastReplyMarkdown(page)).toHaveText('4', { timeout: 60_000 });
-    await waitForIdle(page, 60_000);
+    ({ project, committedChatId } = await createWelcomeChat(app.page));
   });
 
   test.afterAll(async () => {
@@ -224,12 +208,6 @@ test.describe('§new-session-prefill', () => {
 
   test('the sidebar "+" from the same freshly committed chat also opens a draft in the active project, not "Choose a project"', async () => {
     const { page } = app;
-    // Return to the real chat committed in beforeAll (the New-session test
-    // above branched off it into a separate draft) — addressed by its own id
-    // since the seeded chat from beforeAll also has a `sessions-row`. A real
-    // (non-draft) chat's header never renders `chat-header-project`
-    // (ChatCardHeaderReal carries no project chip — only ChatCardHeaderDraft
-    // does), so the switch is confirmed via the row's `data-active` instead.
     await sessionsSidebar(page).row(committedChatId).click();
     await expect(sessionsSidebar(page).row(committedChatId)).toHaveAttribute('data-active', 'true', {
       timeout: 10_000,
