@@ -882,6 +882,51 @@ describe("AcpSessionAttachment — a reconnect that beats this chat's own gap si
   });
 });
 
+describe('AcpSessionPlane — a send is not hidden behind a stale window after a reconnect that beat the gap (re-review LOW)', () => {
+  it('sendPrompt reconciles the connection first — the live turn lands on the visible transcript immediately, and the stale window settles', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    // A stale full window (A) opens on the ORIGINAL connection and is still
+    // staging off-screen — e.g. a resync in flight when the socket dies.
+    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+
+    // Some OTHER caller's `ensureConnected()` lands a new connection — no
+    // gap fires for THIS attachment yet (its own dead-connection gap can lag
+    // by up to its backoff).
+    client.bumpConnectionGenerationSilently();
+
+    // The user sends from THIS chat — the daemon attaches the new
+    // connection on the prompt path with a fresh stream. Without the fix,
+    // `sendPrompt` never reconciles the connection, so the creates/turn this
+    // starts would route into A's still-open staging (via `target()`) and
+    // stay invisible until the late gap eventually drains it.
+    await plane.sendPrompt('hello', {});
+    client.emitUpdate(CHAT_ID, agentMessage('live-1', 'hi'));
+
+    const last = lastOf(transcripts(host))!;
+    expect(idsOf(last.messages)).toEqual(['base-0', 'live-1']);
+
+    // A is settled (drained out of the FIFO), not merely aborted-but-queued
+    // — its own late marker finds no open window at all, rather than
+    // wrongly publishing A's stale staging over the live turn above.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(() => client.emitReplayComplete(CHAT_ID)).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no open window'));
+    } finally {
+      warn.mockRestore();
+    }
+    // The live turn survived that late marker untouched.
+    expect(idsOf(lastOf(transcripts(host))!.messages)).toEqual(['base-0', 'live-1']);
+  });
+});
+
 describe('AcpSessionPlane — a live create after the first full replay carries no status (finding 2)', () => {
   it('does not leave origin: "replay" set on the published accumulator after publishStaging()', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });

@@ -14,6 +14,8 @@ export interface AcpSessionListenerDeps {
   host: AcpSessionAttachmentHost;
   fullReplay: FullReplayRetry;
   replay: ReplayWindowCoordinator;
+  /** `AcpSessionAttachment.syncConnectionGeneration()` — called before routing a frame to this chat (re-review LOW). */
+  syncConnectionGeneration: () => void;
 }
 
 /**
@@ -23,10 +25,15 @@ export interface AcpSessionListenerDeps {
  * calls back, so nothing is pushed for it).
  */
 export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
-  const { getChatId: chatId, host, fullReplay, replay } = deps;
+  const { getChatId: chatId, host, fullReplay, replay, syncConnectionGeneration } = deps;
   const unsubscribe: Array<() => void> = [
     client.onSessionUpdate((sessionId, update) => {
-      if (sessionId === chatId()) host.onSessionUpdate(update);
+      if (sessionId !== chatId()) return;
+      // Reconcile a reconnect this attachment's own gap hasn't caught up to
+      // YET — before this frame can land on a stale window's staging
+      // (re-review LOW). A no-op once already reconciled.
+      syncConnectionGeneration();
+      host.onSessionUpdate(update);
     }),
     client.onPermissionRequest((id, request) => {
       if (request.sessionId === chatId()) host.onPermissionRequest(id, request);

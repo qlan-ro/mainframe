@@ -120,6 +120,8 @@ export class AcpSessionPlane {
 
   async sendPrompt(text: string, sendMeta: PromptSendMeta): Promise<{ queued: boolean }> {
     const client = this.attachment.requireClient();
+    // The daemon attaches THIS connection on the prompt path with a fresh stream even if a reconnect elsewhere beat this attachment's own gap (re-review LOW) — reconcile first, or the live turn this send starts routes into a stale window's staging and stays invisible until the late gap catches up.
+    this.attachment.syncConnectionGeneration();
     const meta = Object.keys(sendMeta).length > 0 ? { _meta: { [MAINFRAME_META_NAMESPACE]: sendMeta } } : {};
     const response = await client.prompt(this.host.getChatId(), text, meta);
     const queuedState = response._meta?.[MAINFRAME_META_NAMESPACE] as { position?: number } | undefined;

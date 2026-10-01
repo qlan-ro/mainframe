@@ -162,26 +162,17 @@ export class AcpSessionAttachment {
   }
 
   /**
-   * No-op while detached — same reasoning as `reattach()`. A gap fires for
-   * two reasons the client can't tell apart on its own: a live-socket
-   * heartbeat/sequence gap, or a dead-and-reconnected socket. Only the
-   * latter invalidates a queued window outright — its `resume()` went out
-   * on a connection that no longer exists, so its marker can never arrive,
-   * and leaving it queued would let the NEXT marker (meant for whatever
-   * this gap resume opens) close it instead, discarding the new window's
-   * staging through the shared slot (finding 1). A live gap keeps today's
-   * behavior: the open window(s) are aborted but stay queued, absorbing
-   * frames until their own marker arrives — a gap resuming the live cursor
-   * must not swallow `FullReplayRetry`'s own, unrelated armed retry.
+   * No-op while detached — same reasoning as `reattach()`. A gap fires for two reasons the client can't tell apart on its own: a live-socket heartbeat/sequence gap, or a dead-and-reconnected socket. Only the latter invalidates a queued window outright — its `resume()` went out on a connection that no longer exists, so its marker can never arrive, and leaving it queued would let the NEXT marker (meant for whatever this gap resume opens) close it instead, discarding the new window's staging through the shared slot (finding 1). A live gap keeps today's behavior: the open window(s) are aborted but stay queued, absorbing frames until their own marker arrives — a gap resuming the live cursor must not swallow `FullReplayRetry`'s own, unrelated armed retry.
    */
   async resumeFromGap(): Promise<void> {
     if (!this.subscribed || this.host.isDisposed() || !this.replay.hasAttached) return;
-    const client = this.requireClient();
-    const currentConnectionGeneration = client.connectionGeneration;
-    if (currentConnectionGeneration !== this.observedConnectionGeneration) {
-      this.replay.cancelStaleConnection(currentConnectionGeneration);
-      this.observedConnectionGeneration = currentConnectionGeneration;
-    } else {
+    const observedBefore = this.observedConnectionGeneration;
+    this.syncConnectionGeneration();
+    // `syncConnectionGeneration()` only drains when the generation actually
+    // moved; an unchanged generation means THIS is a live-socket gap on the
+    // connection already reconciled against, which still gets today's
+    // absorb-until-marker treatment rather than a drain.
+    if (this.requireClient().connectionGeneration === observedBefore) {
       this.replay.abortOpenWindowsOnGap();
     }
     const settled = this.host.getLastSettledItemId();
@@ -191,6 +182,17 @@ export class AcpSessionAttachment {
     } catch (error) {
       console.warn('[acp-session] resume-on-gap failed — a later gap/close will retry', error);
     }
+  }
+
+  /**
+   * The single choke point for reconciling a reconnect THIS attachment has not yet been told about via its own `onGap` (re-review LOW): a loader's `ensureConnected()` elsewhere lands a new connection, and its `notifyGap` can lag by up to the client's own backoff. Called before routing any frame (`acp-session-listeners.ts`'s `onSessionUpdate`) and before `AcpSessionPlane.sendPrompt()` — both can otherwise land fresh, post-reconnect traffic on a stale window's staging (`AcpTranscriptStore.target()`), invisible until the late gap eventually drains it. A no-op once the generation is already reconciled, so calling it from multiple sites costs nothing extra.
+   */
+  syncConnectionGeneration(): void {
+    if (!this.client) return;
+    const current = this.client.connectionGeneration;
+    if (current === this.observedConnectionGeneration) return;
+    this.replay.cancelStaleConnection(current);
+    this.observedConnectionGeneration = current;
   }
 
   /** Prompt/cancel/reply only need a bound client, not a live subscription — a dormant chat can still be prompted (the daemon attaches this connection on send). */
@@ -243,6 +245,7 @@ export class AcpSessionAttachment {
         host: this.host,
         fullReplay: this.fullReplay,
         replay: this.replay,
+        syncConnectionGeneration: () => this.syncConnectionGeneration(),
       }),
       client.onGap(() => void this.resumeFromGap()),
     );
