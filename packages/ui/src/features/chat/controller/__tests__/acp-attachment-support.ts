@@ -26,6 +26,9 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
   const resetSettledCursor = vi.fn<() => void>(() => {
     state.settledItemId = null;
   });
+  const beginReplay = vi.fn<(opts: { full: boolean }) => void>();
+  const completeReplay = vi.fn<(opts: { full: boolean }) => void>();
+  const discardReplay = vi.fn<(opts: { full: boolean }) => void>();
   const host: AcpSessionAttachmentHost = {
     getChatId: () => CHAT_ID,
     dispatch,
@@ -37,8 +40,11 @@ export function makeHost(overrides: { hasAccumulatedItems?: () => boolean } = {}
     onSessionUpdate: vi.fn(),
     onPermissionRequest: vi.fn(),
     onGateResolvedForSession: vi.fn(),
+    beginReplay,
+    completeReplay,
+    discardReplay,
   };
-  return { host, state, dispatch, resetAccumulator, resetSettledCursor };
+  return { host, state, dispatch, resetAccumulator, resetSettledCursor, beginReplay, completeReplay, discardReplay };
 }
 
 export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

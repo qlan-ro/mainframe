@@ -24,7 +24,7 @@ import { useCallback, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
-import { buildChatExtras } from '@/features/chat/runtime/chat-extras';
+import { buildChatExtras, isRunningFromState } from '@/features/chat/runtime/chat-extras';
 import { projectChatThreadMessages } from '@/features/chat/controller/project-messages';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
@@ -45,7 +45,7 @@ export function SideChatPanel({
   const state = useControllerState(controller);
 
   const messages = useMemo(() => projectChatThreadMessages(state), [state]);
-  const isRunning = state.runState.type === 'running' || state.runState.type === 'cancelling';
+  const isRunning = isRunningFromState(state);
   const extras = useMemo(() => buildChatExtras(controller, port, state), [controller, port, state]);
 
   const onNew = useCallback(

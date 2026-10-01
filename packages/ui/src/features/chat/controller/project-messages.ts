@@ -88,7 +88,8 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
   // consistent ThreadMessage[] for downstream hooks.
   const serverMessages: ThreadMessage[] = state.messages.map((m) => m as ThreadMessageLike as ThreadMessage);
 
-  // Streaming "typing" reveal: while a run is active, mark the TAIL assistant
+  // Streaming "typing" reveal: while a run is active (or cancelling — D7, a
+  // cancel in flight still counts as running), mark the TAIL assistant
   // message `running` so assistant-ui's default useSmooth (in MarkdownTextPrimitive)
   // reveals its text character-by-character as the facade streams
   // session/update chunks. We use a pre-built messageRepository, which
@@ -96,7 +97,20 @@ export function projectChatThreadMessages(state: ChatThreadState): ThreadMessage
   // messages+convertMessage path — so the running status must be set here, or
   // every message stays `complete` and appears instantly. Only the tail streams;
   // earlier turns and all loaded history (runState idle) stay complete/instant.
-  if (state.runState.type === 'running') {
+  //
+  // This is a FALLBACK only (D6): a message that already carries its own
+  // `running` status — because `convert-acp-item.ts` found a part the
+  // overlay is actively streaming — is never second-guessed here. The walk
+  // looks backward for the nearest ASSISTANT message, not literally the
+  // last entry: a just-acked user bubble can land after the streaming
+  // assistant turn in server order (`project-messages-ack-during-stream.test.ts`),
+  // and must not steal or block the running status from the assistant still
+  // streaming ahead of it.
+  const isRunNowish = state.runState.type === 'running' || state.runState.type === 'cancelling';
+  const alreadyRunning = serverMessages.some(
+    (m): m is ThreadMessage & { status: { type: 'running' } } => m.role === 'assistant' && m.status?.type === 'running',
+  );
+  if (isRunNowish && !alreadyRunning) {
     for (let i = serverMessages.length - 1; i >= 0; i--) {
       const msg = serverMessages[i]!;
       if (msg.role === 'assistant') {

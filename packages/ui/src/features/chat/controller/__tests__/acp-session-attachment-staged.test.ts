@@ -1,0 +1,500 @@
+/**
+ * Staged full replay (D4, plan task U2) — behavior tests for
+ * `AcpSessionAttachment`/`AcpSessionPlane`/`ReplayWindowCoordinator` once the
+ * daemon advertises `replayComplete`. Every suite here builds its client
+ * with that capability on; `acp-session-attachment(-replay).test.ts` and
+ * `acp-session-plane(-gates).test.ts` cover the legacy (no-capability) path
+ * and must stay unchanged.
+ */
+import { describe, expect, it, vi } from 'vitest';
+import type { ThreadMessageLike } from '@assistant-ui/react';
+import type { ChatStateEvent } from '../chat-thread-state';
+import { AcpSessionPlane, type AcpSessionPlaneHost } from '../acp-session-plane';
+import { CHAT_ID, makeFakeAcpClient, type FakeAcpClient } from './acp-test-kit';
+import { deferred, tick, type ResumeResult } from './acp-attachment-support';
+
+const STAGED = { itemCreationMarkers: true, replayComplete: true };
+
+type DispatchMock = ReturnType<typeof vi.fn<(event: ChatStateEvent) => void>>;
+type TranscriptUpdated = Extract<ChatStateEvent, { type: 'transcript.updated' }>;
+
+function makeHost(): AcpSessionPlaneHost & { dispatch: DispatchMock } {
+  return {
+    getChatId: () => CHAT_ID,
+    dispatch: vi.fn<(event: ChatStateEvent) => void>(),
+    isDisposed: () => false,
+  };
+}
+
+function eventsOf(host: ReturnType<typeof makeHost>): ChatStateEvent[] {
+  return host.dispatch.mock.calls.map((c) => c[0]);
+}
+
+function transcripts(host: ReturnType<typeof makeHost>): TranscriptUpdated[] {
+  return eventsOf(host).filter((e): e is TranscriptUpdated => e.type === 'transcript.updated');
+}
+
+function lastOf<T>(arr: readonly T[]): T | undefined {
+  return arr[arr.length - 1];
+}
+
+function idsOf(messages: readonly ThreadMessageLike[]): Array<string | number | undefined> {
+  return messages.map((m) => m.id);
+}
+
+function createdMeta() {
+  return { '_mainframe.dev': { created: true } };
+}
+
+function agentMessage(id: string, text: string) {
+  return {
+    sessionUpdate: 'agent_message' as const,
+    messageId: id,
+    content: [{ type: 'text' as const, text }],
+    _meta: createdMeta(),
+  };
+}
+
+/**
+ * Attaches and closes the first (full) replay with `n` items, establishing a
+ * settled baseline transcript. The `tick()` between `attach()` and emitting
+ * frames matters: the window isn't pushed until the mocked `resume()`'s
+ * reply resolves (a microtask), and a frame or marker emitted before that
+ * would land with no window open at all.
+ */
+async function attachWithItems(plane: AcpSessionPlane, client: FakeAcpClient, n: number): Promise<void> {
+  client.nextResumeMeta = { itemCount: n, fullReplay: true };
+  const attached = plane.attach(client);
+  await tick();
+  for (let i = 0; i < n; i++) client.emitUpdate(CHAT_ID, agentMessage(`base-${i}`, `base ${i}`));
+  client.emitReplayComplete(CHAT_ID);
+  await attached;
+}
+
+describe('AcpSessionPlane — staged full replay publishes atomically (D4)', () => {
+  it('a full replay publishes once at replay_complete, with the visible transcript untouched until then', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 3);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 10, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    for (let i = 0; i < 10; i++) client.emitUpdate(CHAT_ID, agentMessage(`new-${i}`, `new ${i}`));
+
+    // Nothing published while staging.
+    expect(transcripts(host)).toHaveLength(0);
+
+    client.emitReplayComplete(CHAT_ID);
+
+    const updates = transcripts(host);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.messages).toHaveLength(10);
+    expect(idsOf(updates[0]!.messages)).toEqual(Array.from({ length: 10 }, (_, i) => `new-${i}`));
+  });
+
+  it('resync keeps the visible transcript until the replay completes — no transcript.cleared, item count stays 3', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 3);
+    expect(lastOf(transcripts(host))!.messages).toHaveLength(3);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('r1', 'r1'));
+    client.emitUpdate(CHAT_ID, agentMessage('r2', 'r2'));
+
+    expect(eventsOf(host)).not.toContainEqual({ type: 'transcript.cleared' });
+    expect(transcripts(host)).toHaveLength(0);
+
+    client.emitReplayComplete(CHAT_ID);
+    expect(lastOf(transcripts(host))!.messages).toHaveLength(2);
+  });
+
+  it('resync is busy until replay end — a second resync before replay_complete issues no second resume call', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    const resumesBefore = client.resumeCalls.length;
+
+    client.emitResync(CHAT_ID);
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+
+    client.emitResync(CHAT_ID);
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+
+    client.emitReplayComplete(CHAT_ID);
+  });
+
+  it('an aborted replay_complete keeps the visible transcript and retries after backoff', async () => {
+    // `attachWithItems` waits on the REAL-timer `tick()` helper — switch to
+    // fake timers only after setup, or that wait never resolves.
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 3);
+    host.dispatch.mockClear();
+    const resumesBefore = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
+      client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+      client.emitResync(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+      client.emitUpdate(CHAT_ID, agentMessage('aborted-1', 'nope'));
+      client.emitReplayComplete(CHAT_ID, true);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(transcripts(host)).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a count mismatch still publishes and only warns', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = makeFakeAcpClient({ capabilities: STAGED });
+      const host = makeHost();
+      const plane = new AcpSessionPlane(host);
+      await attachWithItems(plane, client, 1);
+      host.dispatch.mockClear();
+      warn.mockClear();
+
+      client.nextResumeMeta = { itemCount: 5, fullReplay: true };
+      client.emitResync(CHAT_ID);
+      await tick();
+      for (let i = 0; i < 4; i++) client.emitUpdate(CHAT_ID, agentMessage(`m${i}`, `m${i}`));
+      client.emitReplayComplete(CHAT_ID);
+
+      const updates = transcripts(host);
+      expect(updates).toHaveLength(1);
+      expect(updates[0]!.messages).toHaveLength(4);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('itemCount mismatch'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('AcpSessionPlane — staged replay aborts (D4)', () => {
+  it('a resync inside an open (non-FullReplayRetry) window aborts it: no publish, one follow-up resume after backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = makeFakeAcpClient({ capabilities: STAGED });
+      const host = makeHost();
+      const plane = new AcpSessionPlane(host);
+
+      // The plain attach() opens a window directly (not through
+      // FullReplayRetry) and never gets its own replay_complete.
+      client.nextResumeMeta = { itemCount: 3, fullReplay: true };
+      const attachPromise = plane.attach(client);
+      // Attached immediately so Node never classifies the eventual
+      // ReplayCancelledError rejection (below) as unhandled.
+      const attachSettled = attachPromise.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(0);
+      const resumesAfterAttach = client.resumeCalls.length;
+
+      client.emitResync(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+      // Aborted immediately — no second resume call fires yet (backoff).
+      expect(client.resumeCalls.length).toBe(resumesAfterAttach);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(client.resumeCalls.length).toBe(resumesAfterAttach);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.resumeCalls.length).toBe(resumesAfterAttach + 1);
+
+      expect(transcripts(host)).toHaveLength(0);
+      // The original attach() rejected quietly (ReplayCancelledError) once superseded.
+      expect(await attachSettled).toBeInstanceOf(Error);
+      client.emitReplayComplete(CHAT_ID);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('detach between request and reply settles resume and leaves FullReplayRetry idle for the next resync', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+
+    const gate = deferred<ResumeResult>();
+    const realResume = client.resume;
+    client.resume = vi.fn((sessionId: string, _cwd: string, cursor) => {
+      client.resumeCalls.push({ sessionId, cursor });
+      return gate.promise;
+    }) as typeof client.resume;
+
+    client.emitResync(CHAT_ID);
+    await tick();
+
+    plane.detach();
+    gate.resolve({ _meta: { '_mainframe.dev': { itemCount: 5, fullReplay: true } } } as unknown as ResumeResult);
+    await tick();
+
+    // No window ever got pushed for the detached-before-arrival reply, so
+    // nothing is left waiting on a marker that will never come.
+    client.resume = realResume;
+    const reactivated = plane.reactivate(client);
+    await tick();
+    client.emitReplayComplete(CHAT_ID); // closes reactivate()'s own (full, since nothing ever settled) window
+    await reactivated;
+    const resumesAfterReactivate = client.resumeCalls.length;
+
+    client.emitResync(CHAT_ID);
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesAfterReactivate + 1);
+    client.emitReplayComplete(CHAT_ID);
+  });
+
+  it('frames after a gap abort never reach the visible accumulator', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 3);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 5, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('gap-1', 'gap 1'));
+    client.emitUpdate(CHAT_ID, agentMessage('gap-2', 'gap 2'));
+
+    client.emitGap();
+    await tick();
+
+    // The gap's own cursor resume is now pending; remaining creates for the
+    // aborted window arrive before ITS marker does.
+    client.emitUpdate(CHAT_ID, agentMessage('gap-3', 'gap 3'));
+    client.emitUpdate(CHAT_ID, agentMessage('gap-4', 'gap 4'));
+    client.emitUpdate(CHAT_ID, agentMessage('gap-5', 'gap 5'));
+
+    expect(transcripts(host)).toHaveLength(0);
+
+    // The aborted window's own marker finally arrives — still no publish.
+    client.emitReplayComplete(CHAT_ID);
+    expect(transcripts(host)).toHaveLength(0);
+  });
+
+  it('socket death (dispose) clears the window FIFO: a later marker with an empty FIFO is ignored', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = makeFakeAcpClient({ capabilities: STAGED });
+      const host = makeHost();
+      const plane = new AcpSessionPlane(host);
+      await attachWithItems(plane, client, 1);
+
+      client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+      client.emitResync(CHAT_ID);
+      await tick();
+
+      plane.dispose();
+
+      // No marker will ever arrive from a disposed plane's point of view,
+      // but if one does (e.g. a race), it's ignored, not a crash.
+      expect(() => client.emitReplayComplete(CHAT_ID)).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no open window'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('AcpSessionPlane — staged windows close oldest first', () => {
+  it('a full and then a cursor resume are both answered before either marker; markers close them oldest first', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('full-1', 'full 1'));
+    client.emitUpdate(CHAT_ID, agentMessage('full-2', 'full 2'));
+
+    // A cursor resume (reactivate-style) opens a SECOND window while the
+    // full one above is still unclosed.
+    client.nextResumeMeta = undefined;
+    await plane.reactivate(client);
+
+    expect(transcripts(host)).toHaveLength(0);
+
+    client.emitReplayComplete(CHAT_ID); // closes the full window first
+    expect(transcripts(host)).toHaveLength(1);
+    expect(transcripts(host)[0]!.messages).toHaveLength(2);
+
+    client.emitReplayComplete(CHAT_ID); // closes the cursor window
+    // The cursor window published nothing extra on close — it already
+    // dispatched live, frame by frame, while open.
+    expect(transcripts(host)).toHaveLength(1);
+  });
+});
+
+describe('AcpSessionPlane — settled cursor at publish (D4)', () => {
+  it('a mid-turn full replay (state: running) leaves the settled cursor at start, not the newest staged item', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('running-1', 'still going'));
+    client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
+    client.emitReplayComplete(CHAT_ID);
+
+    client.emitGap();
+    await tick();
+    expect(lastOf(client.resumeCalls)).toEqual({ sessionId: CHAT_ID, cursor: { type: 'start' } });
+  });
+
+  it('an idle replay sets the cursor to the last staged item, not a visible one', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('idle-1', 'done'));
+    client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
+    client.emitReplayComplete(CHAT_ID);
+
+    client.emitGap();
+    await tick();
+    expect(lastOf(client.resumeCalls)).toEqual({ sessionId: CHAT_ID, cursor: { type: 'item', itemId: 'idle-1' } });
+  });
+});
+
+describe('AcpSessionPlane — live traffic after a replay (D4)', () => {
+  it('a live update after replay_complete lands on the published transcript in order', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('p1', 'p1'));
+    client.emitUpdate(CHAT_ID, agentMessage('p2', 'p2'));
+    client.emitReplayComplete(CHAT_ID);
+
+    client.emitUpdate(CHAT_ID, agentMessage('live-after', 'fresh'));
+
+    const last = lastOf(transcripts(host))!;
+    expect(idsOf(last.messages)).toEqual(['p1', 'p2', 'live-after']);
+  });
+
+  it('an unknown-id chunk with no resume pending requests one bounded resync; the same chunk while a resume is pending requests none', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    const resumesBefore = client.resumeCalls.length;
+
+    client.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'unknown-1',
+      content: { type: 'text', text: 'x' },
+    });
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+    client.emitReplayComplete(CHAT_ID);
+    await tick(); // let that resync's FullReplayRetry run fully settle (inFlight: false) before starting a fresh one
+
+    // While THIS bounded resync's own window is pending, the same shape of
+    // frame for ANOTHER unknown id requests no second resync.
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    const resumesNowPending = client.resumeCalls.length;
+    expect(resumesNowPending).toBe(resumesBefore + 2);
+    client.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'unknown-2',
+      content: { type: 'text', text: 'y' },
+    });
+    await tick();
+    expect(client.resumeCalls.length).toBe(resumesNowPending);
+    client.emitReplayComplete(CHAT_ID);
+  });
+
+  it('transcript_cleared still wipes immediately, before the reattach round-trip', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 2);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitTranscriptCleared(CHAT_ID);
+    await tick();
+
+    const events = eventsOf(host);
+    expect(events.findIndex((e) => e.type === 'transcript.cleared')).toBe(0);
+
+    client.emitUpdate(CHAT_ID, agentMessage('fresh-1', 'fresh'));
+    client.emitReplayComplete(CHAT_ID);
+    expect(lastOf(transcripts(host))!.messages).toHaveLength(1);
+  });
+
+  it('a cursor resume does not stage — its frames dispatch live, one at a time, not batched at the marker', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = undefined;
+    await plane.reactivate(client);
+    client.emitUpdate(CHAT_ID, agentMessage('cursor-1', 'cursor 1'));
+
+    // Dispatched immediately, before any marker — proves it never staged.
+    expect(transcripts(host)).toHaveLength(1);
+    expect(idsOf(transcripts(host)[0]!.messages)).toEqual(['base-0', 'cursor-1']);
+
+    client.emitReplayComplete(CHAT_ID);
+    // The marker only clears `replaying` — no extra publish.
+    expect(transcripts(host)).toHaveLength(1);
+  });
+});
+
+describe('AcpSessionPlane — without replayComplete, the legacy reset-at-reply path is unchanged', () => {
+  it('a plain (no-capability) client never pushes a window: a resync resolves synchronously, not pending on a marker', async () => {
+    const client = makeFakeAcpClient(); // no capabilities — legacy
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+
+    // No replay_complete needed — the legacy path already reset and is
+    // ready for live frames.
+    client.emitUpdate(CHAT_ID, agentMessage('legacy-1', 'legacy'));
+    expect(idsOf(lastOf(transcripts(host))!.messages)).toEqual(['legacy-1']);
+  });
+});

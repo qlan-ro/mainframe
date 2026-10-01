@@ -42,6 +42,7 @@ import {
   type GateResolvedListener,
   type PermissionRequestListener,
   type QueueStateListener,
+  type ReplayCompleteListener,
   type ResyncListener,
   type SessionUpdateListener,
   type TranscriptClearedListener,
@@ -238,6 +239,11 @@ export class AcpFacadeClient {
   /** The chat's server-side message cache evicted from the front (`_mainframe.dev/resync`) — re-replay without wiping the transcript first. */
   onResync(listener: ResyncListener): () => void {
     return this.router.onResync(listener);
+  }
+
+  /** Closes exactly one `session/resume` replay (`_mainframe.dev/replay_complete`, spec Decision 38). */
+  onReplayComplete(listener: ReplayCompleteListener): () => void {
+    return this.router.onReplayComplete(listener);
   }
 
   /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */

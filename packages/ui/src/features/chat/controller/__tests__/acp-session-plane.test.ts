@@ -73,17 +73,27 @@ describe('AcpSessionPlane.attach', () => {
 });
 
 describe('AcpSessionPlane — state_update → run frames', () => {
-  it('dispatches run.started on running and run.stopped on idle', async () => {
-    const client = makeFakeAcpClient();
-    const host = makeHost();
-    const plane = new AcpSessionPlane(host);
-    await plane.attach(client);
-    host.dispatch.mockClear();
+  it('dispatches run.started on running and run.stopped on idle, after the 50ms settle delay (D7)', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = makeFakeAcpClient();
+      const host = makeHost();
+      const plane = new AcpSessionPlane(host);
+      await plane.attach(client);
+      host.dispatch.mockClear();
 
-    client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
-    client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
+      client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
+      client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
 
-    expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'run.stopped' }]);
+      // Not yet — the stop is deferred so a content frame in the same
+      // throttle flush gets a chance to mount its part first.
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }]);
+
+      await vi.advanceTimersByTimeAsync(50);
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'run.stopped' }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

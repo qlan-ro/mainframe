@@ -39,6 +39,7 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
 }));
 vi.mock('@/features/chat/runtime/chat-extras', () => ({
   buildChatExtras: () => ({}),
+  isRunningFromState: () => false,
 }));
 vi.mock('@/features/chat/controller/project-messages', () => ({
   projectChatThreadMessages: () => [],

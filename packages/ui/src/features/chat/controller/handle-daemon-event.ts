@@ -12,12 +12,24 @@ import type { ChatStateEvent } from './chat-thread-state';
 
 export type HandleResult = { kind: 'event'; event: ChatStateEvent } | { kind: 'noop' };
 
-/** Maps a raw DaemonEvent to a HandleResult for the given chatId. */
-export function handleDaemonEvent(event: DaemonEvent, chatId: string): HandleResult {
+/**
+ * Maps a raw DaemonEvent to a HandleResult for the given chatId.
+ *
+ * `facadeAttached` (D7, finding 10) gates the `isRunning: false` arm: while
+ * the facade is attached, its own `state_update idle` is the only stop
+ * signal (`acp-session-plane.ts`'s settle-delayed `run.stopped`) — honoring
+ * this side-band copy too would race it and could pop a part mid-reveal a
+ * beat before the real stop lands. Without a live facade (a failed or
+ * never-completed attach), this stays the only stop signal there is, so it
+ * keeps mapping to `run.stopped`. `isRunning: true` is unaffected either
+ * way: nothing else synthesizes `run.started` sooner.
+ */
+export function handleDaemonEvent(event: DaemonEvent, chatId: string, facadeAttached: boolean): HandleResult {
   switch (event.type) {
     case 'chat.updated': {
       if (event.chat.id !== chatId) return { kind: 'noop' };
       if (event.chat.isRunning === false) {
+        if (facadeAttached) return { kind: 'noop' };
         return { kind: 'event', event: { type: 'run.stopped' } };
       }
       if (event.chat.isRunning === true) {

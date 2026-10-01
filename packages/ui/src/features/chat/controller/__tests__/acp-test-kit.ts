@@ -13,6 +13,7 @@ import type {
   Chat,
   ClientEvent,
   DaemonEvent,
+  MainframeCapabilities,
   QueuedMessageRef,
   JsonRpcRequestId,
   PromptRequest,
@@ -29,6 +30,7 @@ import type {
   PermissionRequestListener,
   CompactionListener,
   QueueStateListener,
+  ReplayCompleteListener,
   ResyncListener,
   SessionUpdateListener,
   TranscriptClearedListener,
@@ -57,10 +59,13 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitTranscriptCleared(sessionId: string): void;
   emitQueueState(sessionId: string, refs: QueuedMessageRef[]): void;
   emitResync(sessionId: string): void;
+  /** `_mainframe.dev/replay_complete` (D4) — closes the oldest open replay window. `aborted` defaults to `false` (a normal close), matching the wire's "absent means not aborted". */
+  emitReplayComplete(sessionId: string, aborted?: boolean): void;
   emitGap(): void;
 }
 
-export function makeFakeAcpClient(): FakeAcpClient {
+/** Defaults to no capabilities (a pre-D3/D4 daemon) — every existing suite that doesn't opt in stays on the legacy path unchanged. */
+export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilities | null } = {}): FakeAcpClient {
   const updateListeners = new Set<SessionUpdateListener>();
   const permissionListeners = new Set<PermissionRequestListener>();
   const gateResolvedListeners = new Set<GateResolvedListener>();
@@ -68,6 +73,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
   const transcriptClearedListeners = new Set<TranscriptClearedListener>();
   const queueStateListeners = new Set<QueueStateListener>();
   const resyncListeners = new Set<ResyncListener>();
+  const replayCompleteListeners = new Set<ReplayCompleteListener>();
   const gapListeners = new Set<GapListener>();
 
   const client: FakeAcpClient = {
@@ -77,6 +83,7 @@ export function makeFakeAcpClient(): FakeAcpClient {
     respondCalls: [],
     detachCalls: [],
     nextResumeMeta: undefined,
+    mainframeCapabilities: options.capabilities ?? null,
 
     ensureConnected: vi.fn().mockResolvedValue(undefined),
 
@@ -107,6 +114,10 @@ export function makeFakeAcpClient(): FakeAcpClient {
     onResync(listener) {
       resyncListeners.add(listener);
       return () => resyncListeners.delete(listener);
+    },
+    onReplayComplete(listener) {
+      replayCompleteListeners.add(listener);
+      return () => replayCompleteListeners.delete(listener);
     },
     onGap(listener) {
       gapListeners.add(listener);
@@ -151,6 +162,9 @@ export function makeFakeAcpClient(): FakeAcpClient {
     },
     emitResync(sessionId) {
       for (const l of resyncListeners) l(sessionId);
+    },
+    emitReplayComplete(sessionId, aborted = false) {
+      for (const l of replayCompleteListeners) l(sessionId, aborted);
     },
     emitGap() {
       for (const l of gapListeners) l();
@@ -271,10 +285,10 @@ export interface ControllerRig {
  */
 export function makeController(
   chatId: string = CHAT_ID,
-  options: { connected?: boolean; active?: boolean } = {},
+  options: { connected?: boolean; active?: boolean; capabilities?: MainframeCapabilities | null } = {},
 ): ControllerRig {
   const ws = makeFakeWs(options);
-  const acpClient = makeFakeAcpClient();
+  const acpClient = makeFakeAcpClient({ capabilities: options.capabilities });
   const ctrl = new AcpChatController(chatId, PORT, ws.fakeClient, () => acpClient);
   if (options.active !== false) ctrl.setActive(true);
   return { ctrl, ws, acpClient };

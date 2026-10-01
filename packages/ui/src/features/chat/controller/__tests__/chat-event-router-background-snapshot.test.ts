@@ -29,6 +29,7 @@ describe('routeDaemonEvent — chat.updated background resync', () => {
     host = {
       getChatId: () => CHAT_ID,
       dispatch: (e) => dispatched.push(e),
+      isFacadeAttached: () => false,
     };
   });
 

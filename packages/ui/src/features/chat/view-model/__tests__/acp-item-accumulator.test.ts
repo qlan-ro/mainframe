@@ -232,6 +232,165 @@ describe('AcpItemAccumulator — ordering and session-level state', () => {
   });
 });
 
+describe('AcpItemAccumulator — strict creation (U1, D3 client half)', () => {
+  const created = { '_mainframe.dev': { created: true } };
+
+  it('a chunk for an unknown id returns needs-replay and leaves itemsInOrder empty', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('hi') });
+
+    expect(outcome).toEqual({ kind: 'needs-replay', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a meta-only upsert for an unknown id returns needs-replay and leaves itemsInOrder empty', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', _meta: { flag: true } });
+
+    expect(outcome).toEqual({ kind: 'needs-replay', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a full-revision upsert without the marker for an unknown id returns needs-replay', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('hi')] });
+
+    expect(outcome).toEqual({ kind: 'needs-replay', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a tool_call_update without the marker for an unknown id returns needs-replay', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({ sessionUpdate: 'tool_call_update', toolCallId: 't1', title: 'Read' });
+
+    expect(outcome).toEqual({ kind: 'needs-replay', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a tool_call_content_chunk for an unknown id returns needs-replay', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({
+      sessionUpdate: 'tool_call_content_chunk',
+      toolCallId: 't1',
+      content: { type: 'content', content: textBlock('{}') },
+    });
+
+    expect(outcome).toEqual({ kind: 'needs-replay', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('a marked message create builds the item in order', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({
+      sessionUpdate: 'agent_message',
+      messageId: 'm1',
+      content: [textBlock('hi')],
+      _meta: created,
+    });
+
+    expect(outcome).toEqual({ kind: 'applied', created: true });
+    expect(acc.itemsInOrder).toEqual([
+      { kind: 'message', id: 'm1', role: 'agent', content: [textBlock('hi')], meta: created, origin: 'live' },
+    ]);
+  });
+
+  it('a marked tool create builds the item in order', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    const outcome = acc.apply({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't1',
+      title: 'Read',
+      kind: 'read',
+      status: 'pending',
+      _meta: created,
+    });
+
+    expect(outcome).toEqual({ kind: 'applied', created: true });
+    expect(acc.itemsInOrder).toEqual([
+      {
+        kind: 'tool-call',
+        id: 't1',
+        title: 'Read',
+        toolKind: 'read',
+        status: 'pending',
+        content: [],
+        locations: undefined,
+        rawInput: undefined,
+        rawOutput: undefined,
+        meta: created,
+        origin: 'live',
+      },
+    ]);
+  });
+
+  it('a marked create for a known id replaces it in place, at the same index', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    acc.apply({ sessionUpdate: 'user_message', messageId: 'u1', content: [textBlock('first')], _meta: created });
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('hi')], _meta: created });
+    const outcome = acc.apply({
+      sessionUpdate: 'agent_message',
+      messageId: 'm1',
+      content: [textBlock('replaced')],
+      _meta: created,
+    });
+
+    expect(outcome).toEqual({ kind: 'applied', created: false });
+    expect(acc.itemsInOrder.map((i) => i.id)).toEqual(['u1', 'm1']);
+    expect(acc.itemsInOrder[1]).toEqual({
+      kind: 'message',
+      id: 'm1',
+      role: 'agent',
+      content: [textBlock('replaced')],
+      meta: created,
+      origin: 'live',
+    });
+  });
+
+  it('a clear for a known id deletes it; a clear for an unknown id returns ignored', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('hi')], _meta: created });
+
+    const known = acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [], _meta: null });
+    expect(known).toEqual({ kind: 'applied', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+
+    const unknown = acc.apply({ sessionUpdate: 'agent_message', messageId: 'm2', content: [], _meta: null });
+    expect(unknown).toEqual({ kind: 'ignored', created: false });
+    expect(acc.itemsInOrder).toEqual([]);
+  });
+
+  it('an item created while replaying has origin: replay; one created live has origin: live', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    acc.setReplaying(true);
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('replayed')], _meta: created });
+    acc.setReplaying(false);
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm2', content: [textBlock('live')], _meta: created });
+
+    expect(acc.itemsInOrder[0]!.origin).toBe('replay');
+    expect(acc.itemsInOrder[1]!.origin).toBe('live');
+  });
+
+  it('a later chunk keeps the origin set at creation, even after the replaying flag flips', () => {
+    const acc = new AcpItemAccumulator({ strictCreation: true });
+    acc.setReplaying(true);
+    acc.apply({ sessionUpdate: 'agent_message', messageId: 'm1', content: [textBlock('replayed')], _meta: created });
+    acc.setReplaying(false);
+    acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock(' more') });
+
+    expect(acc.itemsInOrder[0]!.origin).toBe('replay');
+  });
+});
+
+describe('AcpItemAccumulator — legacy mode (no strictCreation option) behaves like today', () => {
+  it('a chunk for an unknown id still creates the item, with no origin field', () => {
+    const acc = new AcpItemAccumulator();
+    const outcome = acc.apply({ sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: textBlock('hi') });
+
+    expect(outcome).toEqual({ kind: 'applied', created: true });
+    expect(acc.itemsInOrder[0]!.origin).toBeUndefined();
+  });
+});
+
 describe('AcpItemAccumulator — empty-content clear (R2.1)', () => {
   it('a clear frame — empty content with _meta null — removes the item, leaving no blank bubble', () => {
     const acc = new AcpItemAccumulator();

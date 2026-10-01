@@ -15,9 +15,31 @@
  * the resync wanted. A wipe is remembered and runs once the in-flight replay
  * settles: it is user-initiated and must win, and however many arrive during
  * one replay, they coalesce into a single follow-up.
+ *
+ * **Staged replay (D4, plan task U2).** `replay()` now stays pending until
+ * the window it opens settles — its own `replay_complete`, or an earlier
+ * abort — not just until the resume reply arrives, so "one full replay at a
+ * time" now also covers the time the daemon spends streaming it. A resync
+ * that arrives while a window is still open but NOT this instance's own
+ * in-flight run (e.g. a plain `attach()`'s resume, never routed through
+ * here) aborts that foreign window and schedules this instance's own replay
+ * through the normal backoff path rather than firing immediately — a replay
+ * window is never trusted to still be the "current" one once a second resync
+ * says the cache moved again. `ReplayCancelledError` (a detach, dispose,
+ * rebind, or a window superseded before its own marker) is a quiet end: no
+ * backoff, no warning, just stop.
  */
+import { ReplayCancelledError } from './acp-replay-window';
+
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
+
+export interface FullReplayRetryHost {
+  /** True while the FIFO's oldest window is still open (not yet closed or aborted) — a resync must not race it. */
+  hasOpenWindow(): boolean;
+  /** Marks that open window aborted and settles its `resume()` promise — see `acp-session-attachment.ts`. */
+  abortOpenWindow(): void;
+}
 
 export class FullReplayRetry {
   private inFlight = false;
@@ -27,14 +49,27 @@ export class FullReplayRetry {
   private wipePending = false;
 
   constructor(
-    private readonly replay: () => Promise<void>,
+    private readonly replay: (opts: { wipe: boolean }) => Promise<void>,
     private readonly chatId: () => string,
+    private readonly host: FullReplayRetryHost,
   ) {}
 
-  /** Ignored while a replay is in flight, while a retry is armed, and after the give-up. */
+  /**
+   * Ignored while a replay is in flight, while a retry is armed, and after
+   * the give-up. If a DIFFERENT window is open (not this instance's own
+   * in-flight run), that window is stale the moment a new resync arrives —
+   * abort it and go through the backoff path instead of firing immediately,
+   * so a client that keeps getting re-notified mid-replay doesn't hammer the
+   * daemon once per notification.
+   */
   requestResync(): void {
     if (this.inFlight || this.timer !== null || this.gaveUp) return;
-    void this.run();
+    if (this.host.hasOpenWindow()) {
+      this.host.abortOpenWindow();
+      this.scheduleRetry();
+      return;
+    }
+    void this.run(false);
   }
 
   /**
@@ -49,7 +84,7 @@ export class FullReplayRetry {
       return;
     }
     this.cancel();
-    void this.run();
+    void this.run(true);
   }
 
   /**
@@ -70,14 +105,19 @@ export class FullReplayRetry {
     this.timer = null;
   }
 
-  private async run(): Promise<void> {
+  private async run(wipe: boolean): Promise<void> {
     this.inFlight = true;
     try {
-      await this.replay();
+      await this.replay({ wipe });
       this.reset();
     } catch (error) {
-      console.warn('[acp-session] full re-replay failed', error);
-      this.scheduleRetry();
+      if (error instanceof ReplayCancelledError) {
+        // Superseded, not failed — a detach/dispose/rebind or a newer
+        // resync already took over. No backoff, no noise.
+      } else {
+        console.warn('[acp-session] full re-replay failed', error);
+        this.scheduleRetry();
+      }
     } finally {
       this.inFlight = false;
       this.runPendingWipe();
@@ -88,7 +128,7 @@ export class FullReplayRetry {
     if (!this.wipePending) return;
     this.wipePending = false;
     this.cancel();
-    void this.run();
+    void this.run(true);
   }
 
   private scheduleRetry(): void {
@@ -102,7 +142,7 @@ export class FullReplayRetry {
     this.delayMs = this.delayMs === 0 ? BASE_DELAY_MS : Math.min(this.delayMs * 2, MAX_DELAY_MS);
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.run();
+      void this.run(false);
     }, this.delayMs);
   }
 }
