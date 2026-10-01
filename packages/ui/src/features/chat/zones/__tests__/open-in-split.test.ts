@@ -8,7 +8,7 @@
  * the contract itself, which the callers only observe indirectly.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { openInSplit } from '../open-in-split';
+import { forkAnchor, openBeside, openInSplit } from '../open-in-split';
 import { useZonesStore } from '../zones-store';
 import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
@@ -80,5 +80,53 @@ describe('gestures the split absorbs', () => {
     expect(openInSplit('chat-b', 'chat-c')).toBe(true);
     expect(zones()).toEqual(['chat-c', 'chat-b']);
     expect(focusedIndex()).toBe(1);
+  });
+});
+
+describe('openBeside — pair a chat with an anchor, e.g. a fork with its parent', () => {
+  it('opens a fresh pair with the anchor left when there is none', () => {
+    openBeside('parent', 'fork');
+    expect(zones()).toEqual(['parent', 'fork']);
+  });
+
+  it('replaces a pair that does not hold the anchor', () => {
+    useZonesStore.setState({ zones: ['chat-x', 'chat-y'], focusedIndex: 1 });
+    openBeside('parent', 'fork');
+    expect(zones()).toEqual(['parent', 'fork']);
+  });
+
+  it("keeps the anchor's slot and swaps the other one", () => {
+    useZonesStore.setState({ zones: ['chat-x', 'parent'], focusedIndex: 1 });
+    openBeside('parent', 'fork');
+    expect(zones()).toEqual(['fork', 'parent']);
+  });
+
+  it('leaves a pair that already shows both untouched', () => {
+    useZonesStore.setState({ zones: ['parent', 'fork'], focusedIndex: 0 });
+    openBeside('parent', 'fork');
+    expect(zones()).toEqual(['parent', 'fork']);
+  });
+});
+
+describe('forkAnchor — what a new fork opens beside', () => {
+  it('is the parent when the parent is the focused chat', () => {
+    expect(forkAnchor('parent', 'parent', null)).toBe('parent');
+  });
+
+  it('is the parent when it sits in the visible split beside the focused chat', () => {
+    expect(forkAnchor('parent', 'chat-x', ['parent', 'chat-x'])).toBe('parent');
+  });
+
+  it('is the focused chat when the parent is off screen', () => {
+    expect(forkAnchor('parent', 'chat-x', null)).toBe('chat-x');
+  });
+
+  it('is the focused chat when the parent is only in a parked pair', () => {
+    expect(forkAnchor('parent', 'chat-x', ['parent', 'chat-y'])).toBe('chat-x');
+  });
+
+  it('is null with nothing focused or only an unsent draft', () => {
+    expect(forkAnchor('parent', null, null)).toBeNull();
+    expect(forkAnchor('parent', '__LOCALID_1', null)).toBeNull();
   });
 });
