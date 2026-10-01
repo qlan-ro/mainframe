@@ -29,7 +29,8 @@ use std::collections::HashMap;
 
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{
-    DisplayContent, DisplayMessage, DisplayMessageType, DisplayNode, ToolCallResult, ToolCategory,
+    DisplayContent, DisplayMessage, DisplayMessageType, DisplayNode, StreamingLeafKind,
+    ToolCallResult, ToolCategory,
 };
 
 use mainframe_types::acp::content::ContentBlock;
@@ -141,8 +142,29 @@ fn is_queued(message: &DisplayMessage) -> bool {
 
 /// Encode a `DisplayMessage[]` snapshot into the ACP item list.
 pub fn encode(messages: &[DisplayMessage]) -> Vec<EncodedItem> {
+    encode_messages(messages, None)
+}
+
+/// Like `encode`, but for the last non-queued top-level container, marks
+/// whichever accumulator segment is still open at `finish` with
+/// `ItemMeta.streaming: true` when its kind matches `streaming` (spec
+/// Decision 39) — the item the partial-message overlay currently backs.
+/// `handle_display_revision` calls this; resume replay keeps `encode`,
+/// because a resume snapshot has no overlay.
+pub fn encode_revision(
+    messages: &[DisplayMessage],
+    streaming: Option<StreamingLeafKind>,
+) -> Vec<EncodedItem> {
+    encode_messages(messages, streaming)
+}
+
+fn encode_messages(
+    messages: &[DisplayMessage],
+    streaming: Option<StreamingLeafKind>,
+) -> Vec<EncodedItem> {
     let mut out = Vec::new();
-    for message in messages {
+    let last = messages.iter().rposition(|m| !is_queued(m));
+    for (index, message) in messages.iter().enumerate() {
         if is_queued(message) {
             continue;
         }
@@ -153,11 +175,13 @@ pub fn encode(messages: &[DisplayMessage]) -> Vec<EncodedItem> {
             message_meta: message.metadata.as_ref(),
             parent_tool_call_id: None,
         };
+        let leaf_kind = if Some(index) == last { streaming } else { None };
         encode_content(
             &message.content,
             &container,
             role_for(message.r#type),
             &mut out,
+            leaf_kind,
         );
     }
     out

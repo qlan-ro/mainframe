@@ -75,10 +75,14 @@ impl Accum {
     }
 
     /// Build the open segment's finished item, draining the accumulated
-    /// state so the accumulator is ready to open the next one.
-    fn build(&mut self, container: &Container<'_>) -> EncodedItem {
+    /// state so the accumulator is ready to open the next one. `streaming`
+    /// is `true` only for the segment still open at `finish` for the
+    /// overlay's leaf kind (spec Decision 39) — `claim`'s early close of an
+    /// interrupted segment always passes `false`.
+    fn build(&mut self, container: &Container<'_>, streaming: bool) -> EncodedItem {
         let id = self.id(container);
         let content = std::mem::take(&mut self.blocks);
+        let streaming = streaming.then_some(true);
         match self.kind {
             AccumKind::Message(role) => EncodedItem::Message {
                 id,
@@ -88,13 +92,17 @@ impl Accum {
                     error_text: self.error_text.take(),
                     skill_loaded: self.skill_loaded.take(),
                     is_compacted: std::mem::take(&mut self.is_compacted).then_some(true),
+                    streaming,
                     ..container.base_meta()
                 }),
             },
             AccumKind::Thought => EncodedItem::Thought {
                 id,
                 content,
-                meta: wrap_meta(container.base_meta()),
+                meta: wrap_meta(ItemMeta {
+                    streaming,
+                    ..container.base_meta()
+                }),
             },
         }
     }
@@ -110,7 +118,7 @@ impl Accum {
         if let Some(pos) = self.pos
             && pos + 1 != out.len()
         {
-            out[pos] = self.build(container);
+            out[pos] = self.build(container, false);
             self.segment += 1;
             self.pos = None;
         }
@@ -138,8 +146,13 @@ impl Accum {
         self
     }
 
-    pub(super) fn finish(mut self, container: &Container<'_>, out: &mut [EncodedItem]) {
+    pub(super) fn finish(
+        mut self,
+        container: &Container<'_>,
+        out: &mut [EncodedItem],
+        streaming: bool,
+    ) {
         let Some(pos) = self.pos else { return };
-        out[pos] = self.build(container);
+        out[pos] = self.build(container, streaming);
     }
 }

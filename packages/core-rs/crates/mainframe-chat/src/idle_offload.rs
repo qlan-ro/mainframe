@@ -108,7 +108,7 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .delete(chat_id);
+            .release(chat_id);
         self.event_handler.clear_display_state(chat_id);
         self.permissions
             .lock()
@@ -131,11 +131,18 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     /// offload slot and must release it itself.
     fn recheck(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
-        let session = {
+        let (session, process_state) = {
             let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-            guard.session.clone()?
+            (guard.session.clone()?, guard.chat.process_state)
         };
         if !session.is_spawned() {
+            return None;
+        }
+        // A turn whose tool runs silent past the idle threshold must not have
+        // its CLI killed mid-turn (finding 4): `is_spawned`/`last_activity_at`
+        // alone can't see that, since a long tool call produces no adapter
+        // activity.
+        if process_state == Some(Some(mainframe_types::chat::ProcessState::Working)) {
             return None;
         }
         let last = session.last_activity_at()?;

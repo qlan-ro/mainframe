@@ -58,8 +58,13 @@ async fn a_turn_that_starts_during_the_await_reaches_the_client_after_the_replay
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
 
     let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 2, "the reply, then the buffered start");
-    assert_eq!(frames[1]["params"]["update"]["state"], json!("running"));
+    assert_eq!(
+        frames.len(),
+        3,
+        "the reply, the closing marker, then the buffered start"
+    );
+    assert_eq!(frames[1]["method"], json!("_mainframe.dev/replay_complete"));
+    assert_eq!(frames[2]["params"]["update"]["state"], json!("running"));
 }
 
 #[tokio::test]
@@ -108,8 +113,19 @@ async fn a_retry_raised_during_the_await_marks_the_first_frame_after_the_replay(
     hub.reset_session(&conn, "chat-1", seed(&items, &reply(1)), |_c| {});
     drain(&mut rx);
 
-    // The retried answer arrives as a new item after the resume.
-    hub.on_chat_surface_event(revision("chat-1", "Retried answer"));
+    // The retried answer arrives as a new item after the resume (a retry
+    // re-streams from scratch under a fresh message id, per `stream.rs`'s own
+    // module doc — reusing "m1" here would make this a no-op full revision
+    // with an unchanged meta, which finding 8's fix correctly refuses as a
+    // marker carrier).
+    hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
+        chat_id: "chat-1".to_string(),
+        messages: vec![
+            display_message("m1", "Hello"),
+            display_message("m2", "Retried answer"),
+        ],
+        streaming: None,
+    });
 
     let frames = drain(&mut rx);
     let marked = frames

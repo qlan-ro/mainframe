@@ -101,6 +101,46 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
     ));
 }
 
+/// Spec Decision 37: `dispatch_resume` diffs the snapshot against a fresh
+/// `SessionState`, so every replayed item goes through `create_update` —
+/// every item frame in the replay must carry the creation marker.
+#[tokio::test]
+async fn a_replay_create_carries_the_marker() {
+    let port = FakePort {
+        messages: vec![
+            dmsg("dmsg_1", vec![text("hello")]),
+            dmsg("dmsg_2", vec![text("world")]),
+        ],
+        pending: None,
+        running: false,
+    };
+    let (_response, replay) =
+        dispatch_resume(resume_request(Some(json!({ "type": "start" }))), &port).await;
+
+    let item_frames: Vec<_> = replay
+        .updates
+        .iter()
+        .filter(|u| !matches!(u, SessionUpdate::StateUpdate(_)))
+        .collect();
+    assert_eq!(item_frames.len(), 2, "one create per replayed item");
+    for frame in item_frames {
+        let SessionUpdate::AgentMessage(upsert) = frame else {
+            panic!("expected an AgentMessage create, got {frame:?}");
+        };
+        let meta = upsert
+            .meta
+            .clone()
+            .flatten()
+            .expect("every replay create carries meta");
+        assert_eq!(
+            meta[mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE]["created"],
+            json!(true),
+            "message {} must carry the creation marker",
+            upsert.message_id
+        );
+    }
+}
+
 #[tokio::test]
 async fn an_absent_cursor_behaves_like_start() {
     let port = FakePort {

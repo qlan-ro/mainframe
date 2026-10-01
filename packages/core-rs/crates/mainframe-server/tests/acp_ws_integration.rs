@@ -219,12 +219,22 @@ async fn session_resume_reaches_the_resume_port() {
     );
     assert_eq!(state_update["params"]["update"]["state"], json!("idle"));
 
-    // The replay always closes with the queue snapshot — even empty, so a
+    // The replay closes with the queue snapshot — even empty, so a
     // reconnecting client evicts stale queued turns.
     let queue_state = ws.read_event().await;
     assert_eq!(queue_state["method"], json!("_mainframe.dev/queue_state"));
     assert_eq!(queue_state["params"]["sessionId"], json!("no-such-chat"));
     assert_eq!(queue_state["params"]["refs"], json!([]));
+
+    // `_mainframe.dev/replay_complete` closes the replay (spec Decision 38),
+    // after `queue_state` and before any buffered catch-up (none here).
+    let marker = ws.read_event().await;
+    assert_eq!(marker["method"], json!("_mainframe.dev/replay_complete"));
+    assert_eq!(marker["params"]["sessionId"], json!("no-such-chat"));
+    assert!(
+        marker["params"].get("aborted").is_none(),
+        "a normal close carries no aborted key"
+    );
 }
 
 #[tokio::test]

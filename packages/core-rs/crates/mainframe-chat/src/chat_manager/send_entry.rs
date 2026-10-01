@@ -19,7 +19,7 @@ impl ChatManager {
         if let Some(chat) = &chat
             && chat.worktree_missing == Some(true)
         {
-            self.emit_worktree_missing_error(chat_id, chat);
+            self.emit_worktree_missing_error(chat_id, chat).await;
             return Ok(());
         }
 
@@ -61,7 +61,12 @@ impl ChatManager {
         );
     }
 
-    fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
+    /// Loads any existing history into the cache FIRST (todo #350 R1, finding
+    /// 5): a cold or evicted chat's cache is empty, and appending straight
+    /// into it would replace the whole transcript with just this one error
+    /// message — the next resume snapshot then shows nothing else.
+    async fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
+        self.get_messages(chat_id).await;
         let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
             .create_transient_message(
                 chat_id,

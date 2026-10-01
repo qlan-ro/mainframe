@@ -11,7 +11,7 @@ mod teardown_tests;
 use super::*;
 use crate::chat_surface::{ChatSurface, ChatSurfaceEvent};
 use crate::test_support::test_chat;
-use mainframe_types::display::DisplayContent;
+use mainframe_types::display::{DisplayContent, DisplayMessageType, StreamingLeafKind};
 
 /// Deps with a 1:1 prepare (each raw message becomes one display message with
 /// the same id) — enough pipeline to observe id continuity on the revision
@@ -20,6 +20,23 @@ use mainframe_types::display::DisplayContent;
 #[derive(Default)]
 struct OverlayDeps {
     events: Mutex<Vec<DaemonEvent>>,
+    /// When true, `prepare_messages_for_client` collapses a trailing run of
+    /// same-type messages into one `DisplayMessage`, keyed by the run's FIRST
+    /// message (id + timestamp) — just enough of the real `group_messages`
+    /// behavior (owned by `mainframe-adapter-claude`, out of this crate's dep
+    /// set) to prove the overlay's own frozen timestamp survives into the
+    /// group it opens. `false` keeps the flat 1:1 conversion every other test
+    /// in this file relies on.
+    group_consecutive: bool,
+}
+
+impl OverlayDeps {
+    fn grouping() -> Self {
+        Self {
+            group_consecutive: true,
+            ..Self::default()
+        }
+    }
 }
 
 impl EventHandlerDeps for OverlayDeps {
@@ -49,6 +66,9 @@ impl EventHandlerDeps for OverlayDeps {
         raw: &[ChatMessage],
         _categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
+        if self.group_consecutive {
+            return group_consecutive(raw);
+        }
         raw.iter()
             .map(|m| DisplayMessage {
                 id: m.id.clone(),
@@ -100,9 +120,42 @@ impl EventHandlerDeps for OverlayDeps {
     fn workflow_runs_stop_all(&self, _chat_id: &str) {}
 }
 
+/// Groups a trailing run of same-type messages into one `DisplayMessage`,
+/// using the run's first message as the base for id and timestamp — see
+/// `OverlayDeps::group_consecutive`'s doc.
+fn group_consecutive(raw: &[ChatMessage]) -> Vec<DisplayMessage> {
+    let mut out: Vec<DisplayMessage> = Vec::new();
+    for m in raw {
+        let r#type = match m.r#type {
+            ChatMessageType::User => DisplayMessageType::User,
+            _ => DisplayMessageType::Assistant,
+        };
+        let leaves: Vec<DisplayContent> = m
+            .content
+            .iter()
+            .filter_map(|c| match c {
+                MessageContent::Leaf(leaf) => Some(DisplayContent::Leaf(leaf.clone())),
+                MessageContent::Node(_) => None,
+            })
+            .collect();
+        match out.last_mut() {
+            Some(last) if last.r#type == r#type => last.content.extend(leaves),
+            _ => out.push(DisplayMessage {
+                id: m.id.clone(),
+                chat_id: m.chat_id.clone(),
+                r#type,
+                content: leaves,
+                timestamp: m.timestamp.clone(),
+                metadata: None,
+            }),
+        }
+    }
+    out
+}
+
 #[derive(Default)]
 struct RevisionSurface {
-    revisions: Mutex<Vec<Vec<DisplayMessage>>>,
+    revisions: Mutex<Vec<(Vec<DisplayMessage>, Option<StreamingLeafKind>)>>,
 }
 
 impl RevisionSurface {
@@ -110,17 +163,33 @@ impl RevisionSurface {
         self.revisions
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .clone()
+            .iter()
+            .map(|(messages, _)| messages.clone())
+            .collect()
+    }
+
+    fn streaming(&self) -> Vec<Option<StreamingLeafKind>> {
+        self.revisions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|(_, streaming)| *streaming)
+            .collect()
     }
 }
 
 impl ChatSurface for RevisionSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
-        if let ChatSurfaceEvent::DisplayRevision { messages, .. } = event {
+        if let ChatSurfaceEvent::DisplayRevision {
+            messages,
+            streaming,
+            ..
+        } = event
+        {
             self.revisions
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .push(messages);
+                .push((messages, streaming));
         }
     }
 }
@@ -157,16 +226,44 @@ fn text(t: &str) -> MessageContent {
     })
 }
 
+fn thinking(t: &str) -> MessageContent {
+    MessageContent::Leaf(LeafContent::Thinking {
+        thinking: t.to_string(),
+        parent_tool_use_id: None,
+    })
+}
+
 fn setup() -> (Arc<dyn SessionSink>, Arc<OverlayDeps>, Arc<RevisionSurface>) {
-    let deps = Arc::new(OverlayDeps::default());
+    let (sink, _messages, deps, surface) = setup_from(Arc::new(OverlayDeps::default()));
+    (sink, deps, surface)
+}
+
+type SetupParts = (
+    Arc<dyn SessionSink>,
+    Arc<Mutex<MessageCache>>,
+    Arc<OverlayDeps>,
+    Arc<RevisionSurface>,
+);
+
+/// Like `setup`, but with a caller-chosen deps AND the backing `MessageCache`
+/// exposed, so a test can seed history before the first partial — needed to
+/// put a non-assistant message last, which makes the overlay open its OWN
+/// group instead of merging into one already in the cache.
+fn setup_from(deps: Arc<OverlayDeps>) -> SetupParts {
+    let messages = Arc::new(Mutex::new(MessageCache::new()));
     let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
+        messages.clone(),
         Arc::new(Mutex::new(PermissionManager::new())),
         deps.clone(),
     );
     let surface = Arc::new(RevisionSurface::default());
     handler.set_chat_surface(surface.clone());
-    (handler.build_sink("chat-partial", None), deps, surface)
+    (
+        handler.build_sink("chat-partial", None),
+        messages,
+        deps,
+        surface,
+    )
 }
 
 fn first_text(display: &DisplayMessage) -> &str {
@@ -234,4 +331,97 @@ fn partial_text_gets_the_same_command_tag_stripping_as_completed_text() {
         "before after",
         "overlay text must be stripped like on_message strips"
     );
+}
+
+/// Spec Decision 39: the overlay-backed item carries `streaming: true` only
+/// while the overlay is live; the committed block that supersedes it drops
+/// the flag in the very next revision.
+#[test]
+fn the_streaming_flag_rides_the_overlay_and_drops_on_commit() {
+    let (sink, _deps, surface) = setup();
+
+    sink.on_message_partial("msg_1", vec![text("Riv")]);
+    sink.on_message(
+        vec![text("Rivers flow downhill.")],
+        Some(MessageMetadata {
+            model: None,
+            usage: None,
+            vendor_id: Some("msg_1".to_string()),
+        }),
+    );
+
+    let streaming = surface.streaming();
+    assert_eq!(streaming.len(), 2);
+    assert_eq!(
+        streaming[0],
+        Some(StreamingLeafKind::Text),
+        "the partial streams as text"
+    );
+    assert_eq!(
+        streaming[1], None,
+        "the committed block is no longer streaming"
+    );
+}
+
+#[test]
+fn a_thinking_partial_streams_as_thinking() {
+    let (sink, _deps, surface) = setup();
+
+    sink.on_message_partial("msg_1", vec![thinking("pondering")]);
+
+    let streaming = surface.streaming();
+    assert_eq!(streaming.last(), Some(&Some(StreamingLeafKind::Thinking)));
+}
+
+/// Spec Decision 39: the overlay's timestamp is fixed at its first partial.
+/// The cache ends with a user message, so the overlay opens its own group,
+/// and that group's base — which supplies the `DisplayMessage.timestamp` —
+/// is the overlay itself. This fails before the fix: `overlay_message` would
+/// mint a fresh `now_iso8601()` on every partial, so the second partial's
+/// group would carry a later timestamp than the first.
+#[test]
+fn the_overlay_timestamp_is_frozen_at_the_first_partial() {
+    let (sink, messages, _deps, surface) = setup_from(Arc::new(OverlayDeps::grouping()));
+    messages.lock().unwrap().append(
+        "chat-partial",
+        ChatMessage {
+            id: "u1".to_string(),
+            chat_id: "chat-partial".to_string(),
+            r#type: ChatMessageType::User,
+            content: vec![text("hi")],
+            timestamp: "2020-01-01T00:00:00.000Z".to_string(),
+            metadata: None,
+        },
+    );
+
+    sink.on_message_partial("msg_1", vec![text("Riv")]);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    sink.on_message_partial("msg_1", vec![text("Rivers flow")]);
+
+    let revisions = surface.revisions();
+    assert_eq!(
+        revisions[0].len(),
+        2,
+        "the user message and the overlay's own group: {:?}",
+        revisions[0]
+    );
+    let first_overlay_timestamp = revisions[0].last().unwrap().timestamp.clone();
+    let second_overlay_timestamp = revisions.last().unwrap().last().unwrap().timestamp.clone();
+    assert_eq!(
+        first_overlay_timestamp, second_overlay_timestamp,
+        "the overlay's own group timestamp must not advance between partials"
+    );
+}
+
+/// Spec Decision 39: a partial whose text strips to empty (all command-tag
+/// content) never reports streaming — the display has no trailing leaf to
+/// back the claim.
+#[test]
+fn an_overlay_that_strips_to_empty_is_not_streaming() {
+    let (sink, _deps, surface) = setup();
+
+    sink.on_message_partial("msg_1", vec![text("<mainframe-tag/>")]);
+
+    let streaming = surface.streaming();
+    assert_eq!(streaming.last(), Some(&None));
 }

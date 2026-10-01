@@ -42,6 +42,7 @@ fn revision(chat_id: &str, text: &str) -> ChatSurfaceEvent {
     ChatSurfaceEvent::DisplayRevision {
         chat_id: chat_id.to_string(),
         messages: vec![display_message("m1", text)],
+        streaming: None,
     }
 }
 
@@ -81,6 +82,7 @@ fn seed_with_flag<'a>(
         items,
         reply,
         replied,
+        completed: Arc::new(AtomicBool::new(false)),
         redelivered_gate: None,
     }
 }
@@ -145,6 +147,32 @@ async fn a_growing_message_streams_as_chunks_after_its_first_frame() {
     assert_eq!(
         frames[1]["params"]["update"]["content"]["text"],
         json!("lo")
+    );
+}
+
+/// Spec Decision 39: `encode_revision` (not `encode`) is what wires the
+/// overlay-backed item's `streaming` flag onto the live frame.
+#[tokio::test]
+async fn a_live_revision_with_streaming_wires_the_flag() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    hub.attach(&conn, "chat-1");
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::DisplayRevision {
+        chat_id: "chat-1".to_string(),
+        messages: vec![display_message("m1", "Hello")],
+        streaming: Some(mainframe_types::display::StreamingLeafKind::Text),
+    });
+
+    let frames = drain(&mut rx);
+    assert_eq!(frames.len(), 1);
+    assert_eq!(
+        frames[0]["params"]["update"]["sessionUpdate"],
+        json!("agent_message")
+    );
+    assert_eq!(
+        frames[0]["params"]["update"]["_meta"]["_mainframe.dev"]["streaming"],
+        json!(true)
     );
 }
 

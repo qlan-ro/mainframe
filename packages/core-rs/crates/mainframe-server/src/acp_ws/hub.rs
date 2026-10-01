@@ -133,6 +133,11 @@ impl FacadeHub {
     /// is re-created and no replay is delivered. `reply` goes out either way
     /// — the client's `session/resume` promise must settle even when its own
     /// detach won the race.
+    ///
+    /// Both arms close with `_mainframe.dev/replay_complete` (spec Decision
+    /// 38) right after their last replay frame (`queue_state`, in the seeded
+    /// arm's `replay` closure) and before any buffered catch-up — the
+    /// invariant every successful reply gets exactly one matching marker.
     pub fn reset_session(
         &self,
         connection: &FacadeConnection,
@@ -145,6 +150,8 @@ impl FacadeHub {
             drop(sessions);
             connection.send_json(seed.reply);
             seed.replied.store(true, Ordering::Relaxed);
+            connection.send_json(&mainframe_acp::replay_complete_notification(chat_id, false));
+            seed.completed.store(true, Ordering::Relaxed);
             return;
         };
         let mut stream = SessionStream::new(self.throttle_interval_ms);
@@ -154,6 +161,8 @@ impl FacadeHub {
         connection.send_json(seed.reply);
         seed.replied.store(true, Ordering::Relaxed);
         replay(connection);
+        connection.send_json(&mainframe_acp::replay_complete_notification(chat_id, false));
+        seed.completed.store(true, Ordering::Relaxed);
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
         }
@@ -227,6 +236,11 @@ pub struct ResumeSeed<'a> {
     /// catch-up run behind that send, so a delivery that dies in there has
     /// already settled the client's promise and owes it no second answer.
     pub replied: Arc<AtomicBool>,
+    /// Set as the `replay_complete` marker goes out, in whichever arm sends
+    /// it. `fail_resume` reads this alongside `replied`: a delivery that
+    /// replied but died before this was set owes the client its own
+    /// `replay_complete { aborted: true }`.
+    pub completed: Arc<AtomicBool>,
     /// The rpc id of the gate the replay redelivers on its own, if any.
     pub redelivered_gate: Option<&'a str>,
 }

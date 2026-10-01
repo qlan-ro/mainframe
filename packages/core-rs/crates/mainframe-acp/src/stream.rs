@@ -141,12 +141,20 @@ impl SessionStream {
     }
 }
 
+/// A carrier is an upsert that already wires a FULL meta value this frame
+/// (`Some(Some(_))`) — never one whose meta patch is omitted (`None`,
+/// unchanged) or explicit `null` (`Some(None)`, a clear). Finding 8: on a
+/// full-revision upsert whose meta did not change, `meta` is `None`, and
+/// merging into that would wire `_meta` as JUST `{attempt, reason}`, which
+/// the client reads as the item's whole meta — losing `containerId` and
+/// turning the item into its own container at the tail (Bug 1's symptom). A
+/// batch with no such carrier leaves the marker pending for the next one.
 fn retry_marker_carrier(update: &mut SessionUpdate) -> Option<&mut Option<Option<Value>>> {
     match update {
         SessionUpdate::UserMessage(upsert)
         | SessionUpdate::AgentMessage(upsert)
         | SessionUpdate::AgentThought(upsert)
-            if !is_empty_content_clear(&upsert.content) =>
+            if !is_empty_content_clear(&upsert.content) && matches!(upsert.meta, Some(Some(_))) =>
         {
             Some(&mut upsert.meta)
         }
@@ -166,8 +174,9 @@ fn is_empty_content_clear(
 /// Merge `value`'s keys into `_meta["_mainframe.dev"]` on top of whatever
 /// the frame already carries — the encoder's parent relation and the retry
 /// marker share the namespace object, so a marker must extend it, never
-/// replace it.
-fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
+/// replace it. `pub(crate)`: `session_state/updates.rs::create_update`
+/// reuses it to merge in the creation marker (spec Decision 37).
+pub(crate) fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
     let mut map = match existing {
         Some(Value::Object(map)) => map,
         _ => Map::new(),

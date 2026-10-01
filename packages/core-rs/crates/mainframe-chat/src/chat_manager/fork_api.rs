@@ -126,6 +126,10 @@ impl ChatManager {
                 turn_started_at: None,
             })),
         );
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pin(&new_chat.id);
         self.emit(DaemonEvent::ChatCreated {
             chat: new_chat.clone(),
             source: None,

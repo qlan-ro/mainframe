@@ -500,3 +500,93 @@ async fn resend_from_an_attached_chat_after_offload_resyncs_instead_of_scramblin
          not leave it diffing stale live ids against the reloaded graph"
     );
 }
+
+// ── todo #350 R1: offload guard, resync producers ──────────────────────────
+
+/// Finding 4: `ChatOffload::recheck` must not kill the CLI of a turn whose
+/// tool is still running silently past the idle threshold — `is_spawned`/
+/// `last_activity_at` alone can't see that.
+#[tokio::test]
+async fn a_working_chat_is_never_offloaded() {
+    let deps = StoreDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let mut chat = test_chat("c1");
+    chat.process_state = Some(Some(mainframe_types::chat::ProcessState::Working));
+    let session = FakeSession::with_activity(true, Some(long_idle()));
+    seed_active(&mgr, "c1", chat, session.clone());
+    mgr.messages
+        .lock()
+        .unwrap()
+        .set("c1", vec![history_message("m1")]);
+
+    mgr.scan_idle_sessions().await;
+
+    assert_eq!(session.kills(), 0, "a working turn's CLI is never killed");
+    assert!(
+        mgr.active_chats.get("c1").is_some(),
+        "the registry cell remains"
+    );
+    assert!(
+        mgr.messages.lock().unwrap().get("c1").is_some(),
+        "the cache remains"
+    );
+    assert!(offloaded_events(&deps).is_empty());
+}
+
+/// Finding 6: a cold chat's first send after `session/resume` must not force
+/// a full replay — `do_load_chat`'s reload reproduces the exact same list
+/// `get_messages` already cached, so no resync is warranted.
+#[tokio::test]
+async fn a_cold_opened_chat_sends_without_resync() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    *deps.history.lock().unwrap() = Some(vec![history_message("m1"), history_message("m2")]);
+    deps.set_spawn_ok(true);
+    let mgr = ChatManager::new(deps.clone());
+    let surface = RecordingSurface::arc();
+    let mgr = mgr.with_chat_surface(surface.clone());
+
+    let _ = mgr.get_messages("c1").await;
+    mgr.send_message("c1", "hello", None, None)
+        .await
+        .expect("the cold chat spawns and sends");
+
+    assert!(
+        !surface
+            .events()
+            .iter()
+            .any(|e| matches!(e, ChatSurfaceEvent::Resync { .. })),
+        "an identical reload of an already-warm cache must not resync"
+    );
+}
+
+/// Finding 5: `emit_worktree_missing_error` loads any existing history before
+/// it appends, so the error lands after the chat's prior transcript instead
+/// of replacing it.
+#[tokio::test]
+async fn worktree_missing_error_keeps_the_loaded_history() {
+    let mut chat = test_chat("c1");
+    chat.claude_session_id = Some("sess-1".to_string());
+    // `get_chat` recomputes `worktree_missing` from disk (`enrich_chat`), so
+    // the fixture needs a worktree path that is actually absent rather than
+    // the flag set directly.
+    chat.worktree_path = Some("/tmp/mainframe-test-missing-worktree-r1".to_string());
+    let deps = StoreDeps::with_chats(vec![chat]);
+    *deps.history.lock().unwrap() = Some(vec![history_message("m1"), history_message("m2")]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.send_message("c1", "hello", None, None)
+        .await
+        .expect("the worktree-missing branch returns Ok without sending");
+
+    let messages = mgr.get_messages("c1").await;
+    assert_eq!(messages.len(), 3, "history plus one error message");
+    let ids: Vec<&str> = messages[..2].iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["m1", "m2"],
+        "the loaded history survives, with the error appended after it"
+    );
+    assert_eq!(messages[2].r#type, ChatMessageType::Error);
+}

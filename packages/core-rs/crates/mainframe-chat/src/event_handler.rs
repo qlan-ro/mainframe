@@ -16,7 +16,9 @@ use mainframe_types::chat::{
 };
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{DisplayMessage, ToolCategories};
+use mainframe_types::display::{
+    DisplayContent, DisplayMessage, DisplayMessageType, StreamingLeafKind, ToolCategories,
+};
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
@@ -28,11 +30,10 @@ use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
-use partial_overlay::{PartialOverlay, PartialOverlays};
+use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
 
 mod partial_overlay;
-pub(crate) mod resync;
 mod worktree_tool;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
@@ -313,6 +314,7 @@ fn emit_display_for<D: EventHandlerDeps>(
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
+    let has_overlay = overlay.is_some();
     let with_overlay: Vec<ChatMessage>;
     let raw = match overlay {
         Some(synthetic) => {
@@ -326,13 +328,59 @@ fn emit_display_for<D: EventHandlerDeps>(
         None => raw,
     };
     let new_display = deps.prepare_messages_for_client(raw, categories);
+    // The overlay is the last leaf of `raw` when present — read it back off
+    // `raw` rather than cloning the overlay a second time.
+    let streaming = has_overlay
+        .then(|| streaming_leaf_kind(raw.last(), &new_display))
+        .flatten();
     chat_surface::notify(
         surface,
         ChatSurfaceEvent::DisplayRevision {
             chat_id: chat_id.to_string(),
             messages: new_display,
+            streaming,
         },
     );
+}
+
+/// Spec Decision 39's streaming determination: `Some` only when the overlay's
+/// own leaf has non-empty text/thinking after trim AND the prepared display's
+/// last message is an assistant message whose own last leaf is the same
+/// kind. The second check catches an overlay the conversion stripped to
+/// empty (tag stripping, grouping) — that case must never report streaming.
+fn streaming_leaf_kind(
+    overlay: Option<&ChatMessage>,
+    new_display: &[DisplayMessage],
+) -> Option<StreamingLeafKind> {
+    let overlay_kind = overlay.and_then(overlay_leaf_kind)?;
+    let last_message = new_display.last()?;
+    if last_message.r#type != DisplayMessageType::Assistant {
+        return None;
+    }
+    let last_leaf_kind = last_message.content.last().and_then(display_leaf_kind)?;
+    (overlay_kind == last_leaf_kind).then_some(overlay_kind)
+}
+
+fn overlay_leaf_kind(overlay: &ChatMessage) -> Option<StreamingLeafKind> {
+    overlay.content.iter().find_map(|c| match c {
+        MessageContent::Leaf(LeafContent::Text { text, .. }) if !text.trim().is_empty() => {
+            Some(StreamingLeafKind::Text)
+        }
+        MessageContent::Leaf(LeafContent::Thinking { thinking, .. })
+            if !thinking.trim().is_empty() =>
+        {
+            Some(StreamingLeafKind::Thinking)
+        }
+        _ => None,
+    })
+}
+
+fn display_leaf_kind(content: &DisplayContent) -> Option<StreamingLeafKind> {
+    match content {
+        DisplayContent::Leaf(LeafContent::Text { .. }) => Some(StreamingLeafKind::Text),
+        DisplayContent::Leaf(LeafContent::Thinking { .. }) => Some(StreamingLeafKind::Thinking),
+        _ => None,
+    }
 }
 
 struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
@@ -383,12 +431,10 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     fn append_and_display(&self, message: ChatMessage) {
-        let evicted = self
-            .messages
+        self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(&self.chat_id, message);
-        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
         self.emit_display();
     }
 
@@ -1258,12 +1304,10 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
             None,
             vendor_id.map(str::to_string),
         );
-        let evicted = self
-            .messages
+        self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .append(&self.chat_id, message);
-        resync::notify_if_evicted(self.chat_surface.get(), &self.chat_id, evicted);
         self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
             phase: CompactionPhase::Done,
@@ -1473,14 +1517,8 @@ impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
                 other => other,
             })
             .collect();
-        self.partial_overlays.insert(
-            &self.chat_id,
-            self.session_key(),
-            PartialOverlay {
-                message_id: api_message_id.to_string(),
-                content: stripped,
-            },
-        );
+        self.partial_overlays
+            .insert(&self.chat_id, self.session_key(), api_message_id, stripped);
         self.emit_display();
     }
 

@@ -300,6 +300,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 turn_started_at: None,
             })),
         );
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pin(&chat.id);
         self.deps.emit_event(DaemonEvent::ChatCreated {
             chat: chat.clone(),
             source: None,
@@ -675,7 +679,7 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         self.messages
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .delete(chat_id);
+            .release(chat_id);
         self.permissions
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -743,6 +747,12 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
             },
         );
         self.active_chats.remove(chat_id);
+        // The cache entry stays (an ended chat can still be read), but it is
+        // no longer registry-held, so it becomes evictable like any cold read.
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .unpin(chat_id);
         self.deps.emit_event(DaemonEvent::ChatEnded {
             chat_id: chat_id.to_string(),
         });
@@ -883,14 +893,17 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
         });
     }
 
-    /// Returns whether this call actually (re)populated the message cache —
+    /// Returns whether this call actually changed the message cache —
     /// `ChatManager::load_chat` uses it to decide whether an attached facade
     /// session needs a `Resync` (todo #178: a chat left on screen through an
     /// idle offload keeps its facade session, which offload deliberately
     /// leaves un-notified — see `idle_offload.rs`'s step 4 — so the NEXT
     /// `load_chat` is what rebuilds the cache under the transcript's own ids
     /// and must tell that attached session to re-replay rather than diff
-    /// against the ids it cached live).
+    /// against the ids it cached live). An identical reload of an already-
+    /// warm cache — a cold chat's first send after `session/resume` — raises
+    /// no resync (finding 6): "no previous entry" counts as changed, an
+    /// unchanged list does not.
     async fn do_load_chat(&self, chat_id: &str) -> bool {
         let Some(mut chat) = self.deps.chats_get(chat_id) else {
             warn!(chat_id, "doLoadChat: chat not found");
@@ -904,6 +917,10 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 turn_started_at: None,
             })),
         );
+        self.messages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pin(chat_id);
 
         // Rule 7: before any resume target is read below, a dead ephemeral
         // session's context loss must be marked (clears `claude_session_id`, so
@@ -974,15 +991,19 @@ impl<D: LifecycleManagerDeps + 'static> ChatLifecycleManager<D> {
                 })
                 .collect();
             if !remapped.is_empty() {
-                self.messages
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .set(chat_id, remapped.clone());
+                let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+                let previous = messages.get(chat_id).cloned();
+                messages.set(chat_id, remapped.clone());
+                drop(messages);
                 self.permissions
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .restore_pending_permission(chat_id, &remapped);
-                cache_reloaded = true;
+                // Raise the resync only when the reload actually changed the
+                // cached list — "no previous entry" counts as changed, but a
+                // cold chat's identical re-read (the first send after
+                // `session/resume`) must not force a full replay (finding 6).
+                cache_reloaded = previous.as_ref() != Some(&remapped);
             }
         }
 
