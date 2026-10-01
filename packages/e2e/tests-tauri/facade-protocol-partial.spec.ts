@@ -31,12 +31,15 @@ import {
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { chatThread } from '../helpers/tauri/page-objects.js';
-import { sendJson, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
+import { sendJson, collectFrames, collectUntilQuiet, closeSocket } from '../helpers/tauri/raw-ws-client.js';
 import {
   promptRequest,
+  resumeRequest,
   updates,
   itemId,
+  mainframeMeta,
   connectAndInitialize,
+  expectReplayClosedAfterQueueState,
   type SessionUpdateFrame,
 } from '../helpers/tauri/facade-protocol-support.js';
 
@@ -86,6 +89,9 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
     // The clearing upsert: content replaced with the empty list. The client
     // deletes the item on receipt (T23), so a bubble can never outlive it.
     expect(partialFrames[1]?.params?.update?.content).toEqual([]);
+    // Spec Decision 37: only the create carries the creation marker, never the clear.
+    expect(mainframeMeta(partialFrames[0]!)?.created).toBe(true);
+    expect(mainframeMeta(partialFrames[1]!)?.created).toBeUndefined();
 
     // The retry marker never rides the clearing frame (T16) — it rides the
     // retried call's own content, which is a different item.
@@ -95,6 +101,29 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
     expect(marked[0]?.params?.update?._meta?.['_mainframe.dev']?.reason).toBe('overloaded_error');
     expect(itemId(marked[0] as SessionUpdateFrame)).not.toBe('msg_A');
     expect(textOf(marked[0]?.params?.update?.content)).toBe(COMPLETED_TEXT);
+    // The marker merges into the retried item's create: it keeps the creation
+    // marker and the full item meta, not a namespace holding only attempt/reason.
+    expect(mainframeMeta(marked[0]!)?.created).toBe(true);
+    expect(mainframeMeta(marked[0]!)?.containerId).toBeTruthy();
+  });
+
+  test('a resume from start replays only the completed item and closes with replay_complete', async () => {
+    const ws = await connectAndInitialize();
+    const collected = collectUntilQuiet(ws, 1_500, 15_000);
+    const replies = collectFrames(ws);
+    sendJson(ws, resumeRequest(2, chatId, { type: 'start' }));
+    const reply = await replies.next((f) => f['id'] === 2);
+    expect(reply['error']).toBeUndefined();
+    const frames = await collected;
+    await closeSocket(ws);
+
+    expectReplayClosedAfterQueueState(frames, chatId, 2);
+    const replayed = updates(frames);
+    expect(replayed.filter((frame) => itemId(frame) === 'msg_A')).toHaveLength(0);
+    const agentTexts = replayed
+      .filter((frame) => frame.params?.update?.sessionUpdate === 'agent_message')
+      .map((frame) => textOf(frame.params?.update?.content));
+    expect(agentTexts).toEqual([COMPLETED_TEXT]);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   itemId,
   itemIds,
   connectAndInitialize,
+  expectReplayClosedAfterQueueState,
   type SessionUpdateFrame,
 } from '../helpers/tauri/facade-protocol-support.js';
 
@@ -135,8 +136,11 @@ test.describe('§facade-protocol streaming', () => {
     const reply = (await replies.next((f) => f['id'] === 2)) as { result?: unknown; error?: unknown };
     expect(reply.error).toBeUndefined();
 
-    const replayFrames = updates(await collected);
+    const resumed = await collected;
     await closeSocket(ws);
+    // Spec Decision 38: the replay closes with queue_state, then replay_complete.
+    expectReplayClosedAfterQueueState(resumed, chatId, 2);
+    const replayFrames = updates(resumed);
 
     const liveIds = itemIds(liveFrames);
     const replayIds = itemIds(replayFrames);
@@ -160,7 +164,9 @@ test.describe('§facade-protocol streaming', () => {
     };
     expect(reply.result?._meta?.['_mainframe.dev']?.fullReplay).toBeUndefined();
 
-    const partialFrames = updates(await partial);
+    const partialCapture = await partial;
+    expectReplayClosedAfterQueueState(partialCapture, chatId, 2);
+    const partialFrames = updates(partialCapture);
     const partialIds = itemIds(partialFrames);
     // A cursor at item 0 replays every later item; an empty set would make the
     // two checks below vacuously true, so pin the count first.
@@ -175,8 +181,11 @@ test.describe('§facade-protocol streaming', () => {
       result?: { _meta?: Record<string, { fullReplay?: boolean }> };
     };
     expect(fullReply.result?._meta?.['_mainframe.dev']?.fullReplay).toBe(true);
-    const fullFrames = updates(await full);
+    const fullCapture = await full;
     await closeSocket(ws);
+    // A cursor fallback is still a successful reply, so it is closed the same way.
+    expectReplayClosedAfterQueueState(fullCapture, chatId, 3);
+    const fullFrames = updates(fullCapture);
     expect(itemIds(fullFrames)).toEqual(itemIds(liveFrames));
   });
 });
