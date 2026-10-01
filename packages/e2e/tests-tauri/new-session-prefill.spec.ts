@@ -151,9 +151,11 @@ async function selectTextInLastAssistantMessage(page: Page, needle: string): Pro
   }, needle);
 }
 
-async function createWelcomeChat(page: Page): Promise<{ project: TauriProject; committedChatId: string }> {
-  const prompts = capturePrompts(page);
-  const project = await createTauriProject(page);
+async function createWelcomeChat(
+  page: Page,
+  project: TauriProject,
+  prompts: ReturnType<typeof capturePrompts>,
+): Promise<string> {
   const chatsBeforeDraft = await fetchProjectChatIds(project.projectId);
   await pickProjectFromWelcome(page, project.projectId);
   const firstPrompt = 'What is 2 + 2? Reply with just the number.';
@@ -171,7 +173,7 @@ async function createWelcomeChat(page: Page): Promise<{ project: TauriProject; c
     committedChatId,
   ]);
   await expectUnarchivedChat(committedChatId);
-  return { project, committedChatId };
+  return committedChatId;
 }
 
 test.describe('§new-session-prefill', () => {
@@ -181,7 +183,9 @@ test.describe('§new-session-prefill', () => {
 
   test.beforeAll(async () => {
     app = await launchTauriApp({ recordingKey: 'messaging' });
-    ({ project, committedChatId } = await createWelcomeChat(app.page));
+    const prompts = capturePrompts(app.page);
+    project = await createTauriProject(app.page);
+    committedChatId = await createWelcomeChat(app.page, project, prompts);
   });
 
   test.afterAll(async () => {
