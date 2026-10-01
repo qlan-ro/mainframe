@@ -10,9 +10,15 @@
  * far into a turn any event can be scheduled, not a per-event pace: anything
  * recorded past it bursts out instantly once the ceiling elapses). That gives
  * a real, known wall-clock window between the two real ticks and the burst to
- * select text — both in the OLDER settled message and in the paragraph that
- * is itself STILL growing — exercising `markdown-text.tsx`'s hold/release fix
- * (`selection-hold.ts`), not just its unit tests.
+ * select text — both in the OLDER settled message and, immediately after the
+ * SECOND tick lands (independent review round 2, finding 1 — selecting while
+ * the smooth reveal may still be lagging the just-grown text), in the
+ * paragraph that is itself STILL growing — exercising `markdown-text.tsx`'s
+ * hold/release fix (`selection-hold.ts`), not just its unit tests.
+ *
+ * NOTE: this spec's timing-sensitive step (selecting immediately after the
+ * second tick) could not be re-run locally this round — Playwright/Tauri
+ * launches are deliberately not exercised locally here; confirm in CI.
  */
 import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
@@ -115,12 +121,18 @@ test.describe('§selection-hold — a selection survives streaming elsewhere in 
     await expect(page.getByTestId('chat-selection-toolbar')).toBeVisible();
     await expect(page.getByTestId('chat-selection-quote')).toBeVisible();
 
-    // 2) Now select text near the START of the paragraph that is itself
-    // STILL actively growing — later words keep being appended to this
-    // exact text node while the selection is up. This is the hold/release
-    // fix's core case: nothing but the hold keeps that node's identity
-    // intact (without it, the DOM "replace data" algorithm collapses the
-    // Range the instant the next word lands).
+    // 2) Wait for the SECOND real tick's own distinguishing text to land,
+    // then select 'growing word by word' (present since the FIRST tick,
+    // stable since) IMMEDIATELY — no extra wait in between. That is the
+    // exact window independent review round-2 finding 1 flagged: selecting
+    // right after a growth tick, while the SMOOTH REVEAL of that new text
+    // may still be lagging behind it. An earlier, buggy version froze the
+    // live INPUT text (not the DISPLAYED one) here, jumping the DOM straight
+    // from whatever had been revealed to the full live text in one commit —
+    // the exact "replace data" collapse this feature exists to prevent.
+    await expect(page.getByTestId('chat-assistant-message').last()).toContainText('keeps extending', {
+      timeout: 10_000,
+    });
     const streamingSelected = await selectTextIn(page, 'chat-assistant-message', 'growing word by word', 'last');
     expect(streamingSelected).toBe('growing word by word');
     await expect(page.getByTestId('chat-selection-toolbar')).toBeVisible({ timeout: 5_000 });
