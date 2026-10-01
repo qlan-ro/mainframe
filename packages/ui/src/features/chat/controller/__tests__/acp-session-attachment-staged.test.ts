@@ -728,6 +728,37 @@ describe('AcpSessionPlane — live traffic after a replay (D4)', () => {
     // The marker only clears `replaying` — no extra publish.
     expect(transcripts(host)).toHaveLength(1);
   });
+
+  it('a cursor resume creating fewer items than the snapshot itemCount does not warn', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const client = makeFakeAcpClient({ capabilities: STAGED });
+      const host = makeHost();
+      const plane = new AcpSessionPlane(host);
+      await attachWithItems(plane, client, 1);
+      // An idle full replay settles the cursor, so the gap below resumes from an item.
+      client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+      client.emitResync(CHAT_ID);
+      await tick();
+      client.emitUpdate(CHAT_ID, agentMessage('idle-1', 'done'));
+      client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
+      client.emitReplayComplete(CHAT_ID);
+      warn.mockClear();
+
+      // itemCount is the whole 14-item snapshot; only the one item past the cursor is created.
+      client.nextResumeMeta = { itemCount: 14 };
+      client.emitGap();
+      await tick();
+      expect(lastOf(client.resumeCalls)).toEqual({ sessionId: CHAT_ID, cursor: { type: 'item', itemId: 'idle-1' } });
+      client.emitUpdate(CHAT_ID, agentMessage('cursor-1', 'cursor 1'));
+      client.emitReplayComplete(CHAT_ID);
+      await tick();
+
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('itemCount mismatch'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('AcpSessionPlane — without replayComplete, the legacy reset-at-reply path is unchanged', () => {

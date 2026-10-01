@@ -232,8 +232,9 @@ export class ReplayWindowCoordinator {
     this.host.dispatch({ type: 'history.refresh.refused' });
   }
 
+  /** Full windows only: a cursor resume's `itemCount` is the whole snapshot but it creates just the items past the cursor. */
   private warnOnItemCountMismatch(window: ReplayWindow): void {
-    if (window.itemCount !== null && window.itemCount !== window.createdCount) {
+    if (window.kind === 'full' && window.itemCount !== null && window.itemCount !== window.createdCount) {
       console.warn(
         `[acp-session] resume itemCount mismatch for ${this.host.getChatId()}: expected ${window.itemCount}, created ${window.createdCount}`,
       );
