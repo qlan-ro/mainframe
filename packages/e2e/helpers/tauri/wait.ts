@@ -17,7 +17,13 @@ export async function waitConnected(page: Page, timeout = 20_000): Promise<void>
   await page.locator('[data-testid="daemon-footer-trigger"]').locator('[aria-label="Connected"]').waitFor({ timeout });
 }
 
-/** Wait until the assistant is idle (the running indicator is gone). */
+/**
+ * Wait until the assistant is idle (the running indicator is gone) and its text has settled.
+ *
+ * A turn's final text keeps smooth-streaming for a moment after the run stops: the markdown
+ * container (`.aui-md`) carries `data-status="running"` until the reveal catches up. A test
+ * that reads or selects that text before then races the reveal's DOM updates.
+ */
 export async function waitForIdle(page: Page, timeout = 60_000): Promise<void> {
   await page
     .locator('[data-testid="chat-thread-running"]')
@@ -29,4 +35,13 @@ export async function waitForIdle(page: Page, timeout = 60_000): Promise<void> {
         .waitFor({ state: 'detached', timeout: 1_000 })
         .catch(() => {});
     });
+  await waitForTextSettled(page, timeout);
+}
+
+/** Wait until no assistant message is still revealing streamed text. */
+export async function waitForTextSettled(page: Page, timeout = 10_000): Promise<void> {
+  await page
+    .locator('[data-testid="chat-assistant-message"] .aui-md[data-status="running"]')
+    .first()
+    .waitFor({ state: 'detached', timeout });
 }

@@ -29,7 +29,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { sendMessage, waitForIdle, waitForTextSettled } from '../helpers/tauri/wait.js';
 
 async function clearComposer(page: import('@playwright/test').Page): Promise<void> {
   await page.getByTestId('chat-composer-input').fill('');
@@ -255,6 +255,9 @@ test.describe('§composer quote + worktree mid-session warning', () => {
     const { page } = app;
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     await expect(lastAssistant).toContainText('Files in the project', { timeout: 10_000 });
+    // The reply keeps smooth-streaming briefly after the run stops; a selection made mid-reveal
+    // is dropped by the reveal's next DOM update, taking the toolbar with it.
+    await waitForTextSettled(page);
 
     // Programmatic selection (deterministic vs. dblclick word-boundary guessing): select the
     // word "project" inside the assistant's final text reply and fire the native 'mouseup' the
