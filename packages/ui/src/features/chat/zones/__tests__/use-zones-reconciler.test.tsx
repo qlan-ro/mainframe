@@ -13,13 +13,14 @@ import { useLayoutStore } from '@/store/layout';
 import { useZonesStore } from '../zones-store';
 
 let mainThreadIdValue: string | null;
+let listedIds: string[] = [];
 
 vi.mock('@assistant-ui/react', async () => {
   const actual = await vi.importActual<typeof import('@assistant-ui/react')>('@assistant-ui/react');
   return {
     ...actual,
-    useAuiState: (sel: (s: { threads: { mainThreadId: string | null } }) => unknown) =>
-      sel({ threads: { mainThreadId: mainThreadIdValue } }),
+    useAuiState: (sel: (s: { threads: { mainThreadId: string | null; threadItems: { id: string }[] } }) => unknown) =>
+      sel({ threads: { mainThreadId: mainThreadIdValue, threadItems: listedIds.map((id) => ({ id })) } }),
   };
 });
 
@@ -30,7 +31,8 @@ const focusedIndex = () => useZonesStore.getState().focusedIndex;
 
 beforeEach(() => {
   mainThreadIdValue = null;
-  useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  listedIds = [];
+  useZonesStore.setState({ zones: null, focusedIndex: 0, pendingPair: null });
 });
 
 describe('switching to a chat already in the split', () => {
@@ -201,5 +203,23 @@ describe('the workspace follows the split', () => {
     expect(useZonesStore.getState().zones).toEqual(['chat-a', 'chat-c']);
     expect(move).not.toHaveBeenCalled();
     expect(restore).not.toHaveBeenCalled();
+  });
+});
+
+describe('a queued pair (a new fork beside its parent)', () => {
+  it('waits until the second chat is in the thread list, then opens with focus on it', () => {
+    listedIds = ['parent'];
+    mainThreadIdValue = 'fork';
+    useZonesStore.getState().queuePair('parent', 'fork');
+    const { rerender } = renderHook(() => useZonesReconciler());
+
+    expect(zones()).toBeNull();
+
+    listedIds = ['parent', 'fork'];
+    rerender();
+
+    expect(zones()).toEqual(['parent', 'fork']);
+    expect(focusedIndex()).toBe(1);
+    expect(useZonesStore.getState().pendingPair).toBeNull();
   });
 });
