@@ -22,8 +22,9 @@
  * `MarkdownText` is the `TextMessagePartComponent` wired into AssistantMessage.
  * `markdownComponents` is exported separately so UserMessage can reuse it.
  */
-import React, { memo, type FC } from 'react';
+import React, { memo, useCallback, useRef, type FC } from 'react';
 import type { TextMessagePartComponent } from '@assistant-ui/react';
+import { useAuiState } from '@assistant-ui/react';
 import {
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents,
@@ -42,6 +43,7 @@ import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
 import { MarkdownUl, MarkdownOl, MarkdownLi, MarkdownTaskCheckbox } from './markdown-lists';
 import { MarkdownTable, MarkdownThead, MarkdownTh, MarkdownTd, MarkdownTr } from './markdown-table';
+import { useSelectionHold } from './selection-hold';
 
 // ── Inline code ───────────────────────────────────────────────────────────────
 // Handles inline `code` spans. Fenced code blocks are handled by the native
@@ -170,18 +172,73 @@ export const MARKDOWN_ROOT_CLASS = 'aui-md';
 
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
 
+/**
+ * Holds this part's text at its last snapshot while a non-collapsed selection
+ * intersects it — see `selection-hold.ts`'s module doc for the mechanism this
+ * guards against. `useAuiState` (not the deprecated `useMessagePartText`)
+ * gives the same live `{ text, status }` the primitive's own internal
+ * subscription reads, so we can decide "hold or not" without touching
+ * `useSmooth` itself: `preprocess` (an `@assistant-ui/react-markdown` prop
+ * that runs BEFORE `useSmooth` sees the text) swaps in the frozen snapshot
+ * instead. Dropping `effectivelyHeld` the instant the part completes — even
+ * if the selection itself is still up — is required, not optional: once a
+ * part is done streaming, nothing will ever trigger another render that
+ * could release the hold on its own, so staying frozen past completion would
+ * strand the user on a truncated snapshot forever.
+ *
+ * Freezing the INPUT alone is not enough: `useSmooth`'s own reveal timer
+ * keeps ticking forward toward whatever text it was LAST given, independent
+ * of whether that text is still growing — a selection made mid-reveal of the
+ * settle-delayed final snippet (D7; no new text ever arrives after) would
+ * still see the in-progress reveal replace the node's data tick by tick. So
+ * `smooth` itself also drops to `false` while held: combined with the frozen
+ * snapshot, the primitive has nothing left to animate toward and renders the
+ * snapshot statically until release, when `smooth` flips back on to animate
+ * the catch-up.
+ */
+function useHeldText(containerRef: React.RefObject<HTMLDivElement | null>): {
+  preprocess: (text: string) => string;
+  smooth: boolean;
+} {
+  const held = useSelectionHold(containerRef);
+  const part = useAuiState((s) => (s.part.type === 'text' || s.part.type === 'reasoning' ? s.part : null));
+  const effectivelyHeld = held && part?.status?.type !== 'complete';
+  const frozenTextRef = useRef<string | null>(null);
+
+  const preprocess = useCallback(
+    (text: string) => {
+      if (!effectivelyHeld) {
+        frozenTextRef.current = null;
+        return text;
+      }
+      if (frozenTextRef.current === null) frozenTextRef.current = text;
+      return frozenTextRef.current;
+    },
+    // A fresh callback identity on every hold/release flip is the point: it
+    // is what forces `MarkdownTextPrimitive`'s internal `useMemo` to
+    // re-evaluate `preprocess` even when the live text itself hasn't
+    // changed since the last render (e.g. the selection just started).
+    [effectivelyHeld],
+  );
+  return { preprocess, smooth: !effectivelyHeld };
+}
+
 const MarkdownTextImpl: TextMessagePartComponent = () => {
   // `data-text-part` marks the searchable text container for in-chat Find
   // (FindBar walks [data-message-id] → [data-text-part]). The wrapper guarantees
   // the attribute lands on a real DOM node regardless of primitive prop-forwarding.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { preprocess, smooth } = useHeldText(containerRef);
   return (
-    <div data-text-part>
+    <div data-text-part ref={containerRef}>
       <SmartActionsProvider>
         <MarkdownTextPrimitive
           className={MARKDOWN_ROOT_CLASS}
           remarkPlugins={REMARK_PLUGINS}
           urlTransform={urlTransform}
+          smooth={smooth}
           components={markdownComponents}
+          preprocess={preprocess}
         />
       </SmartActionsProvider>
     </div>
