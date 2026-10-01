@@ -63,6 +63,12 @@ export class AcpTranscriptStore {
   publishStaging(): AccumulatedItem[] {
     if (this.staging) {
       this.visible = this.staging;
+      // The published accumulator must stop marking new items replay-origin
+      // the instant it goes live, or every subsequently-created item (every
+      // chat full-replays on attach) gets an explicit `complete` status
+      // forever, and a later streaming item's own final block pops instead
+      // of animating (finding 2 of the independent review).
+      this.visible.setReplaying(false);
       this.staging = null;
       this.firstSeenAt.clear();
     }

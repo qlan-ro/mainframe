@@ -288,9 +288,9 @@ export class AcpChatController {
     this.dispatch(event);
   }
 
-  /** Single dispatch choke point. Any `run.started` — facade, optimistic send, or side-band backstop — cancels the plane's deferred `run.stopped` (D7, finding 10). */
+  /** Single dispatch choke point. `run.started` (any source) and `run.failed` both cancel the plane's deferred `run.stopped` (D7 finding 10) — a failure inside the settle delay must not be clobbered by the stale deferred idle. */
   private dispatch(event: ChatStateEvent): void {
-    if (event.type === 'run.started') this.plane.cancelPendingStop();
+    if (event.type === 'run.started' || event.type === 'run.failed') this.plane.cancelPendingStop();
     const nextState = reduceChatThreadState(this.state, event);
     if (nextState === this.state) return;
     this.state = nextState;

@@ -103,6 +103,27 @@ describe('deferred run.stopped — any run.started cancels it', () => {
   });
 });
 
+describe('deferred run.stopped — run.failed cancels it too (independent review, LOW)', () => {
+  it('a failure inside the settle delay is not clobbered by the stale deferred idle', async () => {
+    vi.useFakeTimers();
+    try {
+      const { ctrl, acpClient, ws } = makeController();
+      await armPendingStop(ctrl, acpClient);
+
+      ctrl.subscribeLive();
+      ws.pushEvent({ type: 'error', chatId: CHAT_ID, error: 'boom' });
+      expect(ctrl.getState().runState).toMatchObject({ type: 'error' });
+
+      // Without the fix, the stale deferred `run.stopped` fires here and
+      // flips `runState` back to idle, erasing the failure a moment later.
+      await vi.advanceTimersByTimeAsync(50);
+      expect(ctrl.getState().runState).toMatchObject({ type: 'error' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('deferred run.stopped — dispose() cancels it', () => {
   it('a disposed controller never flips to idle once the settle delay elapses', async () => {
     vi.useFakeTimers();

@@ -10,8 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { ChatStateEvent } from '../chat-thread-state';
 import { AcpSessionPlane, type AcpSessionPlaneHost } from '../acp-session-plane';
+import { AcpSessionAttachment, type AcpSessionClientPort } from '../acp-session-attachment';
 import { CHAT_ID, makeFakeAcpClient, type FakeAcpClient } from './acp-test-kit';
-import { deferred, tick, type ResumeResult } from './acp-attachment-support';
+import { deferred, makeHost as makeAttachmentHost, tick, type ResumeResult } from './acp-attachment-support';
 
 const STAGED = { itemCreationMarkers: true, replayComplete: true };
 
@@ -164,6 +165,43 @@ describe('AcpSessionPlane — staged full replay publishes atomically (D4)', () 
     }
   });
 
+  it('consecutive daemon-aborted replies back off exponentially, not flatly at 1s every time (finding 3)', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+    const resumesBefore = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
+      client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+      client.emitResync(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+      client.emitReplayComplete(CHAT_ID, true); // 1st daemon abort
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2); // 1st automatic retry, at 1s
+
+      client.emitReplayComplete(CHAT_ID, true); // 2nd daemon abort
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Without the fix, `resume()` would have already reset the backoff
+      // right after THIS reply arrived — before learning the window would
+      // be aborted — so the 2nd retry would also land at 1s. With the fix,
+      // the streak's delay has doubled, and nothing fires before 2s.
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('a count mismatch still publishes and only warns', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -291,7 +329,7 @@ describe('AcpSessionPlane — staged replay aborts (D4)', () => {
     expect(transcripts(host)).toHaveLength(0);
   });
 
-  it('socket death (dispose) clears the window FIFO: a later marker with an empty FIFO is ignored', async () => {
+  it('socket death (dispose) clears the window FIFO: a later marker is a no-op, and the listener is gone (finding 4)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const client = makeFakeAcpClient({ capabilities: STAGED });
@@ -305,45 +343,88 @@ describe('AcpSessionPlane — staged replay aborts (D4)', () => {
 
       plane.dispose();
 
-      // No marker will ever arrive from a disposed plane's point of view,
-      // but if one does (e.g. a race), it's ignored, not a crash.
+      // `dispose()` both drains the window FIFO AND unsubscribes every
+      // listener (including `onReplayComplete`, finding 4 of the
+      // independent review) — a marker that arrives anyway (e.g. a race)
+      // reaches nothing at all: no crash, and no "no open window" warning
+      // either, since the handler is no longer registered to produce one.
       expect(() => client.emitReplayComplete(CHAT_ID)).not.toThrow();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no open window'));
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 });
 
-describe('AcpSessionPlane — staged windows close oldest first', () => {
-  it('a full and then a cursor resume are both answered before either marker; markers close them oldest first', async () => {
+describe('AcpSessionPlane — staged windows close oldest first (finding 7 of the independent review)', () => {
+  /**
+   * The previous version of this test called `plane.reactivate(client)`
+   * while still subscribed — `AcpSessionAttachment.reactivate()` returns
+   * immediately whenever `this.subscribed` is already true, so no second
+   * `resume()` was ever sent, and the test's "oldest first" assertions held
+   * vacuously (the second `emitReplayComplete` just hit "no open window").
+   * This version drives `AcpSessionAttachment.resumeFromGap()` directly,
+   * twice, before either reply arrives — the first call's `resume()` only
+   * reaches `client.resume()` (capturing the first deferred reply) and
+   * returns control at its own `await`, so the FIFO is still empty when the
+   * second call runs its own (no-op) abort-check and sends its own request.
+   * Both windows are therefore genuinely open, independent, and unaborted;
+   * each is tracked here via its OWN settlement (not transcript content,
+   * which — for two concurrently-staging FULL windows specifically — would
+   * hit the single-staging-slot limitation `AcpTranscriptStore` still has;
+   * see this task's final report).
+   */
+  it('two overlapping gap-resumes open two independent (cursor) windows; replay_complete closes them oldest-first', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
-    const host = makeHost();
-    const plane = new AcpSessionPlane(host);
-    await attachWithItems(plane, client, 1);
-    host.dispatch.mockClear();
-
-    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
-    client.emitResync(CHAT_ID);
+    const { host, state } = makeAttachmentHost({ hasAccumulatedItems: () => true });
+    const attachment = new AcpSessionAttachment(host);
+    const attached = attachment.attach(client as unknown as AcpSessionClientPort);
     await tick();
-    client.emitUpdate(CHAT_ID, agentMessage('full-1', 'full 1'));
-    client.emitUpdate(CHAT_ID, agentMessage('full-2', 'full 2'));
+    client.emitReplayComplete(CHAT_ID); // closes attach()'s own (full) window
+    await attached;
+    // A non-null settled cursor makes a gap resume a CURSOR-kind resume
+    // (not a `{type:'start'}` one, which is always 'full' regardless of
+    // meta) — cursor windows never touch the shared staging slot.
+    state.settledItemId = 'base-0';
 
-    // A cursor resume (reactivate-style) opens a SECOND window while the
-    // full one above is still unclosed.
-    client.nextResumeMeta = undefined;
-    await plane.reactivate(client);
+    const gateA = deferred<ResumeResult>();
+    const gateB = deferred<ResumeResult>();
+    const gates = [gateA, gateB];
+    let callIndex = 0;
+    client.resume = vi.fn((sessionId: string, _cwd: string, cursor) => {
+      client.resumeCalls.push({ sessionId, cursor });
+      return gates[callIndex++]!.promise;
+    }) as typeof client.resume;
 
-    expect(transcripts(host)).toHaveLength(0);
+    const gapA = attachment.resumeFromGap(); // request #1 — no window pushed yet
+    const gapB = attachment.resumeFromGap(); // request #2 — FIFO still empty, nothing to abort
 
-    client.emitReplayComplete(CHAT_ID); // closes the full window first
-    expect(transcripts(host)).toHaveLength(1);
-    expect(transcripts(host)[0]!.messages).toHaveLength(2);
+    const cursorMeta = { _meta: { '_mainframe.dev': { itemCount: 1 } } } as unknown as ResumeResult; // no fullReplay flag
+    gateA.resolve(cursorMeta);
+    await tick();
+    gateB.resolve(cursorMeta);
+    await tick();
 
-    client.emitReplayComplete(CHAT_ID); // closes the cursor window
-    // The cursor window published nothing extra on close — it already
-    // dispatched live, frame by frame, while open.
-    expect(transcripts(host)).toHaveLength(1);
+    let aSettled = false;
+    let bSettled = false;
+    void gapA.then(() => {
+      aSettled = true;
+    });
+    void gapB.then(() => {
+      bSettled = true;
+    });
+    await tick();
+    expect(aSettled).toBe(false);
+    expect(bSettled).toBe(false);
+
+    client.emitReplayComplete(CHAT_ID); // closes window A (oldest) first
+    await tick();
+    expect(aSettled).toBe(true);
+    expect(bSettled).toBe(false);
+
+    client.emitReplayComplete(CHAT_ID); // closes window B
+    await tick();
+    expect(bSettled).toBe(true);
   });
 });
 
@@ -440,6 +521,48 @@ describe('AcpSessionPlane — live traffic after a replay (D4)', () => {
     client.emitReplayComplete(CHAT_ID);
   });
 
+  it('two consecutive needs-replay-triggered replays that both close successfully still back off, not fire back-to-back (finding 6)', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    const resumesBefore = client.resumeCalls.length;
+
+    vi.useFakeTimers();
+    try {
+      client.emitUpdate(CHAT_ID, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'unknown-1',
+        content: { type: 'text', text: 'x' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+      // Closes successfully — the daemon's own replay just didn't happen to
+      // resolve this particular id (its create frame is STILL malformed).
+      client.emitReplayComplete(CHAT_ID);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The SAME still-unknown id patches again. Without the fix, a clean
+      // success leaves nothing armed, and this fires another full replay
+      // immediately — back-to-back, at round-trip speed.
+      client.emitUpdate(CHAT_ID, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'unknown-1',
+        content: { type: 'text', text: 'y' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.resumeCalls.length).toBe(resumesBefore + 2); // the automatically-armed retry, at 1s
+      client.emitReplayComplete(CHAT_ID);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('transcript_cleared still wipes immediately, before the reattach round-trip', async () => {
     const client = makeFakeAcpClient({ capabilities: STAGED });
     const host = makeHost();
@@ -496,5 +619,160 @@ describe('AcpSessionPlane — without replayComplete, the legacy reset-at-reply 
     // ready for live frames.
     client.emitUpdate(CHAT_ID, agentMessage('legacy-1', 'legacy'));
     expect(idsOf(lastOf(transcripts(host))!.messages)).toEqual(['legacy-1']);
+  });
+});
+
+describe('AcpSessionAttachment — a reconnect mid-replay does not wedge the window queue (finding 1)', () => {
+  it("drains the stale window instead of leaving it queued ahead of the reconnect's own resume", async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    // A resync opens window A (full) on the ORIGINAL connection; it stages
+    // a create that must never reach the visible transcript.
+    client.nextResumeMeta = { itemCount: 2, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('A-1', 'a1'));
+
+    // The socket dies and a NEW connection replaces it — not a live gap.
+    // A's own `replay_complete` died with the old socket and will never
+    // arrive. Without the fix, A stays queued (merely aborted) ahead of
+    // whatever this gap's own resume opens next, so the single marker that
+    // DOES arrive (meant for the new window) closes A instead — discarding
+    // the new window's staging through the shared slot and leaving it
+    // settled on nothing. `lastOf(transcripts(host))` would then be
+    // `undefined` and the next line would throw.
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitReconnect();
+    await tick();
+
+    // The gap's own resume (window B, on the NEW connection) is free to
+    // close normally — nothing from A is left queued ahead of it.
+    client.emitUpdate(CHAT_ID, agentMessage('B-1', 'b1'));
+    client.emitReplayComplete(CHAT_ID);
+
+    expect(idsOf(lastOf(transcripts(host))!.messages)).toEqual(['B-1']);
+
+    // A's own marker, if it somehow arrived late, is just logged — not
+    // misrouted onto B's (already-closed) slot.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(() => client.emitReplayComplete(CHAT_ID)).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('no open window'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("a live-socket gap (no reconnect) keeps today's behavior — the open window stays queued, absorbing frames until its own marker", async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    client.emitResync(CHAT_ID);
+    await tick();
+    client.emitUpdate(CHAT_ID, agentMessage('A-1', 'a1'));
+
+    client.emitGap(); // same connection — NOT a reconnect
+    await tick();
+
+    // The live gap's own resume opened a second window; A's own marker
+    // (now the oldest) still has to arrive and close it before anything
+    // from the gap's window can publish.
+    expect(transcripts(host)).toHaveLength(0);
+    client.emitReplayComplete(CHAT_ID); // closes A — bookkeeping only, A was aborted but queued
+    expect(transcripts(host)).toHaveLength(0);
+  });
+});
+
+describe('AcpSessionPlane — a live create after the first full replay carries no status (finding 2)', () => {
+  it('does not leave origin: "replay" set on the published accumulator after publishStaging()', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    // The very first attach() is itself a full replay that stages off-screen
+    // and publishes via `AcpTranscriptStore.publishStaging()` — exactly the
+    // path that used to leave `replaying: true` set on the now-visible
+    // accumulator forever.
+    await attachWithItems(plane, client, 1);
+    host.dispatch.mockClear();
+
+    client.emitUpdate(CHAT_ID, agentMessage('live-after-attach', 'fresh live text'));
+
+    const last = lastOf(transcripts(host))!;
+    const liveMsg = last.messages.find((m) => m.id === 'live-after-attach')!;
+    const part = (liveMsg.content as unknown as Array<{ type: string; status?: unknown }>)[0]!;
+    expect(part.status).toBeUndefined();
+  });
+});
+
+describe('AcpSessionAttachment — detach() removes the onReplayComplete listener (finding 4)', () => {
+  it('a marker that arrives after detach() reaches nothing — no bookkeeping warning, no crash', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await attachWithItems(plane, client, 1);
+
+    plane.detach();
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(() => client.emitReplayComplete(CHAT_ID)).not.toThrow();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('AcpSessionAttachment — overlapping resumes track pending status independently (finding 5)', () => {
+  it('a second resume still awaiting its OWN reply keeps blocking needs-replay routing after the first settles', async () => {
+    const client = makeFakeAcpClient({ capabilities: STAGED });
+    const { host, state } = makeAttachmentHost({ hasAccumulatedItems: () => true });
+    const attachment = new AcpSessionAttachment(host);
+    const attached = attachment.attach(client as unknown as AcpSessionClientPort);
+    await tick();
+    client.emitReplayComplete(CHAT_ID); // closes attach()'s own window
+    await attached;
+    state.settledItemId = 'base-0';
+
+    const gateA = deferred<ResumeResult>();
+    const gateB = deferred<ResumeResult>();
+    const gates = [gateA, gateB];
+    let callIndex = 0;
+    client.resume = vi.fn((sessionId: string, _cwd: string, cursor) => {
+      client.resumeCalls.push({ sessionId, cursor });
+      return gates[callIndex++]!.promise;
+    }) as typeof client.resume;
+
+    const gapA = attachment.resumeFromGap(); // request #1
+    void attachment.resumeFromGap(); // request #2 — stays pending for the rest of this test
+
+    const cursorMeta = { _meta: { '_mainframe.dev': { itemCount: 1 } } } as unknown as ResumeResult;
+    gateA.resolve(cursorMeta);
+    await tick();
+    client.emitReplayComplete(CHAT_ID); // closes window A — its OWN resume() settles
+    await gapA;
+
+    const resumesBeforeNeedsReplay = client.resumeCalls.length;
+    attachment.routeNeedsReplay();
+    await tick();
+
+    // Without the fix (a boolean `resumePending`), A's settlement would
+    // have wrongly cleared pending status even though request #2 — sent,
+    // but still awaiting its OWN reply — is still outstanding, and this
+    // would have fired a brand-new resume call right on top of it.
+    expect(client.resumeCalls.length).toBe(resumesBeforeNeedsReplay);
+
+    // Let the still-pending request resolve and close, so nothing leaks.
+    gateB.resolve(cursorMeta);
+    await tick();
+    client.emitReplayComplete(CHAT_ID);
   });
 });

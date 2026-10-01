@@ -10,6 +10,12 @@ import { ReplayCancelledError, ReplayWindow, ReplayWindowFifo, type ReplayWindow
 import type { ChatStateEvent } from './chat-thread-state';
 
 /** What `ReplayWindowCoordinator` needs from `AcpSessionAttachmentHost` — a view, not the whole interface, so the coordinator stays independent of the attachment's own state. */
+/** The two generations a window is tagged with at open time — the attachment's own subscription generation, and the client's connection generation (finding 1 of the independent review). */
+export interface WindowIdentity {
+  generation: number;
+  connectionGeneration: number;
+}
+
 export interface ReplayCoordinatorHost {
   getChatId(): string;
   dispatch(event: ChatStateEvent): void;
@@ -72,6 +78,30 @@ export class ReplayWindowCoordinator {
     }
   }
 
+  /**
+   * A reconnect (a NEW underlying connection, not a live-socket gap):
+   * every window still queued was opened on the connection that just died,
+   * so its own `replay_complete` can never arrive — settle and discard it
+   * now, exactly like `cancelAll()`, rather than leaving it queued ahead of
+   * whatever the reconnect's own gap-resume opens next. A window already
+   * tagged with the NEW connection (there shouldn't be one yet, but
+   * defensively) is left untouched (finding 1 of the independent review:
+   * without this, a stale window sat in the FIFO forever, and the next
+   * resume's marker closed IT instead of the new one, discarding the new
+   * window's staging through the shared slot and leaving it settled on
+   * nothing).
+   */
+  cancelStaleConnection(currentConnectionGeneration: number): void {
+    for (const window of this.fifo.drainStale(currentConnectionGeneration)) {
+      window.abort(
+        new ReplayCancelledError(
+          `[acp-session] the connection for ${this.host.getChatId()} reconnected, invalidating a queued replay`,
+        ),
+      );
+      if (window.kind === 'full') this.host.discardReplay({ full: true });
+    }
+  }
+
   /** Tracks a frame's creation against the currently-open window, for the `itemCount` cross-check at publish (advisory only). */
   recordApplyOutcome(outcome: { created: boolean }): void {
     this.fifo.front()?.recordApplyOutcome(outcome);
@@ -96,14 +126,14 @@ export class ReplayWindowCoordinator {
     staged: boolean,
     isFullReplay: boolean,
     itemCount: number | null,
-    generation: number,
+    ids: WindowIdentity,
     opts: { bypassGuard?: boolean },
   ): Promise<void> {
     if (!staged) {
       this.legacyContinuation(isFullReplay, itemCount, opts);
       return;
     }
-    await this.openWindow(isFullReplay, itemCount, generation, opts);
+    await this.openWindow(isFullReplay, itemCount, ids, opts);
   }
 
   /** Closes the FIFO's oldest window — regardless of its status, because replies and markers for one session pair up in FIFO order (spec Decision 38). */
@@ -156,7 +186,7 @@ export class ReplayWindowCoordinator {
   private async openWindow(
     isFullReplay: boolean,
     itemCount: number | null,
-    generation: number,
+    ids: WindowIdentity,
     opts: { bypassGuard?: boolean },
   ): Promise<void> {
     const kind: ReplayWindowKind = this.isRefused(isFullReplay, itemCount, opts)
@@ -164,7 +194,7 @@ export class ReplayWindowCoordinator {
       : isFullReplay
         ? 'full'
         : 'cursor';
-    const window = new ReplayWindow(kind, itemCount, generation);
+    const window = new ReplayWindow(kind, itemCount, ids.generation, ids.connectionGeneration);
     this.fifo.push(window);
 
     if (kind === 'refused') {

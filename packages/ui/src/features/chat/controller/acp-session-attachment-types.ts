@@ -47,6 +47,8 @@ export interface AcpSessionClientPort {
   detach(sessionId: string): void;
   /** The daemon's advertised `_mainframe.dev` capabilities — `null`/absent on a pre-capability daemon (legacy path). */
   readonly mainframeCapabilities?: MainframeCapabilities | null;
+  /** Bumped on every new underlying connection (`acp-client.ts`) — distinguishes a reconnect from a live-socket gap on the SAME connection. */
+  readonly connectionGeneration: number;
 }
 
 export interface AcpSessionAttachmentHost {

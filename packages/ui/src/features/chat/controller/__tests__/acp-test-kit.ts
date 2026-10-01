@@ -61,7 +61,17 @@ export interface FakeAcpClient extends AcpClientHandle {
   emitResync(sessionId: string): void;
   /** `_mainframe.dev/replay_complete` (D4) — closes the oldest open replay window. `aborted` defaults to `false` (a normal close), matching the wire's "absent means not aborted". */
   emitReplayComplete(sessionId: string, aborted?: boolean): void;
+  /** A live-socket heartbeat/sequence gap — the connection is unchanged. */
   emitGap(): void;
+  /**
+   * A dead-socket reconnect: bumps `connectionGeneration` (mirroring
+   * `AcpFacadeClient.connect()`'s own bump on every new connection) and
+   * THEN fires the gap listeners, exactly like the real
+   * `scheduleReconnect()`'s `.then(() => this.notifyGap())`. Distinct from
+   * `emitGap()` so a test can exercise the reconnect-vs-live-gap
+   * distinction `AcpSessionAttachment.resumeFromGap()` makes (finding 1).
+   */
+  emitReconnect(): void;
 }
 
 /** Defaults to no capabilities (a pre-D3/D4 daemon) — every existing suite that doesn't opt in stays on the legacy path unchanged. */
@@ -75,6 +85,7 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
   const resyncListeners = new Set<ResyncListener>();
   const replayCompleteListeners = new Set<ReplayCompleteListener>();
   const gapListeners = new Set<GapListener>();
+  let connectionGeneration = 0;
 
   const client: FakeAcpClient = {
     promptCalls: [],
@@ -84,6 +95,9 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
     detachCalls: [],
     nextResumeMeta: undefined,
     mainframeCapabilities: options.capabilities ?? null,
+    get connectionGeneration() {
+      return connectionGeneration;
+    },
 
     ensureConnected: vi.fn().mockResolvedValue(undefined),
 
@@ -167,6 +181,10 @@ export function makeFakeAcpClient(options: { capabilities?: MainframeCapabilitie
       for (const l of replayCompleteListeners) l(sessionId, aborted);
     },
     emitGap() {
+      for (const l of gapListeners) l();
+    },
+    emitReconnect() {
+      connectionGeneration += 1;
       for (const l of gapListeners) l();
     },
   };

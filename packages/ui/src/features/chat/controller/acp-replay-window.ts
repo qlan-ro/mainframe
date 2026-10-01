@@ -43,6 +43,8 @@ export class ReplayWindow {
     readonly itemCount: number | null,
     /** The attachment's subscription generation this window opened under. */
     readonly generation: number,
+    /** The client's connection generation this window's `resume()` request was sent on — a later reconnect invalidates it even though it never got aborted by a live-socket gap. */
+    readonly connectionGeneration: number,
   ) {
     this.promise = new Promise<void>((resolve, reject) => {
       this.resolveFn = resolve;
@@ -113,5 +115,22 @@ export class ReplayWindowFifo {
     const all = [...this.windows];
     this.windows.length = 0;
     return all;
+  }
+
+  /**
+   * Removes and returns every window NOT tagged with `current` — a
+   * reconnect invalidates them (their `resume()` request went out on a
+   * connection that is now gone, so their own `replay_complete` can never
+   * arrive), while a window already opened on the new connection is left
+   * queued untouched. Order among the kept windows is preserved.
+   */
+  drainStale(current: number): ReplayWindow[] {
+    const stale: ReplayWindow[] = [];
+    for (let i = this.windows.length - 1; i >= 0; i--) {
+      if (this.windows[i]!.connectionGeneration !== current) {
+        stale.unshift(...this.windows.splice(i, 1));
+      }
+    }
+    return stale;
   }
 }

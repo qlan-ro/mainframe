@@ -28,11 +28,36 @@
  * says the cache moved again. `ReplayCancelledError` (a detach, dispose,
  * rebind, or a window superseded before its own marker) is a quiet end: no
  * backoff, no warning, just stop.
+ *
+ * **Backoff resets only on PROVEN success (independent review findings 3,
+ * 6).** Whether a completed replay counts as "fixed" is decided by
+ * `AcpSessionAttachment.resume()`, not here: this class never resets its own
+ * backoff on a successful `replay()` call. A plain resync/wipe still gets
+ * its usual immediate reset (via `resume()`, after its window genuinely
+ * closes — not merely after the reply, which a window the daemon later
+ * aborts would wrongly count as success). A `needs-replay`-triggered run
+ * (an unknown-id patch — a create frame `parseOrWarn` dropped, say) carries
+ * `trigger: 'needs-replay'` end to end; `resume()` recognizes it and skips
+ * the reset even though the window closed fine, because "the replay
+ * completed" is not evidence the specific id it was chasing is now known. A
+ * `needs-replay`-triggered run also ARMS the same growing backoff on success
+ * here, in `run()` — not just on failure — or a steadily-unknown id would
+ * trigger a full replay on every single patch at round-trip speed forever:
+ * `resume()` skipping the reset is not enough by itself, since nothing else
+ * would stop the NEXT chunk from firing immediately. The remembered-bad-ids
+ * alternative (suppress `needs-replay` requests for a SPECIFIC id once a
+ * replay completes without resolving it) was not chosen: it needs new
+ * cross-layer state (which ids, and when to forget them if the daemon later
+ * fixes itself), where backoff reuses the give-up/reset machinery this
+ * class already has for "retrying keeps not working."
  */
 import { ReplayCancelledError } from './acp-replay-window';
 
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
+
+/** Why a replay is being requested — threaded through to `AcpSessionAttachment.resume()` so it knows whether a successful close is evidence enough to reset the backoff (findings 3, 6). */
+export type FullReplayTrigger = 'resync' | 'needs-replay';
 
 export interface FullReplayRetryHost {
   /** True while the FIFO's oldest window is still open (not yet closed or aborted) — a resync must not race it. */
@@ -47,51 +72,73 @@ export class FullReplayRetry {
   private delayMs = 0;
   private gaveUp = false;
   private wipePending = false;
+  /** The reason the CURRENT backoff streak started — every automatic retry inherits it until a resync/wipe explicitly restarts the streak. */
+  private lastTrigger: FullReplayTrigger = 'resync';
 
   constructor(
-    private readonly replay: (opts: { wipe: boolean }) => Promise<void>,
+    private readonly replay: (opts: { wipe: boolean; trigger: FullReplayTrigger }) => Promise<void>,
     private readonly chatId: () => string,
     private readonly host: FullReplayRetryHost,
   ) {}
 
   /**
    * Ignored while a replay is in flight, while a retry is armed, and after
-   * the give-up. If a DIFFERENT window is open (not this instance's own
-   * in-flight run), that window is stale the moment a new resync arrives —
-   * abort it and go through the backoff path instead of firing immediately,
-   * so a client that keeps getting re-notified mid-replay doesn't hammer the
-   * daemon once per notification.
+   * the give-up — UNLESS the armed timer/give-up belongs to a `needs-replay`
+   * streak and this call is a genuine `'resync'`: a daemon-pushed resync
+   * always outranks a client-side guess about one unknown id, so it cancels
+   * that backoff and proceeds now rather than waiting out a delay that was
+   * never about this signal. A backoff a REAL resync failure armed is left
+   * alone either way (today's "one resync at a time" behavior, unchanged).
+   * If a DIFFERENT window is open (not this instance's own in-flight run),
+   * that window is stale the moment a new resync arrives — abort it and go
+   * through the backoff path instead of firing immediately, so a client
+   * that keeps getting re-notified mid-replay doesn't hammer the daemon
+   * once per notification.
    */
-  requestResync(): void {
-    if (this.inFlight || this.timer !== null || this.gaveUp) return;
+  requestResync(trigger: FullReplayTrigger = 'resync'): void {
+    if (this.inFlight) return;
+    const resyncOutranksNeedsReplayBackoff = trigger === 'resync' && this.lastTrigger === 'needs-replay';
+    if ((this.timer !== null || this.gaveUp) && !resyncOutranksNeedsReplayBackoff) return;
+    if (resyncOutranksNeedsReplayBackoff) {
+      this.reset();
+      this.cancel();
+    }
+    this.lastTrigger = trigger;
     if (this.host.hasOpenWindow()) {
       this.host.abortOpenWindow();
       this.scheduleRetry();
       return;
     }
-    void this.run(false);
+    void this.run(false, trigger);
   }
 
   /**
    * Never dropped: a wipe supersedes an armed retry, and waits out an
    * in-flight replay. It also starts a fresh backoff — inheriting a capped
-   * delay would leave a user-initiated wipe with no retries at all.
+   * delay would leave a user-initiated wipe with no retries at all. A wipe
+   * is always a plain `'resync'`-shaped trigger: it is user/server-initiated,
+   * never a patch chasing one specific unknown id.
    */
   requestWipe(): void {
     this.reset();
+    this.lastTrigger = 'resync';
     if (this.inFlight) {
       this.wipePending = true;
       return;
     }
     this.cancel();
-    void this.run(true);
+    void this.run(true, 'resync');
   }
 
   /**
-   * A successful resume from any path clears the failure streak, including a
-   * give-up. An armed retry is deliberately left running: a gap resume
-   * replays from the settled cursor at the tail, which is exactly what a
-   * resync (front eviction) says is not enough.
+   * Clears the failure streak, including a give-up. Called by
+   * `AcpSessionAttachment.resume()` once a window PROVABLY closed
+   * successfully — never from inside `run()` itself (findings 3, 6) — so a
+   * window the daemon later aborts, or a needs-replay-triggered run, never
+   * looks like proof the connection is healthy. An armed retry is
+   * deliberately left running when this fires for an unrelated reason (e.g.
+   * a gap resume): a gap resume replays from the settled cursor at the tail,
+   * which is exactly what a resync (front eviction) says is not enough.
    */
   reset(): void {
     this.delayMs = 0;
@@ -105,11 +152,17 @@ export class FullReplayRetry {
     this.timer = null;
   }
 
-  private async run(wipe: boolean): Promise<void> {
+  private async run(wipe: boolean, trigger: FullReplayTrigger): Promise<void> {
     this.inFlight = true;
     try {
-      await this.replay({ wipe });
-      this.reset();
+      await this.replay({ wipe, trigger });
+      // No `this.reset()` here — see the class doc and `AcpSessionAttachment.resume()`.
+      // A needs-replay-triggered run closing fine is not proof the id it was
+      // chasing is now known (finding 6) — arm the SAME growing backoff a
+      // failure would, rather than leaving the next chunk free to fire
+      // another full replay at round-trip speed. A plain resync/wipe needs
+      // no such caution: `resume()` resets the backoff for it unconditionally.
+      if (trigger === 'needs-replay') this.scheduleRetry();
     } catch (error) {
       if (error instanceof ReplayCancelledError) {
         // Superseded, not failed — a detach/dispose/rebind or a newer
@@ -128,7 +181,8 @@ export class FullReplayRetry {
     if (!this.wipePending) return;
     this.wipePending = false;
     this.cancel();
-    void this.run(true);
+    this.lastTrigger = 'resync';
+    void this.run(true, 'resync');
   }
 
   private scheduleRetry(): void {
@@ -142,7 +196,7 @@ export class FullReplayRetry {
     this.delayMs = this.delayMs === 0 ? BASE_DELAY_MS : Math.min(this.delayMs * 2, MAX_DELAY_MS);
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.run(false);
+      void this.run(false, this.lastTrigger);
     }, this.delayMs);
   }
 }
